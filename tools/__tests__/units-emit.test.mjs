@@ -11,7 +11,8 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { GEN_UNITS_OUTPUTS, generate, main, staleFiles, writeOutputs } from "../units/gen.mjs"
-import { ALL_SEAM_IDS, AGGREGATES, liveSeams } from "../units/seams.mjs"
+import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../units/seams.mjs"
+import { loadUnits } from "../units/manifest.mjs"
 import { aggregateSource, importSpecifier } from "../units/templates.mjs"
 import { memberLineTypes } from "../test-select/registry.mjs"
 
@@ -92,29 +93,44 @@ test("check → write → check: stale, then clean; orphans are listed and remov
     r = await run(root)
     assert.deepEqual(staleFiles(root, r), [])
     // An aggregate whose seam is switched off is an orphan: --check lists it, a write removes it.
-    const off = ctxFor(root, liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, id !== "components"]))))
-    rmSync(path.join(root, "frontend/src/nodes/fixture-echo/node.tsx"))
+    const off = ctxFor(root, liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, id !== "configs"]))))
+    rmSync(path.join(root, "frontend/src/nodes/fixture-echo/config.tsx"))
     r = await run(root, off)
     assert.deepEqual(r.errors, [])
-    assert.deepEqual(r.orphans, ["frontend/src/nodes/_generated/components.ts"])
-    assert.deepEqual(staleFiles(root, r), ["frontend/src/nodes/_generated/components.ts"])
+    assert.deepEqual(r.orphans, ["frontend/src/nodes/_generated/configs.ts"])
+    assert.deepEqual(staleFiles(root, r), ["frontend/src/nodes/_generated/configs.ts"])
     writeOutputs(root, r)
-    assert.equal(existsSync(path.join(root, "frontend/src/nodes/_generated/components.ts")), false)
+    assert.equal(existsSync(path.join(root, "frontend/src/nodes/_generated/configs.ts")), false)
     assert.deepEqual(staleFiles(root, await run(root, off)), [])
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
-test("the real tree: no unit, no live seam — gen:units --check is a clean no-op", async () => {
+test("the real tree: gen:units --check is clean, and writes exactly the live seams' outputs", async () => {
   const out = []
   const err = []
   const rc = await main(["--check"], REPO, { write: (s) => out.push(s) }, { write: (s) => err.push(s) })
   assert.equal(rc, 0, err.join(""))
-  assert.match(out.join(""), /no drift \(0 generated file\(s\)\)/)
+  const live = liveSeams()
+  const units = loadUnits(REPO).length
+  const expected = AGGREGATES.filter((a) => live.has(a.id)).length + SPLICES.filter((x) => live.has(x.id)).reduce((n, x) => n + x.files.length, 0) + DATA_FILES.filter((d) => live.has(d.id)).length
+  // With no unit, every output is a live seam's (an empty aggregate, a spliced region, the contracts file).
+  if (units === 0) assert.match(out.join(""), new RegExp(`no drift \\(${expected} generated file\\(s\\)\\)`))
 })
 
 test("an unknown argument is a usage error", async () => {
   const err = []
   assert.equal(await main(["--wat"], REPO, { write() {} }, { write: (s) => err.push(s) }), 2)
+})
+
+test("every keyed aggregate is a null-prototype object: a lookup by \"constructor\" / \"__proto__\" / \"toString\" finds nothing", () => {
+  for (const agg of AGGREGATES.filter((a) => a.id !== "definitions")) {
+    const src = aggregateSource(agg, [])
+    assert.match(src, /= Object\.assign\(Object\.create\(null\), \{\n\}\)\n$/, agg.id)
+    // The object the module evaluates to, with its import lines and types stripped.
+    const body = src.slice(src.indexOf("Object.assign(")).replace(/\n/g, " ")
+    const value = new Function(`return ${body}`)()
+    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) assert.equal(value[key], undefined, `${agg.id}[${key}]`)
+  }
 })
 
 test("adding a member to an aggregate changes only `// unit:` lines (what the engine narrows)", async () => {

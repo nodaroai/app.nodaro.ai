@@ -223,9 +223,28 @@ describe("generate_image — count / models", () => {
     })
     // No provider: each model is the preset's provider edit, made by the route.
     expect(received.body).not.toHaveProperty("provider")
+    // Nothing the caller did not set rides along.
+    expect(received.body).not.toHaveProperty("subject")
     // Only what the caller set overrides the preset (no saved defaults, no filled-in levers).
     expect(received.body).not.toHaveProperty("resolution")
     expect(textOf(result)).toContain("flux-2-max: job-3, job-4")
+  })
+
+  it("presetId + models + subject: the subject goes to the route with the preset", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", BATCH)
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const subject = { type: "woman", heldProp: "smartphone" }
+
+    const result = await callTool(server, "generate_image", {
+      presetId: "generate-image/cinematic-still",
+      prompt: "a lighthouse",
+      models: ["gpt-image-2", "flux-2-max"],
+      subject,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({ presetId: "generate-image/cinematic-still", subject })
   })
 
   it("one image is answered exactly as before: no count, no models, no jobIds", async () => {

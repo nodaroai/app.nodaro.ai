@@ -42,7 +42,7 @@ import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
 import { audioSync } from "../../providers/audio/audio-sync.js"
-import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
+import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER, transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
   captionRenderFps,
@@ -71,6 +71,12 @@ import { edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, type Edl
 import { transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
+// Node units (tools/units/README.md): every worker unit on the video queue
+// (backend/src/nodes/<type>/worker.ts), keyed by its node type.
+// @registry-enumerates ffmpegHandlers carries every video-queue node unit's worker
+import { UNIT_WORKERS } from "../../nodes/_generated/workers.js"
+import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
+import { composeRecord } from "../../lib/unit-compose.js"
 
 /**
  * The transcription lane a KEYLESS install relays add-captions' auto-transcribe
@@ -822,7 +828,7 @@ async function dispatchKineticCaptions(
   // relay_credits on THIS row. Note what that figure then means: the relayed
   // TRANSCRIPTION only, never the locally-rendered Remotion pass, so it is not
   // the job's full cost and settlement must not read it as one.
-  const transcribeProvider = data.transcribe_provider ?? "incredibly-fast-whisper"
+  const transcribeProvider = data.transcribe_provider ?? ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER
   const localTranscribeKey = transcribeLaneKey(transcribeProvider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   const runTranscription = async (): Promise<TranscribedCaptionSource | null> => {
@@ -1547,7 +1553,7 @@ const handleSlideshow: HandlerFn = async function handleSlideshow(job, ctx) {
   })
 }
 
-export const ffmpegHandlers: Record<string, HandlerFn> = {
+export const ffmpegHandlers: Record<string, HandlerFn> = composeRecord<HandlerFn>("ffmpegHandlers", {
   "combine-videos": handleCombineVideos,
   "apply-edl": handleApplyEdl,
   "assemble-narrated-video": handleAssembleNarratedVideo,
@@ -1578,4 +1584,4 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "remove-audio": handleRemoveAudio,
   "silence-detect": handleSilenceDetect,
   "audio-sync": handleAudioSync,
-}
+}, Object.fromEntries(Object.entries(UNIT_WORKERS).filter(([type]) => unitDescriptorOf(type)?.execution.queue === "video")))

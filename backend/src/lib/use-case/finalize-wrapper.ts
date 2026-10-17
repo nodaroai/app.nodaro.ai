@@ -6,7 +6,7 @@
  * job-policy funnels), so the fee is committed or refunded exactly once — only
  * the caller that won the flip moves money.
  *
- * completed with a result → markJobCompleted (output_data, credits_actual =
+ * completed with the result its kind promises → markJobCompleted (output_data, credits_actual =
  *   inner total + fee) → commit the fee hold.
  * anything else terminal  → markJobFailed, keeping the completed outputs on
  *   output_data → refund the fee hold. Inner jobs settle themselves.
@@ -21,7 +21,7 @@ import { loadExecutionForWrapper } from "../execution-inline-graph.js"
 import { markJobFailed } from "../job-failure.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
+import { usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
 
 export type FinalizeOutcome = "not_terminal" | "not_use_case" | "already_final" | "completed" | "failed"
 
@@ -97,7 +97,7 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
   // what names a continuation's generations and what a cancel stops read it.
   const backfill = typeof input._executionId === "string" ? {} : { input_data: { ...input, _executionId: exec.id } }
 
-  if (exec.status === "completed" && (output.videoUrl || output.audioUrl)) {
+  if (exec.status === "completed" && usecaseWrapperHasResult(exec.inlineGraph, output)) {
     const { markJobCompleted } = await loadShared()
     const flipped = await markJobCompleted(exec.wrapperJobId, { output_data: output, credits_actual: exec.totalCreditsUsed + fee, ...backfill })
     if (!flipped) return "already_final"

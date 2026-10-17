@@ -21,18 +21,25 @@ import {
   EDIT_PLAN_TIERS,
   EDL_TARGET_ASPECTS,
   type EdlTargetAspect,
-  type EditPlanTier,
 } from "@nodaro/shared/edl"
 import { SPEAKER_VIEW_LAYOUT_SETTINGS } from "./speaker-view-settings"
 import { normalizeSpeakerViewData } from "./speaker-view-options"
-import type { UseCaseGraph, UseCaseGraphEdge, UseCaseGraphNode, UseCaseHandleRef } from "./use-case-graph"
+import type {
+  EpisodeOutputMap,
+  PlanTier,
+  UseCaseGraph,
+  UseCaseGraphEdge,
+  UseCaseGraphNode,
+  UseCaseHandleRef,
+  UseCaseMediaKind,
+  UseCaseMediaSource,
+} from "./use-case-graph"
+
+export type { PlanTier, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
 
 export const TIGHTEN_EPISODE = "tighten-episode" as const
 /** Edit Plan's and Apply EDL's ceiling: a longer recording is refused up front. */
 export const TIGHTEN_MAX_EPISODE_SEC = 180 * 60
-
-export type UseCaseMediaKind = "video" | "audio"
-export type PlanTier = EditPlanTier
 
 export type TightenFramingAspect = EdlTargetAspect
 export type TightenFramingLayout = "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip"
@@ -67,11 +74,6 @@ export const TIGHTEN_EPISODE_DEFAULTS: TightenEpisodeSettings = Object.freeze({
   musicDuckAmount: 75,
 })
 
-export interface UseCaseMediaSource {
-  readonly url: string
-  readonly kind: UseCaseMediaKind
-  readonly durationSec?: number
-}
 export interface TightenEpisodeSources {
   readonly media: UseCaseMediaSource
   readonly music?: { readonly url: string }
@@ -164,8 +166,11 @@ const edge = (source: string, sourceHandle: string, target: string, targetHandle
   targetHandle,
 })
 
+/** Tighten Episode's graph: one delivered episode (its output map names no kind, as every P1 snapshot). */
+export type TightenEpisodeGraph = UseCaseGraph & { readonly outputMap: EpisodeOutputMap }
+
 /** The chain one Tighten Episode run executes, built from resolved settings and its inputs. */
-export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sources: TightenEpisodeSources): UseCaseGraph {
+export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sources: TightenEpisodeSources): TightenEpisodeGraph {
   const audioIn = sources.media.kind === "audio"
   const framing = settings.output === "video" ? settings.framing : null
   const quality = settings.reviewBeforeRender ? "proxy" : "final"

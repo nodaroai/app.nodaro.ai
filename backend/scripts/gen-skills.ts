@@ -28,7 +28,7 @@
  * `When to use` / `Common gotchas` sections sit between the auto-gen
  * blocks; marker-blocks.ts only touches text inside the START/END pairs.
  */
-// @reads frontend/src/types/nodes.ts backend/skills/** docs/choosing-models.md docs/mcp/** backend/src/lib/mcp/generated/** packages/render-rules/src/generated/**
+// @reads frontend/src/types/nodes.ts frontend/src/nodes/** backend/skills/** docs/choosing-models.md docs/mcp/** backend/src/lib/mcp/generated/** packages/render-rules/src/generated/**
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"

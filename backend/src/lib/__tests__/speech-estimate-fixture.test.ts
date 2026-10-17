@@ -1,3 +1,4 @@
+// @test-watches tools/fixtures/speech-estimate-cases.json
 /**
  * One fixture, two engines: every case in tools/fixtures/speech-estimate-cases.json
  * is met by the backend estimator here and by the editor's mirror

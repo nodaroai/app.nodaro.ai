@@ -1,3 +1,4 @@
+// @test-always scans the frontend sources for macro creation sites, and checks every node unit's too
 /**
  * The add-node macros (Reframe, decided 2026-10-11): a menu entry that inserts
  * real nodes. Invariants that keep it from drifting into a ghost node type:

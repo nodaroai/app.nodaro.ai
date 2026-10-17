@@ -59,6 +59,7 @@ import {
   editPlanSourceDurationSec,
 } from "@nodaro/shared/video"
 import { runWireLengthSec } from "./utility-wire-length"
+import { keptLengthOrigin } from "./kept-length"
 
 /** A node and a wire as the estimate reads them: either engine's graph fits. */
 export interface EstimateGraphNode {
@@ -423,8 +424,9 @@ export const WHOLE_CLIP_RENDER_TYPES: ReadonlySet<string> = new Set(["speaker-vi
 /**
  * The length of a whole clip a render cuts from the video on `videoEdge`, in
  * output minutes, capped at the 180-minute limit the run refuses beyond:
- *  - a render's output → that render's own estimated length (episode-relative
- *    when it is);
+ *  - a render's output, directly or through steps that keep its length (Add
+ *    Captions, … — `keptLengthOrigin`) → that render's own estimated length
+ *    (episode-relative when it is);
  *  - a Trim, Loop, Combine Videos or Video SFX → the length it passes on, and
  *    any other source → its own recorded length (`mediaLengthSecOf`), read by
  *    the run estimate's wire rule ({@link runWireLengthSec});
@@ -440,7 +442,9 @@ function wiredVideoLength(
   rerunIds: ReadonlySet<string>,
   planOutputOf: EditPlanOutputReader,
 ): RenderEstimateLength {
-  const origin = resolveGraphOrigin(nodes.find((n) => n.id === videoEdge.source), nodes, edges)
+  // Through any step that keeps its input's length (Add Captions, …): a render
+  // there keeps its own length parts (per minute of the episode when it is).
+  const origin = keptLengthOrigin(videoEdge.source, nodes, edges)
   if (origin && isRenderNodeType(origin.type)) {
     const upstream = resolveApplyEdlEstimateLength(origin, nodes, edges, rerunIds, planOutputOf)
     return upstream.perEpisodeMinute > 0

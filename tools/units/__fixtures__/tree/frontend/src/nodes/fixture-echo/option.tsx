@@ -1,1 +1,1 @@
-export const option = { icon: () => <span aria-hidden>E</span> }
+export const option = { icon: ({ className }: { className?: string }) => <span className={className} aria-hidden>E</span> }

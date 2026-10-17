@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/mcp/tools/*.ts
 import { describe, expect, it, vi } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"

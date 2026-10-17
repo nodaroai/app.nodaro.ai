@@ -35,7 +35,7 @@ const m = vi.hoisted(() => ({
   failed: vi.fn(async (..._a: unknown[]) => true),
   refund: vi.fn(async (..._a: unknown[]) => 1),
   prepare: vi.fn(),
-  existingByKey: null as { id: string } | null,
+  existingByKey: null as { id: string; provider?: string | null; jobType?: string | null } | null,
   keyLookups: [] as unknown[][],
   payer: undefined as unknown,
   stampThrows: false,
@@ -54,7 +54,7 @@ vi.mock("@/lib/availability-viewer.js", () => ({ isNodeDeniedForUser: async () =
 vi.mock("@/lib/execution-inline-graph.js", () => ({ ensureInlineGraphColumns: async () => !m.absent }))
 vi.mock("@/lib/use-case/request.js", async (orig) => ({
   ...(await orig<typeof import("@/lib/use-case/request.js")>()),
-  prepareTightenEpisode: (...a: unknown[]) => m.prepare(...a),
+  prepareUseCase: (...a: unknown[]) => m.prepare(...a),
 }))
 vi.mock("@/lib/use-case/preflight.js", () => ({ usecasePreflight: async () => m.preflight }))
 vi.mock("@/ee/billing/use-case-estimate.js", () => ({
@@ -111,7 +111,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/job-failure.js", () => ({ markJobFailed: m.failed }))
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: m.refund }))
-import { tightenEpisodeRoutes } from "../tighten-episode.js"
+import { usecaseRunRoutes } from "../use-case-run.js"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
 
 const routeConfigs: Array<{ url: string; config: unknown }> = []
@@ -125,7 +125,7 @@ async function makeApp(): Promise<FastifyInstance> {
     req.authKind = m.authKind
     if (m.payer) req.billingContext = m.payer as never
   })
-  await app.register(tightenEpisodeRoutes)
+  await app.register(usecaseRunRoutes)
   await app.ready()
   return app
 }
@@ -183,7 +183,7 @@ describe("POST /v1/tighten-episode", () => {
   })
 
   it("dedupe: the same idempotency key answers the same wrapper and starts nothing", async () => {
-    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-0" } })
+    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-0", provider: "use-case", job_type: "tighten-episode" } })
     const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
     expect(res.statusCode).toBe(202)
     expect(res.json()).toEqual({ jobId: "job-0", deduped: true })
@@ -312,7 +312,7 @@ describe("POST /v1/tighten-episode", () => {
 
   it("a keyed retry long after the guard's window gets its live run back — no re-probe, no balance check, nothing new", async () => {
     // +11 s: the media link has expired and the balance is drained by the run itself.
-    m.existingByKey = { id: "job-live" }
+    m.existingByKey = { id: "job-live", provider: "use-case", jobType: "tighten-episode" }
     m.prepared = { ok: false, status: 400, code: "media_unreadable", message: "x" }
     m.cover = { ok: false, balance: 0 }
     const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
@@ -320,7 +320,7 @@ describe("POST /v1/tighten-episode", () => {
     expect(res.json()).toEqual({ jobId: "job-live", deduped: true })
     expect(res.headers["x-dedup-hit"]).toBe("1")
     // Only a use-case wrapper answers a keyed retry: a key reused on another job type never does.
-    expect(m.keyLookups).toEqual([[USER, "client-key-123", { provider: "use-case" }]])
+    expect(m.keyLookups).toEqual([[USER, "client-key-123"]])
     expect(m.prepare).not.toHaveBeenCalled()
     expect(m.estimateCalls).toBe(0)
     expect(m.insertJob).not.toHaveBeenCalled()
@@ -332,7 +332,7 @@ describe("POST /v1/tighten-episode", () => {
   for (const answer of [402, 413] as const) {
     it(`a keyed retry is answered before the credit guard (which would now answer ${answer}): its run back, nothing new`, async () => {
       m.guard = answer
-      m.existingByKey = { id: "job-live" }
+      m.existingByKey = { id: "job-live", provider: "use-case", jobType: "tighten-episode" }
       const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
       expect(res.statusCode).toBe(202)
       expect(res.json()).toEqual({ jobId: "job-live", deduped: true })
@@ -352,11 +352,73 @@ describe("POST /v1/tighten-episode", () => {
         expect(res.statusCode).toBe(answer)
       }
       expect(m.guardCalls).toBe(3)
-      expect(m.keyLookups).toEqual([[USER, "client-key-new", { provider: "use-case" }]])
+      expect(m.keyLookups).toEqual([[USER, "client-key-new"]])
       expect(m.insertJob).not.toHaveBeenCalled()
       expect(m.reserve).not.toHaveBeenCalled()
     })
   }
+
+  it("a key already used for another use-case type is refused, and nothing is created", async () => {
+    m.existingByKey = { id: "job-other", provider: "use-case", jobType: "episode-chapters" }
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "k-reused-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toEqual({
+      code: "idempotency_key_reused",
+      message: "This Idempotency-Key was already used for another kind of run. Send a new key.",
+    })
+    expect(m.guardCalls).toBe(0)
+    expect(m.prepare).not.toHaveBeenCalled()
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.insertIdem).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+  })
+
+  it("a key another type's first request won while this one was checked: refused 409, nothing held or run", async () => {
+    // Another type's first request won the key while this one was checked.
+    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-other", provider: "use-case", job_type: "episode-chapters", run_type: "episode-chapters" } })
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "k-reused-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+    // The row the insert found under the key is judged by its kind and type, read with them.
+    expect(m.insertIdem.mock.calls[0]![3]).toBe("id, provider, job_type, run_type:input_data->>type")
+  })
+
+  it("a key already used on another kind of job (an image generation) is refused, and nothing is created", async () => {
+    m.existingByKey = { id: "job-img", provider: "kie", jobType: "generate-image" }
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "k-image-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(res.body).not.toContain("job-img")
+    // Asked of every job of the caller's under the key, not only use-case runs.
+    expect(m.keyLookups).toEqual([[USER, "k-image-0123456789"]])
+    expect(m.guardCalls).toBe(0)
+    expect(m.prepare).not.toHaveBeenCalled()
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.insertIdem).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+  })
+
+  it("a key another kind of job holds, found only by the insert: refused 409, never answered with that job", async () => {
+    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-img", provider: "kie", job_type: "generate-image", run_type: null } })
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "k-image-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(res.body).not.toContain("job-img")
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+  })
+
+  it("the same type's keyed run is its own: answered with it, as before", async () => {
+    m.existingByKey = { id: "job-live", provider: "use-case", jobType: "tighten-episode" }
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ jobId: "job-live", deduped: true })
+  })
 
   it("no key (or one too short to be a key): no lookup", async () => {
     await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "short" })
@@ -365,7 +427,7 @@ describe("POST /v1/tighten-episode", () => {
   })
 
   it("the estimate never answers with another run", async () => {
-    m.existingByKey = { id: "job-live" }
+    m.existingByKey = { id: "job-live", provider: "use-case", jobType: "tighten-episode" }
     const res = await (await makeApp()).inject({ method: "POST", url: "/v1/tighten-episode/estimate", payload: { mediaUrls: ["https://r2/ep.mp4"] }, headers: { "idempotency-key": "client-key-123" } })
     expect(res.json().data.totalCredits).toBe(932)
     expect(m.keyLookups).toEqual([])
@@ -459,7 +521,7 @@ describe("MCP tighten_episode through the real route", () => {
       // As the auth hook decides it: the orchestrator secret is the internal lane.
       req.authKind = req.headers["x-internal-orchestrator-secret"] !== undefined ? "internal" : "jwt"
     })
-    await app.register(tightenEpisodeRoutes)
+    await app.register(usecaseRunRoutes)
     await app.ready()
     const { registerUseCaseVerbs } = await import("@/lib/mcp/tools/verbs-use-case.js")
     const { buildServer } = await import("@/lib/mcp/tools/__tests__/_helpers.js")

@@ -13,7 +13,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
-import { CATEGORIES, DICT_LOCALES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
@@ -98,9 +98,11 @@ export function loadUnits(root) {
   })
 }
 
-/** The family ids of `NODE_FAMILIES` in frontend/src/lib/node-families.ts (textual; pinned to the runtime list by units-vocabulary.test.ts). */
+/** The family ids of the `NODE_FAMILIES` literal (LEGACY_NODE_FAMILIES) in frontend/src/lib/node-families.ts (textual; pinned to the runtime list by units-vocabulary.test.ts). */
 export function familyIdsFrom(source) {
-  const start = source.indexOf("export const NODE_FAMILIES")
+  // The hand-written literal (LEGACY_NODE_FAMILIES since NODE_FAMILIES composes the units in).
+  const legacy = source.search(/^(?:export )?const LEGACY_NODE_FAMILIES\b/m)
+  const start = legacy >= 0 ? legacy : source.indexOf("export const NODE_FAMILIES")
   if (start < 0) return []
   const rest = source.slice(start)
   const next = rest.indexOf("\nexport ", 1)
@@ -144,7 +146,12 @@ function checkHandles(h, errors) {
       if (!isNonEmptyString(handle.label)) errors.push(`${at}.label must be a non-empty string`)
       if (side === "inputs") {
         if (!Array.isArray(handle.accepts) || handle.accepts.length === 0) errors.push(`${at}.accepts must list at least one handle kind`)
-        else for (const k of handle.accepts) if (!HANDLE_KINDS.includes(k)) errors.push(`${at}.accepts: "${k}" is not a handle kind (${HANDLE_KINDS.join(", ")})`)
+        else {
+          for (const k of handle.accepts) {
+            if (!HANDLE_KINDS.includes(k)) errors.push(`${at}.accepts: "${k}" is not a handle kind (${HANDLE_KINDS.join(", ")})`)
+            else if (!ACCEPTS_KINDS.includes(k)) errors.push(`${at}.accepts: "${k}" has no editor connection rule for a unit input yet (${ACCEPTS_KINDS.join(", ")}) — add it to unitInputAccepts (frontend/src/lib/ffmpeg-handles.ts) and ACCEPTS_KINDS in this PR`)
+          }
+        }
         if (handle.field !== undefined && !isNonEmptyString(handle.field)) errors.push(`${at}.field must be a non-empty string`)
       } else {
         if (!HANDLE_KINDS.includes(handle.kind)) errors.push(`${at}.kind: "${handle.kind}" is not a handle kind (${HANDLE_KINDS.join(", ")})`)
@@ -191,6 +198,8 @@ function checkFiles(unit, m, errors) {
   const kind = m.execution?.kind
   if (!EXECUTION_KINDS.includes(kind)) return
   const has = (tree, f) => unit.files[tree].includes(f)
+  // Every node renders on the canvas: nodeTypes composes each unit's node.tsx.
+  if (!has("frontend", "node.tsx")) errors.push(`every unit needs ${unit.dirs.frontend}/node.tsx (its canvas component)`)
   const need = requiredFiles(kind)
   for (const tree of ["frontend", "backend"]) for (const f of need[tree]) if (!has(tree, f)) errors.push(`execution.kind "${kind}" needs ${unit.dirs[tree]}/${f}`)
   const routes = ["route.ts", "route.ee.ts"].filter((f) => has("backend", f))
@@ -199,6 +208,8 @@ function checkFiles(unit, m, errors) {
   if (!need.route && routes.length > 0) errors.push(`execution.kind "${kind}" runs no route — remove ${routes.join(", ")} or change the kind`)
   for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
   if (kind === "source" && has("frontend", "exec.ts")) errors.push("execution.kind \"source\" runs nothing — remove exec.ts or change the kind")
+  // The add-node picker renders the icon of option.tsx (node-options.tsx composes it).
+  if (isObject(m.picker) && !has("frontend", "option.tsx")) errors.push(`a unit in the add-node picker needs ${unit.dirs.frontend}/option.tsx (its icon), or "picker": null`)
   // getModelCreditBaseCost hard-fails on an unknown id, so a route without a price breaks the node.
   if (routes.length > 0 && !has("backend", "price.ee.ts")) errors.push(`a unit with a route needs ${unit.dirs.backend}/price.ee.ts (a zero-cost one too)`)
   if (routes.length === 0 && has("backend", "price.ee.ts")) errors.push("price.ee.ts without a route prices nothing — remove it")
@@ -259,6 +270,7 @@ export function validateUnit(unit, ctx, knownTypes) {
   if (ctx.legacyTypes.has(unit.type)) errors.push("is also a legacy node (tools/units/legacy-nodes.json) — a type lives in exactly one place")
   if (!isNonEmptyString(m.label)) errors.push("label must be a non-empty string")
   if (!CATEGORIES.includes(m.category)) errors.push(`category "${m.category}" is not one of ${CATEGORIES.join(", ")}`)
+  else if (!REGISTRY_CATEGORIES.includes(m.category)) errors.push(`category "${m.category}" has no /v1/nodes category yet (${REGISTRY_CATEGORIES.join(", ")}) — a unit in it adds that seam in its own PR`)
   const after = (v, where) => {
     if (v === null) return
     if (typeof v !== "string") return errors.push(`${where} must name a node type or be null (first)`)
@@ -295,7 +307,7 @@ export function validateUnit(unit, ctx, knownTypes) {
       const r = ex.requires
       if (ex.kind !== "worker" && ex.kind !== "sync") errors.push("execution.requires is only for a node that runs on the server")
       if (!isObject(r) || !Array.isArray(r.anyOf) || r.anyOf.length === 0 || !r.anyOf.every(isNonEmptyString)) errors.push("execution.requires.anyOf must list the data fields any of which supplies the media")
-      else if (!HANDLE_KINDS.includes(r.kind) || !isNonEmptyString(r.noun)) errors.push("execution.requires needs a handle `kind` and a `noun` (\"a video\")")
+      else if (!MEDIA_INPUT_KINDS.includes(r.kind) || !isNonEmptyString(r.noun)) errors.push(`execution.requires needs a media \`kind\` (${MEDIA_INPUT_KINDS.join(", ")}) and a \`noun\` ("a video")`)
     }
   }
   if (!Array.isArray(m.capabilities)) errors.push("capabilities must be an array (empty is fine)")

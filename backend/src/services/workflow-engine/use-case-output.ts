@@ -3,7 +3,9 @@
  * its wrapper job's `output_data` (lib/use-case/wrapper-output.ts): the
  * episode as video or audio, the plan on `json`, the transcript, the take's
  * quality ("proxy" is a review-on run's preview) and its render's bases, and
- * the settings the run was built from. Pure — the one
+ * the settings the run was built from, and the episode's length
+ * (`durationSec`, with the take only: what a Trim, Loop or Combine Videos
+ * after the node is charged by). Pure — the one
  * mapping the node's executor (completed and failed) and every rebuild of a
  * node output from a job row (`buildNodeOutputFromJobData`) share. The
  * wrapper's `plan` is the same value as its `json` and is not copied
@@ -24,6 +26,9 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
   const renderBasis = basis(outputData.renderBasis)
   const settings = outputData.useCaseSettings
   const useCaseSettings = settings && typeof settings === "object" && !Array.isArray(settings) ? (settings as Readonly<Record<string, unknown>>) : undefined
+  const durationSec = (videoUrl || audioUrl) && typeof outputData.durationSec === "number" && Number.isFinite(outputData.durationSec) && outputData.durationSec > 0
+    ? outputData.durationSec
+    : undefined
   return {
     ...(videoUrl ? { videoUrl } : {}),
     ...(audioUrl ? { audioUrl } : {}),
@@ -33,5 +38,6 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
     ...(planBasis ? { planBasis } : {}),
     ...(renderBasis ? { renderBasis } : {}),
     ...(useCaseSettings ? { useCaseSettings } : {}),
+    ...(durationSec !== undefined ? { durationSec } : {}),
   }
 }

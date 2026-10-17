@@ -93,6 +93,33 @@ describe("MCP structured references (connected_references + reference_order)", (
   })
 })
 
+// WHO is in the shot, as picker-catalog ids: one id, a list, and the one number.
+const SUBJECT = { type: "woman", age: "age-custom", customAge: 34, jewelry: ["jewelry-gold", "jewelry-silver"], heldProp: "smartphone" }
+
+describe("MCP structured subject (subject)", () => {
+  it("generate_image forwards subject unchanged to /v1/generate-image", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-subj" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_image", { prompt: "on the seawall at dusk", subject: SUBJECT })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.subject).toEqual(SUBJECT)
+    expect(received.body?.prompt).toBe("on the seawall at dusk")
+  })
+
+  it("generate_image sends no subject key when none is given", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-nosubj" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "generate_image", { prompt: "a cabin" })
+
+    expect(received.body && "subject" in received.body).toBe(false)
+  })
+})
+
 // A reference the caller can name and describe but has no image for.
 const DESCRIBED = [{ name: "Natalie", description: "a tall woman in a red coat" }]
 

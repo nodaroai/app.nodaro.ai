@@ -144,11 +144,12 @@ describe("executeUseCaseNode — the run", () => {
     expect((c as unknown as { onJobCreated: ReturnType<typeof vi.fn> }).onJobCreated).toHaveBeenCalledWith("t1", "job-w")
   })
 
-  it("a null setting is left out (the route reads absent as its default)", async () => {
-    await executeUseCaseNode(tighten({ framing: null, captionStyle: null }), wired(), ctx(), undefined)
+  it("a None the body takes is sent as null; a null it does not take, or an unset setting, is left out (the route's default)", async () => {
+    await executeUseCaseNode(tighten({ framing: null, captionStyle: null, styleGuide: undefined }), wired(), ctx(), undefined)
     const body = JSON.parse(m.fetch.mock.calls[0]![1].body)
-    expect(body).not.toHaveProperty("framing")
+    expect(body).toHaveProperty("framing", null)
     expect(body).not.toHaveProperty("captionStyle")
+    expect(body).not.toHaveProperty("styleGuide")
   })
 
   it("carries the take's quality and transcript, and an audio episode as audio", async () => {

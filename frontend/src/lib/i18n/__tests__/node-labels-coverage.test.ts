@@ -1,3 +1,4 @@
+// @test-always reads frontend sources by path, and checks every node unit's label too
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"

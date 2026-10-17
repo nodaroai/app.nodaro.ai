@@ -85,7 +85,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -137,6 +137,11 @@ import { usecaseFeesTotal } from "./use-case-fees.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
+// Node units (tools/units/README.md): each unit's price.ee.ts, through the ee
+// aggregate, so core never imports a price. STATIC_CREDIT_COSTS and
+// CREDIT_COSTS are the legacy tables below ∪ every unit's rows and credit id.
+import { UNIT_PRICES } from "../nodes/_generated/prices.js"
+import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -564,7 +569,7 @@ const ELEVENLABS_SFX_PER_SECOND_ROWS: Record<string, number> = Object.fromEntrie
   TEXT_TO_AUDIO_SFX_CREDIT_IDS.map((id, i) => [id, (i + 1) * ELEVENLABS_SFX_CREDITS_PER_SECOND]),
 )
 
-export const STATIC_CREDIT_COSTS: Record<string, number> = {
+export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC_CREDIT_COSTS", {
   // Credits = ceil(kieCredits / 4) at 0% markup.
   // Markup % is configurable in admin settings (app_settings.cost_markup_percent).
   // Base entries = default/cheapest setting. Composite entries = specific setting.
@@ -1892,6 +1897,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // `SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE` (lib/speaker-view-plan.ts), the
   // model_pricing rows mirror them.
   ...SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE,
+  // speaker-frames — where each speaker's face is, per camera (the cloud
+  // plugin's YuNet detection, no vendor). Priced per started BLOCK of 1,000
+  // sampled frames, decided 2026-10-16: one rate for every footage class.
+  // The route's computeCredits and the DAG's speakerFramesCreditOverride both
+  // reserve `this × max(1, ⌈frames ÷ 1,000⌉)` from the server-counted scope
+  // (lib/speaker-frames-plan.ts); the bare row is the estimators' one-block
+  // floor. Value is `SPEAKER_FRAMES_CREDITS_PER_BLOCK` (@nodaro/render-rules);
+  // the model_pricing row (migration 530) mirrors it.
+  [SPEAKER_FRAMES_CREDIT_ID]: SPEAKER_FRAMES_CREDITS_PER_BLOCK,
   // Image Collage — composites N images into one 2K/4K image (local ffmpeg,
   // no provider cost). Priced by resolution. Base + resolution composites;
   // the single-node route uses computeCredits, workflow runs reserve the
@@ -2139,7 +2153,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "beeble-switchx:210f:720p": 350,
   "beeble-switchx:240f:1080p": 1200,
   "beeble-switchx:240f:720p": 400,
-}
+}, unitStaticCosts(UNIT_PRICES))
 
 /**
  * The `premium-direct` rung (decided 2026-10-08): what a PREMIUM model costs
@@ -2238,7 +2252,7 @@ export function registerStaticCreditCosts(costs: Record<string, number>): void {
 // provider+quality shape — anything where the node's *strategy* or *mode*
 // drives the price.
 
-export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = {
+export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = composeRecord<(data: Record<string, unknown>) => string>("CREDIT_COSTS", {
   // Choose Best (reduce): composite key = `reduce:<strategyId>`; the AI judge
   // additionally tiers by its model (strategyConfig.llmModel). Default to
   // `concat` (the cheapest pure-logic strategy) when strategyId is absent.
@@ -2284,6 +2298,10 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Camera Switch: flat — one id whatever the request carries.
   "camera-switch": () => CAMERA_SWITCH_CREDIT_ID,
 
+  // Speaker Frames: one id whatever the request carries; the blocks are the
+  // reserve's quantity (lib/speaker-frames-plan.ts), never the id.
+  "speaker-frames": () => SPEAKER_FRAMES_CREDIT_ID,
+
   // Speaker View: the row of a request-shaped record's quality and price tier
   // (the route body / the job's input_data: `edl`, `transcript` and the wire
   // settings) — the same rule the plugin's route and the payload builder price
@@ -2301,7 +2319,7 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Tighten Episode (a use-case node): its own charge is its per-run fee; its
   // steps bill as their own jobs, and an estimate expands it into them.
   "tighten-episode": () => "use-case-fee:tighten-episode",
-}
+}, Object.fromEntries(Object.entries(UNIT_PRICES).map(([type, p]) => [type, (data: Record<string, unknown>) => p.creditId(data)])))
 
 // ============================================================
 // Helper Functions
@@ -4740,7 +4758,12 @@ function wireInputLength(
       length: wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps, walked),
     }))
   const length = videoOutputLength(origin, inputs)
-  return length === "no-rule" ? undefined : length
+  if (length !== "no-rule") return length
+  // A step outside the video registry that keeps one input's length (a Mix
+  // Audio that ends with its voice — `keptLengthWire`, the rule the run walks
+  // read, decided 2026-10-16): that input's length.
+  const kept = keptLengthWire(origin, gateNodes, gateEdges)
+  return kept ? inputs.find((i) => i.sourceId === kept.source)?.length : undefined
 }
 
 /**
@@ -4982,6 +5005,18 @@ export function graphPricingUnits(
   edges: ReadonlyArray<EstimateEdge> | undefined,
   rerunIds: ReadonlySet<string>,
 ): number {
+  // Speaker Frames: the blocks of the edit wired in when it is known now,
+  // else the 180 min × 6 cameras ceiling (`speakerFramesEstimateBlocks`, the
+  // one rule the editor reads too). No wiring sent: the ceiling, unless the
+  // node's own edit gives the frames.
+  if (node.type === "speaker-frames") {
+    const self = { id: node.id ?? "", type: node.type, data: node.data }
+    if (edges === undefined || !node.id) {
+      const inline = node.data?.edl
+      return inline === undefined || inline === null || inline === "" ? SPEAKER_FRAMES_CEILING_BLOCKS : speakerFramesEstimateBlocks(self, [], [], rerunIds)
+    }
+    return speakerFramesEstimateBlocks(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
+  }
   if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
   if (!node.id) return EDIT_PLAN_MAX_MINUTES
   // No wiring sent (the route's `edges` omitted): the render may be wired to

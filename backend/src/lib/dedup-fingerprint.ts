@@ -71,28 +71,47 @@ export async function findRecentMatchingJob(
   }
 }
 
+/** A job under an idempotency key, as a keyed route judges it: whose kind of job it is, and its run's type. */
+export interface KeyedJob {
+  readonly id: string
+  readonly provider: string | null
+  /** The run's type: what its input records (`input_data.type`), else its `job_type`. */
+  readonly jobType: string | null
+}
+
+/** The columns {@link keyedJobOf} reads (a PostgREST select list). */
+export const KEYED_JOB_COLUMNS = "id, provider, job_type, run_type:input_data->>type"
+
+const named = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null)
+
+/** A row selected with {@link KEYED_JOB_COLUMNS}, as a {@link KeyedJob}. */
+export function keyedJobOf(row: { readonly id: string } & Readonly<Record<string, unknown>>): KeyedJob {
+  return { id: row.id, provider: named(row.provider), jobType: named(row.run_type) ?? named(row.job_type) }
+}
+
 /**
- * The caller's job under this idempotency key, at any age (null when there is
- * none or the read fails). A route whose job outlives the guard's
- * `DEDUP_TTL_MS` window asks this before any check that could answer a retry
- * differently from the original (a re-probe, a balance check), so a keyed
- * retry of a live run always gets that run back.
+ * The caller's job under this idempotency key, at any age, with its kind and
+ * run type (null when there is none or the read fails). A route whose job
+ * outlives the guard's `DEDUP_TTL_MS` window asks this before any check that
+ * could answer a retry differently from the original (a re-probe, a balance
+ * check), so a keyed retry of a live run always gets that run back.
  */
 export async function findJobByIdempotencyKey(
   userId: string,
   key: string,
   /** Only a job of this provider answers (a key reused on another kind of job does not). */
   opts?: { readonly provider?: string },
-): Promise<{ id: string } | null> {
+): Promise<KeyedJob | null> {
   try {
     let query = supabase
       .from("jobs")
-      .select("id")
+      .select(KEYED_JOB_COLUMNS)
       .eq("user_id", userId)
       .eq("idempotency_key", key)
     if (opts?.provider) query = query.eq("provider", opts.provider)
     const { data } = await query.limit(1).maybeSingle()
-    return (data as { id: string } | null) ?? null
+    const row = data as ({ id: string } & Record<string, unknown>) | null
+    return row ? keyedJobOf(row) : null
   } catch {
     return null
   }

@@ -10,11 +10,24 @@
         ]
       }
     },
+    "frontend/src/lib/unit-definitions.ts": {
+      "composes": "UNIT_NODE_DEFINITIONS = UNIT_DEFINITIONS — the one door through which the registries derived from a unit's manifest (handle tables, EXECUTABLE_TYPES and the price mirror, the ffmpeg rule, config-panel names and sets, output extraction) read it, so none of those modules is itself a composer a unit may not import (G5)",
+      "exports": {
+        "definitions": [
+          "UNIT_NODE_DEFINITIONS"
+        ]
+      },
+      "lookups": [
+        "unitDefinitionOf"
+      ]
+    },
     "frontend/src/components/editor/workflow-editor/types.ts": {
       "composes": "EXECUTABLE_TYPES from the composed definitions (execution.kind) and the editor's price fallback",
       "exports": {
         "definitions": [
-          "EXECUTABLE_TYPES"
+          "EXECUTABLE_TYPES",
+          "NODE_CREDIT_COSTS",
+          "estimateNodeCredits"
         ]
       },
       "lookups": [
@@ -128,14 +141,25 @@
         ]
       }
     },
+    "backend/src/lib/unit-descriptors.ts": {
+      "composes": "UNIT_NODE_DESCRIPTORS = the registry aggregate — the one door through which the server registries derived from a unit's manifest (required media, saved output, the finalize set, the video-length rules, the worker map, the MCP handle table) read it",
+      "exports": {
+        "registry": [
+          "UNIT_NODE_DESCRIPTORS"
+        ]
+      },
+      "lookups": [
+        "unitDescriptorOf"
+      ]
+    },
     "backend/src/services/workflow-engine/payload-builder.ts": {
-      "composes": "UNIT_PAYLOADS[type] before the legacy cases"
+      "composes": "UNIT_PAYLOADS[type] after the shared prelude, before the legacy cases; REQUIRED_MEDIA_INPUTS ∪ each unit's execution.requires"
     },
     "backend/src/services/workflow-engine/output-extractor.ts": {
-      "composes": "output sets from UNIT_REGISTRY capabilities"
+      "composes": "the saved output of a unit from its descriptor's handles.outputs[].from (through lib/unit-descriptors.ts)"
     },
     "backend/src/workers/handlers/ffmpeg.ts": {
-      "composes": "UNIT_WORKERS on the video queue"
+      "composes": "ffmpegHandlers = legacy ∪ UNIT_WORKERS whose execution.queue is video"
     }
   }
 }

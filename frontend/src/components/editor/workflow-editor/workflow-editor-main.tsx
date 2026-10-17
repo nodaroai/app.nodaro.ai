@@ -86,7 +86,6 @@ import { ugcPriceNoteKey, ugcRunCredits, ugcRunFigureNow, ugcRunParts, type UgcP
 import { runSetPriceState, useUgcRunAnswers } from "@/hooks/use-run-from-here-credits";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
-  NODE_CREDIT_COSTS,
   isExecutableNode,
   SERVER_RUN_ONLY_TYPES,
   type ExecutionContext,

@@ -30,6 +30,7 @@ import { speechPriceIdsFor } from "@/lib/speech-estimate"
 import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
+// @registry-lookup prices each node of a run by its own type (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 /** The units a run is priced at, exactly: the factors' whole units unless they carry fractional ones. */
 function exactUnitsOf(quantity: RunCreditQuantity): number {

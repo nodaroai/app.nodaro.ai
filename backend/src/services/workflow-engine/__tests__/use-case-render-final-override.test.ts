@@ -9,8 +9,12 @@
  */
 import { describe, it, expect } from "vitest"
 import { applyInputOverridesToNodes } from "../../../workers/apply-input-overrides.js"
-import { CONTINUE_PATH, requestOf } from "../use-case-request.js"
-import type { OrchestratorContext, SimpleNode } from "../types.js"
+import { usecaseContinuePath } from "@nodaro/render-rules"
+import { continuingGeneration, requestOf } from "../use-case-request.js"
+import { routeUseCaseInput } from "../use-case-inputs.js"
+import type { OrchestratorContext, ResolvedInputs, SimpleEdge, SimpleNode } from "../types.js"
+
+const CONTINUE_PATH = usecaseContinuePath("tighten-episode")
 
 const EDIT = { v: 1, kind: "edl", basis: "b", edl: { segments: [{ id: "s0", inMs: 0, outMs: 4000 }], dropped: [] } }
 const saved = (): SimpleNode[] => [
@@ -84,3 +88,50 @@ describe("a continuation saved on the graph is never this run's", () => {
   })
 })
 
+
+describe("the request reads the node's own descriptor", () => {
+  const media = { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] }
+
+  it("Tighten Episode's routes are the ones P1 called", () => {
+    expect(CONTINUE_PATH).toBe("/v1/tighten-episode/continue")
+    const t1 = saved().find((n) => n.id === "t1")!
+    expect(requestOf(t1, media as never, ctx, null).path).toBe("/v1/tighten-episode")
+    expect(requestOf(t1, media as never, ctx, "job-failed").path).toBe(CONTINUE_PATH)
+  })
+
+  it("a fresh run sends the type's setting keys and nothing else of the node's data", () => {
+    const t1: SimpleNode = {
+      id: "t1", type: "tighten-episode",
+      data: { output: "video", captions: false, framing: null, planTier: "premium", musicDuckAmount: 40, label: "Mine", useCaseJobId: "job-0", generatedVideoUrl: "x" },
+    }
+    const body = requestOf(t1, media as never, ctx, null).body
+    expect(body).toMatchObject({ mediaUrls: ["https://r2/ep.mp4"], output: "video", captions: false, framing: null, planTier: "premium", musicDuckAmount: 40 })
+    for (const key of ["label", "useCaseJobId", "generatedVideoUrl"]) expect(body).not.toHaveProperty(key)
+  })
+
+  it("a wired music bed rides along; an intro card is sent only to a type with that input (Tighten has none)", () => {
+    const t1 = saved().find((n) => n.id === "t1")!
+    const body = requestOf(t1, { ...media, useCaseMusic: "https://r2/bed.mp3", useCaseIntroCard: "https://r2/card.mp4" } as never, ctx, null).body
+    expect(body).toMatchObject({ musicUrl: "https://r2/bed.mp3" })
+    expect(body).not.toHaveProperty("introCardUrl")
+  })
+
+  it("no recording wired: the node's own label in the refusal", () => {
+    const t1 = saved().find((n) => n.id === "t1")!
+    expect(() => requestOf(t1, {} as never, ctx, null)).toThrow("Tighten Episode needs a recording wired into Media")
+  })
+
+  it("a newer generation is continued on the same continue route", () => {
+    const t1 = saved().find((n) => n.id === "t1")!
+    const next = continuingGeneration(requestOf(t1, media as never, ctx, "job-failed"), "job-newer")
+    expect(next.path).toBe(CONTINUE_PATH)
+    expect(next.body).toMatchObject({ jobId: "job-newer", mode: "from-failed" })
+  })
+
+  it("a wire into introCard is the node's intro card", () => {
+    const inputs: ResolvedInputs = {} as ResolvedInputs
+    const edge = { id: "e", source: "card", target: "t1", targetHandle: "introCard" } as SimpleEdge
+    expect(routeUseCaseInput(inputs, edge, "card", "https://r2/card.mp4")).toBe(true)
+    expect(inputs.useCaseIntroCard).toBe("https://r2/card.mp4")
+  })
+})

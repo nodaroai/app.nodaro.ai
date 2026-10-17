@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import { NodaroError } from "../errors.js"
+import { ForbiddenError, NodaroError } from "../errors.js"
 import {
   remapTranscriptThroughEdl,
   unwrapEditPlanOutput,
@@ -324,20 +324,40 @@ export interface TightenEpisodeInput {
   musicDuckAmount?: number
 }
 
-/** What `tightenEpisode` and `continueUseCase` answer: the run's job to poll. */
-export interface TightenEpisodeJobResult extends EditJobResult {
+/**
+ * The podcast use-case node types, each one a route (`POST /v1/<type>`, and
+ * `POST /v1/<type>/continue` to continue one of its runs).
+ */
+export const USE_CASE_NODE_TYPES = ["tighten-episode"] as const
+/** A podcast use-case node type (see {@link USE_CASE_NODE_TYPES}). */
+export type UseCaseNodeType = (typeof USE_CASE_NODE_TYPES)[number]
+
+function isUseCaseNodeType(value: unknown): value is UseCaseNodeType {
+  return typeof value === "string" && (USE_CASE_NODE_TYPES as readonly string[]).includes(value)
+}
+
+/** The route that continues a run of each type (`/v1/<type>/continue`), as a table the type picks from. */
+const USE_CASE_CONTINUE_PATHS: { readonly [K in UseCaseNodeType]: `/v1/${K}/continue` } = {
+  "tighten-episode": "/v1/tighten-episode/continue",
+}
+
+/** What a use-case run (`tightenEpisode`) and `continueUseCase` answer: the run's job to poll. */
+export interface UseCaseJobResult extends EditJobResult {
   /** The run's execution (absent on a deduplicated retry). */
   executionId?: string
   /** `true` when an `Idempotency-Key` retry found the run already started: `jobId` is that run. */
   deduped?: boolean
 }
 
+/** What `tightenEpisode` answers (a {@link UseCaseJobResult}). */
+export type TightenEpisodeJobResult = UseCaseJobResult
+
 /**
- * What a Tighten Episode run is estimated at (`data`). Every credit amount is 0
+ * What a use-case run is estimated at (`data`). Every credit amount is 0
  * on an edition without credits; `durationSec` is `null` when the recording's
  * length could not be read.
  */
-export interface TightenEpisodeEstimate {
+export interface UseCaseEstimate {
   /** The whole run: its steps plus the fee. */
   totalCredits: number
   /** The steps at their own rates. */
@@ -347,6 +367,9 @@ export interface TightenEpisodeEstimate {
   /** The recording's length, in seconds. */
   durationSec: number | null
 }
+
+/** What a Tighten Episode run is estimated at (a {@link UseCaseEstimate}). */
+export type TightenEpisodeEstimate = UseCaseEstimate
 
 /** Input for {@link EditResource.continueUseCase}. */
 export interface UseCaseContinueInput {
@@ -359,6 +382,13 @@ export interface UseCaseContinueInput {
   mode: "from-failed" | "render-final"
   /** Render final only: the reviewer's edit of the plan (an EDL). */
   editedEdl?: unknown
+  /**
+   * The run's node type: its continuation goes to `POST /v1/<nodeType>/continue`.
+   * Optional: when absent the job is read first (`GET /v1/jobs/:id`, which
+   * needs the `jobs:read` scope on an app token) for the type the run records;
+   * a key that may not read jobs continues on the Tighten Episode route.
+   */
+  nodeType?: UseCaseNodeType
 }
 
 /** Per-call options for the Tighten Episode requests. */
@@ -488,20 +518,51 @@ export class EditResource {
   }
 
   /**
-   * Continue a Tighten Episode run as a new job (`POST /v1/tighten-episode/continue`):
-   * `"from-failed"` keeps the steps that finished and runs the rest (the fee is
-   * held again; the failed run's was refunded); `"render-final"` renders the
-   * full-quality episode after a review-on preview, with the preview's
-   * settings and no fee. A refusal that names another job
+   * Continue a use-case run as a new job (`POST /v1/<type>/continue`, the
+   * run's own type: `input.nodeType`, else the type the job records, read with
+   * `GET /v1/jobs/:id`): `"from-failed"` keeps the steps that finished and runs
+   * the rest (the fee is held again; the failed run's was refunded);
+   * `"render-final"` renders the full-quality result after a review-on preview,
+   * with the preview's settings and no fee. A refusal that names another job
    * (`already_running`, `continuation_superseded`,
    * `render_final_already_rendered`) throws a `ContinuationRefusedError`
    * carrying that `jobId`.
    */
-  continueUseCase(input: UseCaseContinueInput, options?: UseCaseRequestOptions): Promise<TightenEpisodeJobResult> {
-    return this.client.request("POST", "/v1/tighten-episode/continue", {
+  async continueUseCase(input: UseCaseContinueInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
+    if (input.nodeType !== undefined && !isUseCaseNodeType(input.nodeType)) {
+      throw new NodaroError(
+        `continueUseCase: nodeType "${String(input.nodeType)}" is not a use-case node type (${USE_CASE_NODE_TYPES.join(", ")})`,
+        "invalid_node_type",
+        400,
+      )
+    }
+    const type = input.nodeType ?? (await this.runTypeOf(input.jobId))
+    return this.client.request("POST", USE_CASE_CONTINUE_PATHS[type], {
       body: { jobId: input.jobId, mode: input.mode, ...(input.editedEdl !== undefined ? { editedEdl: input.editedEdl } : {}) },
       ...idempotencyHeaders(options),
     })
+  }
+
+  /**
+   * The use-case type a run records (`input_data.type`, else its `job_type`).
+   * Tighten Episode — the one type before runs could be read for theirs — when
+   * the key lacks the `jobs:read` scope (403 naming that scope) or the job
+   * names no use-case type: its route then answers for the run exactly as it
+   * always has (a job that is no run of it is `not_found`). Any other failure
+   * of the read, any other 403 included, is thrown.
+   */
+  private async runTypeOf(jobId: string): Promise<UseCaseNodeType> {
+    let row: { job_type?: unknown; input_data?: unknown } | undefined
+    try {
+      row = (await this.client.request<{ data?: { job_type?: unknown; input_data?: unknown } }>("GET", `/v1/jobs/${encodeURIComponent(jobId)}`)).data
+    } catch (err) {
+      if (err instanceof ForbiddenError && err.missingScope === "jobs:read") return "tighten-episode"
+      throw err
+    }
+    const input = row?.input_data
+    const recorded = input && typeof input === "object" && !Array.isArray(input) ? (input as { type?: unknown }).type : undefined
+    const type = typeof recorded === "string" && recorded.length > 0 ? recorded : row?.job_type
+    return isUseCaseNodeType(type) ? type : "tighten-episode"
   }
 
   /**

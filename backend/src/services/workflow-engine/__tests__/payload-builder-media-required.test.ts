@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/workflow-editor/execute-node.ts frontend/src/lib/i18n/en.ts
 /**
  * B3 (spec §7, audit §7 "B3"). The DAG engine enqueued ffmpeg nodes with an
  * `undefined` media URL (`resolvedInputs.videoUrl || data.videoUrl`, both

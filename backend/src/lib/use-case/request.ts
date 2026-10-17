@@ -1,68 +1,26 @@
 /**
- * Tighten Episode's request: the wire schema (REST, MCP loopback, SDK, the
- * editor, the backend engine) and the preparation every route shares — probe
- * the recording (what streams it really carries, how long it is), refuse what
- * the chain cannot run, resolve the settings, build the graph. No row, no hold.
+ * A use-case run's request (decided 2026-10-13): the bodies (bodies.ts, one
+ * per type; re-exported here for existing importers), the continue body, and
+ * the preparation every route shares — probe the recording (what streams it
+ * really carries, how long it is), refuse what the chain cannot run, resolve
+ * the settings, build the type's graph from its descriptor. No row, no hold.
  */
 import { z } from "zod"
 import {
-  SPEAKER_VIEW_LAYOUT_SETTINGS,
-  TIGHTEN_MAX_EPISODE_SEC,
-  buildTightenEpisodeGraph,
-  resolveTightenEpisodeSettings,
-  type TightenEpisodeSettings,
-  type TightenEpisodeSources,
+  usecaseDescriptor,
   type UseCaseGraph,
   type UseCaseMediaKind,
+  type UseCaseNodeType,
+  type UseCaseSettings,
+  type UseCaseSources,
 } from "@nodaro/render-rules"
-import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
-import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
-import { safeUrlSchema } from "../url-validator.js"
 import { probeMediaDuration, probeMediaStreams } from "../../providers/video/ffmpeg-utils.js"
+import type { UseCaseBody } from "./bodies.js"
 
-const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
-
-export const tightenEpisodeBody = z.object({
-  /** The recording. One in this phase; multicam arrives with the Cameras section. */
-  mediaUrls: z.array(safeUrlSchema).min(1).max(1),
-  musicUrl: safeUrlSchema.optional(),
-  output: z.enum(["video", "audio"]).optional(),
-  /**
-   * Frame the episode with Speaker View: an output aspect and a layout, on
-   * automatic boxes over the speakers on screen. null/absent = no framing. A
-   * layout the aspect does not draw is snapped by the settings resolver, as
-   * the render would snap it.
-   */
-  framing: z
-    .object({
-      aspect: z.enum(tuple(EDL_TARGET_ASPECTS)),
-      layout: z.enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS)),
-    })
-    .nullable()
-    .optional(),
-  captions: z.boolean().optional(),
-  captionStyle: z.enum(tuple(ALL_CAPTION_STYLES)).optional(),
-  reviewBeforeRender: z.boolean().optional(),
-  planTier: z.enum(tuple(EDIT_PLAN_TIERS)).optional(),
-  instructions: z.string().max(4000).optional(),
-  styleGuide: z.string().max(4000).optional(),
-  musicDuckAmount: z.number().min(0).max(100).optional(),
-  // Honoured on the internal lane only (the backend engine); ignored from any other caller.
-  componentDepth: z.number().int().min(0).max(5).optional(),
-  executingComponentIds: z.array(z.string()).max(10).optional(),
-  previewStopRule: z.boolean().optional(),
-  reviewerPresent: z.boolean().optional(),
-  billingContext: z.unknown().optional(),
-  // The usual job stamps.
-  userId: z.string().uuid().optional(),
-  workflowId: z.string().uuid().optional(),
-  nodeId: z.string().max(200).optional(),
-  mcp_client: z.string().max(200).optional(),
-})
-export type TightenEpisodeBody = z.infer<typeof tightenEpisodeBody>
+export { tightenEpisodeBody, type TightenEpisodeBody } from "./bodies.js"
 
 /**
- * POST /v1/tighten-episode/continue: continue a run of yours — from where it
+ * POST <the type's route>/continue: continue a run of yours — from where it
  * failed, or its Render final after a review. The run is named by its wrapper
  * job; the graph is the snapshot that run stored, never one rebuilt here.
  */
@@ -89,27 +47,29 @@ export const usecaseContinueBody = z.object({
 export type UseCaseContinueBody = z.infer<typeof usecaseContinueBody>
 
 export type PreparedUseCase =
-  | { readonly ok: true; readonly settings: TightenEpisodeSettings; readonly sources: TightenEpisodeSources; readonly graph: UseCaseGraph }
+  | { readonly ok: true; readonly settings: UseCaseSettings; readonly sources: UseCaseSources; readonly graph: UseCaseGraph }
   | { readonly ok: false; readonly status: 400 | 403 | 503; readonly code: string; readonly message: string }
 
 const refuse = (code: string, message: string): PreparedUseCase => ({ ok: false, status: 400, code, message })
 
 /**
  * Whether someone can review this run's preview (decided 2026-10-13) — the
- * one place a use-case route derives it. A caller outside any run reviews
- * their own run: present exactly when they asked for review. Inside another
- * run (the internal lane) only that run's own answer counts, and only a
- * literal `true`.
+ * one place a use-case route derives it, for any type's resolved settings. A
+ * caller outside any run reviews their own run: present exactly when they
+ * asked for review. Inside another run (the internal lane) only that run's
+ * own answer counts, and only a literal `true`.
  */
 export function usecaseReviewerPresent(
-  settings: Pick<TightenEpisodeSettings, "reviewBeforeRender">,
+  settings: { readonly reviewBeforeRender?: unknown },
   lane: { readonly internal: boolean; readonly forwarded: unknown },
 ): boolean {
-  if (!settings.reviewBeforeRender) return false
+  if (settings.reviewBeforeRender !== true) return false
   return lane.internal ? lane.forwarded === true : true
 }
 
-export async function prepareTightenEpisode(body: TightenEpisodeBody, _userId: string): Promise<PreparedUseCase> {
+/** Probe the recording (and any optional input), refuse what the chain cannot run, build the type's graph. No row, no hold. */
+export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): Promise<PreparedUseCase> {
+  const d = usecaseDescriptor(type)
   const mediaUrl = body.mediaUrls[0]!
   let streams: { hasVideo: boolean; hasAudio: boolean }
   try {
@@ -118,21 +78,27 @@ export async function prepareTightenEpisode(body: TightenEpisodeBody, _userId: s
     return refuse("media_unreadable", "The recording could not be read. Check that the link opens and is a video or audio file.")
   }
   if (!streams.hasAudio) return refuse("media_has_no_audio", "The recording has no sound to transcribe.")
+  if (d.needsVideo && !streams.hasVideo) return refuse("media_needs_video", `${d.label} needs a video recording.`)
   const durationSec = await probeMediaDuration(mediaUrl)
-    .then((d) => (Number.isFinite(d) && d > 0 ? d : undefined))
+    .then((s) => (Number.isFinite(s) && s > 0 ? s : undefined))
     .catch(() => undefined)
-  if (durationSec !== undefined && durationSec > TIGHTEN_MAX_EPISODE_SEC) {
-    return refuse("media_too_long", "Tighten Episode takes recordings up to 3 hours.")
+  if (durationSec !== undefined && durationSec > d.maxSourceSec) {
+    return refuse("media_too_long", `${d.label} takes recordings up to ${Math.round(d.maxSourceSec / 3600)} hours.`)
   }
   if (body.musicUrl) {
     const music = await probeMediaStreams(body.musicUrl).catch(() => null)
     if (!music?.hasAudio) return refuse("music_has_no_audio", "The music file could not be read as audio.")
   }
+  if (body.introCardUrl) {
+    const card = await probeMediaStreams(body.introCardUrl).catch(() => null)
+    if (!card?.hasVideo) return refuse("intro_card_unreadable", "The intro card could not be read as a video.")
+  }
   const kind: UseCaseMediaKind = streams.hasVideo ? "video" : "audio"
-  const settings = resolveTightenEpisodeSettings(body, kind)
-  const sources: TightenEpisodeSources = {
+  const settings = d.resolveSettings(body, kind)
+  const sources: UseCaseSources = {
     media: { url: mediaUrl, kind, ...(durationSec !== undefined ? { durationSec } : {}) },
     ...(body.musicUrl ? { music: { url: body.musicUrl } } : {}),
+    ...(body.introCardUrl ? { introCard: { url: body.introCardUrl } } : {}),
   }
-  return { ok: true, settings, sources, graph: buildTightenEpisodeGraph(settings, sources) }
+  return { ok: true, settings, sources, graph: d.build(settings, sources) }
 }

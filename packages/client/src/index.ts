@@ -462,6 +462,7 @@ export type {
   StructuredReferenceParams,
   GenerationSessionParams,
   GenerateImageParams,
+  Subject,
   GenerateImageBatchGroup,
   GenerateImageBatchResult,
   GenerateImageBatchOutput,
@@ -758,7 +759,7 @@ export {
   type InviteInput,
   type ListInvitationsOptions,
 } from "./resources/organizations.js"
-export { EditResource } from "./resources/edit.js"
+export { EditResource, USE_CASE_NODE_TYPES } from "./resources/edit.js"
 export type {
   EditJobResult,
   SilenceDetectInput,
@@ -775,6 +776,9 @@ export type {
   TightenEpisodeJobResult,
   TightenEpisodeEstimate,
   UseCaseContinueInput,
+  UseCaseEstimate,
+  UseCaseJobResult,
+  UseCaseNodeType,
   UseCaseRequestOptions,
 } from "./resources/edit.js"
 export { WorkspacesResource, type CreateWorkspaceInput } from "./resources/workspaces.js"

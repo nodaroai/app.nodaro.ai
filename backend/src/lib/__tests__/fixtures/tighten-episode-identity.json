@@ -1,0 +1,6775 @@
+[
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "283661b8871add16",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ],
+    "stored": {
+      "version": 1,
+      "nodeType": "tighten-episode",
+      "nodes": [
+        {
+          "id": "uc-source",
+          "type": "upload-video",
+          "position": {
+            "x": 0,
+            "y": 220
+          },
+          "data": {
+            "fieldMappings": {},
+            "label": "Episode recording",
+            "assetId": "",
+            "url": "https://r2/ep.mp4"
+          }
+        },
+        {
+          "id": "uc-transcribe",
+          "type": "transcribe",
+          "position": {
+            "x": 320,
+            "y": 0
+          },
+          "data": {
+            "fieldMappings": {},
+            "label": "Transcribe",
+            "provider": "elevenlabs-stt",
+            "language": "auto",
+            "diarize": true
+          }
+        },
+        {
+          "id": "uc-silence",
+          "type": "silence-detect",
+          "position": {
+            "x": 320,
+            "y": 440
+          },
+          "data": {
+            "fieldMappings": {},
+            "label": "Silence Detect",
+            "thresholdDb": -35,
+            "minSilenceMs": 700,
+            "padMs": 120
+          }
+        },
+        {
+          "id": "uc-plan",
+          "type": "edit-plan",
+          "position": {
+            "x": 640,
+            "y": 220
+          },
+          "data": {
+            "fieldMappings": {},
+            "label": "Tighten Plan",
+            "mode": "tighten",
+            "planTier": "standard",
+            "instructions": "",
+            "sourceOrder": [
+              "uc-source"
+            ],
+            "sourceConfig": {}
+          }
+        },
+        {
+          "id": "uc-render",
+          "type": "apply-edl",
+          "position": {
+            "x": 960,
+            "y": 220
+          },
+          "data": {
+            "fieldMappings": {},
+            "label": "Apply Cut",
+            "output": "video",
+            "quality": "proxy",
+            "crossfadeMs": 0
+          }
+        },
+        {
+          "id": "uc-captions",
+          "type": "add-captions",
+          "position": {
+            "x": 1280,
+            "y": 0
+          },
+          "data": {
+            "fieldMappings": {},
+            "label": "Add Captions",
+            "style": "word-highlight",
+            "wordLevel": false,
+            "position": "bottom",
+            "fontSize": 24,
+            "color": "#ffffff"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "uc-e-uc-source-video-uc-transcribe-audio",
+          "source": "uc-source",
+          "target": "uc-transcribe",
+          "sourceHandle": "video",
+          "targetHandle": "audio"
+        },
+        {
+          "id": "uc-e-uc-source-video-uc-silence-in",
+          "source": "uc-source",
+          "target": "uc-silence",
+          "sourceHandle": "video",
+          "targetHandle": "in"
+        },
+        {
+          "id": "uc-e-uc-source-video-uc-plan-sources",
+          "source": "uc-source",
+          "target": "uc-plan",
+          "sourceHandle": "video",
+          "targetHandle": "sources"
+        },
+        {
+          "id": "uc-e-uc-source-video-uc-render-sources",
+          "source": "uc-source",
+          "target": "uc-render",
+          "sourceHandle": "video",
+          "targetHandle": "sources"
+        },
+        {
+          "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+          "source": "uc-transcribe",
+          "target": "uc-plan",
+          "sourceHandle": "json",
+          "targetHandle": "transcript"
+        },
+        {
+          "id": "uc-e-uc-silence-json-uc-plan-silence",
+          "source": "uc-silence",
+          "target": "uc-plan",
+          "sourceHandle": "json",
+          "targetHandle": "silence"
+        },
+        {
+          "id": "uc-e-uc-plan-edl-uc-render-edl",
+          "source": "uc-plan",
+          "target": "uc-render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+          "source": "uc-transcribe",
+          "target": "uc-render",
+          "sourceHandle": "json",
+          "targetHandle": "transcript"
+        },
+        {
+          "id": "uc-e-uc-render-media-uc-captions-in",
+          "source": "uc-render",
+          "target": "uc-captions",
+          "sourceHandle": "media",
+          "targetHandle": "in"
+        },
+        {
+          "id": "uc-e-uc-render-json-uc-captions-transcript",
+          "source": "uc-render",
+          "target": "uc-captions",
+          "sourceHandle": "json",
+          "targetHandle": "transcript"
+        }
+      ],
+      "outputMap": {
+        "media": {
+          "nodeId": "uc-captions",
+          "handle": "video-out"
+        },
+        "preview": {
+          "nodeId": "uc-render",
+          "handle": "media"
+        },
+        "json": {
+          "nodeId": "uc-plan",
+          "handle": "edl"
+        },
+        "transcript": {
+          "nodeId": "uc-transcribe",
+          "handle": "json"
+        },
+        "planNodeId": "uc-plan",
+        "renderNodeId": "uc-render"
+      },
+      "settings": {
+        "output": "video",
+        "framing": null,
+        "captions": true,
+        "captionStyle": "word-highlight",
+        "reviewBeforeRender": true,
+        "planTier": "standard",
+        "instructions": "",
+        "styleGuide": "",
+        "musicDuckAmount": 75
+      },
+      "hash": "283661b8871add16"
+    }
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "b0b337f056ad03ae",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "8cfa81441bd13a12",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "7de0c45ed405045c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "66380ed2abebf450",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "389a4b6ef0818f30",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "7c38da8850efc1f6",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "ae7f4c9e2ed37e68",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "b4745aec97ca018a",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "127bff789ff2e5ee",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "5b978e2c2f26d712",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "aa0f7be253771850",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-captions",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "dee53c0ea0311d0c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "938b7786bf006d30",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "c9a51820e9b4a236",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "08258ad2036888ac",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "3191b550dccafdaa",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "a669e1cdff48ef37",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "6f32ff81fade227b",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "f5cd90d0dae7b28a",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "5e82eaabbba10dd5",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "b86adb601d93e6ce",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "2c56ad35d934258f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "c84de15ec9fc6da4",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a6249c3c99d66276",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "af2efaf530241a77",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "4e6c0581598d5b13",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "2c7fb09c788213c6",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "ea14f62ffa3409c9",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "2ade6fa0312f5666",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "5327443d9243dbef",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "1df9a9f2a285bbc8",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "548e05a3d0664959",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "0162a1c659be563c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "548e05a3d0664959",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "0162a1c659be563c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "5b31f59cf7e20f66",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7cd8130d267268e3",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "5b31f59cf7e20f66",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7cd8130d267268e3",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "ad43fe83e169d011",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "8f4e72723ae0cd78",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "ad43fe83e169d011",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "8f4e72723ae0cd78",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "4fe66a441665e966",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "fe97cfb924b2ca9f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "4fe66a441665e966",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "fe97cfb924b2ca9f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "548e05a3d0664959",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "0162a1c659be563c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "548e05a3d0664959",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "0162a1c659be563c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "5b31f59cf7e20f66",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7cd8130d267268e3",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "5b31f59cf7e20f66",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7cd8130d267268e3",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "ad43fe83e169d011",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "8f4e72723ae0cd78",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "ad43fe83e169d011",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "8f4e72723ae0cd78",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "4fe66a441665e966",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "fe97cfb924b2ca9f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "4fe66a441665e966",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "fe97cfb924b2ca9f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "a1df15535ae4933d",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "9b3c9cce6ce16a50",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cd74c568317c7c1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": true,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "7b6d78018d369053",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": false,
+    "durationSec": null,
+    "hash": "bd3744f3d316e165",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": false,
+    "durationSec": 3600,
+    "hash": "97edbedae174513c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": null,
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b541f7e0fd4708fe",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "audio",
+    "raw": {
+      "output": "audio",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": false,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "premium",
+      "instructions": "Cut the cross-talk.",
+      "styleGuide": "Keep the host's jokes; drop the ad reads.",
+      "musicDuckAmount": 40
+    },
+    "music": true,
+    "durationSec": 3600,
+    "hash": "97257add49baa14f",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-mix",
+        "handle": "audio-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "media"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": null
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "16:9",
+        "layout": "auto"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "83bc496c55301a1e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "16:9",
+        "layout": "single"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "599d85734f8fd215",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "16:9",
+        "layout": "side-by-side"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "84102d660242bff0",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "16:9",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "84102d660242bff0",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "16:9",
+        "layout": "grid"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cad45b8357a85c99",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "16:9",
+        "layout": "pip"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "cc102dc6106298e8",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "auto"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "987058ba4bbad92c",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "single"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "7812ab690cd08ab3",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "side-by-side"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "7c38da8850efc1f6",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "7c38da8850efc1f6",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "grid"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "f216b239f6a7cbf7",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "9:16",
+        "layout": "pip"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "3f801d343f99a1c6",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "1:1",
+        "layout": "auto"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "3862319edba2d018",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "1:1",
+        "layout": "single"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "4d2401a768f904c1",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "1:1",
+        "layout": "side-by-side"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "06531c205184c8a2",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "1:1",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "84d43de4cfffae6a",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "1:1",
+        "layout": "grid"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "b9335137b34a4065",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "1:1",
+        "layout": "pip"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "ee45d4008fde43fa",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "4:5",
+        "layout": "auto"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "274927ade599c847",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "4:5",
+        "layout": "single"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "c614dfc0f85e21da",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "4:5",
+        "layout": "side-by-side"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "c829b803a8140189",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "4:5",
+        "layout": "stacked"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "c829b803a8140189",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "4:5",
+        "layout": "grid"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "90e650101916273e",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  },
+  {
+    "kind": "video",
+    "raw": {
+      "output": "video",
+      "framing": {
+        "aspect": "4:5",
+        "layout": "pip"
+      },
+      "captions": true,
+      "captionStyle": "word-highlight",
+      "reviewBeforeRender": true,
+      "planTier": "standard",
+      "instructions": "",
+      "styleGuide": "",
+      "musicDuckAmount": 75
+    },
+    "music": true,
+    "durationSec": null,
+    "hash": "0dc8892f192f5919",
+    "outputMap": {
+      "media": {
+        "nodeId": "uc-merge",
+        "handle": "video-out"
+      },
+      "preview": {
+        "nodeId": "uc-render",
+        "handle": "video"
+      },
+      "json": {
+        "nodeId": "uc-plan",
+        "handle": "edl"
+      },
+      "transcript": {
+        "nodeId": "uc-transcribe",
+        "handle": "json"
+      },
+      "planNodeId": "uc-plan",
+      "renderNodeId": "uc-render"
+    },
+    "firstRun": [
+      "uc-source",
+      "uc-transcribe",
+      "uc-silence",
+      "uc-plan",
+      "uc-render"
+    ]
+  }
+]

@@ -15,7 +15,6 @@ import { wordTimingsPreflight } from "./add-captions-preflight"
 import { nestedRunPreflight } from "./sub-workflow-preflight"
 import { previewRenderPreflight } from "./preview-gate"
 import { speakerViewPricePreflight, speakerViewVideoPreflight } from "./speaker-view-price-preflight"
-import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight"
 import { nodeRunError } from "@/components/editor/workflow-editor/node-run-message"
 import { speakerViewSourceOrderingEdges } from "@nodaro/render-rules"
 import { speakerViewVideoUrl } from "@/lib/speaker-view-context"
@@ -107,7 +106,6 @@ export async function executeSubWorkflow(
         previewRenderPreflight(subNodes, subEdges) ??
         speakerViewPricePreflight(subNodes) ??
         speakerViewVideoPreflight(subNodes, subNodes, subEdges) ??
-        speakerFramesPricePreflight(subNodes) ??
         (await nestedRunPreflight(subNodes, { depth: depth + 1, routeKeys: childExecutingKeys }))
       if (blocked) throw new Error(blocked)
     }

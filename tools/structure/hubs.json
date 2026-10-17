@@ -195,7 +195,6 @@
     "frontend/src/components/editor/workflow-editor/scene3d-execution.ts",
     "frontend/src/components/editor/workflow-editor/site-capture-execute.ts",
     "frontend/src/components/editor/workflow-editor/speaker-frames-executor.ts",
-    "frontend/src/components/editor/workflow-editor/speaker-frames-price-preflight.ts",
     "frontend/src/components/editor/workflow-editor/speaker-view-executor.ts",
     "frontend/src/components/editor/workflow-editor/speaker-view-price-preflight.ts",
     "frontend/src/components/editor/workflow-editor/speaker-view-source-measure.ts",

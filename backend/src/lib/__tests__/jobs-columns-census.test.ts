@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts supabase/migrations/*.sql
 /**
  * Every `jobs` column the backend names exists.
  *

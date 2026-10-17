@@ -1,6 +1,6 @@
 "use client"
 
-import { SPEAKER_FRAMES_PRICED, SPEAKER_VIEW_PRICED } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_PRICED, isUseCaseNodeType } from "@nodaro/render-rules"
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
@@ -21,11 +21,13 @@ import { useLocaleStore } from "@/lib/locale-store"
 import { nodeLabelFieldValue, nodeLabelFieldCommit, nodeTypeDefaultLabel } from "./config-panel-label"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
-import { useTightenEpisodeCredits } from "@/hooks/use-tighten-episode-credits"
+import { useUseCaseCredits } from "@/hooks/use-use-case-credits"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
+// @registry-enumerates lists the autoExecute types of NODE_DEFINITIONS (and renders a unit panel by type, UNIT_CONFIGS[nodeType])
+import { UNIT_CONFIGS } from "@/nodes/_generated/configs"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   NODE_DEFINITIONS,
@@ -335,6 +337,10 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     refetchInterval: (q) => (q.state.data?.status === "approved" ? false : 5000),
     retry: false,
   })
+
+  // A node unit's own panel (frontend/src/nodes/<type>/config.tsx) — never a legacy type below.
+  const UnitConfig = UNIT_CONFIGS[nodeType]
+  if (UnitConfig) return <UnitConfig {...configProps} />
 
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} nodeId={selectedNodeId} />
@@ -869,9 +875,9 @@ export function ConfigPanel() {
     && (_earlyData.providers as unknown[]).length >= 2
   const _providersForSum = _isMultiProviderNode ? (_earlyData.providers as readonly string[]) : []
   const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
-  // Tighten Episode: its chain on its real source plus its fee — the node's own
-  // pill figure — never the bare fee its credit id names.
-  const _tightenCredits = useTightenEpisodeCredits(_earlyType === "tighten-episode" && displayNode ? displayNode.id : "")
+  // A use-case node (any type): its chain on its real source plus its fee —
+  // the node's own pill figure — never the bare fee its credit id names.
+  const _usecaseCredits = useUseCaseCredits(isUseCaseNodeType(_earlyType) && displayNode ? displayNode.id : "")
   // A per-unit node (minutes of a render, seconds of a retake, …): its model
   // cost is a RATE, so the Run button prices every unit it will reserve — as
   // the server's price for the whole run (lib/unit-quote.ts), never the
@@ -1212,21 +1218,19 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
-                    // A Speaker View whose price is withdrawn (priced since C4) and
-                    // Speaker Frames (until P3.7) have no price: the button says so and does not run.
-                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED) || (nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED)}
+                    // A Speaker View whose price is withdrawn (priced since C4) has
+                    // no price: the button says so and does not run.
+                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED)}
                     disabledReason={
                       imageGateBlocked
                         ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
                         : nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED
                           ? t("speakerView.notPriced")
-                          : nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED
-                            ? t("speakerFrames.notPriced")
-                            : undefined
+                          : undefined
                     }
                     creditOverride={runButtonCreditOverride(_videoPrice,
-                      nodeType === "tighten-episode"
-                        ? _tightenCredits
+                      isUseCaseNodeType(nodeType)
+                        ? _usecaseCredits
                         : nodeType === "component"
                         ? (nodeData.estimatedCredits as number) || undefined
                         : _isMultiProviderNode && _providerSum > 0

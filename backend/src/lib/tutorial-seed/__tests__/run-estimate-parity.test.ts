@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/*.json backend/src/lib/tutorial-seed/__tests__/fixtures/run-estimate-parity.json
 /**
  * The server's half of the run-estimate parity (decided 2026-10-07): the
  * listing a template stores (at the 180-minute cap: fixed + 180 × per

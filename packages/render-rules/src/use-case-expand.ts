@@ -6,12 +6,16 @@
  * one-node estimate is the hand-built chain's estimate by construction. Pure:
  * fresh objects, the inputs are never touched.
  *
- * Inner ids are `<nodeId>::<inner id>`. The built source (and music) node is
- * REPLACED by the node wired into `media` (and `music`), on that wire's
- * handle, so the plan's and the render's length read the real recording. An
- * unwired node keeps its placeholder source (unknown length: the ceiling).
- * Wires out of the node leave from the mapped output (`json` → the plan's
- * edit, `transcript` → the transcript, anything else → the media).
+ * Every type is built through its registry descriptor (`use-case-registry.ts`).
+ * Inner ids are `<nodeId>::<inner id>`. The built node each wired input stands
+ * for (`inputNodeIds`: the source for `media`, the bed for `music`, …) is
+ * REPLACED by the node wired into it, on that wire's handle, so the plan's
+ * and the render's length read the real recording. An unwired node keeps its
+ * placeholder source (unknown length: the ceiling). Wires out of the node
+ * leave from the mapped output (`json` → the plan's edit, `transcript` → the
+ * transcript, anything else → the delivered media, or a stand-in List of the
+ * deliveries when there are several), keeping the mode they had leaving the
+ * node.
  *
  * A node that runs its Render final (`useCaseContinue: { mode: "render-final" }`,
  * an override of that run only) continues a run that paid its fee: it is
@@ -22,15 +26,20 @@
  * read — its plan holding the run's plan and the reviewer's edit, kept on the
  * node — so price it as a run subset.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
-import { initialRunNodeIds, isUseCaseNodeType, usecaseFeeCreditId, type UseCaseFeeCreditId, type UseCaseGraph } from "./use-case-graph"
-import { descendantsOf } from "./graph-walk"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, defaultEdgeOutputMode } from "@nodaro/shared/nodes"
 import {
-  TIGHTEN_NODE_IDS,
-  buildTightenEpisodeGraph,
-  resolveTightenEpisodeSettings,
+  initialRunNodeIds,
+  isUseCaseNodeType,
+  usecaseFeeCreditId,
+  usecaseRenderNodeId,
+  type UseCaseFeeCreditId,
+  type UseCaseGraph,
+  type UseCaseHandleRef,
   type UseCaseMediaKind,
-} from "./tighten-episode-graph"
+  type UseCaseNodeType,
+} from "./use-case-graph"
+import { descendantsOf } from "./graph-walk"
+import { usecaseDescriptor } from "./use-case-registry"
 
 type AnyNode = { readonly id?: string; readonly type?: string | null; readonly data?: unknown }
 type AnyEdge = { readonly source?: string; readonly target: string; readonly sourceHandle?: string | null; readonly targetHandle?: string | null; readonly data?: unknown }
@@ -49,7 +58,7 @@ export interface UseCaseExpansion<N, E> {
   readonly edges: ReadonlyArray<E | UseCaseExpandedEdge>
   /** One fee per use-case node, by its pricing id — none for a node running its Render final. */
   readonly fees: ReadonlyArray<{ readonly nodeId: string; readonly creditId: UseCaseFeeCreditId }>
-  /** Each use-case node's inner node ids that run (its replaced source excluded; a Render final: its render and what follows). */
+  /** Each use-case node's inner node ids that run (its replaced inputs excluded; a Render final: its render and what follows; a deliveries stand-in included). */
   readonly members: ReadonlyMap<string, readonly string[]>
   /** False when the graph holds no use-case node: `nodes`/`edges` are copies of the input. */
   readonly expanded: boolean
@@ -88,6 +97,19 @@ export function usecaseMediaKindOf(node: AnyNode | undefined, handle: string | n
 
 const inner = (useCaseId: string, id: string): string => `${useCaseId}::${id}`
 
+/** The inner refs a wire leaving a use-case node on `handle` starts from (one per delivery for a format list). */
+function outputRefs(g: UseCaseGraph, handle: string | null, whole: boolean): UseCaseHandleRef[] {
+  const m = g.outputMap
+  if (handle === "json") return [m.json]
+  if (handle === "transcript") return [m.transcript]
+  // Chapters renders nothing: its text is made from the plan's chapters.
+  if (m.kind === "chapters") return [m.json]
+  // A review-on node delivers its preview until its Render final; a whole
+  // chain keeps what follows the render, so its consumers read the deliveries.
+  if (!whole && initialRunNodeIds(g)) return [m.preview]
+  return m.kind === "formats" ? m.formats.map((f) => f.ref) : [m.media]
+}
+
 /**
  * The node runs its Render final: a continuation of its run, set for that run
  * only. It names that run (`jobId`) — the same test as `rendersAsPreview`
@@ -111,7 +133,7 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
   edges: readonly E[],
   options?: UseCaseExpandOptions,
 ): UseCaseExpansion<N, E> {
-  const useCases = nodes.filter((n): n is N & { readonly id: string } => typeof n.id === "string" && isUseCaseNodeType(n.type))
+  const useCases = nodes.filter((n): n is N & { readonly id: string; readonly type: UseCaseNodeType } => typeof n.id === "string" && isUseCaseNodeType(n.type))
   if (useCases.length === 0) return { nodes: [...nodes], edges: [...edges], fees: [], members: new Map(), expanded: false }
 
   const whole = options?.chain === "whole"
@@ -122,65 +144,101 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
   const built = new Map<string, UseCaseGraph>()
   const finals = new Set(useCases.filter((u) => runsUseCaseRenderFinal(u.data)).map((u) => u.id))
   for (const u of useCases) {
+    const d = usecaseDescriptor(u.type)
     const mediaWire = wireInto(u.id, "media")
     const kind = usecaseMediaKindOf(byId.get(mediaWire?.source ?? ""), mediaWire?.sourceHandle)
     const raw = (u.data ?? {}) as Readonly<Record<string, unknown>>
     // A Render final renders with the settings of the run it finishes (the
     // preview's, carried on the continuation), never the node's later ones.
-    const settings = resolveTightenEpisodeSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? raw), reviewBeforeRender: false } : raw, kind)
-    const music = wireInto(u.id, "music") ? { music: { url: PLACEHOLDER_URL } } : {}
-    built.set(u.id, buildTightenEpisodeGraph(settings, { media: { url: PLACEHOLDER_URL, kind }, ...music }))
+    const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? raw), reviewBeforeRender: false } : raw, kind)
+    // A wired optional input is a placeholder of its own (its real source replaces it below).
+    const optional = Object.fromEntries(
+      d.inputs.filter((h) => h !== "media" && wireInto(u.id, h)).map((h) => [h, { url: PLACEHOLDER_URL }] as const),
+    )
+    built.set(u.id, d.build(settings, { media: { url: PLACEHOLDER_URL, kind }, ...optional }))
   }
 
-  /** Where a wire leaving `nodeId` on `handle` really starts (through a use-case node's output map). */
-  const from = (nodeId: string, handle: string | null): { source: string; sourceHandle: string | null } => {
+  /**
+   * Where a wire leaving use-case node `nodeId` on `handle` starts. One inner
+   * ref: that ref. Several (a Trailer's formats, each its own node): a
+   * stand-in List of one item per delivery, so the node after it runs once per
+   * delivery on an Each wire and receives them all on a Bundle wire — what the
+   * run does with the node's own list. The stand-in is free (a List).
+   */
+  const deliveries = new Map<string, { readonly owner: string; readonly node: UseCaseExpandedNode }>()
+  const fromOne = (nodeId: string, handle: string | null): { source: string; sourceHandle: string | null } => {
     const g = built.get(nodeId)
     if (!g) return { source: nodeId, sourceHandle: handle }
-    const { outputMap } = g
-    // A review-on node delivers its preview until its Render final; a whole
-    // chain keeps what follows the render, so its consumers read the media.
-    const ref = handle === "json"
-      ? outputMap.json
-      : handle === "transcript"
-        ? outputMap.transcript
-        : !whole && initialRunNodeIds(g) ? outputMap.preview : outputMap.media
-    return { source: inner(nodeId, ref.nodeId), sourceHandle: ref.handle }
+    const refs = outputRefs(g, handle, whole)
+    if (refs.length === 1) return { source: inner(nodeId, refs[0]!.nodeId), sourceHandle: refs[0]!.handle }
+    const id = inner(nodeId, "uc-deliveries")
+    if (!deliveries.has(id)) {
+      deliveries.set(id, { owner: nodeId, node: { id, type: "list", data: { items: refs.map((r) => inner(nodeId, r.nodeId)).join("\n") } } })
+    }
+    return { source: id, sourceHandle: "text" }
+  }
+
+  /**
+   * The data a wire leaving use-case node `e.source` keeps: its own, with the
+   * mode it had leaving the node — set on it, else the NODE's default (a list
+   * result's "each", FAN_OUT_EACH_HANDLES), never the inner source's, or a node
+   * after a Clip Pack would be priced once, not per clip. Every wire that
+   * leaves a use-case node reads it: to a plain node, or into another
+   * use-case node's input.
+   */
+  const leavingData = (e: E): Record<string, unknown> => {
+    const own = (e.data as Record<string, unknown> | undefined) ?? {}
+    const mode = own.outputMode ?? defaultEdgeOutputMode(byId.get(e.source ?? "")?.type, e.sourceHandle ?? null)
+    return { ...own, outputMode: mode }
   }
 
   const outNodes: Array<N | UseCaseExpandedNode> = nodes.filter((n) => !(typeof n.id === "string" && ucIds.has(n.id)))
   const outEdges: Array<E | UseCaseExpandedEdge> = []
   for (const e of edges) {
     if (ucIds.has(e.target)) continue // replaced by the inner wires below
-    outEdges.push(e.source && ucIds.has(e.source) ? { ...e, ...from(e.source, e.sourceHandle ?? null) } : e)
+    if (!e.source || !ucIds.has(e.source)) {
+      outEdges.push(e)
+      continue
+    }
+    outEdges.push({ ...e, ...fromOne(e.source, e.sourceHandle ?? null), data: leavingData(e) })
   }
 
   const fees: Array<{ nodeId: string; creditId: UseCaseFeeCreditId }> = []
   const members = new Map<string, readonly string[]>()
   for (const u of useCases) {
     const g = built.get(u.id)!
-    // A replaced source keeps the outer wire's data (its output mode, Each or
-    // All): every inner step reads the source the way the node would have.
+    // A replaced input keeps the outer wire's data (its output mode, Each or
+    // All): every inner step reads the source the way the node would have. A
+    // wire from another use-case node keeps the mode it had leaving that node.
     const replaced = new Map<string, { source: string; sourceHandle: string | null; data?: unknown }>()
-    const fromWire = (w: E) => ({ ...from(w.source!, w.sourceHandle ?? null), ...(w.data !== undefined ? { data: w.data } : {}) })
-    const mediaWire = wireInto(u.id, "media")
-    const musicWire = wireInto(u.id, "music")
-    if (mediaWire) replaced.set(TIGHTEN_NODE_IDS.source, fromWire(mediaWire))
-    if (musicWire) replaced.set(TIGHTEN_NODE_IDS.music, fromWire(musicWire))
+    const d = usecaseDescriptor(u.type)
+    const fromWire = (w: E) => ({
+      ...fromOne(w.source!, w.sourceHandle ?? null),
+      ...(ucIds.has(w.source!) ? { data: leavingData(w) } : w.data !== undefined ? { data: w.data } : {}),
+    })
+    for (const h of d.inputs) {
+      const w = wireInto(u.id, h)
+      const builtId = d.inputNodeIds[h]
+      if (w && builtId) replaced.set(builtId, fromWire(w))
+    }
     // Node ids named INSIDE data (the plan's sourceOrder; the mix's trackOrder
-    // and duckUnder) follow the same renaming, or the plan would look for a
-    // source that is not on the graph and price at the ceiling.
+    // and duckUnder; Combine Videos' clipOrder) follow the same renaming, or the
+    // plan would look for a source that is not on the graph and price at the ceiling.
     const rename = (id: string) => replaced.get(id)?.source ?? inner(u.id, id)
     const renameData = (data: Readonly<Record<string, unknown>>): Record<string, unknown> => ({
       ...data,
       ...(Array.isArray(data.sourceOrder) ? { sourceOrder: (data.sourceOrder as string[]).map(rename) } : {}),
       ...(Array.isArray(data.trackOrder) ? { trackOrder: (data.trackOrder as string[]).map(rename) } : {}),
       ...(typeof data.duckUnder === "string" ? { duckUnder: rename(data.duckUnder) } : {}),
+      ...(Array.isArray(data.clipOrder) ? { clipOrder: (data.clipOrder as string[]).map(rename) } : {}),
     })
     const firstRun = whole ? null : initialRunNodeIds(g)
     const runs = (id: string) => !firstRun || firstRun.includes(id)
-    // A Render final runs its render and what follows it; the rest is read, not run.
-    const final = finals.has(u.id)
-    const finalPart = final ? new Set([g.outputMap.renderNodeId, ...descendantsOf(g.outputMap.renderNodeId, g.edges)]) : null
+    // A Render final runs its render and what follows it; the rest is read, not
+    // run. A graph that renders nothing has no Render final (it is not reviewable).
+    const renderId = usecaseRenderNodeId(g.outputMap)
+    const finalPart = renderId !== null && finals.has(u.id) ? new Set([renderId, ...descendantsOf(renderId, g.edges)]) : null
+    const final = finalPart !== null
     const ids: string[] = []
     // Its plan is the run's, kept on the node (and the reviewer's edit of it):
     // the render it finishes is priced on that cut, as the run renders it.
@@ -197,10 +255,16 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     for (const e of g.edges) {
       if (!runs(e.target) || (!replaced.has(e.source) && !runs(e.source))) continue
       const start = replaced.get(e.source) ?? { source: inner(u.id, e.source), sourceHandle: e.sourceHandle }
-      outEdges.push({ ...start, target: inner(u.id, e.target), targetHandle: e.targetHandle })
+      // A built wire's own mode (an Each wire inside the chain) is priced as one.
+      outEdges.push({ ...start, target: inner(u.id, e.target), targetHandle: e.targetHandle, ...(e.data ? { data: e.data } : {}) })
     }
     if (!final) fees.push({ nodeId: u.id, creditId: usecaseFeeCreditId(g.nodeType) })
     members.set(u.id, ids)
+  }
+  // A deliveries stand-in "runs" whenever its node does: a run subset that names the node names it too.
+  for (const [id, { owner, node }] of deliveries) {
+    outNodes.push(node)
+    members.set(owner, [...(members.get(owner) ?? []), id])
   }
   return { nodes: outNodes, edges: outEdges, fees, members, expanded: true }
 }

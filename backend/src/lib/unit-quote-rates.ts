@@ -14,7 +14,8 @@
  * (`RENDER_NODE_TYPES[*].creditIds`), every video utility the shared estimator
  * prices per unit, Mask Composite, the LTX per-second rows, and the dubbing
  * per-minute rows (whole started minutes only, at most the longest span a dub
- * may cover — `<row>:2.5u` is not a count a dub is charged at). A speech
+ * may cover — `<row>:2.5u` is not a count a dub is charged at), and Speaker
+ * Frames' per-block row (whole started blocks of 1,000 sampled frames). A speech
  * request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
  * cap and follows the length-pricing flag.
@@ -35,6 +36,7 @@ import {
 import {
   RENDER_NODE_TYPES,
 } from "@nodaro/shared/nodes"
+import { SPEAKER_FRAMES_CREDIT_ID } from "@nodaro/render-rules"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
 
@@ -51,6 +53,8 @@ export interface UnitQuoteRule {
 
 const ANY_UNITS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: false }
 const DUB_MINUTES: UnitQuoteRule = { maxUnits: DUBBING_MAX_MINUTES, wholeUnits: true }
+/** Speaker Frames: started blocks of 1,000 sampled frames — whole blocks only. */
+const FRAME_BLOCKS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: true }
 
 /** Every rate a whole-run quote may name, with the unit counts it accepts. */
 export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
@@ -62,6 +66,7 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
     LTX_RETAKE_PER_SECOND_CREDIT_ID,
   ].map((id) => [id, ANY_UNITS] as const),
   ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
+  [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
 ])
 
 /** The rates a whole-run quote may name. */

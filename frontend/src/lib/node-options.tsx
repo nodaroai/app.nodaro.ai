@@ -144,8 +144,14 @@ import { REFRAME_ENTRY_TYPE, canvasMacroOf } from "@/lib/canvas-macros"
 import { ENGINE_GATED_NODE_TYPES, isScene3DProAvailable } from "@/lib/scene3d-pro-availability"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { SceneNodeType } from "@/types/nodes"
+import type { UnitDefinition } from "@/nodes/kit"
+import { UNIT_OPTIONS } from "@/nodes/_generated/options"
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { composeNodeOptions } from "@/lib/unit-compose"
+// @registry-enumerates NODE_OPTIONS offers every node unit with a picker entry (unit.json picker)
 
-export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
+// The hand-written options of every node that is not yet a unit.
+const LEGACY_NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   {
     type: "text-prompt",
@@ -1847,6 +1853,23 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "automate-canvas",
   },
 ];
+
+/** A node unit's picker entry: unit.json `picker` + the icon of its option.tsx. */
+function unitOption(u: UnitDefinition): NodeOption {
+  const Icon = UNIT_OPTIONS[u.type]?.icon
+  if (!Icon || !u.picker) throw new Error(`${u.type}: a node unit in the picker needs picker in unit.json and an option.tsx icon`)
+  return {
+    type: u.type as SceneNodeType,
+    label: u.label,
+    icon: <Icon className="h-4 w-4" />,
+    category: u.picker.pickerCategory ?? u.category.charAt(0).toUpperCase() + u.category.slice(1),
+    group: u.picker.family,
+    ...(u.picker.keywords ? { keywords: u.picker.keywords } : {}),
+  }
+}
+
+/** Every add-node option: the legacy list ∪ each node unit at its picker.after. */
+export const NODE_OPTIONS: ReadonlyArray<NodeOption> = composeNodeOptions(LEGACY_NODE_OPTIONS, UNIT_NODE_DEFINITIONS, unitOption);
 
 /**
  * Returns `NODE_OPTIONS` filtered for the current edition.

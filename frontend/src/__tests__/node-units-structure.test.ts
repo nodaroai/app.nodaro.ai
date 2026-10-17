@@ -45,10 +45,18 @@ describe("composers declare every export that reads their composed collection", 
   const composers = JSON.parse(read("tools/units/registry-composers.json")).composers as Record<string, Entry>
 
   it("the real composers (tools/units/registry-composers.json exports / lookups)", () => {
+    // A composer may derive from ANOTHER composer's collection of a registry it
+    // passes through (workflow-editor/types.ts: NODE_CREDIT_COSTS from
+    // UNIT_NODE_DEFINITIONS, both "definitions"): every name of those registries
+    // seeds the walk. (A derivation from a registry it does NOT pass through
+    // leaves the module an enumerator of that one — selected, so sound.)
+    const namesById = new Map<string, Set<string>>()
+    for (const e of Object.values(composers)) for (const [id, names] of Object.entries(e.exports ?? {})) namesById.set(id, new Set([...(namesById.get(id) ?? []), ...names]))
     const problems = Object.entries(composers).flatMap(([p, e]) => {
-      const collection = new Set(Object.values(e.exports ?? {}).flat())
-      if (!collection.size) return []
-      return composerExportProblems(ts, p, read(p), collection, new Set([...collection, ...(e.lookups ?? [])])).map((n) => `${p}: ${n}`)
+      const own = new Set(Object.values(e.exports ?? {}).flat())
+      if (!own.size) return []
+      const seeds = new Set([...own, ...Object.keys(e.exports ?? {}).flatMap((id) => [...(namesById.get(id) ?? [])])])
+      return composerExportProblems(ts, p, read(p), seeds, new Set([...own, ...(e.lookups ?? [])])).map((n) => `${p}: ${n}`)
     })
     expect(problems, "these composer exports read the composed collection but are not in its registry-composers.json `exports` (callers enumerate) or `lookups` (answers for one given type only) — undeclared, a caller reaching only the composer would skip every unit change").toEqual([])
   })
@@ -78,6 +86,20 @@ describe("composers declare every export that reads their composed collection", 
     ].join("\n")
     const col = new Set(["NODE_DEFINITIONS"])
     expect(composerExportProblems(ts, "frontend/src/types/x.ts", src, col, col)).toEqual(["UNIT_TYPES"])
+  })
+
+  it("fixtures: a re-export of an aggregate binding is caught (direct, star, and of the local import)", () => {
+    const col = new Set(["NODE_DEFINITIONS"])
+    const check = (src: string) => composerExportProblems(ts, "frontend/src/types/x.ts", src, col, col)
+    expect(check('export { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"')).toEqual(["UNIT_DEFINITIONS"])
+    expect(check('export { UNIT_DEFINITIONS as UNITS } from "../nodes/_generated/definitions"')).toEqual(["UNITS"])
+    expect(check('export * from "@/nodes/_generated/definitions"')).toEqual(["*"])
+    expect(check('export * as defs from "@/nodes/_generated/definitions"')).toEqual(["defs"])
+    expect(check('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nexport { UNIT_DEFINITIONS }')).toEqual(["UNIT_DEFINITIONS"])
+    // Type-only re-exports carry no value; other modules' re-exports are not the collection.
+    expect(check('export type { UnitNodeType } from "@/nodes/_generated/definitions"')).toEqual([])
+    expect(check('export { type UnitNodeType } from "@/nodes/_generated/definitions"')).toEqual([])
+    expect(check('export { other } from "@/lib/other"\nexport * from "@/lib/more"')).toEqual([])
   })
 })
 
@@ -152,9 +174,18 @@ describe("G7 — unit modules have no top-level side effects", () => {
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "if (x) {}\n")).toHaveLength(1)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export default setup()")[0]).toMatch(/export default/)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export let n = 0\nn = 1\n")).toHaveLength(1)
-    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { static y = register() }")[0]).toMatch(/class X runs a static initializer/)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { static y = register() }")[0]).toMatch(/class X runs code when it is defined/)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "class X { static { register() } }")).toHaveLength(1)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export const C = class { static y = register() }")).toHaveLength(1)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { static y = 1; z = register(); run() { go() } }")).toEqual([])
+    // Decorators and computed member names run when the class is defined.
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "@register() export class X {}")[0]).toMatch(/class X runs code when it is defined/)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { @track() run() {} }")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { constructor(@inject() a: number) {} }")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { [compute()] = 1 }")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export class X { [compute()]() {} }")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export const C = class { [compute()] = 1 }")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export const o = { [k()]() {}, get [g()]() { return 1 } }")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", 'const K = "k"\nexport class X { [K] = 1; ["a"]() {} }\nexport const o = { [K]() {} }')).toEqual([])
   })
 })

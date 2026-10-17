@@ -23,6 +23,7 @@ import { videoMaskQuotedSec } from "@/lib/video-utility-estimate"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
 import type { VideoMaskNodeData } from "@/types/nodes"
+// @registry-lookup reads its own rows only (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 // Module-level `accepts` predicates (stable refs for HandleWithPopover's memo).
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)

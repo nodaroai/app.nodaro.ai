@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{ts,tsx} frontend/src/**/*.{ts,tsx}
 /**
  * `jobs` and `workflow_executions` are joined by TWO foreign keys:
  * `jobs.workflow_execution_id` (the run a job belongs to) and

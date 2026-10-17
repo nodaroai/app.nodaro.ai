@@ -6,14 +6,14 @@ const probe = vi.hoisted(() => ({
   duration: vi.fn(async (_u: string) => 3600),
 }))
 vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({ probeMediaStreams: probe.streams, probeMediaDuration: probe.duration }))
-import { prepareTightenEpisode, tightenEpisodeBody, usecaseReviewerPresent } from "../request.js"
+import { prepareUseCase, tightenEpisodeBody, usecaseReviewerPresent } from "../request.js"
 
 beforeEach(() => {
   probe.streams.mockReset().mockResolvedValue({ hasVideo: true, hasAudio: true })
   probe.duration.mockReset().mockResolvedValue(3600)
 })
 const body = (over = {}) => tightenEpisodeBody.parse({ mediaUrls: ["https://r2/ep.mp4"], ...over })
-const renderOf = (r: Awaited<ReturnType<typeof prepareTightenEpisode>>) => (r.ok ? r.graph.nodes.find((n) => n.id === "uc-render")! : null)
+const renderOf = (r: Awaited<ReturnType<typeof prepareUseCase>>) => (r.ok ? r.graph.nodes.find((n) => n.id === "uc-render")! : null)
 
 describe("tightenEpisodeBody", () => {
   it("takes exactly one recording (multicam is a later phase)", () => {
@@ -23,9 +23,9 @@ describe("tightenEpisodeBody", () => {
   })
 })
 
-describe("prepareTightenEpisode", () => {
+describe("prepareUseCase", () => {
   it("a video recording: probed length, video chain", async () => {
-    const r = await prepareTightenEpisode(body(), "u1")
+    const r = await prepareUseCase("tighten-episode", body())
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.sources.media).toEqual({ url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 })
@@ -33,44 +33,62 @@ describe("prepareTightenEpisode", () => {
   })
   it("an audio-only file (or a video with only cover art) is an audio episode", async () => {
     probe.streams.mockResolvedValue({ hasVideo: false, hasAudio: true })
-    const r = await prepareTightenEpisode(body({ output: "video", captions: true }), "u1")
+    const r = await prepareUseCase("tighten-episode", body({ output: "video", captions: true }))
     expect(r.ok && r.settings).toMatchObject({ output: "audio", captions: false })
   })
   it("unreadable media: 400 before anything else", async () => {
     probe.streams.mockRejectedValue(new Error("403 Forbidden"))
-    expect(await prepareTightenEpisode(body(), "u1")).toMatchObject({ ok: false, status: 400, code: "media_unreadable" })
+    expect(await prepareUseCase("tighten-episode", body())).toMatchObject({ ok: false, status: 400, code: "media_unreadable" })
     expect(probe.duration).not.toHaveBeenCalled()
   })
   it("no audio stream: 400 (nothing to transcribe)", async () => {
     probe.streams.mockResolvedValue({ hasVideo: true, hasAudio: false })
-    expect(await prepareTightenEpisode(body(), "u1")).toMatchObject({ ok: false, status: 400, code: "media_has_no_audio" })
+    expect(await prepareUseCase("tighten-episode", body())).toMatchObject({ ok: false, status: 400, code: "media_has_no_audio" })
   })
   it("longer than 180 minutes: 400", async () => {
     probe.duration.mockResolvedValue(180 * 60 + 1)
-    expect(await prepareTightenEpisode(body(), "u1")).toMatchObject({ ok: false, status: 400, code: "media_too_long" })
+    expect(await prepareUseCase("tighten-episode", body())).toMatchObject({ ok: false, status: 400, code: "media_too_long" })
   })
   it("exactly 180 minutes runs", async () => {
     probe.duration.mockResolvedValue(180 * 60)
-    expect((await prepareTightenEpisode(body(), "u1")).ok).toBe(true)
+    expect((await prepareUseCase("tighten-episode", body())).ok).toBe(true)
   })
   it("framing on a video recording builds a Speaker View render on automatic boxes", async () => {
-    const r = await prepareTightenEpisode(body({ framing: { aspect: "9:16", layout: "stacked" } }), "u1")
+    const r = await prepareUseCase("tighten-episode", body({ framing: { aspect: "9:16", layout: "stacked" } }))
     expect(renderOf(r)).toMatchObject({ type: "speaker-view", data: { targetAspect: "9:16", layout: "stacked", autoRegions: true } })
   })
   it("a music bed must carry audio", async () => {
     probe.streams.mockImplementation(async (u: string) => (u.includes("bed") ? { hasVideo: false, hasAudio: false } : { hasVideo: true, hasAudio: true }))
-    expect(await prepareTightenEpisode(body({ musicUrl: "https://r2/bed.mp3" }), "u1")).toMatchObject({ ok: false, status: 400, code: "music_has_no_audio" })
+    expect(await prepareUseCase("tighten-episode", body({ musicUrl: "https://r2/bed.mp3" }))).toMatchObject({ ok: false, status: 400, code: "music_has_no_audio" })
   })
   it("an unreadable music bed is refused the same way", async () => {
     probe.streams.mockImplementation(async (u: string) => {
       if (u.includes("bed")) throw new Error("404")
       return { hasVideo: true, hasAudio: true }
     })
-    expect(await prepareTightenEpisode(body({ musicUrl: "https://r2/bed.mp3" }), "u1")).toMatchObject({ ok: false, code: "music_has_no_audio" })
+    expect(await prepareUseCase("tighten-episode", body({ musicUrl: "https://r2/bed.mp3" }))).toMatchObject({ ok: false, code: "music_has_no_audio" })
+  })
+  it("prepareUseCase builds the type's own graph from its descriptor", async () => {
+    probe.streams.mockResolvedValue({ hasVideo: true, hasAudio: true })
+    probe.duration.mockResolvedValue(3600)
+    const prep = await prepareUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(prep.ok && prep.graph.nodeType).toBe("tighten-episode")
+    expect(prep.ok && prep.sources.media).toEqual({ url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 })
+  })
+  it("names the node in the too-long refusal", async () => {
+    probe.streams.mockResolvedValue({ hasVideo: true, hasAudio: true })
+    probe.duration.mockResolvedValue(3 * 3600 + 1)
+    expect(await prepareUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"] })).toMatchObject({
+      ok: false, status: 400, code: "media_too_long", message: "Tighten Episode takes recordings up to 3 hours.",
+    })
+  })
+  it("an audio-only recording runs: Tighten Episode does not need picture", async () => {
+    probe.streams.mockResolvedValue({ hasVideo: false, hasAudio: true })
+    expect((await prepareUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp3"] })).ok).toBe(true)
   })
   it("an unknown length (probe returned nothing usable) builds with no length", async () => {
     probe.duration.mockRejectedValue(new Error("no duration"))
-    const r = await prepareTightenEpisode(body(), "u1")
+    const r = await prepareUseCase("tighten-episode", body())
     expect(r.ok && r.sources.media.durationSec).toBeUndefined()
   })
 })

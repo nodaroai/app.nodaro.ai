@@ -86,7 +86,8 @@ runs once per list item has no Render final.
   Plan's pass, the render of a whole episode), it is listed as a fixed
   figure plus a figure per minute of the recording, for example
   **82 + 14/min**. A Trim, Loop or Combine Videos node on the recording you
-  give, or on a render or another such step whose length follows it, is
+  give, or on a render (a Tighten Episode's episode included, captioned or
+  with its music bed) or another such step whose length follows it, is
   listed per minute of it too; a Video SFX node on any recording you give, or
   on a step whose length follows it, is listed at its fixed 300-second price,
   since it refuses a video over 5 minutes. On a generated video (Generate

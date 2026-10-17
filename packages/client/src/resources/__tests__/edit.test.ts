@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { createClient, StaticTokenAuth, NodaroError, ContinuationRefusedError, EditResource, unwrapEditPlanOutput } from "../../index.js"
+import { createClient, StaticTokenAuth, NodaroError, NotFoundError, ForbiddenError, ContinuationRefusedError, EditResource, unwrapEditPlanOutput } from "../../index.js"
 import type { Edl, Transcript, SilenceRanges } from "../../index.js"
 
 function mockOk<T>(body: T) {
@@ -303,6 +303,9 @@ describe("edit.remapTranscript (pure local helper — no request)", () => {
   })
 })
 
+/** `GET /v1/jobs/:id` answering a Tighten Episode run, as the run route writes it. */
+const TIGHTEN_RUN = () => mockOk({ data: { id: "job-1", job_type: "tighten-episode", input_data: { type: "tighten-episode", mode: "run" } } })
+
 describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () => {
   it("tightenEpisode posts the recording and only the settings given", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1", executionId: "exec-1" }))
@@ -347,25 +350,124 @@ describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () =>
   it("estimateTightenEpisode and continueUseCase hit their routes", async () => {
     const fetchMock = vi.fn()
       .mockReturnValueOnce(mockOk({ data: { totalCredits: 932, stepsCredits: 922, feeCredits: 10, durationSec: 3600 } }))
+      .mockReturnValueOnce(TIGHTEN_RUN())
       .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
     const c = client(fetchMock)
     expect((await c.edit.estimateTightenEpisode({ mediaUrl: "https://r2/ep.mp4" })).data.totalCredits).toBe(932)
     expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/tighten-episode/estimate")
     expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"] })
     await c.edit.continueUseCase({ jobId: "job-1", mode: "from-failed" })
-    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
-    expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ jobId: "job-1", mode: "from-failed" })
+    expect(fetchMock.mock.calls[2]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
+    expect(JSON.parse((fetchMock.mock.calls[2]![1] as { body: string }).body)).toEqual({ jobId: "job-1", mode: "from-failed" })
   })
 
   it("continueUseCase sends the reviewer's edit with a Render final", async () => {
-    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-3", executionId: "exec-3" }))
+    const fetchMock = vi.fn().mockReturnValueOnce(TIGHTEN_RUN()).mockReturnValueOnce(mockOk({ jobId: "job-3", executionId: "exec-3" }))
     const editedEdl = { version: 1, segments: [] }
     await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "render-final", editedEdl })
-    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ jobId: "job-1", mode: "render-final", editedEdl })
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ jobId: "job-1", mode: "render-final", editedEdl })
+  })
+
+  it("continueUseCase reads the run's type when none is given, and continues it on that type's route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(TIGHTEN_RUN()).mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+    const out = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" })
+    expect(out.jobId).toBe("job-2")
+    const calls = fetchMock.mock.calls.map(([url, init]) => `${(init as { method: string }).method} ${url as string}`)
+    expect(calls).toEqual([
+      "GET https://api.example.com/v1/jobs/job-1",
+      "POST https://api.example.com/v1/tighten-episode/continue",
+    ])
+  })
+
+  it("the type the run's input records wins over its job_type", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-1", job_type: "something-else", input_data: { type: "tighten-episode" } } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" })
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
+  })
+
+  it("a row with no recorded type is read by its job_type", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-1", job_type: "tighten-episode", input_data: { mode: "run" } } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" })
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
+  })
+
+  it("continueUseCase with nodeType posts straight to that type's route, without reading the job", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "render-final", nodeType: "tighten-episode" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]! as [string, { method: string; body: string }]
+    expect(url).toBe("https://api.example.com/v1/tighten-episode/continue")
+    // nodeType picks the route; it is never part of the body.
+    expect(JSON.parse(init.body)).toEqual({ jobId: "job-1", mode: "render-final" })
+  })
+
+  it("a key that may not read jobs (403) continues on the Tighten Episode route, as before the read", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockErr(403, { error: { code: "insufficient_scope", message: "Missing required scope: jobs:read", missingScope: "jobs:read" } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+    const out = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }, { idempotencyKey: "k-1" })
+    expect(out.jobId).toBe("job-2")
+    const [url, init] = fetchMock.mock.calls[1]! as [string, { body: string; headers: Record<string, string> }]
+    expect(url).toBe("https://api.example.com/v1/tighten-episode/continue")
+    expect(JSON.parse(init.body)).toEqual({ jobId: "job-1", mode: "from-failed" })
+    expect(init.headers["Idempotency-Key"]).toBe("k-1")
+  })
+
+  it("a job that is not a use-case run is sent to the Tighten Episode route, which answers its own not_found", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-1", job_type: "apply-edl", input_data: { edl: {} } } }))
+      .mockReturnValueOnce(mockErr(404, { error: { code: "not_found", message: "That run was not found." } }))
+    const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
+    expect(err).toBeInstanceOf(NotFoundError)
+  })
+
+  it("a read that fails otherwise (500, 401) rethrows and posts nothing", async () => {
+    for (const [status, code] of [[500, "internal_error"], [401, "unauthorized"]] as const) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockErr(status, { error: { code, message: code } }))
+      const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+      expect(err, code).toBeInstanceOf(NodaroError)
+      expect(err, code).toMatchObject({ status })
+      expect(fetchMock, code).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it("a 403 that is not the jobs:read scope refusal rethrows and posts nothing", async () => {
+    for (const body of [
+      { error: { code: "forbidden", message: "Not allowed" } },
+      { error: { code: "insufficient_scope", message: "Missing required scope: workflows:read", missingScope: "workflows:read" } },
+    ]) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockErr(403, body))
+      const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ForbiddenError)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it("an unknown nodeType throws before any request", async () => {
+    const fetchMock = vi.fn()
+    const err = await client(fetchMock)
+      .edit.continueUseCase({ jobId: "job-1", mode: "from-failed", nodeType: "apply-edl" as never })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).toMatchObject({ code: "invalid_node_type", status: 400 })
+    expect((err as Error).message).toMatch(/apply-edl.*tighten-episode/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("a job the read cannot find throws NotFoundError and posts nothing", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(404, { error: { code: "not_found", message: "Job not found" } }))
+    const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NotFoundError)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it("a refusal that names a job throws ContinuationRefusedError carrying that jobId", async () => {
-    const fetchMock = vi.fn().mockReturnValueOnce(
+    const fetchMock = vi.fn().mockReturnValueOnce(TIGHTEN_RUN()).mockReturnValueOnce(
       mockErr(409, { error: { code: "continuation_superseded", message: "A later continuation of this run failed: continue that one." }, jobId: "job-newer" }),
     )
     const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
@@ -376,18 +478,18 @@ describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () =>
 
   it("only the three named-job codes select it: another 409 carrying a jobId stays a plain NodaroError", async () => {
     for (const code of ["already_running", "continuation_superseded", "render_final_already_rendered"]) {
-      const fetchMock = vi.fn().mockReturnValueOnce(mockErr(409, { error: { code, message: code }, jobId: "job-x" }))
+      const fetchMock = vi.fn().mockReturnValueOnce(TIGHTEN_RUN()).mockReturnValueOnce(mockErr(409, { error: { code, message: code }, jobId: "job-x" }))
       const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "render-final" }).catch((e: unknown) => e)
       expect(err, code).toBeInstanceOf(ContinuationRefusedError)
     }
-    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(409, { error: { code: "some_other_conflict", message: "no" }, jobId: "job-x" }))
+    const fetchMock = vi.fn().mockReturnValueOnce(TIGHTEN_RUN()).mockReturnValueOnce(mockErr(409, { error: { code: "some_other_conflict", message: "no" }, jobId: "job-x" }))
     const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NodaroError)
     expect(err).not.toBeInstanceOf(ContinuationRefusedError)
   })
 
   it("a 409 that names no job stays a plain NodaroError", async () => {
-    const fetchMock = vi.fn().mockReturnValueOnce(
+    const fetchMock = vi.fn().mockReturnValueOnce(TIGHTEN_RUN()).mockReturnValueOnce(
       mockErr(409, { error: { code: "continuation_not_failed", message: "That run did not fail." } }),
     )
     const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)

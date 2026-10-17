@@ -1,7 +1,7 @@
 /**
- * The credits a Tighten Episode run reserves, for its pill and Run button: the
- * run set of this node alone priced by the run's own estimate — its chain on
- * its real source plus its fee (`usecaseNodeCredits`, estimate-run-credits.ts)
+ * The credits a use-case node's run reserves (any type), for its pill and Run
+ * button: the run set of this node alone priced by the run's own estimate —
+ * its chain on its real source plus its fee (`usecaseNodeCredits`, estimate-run-credits.ts)
  * — the very figure the Execute badge, the confirm and the precheck add for
  * it. Prices not cached yet are fetched, then the figure is recomputed.
  */
@@ -12,7 +12,7 @@ import type { WorkflowNode } from "@/types/nodes"
 
 const NONE: WorkflowNode[] = []
 
-export function useTightenEpisodeCredits(id: string): number {
+export function useUseCaseCredits(id: string): number {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const executable = useMemo(() => {

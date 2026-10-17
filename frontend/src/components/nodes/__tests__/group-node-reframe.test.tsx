@@ -22,6 +22,10 @@ vi.mock("@xyflow/react", async (importOriginal) => {
 })
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }))
 const credits = vi.hoisted(() => ({ on: true }))
+// Video mode (Speaker View AND Speaker Frames priced): live since P3.7; a test
+// can withdraw it to see the chip go.
+const gate = vi.hoisted(() => ({ live: true }))
+vi.mock("@nodaro/render-rules", async (orig) => ({ ...(await orig<typeof import("@nodaro/render-rules")>()), speakerViewVideoModeLive: () => gate.live }))
 vi.mock("@/lib/edition", async (orig) => ({ ...(await orig<typeof import("@/lib/edition")>()), hasCredits: () => credits.on }))
 vi.mock("@/hooks/use-model-credit-cost", () => ({
   getCachedModelCredits: () => undefined,
@@ -39,6 +43,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
 
 afterEach(() => {
   credits.on = true
+  gate.live = true
 })
 
 function reframe(withVideo: boolean) {
@@ -69,10 +74,16 @@ describe("a Reframe group", () => {
     expect(screen.queryByTestId("reframe-wire-video")).toBeNull()
   })
 
-  it("carries one estimate for its three nodes, and says 'Not priced yet' while two of them are (D5)", () => {
+  it("carries one estimate for its three nodes (D5), Speaker Frames priced since P3.7", () => {
     renderGroup(reframe(true))
     expect(screen.getAllByTestId("macro-group-estimate")).toHaveLength(1)
-    expect(screen.getByTestId("macro-group-estimate").textContent).toBe("Not priced yet")
+    expect(screen.getByTestId("macro-group-estimate").textContent).toMatch(/^≈ \d/)
+  })
+
+  it("shows no estimate should a price be withdrawn (video mode not live)", () => {
+    gate.live = false
+    renderGroup(reframe(true))
+    expect(screen.queryByTestId("macro-group-estimate")).toBeNull()
   })
 
   it("shows no estimate on an edition without credits", () => {

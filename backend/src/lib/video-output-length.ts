@@ -48,10 +48,13 @@ import {
 import {
   extractVideoDurationFromNode,
 } from "@nodaro/shared/video"
-import { utilityOutputLength } from "@nodaro/render-rules"
+import { LENGTH_KEEPING_VIDEO_TYPES, utilityOutputLength } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
+// @registry-enumerates VIDEO_OUTPUT_LENGTH_RULES carries every node unit with a "length:*" capability
+import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
+import { composeRecord, unitsWith } from "./unit-compose.js"
 
 /** A length that does not depend on the episode, plus seconds per minute of it. */
 export interface InputLength {
@@ -365,7 +368,7 @@ function utilityLength(node: LengthNode, inputs: readonly WireInput[]): WireLeng
  * `VIDEO_PRODUCER_TYPES` is a key (guarded), plus the dual-mode steps that can
  * deliver one.
  */
-export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = {
+export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = composeRecord<OutputLengthRule>("VIDEO_OUTPUT_LENGTH_RULES", {
   // Recordings and renders: read off the file / the render's own estimate (credits.ts).
   "upload-video": { via: "recording" },
   "youtube-video": { via: "recording" },
@@ -401,22 +404,8 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "combine-videos": { via: "rule", run: utilityLength },
   "video-sfx": { via: "rule", run: utilityLength },
 
-  // Steps that keep their input's length.
-  "add-captions": passVideo,
-  "resize-video": passVideo,
-  "social-media-format": passVideo,
-  "fade-video": passVideo,
-  // The mask has its clip's frames; the composite follows its foreground (the `video` wire).
-  "video-mask": passVideo,
-  "mask-composite": passVideo,
-  "transcode-video": passVideo,
-  "remove-audio": passVideo,
-  "video-overlay": passVideo,
-  "switchx": passVideo,
-  "video-upscale": passVideo,
-  "video-depth": passVideo,
-  "face-swap": passVideo,
-  "video-retake": passVideo,
+  // Steps that keep their input's length: the one set the run walks follow too (@nodaro/render-rules).
+  ...Object.fromEntries([...LENGTH_KEEPING_VIDEO_TYPES].map((type) => [type, passVideo])),
   "adjust-volume": passMedia,
   "pitch-tempo": { via: "rule", run: pitchTempoLength },
   "voice-changer": passMedia,
@@ -449,7 +438,8 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "list": { via: "rule", run: () => "unknown" },
   "sub-workflow": { via: "rule", run: () => "unknown" },
   "reduce": { via: "rule", run: () => "unknown" },
-}
+// Each node unit with the "length:pass-video" capability keeps its video's length (tools/units/capabilities.mjs).
+}, Object.fromEntries(unitsWith(UNIT_NODE_DESCRIPTORS, "length:pass-video").map((type) => [type, passVideo])))
 
 /** The steps that deliver their input's video whole (pinned by the listing's chain guard). */
 export const PASS_THROUGH_VIDEO_TYPES: readonly string[] = Object.entries(VIDEO_OUTPUT_LENGTH_RULES)

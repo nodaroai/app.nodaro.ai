@@ -1,6 +1,8 @@
 /**
- * What a use-case node (Tighten Episode, decided 2026-10-13) asks its route
- * for, and the one call that asks it — the request half of use-case-node.ts:
+ * What a use-case node (decided 2026-10-13) asks its type's route for, and
+ * the one call that asks it — the request half of use-case-node.ts. The
+ * route, the setting keys and the inputs it sends come from the type's
+ * descriptor (`@nodaro/render-rules`); nothing here names a type:
  *  - a run of the node with its wired recording and its settings;
  *  - a continuation its override names (an app's Render final), or — in an
  *    outer run continued from one where this node failed — a continue of that
@@ -10,21 +12,24 @@
  * node's Idempotency-Key.
  */
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED, RENDER_FINAL_ALREADY_RENDERED } from "@nodaro/shared/nodes"
-import { USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE, usecaseFanOutRefused } from "@nodaro/render-rules"
+import {
+  USE_CASE_REVIEW_LIST_DRIVEN,
+  USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
+  usecaseContinuePath,
+  usecaseDescriptor,
+  usecaseFanOutRefused,
+  type UseCaseNodeType,
+} from "@nodaro/render-rules"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../../lib/render-final-run.js"
+import { usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { syncLaneHeaders } from "./sync-lane-headers.js"
 import { NODE_TIMEOUT_MS, type NodeOutput, type OrchestratorContext, type ResolvedInputs, type SimpleNode } from "./types.js"
 
-/** The node's settings the run route reads (its request schema, lib/use-case/request.ts). */
-const SETTING_KEYS = [
-  "output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount",
-] as const
-
-export const CONTINUE_PATH = "/v1/tighten-episode/continue"
-
 export interface UseCaseRequest {
   readonly path: string
+  /** The node's English label, for an answer the route sent no message with. */
+  readonly label: string
   readonly body: Record<string, unknown>
   /** A continue of the outer run's failed attempt: the fresh run, when there is nothing to continue. */
   readonly fallback?: () => UseCaseRequest
@@ -88,6 +93,9 @@ export function requestOf(
   ctx: OrchestratorContext,
   failedAttempt: string | null,
 ): UseCaseRequest {
+  const type = node.type as UseCaseNodeType
+  const d = usecaseDescriptor(type)
+  const continuePath = usecaseContinuePath(type)
   const data = (node.data ?? {}) as Record<string, unknown>
   const lane = {
     componentDepth: (ctx.componentDepth ?? 0) + 1,
@@ -104,30 +112,42 @@ export function requestOf(
     // The reviewer's edit of the plan: what the person authored, sent with a Render final only.
     const edited = data.editedEdl
     const edit = cont.mode === "render-final" && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
-    return { path: CONTINUE_PATH, body: { jobId: cont.jobId, mode: cont.mode, ...edit, ...lane } }
+    return { path: continuePath, label: d.label, body: { jobId: cont.jobId, mode: cont.mode, ...edit, ...lane } }
   }
   const fresh = (): UseCaseRequest => {
     const media = resolvedInputs.useCaseMedia?.[0]
-    if (!media) throw new Error("Tighten Episode needs a recording wired into Media")
-    const settings = Object.fromEntries(SETTING_KEYS.filter((k) => data[k] !== undefined && data[k] !== null).map((k) => [k, data[k]]))
+    if (!media) throw new Error(`${d.label} needs a recording wired into Media`)
+    // The type's own settings (its request body, lib/use-case/bodies.ts). An
+    // unset one is not sent; one set to None (null) is, where the body takes a
+    // null — a None is not the setting's default (decided 2026-10-16). Any
+    // other null is left out, and the route takes its default.
+    const settings = Object.fromEntries(
+      d.settingKeys.filter((k) => data[k] !== undefined && (data[k] !== null || usecaseBodyTakesNull(type, k))).map((k) => [k, data[k]]),
+    )
     return {
-      path: "/v1/tighten-episode",
+      path: d.route,
+      label: d.label,
       body: {
         mediaUrls: [media.url],
-        ...(resolvedInputs.useCaseMusic ? { musicUrl: resolvedInputs.useCaseMusic } : {}),
+        ...(resolvedInputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: resolvedInputs.useCaseMusic } : {}),
+        ...(resolvedInputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: resolvedInputs.useCaseIntroCard } : {}),
         ...settings,
         ...lane,
       },
     }
   }
-  if (failedAttempt) return { path: CONTINUE_PATH, body: { jobId: failedAttempt, mode: "from-failed", ...lane }, fallback: fresh }
+  if (failedAttempt) return { path: continuePath, label: d.label, body: { jobId: failedAttempt, mode: "from-failed", ...lane }, fallback: fresh }
   return fresh()
 }
 
-/** A continue-from-failed of a newer generation of the same run (no edit: that applies to a Render final only). */
+/**
+ * A continue-from-failed of a newer generation of the same run (no edit: that
+ * applies to a Render final only). Only a continuation is answered with a
+ * newer generation, so `request.path` is already the type's continue route.
+ */
 export function continuingGeneration(request: UseCaseRequest, jobId: string): UseCaseRequest {
   const { editedEdl: _edit, ...body } = request.body
-  return { ...request, path: CONTINUE_PATH, body: { ...body, jobId, mode: "from-failed" } }
+  return { ...request, body: { ...body, jobId, mode: "from-failed" } }
 }
 
 /**
@@ -152,7 +172,7 @@ export async function askRoute(request: UseCaseRequest, key: string, ctx: Orches
   // guard's dedup of the same request) both name the wrapper to wait on.
   if (res.ok && typeof answer.jobId === "string") return { kind: "started", jobId: answer.jobId }
   const code = answer.error?.code
-  const message = answer.error?.message ?? `Tighten Episode failed to start (${res.status})`
+  const message = answer.error?.message ?? `${request.label} failed to start (${res.status})`
   // Inside a Render final, a final already under way or already made with
   // this very edit FAILS the node with that refusal (decided 2026-10-13):
   // followed, the earlier final would hand on as this run's result and every

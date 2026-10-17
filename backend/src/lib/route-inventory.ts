@@ -10,11 +10,13 @@
  * Known blind spots of a static scan, by design: routes registered by the
  * cloud plugin at runtime and paths built at runtime (a registration in a
  * loop over a list, a path held in a variable). `check:surfaces --runtime` boots the
- * app to see the exact set.
+ * app to see the exact set. One loop is read from its registry instead: the
+ * use-case route factories (see {@link usecaseFactoryRegistrations}).
  */
 // @reads backend/src/routes/** backend/src/ee/routes/**
 import { readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseDescriptor } from "@nodaro/render-rules"
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const
 export type HttpMethod = (typeof HTTP_METHODS)[number]
@@ -85,10 +87,41 @@ export function normalizePath(path: string | null): string | null {
 const REGISTRATION_RE =
   /\b\w+\.(get|post|put|patch|delete|head)\s*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(\s*["'`](\/v1\/[^"'`]+)["'`]/g
 
+/** A file that registers its routes once per use-case type (`for (const type of USE_CASE_NODE_TYPES) …`). */
+const USE_CASE_LOOP_RE = /\bfor\s*\(\s*const\s+\w+\s+of\s+USE_CASE_NODE_TYPES\s*\)/
+/**
+ * A registration whose path is the type's, from its descriptor: `d.route`,
+ * `` `${d.route}/<suffix>` ``, or `usecaseContinuePath(type)`.
+ */
+const USE_CASE_REGISTRATION_RE =
+  /\b\w+\.(get|post|put|patch|delete)\s*\(\s*(?:d\.route\b|`\$\{d\.route\}(\/[^`$]*)`|(usecaseContinuePath)\(\s*\w+\s*\))/g
+
+/**
+ * The use-case route factories (routes/use-case-run.ts, routes/use-case-continue.ts)
+ * register one route per registered use-case type, its path read from the
+ * type's descriptor — invisible to a literal scan. Expanded here from the same
+ * registry (`@nodaro/render-rules`), so a new use-case node's routes are in the
+ * inventory the moment it is registered, and a file that stops looping over
+ * the types stops reporting them.
+ */
+export function usecaseFactoryRegistrations(src: string): RouteRegistration[] {
+  if (!USE_CASE_LOOP_RE.test(src)) return []
+  const out: RouteRegistration[] = []
+  for (const m of src.matchAll(USE_CASE_REGISTRATION_RE)) {
+    const line = src.slice(0, m.index).split("\n").length
+    for (const type of USE_CASE_NODE_TYPES) {
+      const raw = m[3] ? usecaseContinuePath(type) : `${usecaseDescriptor(type).route}${m[2] ?? ""}`
+      const path = normalizePath(raw)
+      if (path) out.push({ method: m[1]!.toUpperCase() as HttpMethod, path, line })
+    }
+  }
+  return out
+}
+
 /**
  * Route registrations in one backend file. Matches both `app.<verb>(...)` and
  * `<subapp>.<verb>(...)` (nested Fastify instances created via
- * `app.register(async (api) => { ... })`).
+ * `app.register(async (api) => { ... })`), and the use-case factories' routes.
  */
 export function extractRouteRegistrations(src: string): RouteRegistration[] {
   const out: RouteRegistration[] = []
@@ -98,7 +131,7 @@ export function extractRouteRegistrations(src: string): RouteRegistration[] {
     const line = src.slice(0, m.index).split("\n").length
     out.push({ method: m[1]!.toUpperCase() as HttpMethod, path, line })
   }
-  return out
+  return [...out, ...usecaseFactoryRegistrations(src)]
 }
 
 /** The normalized paths a backend file registers, any verb. */

@@ -1,3 +1,4 @@
+// @test-watches frontend/src/lib/mix-audio-duck.ts packages/cli/src/commands/audio.ts packages/client/src/resources/audio.ts docs/api-integration.md docs/sdk-reference.md docs/mcp/tools.md docs/nodes/processing-audio/mix-audio.md
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"

@@ -51,4 +51,33 @@ describe("usecasePreflight — refused before any row exists", () => {
     expect(r).toMatchObject({ status: 503, code: "provider_key_missing" })
     expect(r!.message).toMatch(/ELEVENLABS_API_KEY/)
   })
+  const withCaptions = (data: Record<string, unknown>) => ({
+    ...graph,
+    nodes: [...graph.nodes, { id: "uc-captions-auto", type: "add-captions", position: { x: 0, y: 0 }, data }],
+  })
+  it("refuses a keyless install whose graph auto-transcribes inside Add Captions (its own lane's key)", async () => {
+    m.credits = true; m.keys.ELEVENLABS_API_KEY = "el-key" // the transcribe step is covered
+    const refusal = await usecasePreflight(withCaptions({ autoTranscribe: true }))
+    expect(refusal).toMatchObject({ status: 503, code: "provider_key_missing" })
+    expect(refusal!.message).toMatch(/REPLICATE_API_TOKEN/)
+  })
+  it("the captions' own lane, named either way the node data spells it", async () => {
+    m.credits = true; m.keys.REPLICATE_API_TOKEN = "r" // only Whisper's key
+    for (const data of [{ autoTranscribe: true, transcribeProvider: "elevenlabs-stt" }, { auto_transcribe: true, transcribe_provider: "elevenlabs-stt" }]) {
+      const refusal = await usecasePreflight({ ...withCaptions(data), nodes: withCaptions(data).nodes.filter((n) => n.type !== "transcribe") })
+      expect(refusal).toMatchObject({ status: 503, code: "provider_key_missing" })
+      expect(refusal!.message).toMatch(/ELEVENLABS_API_KEY/)
+    }
+  })
+  it("an Add Captions node that reads a wired transcript needs no key", async () => {
+    m.credits = true; m.keys.ELEVENLABS_API_KEY = "el-key"
+    expect(await usecasePreflight(withCaptions({}))).toBeNull()
+  })
+  it("Tighten Episode's own captions read the render's transcript: its graph asks no captions key", async () => {
+    m.credits = true; m.keys.ELEVENLABS_API_KEY = "el-key"
+    const captions = graph.nodes.find((n) => n.type === "add-captions")
+    expect(captions).toBeDefined()
+    expect(captions!.data).not.toHaveProperty("autoTranscribe")
+    expect(await usecasePreflight(graph)).toBeNull()
+  })
 })

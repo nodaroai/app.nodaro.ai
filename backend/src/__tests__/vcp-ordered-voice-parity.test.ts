@@ -1,3 +1,4 @@
+// @test-watches frontend/src/lib/api.ts frontend/src/types/nodes.ts backend/src/lib/mcp/tools/verbs-audio.ts backend/src/lib/node-registry.ts packages/client/src/resources/voices.ts
 /**
  * Cross-surface parity guard for the voice-changer-pro ORDERED-VOICE shape.
  *

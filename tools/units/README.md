@@ -18,6 +18,7 @@ the product already reads (`NODE_DEFINITIONS = legacy ∪ units`, …).
 npm run gen:units              # write every generated file
 npm run gen:units -- --check   # CI drift guard (Type Check job): exit 1 listing each stale file
 npm run gen                    # gen:units, then gen:skills
+npm run units:baseline         # refresh the composed-registry baseline (after a deliberate legacy change)
 ```
 
 ## Files
@@ -42,9 +43,41 @@ npm run gen                    # gen:units, then gen:skills
 A seam is live once its composer edit exists. Until then gen:units writes
 nothing for it, and a unit that needs it fails validation with
 "needs the … seam, which is not live". **A node that needs a missing seam
-builds that seam in its own PR** — there is no exceptions list. Today (PR1a)
-no seam is live: there are no units, `gen:units --check` is a validated
-no-op, and gen:skills output is byte-identical.
+builds that seam in its own PR** — there is no exceptions list. Every seam
+in `seams.mjs` is live (PR1b): the aggregates exist (empty until the first
+unit), each composed once into the collection the product reads. The same
+rule holds below the seams: a capability, an input kind (`ACCEPTS_KINDS`) or
+a category (`REGISTRY_CATEGORIES`) is added only with the composition that
+reads it.
+
+| Registry | Composed in |
+|---|---|
+| `NODE_DEFINITIONS`, `SceneNodeType`/`SceneNodeData` | `frontend/src/types/nodes.ts` (`LEGACY_NODE_DEFINITIONS` ∪ units at `position.after`) |
+| `nodeTypes`, config panels, `NODE_OPTIONS` + families, executors, label tables | `components/nodes/index.ts`, `config-panel.tsx`, `node-options.tsx` + `node-families.ts`, `execute-node.ts` (kit: `workflow-editor/unit-exec-kit.ts`), `lib/i18n/labels.ts` |
+| everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
+| `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
+| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, `VIDEO_OUTPUT_LENGTH_RULES`, the MCP handle table `lib/node-handles.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| the producer sets | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` |
+
+The pure composition lives in `frontend/src/lib/unit-compose.ts` and
+`backend/src/lib/unit-compose.ts` (an empty unit collection returns the legacy
+table itself). The unit kits are type-only: `frontend/src/nodes/kit.ts`
+(definition side), `frontend/src/nodes/exec-kit.ts` (exec.ts / config.tsx),
+`backend/src/nodes/kit.ts`.
+
+**The composed baseline.** `tools/units/__fixtures__/composed-baseline.{frontend,backend}.json`
+is every composed registry as it was before the composition, one line per
+member; `units-composed-baseline.test.ts` (both trees) fails on any
+difference. Each section says how it is compared (decided 2026-10-16):
+`ordered` — member for member, in order — where a user or an agent can see
+the order (NODE_DEFINITIONS, NODE_OPTIONS, the families, NODE_REGISTRY,
+TARGET_HANDLE_ACCEPTS, the Copilot's ALL_NODE_HANDLES); `membership` — as a
+set, each value exact — for every Set, lookup record and derived list nothing
+iterates for a user or agent. A node migrated into a unit must leave it
+unchanged. After a DELIBERATE legacy change (a node added, a reprice, a
+relabel) run `npm run units:baseline` and review the diff. The keyed
+aggregates are null-prototype objects, so a lookup by any `node.type` a
+workflow carries ("constructor", "toString") finds no unit.
 
 ## Rules the validator enforces
 

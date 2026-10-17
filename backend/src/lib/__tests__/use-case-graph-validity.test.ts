@@ -4,8 +4,10 @@
  * names real handles on real nodes, every data key is a field its type
  * declares (so the executor-reads guard and gen:skills see it), the outputMap
  * points at real output handles, and the graph is acyclic. Walks the whole
- * settings space. The canvas-legality half lives in the frontend
- * (tighten-episode-graph-connections.test.ts).
+ * settings space of every registered use-case type (`SETTINGS_TABLES`: one
+ * table per type, built through its registry descriptor). A built wire's data
+ * is absent or exactly `{ outputMode: "each" }`. The canvas-legality half
+ * lives in the frontend (tighten-episode-graph-connections.test.ts).
  *
  * Declared = the type's `NODE_DATA_FIELDS` (its data type's fields, generated
  * by gen:skills) ∪ `UNIVERSAL_NODE_SETTINGS` ∪ its `EXTRA_NODE_SETTINGS`. Not
@@ -18,9 +20,17 @@ import {
   NODE_DATA_FIELDS,
   TIGHTEN_EPISODE_DEFAULTS,
   UNIVERSAL_NODE_SETTINGS,
+  USE_CASE_NODE_TYPES,
   buildTightenEpisodeGraph,
   resolveTightenEpisodeSettings,
+  usecaseDescriptor,
+  usecaseRenderNodeId,
   type UseCaseGraph,
+  type UseCaseHandleRef,
+  type UseCaseMediaKind,
+  type UseCaseNodeType,
+  type UseCaseSettings,
+  type UseCaseSources,
 } from "@nodaro/render-rules"
 import { NODE_HANDLES } from "../mcp/generated/node-handles.js"
 
@@ -34,8 +44,42 @@ function* settingsSpace() {
           for (const planTier of ["economy", "standard", "premium"] as const)
             for (const music of [false, true])
               for (const durationSec of [undefined, 60, 3600])
-                for (const framing of FRAMINGS)
-                  yield { kind, music, durationSec, settings: resolveTightenEpisodeSettings({ ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, planTier, framing }, kind) }
+                for (const framing of FRAMINGS) {
+                  const raw = { ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, planTier, framing }
+                  yield { kind, music, durationSec, raw, settings: resolveTightenEpisodeSettings(raw, kind) }
+                }
+}
+
+type SettingsCase = { readonly raw: UseCaseSettings; readonly kind: UseCaseMediaKind; readonly sources: UseCaseSources }
+
+/** One settings table per registered use-case type: the raw settings and inputs its builder is walked over. */
+const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
+  "tighten-episode": function* () {
+    for (const c of settingsSpace()) {
+      yield {
+        raw: c.raw,
+        kind: c.kind,
+        sources: {
+          media: { url: "https://r2/ep", kind: c.kind, ...(c.durationSec ? { durationSec: c.durationSec } : {}) },
+          ...(c.music ? { music: { url: "https://r2/bed.mp3" } } : {}),
+        },
+      }
+    }
+  },
+}
+
+/** Every graph `type`'s descriptor builds over its settings table, with the case it was built from. */
+function* graphsOf(type: UseCaseNodeType): Generator<{ readonly c: SettingsCase; readonly g: UseCaseGraph }> {
+  const d = usecaseDescriptor(type)
+  for (const c of SETTINGS_TABLES[type]()) yield { c, g: d.build(d.resolveSettings(c.raw, c.kind), c.sources) }
+}
+
+/** Every handle ref of the output map: its plan, transcript, and (a rendering graph) its preview and deliveries. */
+function outputRefsOf(g: UseCaseGraph): UseCaseHandleRef[] {
+  const m = g.outputMap
+  if (m.kind === "chapters") return [m.json, m.transcript]
+  const delivered = m.kind === "formats" ? m.formats.map((f) => f.ref) : [m.media]
+  return [...delivered, m.preview, m.json, m.transcript]
 }
 
 function declaredKeys(type: string): ReadonlySet<string> {
@@ -56,6 +100,9 @@ function problems(g: UseCaseGraph): string[] {
     for (const key of Object.keys(n.data)) if (!declared.has(key)) out.push(`${n.type}.data.${key} is not a declared field`)
   }
   for (const e of g.edges) {
+    if (e.data !== undefined && JSON.stringify(e.data) !== JSON.stringify({ outputMode: "each" })) {
+      out.push(`edge ${e.id} has data ${JSON.stringify(e.data)}`)
+    }
     const s = byId.get(e.source)
     const t = byId.get(e.target)
     if (!s || !t) {
@@ -65,11 +112,12 @@ function problems(g: UseCaseGraph): string[] {
     if (!NODE_HANDLES[s.type]?.outputs.includes(e.sourceHandle)) out.push(`${s.type} has no output ${e.sourceHandle}`)
     if (!NODE_HANDLES[t.type]?.inputs.includes(e.targetHandle)) out.push(`${t.type} has no input ${e.targetHandle}`)
   }
-  for (const ref of [g.outputMap.media, g.outputMap.preview, g.outputMap.json, g.outputMap.transcript]) {
+  for (const ref of outputRefsOf(g)) {
     const n = byId.get(ref.nodeId)
     if (!n || !NODE_HANDLES[n.type]?.outputs.includes(ref.handle)) out.push(`outputMap → ${ref.nodeId}.${ref.handle} is not an output`)
   }
-  if (!byId.has(g.outputMap.planNodeId) || !byId.has(g.outputMap.renderNodeId)) out.push("outputMap plan/render id missing")
+  const renderId = usecaseRenderNodeId(g.outputMap)
+  if (!byId.has(g.outputMap.planNodeId) || (renderId !== null && !byId.has(renderId))) out.push("outputMap plan/render id missing")
   // Kahn: acyclic
   const indeg = new Map(g.nodes.map((n) => [n.id, 0]))
   for (const e of g.edges) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1)
@@ -100,6 +148,30 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
       count++
     }
     expect(count).toBe(1152)
+  })
+
+  it("has a settings table for every registered use-case type", () => {
+    expect(Object.keys(SETTINGS_TABLES).sort()).toEqual([...USE_CASE_NODE_TYPES].sort())
+  })
+
+  for (const type of USE_CASE_NODE_TYPES) {
+    it(`${type}, built through its registry descriptor`, () => {
+      let count = 0
+      for (const { c, g } of graphsOf(type)) {
+        expect(g.nodeType).toBe(type)
+        expect(problems(g), JSON.stringify({ raw: c.raw, kind: c.kind, sources: c.sources })).toEqual([])
+        count++
+      }
+      expect(count).toBeGreaterThan(0)
+    })
+  }
+
+  it("the guard catches a wire whose data is not exactly an Each mode", () => {
+    const g = buildTightenEpisodeGraph(TIGHTEN_EPISODE_DEFAULTS, { media: { url: "https://r2/ep", kind: "video" } })
+    const each: UseCaseGraph = { ...g, edges: g.edges.map((e, i) => (i === 0 ? { ...e, data: { outputMode: "each" } } : e)) }
+    expect(problems(each)).toEqual([])
+    const last = { ...g, edges: g.edges.map((e, i) => (i === 0 ? { ...e, data: { outputMode: "last" } } : e)) } as unknown as UseCaseGraph
+    expect(problems(last)).toEqual([`edge ${g.edges[0]!.id} has data {"outputMode":"last"}`])
   })
 
   it("the guard itself catches an undeclared key, a wrong handle and a cycle", () => {

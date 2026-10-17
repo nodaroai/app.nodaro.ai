@@ -291,7 +291,7 @@ const SPEAKER_VIEW_CREATE_REFUSALS: ReadonlySet<string> = new Set([
 
 /** nodaro.ai's Speaker Frames route refuses these before it reserves anything
  *  (cloud-plugins P3.4): a function of the request or of nodaro.ai's release
- *  (`not_priced` until P3.7, `media_proxy_unavailable` on a host without the
+ *  (`not_priced` from a release before its price (P3.7), `media_proxy_unavailable` on a host without the
  *  proxy or the detector, `invalid_proxy` for a relayed proxy its schema
  *  refuses), so the job fails once, with nodaro.ai's message. */
 const SPEAKER_FRAMES_CREATE_REFUSALS: ReadonlySet<string> = new Set([

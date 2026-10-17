@@ -7,6 +7,9 @@ export const descriptor = {
   "category": "utility",
   "description": "Echo the input video back unchanged (the gen:units fixture).",
   "outputType": "video",
+  "position": {
+    "after": "upload-video"
+  },
   "inputs": [
     "in"
   ],

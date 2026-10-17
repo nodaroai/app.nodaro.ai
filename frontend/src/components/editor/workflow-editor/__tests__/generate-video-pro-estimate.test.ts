@@ -1,3 +1,4 @@
+// @test-units-by-name estimates only generate-video-pro nodes
 /**
  * Golden-table test for the generate-video-pro DISPLAY-ONLY credit estimate
  * (`estimateNodeCredits`'s "generate-video-pro" branch in ../types.ts).

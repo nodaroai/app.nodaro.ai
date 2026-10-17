@@ -32,6 +32,8 @@ export function aggregateSource(agg, members) {
     `// @registry-exports ${agg.id}: ${agg.exportName}${agg.id === "definitions" ? " UnitNodeType UnitNodeData" : ""}`,
   ]
   const dir = (u) => u.dirs[agg.tree]
+  // The unit kit types the collection, so a member that does not fit fails typecheck at its line.
+  lines.push(`import type { ${agg.kitType} } from "${importSpecifier(agg.out, `${agg.tree === "frontend" ? "frontend/src/nodes" : "backend/src/nodes"}/${agg.kitFile ?? "kit.ts"}`)}"`)
   for (const u of members) lines.push(`import { ${agg.binding} as ${unitBinding(u.type)} } from "${importSpecifier(agg.out, `${dir(u)}/${agg.member}`)}" ${tag(u.type)}`)
   const typed = agg.id === "definitions" ? members.filter((u) => u.typesSource !== null) : []
   for (const u of typed) {
@@ -40,16 +42,19 @@ export function aggregateSource(agg, members) {
   lines.push("")
   if (agg.id === "definitions") {
     // An array: the composer inserts each one at its position.after.
-    lines.push(`export const ${agg.exportName} = [`)
+    lines.push(`export const ${agg.exportName}: ReadonlyArray<${agg.kitType}> = [`)
     for (const u of members) lines.push(`  ${unitBinding(u.type)}, ${tag(u.type)}`)
-    lines.push("] as const", "", "export type UnitNodeType =", "  | never")
+    lines.push("]", "", "export type UnitNodeType =", "  | never")
     for (const u of members) lines.push(`  | ${JSON.stringify(u.type)} ${tag(u.type)}`)
     lines.push("", "export type UnitNodeData =", "  | never")
     for (const u of typed) lines.push(`  | ${unitBinding(u.type)}_data ${tag(u.type)}`)
   } else {
-    lines.push(`export const ${agg.exportName} = {`)
+    // Null-prototype: composers look a unit up by any node.type a workflow
+    // carries, and on a plain object "constructor" / "toString" / "__proto__"
+    // would answer with Object's own members instead of undefined.
+    lines.push(`export const ${agg.exportName}: Readonly<Record<string, ${agg.kitType}>> = Object.assign(Object.create(null), {`)
     for (const u of members) lines.push(`  ${JSON.stringify(u.type)}: ${unitBinding(u.type)}, ${tag(u.type)}`)
-    lines.push("} as const")
+    lines.push("})")
   }
   return `${lines.join("\n")}\n`
 }
@@ -95,6 +100,7 @@ export function descriptorSource(unit) {
     category: m.category,
     description: m.registry.description,
     outputType: m.registry.outputType,
+    position: m.position,
     inputs: handleIds(m.handles?.inputs),
     outputs: handleIds(m.handles?.outputs),
     handles: m.handles,
@@ -115,12 +121,18 @@ export function i18nLines(units, locale) {
 }
 
 const cell = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ")
-/** One docs/nodes/README.md table row per unit that has a docs page. */
+/**
+ * The docs/nodes/README.md region: a table of every unit that has a docs page,
+ * WITH its own header row — in GitHub-flavoured Markdown the region's comment
+ * line ends any table above it, so bare rows would render as a paragraph.
+ * Nothing at all when no unit has a page.
+ */
 export function docsRows(units) {
-  return units.filter((u) => u.manifest.docs?.page).map((u) => {
+  const rows = units.filter((u) => u.manifest.docs?.page).map((u) => {
     const m = u.manifest
     return `| [${cell(m.label)}](./${path.posix.relative("docs/nodes", m.docs.page)}) | ${cell(m.registry.description)} | ${cell(m.docs.useCase)} |`
   })
+  return rows.length ? ["| Node | Description | When to Use |", "|------|-------------|-------------|", ...rows] : []
 }
 
 /** packages/shared/src/generated/unit-contracts.ts — type id + producer kind, nothing else. */

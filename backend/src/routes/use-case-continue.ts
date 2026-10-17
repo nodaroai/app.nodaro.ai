@@ -1,7 +1,8 @@
 /**
- * Continue a Tighten Episode run (a podcast use-case node, decided
- * 2026-10-13): a NEW wrapper job whose hidden run continues the earlier run's
- * inner execution, on that run's stored snapshot.
+ * Continue a use-case run (podcast use-case nodes, decided 2026-10-13): a NEW
+ * wrapper job whose hidden run continues the earlier run's inner execution,
+ * on that run's stored snapshot. One `<route>/continue` per registered type;
+ * a run is continued only through its own type's route.
  *
  *  - from-failed: runs every step the failed run did not complete; the
  *    completed ones are handed on, never run or billed again. The run's fee
@@ -22,12 +23,13 @@
  */
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
-import { TIGHTEN_EPISODE, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseFeeCreditId, type UseCaseNodeType } from "@nodaro/render-rules"
 import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
 import { hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
+import { KEYED_JOB_COLUMNS, keyedJobOf } from "../lib/dedup-fingerprint.js"
 import { creditGuard, reserveCreditsForJob, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
@@ -40,12 +42,14 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { RENDER_FINAL_ALREADY_RUNNING, renderFinalCredits } from "../lib/render-final-run.js"
 import { claimContinuation, releaseContinuation, type ContinueClaim } from "../lib/use-case/continue-claim.js"
 import {
-  TIGHTEN_EPISODE_UNAVAILABLE,
+  IDEMPOTENCY_KEY_REUSED,
   USE_CASE_MAX_DEPTH,
   adoptForwardedPayer,
-  answerKeyedRetry,
   idempotencyKeyOf,
   isInternalLane,
+  usecaseKeyedRetry,
+  usecaseKeyedRunIsOwn,
+  usecaseUnavailable,
 } from "../lib/use-case/lanes.js"
 import { usecaseContinueBody, usecaseReviewerPresent } from "../lib/use-case/request.js"
 import { resolveUseCaseContinuation, type UseCaseContinuation } from "../lib/use-case/continuation.js"
@@ -53,7 +57,6 @@ import { fromFailedCover } from "../lib/use-case/continue-credits.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 
-const FEE_ID = usecaseFeeCreditId(TIGHTEN_EPISODE)
 const STAMP_ATTEMPTS = 3
 
 /** Stamp the wrapper with its run, a few times before giving up. Never throws. */
@@ -75,17 +78,18 @@ async function stampRun(wrapperId: string, userId: string, inputData: Record<str
   }
 }
 
-export async function usecaseContinueRoutes(app: FastifyInstance) {
+function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
+  const FEE_ID = usecaseFeeCreditId(type)
   app.post(
-    "/v1/tighten-episode/continue",
-    { preHandler: [adoptForwardedPayer, answerKeyedRetry, creditGuard(() => FEE_ID)] },
+    usecaseContinuePath(type),
+    { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID)] },
     async (req, reply) => {
       const parsed = usecaseContinueBody.safeParse(req.body)
       if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
       const userId = req.userId
       if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
-      if (await isNodeDeniedForUser(TIGHTEN_EPISODE, userId)) {
-        return reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([TIGHTEN_EPISODE]) } })
+      if (await isNodeDeniedForUser(type, userId)) {
+        return reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([type]) } })
       }
       const body = parsed.data
       const internal = isInternalLane(req)
@@ -94,11 +98,11 @@ export async function usecaseContinueRoutes(app: FastifyInstance) {
           .status(400)
           .send({ error: { code: "nesting_too_deep", message: `Nodes inside components can nest ${USE_CASE_MAX_DEPTH} levels deep.` } })
       }
-      if (!(await ensureInlineGraphColumns())) return reply.status(503).send({ error: TIGHTEN_EPISODE_UNAVAILABLE })
+      if (!(await ensureInlineGraphColumns())) return reply.status(503).send({ error: usecaseUnavailable(type) })
 
       let plan: UseCaseContinuation
       try {
-        const resolved = await resolveUseCaseContinuation({ jobId: body.jobId, userId, mode: body.mode, editedEdl: body.editedEdl })
+        const resolved = await resolveUseCaseContinuation({ nodeType: type, jobId: body.jobId, userId, mode: body.mode, editedEdl: body.editedEdl })
         if (!resolved.ok) {
           return reply
             .status(resolved.status)
@@ -163,12 +167,13 @@ export async function usecaseContinueRoutes(app: FastifyInstance) {
         req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false, ...req.creditReservation, creditOverride: feeCredits }
       }
       const inputData = {
-        type: TIGHTEN_EPISODE,
+        type,
         mode: body.mode,
         sourceJobId: body.jobId,
         settings: plan.input.settings ?? {},
         mediaUrl: plan.input.mediaUrl ?? null,
         ...(plan.input.musicUrl !== undefined ? { musicUrl: plan.input.musicUrl } : {}),
+        ...(plan.input.introCardUrl !== undefined ? { introCardUrl: plan.input.introCardUrl } : {}),
         ...(plan.input.durationSec !== undefined ? { durationSec: plan.input.durationSec } : {}),
         ...(plan.finalChain ? { _finalChain: true } : {}),
         ...(plan.finalOf ? { _finalOf: plan.finalOf } : {}),
@@ -183,7 +188,7 @@ export async function usecaseContinueRoutes(app: FastifyInstance) {
         id: newWrapperId,
         user_id: userId,
         provider: "use-case",
-        job_type: TIGHTEN_EPISODE,
+        job_type: type,
         status: "processing",
         started_at: new Date().toISOString(),
         input_data: inputData,
@@ -208,9 +213,14 @@ export async function usecaseContinueRoutes(app: FastifyInstance) {
       let wrapperId: string
       try {
         if (headerKey) {
-          const dedup = await insertJobIdempotent<{ id: string }>(req, wrapperRow, headerKey)
+          const dedup = await insertJobIdempotent<{ id: string } & Record<string, unknown>>(req, wrapperRow, headerKey, KEYED_JOB_COLUMNS)
           if (!dedup.created) {
             await releaseContinuation(claim)
+            // The key is taken (another request won the race to it): only a run
+            // of this type answers; any other job under it refuses the request.
+            if (!usecaseKeyedRunIsOwn(keyedJobOf(dedup.row), type)) {
+              return reply.status(409).send({ error: IDEMPOTENCY_KEY_REUSED })
+            }
             reply.header("X-Dedup-Hit", "1")
             return reply.status(202).send({ jobId: dedup.row.id, deduped: true })
           }
@@ -279,7 +289,7 @@ export async function usecaseContinueRoutes(app: FastifyInstance) {
           await refundReservedCreditsForJob(wrapperId)
         }
         await releaseContinuation(claim)
-        if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: TIGHTEN_EPISODE_UNAVAILABLE })
+        if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: usecaseUnavailable(type) })
         return sendInternalError(reply, req, err, "Failed to continue the run")
       }
 
@@ -291,4 +301,9 @@ export async function usecaseContinueRoutes(app: FastifyInstance) {
       return reply.status(202).send({ jobId: wrapperId, executionId })
     },
   )
+}
+
+/** One continue route per registered use-case type. */
+export async function usecaseContinueRoutes(app: FastifyInstance) {
+  for (const type of USE_CASE_NODE_TYPES) registerContinue(app, type)
 }

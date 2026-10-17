@@ -66,6 +66,8 @@ The Run button shows the live estimate. When the upstream isn't generated yet, a
 - an uploaded clip: the length measured when it was uploaded, as long as that upload is still the node's file. A link pasted into Upload Video later is charged at the fallback below, never at an earlier upload's length;
 - the output of a Trim, Loop or Combine Videos: the length that step passes on (a Trim's window, a Loop's copies or target, a Combine's clips added up), the same length the estimate before the run uses;
 - a render's output (Apply EDL): the length of the cut it rendered. The estimate before the run prices it at the render's length rounded up to whole minutes, so the run never costs more than its estimate;
+- a [Tighten Episode](./tighten-episode.md#steps-after-the-node)'s episode: the length of the cut it rendered, captioned or with its music bed;
+- the output of a step whose output is exactly as long as its input and that records no length of its own (Add Captions, Resize Video, Fade Video, Transcode Video, Remove Audio; a Merge Video Audio whose tracks are all that same video): its input's length, read by these same rules. The estimate before the run reads it the same way, and also reads a step that may return less than it is given (Face Swap, Video Upscale, Social Media Format, …) at its input's length, so it never quotes less than the run is charged;
 - a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length;
 - anything else: the length the source recorded, else its configured duration.
 

@@ -14,6 +14,7 @@ import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
 import { useT } from "@/lib/i18n"
 import type { MessageKey } from "@/lib/i18n/en"
 import type { TelegramAccountSendData } from "@/types/nodes"
+// @registry-lookup reads its own row only (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 /**
  * Telegram Reply: says who writes (the owner's account or bot) and where the

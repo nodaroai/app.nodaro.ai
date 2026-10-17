@@ -180,7 +180,7 @@ export const SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES = 4
  * The descriptor term of one proxy span of `lengthMs` (`undefined`: the whole
  * source, length unknown): its described frames — both edges, or every frame
  * of a span with fewer — at the detector's per-frame descriptor term. Small:
- * 80 ms a span at most (measured 14–17 µs per box, `face-detect-budget.ts`).
+ * 24 ms a span at most (measured ≤ 46.2 µs per box, `face-detect-budget.ts`).
  */
 export function speakerFramesDescriptorSpanBudgetMs(lengthMs: number | undefined): number {
   const edges = 2 * SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES
@@ -189,14 +189,12 @@ export function speakerFramesDescriptorSpanBudgetMs(lengthMs: number | undefined
 }
 
 /**
- * In-process time charged per box a window hands back. Measured on the
- * plugin's linker and subject filter (P3.4L, P3.4S): linking 75 ms for a
- * 170-minute source, the person-chain pass under 0.1 s for 129,600 boxes, the
- * filter 0.1–2.8 ms per clip — microseconds per box. 1 ms is a placeholder
- * hundreds of times that, until the pricing measurement times the built
- * handler (identity included) and re-pins it.
+ * In-process time charged per box a window hands back: about twice the most
+ * the P3.0f measurement of the built handler could see — below its resolution,
+ * ≤ 0.1 CPU-s per 1,000 frames at about 1,000–2,700 boxes, so ≤ about 0.1 ms
+ * a box (decided 2026-10-16).
  */
-export const SPEAKER_FRAMES_TAIL_MS_PER_BOX = 1
+export const SPEAKER_FRAMES_TAIL_MS_PER_BOX = 0.2
 
 /** Slack for the run itself (the detector session's load, the handler's own
  *  bookkeeping): one default ffmpeg ceiling, as audio-sync's budget carries. */

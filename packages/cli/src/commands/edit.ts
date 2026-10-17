@@ -8,7 +8,7 @@ import {
   SPEAKER_LAYOUT_IDS,
 } from "@nodaro/shared/edl"
 import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource, CameraSwitchInput } from "@nodaro/sdk"
-import { ContinuationRefusedError, type TightenEpisodeInput } from "@nodaro/sdk"
+import { ContinuationRefusedError, USE_CASE_NODE_TYPES, type TightenEpisodeInput, type UseCaseNodeType } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
 import pc from "picocolors"
 import { emit, warn, type OutputOpts } from "../output.js"
@@ -321,20 +321,28 @@ export function editCommand(): Command {
       },
     )
 
-  // ── continue-use-case (Tighten Episode runs) ────────────────────────────
+  // ── continue-use-case (podcast use-case runs) ───────────────────────────
   cmd
     .command("continue-use-case <jobId>")
     .description("continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review")
     .requiredOption("--mode <mode>", "from-failed | render-final")
     .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
+    .option(
+      "--type <type>",
+      `the run's node type (${USE_CASE_NODE_TYPES.join(" | ")}); without it the job is read for its type`,
+    )
     .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
     .option("--watch", "poll the job until it finishes")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
     .option("--json")
-    .action(async (jobId: string, opts: GlobalOpts & WatchOpts & { mode: string; edit?: string; idempotencyKey?: string }) => {
+    .action(async (jobId: string, opts: GlobalOpts & WatchOpts & { mode: string; edit?: string; type?: string; idempotencyKey?: string }) => {
       if (opts.mode !== "from-failed" && opts.mode !== "render-final") {
         warn(`--mode must be "from-failed" or "render-final" (got "${opts.mode}")`)
+        process.exit(1)
+      }
+      if (opts.type !== undefined && !(USE_CASE_NODE_TYPES as readonly string[]).includes(opts.type)) {
+        warn(`--type must be ${USE_CASE_NODE_TYPES.join(", ")} (got "${opts.type}")`)
         process.exit(1)
       }
       if (opts.edit !== undefined && opts.mode !== "render-final") {
@@ -348,6 +356,7 @@ export function editCommand(): Command {
             jobId,
             mode: opts.mode,
             ...(opts.edit !== undefined ? { editedEdl: readJsonFile(opts.edit) } : {}),
+            ...(opts.type !== undefined ? { nodeType: opts.type as UseCaseNodeType } : {}),
           },
           opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
         )

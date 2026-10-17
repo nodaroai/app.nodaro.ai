@@ -1,6 +1,6 @@
 // @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,extend-video,video-retake,dubbing}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,dubbing-span}.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span}.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -86,6 +86,7 @@ import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../../lib/ltx-retake-credits.js"
 import { applyEdlCreditOverride } from "../../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../../lib/speaker-view-plan.js"
+import { speakerFramesCreditOverride } from "../../../lib/speaker-frames-plan.js"
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { buildToolkit } from "../../../lib/private-plugins/toolkit.js"
 import { SRC, parseText, walk } from "../../../lib/__tests__/source-scan.js"
@@ -152,6 +153,10 @@ const CHARGES: Readonly<Record<string, Charge>> = {
       { units: 7, charge: async () => (await speakerViewCreditOverride("speaker-view", { edl: edlOf(7), reservedCreditId: id }))! },
     ]),
   ),
+  // The workflow run's speakerFramesCreditOverride (already marked up): 50 minutes kept on one camera,
+  // padded to 50 min 2 s, is 6,004 frames — 7 started blocks of 1,000. The cloud plugin's route reserves
+  // through the toolkit's unitRatePrice, the same composition.
+  "speaker-frames": { units: 7, charge: async () => (await speakerFramesCreditOverride("speaker-frames", { edl: edlOf(50) }))! },
 }
 
 beforeEach(() => {

@@ -1,3 +1,4 @@
+// @test-watches frontend/src/nodes/**
 import { describe, it, expect } from "vitest"
 import { NODE_DEF_MAP, type SceneNodeType } from "@/types/nodes"
 import { VIDEO_PRODUCER_HANDLE_LABELS } from "../video-producer-handles"

@@ -253,6 +253,7 @@ export {
   type SpeakerViewShowAs,
   type SpeakerViewTurn,
 } from "./speaker-view-on-screen"
+export { EXACT_LENGTH_VIDEO_TYPES, keptLengthOrigin, keptLengthWire, LENGTH_KEEPING_VIDEO_TYPES, type KeptLengthMode } from "./kept-length"
 export {
   forwardedVideoLengthSec,
   knownLength,
@@ -378,17 +379,27 @@ export {
   applySpeakerTrackAssignments,
   coerceSpeakerFramesEdits,
   speakerFramesLiveExclusions,
-  speakerFramesRunRefusal,
   speakerFramesScope,
   speakerFramesSourceRows,
   type SpeakerFramesRefusal,
-  type SpeakerFramesRunRefusal,
   type SpeakerFramesScopeCode,
   type SpeakerFramesScopeSource,
   type SpeakerFramesSourceRow,
   type SpeakerFramesSpan,
   type SpeakerTrackAssignment,
 } from "./speaker-frames"
+export {
+  SPEAKER_FRAMES_CEILING_BLOCKS,
+  SPEAKER_FRAMES_CEILING_FRAMES,
+  SPEAKER_FRAMES_CEILING_SOURCES,
+  SPEAKER_FRAMES_CREDITS_PER_BLOCK,
+  SPEAKER_FRAMES_FRAMES_PER_BLOCK,
+  speakerFramesBareVideoFrames,
+  speakerFramesBaseCredits,
+  speakerFramesBlocks,
+  speakerFramesEstimateBlocks,
+  speakerFramesScopeFrames,
+} from "./speaker-frames-pricing"
 export {
   SPEAKER_VIEW_MOTIONS,
   SPEAKER_VIEW_TRACKED_DEFAULT_MOTION,
@@ -469,6 +480,13 @@ export {
   toStoredInlineGraph,
   usecaseFeeCreditId,
   usecaseGraphHash,
+  usecaseRenderNodeId,
+  usecaseResultKind,
+  usecaseRunType,
+  type ChaptersOutputMap,
+  type ClipsOutputMap,
+  type EpisodeOutputMap,
+  type FormatsOutputMap,
   type StoredInlineGraph,
   type UseCaseFeeCreditId,
   type UseCaseGraph,
@@ -477,7 +495,18 @@ export {
   type UseCaseHandleRef,
   type UseCaseNodeType,
   type UseCaseOutputMap,
+  type UseCaseResultKind,
 } from "./use-case-graph"
+export {
+  USE_CASE_DESCRIPTORS,
+  usecaseContinuePath,
+  usecaseDescriptor,
+  usecaseListsItsResult,
+  type UseCaseDescriptor,
+  type UseCaseInputHandle,
+  type UseCaseSettings,
+  type UseCaseSources,
+} from "./use-case-registry"
 export {
   previewHoldKind,
   previewHoldKindOf,
@@ -514,6 +543,7 @@ export {
   type TightenFraming,
   type TightenFramingAspect,
   type TightenFramingLayout,
+  type TightenEpisodeGraph,
   type TightenEpisodeSettings,
   type TightenEpisodeSources,
   type UseCaseMediaKind,

@@ -24,12 +24,30 @@ import { PRESET_CONTENT_KO } from "./preset-content.ko"
 import { LABELS_PT_BR } from "./labels.pt-br"
 import { PRESET_CONTENT_PT_BR } from "./preset-content.pt-br"
 import { translate, type MessageKey } from "./index"
+import { UNIT_LABELS } from "@/nodes/_generated/labels"
+import { unitNodeLabels } from "@/lib/unit-compose"
+
+// Each node unit's node-label translations (frontend/src/nodes/<type>/strings.json
+// `labels`, projected into labels.generated.ts), by locale.
+const UNIT_NODE_LABELS = unitNodeLabels(Object.values(UNIT_LABELS))
+
+/** A locale's tables with the node units' node labels added (a legacy row of the same English label wins). */
+function withUnitLabels(locale: "he" | "ja" | "ko" | "pt-BR", tables: LocaleLabelTables): LocaleLabelTables {
+  const add = UNIT_NODE_LABELS[locale]
+  return add ? { ...tables, node: { ...add, ...tables.node } } : tables
+}
 
 /**
  * Every locale's label tables. The coverage guards iterate this registry, so a
  * locale added here is checked for complete tables the day it is added.
+ * Legacy tables ∪ the node units' node labels.
  */
-export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = { he: LABELS_HE, ja: LABELS_JA, ko: LABELS_KO, "pt-BR": LABELS_PT_BR }
+export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = {
+  he: withUnitLabels("he", LABELS_HE),
+  ja: withUnitLabels("ja", LABELS_JA),
+  ko: withUnitLabels("ko", LABELS_KO),
+  "pt-BR": withUnitLabels("pt-BR", LABELS_PT_BR),
+}
 
 /** Translate a node's display label for a locale; unknown/custom labels pass through. */
 export function localizeNodeLabel(label: string, locale: LocaleId): string {

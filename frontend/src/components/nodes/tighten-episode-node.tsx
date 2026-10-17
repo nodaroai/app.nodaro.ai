@@ -11,7 +11,7 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useTightenEpisodeCredits } from "@/hooks/use-tighten-episode-credits"
+import { useUseCaseCredits } from "@/hooks/use-use-case-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
@@ -40,7 +40,7 @@ const REFUSED_FINAL_CODES: ReadonlySet<string> = new Set([RENDER_FINAL_ALREADY_R
 function TightenEpisodeNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TightenEpisodeData
   const t = useT()
-  const credits = useTightenEpisodeCredits(id)
+  const credits = useUseCaseCredits(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 
-import { computeFingerprint, findJobByIdempotencyKey, findRecentMatchingJob, DEDUP_TTL_MS } from "../dedup-fingerprint.js"
+import { computeFingerprint, findJobByIdempotencyKey, findRecentMatchingJob, keyedJobOf, DEDUP_TTL_MS } from "../dedup-fingerprint.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -137,6 +137,21 @@ describe("findJobByIdempotencyKey", () => {
     expect(filters).toContainEqual(["provider", "use-case"])
     table([...rows, { id: "job-w", user_id: "u1", idempotency_key: "key-123456", provider: "use-case" }])
     expect(await findJobByIdempotencyKey("u1", "key-123456", { provider: "use-case" })).toMatchObject({ id: "job-w" })
+  })
+
+  it("names the job's kind and run type: the type its input records, else its job_type", async () => {
+    const w = { user_id: "u1", idempotency_key: "key-123456", provider: "use-case" }
+    table([{ ...w, id: "job-a", job_type: "tighten-episode", run_type: "episode-chapters" }])
+    expect(await findJobByIdempotencyKey("u1", "key-123456")).toEqual({ id: "job-a", provider: "use-case", jobType: "episode-chapters" })
+    table([{ ...w, id: "job-b", job_type: "tighten-episode", run_type: null }])
+    expect(await findJobByIdempotencyKey("u1", "key-123456")).toEqual({ id: "job-b", provider: "use-case", jobType: "tighten-episode" })
+    table([{ ...w, id: "job-c" }])
+    expect(await findJobByIdempotencyKey("u1", "key-123456")).toEqual({ id: "job-c", provider: "use-case", jobType: null })
+  })
+
+  it("reads a row the insert found under a key the same way (another kind of job: its provider, no run type)", () => {
+    expect(keyedJobOf({ id: "job-img", provider: "kie", job_type: "generate-image", run_type: null })).toEqual({ id: "job-img", provider: "kie", jobType: "generate-image" })
+    expect(keyedJobOf({ id: "job-x" })).toEqual({ id: "job-x", provider: null, jobType: null })
   })
 })
 

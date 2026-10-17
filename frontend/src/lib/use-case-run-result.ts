@@ -23,7 +23,7 @@
  *    server run as they address the canvas's own.
  */
 import { editPlanResultPatch } from "@nodaro/shared/edl"
-import { TIGHTEN_EPISODE, isUseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, type UseCaseNodeType } from "@nodaro/render-rules"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
 
@@ -159,8 +159,8 @@ export function usecaseTakeFields(
  * (`runResultIdentity`: quality and its render's bases) and what it keeps of
  * the run (`usecaseTakeFields`) — the same fields the server lanes put on theirs.
  */
-export function usecaseTakeResultFields(output: Output): Record<string, unknown> {
-  return { ...runResultIdentity(TIGHTEN_EPISODE, output), ...usecaseTakeFields(TIGHTEN_EPISODE, output, usecaseEpisodeOf(output)?.url) }
+export function usecaseTakeResultFields(nodeType: UseCaseNodeType, output: Output): Record<string, unknown> {
+  return { ...runResultIdentity(nodeType, output), ...usecaseTakeFields(nodeType, output, usecaseEpisodeOf(output)?.url) }
 }
 
 const runSettingsOf = (v: unknown): Readonly<Record<string, unknown>> | undefined =>

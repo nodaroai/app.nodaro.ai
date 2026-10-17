@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
+import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
 import { dubbingQuotedMinutesOf, maskCompositePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
@@ -21,6 +21,10 @@ import { PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared/scene3d"
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
 import { getCachedCredits, getCachedVideoProCredits } from "@/ee/hooks/use-model-credits"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
+// Node units (tools/units/README.md): EXECUTABLE_TYPES and the price mirror
+// are the legacy tables below ∪ every unit (its execution.kind / priceFallback).
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { composeRecord, composeSet, unitRecord } from "@/lib/unit-compose"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -30,7 +34,8 @@ export class WorkflowStaleError extends Error {
   }
 }
 
-export const NODE_CREDIT_COSTS: Record<string, number> = {
+// Legacy rows ∪ each node unit's priceFallback (projected by gen:units from its price.ee.ts).
+export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CREDIT_COSTS", {
   "generate-script": 20,
   "generate-image": 20,
   "modify-image": 20,
@@ -88,6 +93,11 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "speaker-view:proxy": 2,
   "speaker-view:complex": 12,
   "speaker-view:complex:proxy": 3,
+  // speaker-frames: the RATE per started block of 1,000 sampled frames
+  // (decided 2026-10-16); every estimate multiplies it by the blocks
+  // (PRICING_UNIT_ESTIMATORS). Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "speaker-frames": 2,
   "silence-detect": 10,
   // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
   // run-level estimate names the composite (getModelIdentifier) and reads it
@@ -230,7 +240,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // a last-resort floor: every real quoting path (node badge, canvas total,
   // run-confirm, precheck) resolves a bucketed composite first.
   "video-audit": 1073,
-};
+}, unitRecord(UNIT_NODE_DEFINITIONS, (u) => u.priceFallback ?? undefined));
 
 /** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
 const MOTION_CREDIT_COSTS: Record<string, number> = {
@@ -679,7 +689,8 @@ export const SERVER_RUN_ONLY_TYPES: ReadonlySet<string> = new Set(["telegram-acc
 
 // Group/Collect are non-executable aggregators (resolved at field-resolution time, no jobs created).
 // DO NOT add "group" or "collect" to EXECUTABLE_TYPES — they fall through to no-op cases in execute-node.ts.
-export const EXECUTABLE_TYPES = new Set([
+// Legacy types ∪ every node unit that runs something (execution.kind ≠ "source").
+export const EXECUTABLE_TYPES = composeSet("EXECUTABLE_TYPES", new Set([
   "generate-script",
   "generate-image",
   "edit-image",
@@ -857,7 +868,7 @@ export const EXECUTABLE_TYPES = new Set([
   "reduce",
   "reference-sheet",
   "reference-board",
-]);
+]), UNIT_NODE_DEFINITIONS.filter((u) => u.execution.kind !== "source").map((u) => u.type));
 
 /** The node types that fold their inputs into one run (Choose Best, Content
  * Ideas) — DERIVED from @nodaro/shared FAN_IN_TARGETS, the one table both
@@ -951,6 +962,11 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   // length rule. Its reserve is the edit as given, before the turns are split
   // (SV14 b), which a crossfade switch can only shorten — so this leans high.
   "speaker-view": resolveApplyEdlEstimateMinutes,
+  // Speaker Frames: started blocks of 1,000 sampled frames — the edit wired in
+  // when it is known now, else the 180 min × 6 cameras ceiling (130 blocks).
+  // The server's estimate reads the same rule; the reserve counts the run's
+  // own frames, and the charge the frames it sampled.
+  "speaker-frames": speakerFramesEstimateBlocks,
   "trim-video": videoUtilityPricingUnits,
   "loop-video": videoUtilityPricingUnits,
   "combine-videos": videoUtilityPricingUnits,

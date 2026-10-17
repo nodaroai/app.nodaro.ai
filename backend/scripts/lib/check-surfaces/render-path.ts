@@ -7,7 +7,9 @@
  * parameter bound by the caller) are substituted; anything else becomes `:p`.
  * A conditional whose test it can decide (`type === "edit-3d-scene"` with
  * `type` bound) takes one branch, otherwise both, so a method that picks its
- * route at run time yields each route it can call.
+ * route at run time yields each route it can call. A lookup in a const object
+ * literal (`PATHS[type]`) is the one entry its key names, or every entry when
+ * the key is not known — a route table picked from at run time.
  */
 import ts from "typescript"
 
@@ -100,6 +102,22 @@ function decide(e: ts.Expression, scope: Scope, depth: number): Truth {
   return undefined
 }
 
+/** A name's literal key (`a`, `"a-b"`), or undefined for a computed one. */
+function propertyName(p: ts.PropertyAssignment): string | undefined {
+  return ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : undefined
+}
+
+/** The entries of the const object literal `e` names (`const PATHS = { … }`), or null. */
+function tableOf(e: ts.Expression, scope: Scope): { entries: ts.PropertyAssignment[]; scope: Scope } | null {
+  const id = unwrap(e)
+  if (!ts.isIdentifier(id)) return null
+  const b = scope.lookup(id.text)
+  if (!b || !("expr" in b)) return null
+  const lit = unwrap(b.expr)
+  if (!ts.isObjectLiteralExpression(lit)) return null
+  return { entries: lit.properties.filter(ts.isPropertyAssignment), scope: b.scope }
+}
+
 /** Every spelling `e` can render to. Unknown parts are `:p`. */
 export function renderExpr(e: ts.Expression, scope: Scope, depth = 0): string[] {
   if (depth > 12) return [PARAM]
@@ -124,6 +142,15 @@ export function renderExpr(e: ts.Expression, scope: Scope, depth = 0): string[] 
     // `${this.client.baseUrl}/v1/…` — the host is not part of the route.
     if (chain && chain[chain.length - 1] === "baseUrl") return [""]
     return [PARAM]
+  }
+  if (ts.isElementAccessExpression(x)) {
+    // An unknown key credits EVERY entry: right only for a route table keyed by type (one route per entry).
+    const table = tableOf(x.expression, scope)
+    if (!table) return [PARAM]
+    const keys = renderExpr(x.argumentExpression, scope, depth + 1)
+    const known = keys.length === 1 && !keys[0]!.includes(PARAM)
+    const entries = known ? table.entries.filter((p) => propertyName(p) === keys[0]) : table.entries
+    return entries.length ? entries.flatMap((p) => renderExpr(p.initializer, table.scope, depth + 1)) : [PARAM]
   }
   if (ts.isConditionalExpression(x)) {
     const t = decide(x.condition, scope, depth)

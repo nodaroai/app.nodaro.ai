@@ -1,3 +1,4 @@
+// @test-units-by-name estimates only meta-ads-scrape nodes
 /**
  * The Meta Ads credit estimate — and the invariant that the surfaces which
  * quote it can never disagree:

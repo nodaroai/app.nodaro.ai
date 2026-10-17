@@ -23,6 +23,11 @@ describe("runResultIdentity — what a landed take carries (A1b)", () => {
     expect(runResultIdentity("generate-video", { videoUrl: "v", durationSec: 190 })).toEqual({})
   })
 
+  it("a use-case node's episode length (Tighten Episode: its cut's), as the result row's duration", () => {
+    expect(runResultIdentity("tighten-episode", { videoUrl: "v", quality: "final", durationSec: 1834.5 })).toEqual({ quality: "final", duration: 1834.5 })
+    expect(runResultIdentity("tighten-episode", { videoUrl: "v", quality: "final" })).toEqual({ quality: "final" })
+  })
+
   it("another node keeps its thumbnail and never a render quality", () => {
     expect(runResultIdentity("generate-image", { imageUrl: "i", thumbnailUrl: "t", quality: "proxy" })).toEqual({ thumbnailUrl: "t" })
     expect(runResultIdentity("apply-edl", undefined)).toEqual({})

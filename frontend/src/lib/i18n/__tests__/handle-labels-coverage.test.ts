@@ -1,3 +1,4 @@
+// @test-always scans components/ and lib/*handles.ts sources, and checks every node unit's handles too
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"

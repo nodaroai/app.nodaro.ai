@@ -23,6 +23,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { AddCaptionsData } from "@/types/nodes"
+// @registry-lookup estimates its own type only (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()

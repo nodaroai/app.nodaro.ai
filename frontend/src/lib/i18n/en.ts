@@ -11093,11 +11093,11 @@ export const en = {
   // Failed API calls: the headline per action (lib/api.ts), the translated reasons by
   // server error code and the join between them (lib/api-error-copy.ts).
   "apiErr.startImageGeneration": "Failed to start image generation",
-  "nodeRun.tightenNeedsRecording": "Connect a recording to Tighten Episode first",
   "nodeRun.tightenContinueListDriven": "Continue isn't available for a node that runs once per list item — run it again.",
   "nodeRun.tightenReviewListDriven": "Review before render isn't available when the node runs once per list item — turn it off to run the list.",
-  "apiErr.startTightenEpisode": "Couldn't start Tighten Episode",
-  "apiErr.estimateTightenEpisode": "Couldn't estimate Tighten Episode",
+  "nodeRun.usecaseNeedsRecording": "Connect a recording to {label} first",
+  "apiErr.startUseCase": "Couldn't start {label}",
+  "apiErr.estimateUseCase": "Couldn't estimate {label}",
   "apiErr.continueUseCase": "Couldn't continue the run",
   "apiErr.startReferenceBoardGeneration": "Failed to start reference board generation",
   "apiErr.startImageEditing": "Failed to start image editing",
@@ -12546,7 +12546,6 @@ export const en = {
   "speakerView.notPriced": "Not priced yet — runs are refused until its price is set.",
   "speakerView.videoModeNotLive": "Speaker View from a video is not available yet. Use an edit as the input instead. Nothing was charged.",
   "speakerFrames.hint": "Finds where each speaker's face is on every camera the edit shows. It samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second. Wire the same transcript Camera Switch outputs.",
-  "speakerFrames.notPriced": "Not priced yet — runs are refused until its price is set.",
   "speakerFrames.section.cameras": "Cameras to track",
   "speakerFrames.section.result": "Face tracks",
   "speakerFrames.noEdit": "Wire an EDL (Edit Plan or Camera Switch) that has run to choose its cameras.",
@@ -12681,7 +12680,6 @@ export const en = {
   "reframe.wireVideo": "Wire a video",
   "reframe.wireVideoHint": "Connect a video to any one of these three nodes and it is wired to all three.",
   "reframe.groupSum": "group total",
-  "reframe.notPriced": "Not priced yet",
   "reframe.estimateTitle": "The three nodes' estimates added up. Each node charges its own price.",
   "speakerView.framing.tracksLoading": "Loading face tracks…",
   "speakerView.framing.tracksFailed": "The face tracks couldn't be loaded.",
@@ -12705,7 +12703,6 @@ export const en = {
   "nodeRun.speakerViewConnectEdl": "connect an edit (Edit Plan's or Camera Switch's EDL) to the “EDL” input, or a video to the “Video” input",
   "nodeRun.speakerViewNotPriced": "Speaker View is not priced yet.",
   "nodeRun.speakerViewChecking": "Checking the video before it runs…",
-  "nodeRun.speakerFramesNotPriced": "Speaker Frames is not priced yet.",
   "nodeRun.speakerFramesConnectInput": "Connect an edit (Edit Plan or Camera Switch) to “EDL”, or a video to “Video”.",
   "nodeRun.speakerFramesStarted": "Speaker Frames started",
   "nodeRun.speakerFramesComplete": "Speaker Frames complete",
@@ -12739,6 +12736,8 @@ export const en = {
   "nodeRun.maskCompositeNoMask": "no mask video. Wire a mask video (for example from Video Mask) into “Mask”.",
   "apiErr.startVideoMask": "Failed to start Video Mask",
   "apiErr.startMaskComposite": "Failed to start Mask Composite",
+  // gen:units start
+  // gen:units end
 } as const
 
 export type MessageKey = keyof typeof en

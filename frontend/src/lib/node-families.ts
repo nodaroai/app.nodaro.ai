@@ -13,6 +13,9 @@
  */
 import type { SceneNodeType } from "@/types/nodes"
 import { REFRAME_ENTRY_TYPE } from "@/lib/canvas-macros"
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { composeFamilyTypes } from "@/lib/unit-compose"
+// @registry-enumerates NODE_FAMILIES places every node unit in its picker.family
 
 export type PickerTab =
   | "common" | "image" | "video" | "audio" | "models"
@@ -34,7 +37,9 @@ export interface NodeFamily {
   readonly types: readonly SceneNodeType[]
 }
 
-export const NODE_FAMILIES: readonly NodeFamily[] = [
+// The hand-written families. tools/units/manifest.mjs (familyIdsFrom) reads
+// their ids textually to validate a unit's picker.family: keep it a literal.
+const LEGACY_NODE_FAMILIES: readonly NodeFamily[] = [
   {
     id: "image-add-your-own",
     label: "Add Your Own",
@@ -339,6 +344,12 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     types: ["music-genre", "music-mood", "instrumentation", "voice-character", "voice-delivery", "suno-voice"],
   },
 ]
+
+/** The families, each with its node units inserted at their picker.after (unit.json picker.family). */
+export const NODE_FAMILIES: readonly NodeFamily[] = LEGACY_NODE_FAMILIES.map((f) => {
+  const types = composeFamilyTypes(f.id, f.types, UNIT_NODE_DEFINITIONS)
+  return types === f.types ? f : { ...f, types }
+})
 
 /** Creative Controls sub-families, in the order they expand. */
 export const CREATIVE_CONTROL_FAMILY_IDS: readonly string[] = [

@@ -13,12 +13,32 @@ export const CATEGORIES = ["input", "parameter", "ai", "processing", "output", "
 export const HANDLE_KINDS = ["text", "image", "imageRef", "endFrame", "video", "audio", "audioRef", "look", "pickerJson", "reference", "identity", "negative", "face", "mask", "approve", "list", "variables", "control"]
 
 /**
+ * The handle kinds a unit INPUT may accept today: the ones the editor has a
+ * connection rule for (`unitInputAccepts` in frontend/src/lib/ffmpeg-handles.ts —
+ * video, audio, or both = any media). A unit needing another kind adds its
+ * rule there and its kind here in its own PR (decided 2026-10-16: a node that
+ * needs a missing seam builds it).
+ */
+export const ACCEPTS_KINDS = ["video", "audio"]
+
+/** What `execution.requires.kind` may name: `RequiredMediaInput.kind` of the server's payload builder. */
+export const MEDIA_INPUT_KINDS = ["video", "audio", "image"]
+
+/**
  * The producer sets of packages/shared/src/producer-types.ts a node can join
  * (`AUDIO_` / `VIDEO_` / `IMAGE_` / `DYNAMIC_PRODUCER_TYPES`). `contract.producer`
  * is the only key a unit contributes to @nodaro/shared (decided 2026-10-16):
  * a type id and its producer kind, never a price, prompt or doctrine string.
  */
 export const PRODUCER_KINDS = ["audio", "video", "image", "dynamic"]
+
+/**
+ * The categories a unit may have today: the ones the editor's NodeCategory
+ * shares with the server's (`NodeCategory` of backend/src/lib/node-registry.ts),
+ * so its /v1/nodes descriptor needs no second category. A unit in another
+ * category (ai, scene, character, …) adds a `registry.category` seam first.
+ */
+export const REGISTRY_CATEGORIES = ["input", "parameter", "processing", "output", "utility"]
 
 /** `OutputType | "none"` of backend/src/lib/node-registry.ts (`NodeDescriptor.outputType`). */
 export const OUTPUT_TYPES = ["image", "video", "audio", "text", "data", "none"]

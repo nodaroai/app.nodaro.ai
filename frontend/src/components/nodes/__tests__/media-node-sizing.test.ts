@@ -1,4 +1,5 @@
 // @vitest-environment node
+// @test-always scans every components/nodes/*-node.tsx source, and checks every node unit's too
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"

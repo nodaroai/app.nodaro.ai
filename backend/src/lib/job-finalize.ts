@@ -15,6 +15,9 @@ import {
 } from "../workers/shared.js"
 import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
 import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
+// @registry-enumerates NOT_GENERIC_RECOVERABLE carries every node unit with the "finalize:own-writer" capability
+import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
+import { composeSet, unitsWith } from "./unit-compose.js"
 
 /**
  * Provider-side input to `finalizeJobWithMedia`. Mirrors the relevant fields
@@ -214,7 +217,9 @@ export function isFinalizeJobType(v: string | null | undefined): v is FinalizeJo
  * these rows into finalize, which threw, which rode `bumpAttemptsOrExhaust` to
  * 18 attempts and REFUNDED a job whose provider call had succeeded.
  */
-export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
+// Legacy keys ∪ every node unit whose worker writes its own completion
+// (capability "finalize:own-writer", tools/units/capabilities.mjs).
+export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENERIC_RECOVERABLE", new Set<string>([
   // Entity handlers — the ONE non-media key of workers/handlers/entity.ts.
   // The other 13 are entity MEDIA types and now live in
   // `ENTITY_MEDIA_JOB_SPECS` (lib/entity-finalize.ts), which the reconcile
@@ -304,7 +309,7 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   //    row.job_type-keyed finalize.
   "extract-youtube-audio", "audio-separation", "forced-alignment",
   "voice-changer", "dubbing",
-])
+]), unitsWith(UNIT_NODE_DESCRIPTORS, "finalize:own-writer"))
 
 /**
  * Look up the OPEN reservation for a job: the `usage_logs` row keyed by its

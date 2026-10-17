@@ -105,6 +105,38 @@ export interface NodeDescriptor {
 export type RunNodeAdjustment = ModelInputAdjustment
 
 /**
+ * WHO is in the shot, as picker-catalog option ids — the `subject` field of
+ * `generate-image` (and `text-to-video`). The platform writes the wording from
+ * the ids you send; you never write prompt text for the subject. It composes
+ * with `prompt`: the subject clauses are folded in right after your prompt and
+ * ahead of any `direction`.
+ *
+ * A flat map of field → id(s):
+ * - **Keys** are the platform's own picker field names — every Person field
+ *   (`type`, `age`, `ethnicity`, `hairBase`, `lipState`, …), every Styling
+ *   field (`makeup`, `jewelry`, `outerwear`, …), and the prop keys `heldProp`,
+ *   `material` and `animal`. They and their ids come from the picker catalogs:
+ *   `pickerCatalogs.get("person")` / `get("styling")` list each dimension's
+ *   `field` with its `options[].id`; `get("held-prop")`, `get("material")` and
+ *   `get("animal")` write their `options[].id` to the catalog's `valueField`.
+ * - **Values** are one id or a list of ids. Ids past a dimension's own cap are
+ *   dropped, not rejected.
+ * - **One number:** `customAge` (years, rounded and clamped to 0–120), read only
+ *   when `age` is `"age-custom"`. A number on any other key does nothing.
+ * - **Bounds** (without `presetId`): at most 128 keys, 64 characters per key,
+ *   8 ids per key and 100 characters per id — a map over any of them is a 400
+ *   `validation_error`. Unknown keys and unknown ids within them are skipped,
+ *   and the job's `input_data.subject` records the ids that were used.
+ * - **With `presetId`** your `subject` replaces the preset's own and is folded
+ *   into the preset's prompt, as `direction` and `structured` are: an over-long
+ *   key, id or list is dropped rather than rejected, and `input_data` does not
+ *   record the subject.
+ *
+ * Same type as `@nodaro/prompts`' `SubjectFields`, under the SDK's name.
+ */
+export type Subject = SubjectFields
+
+/**
  * Something you asked for that the run did not send, with why — e.g.
  * `moodboard_images_not_sent`: some of a `moodboard:<id>` direction's images
  * did not fit the model's reference limit after your own references. The run
@@ -255,6 +287,13 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
    * Not combinable with `presetId` yet (400 `validation_error`).
    */
   direction?: DirectionFields
+  /**
+   * WHO is in the shot — person, styling and props as picker-catalog ids
+   * ({@link Subject}). The platform writes the wording and folds it in after
+   * `prompt`, ahead of `direction`. With `presetId`, it replaces the preset's own
+   * and is folded into the preset's prompt (over-long values dropped, not 400).
+   */
+  subject?: Subject
   [k: string]: unknown
 }
 
@@ -382,8 +421,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   characterReferences?: VideoCharacterReference[]
   /** Cinematic direction as catalog IDS — the route renders the wording. */
   direction?: DirectionFields
-  /** SUBJECT ids (who is in the shot), folded ahead of the direction clauses. */
-  subject?: SubjectFields
+  /** WHO is in the shot as picker-catalog ids ({@link Subject}), folded ahead of the direction clauses. */
+  subject?: Subject
   /** Seedance Draft (`seedance-2-5` only; ignored elsewhere): render a 480p
    *  DRAFT — it costs the same as a 480p run and any `resolution` is replaced
    *  by 480p. Finalize the take you like with `nodes.run("video-upscale",

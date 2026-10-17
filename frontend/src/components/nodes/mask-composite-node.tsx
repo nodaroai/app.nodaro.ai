@@ -23,6 +23,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { MaskCompositeData } from "@/types/nodes"
 import { videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
+// @registry-lookup reads its own row only (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 // Module-level `accepts` predicates (stable refs for HandleWithPopover's memo).
 const ACCEPTS_FOREGROUND = (t: string) => isValidMaskCompositeConnection("video", t)

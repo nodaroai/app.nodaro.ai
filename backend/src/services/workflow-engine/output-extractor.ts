@@ -76,6 +76,8 @@ import {
 import type { SceneData } from "@nodaro/shared/types"
 import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type UgcOutputs } from "@nodaro/shared/ugc"
 import { buildScenePrompt } from "@nodaro/prompts/prompt-builder"
+import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
+import { unitSavedOutput } from "../../lib/unit-compose.js"
 export { extractVideoDurationFromNode } from "@nodaro/shared/video"
 export { extractAllGeneratedResults }
 
@@ -1436,6 +1438,12 @@ const ENTITY_RESULT_TYPES = new Set([
 export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined {
   const data = node.data
   const type = node.type
+
+  // A node unit's saved output is what its manifest declares (handles.outputs[].from,
+  // the active result first for media) — never a legacy type below. Mirrors the
+  // editor's extractNodeOutput (unit-compose.ts unitOutputValue).
+  const unit = unitDescriptorOf(type)
+  if (unit) return unitSavedOutput(unit, data)
 
   // The UGC nodes, by pip (savedUgcNodeOutput). Ahead of the media sets below:
   // UGC Clip is a video producer and would otherwise be read as a bare video.

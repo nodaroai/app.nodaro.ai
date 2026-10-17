@@ -6,7 +6,12 @@
  * RESULT_PRODUCING_TYPES and fails for a type the gallery cannot type.
  */
 
-export const GENERATE_BUTTON_TYPES = new Set([
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { composeSet, unitsWith } from "@/lib/unit-compose"
+// @registry-enumerates the button sets carry every node unit with a "panel:generate-button" / "panel:run-button" capability
+
+// Legacy types ∪ every node unit with the "panel:generate-button" capability.
+export const GENERATE_BUTTON_TYPES = composeSet("GENERATE_BUTTON_TYPES", new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet", "reference-board",
   "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
@@ -26,9 +31,10 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "tighten-episode", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "mask-composite", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx", "pitch-tempo",
   "add-captions", "mix-audio", "combine-audio",
-])
+]), unitsWith(UNIT_NODE_DEFINITIONS, "panel:generate-button"))
 
-export const RUN_BUTTON_TYPES = new Set([
+// Legacy types ∪ every node unit with the "panel:run-button" capability.
+export const RUN_BUTTON_TYPES = composeSet("RUN_BUTTON_TYPES", new Set([
   "manual-edit", "composite",
   "sub-workflow", "router", "reduce",
   // The handoff's "Test node": a Webhook Output is the one node you most want
@@ -40,7 +46,7 @@ export const RUN_BUTTON_TYPES = new Set([
   "collection-write", "collection-read",
   // And for the two post readers: free reads of what the account holds.
   "inspiration-read", "competitor-read",
-])
+]), unitsWith(UNIT_NODE_DEFINITIONS, "panel:run-button"))
 
 // Node types that produce media results (excludes text-only nodes like combine-text, split-text, extract-field, sub-workflow, social posts)
 export const RESULT_PRODUCING_TYPES: ReadonlySet<string> = new Set([

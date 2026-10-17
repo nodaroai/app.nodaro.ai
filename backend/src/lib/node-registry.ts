@@ -42,6 +42,9 @@ import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
+import type { UnitDescriptor } from "../nodes/kit.js"
+import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
+import { placeAfter, registryCategoryOf } from "./unit-compose.js"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -1698,7 +1701,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). Priced per output minute in two
     // tiers by how many speakers it shows at once (C4, decided 2026-10-10; lib/speaker-view-plan.ts).
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript, or a plain video into `video` (instead of the EDL, never both) with the diarized transcript required; the clip is cut whole at the speakers' turns and defaults to 9:16 (not available until Speaker Frames is priced: a run with a video wired is refused before anything is charged). Emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript, or a plain video into `video` (instead of the EDL, never both) with the diarized transcript required; the clip is cut whole at the speakers' turns and defaults to 9:16, priced at the clip's measured length. Emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
     outputType: "video",
     creditCost: "per-minute",
     inputSchema: {
@@ -1733,11 +1736,13 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: data — its `tracks` handle (json) is the stored face-track file's
     // descriptor (url, sha256, bytes, per-track summaries; P3-22), what Speaker
     // View's tracked framing reads. Nodaro-EXCLUSIVE (relayed from a connected
-    // self-host as detection proxies). NOT PRICED YET (P3.7): every run is
-    // refused with "Speaker Frames is not priced yet" before anything is reserved.
+    // self-host as detection proxies). Priced per started block of 1,000
+    // sampled frames, one rate for every footage class (P3.7, decided
+    // 2026-10-16; lib/speaker-frames-plan.ts).
     description:
-      "Find where each speaker's face is, over time, on every camera of an edit. Wire an EDL (Edit Plan's or Camera Switch's; a clip pack runs once over all its clips) or a single video, and the same renamed transcript Camera Switch outputs; it samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second, on the cameras you leave ticked. Emits the face tracks as a stored file's descriptor on `tracks`. Not priced yet: runs are refused until its price is set.",
+      "Find where each speaker's face is, over time, on every camera of an edit. Wire an EDL (Edit Plan's or Camera Switch's; a clip pack runs once over all its clips) or a single video, and the same renamed transcript Camera Switch outputs; it samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second, on the cameras you leave ticked. Emits the face tracks as a stored file's descriptor on `tracks`. Priced per started block of 1,000 sampled frames, at least one block per run: reserved from the frames the server counts when the run starts (the edit's spans on the ticked cameras, or a bare video's measured length) and charged on the frames actually sampled. Tracks follow each face but aren't named after a speaker yet — Speaker View uses your drawn regions, or asks which face is whom.",
     outputType: "data",
+    creditCost: "per-1000-frames",
     inputSchema: {
       fields: [
         { key: "edl", type: "json" },
@@ -2115,8 +2120,23 @@ function withPromptAffixFields(registry: NodeDescriptor[]): NodeDescriptor[] {
   })
 }
 
-/** Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields). */
-export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(RAW_NODE_REGISTRY)
+// The /v1/nodes categories a unit's manifest category maps onto (tools/units/vocabulary.mjs REGISTRY_CATEGORIES).
+const UNIT_REGISTRY_CATEGORIES = ["input", "parameter", "processing", "output", "utility"] as const satisfies readonly NodeCategory[]
+
+/** A node unit's descriptor as /v1/nodes serves it (its price comes from STATIC_CREDIT_COSTS, as for every node). */
+function unitNodeDescriptor(u: UnitDescriptor): NodeDescriptor {
+  return { type: u.type, label: u.label, category: registryCategoryOf(u, UNIT_REGISTRY_CATEGORIES), description: u.description, outputType: u.outputType }
+}
+
+/**
+ * Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields):
+ * the hand-curated entries ∪ every node unit (unit.json registry), each after its position.after.
+ */
+export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(placeAfter(
+  RAW_NODE_REGISTRY,
+  (d) => d.type,
+  UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: u.position.after, entry: unitNodeDescriptor(u) })),
+))
 
 /**
  * Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS.

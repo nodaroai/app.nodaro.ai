@@ -5,11 +5,11 @@
  * The group has no price of its own: each of its nodes charges its own, and the
  * figure here is `useRunSetCredits` over exactly those nodes, the same run
  * estimate the Execute button, the confirm and the credit precheck are made of.
- *
- * While Speaker Frames or Speaker View has no price (the "not priced yet"
- * gate), a number would be made of the 1-credit floor the estimator gives an
- * unpriced node — a figure nobody will be charged — so the chip says so
- * instead, as the nodes themselves do.
+ * The group runs Speaker Frames and a video-fed Speaker View, so the chip
+ * shows only while both are priced — the one predicate every video-mode surface
+ * reads (`speakerViewVideoModeLive`; both are, since P3.7). Should a price be
+ * withdrawn the chip is not drawn: a number would be made of the floor the
+ * estimator gives an unpriced node, a figure nobody will be charged.
  */
 import { useMemo } from "react"
 import { speakerViewVideoModeLive } from "@nodaro/render-rules"
@@ -93,17 +93,14 @@ export function MacroGroupEstimate({ groupId }: { readonly groupId: string }) {
   }, [fingerprint])
   const executable = useMemo(() => nodes.filter((n) => n.parentId === groupId && isExecutableNode(n)), [nodes, groupId])
   const credits = useRunSetCredits(executable, nodes, edges)
-  if (!hasCredits()) return null
-  // The group runs Speaker Frames and a video-fed Speaker View: priced only
-  // when both are, the one predicate every video-mode surface reads.
-  const unpriced = !speakerViewVideoModeLive()
+  if (!hasCredits() || !speakerViewVideoModeLive()) return null
   return (
     <div
       data-testid="macro-group-estimate"
       title={t("reframe.estimateTitle")}
       className="pointer-events-none absolute end-3 bottom-3 rounded-md border border-border bg-card/80 px-2 py-1 text-xs tabular-nums text-muted-foreground"
     >
-      {unpriced ? t("reframe.notPriced") : `≈ ${formatCreditUnits(credits)}`}
+      {`≈ ${formatCreditUnits(credits)}`}
     </div>
   )
 }

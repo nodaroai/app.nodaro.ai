@@ -10,26 +10,26 @@
  *    of its clips' spans; a bare video is sampled whole. The panel's tick list
  *    shows each source's frame count from it, and a connected self-host builds
  *    its detection proxies over exactly these spans (P3-15 (a)).
- *  - NO PRICE YET (P3.7): `SPEAKER_FRAMES_PRICED` is false, and every run is
- *    refused with the plugin's own words before anything is reserved — the
- *    Speaker View arrangement before C4, in the same three layers (the node,
- *    the run's preflight, the payload).
+ *  - THE PRICE (P3.7, decided 2026-10-16): per started block of 1,000 sampled
+ *    frames (`speaker-frames-pricing.ts`). `SPEAKER_FRAMES_PRICED` is on; it
+ *    still gates Speaker View's video mode (`speakerViewVideoModeLive`).
  *  - MANUAL CORRECTIONS (P3-18 (a)): `trackAssignments` on the node, applied
  *    at read time by `applySpeakerTrackAssignments`; an assignment whose track
  *    a re-run no longer has is listed, never silently dropped.
  */
 import { validateEdl, type Edl, type EdlSegment, type EdlSource, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 
-/** Whether Speaker Frames may be charged for at all. FALSE until P3.7 measures
- *  and ships the per-1,000-frames rate (TA4: no interim price). P3.7 flips this
- *  one flag. */
-export const SPEAKER_FRAMES_PRICED = false
+/** Whether Speaker Frames is priced — on since P3.7 (decided 2026-10-16).
+ *  Speaker View's video mode reads it (`speakerViewVideoModeLive`), and the
+ *  docs-sync guard holds the node's docs to it. */
+export const SPEAKER_FRAMES_PRICED = true
 
 /** The one credit id (P3-13 (a)): billed per started block of 1,000 sampled
- *  frames once P3.7 sets the rate. */
+ *  frames (`speaker-frames-pricing.ts`). */
 export const SPEAKER_FRAMES_CREDIT_ID = "speaker-frames"
 
-/** The plugin route's exact words. */
+/** The words an older cloud plugin's route refuses with (503 `not_priced`)
+ *  before its pin carries the price; the self-host relay recognises them. */
 export const SPEAKER_FRAMES_NOT_PRICED_MESSAGE = "Speaker Frames is not priced yet"
 
 /** The detection proxy's rate (P3-6, P3-31: fixed and not shown). */
@@ -42,31 +42,6 @@ export const SPEAKER_FRAMES_SPAN_MARGIN_MS = 2000
 export const SPEAKER_FRAMES_MAX_SOURCE_MS = 180 * 60_000
 /** The source id a bare video's tracks carry. */
 export const SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID = "video"
-
-export interface SpeakerFramesRunRefusal {
-  readonly nodeIds: readonly string[]
-  readonly message: string
-}
-
-/**
- * The run-start refusal while Speaker Frames has no price, asked of the nodes a
- * run WILL execute before any node dispatches (both engines), so nothing
- * upstream runs and charges for detection that cannot start. Skipped nodes
- * never run. P3.7 deletes this with the flag.
- */
-export function speakerFramesRunRefusal(
-  nodes: ReadonlyArray<{ readonly id: string; readonly type?: unknown; readonly data?: unknown }>,
-  priced: boolean = SPEAKER_FRAMES_PRICED,
-): SpeakerFramesRunRefusal | null {
-  if (priced) return null
-  const hits = nodes.filter((n) => n.type === "speaker-frames" && (n.data as { skipped?: unknown } | null | undefined)?.skipped !== true)
-  if (hits.length === 0) return null
-  const nodeIds = hits.map((n) => n.id)
-  return {
-    nodeIds,
-    message: `${SPEAKER_FRAMES_NOT_PRICED_MESSAGE} (Speaker Frames node ${nodeIds.join(", ")}). The run did not start and nothing was charged.`,
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 //  What an edit samples

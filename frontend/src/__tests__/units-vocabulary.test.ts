@@ -1,4 +1,4 @@
-// @test-watches tools/units/** frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts
+// @test-watches tools/units/** frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -6,7 +6,9 @@ import { NODE_DEFINITIONS } from "@/types/nodes"
 import { NODE_FAMILIES } from "@/lib/node-families"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { familyIdsFrom, loadUnits } from "../../../tools/units/manifest.mjs"
-import { CATEGORIES, HANDLE_KINDS, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "../../../tools/units/vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, HANDLE_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES } from "../../../tools/units/vocabulary.mjs"
+import { unitInputAccepts } from "@/lib/ffmpeg-handles"
+import type { UnitHandleKind } from "@/nodes/kit"
 
 /**
  * The runtime twins of the node-unit guards (tools/units/README.md): the
@@ -54,6 +56,24 @@ describe("the validator's vocabularies are the product's", () => {
 
   it("output types = OutputType | \"none\"", () => {
     expect(OUTPUT_TYPES).toEqual([...(unionOf(read("packages/shared/src/presentation-utils.ts"), "OutputType") ?? []), "none"])
+  })
+
+  it("registry categories = the editor categories /v1/nodes shares (node-registry.ts maps a unit onto them)", () => {
+    const block = read("backend/src/lib/node-registry.ts").match(/export type NodeCategory =([\s\S]*?)\n\n/)?.[1] ?? ""
+    const server = [...block.matchAll(/"([^"]+)"/g)].map((x) => x[1])
+    expect(REGISTRY_CATEGORIES).toEqual(CATEGORIES.filter((c: string) => server.includes(c)))
+    expect(read("backend/src/lib/node-registry.ts")).toContain(`const UNIT_REGISTRY_CATEGORIES = [${REGISTRY_CATEGORIES.map((c: string) => JSON.stringify(c)).join(", ")}] as const`)
+  })
+
+  it("every input kind a unit may accept has an editor connection rule", () => {
+    const kinds = (ACCEPTS_KINDS as string[]).filter((k): k is UnitHandleKind => Object.hasOwn(HANDLE_COLORS, k))
+    expect(kinds).toEqual(ACCEPTS_KINDS)
+    for (const k of kinds) expect(typeof unitInputAccepts([k])).toBe("function")
+    expect(typeof unitInputAccepts(kinds)).toBe("function")
+  })
+
+  it("required-media kinds = RequiredMediaInput.kind of the payload builder", () => {
+    expect(read("backend/src/services/workflow-engine/payload-builder.ts")).toContain(`readonly kind: ${MEDIA_INPUT_KINDS.map((k: string) => JSON.stringify(k)).join(" | ")}`)
   })
 
   it("every queue a unit may name exists", () => {

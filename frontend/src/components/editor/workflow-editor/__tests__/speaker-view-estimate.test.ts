@@ -1,3 +1,4 @@
+// @test-units-by-name reads only the speaker-view rows it names
 // Speaker View in the editor's estimate (C4, decided 2026-10-10): the credit id
 // is the render-node registry's, in the tier the graph tells (`getModelIdentifier`),
 // the cold-cache rate is that row (`estimateNodeCredits` / `NODE_CREDIT_COSTS`),

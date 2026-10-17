@@ -19,9 +19,20 @@ beforeEach(() => {
 const RUN_ID = "00000000-0000-4000-8000-0000000000aa"
 const OTHER_ID = "00000000-0000-4000-8000-0000000000bb"
 
-async function setup(status = 202, body: unknown = { jobId: "job-1", executionId: "exec-1" }) {
+/** The run `GET /v1/jobs/:id` answers by default: a Tighten Episode wrapper, as the run route writes it. */
+const TIGHTEN_RUN = { id: RUN_ID, job_type: "tighten-episode", input_data: { type: "tighten-episode", mode: "run" } }
+
+async function setup(
+  status = 202,
+  body: unknown = { jobId: "job-1", executionId: "exec-1" },
+  job: { status: number; body: unknown } = { status: 200, body: { data: TIGHTEN_RUN } },
+) {
   const fastify = Fastify()
-  const seen: { url?: string; body?: Record<string, unknown>; headers?: Record<string, unknown> } = {}
+  const seen: { url?: string; body?: Record<string, unknown>; headers?: Record<string, unknown>; reads: string[] } = { reads: [] }
+  fastify.get("/v1/jobs/:id", async (req, reply) => {
+    seen.reads.push(req.url)
+    return reply.code(job.status).send(job.body)
+  })
   for (const url of ["/v1/tighten-episode", "/v1/tighten-episode/continue"]) {
     fastify.post(url, async (req, reply) => {
       seen.url = url
@@ -58,6 +69,11 @@ describe("registration", () => {
     const names = (await listTools(server)).map((t) => t.name)
     expect(names).not.toContain("tighten_episode")
     expect(names).not.toContain("continue_use_case")
+  })
+  it("continue_use_case names the use-case nodes this deployment offers", async () => {
+    const { server } = await setup()
+    const tool = (await listTools(server)).find((t) => t.name === "continue_use_case")
+    expect(tool?.description).toMatch(/^Continue a Tighten Episode run as a NEW job \(see `mode`\)/)
   })
   it("says a layout without an aspect is ignored, and what each continue mode does", async () => {
     const { server } = await setup()
@@ -227,6 +243,56 @@ describe("continue_use_case", () => {
     expect(res.isError).toBe(true)
     expect(textOf(res)).toContain("some_new_code")
     expect(textOf(res)).toContain(OTHER_ID)
+  })
+
+  it("reads the run's type from its own row and continues it on that type's route", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBeFalsy()
+    expect(seen.reads).toEqual([`/v1/jobs/${RUN_ID}`])
+    expect(seen.url).toBe("/v1/tighten-episode/continue")
+  })
+
+  it("the type the run's input records wins over its job_type", async () => {
+    const { server, seen } = await setup(202, { jobId: "job-1" }, {
+      status: 200,
+      body: { data: { id: RUN_ID, job_type: "apply-edl", input_data: { type: "tighten-episode" } } },
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/tighten-episode/continue")
+  })
+
+  it("a row with no recorded type is read by its job_type (a run written before the type was recorded)", async () => {
+    const { server, seen } = await setup(202, { jobId: "job-1" }, {
+      status: 200,
+      body: { data: { id: RUN_ID, job_type: "tighten-episode", input_data: { mode: "run" } } },
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "render-final" })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/tighten-episode/continue")
+  })
+
+  it("refuses a job that is not a use-case run, posting nothing", async () => {
+    const { server, seen } = await setup(202, { jobId: "job-1" }, {
+      status: 200,
+      body: { data: { id: RUN_ID, job_type: "apply-edl", input_data: { edl: {} } } },
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode\)/)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("a job the caller cannot read comes back as the read's refusal, posting nothing", async () => {
+    const { server, seen } = await setup(202, { jobId: "job-1" }, {
+      status: 404,
+      body: { error: { code: "not_found", message: "Job not found" } },
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("not_found")
+    expect(seen.url).toBeUndefined()
   })
 
   it("the other continuation refusals come back with their status, code and message", async () => {

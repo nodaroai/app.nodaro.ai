@@ -19,10 +19,11 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import ts from "typescript"
+import { USE_CASE_NODE_TYPES, isUseCaseNodeType, usecaseContinuePath } from "@nodaro/render-rules"
 import { lineOf, parseText } from "../../../src/lib/__tests__/source-scan.js"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
 import { captureToolSurface, type ToolSurface } from "../gen-skills/tool-surface.js"
-import { PARAM, bindCall, childScope, collectLocals, renderExpr, unwrap, v1Part, type Binding, type Scope } from "./render-path.js"
+import { PARAM, bindCall, childScope, collectLocals, renderExpr, unwrap, v1Part, type Binding, type NativeFn, type Scope } from "./render-path.js"
 import { MCP_DIRECT_TOOL_ROUTES } from "./features.js"
 import { moduleScope } from "./ts-scope.js"
 
@@ -30,6 +31,31 @@ export const MCP_TOOLS_DIR = "backend/src/lib/mcp/tools"
 
 /** Helpers whose URL argument is always POSTed. */
 const POST_HELPERS = new Set(["dispatchJob", "postJob", "postBuilder"])
+
+/**
+ * `@nodaro/render-rules` functions a tool file may import to pick a route, run
+ * for real. A type read at run time (the run a job id names) can reach every
+ * registered use-case type's route.
+ */
+const RENDER_RULES_NATIVES: Readonly<Record<string, NativeFn>> = {
+  usecaseContinuePath: ([types = [PARAM]]) =>
+    types.flatMap((t) => (t.includes(PARAM) ? USE_CASE_NODE_TYPES.map(usecaseContinuePath) : isUseCaseNodeType(t) ? [usecaseContinuePath(t)] : [])),
+}
+
+/** The RENDER_RULES_NATIVES a file imports from `@nodaro/render-rules`, by local name. */
+function renderRulesNatives(sf: ts.SourceFile): Map<string, NativeFn> {
+  const out = new Map<string, NativeFn>()
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier) || st.moduleSpecifier.text !== "@nodaro/render-rules") continue
+    const named = st.importClause?.namedBindings
+    if (!named || !ts.isNamedImports(named) || st.importClause?.isTypeOnly) continue
+    for (const el of named.elements) {
+      const fn = RENDER_RULES_NATIVES[(el.propertyName ?? el.name).text]
+      if (fn && !el.isTypeOnly) out.set(el.name.text, fn)
+    }
+  }
+  return out
+}
 
 export interface McpRoute {
   /** Upper-case verb, or `?` (matches any). */
@@ -125,9 +151,10 @@ function scanUrls(node: ts.Node, scope: Scope): { urls: McpRoute[]; calls: Map<s
       if (path && path !== "/v1") urls.push({ method: methodFor.get(lit.node) ?? "?", path })
     }
   }
-  // An identifier passed as the URL (`url: route`) renders through its binding.
+  // An identifier passed as the URL (`url: route`) renders through its binding;
+  // a call or a table lookup (`url: usecaseContinuePath(type)`) through what it returns.
   for (const [n, method] of methodFor) {
-    if (!ts.isIdentifier(n)) continue
+    if (!ts.isIdentifier(n) && !ts.isCallExpression(n) && !ts.isElementAccessExpression(n)) continue
     for (const spelling of renderExpr(n, scope)) {
       const path = normalizePath(v1Part(spelling))
       if (path) urls.push({ method, path })
@@ -180,7 +207,7 @@ export function scanToolFiles(files: ReadonlyArray<{ rel: string; text: string }
   const functions = new Map<string, FnInfo[]>()
   for (const { rel, text } of files) {
     const sf = parseText(rel, text)
-    const mod = moduleScope(sf)
+    const mod = moduleScope(sf, renderRulesNatives(sf))
     // A helper is recorded with the scope it is DEFINED in, so one declared
     // inside a register function sees that function's other locals.
     const addFn = (name: string, fn: ts.SignatureDeclaration & { body?: ts.Node }, scope: Scope) => {

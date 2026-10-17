@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{ts,tsx} frontend/src/**/*.{ts,tsx} packages/render-rules/src/**/*.{ts,tsx} packages/shared/src/**/*.{ts,tsx} packages/prompts/src/**/*.{ts,tsx} packages/client/src/**/*.{ts,tsx}
 /**
  * R15 (decided 2026-10-12): Speaker View's video mode goes live only when
  * Speaker Frames is priced, on top of Speaker View itself being priced. ONE
@@ -31,10 +32,10 @@ describe("speakerViewVideoModeLive", () => {
     expect(speakerViewVideoModeLive({ viewPriced: true })).toBe(SPEAKER_FRAMES_PRICED)
   })
 
-  it("is closed today: Speaker Frames has no price yet", () => {
+  it("is live since Speaker Frames was priced (P3.7, decided 2026-10-16)", () => {
     expect(SPEAKER_VIEW_PRICED).toBe(true)
-    expect(SPEAKER_FRAMES_PRICED).toBe(false)
-    expect(speakerViewVideoModeLive()).toBe(false)
+    expect(SPEAKER_FRAMES_PRICED).toBe(true)
+    expect(speakerViewVideoModeLive()).toBe(true)
   })
 })
 

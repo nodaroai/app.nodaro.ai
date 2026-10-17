@@ -1,3 +1,3 @@
-export async function worker(input: { videoUrl?: string }) {
-  return { videoUrl: input.videoUrl }
-}
+import type { UnitWorker } from "../kit.js"
+
+export const worker: UnitWorker = async () => {}

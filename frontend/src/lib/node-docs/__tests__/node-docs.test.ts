@@ -1,3 +1,4 @@
+// @test-always reads the docs snapshot and scans frontend sources, and checks every node unit's docs too
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"

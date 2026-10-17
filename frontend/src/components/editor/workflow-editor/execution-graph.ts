@@ -1,3 +1,5 @@
+import { unitDefinitionOf } from "@/lib/unit-definitions";
+import { unitOutputValue } from "@/lib/unit-compose";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
@@ -190,6 +192,11 @@ export function computeCollectBuckets(
 export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): string | undefined {
   const data = node.data as Record<string, unknown>;
   const type = node.type;
+
+  // A node unit hands on what its manifest declares (handles.outputs[].from;
+  // a media output prefers the active result) — never a legacy type below.
+  const unit = unitDefinitionOf(type);
+  if (unit) return unitOutputValue(unit, data, sourceHandle);
 
   // The UGC nodes hand on each pip's own value (`ugcOutputs`) — never a separate
   // field such as `generatedImageUrl`, so a creator whose options wait for a

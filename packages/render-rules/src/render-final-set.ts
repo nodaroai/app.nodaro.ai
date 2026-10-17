@@ -33,6 +33,7 @@
 import { buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared/workflow"
 import { PREVIEW_RENDER_NODE_TYPES, renderPlanPath } from "@nodaro/shared/nodes"
 import { descendantsOf } from "./graph-walk"
+import { usecaseListsItsResult } from "./use-case-registry"
 
 /** A node and a wire as the walk reads them: either engine's graph fits. */
 export interface RenderFinalGraphNode {
@@ -135,13 +136,17 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  * final renders with the preview's settings, never the node's later ones.
  * Null for a take that is not a Preview, one whose run is not named, and a
  * node run once per list item (each item is a run of its own: one
- * continuation cannot name them). The app runner offers Render final where
+ * continuation cannot name them). `nodeType` tells a node whose own result is
+ * a list from one run per item. The app runner offers Render final where
  * this answers, and its route continues what this answers.
  */
-export function usecasePreviewTarget(state: unknown): UseCaseRenderFinalTarget | null {
+export function usecasePreviewTarget(state: unknown, nodeType?: string | null): UseCaseRenderFinalTarget | null {
   if (!isRecord(state) || state.status !== "completed" || !isRecord(state.output)) return null
   const output = state.output
-  if (Array.isArray(output.listResults) && output.listResults.length > 0) return null
+  // A node run once per list item has many runs and no one to finish. A node
+  // whose OWN result is a list (clips, formats) is never fanned out with review
+  // on (refused before it runs), so its list is its result, not its runs.
+  if (!usecaseListsItsResult(nodeType) && Array.isArray(output.listResults) && output.listResults.length > 0) return null
   if (output.quality !== "proxy" || typeof state.jobId !== "string" || state.jobId === "") return null
   return { jobId: state.jobId, ...(isRecord(output.useCaseSettings) ? { settings: output.useCaseSettings } : {}) }
 }

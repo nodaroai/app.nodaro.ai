@@ -47,7 +47,7 @@ type States = Readonly<Record<string, unknown>>
 export function appUseCaseFinalTarget(nodeId: string, nodes: readonly WorkflowNode[], edges: readonly WorkflowEdge[], states: States) {
   const node = nodes.find((n) => n.id === nodeId)
   if (!node || !isUseCaseNodeType(node.type) || usecaseListDriven(node, nodes as WorkflowNode[], edges as WorkflowEdge[])) return null
-  return usecasePreviewTarget(states[nodeId])
+  return usecasePreviewTarget(states[nodeId], node.type)
 }
 
 export function appRenderFinalRun(

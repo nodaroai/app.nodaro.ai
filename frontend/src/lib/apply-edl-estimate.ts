@@ -15,6 +15,7 @@ import {
   persistedEdlPlan as persistedEdlPlanWith,
   resolveApplyEdlEstimateMinutes as resolveMinutesWith,
 } from "@nodaro/render-rules"
+import { speakerFramesEstimateBlocks as speakerFramesBlocksWith } from "@nodaro/render-rules"
 import type { GraphEdge, GraphNode } from "@/lib/edit-plan-estimate"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 
@@ -45,4 +46,19 @@ export function resolveApplyEdlEstimateMinutes(
   rerunIds: ReadonlySet<string>,
 ): number {
   return resolveMinutesWith(node, nodes, edges, rerunIds, readPlan)
+}
+
+/**
+ * Speaker Frames' estimated blocks of 1,000 sampled frames — the editor's face
+ * of `@nodaro/render-rules`' `speakerFramesEstimateBlocks` (decided
+ * 2026-10-16): the edit wired in when it is known now, else the 130-block
+ * ceiling. Read through the same cached Edit Plan reader.
+ */
+export function speakerFramesEstimateBlocks(
+  node: GraphNode,
+  nodes: readonly GraphNode[],
+  edges: readonly GraphEdge[],
+  rerunIds: ReadonlySet<string>,
+): number {
+  return speakerFramesBlocksWith(node, nodes, edges, rerunIds, readPlan)
 }

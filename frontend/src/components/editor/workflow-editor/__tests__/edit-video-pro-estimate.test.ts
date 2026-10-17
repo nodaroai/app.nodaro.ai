@@ -1,3 +1,4 @@
+// @test-units-by-name estimates only edit-video-pro nodes
 /**
  * Golden-table test for the edit-video-pro DISPLAY-ONLY credit estimate
  * (`estimateNodeCredits`'s "edit-video-pro" branch in ../types.ts).

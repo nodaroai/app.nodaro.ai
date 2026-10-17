@@ -1,7 +1,7 @@
 ---
 node_type: speaker-frames
-generated_at: 2026-10-09T16:05:15.244Z
-generated_from: 4454c3f6d
+generated_at: 2026-10-16T13:14:24.802Z
+generated_from: 2caffe217
 ---
 
 # Speaker Frames
@@ -9,7 +9,7 @@ generated_from: 4454c3f6d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `speaker-frames`
 **Category:** processing
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `per-1000-frames` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `edl`, `video`, `transcript`
 **Outputs (source handles):** `tracks`
 

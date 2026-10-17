@@ -1,3 +1,4 @@
+// @test-watches frontend/src/types/nodes.ts backend/src/lib/mcp/generated/exposable-sliders.ts packages/shared/src/** packages/prompts/src/**
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"

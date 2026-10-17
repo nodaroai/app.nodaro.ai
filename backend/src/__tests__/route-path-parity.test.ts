@@ -1,3 +1,4 @@
+// @test-watches frontend/src/lib/api.ts backend/src/routes/**/*.ts backend/src/ee/routes/**/*.ts
 /**
  * L1#9 — Frontend api.ts ↔ backend route registration walk.
  *

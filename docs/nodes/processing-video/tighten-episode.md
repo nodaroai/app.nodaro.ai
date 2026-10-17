@@ -23,7 +23,7 @@ A longer recording (when its length can be read), one with no sound, or a music 
 
 | Handle | Type | Description |
 |---|---|---|
-| Episode (`media`) | Video or audio | The tightened episode. **Episode audio** on an audio episode. |
+| Episode (`media`) | Video or audio | The tightened episode. **Episode audio** on an audio episode. It carries the episode's length, so a step priced by the length of what it is given (Trim, Loop, Combine Videos, Video SFX, Pitch & Tempo) is priced by it: see [Steps after the node](#steps-after-the-node). |
 | Edit (EDL) (`json`) | EDL | The edit plan the episode was cut from, with your review edits applied. Wire it into another render, for example a second [Apply EDL](./apply-edl.md) in another format. |
 
 ## Configuration
@@ -84,9 +84,19 @@ The estimate prices the render at the recording's full length. The tightened cut
 | Unknown length | captions off | 25<!-- credits: elevenlabs-stt --> + 11<!-- credits: silence-detect --> + 792<!-- credits: edit-plan:tighten:standard:180m --> + 1980<!-- credits: apply-edl@180 --> + 11<!-- credits: use-case-fee:tighten-episode --> = **2819**<!-- credits: elevenlabs-stt + silence-detect + edit-plan:tighten:standard:180m + apply-edl@180 + use-case-fee:tighten-episode --> |
 | A List of three recordings (Each), unknown length | captions off | 3 × (2808<!-- credits: elevenlabs-stt + silence-detect + edit-plan:tighten:standard:180m + apply-edl@180 --> + 11<!-- credits: use-case-fee:tighten-episode -->) = **8457**<!-- credits: 3*elevenlabs-stt + 3*silence-detect + 3*edit-plan:tighten:standard:180m + 3*apply-edl@180 + 3*use-case-fee:tighten-episode -->: each item is its own run, with its own fee |
 
+### Steps after the node
+
+A step priced by the length of the video (or audio) it is given — [Trim](./trim-video.md#credit-cost), [Loop](./loop-video.md#credit-cost), [Combine Videos](./combine-videos.md#credit-cost), [Video SFX](../ai-video/video-sfx.md#credit-cost), or [Pitch & Tempo](../processing-audio/pitch-tempo.md) on an audio episode — wired to the node's **Episode** is priced at the length of the episode's cut, whether the episode is the render itself or its captioned or music-bed version (both keep the cut's length):
+
+- The estimate before you run prices it at the render's estimated length: the recording's full length, or the 180-minute ceiling when the recording's length is not known (a Video SFX at most its 300-second price, a Pitch & Tempo at most its 30-minute price).
+- A published app's or template's listed price lists a Trim, Loop or Combine Videos per minute of the recording, a Video SFX at its fixed 300-second price (it refuses a longer video), and a Pitch & Tempo at its 30-minute price (660 credits<!-- credits: pitch-tempo:30m -->), the most a run of it is charged.
+- The run charges it at the length of the cut that was rendered, which the run reports on the node's output.
+
+For example, a Trim set to **Seconds** with nothing cut, after a Tighten Episode of a 60-minute recording with captions on, is estimated at 60 minutes: 7920 credits<!-- credits: trim-video@720 -->, not the 22 credits<!-- credits: trim-video@2 --> of the 8-second fallback length it was estimated at before.
+
 ## API
 
-`POST /v1/tighten-episode` with `{ mediaUrls: [<recording URL>], musicUrl?, output?, framing?: { aspect, layout } | null, captions?, captionStyle?, reviewBeforeRender?, planTier?, instructions?, styleGuide?, musicDuckAmount? }` starts a run and answers `202 { jobId, executionId }`. Poll the job (`GET /v1/jobs/:id/status`). Its `output_data` carries the episode (`videoUrl`, or `audioUrl` for an audio episode), the edit (`json`), the transcript (`transcript`) and `quality` (`proxy` for a review run's preview, `final` otherwise); a failed run keeps what completed and names the step that failed (`failedStep`). An `Idempotency-Key` header makes a retry of the same request answer with the same `jobId` and `"deduped": true`, starting nothing. `POST /v1/tighten-episode/estimate` takes the same body and answers the estimate as `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` without starting anything (the credit figures are 0 on an edition without credits).
+`POST /v1/tighten-episode` with `{ mediaUrls: [<recording URL>], musicUrl?, output?, framing?: { aspect, layout } | null, captions?, captionStyle?, reviewBeforeRender?, planTier?, instructions?, styleGuide?, musicDuckAmount? }` starts a run and answers `202 { jobId, executionId }`. Poll the job (`GET /v1/jobs/:id/status`). Its `output_data` carries the episode (`videoUrl`, or `audioUrl` for an audio episode), its length in seconds when the run knows it (`durationSec`: the cut's), the edit (`json`), the transcript (`transcript`) and `quality` (`proxy` for a review run's preview, `final` otherwise); a failed run keeps what completed and names the step that failed (`failedStep`). An `Idempotency-Key` header makes a retry of the same request answer with the same `jobId` and `"deduped": true`, starting nothing. `POST /v1/tighten-episode/estimate` takes the same body and answers the estimate as `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` without starting anything (the credit figures are 0 on an edition without credits).
 
 `POST /v1/tighten-episode/continue` with `{ jobId, mode }` continues one of your runs: `"mode": "from-failed"` runs what a failed run did not complete, and `"mode": "render-final"` (with `editedEdl`, your edit of the plan, optional) renders a review run's final. Its refusals are in [API integration](../../api-integration.md) (the continuation codes, including `continuation_not_failed`, `continuation_settling`, `continuation_superseded` and `already_running`); a Render final of a run that was not a preview is refused `render_final_not_preview`, and one of an edit that was already rendered `render_final_already_rendered`.
 

@@ -24,15 +24,18 @@
  *
  * The graph is the earlier run's stored snapshot, verbatim: its stored hash is
  * the run's identity, so a rebuilt graph would be refused as another one.
- * Someone else's run, a wrapper that is not a use-case run, or a snapshot that
+ * Someone else's run, a wrapper that is not a use-case run, a run of another
+ * use-case type (continued through another type's route), or a snapshot that
  * is gone all read as not found.
  */
 import {
-  TIGHTEN_EPISODE,
   initialRunNodeIds,
   renderFinalRunSet,
   renderRunOverrides,
+  usecaseRenderNodeId,
+  usecaseRunType,
   type StoredInlineGraph,
+  type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import {
   CONTINUATION_NOT_COMPLETED,
@@ -192,6 +195,8 @@ async function alreadyRenderedRefusal(finalOf: string, editKey: string, userId: 
  * be continued. Throws on a read error (never read as "not found").
  */
 export async function resolveUseCaseContinuation(input: {
+  /** The type whose continue route was asked: only a run of that type is continued there. */
+  readonly nodeType: UseCaseNodeType
   readonly jobId: string
   readonly userId: string
   readonly mode: UseCaseContinueMode
@@ -199,20 +204,20 @@ export async function resolveUseCaseContinuation(input: {
 }): Promise<UseCaseContinuation | UseCaseContinuationRefusal> {
   const { data: wrapper, error } = await supabase
     .from("jobs")
-    .select("id, user_id, status, provider, input_data")
+    .select("id, user_id, status, provider, job_type, input_data")
     .eq("id", input.jobId)
     .maybeSingle()
   if (error) throw new Error(`use-case continue: run ${input.jobId} unreadable: ${error.message}`)
-  const row = wrapper as { user_id?: unknown; status?: unknown; provider?: unknown; input_data?: unknown } | null
+  const row = wrapper as { user_id?: unknown; status?: unknown; provider?: unknown; job_type?: unknown; input_data?: unknown } | null
   const stored = isRecord(row?.input_data) ? row.input_data : {}
-  if (!row || row.user_id !== input.userId || row.provider !== "use-case" || stored.type !== TIGHTEN_EPISODE) return NOT_FOUND
+  if (!row || row.user_id !== input.userId || row.provider !== "use-case" || usecaseRunType(stored, row.job_type) !== input.nodeType) return NOT_FOUND
 
   // A wrapper whose stamp never landed still has its run: the run names it.
   const sourceExecutionId =
     typeof stored._executionId === "string" ? stored._executionId : await findExecutionIdForWrapper(input.jobId, input.userId)
   if (!sourceExecutionId) return NOT_FOUND
   const graph = await loadInlineGraph(sourceExecutionId)
-  if (!graph || graph.nodeType !== TIGHTEN_EPISODE) return NOT_FOUND
+  if (!graph || graph.nodeType !== input.nodeType) return NOT_FOUND
   const source = await loadContinuationSource(sourceExecutionId, {
     withStates: true,
     isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(graph.nodes.find((n) => n.id === id)?.type ?? ""),
@@ -282,7 +287,11 @@ export async function resolveUseCaseContinuation(input: {
     }
   }
 
-  const renderId = graph.outputMap.renderNodeId
+  const renderId = usecaseRenderNodeId(graph.outputMap)
+  // A run that renders nothing (Chapters) has no Render final.
+  if (!renderId) {
+    return { ok: false, status: 409, code: RENDER_FINAL_NOT_PREVIEW, message: "This run has no preview to render final." }
+  }
   const runSet = renderFinalRunSet(renderId, graph.nodes, graph.edges)
   const nodeIds = order.filter((id) => runSet.has(id))
   const refused = continuationRefusal(source, { ...identity, nodeIds })

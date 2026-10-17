@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json} frontend/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json} packages/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json}
 /**
  * The render-node census (SV18, decided 2026-10-06).
  *

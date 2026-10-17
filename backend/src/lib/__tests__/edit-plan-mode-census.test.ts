@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{ts,tsx,mts,js,mjs} frontend/src/**/*.{ts,tsx,mts,js,mjs} packages/**/*.{ts,tsx,mts,js,mjs}
 /**
  * Census: who may COERCE an Edit Plan mode (decided 2026-10-06).
  *

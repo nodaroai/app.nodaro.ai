@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const api = vi.hoisted(() => ({
-  tightenEpisode: vi.fn(),
+  runUseCase: vi.fn(),
   continueUseCase: vi.fn(),
   getJobStatus: vi.fn(),
 }))
@@ -38,12 +38,14 @@ vi.mock("../poll-job", () => ({
 import { executionErrorText } from "@/lib/execution-error-text"
 import { iterationIdempotencyKey } from "@/lib/idempotency-key"
 import { tx } from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/locale-store"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import {
   USE_CASE_MAX_GENERATION_HOPS,
   USE_CASE_SETTLING_RETRIES,
   continueAskKey,
   USE_CASE_SETTLING_RETRY_MS,
-  executeTightenEpisode,
+  executeUseCase,
 } from "../use-case-executor"
 
 const ctx = (over: Record<string, unknown> = {}): any => ({
@@ -68,7 +70,7 @@ function liveStore() {
 }
 
 const executeNodeFor = (node: any, inputs: Record<string, unknown>, c = ctx(), opts: Record<string, unknown> = {}) =>
-  executeTightenEpisode(node, inputs as never, c, opts)
+  executeUseCase(node, inputs as never, c, opts)
 const REC = { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] }
 
 function pollFails(message = "Tighten Episode failed: Render") {
@@ -77,7 +79,7 @@ function pollFails(message = "Tighten Episode failed: Render") {
 
 beforeEach(() => {
   vi.useRealTimers()
-  api.tightenEpisode.mockReset()
+  api.runUseCase.mockReset()
   api.continueUseCase.mockReset()
   api.getJobStatus.mockReset()
   store.updateNodeData.mockReset()
@@ -89,28 +91,55 @@ beforeEach(() => {
 
 describe("a fresh run", () => {
   it("starts the run with the node's settings and the wired recording, and remembers the wrapper job", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     await executeNodeFor(tightenNode({ captions: false, planTier: "premium" }), REC)
-    expect(api.tightenEpisode.mock.calls[0]![0]).toEqual(expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", captions: false, planTier: "premium" }))
+    expect(api.runUseCase.mock.calls[0]![0]).toBe("tighten-episode")
+    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", settings: expect.objectContaining({ captions: false, planTier: "premium" }) }))
     expect(store.updateNodeData).toHaveBeenCalledWith("t1", expect.objectContaining({ useCaseJobId: "job-1" }))
     expect(poll.calls[0]).toEqual({ keys: ["generatedVideoUrl", "generatedAudioUrl"], label: "Tighten Episode" })
   })
 
   it("sends the music bed and the framing when set", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     const framing = { aspect: "9:16", layout: "stacked" }
     await executeNodeFor(tightenNode({ framing }), { ...REC, useCaseMusic: "https://r2/bed.mp3" })
-    expect(api.tightenEpisode.mock.calls[0]![0]).toEqual(expect.objectContaining({ musicUrl: "https://r2/bed.mp3", framing }))
+    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ musicUrl: "https://r2/bed.mp3", settings: expect.objectContaining({ framing }) }))
+  })
+
+  it("names the node type in the no-recording refusal (not the node's own name)", async () => {
+    const node = tightenNode({ label: "My Episode" })
+    await expect(executeUseCase(node, {}, ctx())).rejects.toThrow()
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Connect a recording to Tighten Episode first"))
+  })
+
+  it("names the node type in the no-recording refusal in the reader's language (Tighten Episode's own sentence)", async () => {
+    const CASES: ReadonlyArray<readonly [LocaleId, string]> = [
+      ["en", "Connect a recording to Tighten Episode first"],
+      ["he", "חברו קודם הקלטה להידוק פרק"],
+      ["ja", "先に「エピソードを引き締める」に録音を接続してください"],
+      ["ko", "먼저 “에피소드 다듬기”에 녹음을 연결하세요"],
+      ["pt-BR", "Conecte primeiro uma gravação ao Enxugar episódio"],
+    ]
+    try {
+      for (const [locale, sentence] of CASES) {
+        useLocaleStore.setState({ locale })
+        toastError.mockReset()
+        await expect(executeNodeFor(tightenNode({}), {})).rejects.toThrow()
+        expect(String(toastError.mock.calls[0]![0]), locale).toContain(sentence)
+      }
+    } finally {
+      useLocaleStore.setState({ locale: "en" })
+    }
   })
 
   it("no recording: refuses with the node's message, no API call", async () => {
     await expect(executeNodeFor(tightenNode({}), {})).rejects.toThrow()
-    expect(api.tightenEpisode).not.toHaveBeenCalled()
+    expect(api.runUseCase).not.toHaveBeenCalled()
     expect(toastError).toHaveBeenCalledTimes(1)
   })
 
   it("lands the episode's one medium (the other cleared), the plan and transcript, and the take's quality", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     let landed: Record<string, unknown> = {}
     let take: Record<string, unknown> = {}
     poll.outcome = (_id, extra, opts) => {
@@ -146,9 +175,9 @@ describe("a Continue (this run's option)", () => {
     api.continueUseCase.mockRejectedValue(Object.assign(new Error("nope"), { code: "continuation_not_failed" }))
     await expect(executeNodeFor(tightenNode({}), REC, ctx(), { usecaseContinue: { mode: "from-failed", jobId: "job-0" } })).rejects.toThrow()
     expect(store.nodes[0].data).not.toHaveProperty("useCaseContinue")
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-3" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-3" })
     await executeNodeFor(store.nodes[0], REC)
-    expect(api.tightenEpisode).toHaveBeenCalledTimes(1)
+    expect(api.runUseCase).toHaveBeenCalledTimes(1)
     expect(api.continueUseCase).toHaveBeenCalledTimes(1)
   })
 
@@ -244,16 +273,16 @@ describe("the continue route's answers", () => {
 
 describe("Idempotency-Key", () => {
   it("a run sends the call's key", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     await executeNodeFor(tightenNode({}), REC, ctx(), { idempotencyKey: "click-1" })
-    expect(api.tightenEpisode.mock.calls[0]![1]).toBe("click-1")
+    expect(api.runUseCase.mock.calls[0]![2]).toBe("click-1")
   })
 
   it("each fan-out iteration sends its own key", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     await executeNodeFor(tightenNode({}), REC, ctx(), { idempotencyKey: iterationIdempotencyKey("click-1", 0) })
     await executeNodeFor(tightenNode({}), REC, ctx(), { idempotencyKey: iterationIdempotencyKey("click-1", 1) })
-    const [a, b] = api.tightenEpisode.mock.calls.map((c) => c[1])
+    const [a, b] = api.runUseCase.mock.calls.map((c) => c[2])
     expect(a).toBeTruthy()
     expect(a).not.toBe(b)
   })
@@ -281,7 +310,7 @@ describe("a list-driven node (one run per item)", () => {
     const node = tightenNode({})
     await expect(executeNodeFor(node, REC, ctx(), { listDriven: true, usecaseContinue: { mode: "from-failed", jobId: "job-0" } })).rejects.toThrow()
     expect(api.continueUseCase).not.toHaveBeenCalled()
-    expect(api.tightenEpisode).not.toHaveBeenCalled()
+    expect(api.runUseCase).not.toHaveBeenCalled()
     expect(toastError).toHaveBeenCalledTimes(1)
     expect(String(toastError.mock.calls[0]![0])).toContain(tx("nodeRun.tightenContinueListDriven"))
     expect(store.nodes[0].data).not.toHaveProperty("useCaseContinue")
@@ -293,15 +322,15 @@ describe("a list-driven node (one run per item)", () => {
   })
 
   it("still runs a plain Run", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     await executeNodeFor(tightenNode({}), REC, ctx(), { listDriven: true })
-    expect(api.tightenEpisode).toHaveBeenCalledTimes(1)
+    expect(api.runUseCase).toHaveBeenCalledTimes(1)
   })
 })
 
 describe("a failed run keeps what it finished", () => {
   it("the episode its render made stays on the node (one medium, the other cleared)", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     pollFails()
     api.getJobStatus.mockResolvedValue({ status: "failed", output_data: { audioUrl: "https://r2/ep.m4a", json: { v: 1 }, quality: "final", _executionId: "exec-1" } })
     await expect(executeNodeFor(tightenNode({}), REC)).rejects.toThrow()
@@ -309,7 +338,7 @@ describe("a failed run keeps what it finished", () => {
   })
 
   it("the finished plan and transcript stay on the node", async () => {
-    api.tightenEpisode.mockResolvedValue({ jobId: "job-1" })
+    api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     pollFails()
     api.getJobStatus.mockResolvedValue({ status: "failed", output_data: { plan: { v: 1 }, json: { v: 1 }, transcript: { words: [] }, _executionId: "exec-1", failedNodeId: "uc-render" } })
     await expect(executeNodeFor(tightenNode({}), REC)).rejects.toThrow()
@@ -318,14 +347,14 @@ describe("a failed run keeps what it finished", () => {
   })
 
   it("a run that never started reads no job (an earlier run's outputs are not re-written)", async () => {
-    api.tightenEpisode.mockRejectedValue(new Error("refused"))
+    api.runUseCase.mockRejectedValue(new Error("refused"))
     await expect(executeNodeFor(tightenNode({ useCaseJobId: "job-old" }), REC)).rejects.toThrow("refused")
     expect(api.getJobStatus).not.toHaveBeenCalled()
   })
 
   it("a fresh run refused before its wrapper exists leaves no earlier run to Continue", async () => {
     liveStore()
-    api.tightenEpisode.mockRejectedValue(Object.assign(new Error("The recording could not be read."), { code: "media_unreadable" }))
+    api.runUseCase.mockRejectedValue(Object.assign(new Error("The recording could not be read."), { code: "media_unreadable" }))
     await expect(executeNodeFor(tightenNode({ useCaseJobId: "job-old", useCaseExecutionId: "exec-old" }), REC)).rejects.toThrow()
     expect(store.nodes[0].data.useCaseJobId).toBeUndefined()
     expect(store.nodes[0].data.useCaseExecutionId).toBeUndefined()

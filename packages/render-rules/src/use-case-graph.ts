@@ -5,6 +5,7 @@
  * (`StoredInlineGraph`, `workflow_executions.inline_graph`), and the identity a
  * continuation compares (`hash`). Pure; no I/O.
  */
+import type { EditPlanTier } from "@nodaro/shared/edl"
 import { ancestorsOf } from "./graph-walk"
 
 export const USE_CASE_NODE_TYPES = ["tighten-episode"] as const
@@ -12,6 +13,20 @@ export type UseCaseNodeType = (typeof USE_CASE_NODE_TYPES)[number]
 
 export function isUseCaseNodeType(type: string | null | undefined): type is UseCaseNodeType {
   return typeof type === "string" && (USE_CASE_NODE_TYPES as readonly string[]).includes(type)
+}
+
+/**
+ * The use-case type of a run, read from its job row: the type its input
+ * records (`input_data.type`), else its `job_type` (a row written before the
+ * input recorded it). A recorded type wins even when it names no use-case
+ * node. `null` when the row is not a run of a use-case node. One reading for
+ * every surface that resolves a run's type (the continue route, the MCP verb).
+ */
+export function usecaseRunType(inputData: unknown, jobType: unknown): UseCaseNodeType | null {
+  const recorded =
+    inputData && typeof inputData === "object" && !Array.isArray(inputData) ? (inputData as { type?: unknown }).type : undefined
+  const type = typeof recorded === "string" && recorded.length > 0 ? recorded : jobType
+  return typeof type === "string" && isUseCaseNodeType(type) ? type : null
 }
 
 export type UseCaseFeeCreditId = `use-case-fee:${UseCaseNodeType}`
@@ -23,6 +38,16 @@ export function usecaseFeeCreditId(type: UseCaseNodeType): UseCaseFeeCreditId {
 
 /** The static mirror of the fee (STATIC_CREDIT_COSTS / the editor's fallback table). */
 export const USE_CASE_FEE_STATIC_CREDITS = 10
+
+export type UseCaseMediaKind = "video" | "audio"
+export type PlanTier = EditPlanTier
+export interface UseCaseMediaSource {
+  readonly url: string
+  readonly kind: UseCaseMediaKind
+  readonly durationSec?: number
+}
+
+export type UseCaseResultKind = "episode" | "clips" | "formats" | "chapters"
 
 export interface UseCaseGraphNode {
   readonly id: string
@@ -36,21 +61,61 @@ export interface UseCaseGraphEdge {
   readonly target: string
   readonly sourceHandle: string
   readonly targetHandle: string
+  /**
+   * The wire's mode, only where it is not the default: a step after a
+   * per-clip render reads each clip ("each"), as the hand-built clip-pack
+   * template's wire does. Absent on every Tighten wire, so P1 hashes hold.
+   */
+  readonly data?: { readonly outputMode: "each" }
 }
 export interface UseCaseHandleRef {
   readonly nodeId: string
   readonly handle: string
 }
-/** Which inner node/handle feeds each wrapper output, and the plan/render the review and Render final address. */
-export interface UseCaseOutputMap {
-  readonly media: UseCaseHandleRef
-  /** The render's own media: what a review-on run delivers (its preview) and what consumers read until Render final. */
-  readonly preview: UseCaseHandleRef
+interface UseCaseOutputMapBase {
   readonly json: UseCaseHandleRef
   readonly transcript: UseCaseHandleRef
   readonly planNodeId: string
+}
+/** One delivered medium (Tighten Episode). `kind` is absent on every P1 snapshot. */
+export interface EpisodeOutputMap extends UseCaseOutputMapBase {
+  readonly kind?: "episode"
+  readonly media: UseCaseHandleRef
+  /** The render's own media: what a review-on run delivers (its preview). */
+  readonly preview: UseCaseHandleRef
   readonly renderNodeId: string
 }
+/** A clip per planned clip: `media` is the last per-clip step, whose fan-out rows are the clips. */
+export interface ClipsOutputMap extends UseCaseOutputMapBase {
+  readonly kind: "clips"
+  readonly media: UseCaseHandleRef
+  readonly preview: UseCaseHandleRef
+  readonly renderNodeId: string
+}
+/** One delivery per chosen format, in format order. */
+export interface FormatsOutputMap extends UseCaseOutputMapBase {
+  readonly kind: "formats"
+  readonly formats: ReadonlyArray<{ readonly format: string; readonly ref: UseCaseHandleRef }>
+  readonly preview: UseCaseHandleRef
+  readonly renderNodeId: string
+}
+/** No render: the plan's chapters (and the text made from them). */
+export interface ChaptersOutputMap extends UseCaseOutputMapBase {
+  readonly kind: "chapters"
+}
+/** Which inner node/handle feeds each wrapper output, and the plan/render the review and Render final address. */
+export type UseCaseOutputMap = EpisodeOutputMap | ClipsOutputMap | FormatsOutputMap | ChaptersOutputMap
+
+/** What the run delivers. A P1 snapshot names no kind: an episode. */
+export function usecaseResultKind(map: UseCaseOutputMap): UseCaseResultKind {
+  return map.kind ?? "episode"
+}
+
+/** The render a review and a Render final address; null for a graph that renders nothing. */
+export function usecaseRenderNodeId(map: UseCaseOutputMap): string | null {
+  return map.kind === "chapters" ? null : map.renderNodeId
+}
+
 export interface UseCaseGraph {
   readonly nodeType: UseCaseNodeType
   readonly nodes: readonly UseCaseGraphNode[]
@@ -104,11 +169,12 @@ export function usecaseGraphHash(graph: UseCaseGraph): string {
  * render at proxy (review on): only the chain up to and including the render
  * — what follows it (captions, music, merge) stays in the snapshot (so the
  * hash is unchanged) and runs once, in Render final, whatever the
- * preview-stop-rule flag says. Null when the render is final: the whole
- * graph. In the graph's node order.
+ * preview-stop-rule flag says. Null when the render is final, or the graph
+ * renders nothing: the whole graph. In the graph's node order.
  */
 export function initialRunNodeIds(graph: UseCaseGraph): string[] | null {
-  const render = graph.nodes.find((n) => n.id === graph.outputMap.renderNodeId)
+  const renderId = usecaseRenderNodeId(graph.outputMap)
+  const render = renderId ? graph.nodes.find((n) => n.id === renderId) : undefined
   if (!render || render.data.quality !== "proxy") return null
   const keep = ancestorsOf(render.id, graph.edges)
   keep.add(render.id)
@@ -129,9 +195,14 @@ function cloneJson<T>(value: T): T {
 /**
  * The snapshot the server stores for a use-case run: the graph, the resolved
  * settings it was built from (any builder's settings — the contract does not
- * know their shape), and the graph's hash. Fresh objects throughout.
+ * know their shape), and the graph's hash. Fresh objects throughout. The
+ * snapshot keeps the graph's own output-map kind (a builder that returns an
+ * episode map stores one).
  */
-export function toStoredInlineGraph(graph: UseCaseGraph, settings: object): StoredInlineGraph {
+export function toStoredInlineGraph<G extends UseCaseGraph>(
+  graph: G,
+  settings: object,
+): StoredInlineGraph & { readonly outputMap: G["outputMap"] } {
   return {
     version: 1,
     nodeType: graph.nodeType,
@@ -145,6 +216,29 @@ export function toStoredInlineGraph(graph: UseCaseGraph, settings: object): Stor
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
 const isHandleRef = (v: unknown): boolean => isRecord(v) && typeof v.nodeId === "string" && typeof v.handle === "string"
+/** A wire's data: absent, or exactly `{ outputMode: "each" }`. */
+const isEdgeData = (v: unknown): boolean => v === undefined || (isRecord(v) && v.outputMode === "each" && Object.keys(v).length === 1)
+
+/** An output map of one of the known result kinds (no kind: a P1 episode). */
+function isOutputMap(m: unknown): boolean {
+  if (!isRecord(m)) return false
+  const base = isHandleRef(m.json) && isHandleRef(m.transcript) && typeof m.planNodeId === "string"
+  if (!base) return false
+  const rendered = isHandleRef(m.preview) && typeof m.renderNodeId === "string"
+  switch (m.kind) {
+    case undefined:
+    case "episode":
+    case "clips":
+      return rendered && isHandleRef(m.media)
+    case "formats":
+      return rendered && Array.isArray(m.formats) && m.formats.length > 0 &&
+        m.formats.every((f) => isRecord(f) && typeof f.format === "string" && isHandleRef(f.ref))
+    case "chapters":
+      return true
+    default:
+      return false
+  }
+}
 
 /**
  * Whether a stored value is a use-case snapshot (what `inline_graph` holds for
@@ -153,7 +247,6 @@ const isHandleRef = (v: unknown): boolean => isRecord(v) && typeof v.nodeId === 
  */
 export function isStoredInlineGraph(value: unknown): value is StoredInlineGraph {
   if (!isRecord(value)) return false
-  const { outputMap } = value
   return (
     value.version === 1 &&
     isUseCaseNodeType(value.nodeType as string) &&
@@ -169,14 +262,9 @@ export function isStoredInlineGraph(value: unknown): value is StoredInlineGraph 
         typeof e.source === "string" &&
         typeof e.target === "string" &&
         typeof e.sourceHandle === "string" &&
-        typeof e.targetHandle === "string",
+        typeof e.targetHandle === "string" &&
+        isEdgeData(e.data),
     ) &&
-    isRecord(outputMap) &&
-    isHandleRef(outputMap.media) &&
-    isHandleRef(outputMap.preview) &&
-    isHandleRef(outputMap.json) &&
-    isHandleRef(outputMap.transcript) &&
-    typeof outputMap.planNodeId === "string" &&
-    typeof outputMap.renderNodeId === "string"
+    isOutputMap(value.outputMap)
   )
 }

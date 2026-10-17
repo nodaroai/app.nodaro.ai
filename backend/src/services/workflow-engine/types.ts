@@ -612,6 +612,8 @@ export interface ResolvedInputs {
   useCaseMedia?: Array<{ nodeId: string; url: string }>
   /** A use-case node's optional `music` bed. */
   useCaseMusic?: string
+  /** A use-case node's optional `introCard` video (a type whose descriptor takes one). */
+  useCaseIntroCard?: string
   /** speaker-view (P3.9): Speaker Frames' output descriptor wired into the
    *  `tracks` handle (stringified json) — `null` when the wire is there but
    *  its Speaker Frames has no output (refused, never rendered as v1) — and

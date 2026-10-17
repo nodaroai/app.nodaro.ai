@@ -806,6 +806,32 @@ describe("generate_image { presetId } keeps the tool's never-reject contract", (
     expect(body?.prompt).toBe(buildGenerateImagePresetBody({ prompt: "a fox" }, { structured: { mood: "stormy" } }).prompt)
     expect(body?.prompt).not.toBe(buildGenerateImagePresetBody({ prompt: "a fox" }).prompt)
   })
+
+  it("folds the caller's subject into the preset's request instead of dropping it", async () => {
+    customPresetRow.value = { id: "p-subj", name: "Subj", description: null, data: { prompt: "a fox" } }
+    const subject = { heldProp: "smartphone" }
+    const { body } = await runGenerateImage({ presetId: "p-subj", subject })
+    expect(body?.prompt).toBe(buildGenerateImagePresetBody({ prompt: "a fox" }, { subject }).prompt)
+    expect(body?.prompt).not.toBe(buildGenerateImagePresetBody({ prompt: "a fox" }).prompt)
+  })
+
+  it("the caller's subject REPLACES the preset's own subject, not merges with it", async () => {
+    const presetData = { prompt: "a fox", subject: { heldProp: "smartphone" } }
+    customPresetRow.value = { id: "p-own-subj", name: "OwnSubj", description: null, data: presetData }
+    // A DIFFERENT key from the preset's: a merge would keep the preset's held prop.
+    const caller = { material: "denim" }
+    const { result, body } = await runGenerateImage({ presetId: "p-own-subj", subject: caller })
+    expect(result.isError).toBeUndefined()
+    const prompt = body?.prompt as string
+    // Exactly the build with the caller's subject in place of the preset's…
+    expect(prompt).toBe(buildGenerateImagePresetBody(presetData, { subject: caller }).prompt)
+    expect(prompt).toBe(buildGenerateImagePresetBody({ prompt: "a fox", subject: caller }).prompt)
+    // …and the preset's own clause is gone (it is there without the caller's).
+    const presetOnly = buildGenerateImagePresetBody(presetData).prompt as string
+    expect(presetOnly).toContain("smartphone")
+    expect(prompt).not.toContain("smartphone")
+    expect(prompt).toContain("denim")
+  })
 })
 
 describe("generate_image { presetId } refuses a palette or moodboard instead of dropping it", () => {

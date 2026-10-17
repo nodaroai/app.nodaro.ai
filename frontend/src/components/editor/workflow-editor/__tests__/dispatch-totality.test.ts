@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { USE_CASE_NODE_TYPES } from "@nodaro/render-rules"
 
 /**
  * Frontend registration totality — the guard that was missing.
@@ -62,7 +63,10 @@ describe("frontend registration totality", () => {
 
     expect(types.length).toBeGreaterThan(50) // sanity: the set actually parsed
 
-    const undispatched = types.filter((t) => !dispatcher.includes(`"${t}"`))
+    // The use-case nodes are dispatched as one family, by the registry's
+    // predicate (use-case-executor.ts runs any of them from its descriptor).
+    const byFamily = new Set<string>(dispatcher.includes("if (isUseCaseNodeType(node.type))") ? USE_CASE_NODE_TYPES : [])
+    const undispatched = types.filter((t) => !dispatcher.includes(`"${t}"`) && !byFamily.has(t))
     expect(
       undispatched,
       "These types are in EXECUTABLE_TYPES but never named in execute-node.ts, so Run " +

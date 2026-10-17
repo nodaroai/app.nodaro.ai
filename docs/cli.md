@@ -511,7 +511,7 @@ nodaro edit tighten-episode --media <url> [--music <url>] [--output video|audio]
                                                          # episode out — transcribe, plan, render, plus captions / music / framing as set.
                                                          # The run's fee is 11 credits<!-- credits: use-case-fee:tighten-episode --> per run, on top of its steps.
                                                          # --review stops at a preview; render its final with edit continue-use-case.
-nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # continue a Tighten Episode run as a new job. from-failed: keep the steps that
                                                          # finished, run the rest (the fee is held again; the failed run's was refunded).
                                                          # render-final: the full-quality episode after a --review preview, with the
@@ -521,6 +521,9 @@ nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <f
                                                          # render_final_already_rendered (its result is the one to use).
                                                          # With --json that refusal is written to stdout as
                                                          # { "error": { "code", "message" }, "jobId" } (exit 1); other errors as usual.
+                                                         # The run is continued on its own type's route: --type names it; without
+                                                         # --type the job is read for its type (a token without jobs:read
+                                                         # continues on the Tighten Episode route).
 
 # Organizations — only on instances that have them
 nodaro org list [--json]
@@ -652,6 +655,13 @@ Several images in one call (`generate-image` only): `--count <n>` makes 1–4 im
 ```bash
 nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --count 4 --watch
 nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --models gpt-image-2,flux-2-max --count 2 --watch
+```
+
+Who is in the shot, by catalog id (`subject` on `generate-image`, `text-to-video`): a value that starts with `{` is read as JSON, so the map fits in one `--param`. Field names and ids come from `nodaro pickers get person` (also `styling`, `held-prop`, `material`, `animal`); the platform writes the wording. See [API integration — Structured subject](./api-integration.md#structured-subject-subject).
+
+```bash
+nodaro nodes run generate-image --param prompt="on the seawall at dusk" \
+  --param subject='{"type":"woman","age":"age-30s","heldProp":"smartphone"}' --watch
 ```
 
 Input/source nodes run the same way. Meta Ads (`meta-ads-scrape`) pulls public Facebook + Instagram ads from Meta's Ad Library and answers synchronously (the result carries the ad array directly):

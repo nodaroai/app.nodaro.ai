@@ -1,6 +1,7 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../lib/speaker-view-plan.js"
+import { speakerFramesCreditOverride } from "../../lib/speaker-frames-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
 import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
@@ -2260,6 +2261,7 @@ async function executeWorkerNode(
       const creditOverride =
         await applyEdlCreditOverride(jobName, payload) ??
         await speakerViewCreditOverride(jobName, payload) ??
+        await speakerFramesCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
         (await computeSeedanceDraftFinalizeCreditOverride(jobName, payload)) ??

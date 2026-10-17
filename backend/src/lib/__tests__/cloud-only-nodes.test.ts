@@ -1,3 +1,4 @@
+// @test-watches frontend/src/lib/cloud-only-nodes.ts
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"

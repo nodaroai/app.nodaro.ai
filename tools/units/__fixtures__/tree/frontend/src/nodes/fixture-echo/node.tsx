@@ -1,5 +1,5 @@
-import type { FixtureEchoData } from "./types"
+import type { NodeProps } from "@xyflow/react"
 
-export function NodeComponent({ data }: { data: FixtureEchoData }) {
-  return <div>{data.label}</div>
+export function NodeComponent({ data }: NodeProps) {
+  return <div>{String(data.label)}</div>
 }
