@@ -60,6 +60,7 @@ jobs:
     outputs:
       frontend: ${{ steps.gate.outputs.frontend }}
       backend: ${{ steps.gate.outputs.backend }}
+      testdedup: ${{ steps.gate.outputs.testdedup }}
       mode: ${{ steps.mode.outputs.mode }}
       reason: ${{ steps.mode.outputs.reason }}
     steps:
@@ -72,8 +73,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
+            { echo "frontend=true"; echo "backend=true"; echo "testdedup=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')
@@ -81,12 +81,18 @@ jobs:
           # The files API caps at 3000 entries — if we're near it, assume the
           # diff is bigger than we can see and run everything.
           if [ "$count" -ge 2900 ]; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
+            { echo "frontend=true"; echo "backend=true"; echo "testdedup=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          frontend=false backend=false
+          frontend=false backend=false testdedup=false
           while IFS= read -r f; do
+            # The test de-dup harness's inputs: the @test-watches globs of
+            # tools/__tests__/test-dedup-equivalence-vitest.test.mjs (`**` as
+            # `*`, which crosses `/` here). A guard in
+            # tools/__tests__/test-dedup-equivalence.test.mjs holds the two equal.
+            case "$f" in
+              tools/test-dedup/*|tools/__tests__/test-dedup-*|tools/__tests__/fixtures/test-dedup/*|tools/test-select/annotations.mjs|package.json|package-lock.json|.github/workflows/ci.yml) testdedup=true ;; # test-dedup inputs
+            esac
             # First match wins. backend/ comes before the markdown rule: the
             # generated skills (backend/skills/**/*.md) are read by backend
             # tests, and a PR that regenerated them once skipped the suite and
@@ -100,9 +106,8 @@ jobs:
               *) frontend=true; backend=true ;;                # packages/, root, unknown: both
             esac
           done <<< "$files"
-          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
-          echo "backend=$backend" >> "$GITHUB_OUTPUT"
-          echo "changed=$count frontend=$frontend backend=$backend"
+          { echo "frontend=$frontend"; echo "backend=$backend"; echo "testdedup=$testdedup"; } >> "$GITHUB_OUTPUT"
+          echo "changed=$count frontend=$frontend backend=$backend testdedup=$testdedup"
       # The mode steps must never fail the Diff Gate: it is on main's migrate
       # path. A transient failure leaves `mode` empty, and the test jobs'
       # Select step treats an empty mode as a full run.
@@ -410,6 +415,36 @@ jobs:
       - name: Run remotion tests
         run: npm run test
         working-directory: packages/remotion
+
+  # The test de-dup proof harness (tools/test-dedup/) through the REAL Vitest
+  # runner, coverage and CLI — the regression cases of every probe that once
+  # produced a false PROVEN (PR #2302). They need node_modules, which the
+  # tools self-test job (no npm ci) lacks; TEST_DEDUP_REQUIRE_VITEST makes a
+  # missing install fail here instead of skipping. Runs when the Diff Gate
+  # sees one of the harness's inputs change (always on push).
+  test-dedup-harness:
+    name: Test De-dup Harness
+    needs: [changes]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.testdedup != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Equivalence harness (real Vitest runner, coverage, CLI)
+        env:
+          TEST_DEDUP_REQUIRE_VITEST: "1"
+        run: node --test tools/__tests__/test-dedup-equivalence.test.mjs tools/__tests__/test-dedup-equivalence-vitest.test.mjs
 
   backend-test-shards:
     name: Backend Tests (${{ matrix.shard }}/4)
