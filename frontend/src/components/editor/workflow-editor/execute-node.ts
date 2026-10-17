@@ -7532,7 +7532,7 @@ function executeNodeCore(
   }
 
   // Speaker Frames (P3.6): refused here before anything is sent — the plugin's
-  // scope from the shared rule, and "not priced yet" until P3.7 (the executor).
+  // scope from the shared rule (the executor); the route reserves (P3.7).
   if (node.type === "speaker-frames") {
     setUserPromptTemplate(undefined);
     return executeSpeakerFrames(node, inputs, ctx);

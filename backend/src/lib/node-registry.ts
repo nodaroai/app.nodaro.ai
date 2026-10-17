@@ -1701,7 +1701,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). Priced per output minute in two
     // tiers by how many speakers it shows at once (C4, decided 2026-10-10; lib/speaker-view-plan.ts).
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript, or a plain video into `video` (instead of the EDL, never both) with the diarized transcript required; the clip is cut whole at the speakers' turns and defaults to 9:16 (not available until Speaker Frames is priced: a run with a video wired is refused before anything is charged). Emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript, or a plain video into `video` (instead of the EDL, never both) with the diarized transcript required; the clip is cut whole at the speakers' turns and defaults to 9:16, priced at the clip's measured length. Emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
     outputType: "video",
     creditCost: "per-minute",
     inputSchema: {
@@ -1736,11 +1736,13 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: data — its `tracks` handle (json) is the stored face-track file's
     // descriptor (url, sha256, bytes, per-track summaries; P3-22), what Speaker
     // View's tracked framing reads. Nodaro-EXCLUSIVE (relayed from a connected
-    // self-host as detection proxies). NOT PRICED YET (P3.7): every run is
-    // refused with "Speaker Frames is not priced yet" before anything is reserved.
+    // self-host as detection proxies). Priced per started block of 1,000
+    // sampled frames, one rate for every footage class (P3.7, decided
+    // 2026-10-16; lib/speaker-frames-plan.ts).
     description:
-      "Find where each speaker's face is, over time, on every camera of an edit. Wire an EDL (Edit Plan's or Camera Switch's; a clip pack runs once over all its clips) or a single video, and the same renamed transcript Camera Switch outputs; it samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second, on the cameras you leave ticked. Emits the face tracks as a stored file's descriptor on `tracks`. Not priced yet: runs are refused until its price is set.",
+      "Find where each speaker's face is, over time, on every camera of an edit. Wire an EDL (Edit Plan's or Camera Switch's; a clip pack runs once over all its clips) or a single video, and the same renamed transcript Camera Switch outputs; it samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second, on the cameras you leave ticked. Emits the face tracks as a stored file's descriptor on `tracks`. Priced per started block of 1,000 sampled frames, at least one block per run: reserved from the frames the server counts when the run starts (the edit's spans on the ticked cameras, or a bare video's measured length) and charged on the frames actually sampled. Tracks follow each face but aren't named after a speaker yet — Speaker View uses your drawn regions, or asks which face is whom.",
     outputType: "data",
+    creditCost: "per-1000-frames",
     inputSchema: {
       fields: [
         { key: "edl", type: "json" },

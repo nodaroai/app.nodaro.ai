@@ -47,7 +47,6 @@ import { speakerViewRunStartSourceCheck } from "./speaker-view-source";
 import { editorClipMeasure } from "./speaker-view-source-measure";
 import { speakerViewVideoUrl } from "@/lib/speaker-view-context";
 import { ClipMeasureStopped } from "@/lib/clip-measure-poll";
-import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD } from "@nodaro/shared/models"
@@ -414,7 +413,7 @@ export async function confirmRunOrAbort(
     let blocked: string | null;
     try {
       blocked =
-        wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? speakerViewVideoPreflight(runs, allNodes, edges) ?? speakerFramesPricePreflight(runs) ??
+        wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? speakerViewVideoPreflight(runs, allNodes, edges) ??
         // R5 (decided 2026-10-12): the source of a video-fed Speaker View that
         // already exists is measured through the cached background job before the
         // run is sent, so a clip it will refuse is refused for free. A source the

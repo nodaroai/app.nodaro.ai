@@ -13,13 +13,13 @@
  * The untick list sent is the node's, narrowed to the cameras the current edit
  * samples (`speakerFramesLiveExclusions`): an id left from an earlier wiring is
  * invisible in the panel and would otherwise refuse every run.
- *   - a run at all while Speaker Frames has no price (P3.7): "Speaker Frames is
- *     not priced yet".
+ *
+ * The reserve is not made here: `speakerFramesCreditOverride`
+ * (lib/speaker-frames-plan.ts) prices this payload's own scope per started
+ * block of 1,000 sampled frames (P3.7, decided 2026-10-16).
  */
 import {
   SPEAKER_FRAMES_CREDIT_ID,
-  SPEAKER_FRAMES_NOT_PRICED_MESSAGE,
-  SPEAKER_FRAMES_PRICED,
   coerceSpeakerFramesEdits,
   speakerFramesLiveExclusions,
   speakerFramesScope,
@@ -66,7 +66,6 @@ export function buildSpeakerFramesPayload(input: SpeakerFramesPayloadInput): { p
   )
   const scope = speakerFramesScope({ ...(edits ? { edits } : {}), ...(videoUrl ? { videoUrl } : {}), ...(edits ? { excludeSourceIds } : {}) })
   if (!scope.ok) throw new Error(scope.message)
-  if (!SPEAKER_FRAMES_PRICED) throw new Error(SPEAKER_FRAMES_NOT_PRICED_MESSAGE)
 
   const transcript = input.transcript === undefined || input.transcript === null || input.transcript === "" ? undefined : parse(input.transcript)
   return {

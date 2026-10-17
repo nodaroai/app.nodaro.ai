@@ -21,7 +21,8 @@
    "ltx-2.3-pro-retake:per-second": 40,
    "elevenlabs-v4:per-100-chars": 4,
    "elevenlabs-dialogue:per-100-chars": 4,
-   "elevenlabs-dubbing": 40
+   "elevenlabs-dubbing": 40,
+   "speaker-frames": 2
   }
  },
  "cases": [
@@ -822,6 +823,46 @@
     "servedUnit": 45,
     "credits": 314,
     "perUnitQuote": 315
+   }
+  },
+  {
+   "name": "Speaker Frames: 45 min kept on one wide camera samples 5,404 frames, 6 blocks",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "speaker-frames",
+     "data": {
+      "edl": {
+       "version": 1,
+       "clock": "master",
+       "sources": [
+        {
+         "id": "A",
+         "url": "https://m.test/a.mp4",
+         "kind": "video"
+        }
+       ],
+       "segments": [
+        {
+         "id": "s0",
+         "inMs": 0,
+         "outMs": 2700000,
+         "video": "A"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "speaker-frames",
+    "units": 6,
+    "quoteId": "speaker-frames:6u",
+    "servedUnit": 3,
+    "credits": 14,
+    "perUnitQuote": 18
    }
   }
  ]

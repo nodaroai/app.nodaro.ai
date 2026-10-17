@@ -8,24 +8,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { toastError, flag, api, updateNodeData } = vi.hoisted(() => ({
+const { toastError, api, updateNodeData } = vi.hoisted(() => ({
   toastError: vi.fn(),
-  flag: { priced: false },
   api: vi.fn(async (_p: unknown) => ({ jobId: "job-1" })),
   updateNodeData: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: toastError, success: vi.fn(), info: vi.fn() }) }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
-vi.mock("@nodaro/render-rules", async (orig) => {
-  const actual = await orig<typeof import("@nodaro/render-rules")>()
-  return {
-    ...actual,
-    get SPEAKER_FRAMES_PRICED() {
-      return flag.priced
-    },
-  }
-})
 vi.mock("@/lib/api", () => ({ speakerFrames: (p: unknown) => api(p) }))
 vi.mock("../poll-job", () => ({
   RUN_START_RESET: {},
@@ -63,7 +53,6 @@ const ctx = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  flag.priced = false
 })
 
 const sent = async () => {
@@ -80,20 +69,12 @@ describe("executeSpeakerFrames", () => {
     expect(api).not.toHaveBeenCalled()
   })
 
-  it("a stale untick does not refuse the run (unpriced, it reaches the price refusal)", async () => {
-    await expect(executeSpeakerFrames(node({ excludeSourceIds: ["camB"] }), { inputs: [JSON.stringify(ONE_CAM)] }, ctx)).rejects.toThrow(
-      "Speaker Frames is not priced yet",
-    )
-  })
-
-  it("with a price, sends only the untick ids the current edit samples", async () => {
-    flag.priced = true
+  it("sends only the untick ids the current edit samples (priced since P3.7: the route reserves)", async () => {
     void executeSpeakerFrames(node({ excludeSourceIds: ["camB", "gone"] }), { inputs: [JSON.stringify(EDL)] }, ctx)
     expect((await sent()).excludeSourceIds).toEqual(["camB"])
   })
 
-  it("with a price, a stale untick on a rewired edit is dropped", async () => {
-    flag.priced = true
+  it("a stale untick on a rewired edit is dropped, not refused", async () => {
     void executeSpeakerFrames(node({ excludeSourceIds: ["camB"] }), { inputs: [JSON.stringify(ONE_CAM)] }, ctx)
     const body = await sent()
     expect(body.excludeSourceIds).toEqual([])

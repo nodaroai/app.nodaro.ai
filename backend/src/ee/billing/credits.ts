@@ -85,7 +85,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -1897,6 +1897,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // `SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE` (lib/speaker-view-plan.ts), the
   // model_pricing rows mirror them.
   ...SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE,
+  // speaker-frames — where each speaker's face is, per camera (the cloud
+  // plugin's YuNet detection, no vendor). Priced per started BLOCK of 1,000
+  // sampled frames, decided 2026-10-16: one rate for every footage class.
+  // The route's computeCredits and the DAG's speakerFramesCreditOverride both
+  // reserve `this × max(1, ⌈frames ÷ 1,000⌉)` from the server-counted scope
+  // (lib/speaker-frames-plan.ts); the bare row is the estimators' one-block
+  // floor. Value is `SPEAKER_FRAMES_CREDITS_PER_BLOCK` (@nodaro/render-rules);
+  // the model_pricing row (migration 530) mirrors it.
+  [SPEAKER_FRAMES_CREDIT_ID]: SPEAKER_FRAMES_CREDITS_PER_BLOCK,
   // Image Collage — composites N images into one 2K/4K image (local ffmpeg,
   // no provider cost). Priced by resolution. Base + resolution composites;
   // the single-node route uses computeCredits, workflow runs reserve the
@@ -2288,6 +2297,10 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
 
   // Camera Switch: flat — one id whatever the request carries.
   "camera-switch": () => CAMERA_SWITCH_CREDIT_ID,
+
+  // Speaker Frames: one id whatever the request carries; the blocks are the
+  // reserve's quantity (lib/speaker-frames-plan.ts), never the id.
+  "speaker-frames": () => SPEAKER_FRAMES_CREDIT_ID,
 
   // Speaker View: the row of a request-shaped record's quality and price tier
   // (the route body / the job's input_data: `edl`, `transcript` and the wire
@@ -4992,6 +5005,18 @@ export function graphPricingUnits(
   edges: ReadonlyArray<EstimateEdge> | undefined,
   rerunIds: ReadonlySet<string>,
 ): number {
+  // Speaker Frames: the blocks of the edit wired in when it is known now,
+  // else the 180 min × 6 cameras ceiling (`speakerFramesEstimateBlocks`, the
+  // one rule the editor reads too). No wiring sent: the ceiling, unless the
+  // node's own edit gives the frames.
+  if (node.type === "speaker-frames") {
+    const self = { id: node.id ?? "", type: node.type, data: node.data }
+    if (edges === undefined || !node.id) {
+      const inline = node.data?.edl
+      return inline === undefined || inline === null || inline === "" ? SPEAKER_FRAMES_CEILING_BLOCKS : speakerFramesEstimateBlocks(self, [], [], rerunIds)
+    }
+    return speakerFramesEstimateBlocks(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
+  }
   if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
   if (!node.id) return EDIT_PLAN_MAX_MINUTES
   // No wiring sent (the route's `edges` omitted): the render may be wired to

@@ -3841,8 +3841,8 @@ export async function cameraSwitch(params: {
  * Speaker Frames (P3.6): where each speaker's face is, per camera. An edit (one,
  * or a clip pack's edits — ONE run over their union, P3-24 (a)) or a bare
  * video, the renamed transcript as given (its `speakerNames` map included),
- * and the untick list. Not priced yet (P3.7): every run is refused before
- * anything is reserved.
+ * and the untick list. The route reserves per started block of 1,000 frames
+ * it counts itself (P3.7).
  */
 export async function speakerFrames(params: {
   edl?: unknown

@@ -13,8 +13,9 @@
  * The untick list sent is the node's, narrowed to the cameras the current edit
  * samples (`speakerFramesLiveExclusions`): an id left from an earlier wiring is
  * invisible in the panel and would otherwise refuse every run.
- *   - any run at all while Speaker Frames has no price: "Speaker Frames is not
- *     priced yet" (P3.7 sets the price and flips `SPEAKER_FRAMES_PRICED`).
+ *
+ * The plugin's route reserves from the scope it resolves itself (per started
+ * block of 1,000 sampled frames, P3.7) — never from a number this sends.
  *
  * The edit arrives FOLDED (`inputs.inputs`, FAN_IN_TARGETS): one JSON string
  * per edit, so a clip pack is one run over the union of its clips (P3-24 (a)).
@@ -23,8 +24,6 @@
  */
 import { toast } from "sonner"
 import {
-  SPEAKER_FRAMES_NOT_PRICED_MESSAGE,
-  SPEAKER_FRAMES_PRICED,
   coerceSpeakerFramesEdits,
   speakerFramesLiveExclusions,
   speakerFramesScope,
@@ -77,7 +76,6 @@ export function executeSpeakerFrames(node: WorkflowNode, inputs: SpeakerFramesIn
   const excludeSourceIds = speakerFramesLiveExclusions(edits ?? [], data.excludeSourceIds)
   const scope = speakerFramesScope({ ...(edits ? { edits, excludeSourceIds } : {}), ...(videoUrl ? { videoUrl } : {}) })
   if (!scope.ok) return fail(nodeRunText(data.label, scope.message), scope.message)
-  if (!SPEAKER_FRAMES_PRICED) return fail(nodeRunError(data.label, "nodeRun.speakerFramesNotPriced"), SPEAKER_FRAMES_NOT_PRICED_MESSAGE)
 
   const transcriptRaw = inputs.transcript ?? data.transcript
   const transcript = blank(transcriptRaw) ? undefined : parseMaybe(transcriptRaw)

@@ -1,0 +1,1564 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "999 frames: one block",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 497500,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 999
+          }
+        ],
+        "frames": 999,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "1,000 frames: one block",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 498000,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 1000
+          }
+        ],
+        "frames": 1000,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "1,001 frames: two blocks",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 498500,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 1001
+          }
+        ],
+        "frames": 1001,
+        "blocks": 2,
+        "creditsPerBlock": 2,
+        "baseCredits": 4
+      }
+    },
+    {
+      "name": "docs: a 90-minute episode tightened, one wide camera",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 55000,
+            "video": "wide"
+          },
+          {
+            "id": "s1",
+            "inMs": 60000,
+            "outMs": 115000,
+            "video": "wide"
+          },
+          {
+            "id": "s2",
+            "inMs": 120000,
+            "outMs": 175000,
+            "video": "wide"
+          },
+          {
+            "id": "s3",
+            "inMs": 180000,
+            "outMs": 235000,
+            "video": "wide"
+          },
+          {
+            "id": "s4",
+            "inMs": 240000,
+            "outMs": 295000,
+            "video": "wide"
+          },
+          {
+            "id": "s5",
+            "inMs": 300000,
+            "outMs": 355000,
+            "video": "wide"
+          },
+          {
+            "id": "s6",
+            "inMs": 360000,
+            "outMs": 415000,
+            "video": "wide"
+          },
+          {
+            "id": "s7",
+            "inMs": 420000,
+            "outMs": 475000,
+            "video": "wide"
+          },
+          {
+            "id": "s8",
+            "inMs": 480000,
+            "outMs": 535000,
+            "video": "wide"
+          },
+          {
+            "id": "s9",
+            "inMs": 540000,
+            "outMs": 595000,
+            "video": "wide"
+          },
+          {
+            "id": "s10",
+            "inMs": 600000,
+            "outMs": 655000,
+            "video": "wide"
+          },
+          {
+            "id": "s11",
+            "inMs": 660000,
+            "outMs": 715000,
+            "video": "wide"
+          },
+          {
+            "id": "s12",
+            "inMs": 720000,
+            "outMs": 775000,
+            "video": "wide"
+          },
+          {
+            "id": "s13",
+            "inMs": 780000,
+            "outMs": 835000,
+            "video": "wide"
+          },
+          {
+            "id": "s14",
+            "inMs": 840000,
+            "outMs": 895000,
+            "video": "wide"
+          },
+          {
+            "id": "s15",
+            "inMs": 900000,
+            "outMs": 955000,
+            "video": "wide"
+          },
+          {
+            "id": "s16",
+            "inMs": 960000,
+            "outMs": 1015000,
+            "video": "wide"
+          },
+          {
+            "id": "s17",
+            "inMs": 1020000,
+            "outMs": 1075000,
+            "video": "wide"
+          },
+          {
+            "id": "s18",
+            "inMs": 1080000,
+            "outMs": 1135000,
+            "video": "wide"
+          },
+          {
+            "id": "s19",
+            "inMs": 1140000,
+            "outMs": 1195000,
+            "video": "wide"
+          },
+          {
+            "id": "s20",
+            "inMs": 1200000,
+            "outMs": 1255000,
+            "video": "wide"
+          },
+          {
+            "id": "s21",
+            "inMs": 1260000,
+            "outMs": 1315000,
+            "video": "wide"
+          },
+          {
+            "id": "s22",
+            "inMs": 1320000,
+            "outMs": 1375000,
+            "video": "wide"
+          },
+          {
+            "id": "s23",
+            "inMs": 1380000,
+            "outMs": 1435000,
+            "video": "wide"
+          },
+          {
+            "id": "s24",
+            "inMs": 1440000,
+            "outMs": 1495000,
+            "video": "wide"
+          },
+          {
+            "id": "s25",
+            "inMs": 1500000,
+            "outMs": 1555000,
+            "video": "wide"
+          },
+          {
+            "id": "s26",
+            "inMs": 1560000,
+            "outMs": 1615000,
+            "video": "wide"
+          },
+          {
+            "id": "s27",
+            "inMs": 1620000,
+            "outMs": 1675000,
+            "video": "wide"
+          },
+          {
+            "id": "s28",
+            "inMs": 1680000,
+            "outMs": 1735000,
+            "video": "wide"
+          },
+          {
+            "id": "s29",
+            "inMs": 1740000,
+            "outMs": 1795000,
+            "video": "wide"
+          },
+          {
+            "id": "s30",
+            "inMs": 1800000,
+            "outMs": 1855000,
+            "video": "wide"
+          },
+          {
+            "id": "s31",
+            "inMs": 1860000,
+            "outMs": 1915000,
+            "video": "wide"
+          },
+          {
+            "id": "s32",
+            "inMs": 1920000,
+            "outMs": 1975000,
+            "video": "wide"
+          },
+          {
+            "id": "s33",
+            "inMs": 1980000,
+            "outMs": 2035000,
+            "video": "wide"
+          },
+          {
+            "id": "s34",
+            "inMs": 2040000,
+            "outMs": 2095000,
+            "video": "wide"
+          },
+          {
+            "id": "s35",
+            "inMs": 2100000,
+            "outMs": 2155000,
+            "video": "wide"
+          },
+          {
+            "id": "s36",
+            "inMs": 2160000,
+            "outMs": 2215000,
+            "video": "wide"
+          },
+          {
+            "id": "s37",
+            "inMs": 2220000,
+            "outMs": 2275000,
+            "video": "wide"
+          },
+          {
+            "id": "s38",
+            "inMs": 2280000,
+            "outMs": 2335000,
+            "video": "wide"
+          },
+          {
+            "id": "s39",
+            "inMs": 2340000,
+            "outMs": 2395000,
+            "video": "wide"
+          },
+          {
+            "id": "s40",
+            "inMs": 2400000,
+            "outMs": 2455000,
+            "video": "wide"
+          },
+          {
+            "id": "s41",
+            "inMs": 2460000,
+            "outMs": 2515000,
+            "video": "wide"
+          },
+          {
+            "id": "s42",
+            "inMs": 2520000,
+            "outMs": 2575000,
+            "video": "wide"
+          },
+          {
+            "id": "s43",
+            "inMs": 2580000,
+            "outMs": 2635000,
+            "video": "wide"
+          },
+          {
+            "id": "s44",
+            "inMs": 2640000,
+            "outMs": 2695000,
+            "video": "wide"
+          },
+          {
+            "id": "s45",
+            "inMs": 2700000,
+            "outMs": 2755000,
+            "video": "wide"
+          },
+          {
+            "id": "s46",
+            "inMs": 2760000,
+            "outMs": 2815000,
+            "video": "wide"
+          },
+          {
+            "id": "s47",
+            "inMs": 2820000,
+            "outMs": 2875000,
+            "video": "wide"
+          },
+          {
+            "id": "s48",
+            "inMs": 2880000,
+            "outMs": 2935000,
+            "video": "wide"
+          },
+          {
+            "id": "s49",
+            "inMs": 2940000,
+            "outMs": 2995000,
+            "video": "wide"
+          },
+          {
+            "id": "s50",
+            "inMs": 3000000,
+            "outMs": 3055000,
+            "video": "wide"
+          },
+          {
+            "id": "s51",
+            "inMs": 3060000,
+            "outMs": 3115000,
+            "video": "wide"
+          },
+          {
+            "id": "s52",
+            "inMs": 3120000,
+            "outMs": 3175000,
+            "video": "wide"
+          },
+          {
+            "id": "s53",
+            "inMs": 3180000,
+            "outMs": 3235000,
+            "video": "wide"
+          },
+          {
+            "id": "s54",
+            "inMs": 3240000,
+            "outMs": 3295000,
+            "video": "wide"
+          },
+          {
+            "id": "s55",
+            "inMs": 3300000,
+            "outMs": 3355000,
+            "video": "wide"
+          },
+          {
+            "id": "s56",
+            "inMs": 3360000,
+            "outMs": 3415000,
+            "video": "wide"
+          },
+          {
+            "id": "s57",
+            "inMs": 3420000,
+            "outMs": 3475000,
+            "video": "wide"
+          },
+          {
+            "id": "s58",
+            "inMs": 3480000,
+            "outMs": 3535000,
+            "video": "wide"
+          },
+          {
+            "id": "s59",
+            "inMs": 3540000,
+            "outMs": 3595000,
+            "video": "wide"
+          },
+          {
+            "id": "s60",
+            "inMs": 3600000,
+            "outMs": 3655000,
+            "video": "wide"
+          },
+          {
+            "id": "s61",
+            "inMs": 3660000,
+            "outMs": 3715000,
+            "video": "wide"
+          },
+          {
+            "id": "s62",
+            "inMs": 3720000,
+            "outMs": 3775000,
+            "video": "wide"
+          },
+          {
+            "id": "s63",
+            "inMs": 3780000,
+            "outMs": 3835000,
+            "video": "wide"
+          },
+          {
+            "id": "s64",
+            "inMs": 3840000,
+            "outMs": 3895000,
+            "video": "wide"
+          },
+          {
+            "id": "s65",
+            "inMs": 3900000,
+            "outMs": 3955000,
+            "video": "wide"
+          },
+          {
+            "id": "s66",
+            "inMs": 3960000,
+            "outMs": 4015000,
+            "video": "wide"
+          },
+          {
+            "id": "s67",
+            "inMs": 4020000,
+            "outMs": 4075000,
+            "video": "wide"
+          },
+          {
+            "id": "s68",
+            "inMs": 4080000,
+            "outMs": 4135000,
+            "video": "wide"
+          },
+          {
+            "id": "s69",
+            "inMs": 4140000,
+            "outMs": 4195000,
+            "video": "wide"
+          },
+          {
+            "id": "s70",
+            "inMs": 4200000,
+            "outMs": 4255000,
+            "video": "wide"
+          },
+          {
+            "id": "s71",
+            "inMs": 4260000,
+            "outMs": 4315000,
+            "video": "wide"
+          },
+          {
+            "id": "s72",
+            "inMs": 4320000,
+            "outMs": 4375000,
+            "video": "wide"
+          },
+          {
+            "id": "s73",
+            "inMs": 4380000,
+            "outMs": 4435000,
+            "video": "wide"
+          },
+          {
+            "id": "s74",
+            "inMs": 4440000,
+            "outMs": 4495000,
+            "video": "wide"
+          },
+          {
+            "id": "s75",
+            "inMs": 4500000,
+            "outMs": 4555000,
+            "video": "wide"
+          },
+          {
+            "id": "s76",
+            "inMs": 4560000,
+            "outMs": 4615000,
+            "video": "wide"
+          },
+          {
+            "id": "s77",
+            "inMs": 4620000,
+            "outMs": 4675000,
+            "video": "wide"
+          },
+          {
+            "id": "s78",
+            "inMs": 4680000,
+            "outMs": 4735000,
+            "video": "wide"
+          },
+          {
+            "id": "s79",
+            "inMs": 4740000,
+            "outMs": 4795000,
+            "video": "wide"
+          },
+          {
+            "id": "s80",
+            "inMs": 4800000,
+            "outMs": 4855000,
+            "video": "wide"
+          },
+          {
+            "id": "s81",
+            "inMs": 4860000,
+            "outMs": 4915000,
+            "video": "wide"
+          },
+          {
+            "id": "s82",
+            "inMs": 4920000,
+            "outMs": 4975000,
+            "video": "wide"
+          },
+          {
+            "id": "s83",
+            "inMs": 4980000,
+            "outMs": 5035000,
+            "video": "wide"
+          },
+          {
+            "id": "s84",
+            "inMs": 5040000,
+            "outMs": 5095000,
+            "video": "wide"
+          },
+          {
+            "id": "s85",
+            "inMs": 5100000,
+            "outMs": 5155000,
+            "video": "wide"
+          },
+          {
+            "id": "s86",
+            "inMs": 5160000,
+            "outMs": 5215000,
+            "video": "wide"
+          },
+          {
+            "id": "s87",
+            "inMs": 5220000,
+            "outMs": 5275000,
+            "video": "wide"
+          },
+          {
+            "id": "s88",
+            "inMs": 5280000,
+            "outMs": 5335000,
+            "video": "wide"
+          },
+          {
+            "id": "s89",
+            "inMs": 5340000,
+            "outMs": 5395000,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 10616
+          }
+        ],
+        "frames": 10616,
+        "blocks": 11,
+        "creditsPerBlock": 2,
+        "baseCredits": 22
+      }
+    },
+    {
+      "name": "docs: a clip pack of 8 clips, one run over their union",
+      "edl": [
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 10000,
+              "outMs": 66000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 110000,
+              "outMs": 166000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 210000,
+              "outMs": 266000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 310000,
+              "outMs": 366000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 410000,
+              "outMs": 466000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 510000,
+              "outMs": 566000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 610000,
+              "outMs": 666000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 710000,
+              "outMs": 766000,
+              "video": "wide"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 960
+          }
+        ],
+        "frames": 960,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "docs: a 14-second bare video",
+      "videoUrl": "https://media.example/clip.mp4",
+      "probedSec": 14,
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "video",
+            "frames": 28
+          }
+        ],
+        "frames": 28,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "a late camera: its spans moved onto its own clock and clamped at its zero",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video",
+            "offsetMs": 4000
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 30000,
+            "video": "a"
+          },
+          {
+            "id": "s1",
+            "inMs": 45000,
+            "outMs": 75000,
+            "video": "b"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "a",
+            "frames": 132
+          },
+          {
+            "sourceId": "b",
+            "frames": 124
+          }
+        ],
+        "frames": 256,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "margins that touch merge (a 3 s cut)",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 10000,
+            "outMs": 20000,
+            "video": "wide"
+          },
+          {
+            "id": "s1",
+            "inMs": 23000,
+            "outMs": 30000,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 48
+          }
+        ],
+        "frames": 48,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "margins that do not touch stay apart (a 5 s cut)",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 10000,
+            "outMs": 20000,
+            "video": "wide"
+          },
+          {
+            "id": "s1",
+            "inMs": 25000,
+            "outMs": 30000,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 46
+          }
+        ],
+        "frames": 46,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "a pack whose clips overlap on one camera: the union, counted once",
+      "edl": [
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 0,
+              "outMs": 60000,
+              "video": "wide"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "mic",
+              "url": "https://media.example/mic.wav",
+              "kind": "audio",
+              "role": "master-audio"
+            },
+            {
+              "id": "wide",
+              "url": "https://media.example/wide.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s0",
+              "inMs": 30000,
+              "outMs": 90000,
+              "video": "wide"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 184
+          }
+        ],
+        "frames": 184,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "the pack as a JSON string",
+      "edl": "[{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":10000,\"outMs\":66000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":110000,\"outMs\":166000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":210000,\"outMs\":266000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":310000,\"outMs\":366000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":410000,\"outMs\":466000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":510000,\"outMs\":566000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":610000,\"outMs\":666000,\"video\":\"wide\"}]},{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"mic\",\"url\":\"https://media.example/mic.wav\",\"kind\":\"audio\",\"role\":\"master-audio\"},{\"id\":\"wide\",\"url\":\"https://media.example/wide.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":710000,\"outMs\":766000,\"video\":\"wide\"}]}]",
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 960
+          }
+        ],
+        "frames": 960,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "two cameras, one unticked",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 60000,
+            "video": "a"
+          },
+          {
+            "id": "s1",
+            "inMs": 60000,
+            "outMs": 120000,
+            "video": "b"
+          }
+        ]
+      },
+      "excludeSourceIds": [
+        "b"
+      ],
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "a",
+            "frames": 244
+          }
+        ],
+        "frames": 244,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "two cameras, both ticked: every video source samples every kept span",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 60000,
+            "video": "a"
+          },
+          {
+            "id": "s1",
+            "inMs": 60000,
+            "outMs": 120000,
+            "video": "b"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "a",
+            "frames": 244
+          },
+          {
+            "sourceId": "b",
+            "frames": 244
+          }
+        ],
+        "frames": 488,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "exactly 180 minutes kept on one camera",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 10800000,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "wide",
+            "frames": 21604
+          }
+        ],
+        "frames": 21604,
+        "blocks": 22,
+        "creditsPerBlock": 2,
+        "baseCredits": 44
+      }
+    },
+    {
+      "name": "the ceiling: 180 minutes on each of 6 cameras",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "d",
+            "url": "https://media.example/d.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "e",
+            "url": "https://media.example/e.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "f",
+            "url": "https://media.example/f.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 10800000,
+            "video": "a"
+          }
+        ]
+      },
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "a",
+            "frames": 21604
+          },
+          {
+            "sourceId": "b",
+            "frames": 21604
+          },
+          {
+            "sourceId": "c",
+            "frames": 21604
+          },
+          {
+            "sourceId": "d",
+            "frames": 21604
+          },
+          {
+            "sourceId": "e",
+            "frames": 21604
+          },
+          {
+            "sourceId": "f",
+            "frames": 21604
+          }
+        ],
+        "frames": 129624,
+        "blocks": 130,
+        "creditsPerBlock": 2,
+        "baseCredits": 260
+      }
+    },
+    {
+      "name": "a bare video of 2 h 59 min 59.7 s",
+      "videoUrl": "https://media.example/long.mp4",
+      "probedSec": 10799.7,
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "video",
+            "frames": 21600
+          }
+        ],
+        "frames": 21600,
+        "blocks": 22,
+        "creditsPerBlock": 2,
+        "baseCredits": 44
+      }
+    },
+    {
+      "name": "a bare video of 0.2 s: the one-block minimum",
+      "videoUrl": "https://media.example/blink.mp4",
+      "probedSec": 0.2,
+      "expected": {
+        "sources": [
+          {
+            "sourceId": "video",
+            "frames": 1
+          }
+        ],
+        "frames": 1,
+        "blocks": 1,
+        "creditsPerBlock": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "over 180 minutes kept on one camera",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 10800001,
+            "video": "wide"
+          }
+        ]
+      },
+      "expected": {
+        "refused": "too_long"
+      }
+    },
+    {
+      "name": "every camera unticked",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 60000,
+            "video": "a"
+          }
+        ]
+      },
+      "excludeSourceIds": [
+        "a"
+      ],
+      "expected": {
+        "refused": "invalid_input"
+      }
+    },
+    {
+      "name": "an untick naming no camera of the edit",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 60000,
+            "video": "wide"
+          }
+        ]
+      },
+      "excludeSourceIds": [
+        "gone"
+      ],
+      "expected": {
+        "refused": "invalid_input"
+      }
+    },
+    {
+      "name": "an edit and a video together",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "wide",
+            "url": "https://media.example/wide.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 60000,
+            "video": "wide"
+          }
+        ]
+      },
+      "videoUrl": "https://media.example/clip.mp4",
+      "probedSec": 60,
+      "expected": {
+        "refused": "invalid_input"
+      }
+    }
+  ]
+}

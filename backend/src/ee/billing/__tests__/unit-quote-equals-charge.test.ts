@@ -119,6 +119,9 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
     case "dubbing":
       // routes/dubbing.ts computeCredits: the language's per-minute row × the span's whole minutes.
       return dubbingBaseCredits(rateId === "elevenlabs-dubbing-v2" ? "he" : "es", units * 60)
+    case "speaker-frames":
+      // The cloud plugin's route and the workflow run (lib/speaker-frames-plan.ts): the row × the blocks.
+      return unitRateBaseCredits(rateId, units)
     case "text-to-speech":
     case "text-to-dialogue":
       // lib/speech-credits.ts: the unit row × the started hundreds.

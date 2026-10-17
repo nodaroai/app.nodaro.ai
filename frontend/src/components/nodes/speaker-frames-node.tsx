@@ -3,13 +3,13 @@
 import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanFace, Braces, Film, Loader2, AlertCircle } from "lucide-react"
-import { SPEAKER_FRAMES_PRICED } from "@nodaro/render-rules"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { NodeJobProgress } from "./node-job-progress"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useSpeakerFramesNodeCredits } from "@/hooks/use-render-node-credits"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
 import { speakerFramesBareVideoWired, speakerFramesResultSummary, speakerFramesSourcesOf } from "@/lib/speaker-frames-panel"
@@ -20,8 +20,8 @@ import type { SpeakerFramesNodeData } from "@/types/nodes"
 /**
  * Speaker Frames (P3.6): where each speaker's face is, per camera. The face
  * shows the cameras the wired edit samples and their frames before a run, the
- * tracks per camera after one (read after the node's corrections), and — until
- * P3.7 — that it is not priced yet, with the quick strip's Run disabled.
+ * tracks per camera after one (read after the node's corrections). The Run
+ * button quotes the run per started block of 1,000 sampled frames (P3.7).
  */
 function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -38,6 +38,7 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
   const result = useMemo(() => speakerFramesResultSummary(nodeData.generatedJson, nodeData.trackAssignments, transcript), [nodeData.generatedJson, nodeData.trackAssignments, transcript])
   const ticked = sources.filter((s) => s.ticked)
   const frames = ticked.reduce((n, s) => n + s.frames, 0)
+  const credits = useSpeakerFramesNodeCredits(id)
   const labelOf = (sourceId: string) => {
     const label = (nodes.find((n) => n.id === sourceId)?.data as { label?: unknown } | undefined)?.label
     return typeof label === "string" && label ? label : sourceId
@@ -56,12 +57,7 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={240}
         hideHeader
         topToolbarContent={
-          <NodeQuickStrip
-            nodeId={id}
-            isRunning={status === "running"}
-            disabled={!SPEAKER_FRAMES_PRICED}
-            disabledReason={!SPEAKER_FRAMES_PRICED ? t("speakerFrames.notPriced") : undefined}
-          />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         handles={[
           { id: "edl",        type: "target", position: Position.Left,  customStyle: { top: "24px", left: "-29px" },  external: true },
@@ -112,10 +108,6 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
                 <span className="text-[10px] text-center px-2">{t("speakerFrames.connect")}</span>
               )}
             </div>
-          )}
-
-          {!SPEAKER_FRAMES_PRICED && (
-            <span data-testid="speaker-frames-node-not-priced" className="text-[10px] text-center px-2 text-amber-700 dark:text-amber-400">{t("speakerFrames.notPriced")}</span>
           )}
         </div>
       </BaseNode>

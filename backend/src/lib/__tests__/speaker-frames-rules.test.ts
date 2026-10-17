@@ -1,7 +1,7 @@
 /**
  * Speaker Frames' shared rules (P3.6): what an edit samples (P3-5, P3-24), the
- * "not priced yet" flag (P3.7), the run refusal, and the manual corrections
- * resolver (P3-18). One module both engines and the relay read.
+ * price flag (on since P3.7), and the manual corrections resolver (P3-18). One
+ * module both engines and the relay read.
  */
 import { describe, expect, it } from "vitest"
 import {
@@ -10,7 +10,6 @@ import {
   SPEAKER_FRAMES_PRICED,
   applySpeakerTrackAssignments,
   coerceSpeakerFramesEdits,
-  speakerFramesRunRefusal,
   speakerFramesScope,
   speakerFramesLiveExclusions,
   speakerFramesSourceRows,
@@ -34,18 +33,9 @@ const edl = (over: Partial<Edl> = {}): Edl =>
   }) as Edl
 
 describe("the price flag", () => {
-  it("is off until P3.7, with the plugin route's own words", () => {
-    expect(SPEAKER_FRAMES_PRICED).toBe(false)
+  it("is on since P3.7 (decided 2026-10-16); an older plugin's refusal keeps its own words", () => {
+    expect(SPEAKER_FRAMES_PRICED).toBe(true)
     expect(SPEAKER_FRAMES_NOT_PRICED_MESSAGE).toBe("Speaker Frames is not priced yet")
-  })
-
-  it("refuses a run holding a Speaker Frames node, naming it; a skipped one never runs", () => {
-    const r = speakerFramesRunRefusal([{ id: "a", type: "speaker-frames", data: {} }, { id: "b", type: "speaker-frames", data: { skipped: true } }, { id: "c", type: "text" }], false)
-    expect(r?.nodeIds).toEqual(["a"])
-    expect(r?.message).toContain(SPEAKER_FRAMES_NOT_PRICED_MESSAGE)
-    expect(r?.message).toContain("nothing was charged")
-    expect(speakerFramesRunRefusal([{ id: "a", type: "speaker-frames" }], true)).toBeNull()
-    expect(speakerFramesRunRefusal([{ id: "c", type: "text" }], false)).toBeNull()
   })
 })
 

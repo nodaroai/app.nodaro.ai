@@ -1,6 +1,6 @@
 "use client"
 
-import { SPEAKER_FRAMES_PRICED, SPEAKER_VIEW_PRICED, isUseCaseNodeType } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_PRICED, isUseCaseNodeType } from "@nodaro/render-rules"
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
@@ -1218,17 +1218,15 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
-                    // A Speaker View whose price is withdrawn (priced since C4) and
-                    // Speaker Frames (until P3.7) have no price: the button says so and does not run.
-                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED) || (nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED)}
+                    // A Speaker View whose price is withdrawn (priced since C4) has
+                    // no price: the button says so and does not run.
+                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED)}
                     disabledReason={
                       imageGateBlocked
                         ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
                         : nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED
                           ? t("speakerView.notPriced")
-                          : nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED
-                            ? t("speakerFrames.notPriced")
-                            : undefined
+                          : undefined
                     }
                     creditOverride={runButtonCreditOverride(_videoPrice,
                       isUseCaseNodeType(nodeType)

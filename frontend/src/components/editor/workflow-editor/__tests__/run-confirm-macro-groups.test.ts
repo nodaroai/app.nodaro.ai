@@ -14,7 +14,6 @@ let mockEdges: unknown[] = []
 
 // The confirm is asked of a priced graph: Speaker Frames' own price gate (a refusal
 // BEFORE any confirm) has its own tests.
-vi.mock("../speaker-frames-price-preflight", () => ({ speakerFramesPricePreflight: () => null }))
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock("sonner", () => ({ toast: { error: toastError, success: vi.fn(), info: vi.fn(), warning: vi.fn() } }))
 vi.mock("@/hooks/use-workflow-store", () => ({

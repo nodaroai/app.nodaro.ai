@@ -6323,8 +6323,9 @@ export function buildPayload(
 
     // Speaker Frames (P3.6): where each speaker's face is, per camera. The
     // edit folds onto the `edl` wire (a clip pack is ONE run, P3-24 (a));
-    // refused here — the plugin's scope, and "not priced yet" until P3.7 —
-    // before anything is reserved. `buildSpeakerFramesPayload` holds the logic.
+    // refused here — the plugin's scope — before anything is reserved; the
+    // reserve is the scope's frames in started blocks of 1,000
+    // (`speakerFramesCreditOverride`). `buildSpeakerFramesPayload` holds the logic.
     case "speaker-frames": {
       const built = buildSpeakerFramesPayload({
         nodeId: node.id,

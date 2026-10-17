@@ -6,20 +6,14 @@
  *    as given (Camera Switch's renamed transcript keeps its `speakerNames`, the
  *    map transcript-led identity reads), a bare video on `video`;
  *  - payload builder: the plugin's `SpeakerFramesJobPayload`, the scope the
- *    plugin would refuse refused first, and "not priced yet" — the plugin's
- *    own words — until P3.7;
+ *    plugin would refuse refused first (priced since P3.7: the reserve is
+ *    `speakerFramesCreditOverride`'s, speaker-frames-reserve.test.ts);
  *  - output readers: the descriptor on the `tracks` handle, live and saved.
  *
  * The plugin's own queue payload is copied below as the cross-repo fixture
  * (contract.ts `SPEAKER_FRAMES_JOB_PAYLOAD_EXAMPLE`, plugins main bdfa8cbc).
  */
-import { beforeEach, describe, expect, it, vi } from "vitest"
-
-const flag = vi.hoisted(() => ({ priced: false }))
-vi.mock("@nodaro/render-rules", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
-  return { ...actual, get SPEAKER_FRAMES_PRICED() { return flag.priced } }
-})
+import { describe, expect, it } from "vitest"
 
 import { buildPayload } from "../payload-builder.js"
 import { resolveNodeInputs } from "../input-resolver.js"
@@ -28,7 +22,7 @@ import { speakerFramesJobBudgetMs } from "../../../providers/video/speaker-frame
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
 /** The keys of the plugin's `SpeakerFramesJobPayload` (contract.ts). */
-const PLUGIN_PAYLOAD_KEYS = new Set(["jobId", "usageLogId", "edl", "videoUrl", "transcript", "excludeSourceIds", "reservedCreditId", "workflowId", "nodeId"])
+const PLUGIN_PAYLOAD_KEYS = new Set(["jobId", "usageLogId", "edl", "videoUrl", "transcript", "excludeSourceIds", "reservedCreditId", "reservedCreditsPerBlock", "workflowId", "nodeId"])
 
 /** The plugin's real queue payload for a two-camera edit (`SPEAKER_FRAMES_JOB_PAYLOAD_EXAMPLE`). */
 const PLUGIN_EXAMPLE = {
@@ -50,6 +44,7 @@ const PLUGIN_EXAMPLE = {
   transcript: { version: 1, words: [{ text: "Welcome", startMs: 200, endMs: 640, speaker: "Host" }] },
   excludeSourceIds: [] as string[],
   reservedCreditId: "speaker-frames",
+  reservedCreditsPerBlock: 2,
   workflowId: "00000000-0000-4000-8000-0000000000d3",
   nodeId: "speaker-frames-1",
 }
@@ -91,10 +86,6 @@ function built(g: ReturnType<typeof canvas>) {
   return buildPayload(node, "job-1", resolveNodeInputs(node, g.edges, g.states, g.nodes), "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: undefined })
 }
 
-beforeEach(() => {
-  flag.priced = false
-})
-
 describe("the plugin's own payload, copied as a cross-repo fixture", () => {
   it("is one the budget leaf sizes", () => {
     expect(speakerFramesJobBudgetMs(PLUGIN_EXAMPLE)).toBeGreaterThan(0)
@@ -102,12 +93,7 @@ describe("the plugin's own payload, copied as a cross-repo fixture", () => {
 })
 
 describe("the payload builder", () => {
-  it("says it is not priced yet — the plugin's own words — before anything is reserved", () => {
-    expect(() => built(canvas())).toThrow("Speaker Frames is not priced yet")
-  })
-
   it("builds the plugin's job payload, every key one the plugin declares", () => {
-    flag.priced = true
     const { jobName, payload, modelIdentifier } = built(canvas({ excludeSourceIds: ["camB"] })) as { jobName: string; payload: Record<string, unknown>; modelIdentifier: string }
     expect(jobName).toBe("speaker-frames")
     expect(modelIdentifier).toBe("speaker-frames")
@@ -116,19 +102,16 @@ describe("the payload builder", () => {
   })
 
   it("carries the renamed transcript's speakerNames map to the plugin", () => {
-    flag.priced = true
     const { payload } = built(canvas()) as unknown as { payload: { transcript: { speakerNames?: unknown } } }
     expect(payload.transcript.speakerNames).toEqual({ speaker_0: "Host", speaker_1: "Guest" })
   })
 
   it("folds a clip pack into ONE job over the union of its clips (P3-24 (a))", () => {
-    flag.priced = true
     const { payload } = built(canvas({}, { pack: true })) as unknown as { payload: { edl: unknown } }
     expect(payload.edl).toEqual([EDL, CLIP2])
   })
 
   it("takes a bare video whole", () => {
-    flag.priced = true
     const { payload } = built(canvas({}, { video: true })) as { payload: Record<string, unknown> }
     expect(payload.videoUrl).toBe("https://media.example/bare.mp4")
     expect(payload.edl).toBeUndefined()

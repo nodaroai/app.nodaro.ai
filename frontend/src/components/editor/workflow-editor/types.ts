@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
+import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
 import { dubbingQuotedMinutesOf, maskCompositePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
@@ -93,6 +93,11 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   "speaker-view:proxy": 2,
   "speaker-view:complex": 12,
   "speaker-view:complex:proxy": 3,
+  // speaker-frames: the RATE per started block of 1,000 sampled frames
+  // (decided 2026-10-16); every estimate multiplies it by the blocks
+  // (PRICING_UNIT_ESTIMATORS). Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "speaker-frames": 2,
   "silence-detect": 10,
   // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
   // run-level estimate names the composite (getModelIdentifier) and reads it
@@ -957,6 +962,11 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   // length rule. Its reserve is the edit as given, before the turns are split
   // (SV14 b), which a crossfade switch can only shorten — so this leans high.
   "speaker-view": resolveApplyEdlEstimateMinutes,
+  // Speaker Frames: started blocks of 1,000 sampled frames — the edit wired in
+  // when it is known now, else the 180 min × 6 cameras ceiling (130 blocks).
+  // The server's estimate reads the same rule; the reserve counts the run's
+  // own frames, and the charge the frames it sampled.
+  "speaker-frames": speakerFramesEstimateBlocks,
   "trim-video": videoUtilityPricingUnits,
   "loop-video": videoUtilityPricingUnits,
   "combine-videos": videoUtilityPricingUnits,

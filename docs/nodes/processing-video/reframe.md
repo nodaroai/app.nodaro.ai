@@ -4,7 +4,7 @@
 
 **Not a node.** Reframe is a menu entry that inserts three ordinary nodes — [Transcribe](../ai-text/transcribe.md) with speaker detection, [Speaker Frames](./speaker-frames.md) and [Speaker View](./speaker-view.md) — inside a group. There is no *Reframe* node type: a workflow that was exported, imported or written by an agent holds those three nodes, never a node called `reframe`. To build the same thing through the API or MCP, create the three nodes and wire them as below.
 
-**Offered once Speaker Frames is priced, as Speaker View already is.** Reframe feeds Speaker View a video, and [a Speaker View fed a video](./speaker-view.md#a-video-instead-of-an-edit) runs only once both nodes have a credit price. Until then the Reframe entry stays hidden from the add-node popup, the sidebar and the suggestions after a wire is dragged from a video, and nothing can add it. A Reframe group already on a canvas reads **Not priced yet**, and a run that includes it is refused before anything starts: nothing upstream runs or is charged, and the refusal names the node. Reframe has no price of its own to add: it inherits theirs.
+**Priced by its three nodes.** Reframe feeds Speaker View a video, and [a Speaker View fed a video](./speaker-view.md#a-video-instead-of-an-edit) runs because both Speaker View and Speaker Frames have a credit price. Reframe has no price of its own to add: it inherits theirs (see [Credit Cost](#credit-cost)). Should either price ever be withdrawn, the Reframe entry is hidden from the add-node popup, the sidebar and the suggestions after a wire is dragged from a video, and its group on a canvas shows no estimate.
 
 **Cloud feature.** Speaker Frames and Speaker View run on Nodaro Cloud; on a self-hosted install connected to nodaro.ai they relay to the cloud, as described on their pages.
 
@@ -35,23 +35,27 @@ A video wire into Transcribe's **Audio** is how the shipped podcast templates fe
 
 ## Where it is offered
 
-Reframe is offered wherever all three nodes are, and only once Speaker View and Speaker Frames are both priced. A deployment that hides any one of them hides Reframe too. From a wire it is offered only for a **video output** (dragging from an input asks for a producer, which Reframe is not).
+Reframe is offered wherever all three nodes are, while Speaker View and Speaker Frames are both priced. A deployment that hides any one of them hides Reframe too. From a wire it is offered only for a **video output** (dragging from an input asks for a producer, which Reframe is not).
 
 **Groups do not nest.** Dropping Reframe inside an existing group lands the new group right beside it (to its right, on the nearest free spot) instead; the existing group is left as it was. Reframe is refused while a run is in progress, and on a read-only canvas.
 
 ## Credit Cost
 
-Reframe has no credit id of its own. Each of its three nodes charges its own price when it runs, as on its own page.
+Reframe has no credit id of its own. Each of its three nodes charges its own price when it runs, as on its own page:
+
+- **Reframe = Transcribe + Speaker Frames + Speaker View**, where Speaker Frames is charged per started block of 1,000 sampled frames — the whole clip at 2 frames per second, 2.2<!-- credits-rate: speaker-frames --> credits a block ([Speaker Frames: Credit Cost](./speaker-frames.md#credit-cost)) — and Speaker View per minute of the clip at its rate and tier ([Speaker View: Credit Cost](./speaker-view.md#credit-cost)).
+
+For example, Speaker Frames on a 14-second clip samples 28 frames: one block, 3<!-- credits: speaker-frames -->.
 
 Wherever the editor quotes a price it shows **one summed estimate for the group**:
 
-- on the group itself, a chip with the total of its three nodes — or **Not priced yet** while Speaker Frames or Speaker View has no price. The chip updates when anything upstream of the group changes, not only the nodes wired straight into it;
+- on the group itself, a chip with the total of its three nodes. The chip updates when anything upstream of the group changes, not only the nodes wired straight into it;
 - in every run confirm — Run, Run selected, Run from here, Run up to here, a single node's run, Render final and Update preview — a **Reframe** row with the group's sum above the run's total (Render final and Update preview also list each node's own row beneath it);
 - in the run totals — the Execute button, the run confirm, the credit check before a run, a published app's quote and listing — the total simply counts all three nodes once. A group is a frame and changes no figure.
 
-The group's figure is the sum of its nodes' own lines from the run's estimate, never a second calculation, so it cannot differ from what the run is gated and billed on. If a price is missing, the estimate falls back as each node's page describes.
+The group's figure is the sum of its nodes' own lines from the run's estimate, never a second calculation, so it cannot differ from what the run is gated on. Each line leans high as its node's page describes: before the run, Speaker Frames quotes the clip at its recorded length, as Speaker View does (a 14-second upload: one block, 3<!-- credits: speaker-frames -->), and at its ceiling (130 blocks, 286<!-- credits: speaker-frames@130 -->) only when the clip's length is not known before the run; the run then reserves the clip's own measured frames and charges the frames it sampled.
 
 ## Notes
 
-- **A failed leg keeps what was charged.** Each node is its own job: a run that fails at Speaker Frames has already charged Transcribe, and none of the later nodes reserve. Run-start checks — a video already as narrow as the target, an edit and a video wired together, a missing transcript, the "not priced yet" gate — are made before any node runs, so Transcribe is not charged for a run that cannot succeed.
+- **A failed leg keeps what was charged.** Each node is its own job: a run that fails at Speaker Frames has already charged Transcribe, and none of the later nodes reserve. Run-start checks — a video already as narrow as the target, an edit and a video wired together, a missing transcript — are made before any node runs, so Transcribe is not charged for a run that cannot succeed.
 - **A group is the user's to edit.** Move, rename, recolour or ungroup it like any group; deleting a node leaves the rest as ordinary nodes.

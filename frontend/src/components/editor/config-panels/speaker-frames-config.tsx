@@ -1,5 +1,4 @@
 import { useMemo } from "react"
-import { SPEAKER_FRAMES_NOT_PRICED_MESSAGE, SPEAKER_FRAMES_PRICED } from "@nodaro/render-rules"
 import { ScanFace } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -15,8 +14,9 @@ import type { ConfigProps } from "./types"
  * Speaker Frames' settings (P3.6): the cameras the wired edit samples, each
  * with its frame count and a tick (P3-5 (a): untick a camera a render shows
  * full frame), and the last result read after the node's manual corrections
- * (P3-18 (a)). The sampling rate is fixed and not shown (P3-31). Not priced
- * yet (P3.7): the panel says so, and a run is refused. When the result ties
+ * (P3-18 (a)). The sampling rate is fixed and not shown (P3-31); the run is
+ * priced per started block of 1,000 sampled frames (P3.7, the panel's Run
+ * button quotes it). When the result ties
  * no face to a speaker of the video-fed Speaker View it feeds, "Which face is
  * …?" opens that Speaker View's region editor (tap-first, decided 2026-10-13).
  */
@@ -34,11 +34,6 @@ export function SpeakerFramesConfig({ data, onUpdate, nodes, edges = [], nodeId 
   return (
     <div className="flex flex-col gap-3" data-testid="speaker-frames-config">
       <p className="text-[11px] text-muted-foreground">{t("speakerFrames.hint")}</p>
-      {!SPEAKER_FRAMES_PRICED && (
-        <p role="status" data-testid="speaker-frames-not-priced" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-400" title={SPEAKER_FRAMES_NOT_PRICED_MESSAGE}>
-          {t("speakerFrames.notPriced")}
-        </p>
-      )}
 
       <section className="flex flex-col gap-2">
         <Label>{t("speakerFrames.section.cameras")}</Label>

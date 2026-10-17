@@ -1433,6 +1433,7 @@
     ["speaker-view:proxy",2],
     ["speaker-view:complex",12],
     ["speaker-view:complex:proxy",3],
+    ["speaker-frames",2],
     ["silence-detect",10],
     ["audio-sync:2src",10],
     ["audio-sync:3src",20],

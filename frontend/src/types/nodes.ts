@@ -6235,7 +6235,7 @@ export type CameraSwitchNodeData = {
  *  proxies). Reads an edit on `edl` (one, or a clip pack folded into one run,
  *  P3-24) or a bare video on `video`, and the renamed transcript on
  *  `transcript`; emits the stored face-track file's descriptor on `tracks`.
- *  Not priced yet (P3.7): a run is refused. */
+ *  Priced per started block of 1,000 sampled frames (P3.7). */
 export type SpeakerFramesNodeData = {
   [key: string]: unknown
   label: string
@@ -9361,7 +9361,7 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "speaker-frames",
     label: "Speaker Frames",
     category: "processing",
-    // Not priced yet (P3.7): the node says so and a run is refused.
+    // Priced per started block of 1,000 sampled frames (P3.7).
     inputs: ["edl", "video", "transcript"],
     outputs: ["tracks"],
     defaultData: {

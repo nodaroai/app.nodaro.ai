@@ -32,10 +32,10 @@ describe("speakerViewVideoModeLive", () => {
     expect(speakerViewVideoModeLive({ viewPriced: true })).toBe(SPEAKER_FRAMES_PRICED)
   })
 
-  it("is closed today: Speaker Frames has no price yet", () => {
+  it("is live since Speaker Frames was priced (P3.7, decided 2026-10-16)", () => {
     expect(SPEAKER_VIEW_PRICED).toBe(true)
-    expect(SPEAKER_FRAMES_PRICED).toBe(false)
-    expect(speakerViewVideoModeLive()).toBe(false)
+    expect(SPEAKER_FRAMES_PRICED).toBe(true)
+    expect(speakerViewVideoModeLive()).toBe(true)
   })
 })
 

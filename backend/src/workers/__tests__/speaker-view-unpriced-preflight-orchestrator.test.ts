@@ -203,14 +203,14 @@ describe("orchestrator pre-run check — an unpriced Speaker View in the run", (
     expect(mocks.executeNodeCalls).toContain("gv1")
   })
 
-  // Speaker Frames (P3.6): the same refusal until P3.7 prices it.
-  it("refuses an unpriced Speaker Frames before ANY node runs, top level and nested", async () => {
+  // Speaker Frames is priced since P3.7 (decided 2026-10-16): its run-start
+  // refusal is gone, top level and nested.
+  it("starts a run holding a Speaker Frames, top level and nested", async () => {
     await processWorkflowExecution(makeJob({ type: "speaker-frames" }))
-    expect(mocks.executeNodeCalls).toEqual([])
-    expect(failedWrite()!.error_message).toContain("Speaker Frames is not priced yet")
+    expect(failedWrite()?.error_message ?? "").not.toMatch(/not priced/)
+    expect(mocks.executeNodeCalls).toContain("gv1")
     mocks.updateExecutionWithRetry.mockClear()
     await processWorkflowExecution(makeJob({ type: "speaker-frames", nested: true }))
-    expect(mocks.executeNodeCalls).toEqual([])
-    expect(failedWrite()!.error_message).toContain("Sub-workflow node sw1")
+    expect(failedWrite()?.error_message ?? "").not.toMatch(/not priced/)
   })
 })
