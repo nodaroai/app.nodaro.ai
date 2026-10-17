@@ -23,6 +23,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { join, dirname, relative } from "node:path"
 import { fileURLToPath } from "node:url"
+import { unitRouteFiles } from "../unit-source-files.js"
 
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const ROUTES_DIR = join(SRC_DIR, "routes")
@@ -111,7 +112,7 @@ describe("all job inserts go through insert-job.ts", () => {
 
   it("insertJob is actually used by routes (the rule isn't vacuous)", () => {
     // A regex-only guard passes trivially if every route stopped creating jobs.
-    const routeFiles = tsFiles(ROUTES_DIR)
+    const routeFiles = [...tsFiles(ROUTES_DIR), ...unitRouteFiles(join(SRC_DIR, "..", ".."))]
     const users = routeFiles.filter((f) => readFileSync(f, "utf8").includes("insertJob("))
     expect(users.length).toBeGreaterThan(50)
   })

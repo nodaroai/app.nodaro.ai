@@ -3,7 +3,7 @@
 // and gen:skills (backend/scripts/lib/gen-skills/parse-node-definitions.ts)
 // both read units through it, so they can never disagree about what a unit
 // is. Built-ins only: the tools self-test job runs it without npm install.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts docs/nodes/README.md
 //
 // A unit is one node type, named by its type id. Its manifest,
 // frontend/src/nodes/<type>/unit.json, is the source of truth; the backend
@@ -110,6 +110,25 @@ export function familyIdsFrom(source) {
   return [...body.matchAll(/(?:^[ \t]+|\{[ \t]*)id: "([^"]+)"/gm)].map((m) => m[1])
 }
 
+/** The node index whose rows gen:units writes (tools/units/seams.mjs docs-index). */
+export const DOCS_INDEX = "docs/nodes/README.md"
+
+/**
+ * The docs pages (repo paths) the hand-written rows of the node index link to:
+ * every `](./<path>.md)` link outside the `<!-- gen:units … -->` region.
+ */
+export function handWrittenIndexLinks(source) {
+  const out = new Set()
+  let inRegion = false
+  for (const line of source.split(/\r?\n/)) {
+    const t = line.trim()
+    if (t === "<!-- gen:units start -->") inRegion = true
+    else if (t === "<!-- gen:units end -->") inRegion = false
+    else if (!inRegion) for (const m of line.matchAll(/\]\(\.\/([^)#\s]+\.md)\)/g)) out.add(path.posix.join("docs/nodes", m[1]))
+  }
+  return out
+}
+
 /** The validation context of the real repo. Tests build their own. */
 export function repoContext(root) {
   const legacy = JSON.parse(readFileSync(path.join(root, "tools/units/legacy-nodes.json"), "utf8"))
@@ -120,6 +139,7 @@ export function repoContext(root) {
     live: liveSeams(),
     capabilities: CAPABILITIES,
     exists: (p) => existsSync(path.join(root, p)),
+    readText: (p) => (existsSync(path.join(root, p)) ? readFileSync(path.join(root, p), "utf8") : null),
   }
 }
 
@@ -213,6 +233,10 @@ function checkFiles(unit, m, errors) {
   // getModelCreditBaseCost hard-fails on an unknown id, so a route without a price breaks the node.
   if (routes.length > 0 && !has("backend", "price.ee.ts")) errors.push(`a unit with a route needs ${unit.dirs.backend}/price.ee.ts (a zero-cost one too)`)
   if (routes.length === 0 && has("backend", "price.ee.ts")) errors.push("price.ee.ts without a route prices nothing — remove it")
+  // The characterization harness renders ffmpeg-backed operations through their real provider.
+  if (has("backend", "characterize.char.ts") && (kind !== "worker" || !(Array.isArray(m.capabilities) && m.capabilities.includes("ffmpeg-media")))) {
+    errors.push(`characterize.char.ts characterizes an ffmpeg worker: it needs execution.kind "worker" and the "ffmpeg-media" capability`)
+  }
   if (unit.typesSource !== null && !new RegExp(`export\\s+(?:interface|type)\\s+${dataInterfaceName(unit.type)}\\b`).test(unit.typesSource)) {
     errors.push(`${unit.dirs.frontend}/types.ts must export ${dataInterfaceName(unit.type)} (the name gen:skills reads)`)
   }
@@ -311,9 +335,18 @@ export function validateUnit(unit, ctx, knownTypes) {
     }
   }
   if (!Array.isArray(m.capabilities)) errors.push("capabilities must be an array (empty is fine)")
-  else for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
+  else {
+    for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
+    if (m.capabilities.includes("length:pass-video") && m.capabilities.includes("length:exact-video")) errors.push("capabilities: \"length:exact-video\" already keeps the length — drop \"length:pass-video\"")
+  }
   if (!isObject(m.registry) || !isNonEmptyString(m.registry.description) || !OUTPUT_TYPES.includes(m.registry.outputType)) {
     errors.push(`registry needs a description and an outputType (${OUTPUT_TYPES.join(", ")}) — /v1/nodes lists every node`)
+  }
+  if (isObject(m.registry)) {
+    for (const k of Object.keys(m.registry)) if (!["description", "outputType", "after"].includes(k)) errors.push(`registry.${k}: unknown (description, outputType, after)`)
+    // /v1/nodes keeps its own hand-curated order: a node whose place there
+    // differs from position.after states it (a migrated node keeps its place).
+    if ("after" in m.registry) after(m.registry.after, "registry.after")
   }
   checkProducer(m, errors)
   const docs = m.docs
@@ -323,8 +356,18 @@ export function validateUnit(unit, ctx, knownTypes) {
     else if (!ctx.exists(docs.page)) errors.push(`docs.page ${docs.page} does not exist`)
   } else if (!isNonEmptyString(docs.awaiting)) errors.push("docs.awaiting must give the reason")
   if (isObject(docs)) {
-    for (const k of Object.keys(docs)) if (!["page", "awaiting", "useCase"].includes(k)) errors.push(`docs.${k}: unknown (page, awaiting, useCase)`)
+    for (const k of Object.keys(docs)) if (!["page", "awaiting", "useCase", "index"].includes(k)) errors.push(`docs.${k}: unknown (page, awaiting, useCase, index)`)
     if (docs.useCase !== undefined && !isNonEmptyString(docs.useCase)) errors.push("docs.useCase must be a non-empty string (the node index's \"use it to\" column)")
+    // A migrated node keeps its hand-written docs/nodes/README.md row where it
+    // is (decided 2026-10-16: the public page does not change); gen:units then
+    // writes no row for it. The row must exist, outside the generated region.
+    if (docs.index !== undefined) {
+      if (docs.index !== "hand-written") errors.push(`docs.index: "${docs.index}" — the only value is "hand-written" (omit it for a generated row)`)
+      else if (typeof docs.page !== "string") errors.push("docs.index \"hand-written\" needs docs.page (the page its row links to)")
+      else if (ctx.readText && !handWrittenIndexLinks(ctx.readText(DOCS_INDEX) ?? "").has(docs.page)) {
+        errors.push(`docs.index is "hand-written" but ${DOCS_INDEX} has no hand-written row linking ${docs.page} (outside the gen:units region)`)
+      }
+    }
   }
   forbiddenContent(m, "unit", errors)
   checkFiles(unit, m, errors)

@@ -254,7 +254,7 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = composeSet("NOT_GENE
   "gif-to-video", "slideshow", "resize-video", "adjust-volume",
   "audio-fx", "pitch-tempo", "add-captions", "mix-audio", "combine-audio",
   "transcode-video", "social-media-format", "split-media",
-  "extract-audio", "remove-audio", "mask-composite",
+  "extract-audio", "mask-composite",
   // Video Mask calls fal but registers no onTaskCreated (its RLE is rendered
   // locally — providers/fal/sam3-video.ts) and writes its own output_data.
   "video-mask",

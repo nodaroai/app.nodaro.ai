@@ -118,7 +118,7 @@ const LEGACY_NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-sound",
     label: "Sound for Video",
     tab: "video",
-    types: ["video-sfx", "merge-video-audio", "extract-audio", "remove-audio"],
+    types: ["video-sfx", "merge-video-audio", "extract-audio"],
   },
   {
     id: "video-titles-graphics",

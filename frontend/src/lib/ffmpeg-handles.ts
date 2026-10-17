@@ -107,7 +107,6 @@ export const FFMPEG_NODE_TYPES: ReadonlySet<string> = composeSet("FFMPEG_NODE_TY
   "combine-audio",
   "mix-audio",
   "extract-audio",
-  "remove-audio",
   "silence-detect",
 ]), unitsWith(UNIT_NODE_DEFINITIONS, "ffmpeg-media"))
 
@@ -135,10 +134,8 @@ export function isValidFfmpegConnection(
     case "loop-video":
     case "resize-video":
     case "combine-videos":
-    // Extract Audio (video → audio) and Remove Audio (video → silent video)
-    // both take a single video input on their `in` handle.
+    // Extract Audio (video → audio) takes a single video input on its `in` handle.
     case "extract-audio":
-    case "remove-audio":
       return targetHandle === "in" && ACCEPTS_VIDEO(sourceType)
 
     // Add Captions: a video on `in`, plus an optional Transcript (json) on

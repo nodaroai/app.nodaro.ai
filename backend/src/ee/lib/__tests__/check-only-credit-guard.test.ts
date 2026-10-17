@@ -24,6 +24,7 @@
 //   3. Behavioral, both shapes: a default guard honors a workspace context;
 //      a checkOnly guard stays personal and still 402s.
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { unitRouteFiles } from "../../../lib/unit-source-files.js"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -110,16 +111,26 @@ const CHECK_ONLY_ROUTES = ["nodaro-exclusive.ts", "save-to-storage.ts", "collect
  */
 const RESERVE_MARKERS = ["reserveCreditsForJob", "reserveCredits(", "meterSyncLlm("]
 
+/**
+ * Every route file this guard reads, labelled: a basename in the two route
+ * dirs, or a node unit's route (backend/src/nodes/<type>/route.ts |
+ * route.ee.ts) by its repo path — every half below walks this one list.
+ */
+function routeFiles(): Array<{ label: string; path: string }> {
+  const repoRoot = join(__dirname, "..", "..", "..", "..", "..")
+  return [
+    ...ROUTE_DIRS.flatMap((dir) => readdirSync(dir).filter((f) => f.endsWith(".ts")).map((f) => ({ label: f, path: join(dir, f) }))),
+    ...unitRouteFiles(repoRoot).map((f) => ({ label: f.slice(repoRoot.length + 1).split("\\").join("/"), path: f })),
+  ]
+}
+
 function scanCheckOnlyRoutes(): string[] {
   const found: string[] = []
-  for (const dir of ROUTE_DIRS) {
-    for (const file of readdirSync(dir)) {
-      if (!file.endsWith(".ts")) continue
-      const source = readFileSync(join(dir, file), "utf8")
-      if (!source.includes("creditGuard(")) continue
-      if (RESERVE_MARKERS.some((m) => source.includes(m))) continue
-      found.push(file)
-    }
+  for (const { label, path } of routeFiles()) {
+    const source = readFileSync(path, "utf8")
+    if (!source.includes("creditGuard(")) continue
+    if (RESERVE_MARKERS.some((m) => source.includes(m))) continue
+    found.push(label)
   }
   return found.sort()
 }
@@ -135,16 +146,14 @@ describe("check-only creditGuard routes (P14 scope rule)", () => {
 
   it("EVERY creditGuard install in a pinned check-only route opts out via checkOnly: true", () => {
     let seen = 0
-    for (const dir of ROUTE_DIRS) {
-      for (const file of readdirSync(dir)) {
-        if (!CHECK_ONLY_ROUTES.includes(file)) continue
-        seen++
-        const source = readFileSync(join(dir, file), "utf8")
-        const installs = countOf(source, "creditGuard(")
-        const optOuts = countOf(source, "checkOnly: true")
-        expect(installs, `${file} must install creditGuard at least once`).toBeGreaterThan(0)
-        expect(optOuts, `${file}: every creditGuard install must carry checkOnly: true — see this test's header`).toBe(installs)
-      }
+    for (const { label: file, path } of routeFiles()) {
+      if (!CHECK_ONLY_ROUTES.includes(file)) continue
+      seen++
+      const source = readFileSync(path, "utf8")
+      const installs = countOf(source, "creditGuard(")
+      const optOuts = countOf(source, "checkOnly: true")
+      expect(installs, `${file} must install creditGuard at least once`).toBeGreaterThan(0)
+      expect(optOuts, `${file}: every creditGuard install must carry checkOnly: true — see this test's header`).toBe(installs)
     }
     expect(seen).toBe(CHECK_ONLY_ROUTES.length)
   })
@@ -162,24 +171,16 @@ const SKIP_STORAGE_ROUTES = ["collection-nodes.ts", "social-post-reads.ts"].sort
 
 describe("creditGuard routes that skip the storage quota (#1890)", () => {
   it("the skipping set is exactly the pinned list", () => {
-    const found: string[] = []
-    for (const dir of ROUTE_DIRS) {
-      for (const file of readdirSync(dir)) {
-        if (!file.endsWith(".ts")) continue
-        if (readFileSync(join(dir, file), "utf8").includes("skipStorageCheck")) found.push(file)
-      }
-    }
+    const found = routeFiles().filter(({ path }) => readFileSync(path, "utf8").includes("skipStorageCheck")).map(({ label }) => label)
     expect(found.sort()).toEqual(SKIP_STORAGE_ROUTES)
   })
 
   it("every creditGuard install in a skipping route skips, and only a check-only route skips", () => {
-    for (const dir of ROUTE_DIRS) {
-      for (const file of readdirSync(dir)) {
-        if (!SKIP_STORAGE_ROUTES.includes(file)) continue
-        const source = readFileSync(join(dir, file), "utf8")
-        expect(CHECK_ONLY_ROUTES, file).toContain(file)
-        expect(countOf(source, "skipStorageCheck: true"), file).toBe(countOf(source, "creditGuard("))
-      }
+    for (const { label: file, path } of routeFiles()) {
+      if (!SKIP_STORAGE_ROUTES.includes(file)) continue
+      const source = readFileSync(path, "utf8")
+      expect(CHECK_ONLY_ROUTES, file).toContain(file)
+      expect(countOf(source, "skipStorageCheck: true"), file).toBe(countOf(source, "creditGuard("))
     }
   })
 })

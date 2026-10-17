@@ -11,8 +11,18 @@ import type { ConfigProps } from "@/components/editor/config-panels/types"
 import type { FrontendResolvedInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import type { OutputKeySpec } from "@/components/editor/workflow-editor/poll-job"
 
+/**
+ * What config.tsx is handed beside its ConfigProps: the editor services it may
+ * not import (G5: labels.ts composes every unit's labels, so a unit never
+ * imports it). config-panel.tsx builds it.
+ */
+export interface UnitConfigKit {
+  /** A node label in the interface language ("Extract Audio" → its translation). */
+  localizeNodeLabel(label: string): string
+}
+
 /** config.tsx — the config panel body. */
-export type UnitConfigPanel = ComponentType<ConfigProps<never>>
+export type UnitConfigPanel = ComponentType<ConfigProps<never> & { readonly kit: UnitConfigKit }>
 
 /**
  * The engine services exec.ts reaches. execute-node.ts builds one per run

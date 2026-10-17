@@ -1,4 +1,4 @@
-// @test-watches backend/src/routes/**/*.ts backend/src/ee/routes/**/*.ts
+// @test-watches backend/src/routes/**/*.ts backend/src/ee/routes/**/*.ts backend/src/nodes/*/route*.ts
 /**
  * A ROUTE THAT RESERVES A JOB'S CREDITS AND MARKS THE JOB COMPLETED SETTLES THE HOLD.
  *
@@ -25,6 +25,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { unitRouteFiles } from "../../lib/unit-source-files.js"
 
 const SRC = join(__dirname, "..", "..")
 const ROOTS = ["routes", "ee/routes"]
@@ -64,7 +65,8 @@ function code(src: string): string {
 const RESERVES = /reserveCreditsForJob\(|\.reserveCredits\(/
 const COMPLETES = /status:\s*["']completed["']/
 
-const files = ROOTS.flatMap((root) => tsFiles(join(SRC, root))).map((abs) => ({
+// The two route trees, plus every node unit's route (labelled nodes/<type>/route.ts).
+const files = [...ROOTS.flatMap((root) => tsFiles(join(SRC, root))), ...unitRouteFiles(join(SRC, "..", ".."))].map((abs) => ({
   file: abs.slice(SRC.length + 1).split("\\").join("/"),
   src: code(readFileSync(abs, "utf8")),
 }))

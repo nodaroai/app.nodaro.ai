@@ -179,7 +179,6 @@ const ALLOWLIST = new Set([
   // reference-board mirrors generate-image-node — same deferred ee/ credit-hook coupling (Phase 3.5/4.5)
   "frontend/src/components/nodes/reference-board-node.tsx",
   "frontend/src/components/nodes/reference-sheet-node.tsx",
-  "frontend/src/components/nodes/remove-audio-node.tsx",
   "frontend/src/components/nodes/remove-background-node.tsx",
   "frontend/src/components/nodes/silence-detect-node.tsx",
   // The scrapers' Run-button price: the charged figure via useModelCredits, the
@@ -236,6 +235,10 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/voice-remix-node.tsx",
   "frontend/src/components/presentation/presentation-view.tsx",
   "frontend/src/hooks/use-workflow-persistence.ts",
+  // Node units' canvas components read the Run-button price through
+  // useModelCredits, the same deferred ee/ credit-hook coupling as the legacy
+  // node cards above (Remove Audio moved here from components/nodes/).
+  "frontend/src/nodes/remove-audio/node.tsx",
 ])
 
 function listFiles(dir) {

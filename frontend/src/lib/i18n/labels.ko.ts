@@ -165,7 +165,6 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Reframe": "리프레임",
   "Follow the speaker": "화자 따라가기",
   "Speaker Frames": "화자 프레임",
-  "Remove Audio": "오디오 제거",
   "Mix Audio": "오디오 믹스",
   "Combine Audio": "오디오 합치기",
   "Adjust Volume": "볼륨 조절",

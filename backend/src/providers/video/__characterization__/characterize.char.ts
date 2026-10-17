@@ -1,3 +1,4 @@
+// @registry-enumerates renders and checks every characterization operation, the node units' included
 import { promises as fs } from "node:fs"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { ensureFixtures, type FixtureSet } from "./fixtures.js"

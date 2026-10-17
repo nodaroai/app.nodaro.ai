@@ -1940,8 +1940,6 @@ export const ptBR: ChromeDict = {
   "proccfg.videoChunks": "Partes de vídeo ({count})",
   "proccfg.extractsTheAudioTrackFromThe": "Extrai a faixa de áudio do vídeo conectado como um MP3 independente.",
   "proccfg.noSettingsConnectAVideoTo": "Sem configurações — conecte um vídeo à entrada e execute. Use o nó “{node}” se preferir o vídeo sem som.",
-  "proccfg.stripsTheAudioTrackFromThe": "Remove a faixa de áudio do vídeo conectado, deixando um clipe sem som (sem perdas — o vídeo é copiado direto, sem recodificação).",
-  "proccfg.noSettingsConnectAVideoTo2": "Sem configurações — conecte um vídeo à entrada e execute. Use o nó “{node}” se preferir a faixa de áudio.",
   "proccfg.connectAudioNodesToSetPer": "Conecte nós de áudio para definir o volume de cada faixa.",
   "proccfg.mixDuckUnder": "Reduzir sob a faixa",
   "proccfg.mixDuckUnderAria": "Faixa sob a qual as demais são reduzidas",
@@ -6351,8 +6349,6 @@ export const ptBR: ChromeDict = {
   "node.connectACharacterObjectOr": "Conecte um personagem, objeto ou local com imagem principal",
   "node.referenceSheet": "Folha de referência",
   "node.deleteThisSheet": "Excluir esta folha",
-  "node.removeAudio": "Remover áudio",
-  "node.silent": "Sem áudio",
   "node.rendered": "Renderizado",
   "node.resized": "Redimensionado",
   "node.finalPromptUsed": "Prompt final usado",
@@ -10907,7 +10903,6 @@ export const ptBR: ChromeDict = {
   "apiErr.startTrimAudio": "Não foi possível iniciar o corte do áudio",
   "apiErr.startSplitMedia": "Não foi possível iniciar a divisão da mídia",
   "apiErr.startExtractAudio": "Não foi possível iniciar a extração do áudio",
-  "apiErr.startRemoveAudio": "Não foi possível iniciar a remoção do áudio",
   "apiErr.startSilenceDetect": "Não foi possível iniciar a detecção de silêncio",
   "apiErr.startAudioSync": "Não foi possível iniciar a sincronização de áudio",
   "apiErr.startTrimVideo": "Não foi possível iniciar o corte do vídeo",
@@ -12441,5 +12436,10 @@ export const ptBR: ChromeDict = {
   "apiErr.startVideoMask": "Não foi possível iniciar a Máscara de vídeo",
   "apiErr.startMaskComposite": "Não foi possível iniciar a Composição por máscara",
   // gen:units start
+  "apiErr.startRemoveAudio": "Não foi possível iniciar a remoção do áudio",
+  "node.removeAudio": "Remover áudio",
+  "node.silent": "Sem áudio",
+  "proccfg.noSettingsConnectAVideoTo2": "Sem configurações — conecte um vídeo à entrada e execute. Use o nó “{node}” se preferir a faixa de áudio.",
+  "proccfg.stripsTheAudioTrackFromThe": "Remove a faixa de áudio do vídeo conectado, deixando um clipe sem som (sem perdas — o vídeo é copiado direto, sem recodificação).",
   // gen:units end
 }

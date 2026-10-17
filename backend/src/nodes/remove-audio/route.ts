@@ -1,21 +1,21 @@
-import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
-import { insertJob } from "../lib/insert-job.js"
-import { supabase } from "../lib/supabase.js"
-import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
-import { buildJobInputData } from "../lib/job-input-data.js"
-import { formatZodError } from "../lib/zod-error.js"
-import { sendInternalError } from "../lib/http-errors.js"
+import { safeUrlSchema } from "../../lib/url-validator.js"
+import { insertJob } from "../../lib/insert-job.js"
+import { videoQueue } from "../../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../../lib/request-helpers.js"
+import { buildJobInputData } from "../../lib/job-input-data.js"
+import { formatZodError } from "../../lib/zod-error.js"
+import { sendInternalError } from "../../lib/http-errors.js"
+import type { UnitRoute } from "../kit.js"
 
 const removeAudioBody = z.object({
   videoUrl: safeUrlSchema,
   userId: z.string().uuid().optional(),
 })
 
-export async function removeAudioRoutes(app: FastifyInstance) {
+// POST /v1/remove-audio: queue a video-queue job (worker.ts) that strips the audio track.
+export const route: UnitRoute = async function removeAudioRoutes(app) {
   app.post("/v1/remove-audio", { preHandler: creditGuard(() => "remove-audio") }, async (req, reply) => {
     const parsed = removeAudioBody.safeParse(req.body)
     if (!parsed.success) {

@@ -1904,7 +1904,6 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
   { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },
   { type: "manual-edit", label: "Manual Edit", category: "processing", description: "Open video in a browser-based web editor for manual adjustments.", outputType: "video" },
-  { type: "remove-audio", label: "Remove Audio", category: "processing", description: "Strip the audio track from a video, leaving a silent clip (stream-copied, lossless).", outputType: "video" },
   { type: "trim-audio", label: "Trim Audio", category: "processing", description: "Extract a section of audio or extract audio from video.", outputType: "audio" },
   { type: "mix-audio", label: "Mix Audio", category: "processing", description: "Blend multiple audio tracks with individual volume control.", outputType: "audio" },
   { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
@@ -2202,12 +2201,13 @@ function unitNodeDescriptor(u: UnitDescriptor): NodeDescriptor {
 
 /**
  * Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields):
- * the hand-curated entries ∪ every node unit (unit.json registry), each after its position.after.
+ * the hand-curated entries ∪ every node unit (unit.json registry), each after its registry.after
+ * (when stated — this list keeps its own hand-curated order) or else its position.after.
  */
 export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(placeAfter(
   RAW_NODE_REGISTRY,
   (d) => d.type,
-  UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: u.position.after, entry: unitNodeDescriptor(u) })),
+  UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: (u.registryPosition ?? u.position).after, entry: unitNodeDescriptor(u) })),
 ))
 
 /**

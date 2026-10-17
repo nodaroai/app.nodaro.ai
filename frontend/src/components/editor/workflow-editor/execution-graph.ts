@@ -654,8 +654,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "mask-composite" ||
     type === "video-overlay" ||
     type === "manual-edit" ||
-    type === "transcode-video" ||
-    type === "remove-audio"
+    type === "transcode-video"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

@@ -28,7 +28,8 @@ function walk(dir: string, out: string[] = []): string[] {
 // Collected ONCE (a substring search per dictionary key over the multi-MB
 // source timed out under the parallel suite).
 const editorKeys = new Set<string>()
-for (const f of [...walk(path.join(SRC, "components/editor")), ...walk(path.join(SRC, "components/nodes")), ...walk(path.join(SRC, "hooks"))]) {
+// …plus the node units (frontend/src/nodes/<type>/: a unit's node card and config panel, tools/units/README.md).
+for (const f of [...walk(path.join(SRC, "components/editor")), ...walk(path.join(SRC, "components/nodes")), ...walk(path.join(SRC, "nodes")), ...walk(path.join(SRC, "hooks"))]) {
   for (const m of fs.readFileSync(f, "utf8").matchAll(/"([a-z][A-Za-z0-9]*\.[A-Za-z0-9.]+)"/g)) editorKeys.add(m[1])
 }
 

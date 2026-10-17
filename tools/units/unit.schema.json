@@ -302,6 +302,13 @@
             "data",
             "none"
           ]
+        },
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Where the node sits in /v1/nodes (NODE_REGISTRY) when that differs from position.after: right after this type (null = first). The hand-curated registry has its own order, so a migrated node keeps its place there."
         }
       }
     },
@@ -333,6 +340,10 @@
         },
         "useCase": {
           "type": "string"
+        },
+        "index": {
+          "const": "hand-written",
+          "description": "The node keeps its hand-written docs/nodes/README.md row, where it is (decided 2026-10-16 for migrated nodes: the public page does not change); gen:units emits no generated row for it. New nodes omit it and get a generated row."
         }
       }
     }

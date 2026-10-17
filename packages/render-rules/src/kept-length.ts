@@ -26,13 +26,30 @@
  */
 import { DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { resolveGraphOrigin, type EstimateGraphEdge, type EstimateGraphNode } from "./apply-edl-estimate"
+import { UNIT_KEPT_LENGTHS } from "./unit-kept-lengths.generated"
+
+/** The node units (tools/units/README.md) with a "length:*" capability: every one for the bound, the "exact" ones for the charge. */
+const unitKeptLengthTypes = (mode: KeptLengthMode): string[] =>
+  UNIT_KEPT_LENGTHS.filter(([, m]) => mode === "bound" || m === "exact").map(([type]) => type)
+
+/**
+ * A hand-written set ∪ its node units, refusing a type that is in both — a
+ * type lives in one place (G1; the editor's and the server's composeSet keep
+ * the same rule). Throws at module load, so any import of the set fails.
+ */
+function composeUnits(what: string, legacy: readonly string[], units: readonly string[]): ReadonlySet<string> {
+  const clash = units.filter((t) => legacy.includes(t))
+  if (clash.length > 0) throw new Error(`${what}: ${clash.join(", ")} is both hand-written and a node unit — a type lives in one place (tools/units/README.md)`)
+  return new Set([...legacy, ...units])
+}
 
 /**
  * The steps that deliver their input's video whole: the backend listing's
  * `passVideo` rows are built from this set. An upper bound on what each
- * delivers (a provider step may return less).
+ * delivers (a provider step may return less). The hand-written steps ∪ every
+ * node unit with a "length:pass-video" or "length:exact-video" capability.
  */
-export const LENGTH_KEEPING_VIDEO_TYPES: ReadonlySet<string> = new Set([
+export const LENGTH_KEEPING_VIDEO_TYPES: ReadonlySet<string> = composeUnits("LENGTH_KEEPING_VIDEO_TYPES", [
   "add-captions",
   "resize-video",
   "social-media-format",
@@ -41,29 +58,28 @@ export const LENGTH_KEEPING_VIDEO_TYPES: ReadonlySet<string> = new Set([
   "video-mask",
   "mask-composite",
   "transcode-video",
-  "remove-audio",
   "video-overlay",
   "switchx",
   "video-upscale",
   "video-depth",
   "face-swap",
   "video-retake",
-])
+], unitKeptLengthTypes("bound"))
 
 /**
  * The steps of {@link LENGTH_KEEPING_VIDEO_TYPES} whose output is exactly as
  * long as their input (local FFmpeg passes that never cut): the ones the run's
  * charge follows. The rest are bounds only (a provider step may return less;
- * Social Media Format cuts to the platform's limit).
+ * Social Media Format cuts to the platform's limit). The hand-written steps ∪
+ * every node unit with the "length:exact-video" capability.
  */
-export const EXACT_LENGTH_VIDEO_TYPES: ReadonlySet<string> = new Set([
+export const EXACT_LENGTH_VIDEO_TYPES: ReadonlySet<string> = composeUnits("EXACT_LENGTH_VIDEO_TYPES", [
   "add-captions",
   "resize-video",
   "fade-video",
   "transcode-video",
-  "remove-audio",
   "video-overlay",
-])
+], unitKeptLengthTypes("exact"))
 
 /** How a walk reads a step: `bound` (an estimate or a listing) follows every step that keeps at most its input's length; `exact` (a run's charge) only those that keep exactly it. */
 export type KeptLengthMode = "bound" | "exact"

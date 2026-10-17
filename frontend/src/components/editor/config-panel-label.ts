@@ -148,7 +148,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = composeRecord("NODE_TYPE
   "extract-audio": "Extract Audio",
   "silence-detect": "Silence Detect",
   "audio-sync": "Audio Sync",
-  "remove-audio": "Remove Audio",
   "mix-audio": "Mix Audio",
   "combine-audio": "Combine Audio",
   "adjust-volume": "Adjust Volume",

@@ -75,7 +75,8 @@ describe("catalog guard placement", () => {
     expect(worker).toMatch(/new Worker(<[^>]*>)?\(\s*["']workflow-orchestration["']/)
     // Sweep for any other Worker bound to the same queue name.
     const queueName = "workflow-orchestration"
-    const glob = ["workers", "lib", "services", "routes", "ee"].flatMap((d) => walk(join(SRC, d)))
+    // …"nodes" too: a node unit's worker/route lives in backend/src/nodes/<type>/.
+    const glob = ["workers", "lib", "services", "routes", "ee", "nodes"].flatMap((d) => walk(join(SRC, d)))
     const others = glob.filter((f) => {
       if (f.endsWith("orchestrator-worker.ts") || f.includes("__tests__")) return false
       const s = readFileSync(f, "utf8")

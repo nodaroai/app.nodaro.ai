@@ -140,7 +140,6 @@ import { SplitMediaNode } from "./split-media-node";
 import { ExtractAudioNode } from "./extract-audio-node";
 import { SilenceDetectNode } from "./silence-detect-node";
 import { AudioSyncNode } from "./audio-sync-node";
-import { RemoveAudioNode } from "./remove-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { CombineAudioNode } from "./combine-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
@@ -382,7 +381,6 @@ const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.Comp
   "extract-audio": ExtractAudioNode,
   "silence-detect": SilenceDetectNode,
   "audio-sync": AudioSyncNode,
-  "remove-audio": RemoveAudioNode,
   "mix-audio": MixAudioNode,
   "combine-audio": CombineAudioNode,
   "adjust-volume": AdjustVolumeNode,

@@ -1,4 +1,4 @@
-// @test-watches backend/src/routes/*.ts
+// @test-watches backend/src/routes/*.ts backend/src/nodes/*/route*.ts
 /**
  * Every route that calls a model writes the PERSON's sentence on failure,
  * never the error's own message.
@@ -16,15 +16,21 @@
  */
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, relative } from "node:path"
+import { unitRouteFiles } from "../../lib/route-inventory.js"
 
 const ROUTES = join(__dirname, "..")
+const REPO = join(__dirname, "..", "..", "..", "..")
 const RAW_MESSAGE = /const message\s*=\s*err instanceof Error \? err\.message/
 
 describe("LLM route failure messages go through userFacingMessage", () => {
-  const files = readdirSync(ROUTES).filter((f) => f.endsWith(".ts"))
+  // The route files, plus every node unit's route (backend/src/nodes/<type>/route.ts | route.ee.ts), repo-relative.
+  const files = [
+    ...readdirSync(ROUTES).filter((f) => f.endsWith(".ts")).map((f) => relative(REPO, join(ROUTES, f))),
+    ...unitRouteFiles(REPO).map((f) => relative(REPO, f)),
+  ]
   const llmRoutes = files.filter((f) => {
-    const src = readFileSync(join(ROUTES, f), "utf8")
+    const src = readFileSync(join(REPO, f), "utf8")
     return src.includes("lib/llm-client.js") && src.includes("markJobFailed")
   })
 
@@ -33,7 +39,7 @@ describe("LLM route failure messages go through userFacingMessage", () => {
   })
 
   it.each(llmRoutes)("%s", (file) => {
-    const src = readFileSync(join(ROUTES, file), "utf8")
+    const src = readFileSync(join(REPO, file), "utf8")
     expect(RAW_MESSAGE.test(src), `${file} writes a raw err.message — use userFacingMessage(err, fallback)`).toBe(false)
   })
 })

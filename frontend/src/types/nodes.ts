@@ -4378,19 +4378,6 @@ export type ExtractAudioData = {
   activeResultIndex?: number
 }
 
-// Remove Audio: video in → silent video out. No config params.
-export type RemoveAudioData = {
-  currentJobProgress?: number
-  [key: string]: unknown
-  label: string
-  fieldMappings: FieldMappings
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  generatedVideoUrl?: string
-  generatedResults?: readonly GeneratedResult[]
-  activeResultIndex?: number
-}
-
 export type SplitMediaData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -7517,7 +7504,6 @@ export type SceneNodeData =
   | TrimAudioData
   | SplitMediaData
   | ExtractAudioData
-  | RemoveAudioData
   | MixAudioData
   | CombineAudioData
   | AdjustVolumeData
@@ -7761,7 +7747,6 @@ export type SceneNodeType =
   | "extract-audio"
   | "silence-detect"
   | "audio-sync"
-  | "remove-audio"
   | "mix-audio"
   | "combine-audio"
   | "adjust-volume"
@@ -9724,14 +9709,6 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["sources"],
     outputs: ["json"],
     defaultData: { label: "Audio Sync", fieldMappings: {} } as AudioSyncNodeData,
-  },
-  {
-    type: "remove-audio",
-    label: "Remove Audio",
-    category: "processing",
-    inputs: ["in"],
-    outputs: ["video-out"],
-    defaultData: { label: "Remove Audio", fieldMappings: {} },
   },
   {
     type: "mix-audio",

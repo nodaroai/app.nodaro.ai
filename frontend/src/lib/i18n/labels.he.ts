@@ -169,7 +169,6 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Reframe": "מסגור מחדש",
   "Follow the speaker": "עקוב אחרי הדובר",
   "Speaker Frames": "מסגרות דוברים",
-  "Remove Audio": "הסרת אודיו",
   "Mix Audio": "מיקס אודיו",
   "Combine Audio": "שילוב אודיו",
   "Adjust Volume": "כוונון עוצמה",

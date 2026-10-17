@@ -55,6 +55,8 @@ export interface UnitDescriptor {
   readonly outputType: "image" | "video" | "audio" | "text" | "data" | "none"
   /** Where the unit sits among the nodes: right after this type (null = first). */
   readonly position: { readonly after: string | null }
+  /** Its place in /v1/nodes (NODE_REGISTRY) when unit.json states one apart from position.after (registry.after). */
+  readonly registryPosition?: { readonly after: string | null }
   readonly inputs: ReadonlyArray<string>
   readonly outputs: ReadonlyArray<string>
   readonly handles: { readonly inputs: ReadonlyArray<UnitInputHandle>; readonly outputs: ReadonlyArray<UnitOutputHandle> }
@@ -83,8 +85,12 @@ export type UnitPayload = (kit: UnitPayloadKit) => PayloadResult
 /** worker.ts — the BullMQ handler, registered on the unit's `execution.queue`. */
 export type UnitWorker = HandlerFn
 
-/** price.ee.ts — the unit's static credit rows and the credit id a run reserves. */
+/**
+ * price.ee.ts — the unit's static credit rows and, when the id a run reserves
+ * depends on the node's data, the resolver that names it (CREDIT_COSTS). A
+ * flat-priced unit omits `creditId`: its run reserves the row named by its type.
+ */
 export interface UnitPrice {
   readonly staticCosts: Readonly<Record<string, number>>
-  creditId(data: Readonly<Record<string, unknown>>): string
+  creditId?(data: Readonly<Record<string, unknown>>): string
 }

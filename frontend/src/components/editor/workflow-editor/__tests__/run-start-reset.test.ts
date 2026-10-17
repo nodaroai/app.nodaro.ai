@@ -33,7 +33,13 @@ const DIR = resolve(HERE, "..")
 const EDITOR = resolve(HERE, "../..")
 
 /** Same scope as the wrapper guard: a config panel starts runs too. */
-const DIRS = [DIR, resolve(EDITOR, "config-panels")]
+// …and every node unit's folder (frontend/src/nodes/<type>/, tools/units/README.md):
+// a unit's exec.ts starts its node's run exactly as an executor here does.
+const UNITS = resolve(EDITOR, "../../nodes")
+const UNIT_DIRS = readdirSync(UNITS, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
+  .map((e) => resolve(UNITS, e.name))
+const DIRS = [DIR, resolve(EDITOR, "config-panels"), ...UNIT_DIRS]
 
 const RUN_START = /executionStatus:\s*["']running["']/
 const SITE_EXEMPTION = /\/\/\s*run-start-reset-ok:\s*\S/

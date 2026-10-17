@@ -2,6 +2,8 @@
 // @registry frontend/src/nodes/*/node.tsx
 // @registry-exports components: UNIT_COMPONENTS
 import type { UnitNodeComponent } from "../kit"
+import { NodeComponent as unit_remove_audio } from "../remove-audio/node" // unit:remove-audio
 
 export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

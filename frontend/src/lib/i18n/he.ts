@@ -1995,8 +1995,6 @@ export const he: ChromeDict = {
   "proccfg.videoChunks": "מקטעי וידאו ({count})",
   "proccfg.extractsTheAudioTrackFromThe": "מחלץ את רצועת האודיו מהווידאו המחובר כקובץ MP3 עצמאי.",
   "proccfg.noSettingsConnectAVideoTo": "אין הגדרות — חברו וידאו לקלט והריצו. השתמשו ב{node} אם אתם רוצים את הווידאו השקט במקום.",
-  "proccfg.stripsTheAudioTrackFromThe": "מסיר את רצועת האודיו מהווידאו המחובר ומשאיר קליפ שקט (ללא אובדן — הווידאו מועתק כזרם, בלי קידוד מחדש).",
-  "proccfg.noSettingsConnectAVideoTo2": "אין הגדרות — חברו וידאו לקלט והריצו. השתמשו ב{node} אם אתם רוצים את רצועת האודיו במקום.",
   "proccfg.connectAudioNodesToSetPer": "חברו רכיבי אודיו כדי לקבוע עוצמת קול לכל רצועה.",
   "proccfg.mixDuckUnder": "הנמכה מתחת לרצועה",
   "proccfg.mixDuckUnderAria": "הרצועה שמתחתיה שאר הרצועות מונמכות",
@@ -6497,8 +6495,6 @@ export const he: ChromeDict = {
   "node.connectACharacterObjectOr": "חברו דמות, אובייקט או מיקום עם תמונה ראשית",
   "node.referenceSheet": "גיליון ייחוס",
   "node.deleteThisSheet": "מחיקת הגיליון הזה",
-  "node.removeAudio": "הסרת אודיו",
-  "node.silent": "ללא אודיו",
   "node.rendered": "מרונדר",
   "node.resized": "בגודל חדש",
   "node.finalPromptUsed": "הפרומפט הסופי שנעשה בו שימוש",
@@ -11117,7 +11113,6 @@ export const he: ChromeDict = {
   "apiErr.startTrimAudio": "התחלת קיצוץ האודיו נכשלה",
   "apiErr.startSplitMedia": "התחלת פיצול המדיה למקטעים נכשלה",
   "apiErr.startExtractAudio": "התחלת חילוץ האודיו נכשלה",
-  "apiErr.startRemoveAudio": "התחלת הסרת האודיו נכשלה",
   "apiErr.startSilenceDetect": "התחלת זיהוי השקט נכשלה",
   "apiErr.startAudioSync": "התחלת סנכרון האודיו נכשלה",
   "apiErr.startTrimVideo": "התחלת קיצוץ הווידאו נכשלה",
@@ -12651,5 +12646,10 @@ export const he: ChromeDict = {
   "apiErr.startVideoMask": "הפעלת מסכת וידאו נכשלה",
   "apiErr.startMaskComposite": "הפעלת שילוב לפי מסכה נכשלה",
   // gen:units start
+  "apiErr.startRemoveAudio": "התחלת הסרת האודיו נכשלה",
+  "node.removeAudio": "הסרת אודיו",
+  "node.silent": "ללא אודיו",
+  "proccfg.noSettingsConnectAVideoTo2": "אין הגדרות — חברו וידאו לקלט והריצו. השתמשו ב{node} אם אתם רוצים את רצועת האודיו במקום.",
+  "proccfg.stripsTheAudioTrackFromThe": "מסיר את רצועת האודיו מהווידאו המחובר ומשאיר קליפ שקט (ללא אובדן — הווידאו מועתק כזרם, בלי קידוד מחדש).",
   // gen:units end
 }

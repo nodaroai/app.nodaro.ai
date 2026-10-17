@@ -160,6 +160,14 @@
     },
     "backend/src/workers/handlers/ffmpeg.ts": {
       "composes": "ffmpegHandlers = legacy ∪ UNIT_WORKERS whose execution.queue is video"
+    },
+    "backend/src/providers/video/__characterization__/operations.ts": {
+      "composes": "OPERATIONS = the hand-written characterization operations ∪ UNIT_CHARACTERIZATIONS, each named by its unit's type and placed after its `after`",
+      "exports": {
+        "characterizations": [
+          "OPERATIONS"
+        ]
+      }
     }
   }
 }

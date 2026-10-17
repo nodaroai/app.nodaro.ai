@@ -10,6 +10,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 import { GEN_UNITS_OUTPUTS, generate, main, staleFiles, writeOutputs } from "../units/gen.mjs"
 import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../units/seams.mjs"
 import { loadUnits } from "../units/manifest.mjs"
@@ -105,7 +106,14 @@ test("check → write → check: stale, then clean; orphans are listed and remov
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
-test("the real tree: gen:units --check is clean, and writes exactly the live seams' outputs", async () => {
+// A real unit with a price.ee.ts is read through the TypeScript price reader, and
+// this job runs with no npm install. The same check runs with dependencies as
+// `npm run gen:units -- --check` in the Type Check job, so here it skips cleanly.
+let ts = null
+try { ts = createRequire(new URL("../../package.json", import.meta.url))("typescript") } catch { /* no npm install here */ }
+const realTreeNeedsTs = loadUnits(REPO).length > 0
+
+test("the real tree: gen:units --check is clean, and writes exactly the live seams' outputs", { skip: realTreeNeedsTs && !ts && "typescript is not installed (the Type Check job runs gen:units --check)" }, async () => {
   const out = []
   const err = []
   const rc = await main(["--check"], REPO, { write: (s) => out.push(s) }, { write: (s) => err.push(s) })
@@ -115,6 +123,23 @@ test("the real tree: gen:units --check is clean, and writes exactly the live sea
   const expected = AGGREGATES.filter((a) => live.has(a.id)).length + SPLICES.filter((x) => live.has(x.id)).reduce((n, x) => n + x.files.length, 0) + DATA_FILES.filter((d) => live.has(d.id)).length
   // With no unit, every output is a live seam's (an empty aggregate, a spliced region, the contracts file).
   if (units === 0) assert.match(out.join(""), new RegExp(`no drift \\(${expected} generated file\\(s\\)\\)`))
+})
+
+test("docs.index \"hand-written\" keeps the unit out of the generated README region; registry.after reaches the descriptor", async () => {
+  const root = tree()
+  try {
+    const file = path.join(root, "frontend/src/nodes/fixture-echo/unit.json")
+    const m = JSON.parse(readFileSync(file, "utf8"))
+    m.docs.index = "hand-written"
+    m.registry.after = "text-prompt"
+    writeFileSync(file, JSON.stringify(m))
+    const result = await run(root)
+    assert.deepEqual(result.errors, [])
+    const readme = result.outputs.get("docs/nodes/README.md")
+    assert.ok(!readme.includes("Fixture Echo"), "no generated row (and no header) for a hand-written one")
+    assert.match(readme, /<!-- gen:units start -->\n<!-- gen:units end -->/)
+    assert.match(result.outputs.get("backend/src/nodes/fixture-echo/descriptor.generated.ts"), /"registryPosition": \{\n\s+"after": "text-prompt"\n\s+\}/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
 test("an unknown argument is a usage error", async () => {

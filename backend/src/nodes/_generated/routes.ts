@@ -2,6 +2,8 @@
 // @registry backend/src/nodes/*/route.ts
 // @registry-exports routes: UNIT_ROUTES
 import type { UnitRoute } from "../kit.js"
+import { route as unit_remove_audio } from "../remove-audio/route.js" // unit:remove-audio
 
 export const UNIT_ROUTES: Readonly<Record<string, UnitRoute>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

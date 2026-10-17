@@ -108,7 +108,6 @@ import { splitMediaRoutes } from "./routes/split-media.js"
 import { extractAudioRoutes } from "./routes/extract-audio.js"
 import { silenceDetectRoutes } from "./routes/silence-detect.js"
 import { audioSyncRoutes } from "./routes/audio-sync.js"
-import { removeAudioRoutes } from "./routes/remove-audio.js"
 // Node units (tools/units/README.md): every unit's route.ts, and — registered
 // only where credits exist — every Cloud-only unit's route.ee.ts.
 // @registry-enumerates registers every node unit's route
@@ -617,7 +616,6 @@ export async function buildApp() {
   await app.register(extractAudioRoutes)
   await app.register(silenceDetectRoutes)
   await app.register(audioSyncRoutes)
-  await app.register(removeAudioRoutes)
   for (const route of Object.values(UNIT_ROUTES)) await app.register(route)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)

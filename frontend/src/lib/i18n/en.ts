@@ -2013,8 +2013,6 @@ export const en = {
   "proccfg.videoChunks": "Video Chunks ({count})",
   "proccfg.extractsTheAudioTrackFromThe": "Extracts the audio track from the connected video as a standalone MP3.",
   "proccfg.noSettingsConnectAVideoTo": "No settings — connect a video to the input and run. Use {node} if you want the silent video instead.",
-  "proccfg.stripsTheAudioTrackFromThe": "Strips the audio track from the connected video, leaving a silent clip (lossless — the video is stream-copied, not re-encoded).",
-  "proccfg.noSettingsConnectAVideoTo2": "No settings — connect a video to the input and run. Use {node} if you want the audio track instead.",
   "proccfg.connectAudioNodesToSetPer": "Connect audio nodes to set per-track volumes.",
   "proccfg.mixDuckUnder": "Duck the others under",
   "proccfg.mixDuckUnderAria": "Track the other tracks duck under",
@@ -6543,8 +6541,6 @@ export const en = {
   "node.connectACharacterObjectOr": "Connect a character, object, or location with a main image",
   "node.referenceSheet": "Reference sheet",
   "node.deleteThisSheet": "Delete this sheet",
-  "node.removeAudio": "Remove Audio",
-  "node.silent": "Silent",
   "node.rendered": "Rendered",
   "node.resized": "Resized",
   "node.finalPromptUsed": "Final prompt used",
@@ -11206,7 +11202,6 @@ export const en = {
   "apiErr.startTrimAudio": "Failed to start trim-audio",
   "apiErr.startSplitMedia": "Failed to start split-media",
   "apiErr.startExtractAudio": "Failed to start extract-audio",
-  "apiErr.startRemoveAudio": "Failed to start remove-audio",
   "apiErr.startSilenceDetect": "Failed to start silence-detect",
   "apiErr.startAudioSync": "Failed to start audio-sync",
   "apiErr.startTrimVideo": "Failed to start trim-video",
@@ -12745,6 +12740,11 @@ export const en = {
   "apiErr.startVideoMask": "Failed to start Video Mask",
   "apiErr.startMaskComposite": "Failed to start Mask Composite",
   // gen:units start
+  "apiErr.startRemoveAudio": "Failed to start remove-audio",
+  "node.removeAudio": "Remove Audio",
+  "node.silent": "Silent",
+  "proccfg.noSettingsConnectAVideoTo2": "No settings — connect a video to the input and run. Use {node} if you want the audio track instead.",
+  "proccfg.stripsTheAudioTrackFromThe": "Strips the audio track from the connected video, leaving a silent clip (lossless — the video is stream-copied, not re-encoded).",
   // gen:units end
 } as const
 

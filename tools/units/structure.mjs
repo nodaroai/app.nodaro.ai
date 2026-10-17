@@ -98,10 +98,17 @@ function isPure(ts, e) {
   if (ts.isPrefixUnaryExpression(e)) return isPure(ts, e.operand)
   if (ts.isBinaryExpression(e)) return e.operatorToken.kind !== ts.SyntaxKind.EqualsToken && isPure(ts, e.left) && isPure(ts, e.right)
   if (ts.isConditionalExpression(e)) return isPure(ts, e.condition) && isPure(ts, e.whenTrue) && isPure(ts, e.whenFalse)
-  if (ts.isCallExpression(e)) return PURE_CALLS.test(e.expression.getText()) && e.arguments.every((a) => isPure(ts, a))
+  if (ts.isCallExpression(e)) return (PURE_CALLS.test(e.expression.getText()) || isZodChain(ts, e.expression)) && e.arguments.every((a) => isPure(ts, a))
   if (ts.isNewExpression(e)) return ts.isIdentifier(e.expression) && PURE_NEW.has(e.expression.text) && (e.arguments ?? []).every((a) => isPure(ts, a))
   if (ts.isJsxElement(e) || ts.isJsxSelfClosingElement(e) || ts.isJsxFragment(e)) return true
   return false
+}
+
+// A zod schema built by chaining (`z.string().uuid().optional()`): a method of
+// a call that is itself a pure zod call. Each link only builds a schema.
+function isZodChain(ts, callee) {
+  return ts.isPropertyAccessExpression(callee) && ts.isCallExpression(callee.expression) && isPure(ts, callee.expression)
+    && /^z[.(]/.test(callee.expression.getText())
 }
 
 const decorated = (ts, node) => Boolean(ts.canHaveDecorators?.(node) && ts.getDecorators(node)?.length)

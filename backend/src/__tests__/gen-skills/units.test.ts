@@ -1,4 +1,4 @@
-// @test-watches tools/units/**
+// @test-watches tools/units/** frontend/src/types/nodes.ts frontend/src/nodes/*/unit.json
 import { afterAll, describe, expect, it } from "vitest"
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -9,11 +9,12 @@ import { renderNodeDataFieldsModule } from "../../../scripts/lib/gen-skills/rend
 import { renderNodeHandlesModule } from "../../../scripts/lib/gen-skills/render-node-handles.js"
 import { GEN_SKILLS_OUTPUTS } from "../../../scripts/lib/gen-skills/outputs.js"
 import { GEN_UNITS_OUTPUTS } from "../../../../tools/units/gen.mjs"
+import { insertAtPositions, loadUnits } from "../../../../tools/units/manifest.mjs"
 
 /**
  * gen:skills loads node units (tools/units/README.md) through the same loader
  * as gen:units: proven on the fixture unit `fixture-echo` in a temporary tree
- * (the real tree has no unit yet, so gen:skills:check stays byte-identical).
+ * and on the real tree, where each unit is parsed at its position.after.
  */
 
 const REPO = resolve(__dirname, "../../../..")
@@ -55,9 +56,12 @@ describe("gen:skills sees node units", () => {
     expect(rendered).toContain('"upload-video"')
   })
 
-  it("the real tree has no unit: the parse is the literal alone", () => {
+  it("the real tree: the literal plus every unit, each at its position.after", () => {
     const real = parseNodeDefinitions(join(REPO, "frontend/src/types/nodes.ts"))
-    expect(real.some((d) => d.unit)).toBe(false)
+    const units = loadUnits(REPO)
+    expect(real.filter((d) => d.unit).map((d) => d.type).sort()).toEqual(units.map((u) => u.type))
+    const legacy = real.filter((d) => !d.unit).map((d) => d.type)
+    expect(real.map((d) => d.type)).toEqual(insertAtPositions(legacy, units.map((u) => ({ type: u.type, after: u.manifest.position.after }))))
   })
 })
 

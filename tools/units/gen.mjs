@@ -8,13 +8,13 @@
 // Deterministic: units sorted by type, LF, no timestamps. It never reads
 // gen:skills' outputs and gen:skills never reads its outputs, so the two
 // checks run in either order or concurrently.
-// @reads frontend/src/nodes/** backend/src/nodes/** backend/src/ee/nodes/** frontend/src/lib/i18n/*.ts docs/nodes/README.md packages/shared/src/generated/**
+// @reads frontend/src/nodes/** backend/src/nodes/** backend/src/ee/nodes/** frontend/src/lib/i18n/*.ts docs/nodes/README.md packages/shared/src/generated/** packages/render-rules/src/unit-kept-lengths.generated.ts
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { loadUnits, repoContext, validateUnits } from "./manifest.mjs"
 import { AGGREGATES, DATA_FILES, GENERATED_DIRS, PROJECTIONS, SPLICES, UNIT_ROOTS } from "./seams.mjs"
-import { aggregateSource, contractsSource, definitionSource, descriptorSource, docsRows, i18nLines, labelsSource, spliceRegion } from "./templates.mjs"
+import { aggregateSource, contractsSource, definitionSource, descriptorSource, docsRows, i18nLines, keptLengthsSource, labelsSource, spliceRegion } from "./templates.mjs"
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
@@ -80,7 +80,8 @@ export async function generate({ root = REPO_ROOT, ctx = repoContext(root), read
       outputs.set(f.path, spliceRegion(readFileSync(abs, "utf8"), s.start, s.end, lines, f.path))
     }
   }
-  for (const d of DATA_FILES.filter((x) => live.has(x.id))) outputs.set(d.out, contractsSource(units))
+  const dataSource = { contracts: contractsSource, lengths: keptLengthsSource }
+  for (const d of DATA_FILES.filter((x) => live.has(x.id))) outputs.set(d.out, dataSource[d.id](units))
   // Orphans: generated files no unit or live seam produces any more (a
   // removed unit's projection, a seam switched off). --check fails on them;
   // a write deletes them.

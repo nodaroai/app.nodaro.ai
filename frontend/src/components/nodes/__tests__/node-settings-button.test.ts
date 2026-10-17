@@ -13,7 +13,7 @@
 // halves from source, so a new bespoke toolbar cannot quietly opt out.
 
 import { describe, it, expect } from "vitest"
-import { readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
 const NODES_DIR = join(process.cwd(), "src/components/nodes")
@@ -21,8 +21,16 @@ const NODES_DIR = join(process.cwd(), "src/components/nodes")
 /** The class string every self-framing run-strip pill uses. */
 const PILL_MARKER = "px-1.5 py-1 backdrop-blur-sm rounded-xl"
 
+// The node components here, plus every node unit's canvas component
+// (frontend/src/nodes/<type>/node.tsx, tools/units/README.md), relative to NODES_DIR.
+const UNITS_DIR = join(NODES_DIR, "../../nodes")
 function nodeSourceFiles(): string[] {
-  return readdirSync(NODES_DIR).filter((f) => f.endsWith(".tsx"))
+  return [
+    ...readdirSync(NODES_DIR).filter((f) => f.endsWith(".tsx")),
+    ...readdirSync(UNITS_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && !d.name.startsWith("_") && existsSync(join(UNITS_DIR, d.name, "node.tsx")))
+      .map((d) => `../../nodes/${d.name}/node.tsx`),
+  ]
 }
 
 function read(file: string): string {

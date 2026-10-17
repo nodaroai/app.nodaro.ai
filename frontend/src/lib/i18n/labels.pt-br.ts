@@ -165,7 +165,6 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Reframe": "Reenquadrar",
   "Follow the speaker": "Siga quem fala",
   "Speaker Frames": "Quadros dos falantes",
-  "Remove Audio": "Remover áudio",
   "Mix Audio": "Mixar áudio",
   "Combine Audio": "Combinar áudio",
   "Adjust Volume": "Ajustar volume",

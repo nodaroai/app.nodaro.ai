@@ -101,6 +101,8 @@ export function descriptorSource(unit) {
     description: m.registry.description,
     outputType: m.registry.outputType,
     position: m.position,
+    // Its place in /v1/nodes, when the manifest states one apart from position.after.
+    ...("after" in m.registry ? { registryPosition: { after: m.registry.after } } : {}),
     inputs: handleIds(m.handles?.inputs),
     outputs: handleIds(m.handles?.outputs),
     handles: m.handles,
@@ -122,13 +124,15 @@ export function i18nLines(units, locale) {
 
 const cell = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ")
 /**
- * The docs/nodes/README.md region: a table of every unit that has a docs page,
+ * The docs/nodes/README.md region: a table of every unit that has a docs page
+ * (except a docs.index "hand-written" one, whose row stays where it is),
  * WITH its own header row — in GitHub-flavoured Markdown the region's comment
  * line ends any table above it, so bare rows would render as a paragraph.
  * Nothing at all when no unit has a page.
  */
 export function docsRows(units) {
-  const rows = units.filter((u) => u.manifest.docs?.page).map((u) => {
+  // A unit with docs.index "hand-written" keeps its hand-placed row (a migrated node).
+  const rows = units.filter((u) => u.manifest.docs?.page && u.manifest.docs.index !== "hand-written").map((u) => {
     const m = u.manifest
     return `| [${cell(m.label)}](./${path.posix.relative("docs/nodes", m.docs.page)}) | ${cell(m.registry.description)} | ${cell(m.docs.useCase)} |`
   })
@@ -146,6 +150,23 @@ export function contractsSource(units) {
     "",
     "export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: \"audio\" | \"video\" | \"image\" | \"dynamic\"]> = [",
     ...rows.map((u) => `  [${JSON.stringify(u.type)}, ${JSON.stringify(u.manifest.contract.producer)}], ${tag(u.type)}`),
+    "]",
+    "",
+  ].join("\n")
+}
+
+/** packages/render-rules/src/unit-kept-lengths.generated.ts — the units that hand on their video input's length. */
+export function keptLengthsSource(units) {
+  const mode = (u) => (u.manifest.capabilities?.includes("length:exact-video") ? "exact" : u.manifest.capabilities?.includes("length:pass-video") ? "bound" : null)
+  const rows = units.filter((u) => mode(u) !== null)
+  return [
+    GENERATED_HEADER,
+    "// The node units whose output keeps their video input's length (the \"length:*\" capabilities,",
+    "// tools/units/capabilities.mjs): \"bound\" keeps at most it, \"exact\" exactly it. kept-length.ts",
+    "// composes these rows into LENGTH_KEEPING_VIDEO_TYPES / EXACT_LENGTH_VIDEO_TYPES.",
+    "",
+    "export const UNIT_KEPT_LENGTHS: ReadonlyArray<readonly [type: string, mode: \"bound\" | \"exact\"]> = [",
+    ...rows.map((u) => `  [${JSON.stringify(u.type)}, ${JSON.stringify(mode(u))}], ${tag(u.type)}`),
     "]",
     "",
   ].join("\n")

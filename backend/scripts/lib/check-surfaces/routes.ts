@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import ts from "typescript"
-import { extractRouteRegistrations, normalizePath, ROUTE_DIRS, walkRouteFiles } from "../../../src/lib/route-inventory.js"
+import { allRouteFiles, extractRouteRegistrations, normalizePath } from "../../../src/lib/route-inventory.js"
 import { parseText } from "../../../src/lib/__tests__/source-ast.js"
 import { isPluginPath } from "./features.js"
 import type { RouteBucket } from "./types.js"
@@ -54,7 +54,7 @@ export function makeClassifier(inAppOnly: ReadonlySet<string>): Classifier {
 }
 
 export async function staticRoutes(repoRoot: string): Promise<{ routes: RouteEntry[]; classify: Classifier }> {
-  const files = ROUTE_DIRS.flatMap((d) => walkRouteFiles(join(repoRoot, d)))
+  const files = allRouteFiles(repoRoot)
   const classify = makeClassifier(inAppOnlyFiles(repoRoot, files))
   const { isAnonymousRoute } = await import("../../../src/middleware/auth.js")
   const anonymous = (method: string, path: string) => isAnonymousRoute(method, path.replace(/:p/g, "x"))
@@ -85,7 +85,7 @@ export async function staticRoutes(repoRoot: string): Promise<{ routes: RouteEnt
  * OpenAPI document test does.
  */
 export async function openApiOperations(repoRoot: string): Promise<Set<string>> {
-  const files = ROUTE_DIRS.flatMap((d) => walkRouteFiles(join(repoRoot, d))).filter((f) =>
+  const files = allRouteFiles(repoRoot).filter((f) =>
     readFileSync(f, "utf8").includes("openApiRegistry.registerPath"),
   )
   // Every Fastify call is a no-op: only the OpenAPI registrations matter.

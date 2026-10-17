@@ -358,6 +358,10 @@ describe("every mark an executor writes for a run in flight is one the freeze co
     ...inDir("components/editor/workflow-editor", () => true),
     ...inDir("components/editor/reference-sheet", () => true),
     ...inDir("components/nodes", (name) => name.endsWith("-run-state.ts")),
+    // every node unit's executor (frontend/src/nodes/<type>/exec.ts, tools/units/README.md)
+    ...readdirSync(join(src, "nodes"), { withFileTypes: true })
+      .filter((d) => d.isDirectory() && !d.name.startsWith("_"))
+      .flatMap((d) => inDir(`nodes/${d.name}`, (name) => name === "exec.ts")),
   ]
 
   /** The string values of every key map `name` is read from (`const name = map[…]`). */

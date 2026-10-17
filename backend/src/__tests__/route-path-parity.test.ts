@@ -1,4 +1,4 @@
-// @test-watches frontend/src/lib/api.ts backend/src/routes/**/*.ts backend/src/ee/routes/**/*.ts
+// @test-watches frontend/src/lib/api.ts frontend/src/nodes/** backend/src/routes/**/*.ts backend/src/ee/routes/**/*.ts
 /**
  * L1#9 — Frontend api.ts ↔ backend route registration walk.
  *
@@ -19,21 +19,19 @@
  * (nested Fastify instances) registrations are detected.
  */
 
-import { readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { UGC_SYNC_ROUTES } from "../services/workflow-engine/ugc-sync-nodes.js"
 import {
+  allRouteFiles,
   extractBackendV1Paths,
   normalizePath,
   substituteTemplateExprs,
-  walkRouteFiles,
 } from "../lib/route-inventory.js"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..")
 const FRONTEND_API_FILE = join(REPO_ROOT, "frontend/src/lib/api.ts")
-const BACKEND_ROUTES_DIR = join(REPO_ROOT, "backend/src/routes")
-const EE_BACKEND_ROUTES_DIR = join(REPO_ROOT, "backend/src/ee/routes")
 
 /**
  * Walk a frontend source file (typically api.ts) for /v1/... paths.
@@ -97,12 +95,14 @@ function extractFrontendV1Paths(src: string): Set<string> {
 }
 
 const FRONTEND_API_SRC = readFileSync(FRONTEND_API_FILE, "utf8")
-const FRONTEND_PATHS = extractFrontendV1Paths(FRONTEND_API_SRC)
+// lib/api.ts, plus every node unit's own client (frontend/src/nodes/<type>/api.ts).
+const UNITS_DIR = join(REPO_ROOT, "frontend/src/nodes")
+const UNIT_API_SRCS = readdirSync(UNITS_DIR)
+  .filter((n) => !n.startsWith("_") && existsSync(join(UNITS_DIR, n, "api.ts")))
+  .map((n) => readFileSync(join(UNITS_DIR, n, "api.ts"), "utf8"))
+const FRONTEND_PATHS = new Set([FRONTEND_API_SRC, ...UNIT_API_SRCS].flatMap((src) => [...extractFrontendV1Paths(src)]))
 
-const BACKEND_FILES = [
-  ...walkRouteFiles(BACKEND_ROUTES_DIR),
-  ...walkRouteFiles(EE_BACKEND_ROUTES_DIR),
-]
+const BACKEND_FILES = allRouteFiles(REPO_ROOT)
 const BACKEND_PATHS = new Set<string>()
 for (const f of BACKEND_FILES) {
   for (const p of extractBackendV1Paths(readFileSync(f, "utf8"))) {

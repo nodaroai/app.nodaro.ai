@@ -1392,8 +1392,6 @@ const VIDEO_RESULT_TYPES = new Set([
   "video-overlay",
   "transcode-video",
   "manual-edit",
-  // Remove Audio: video in → silent video out (stores generatedVideoUrl).
-  "remove-audio",
 ])
 
 /** Audio-generating node types that store results in generatedAudioUrl / generatedResults.

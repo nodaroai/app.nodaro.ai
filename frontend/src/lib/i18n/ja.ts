@@ -2006,8 +2006,6 @@ export const ja: ChromeDict = {
   "proccfg.videoChunks": "動画チャンク（{count}）",
   "proccfg.extractsTheAudioTrackFromThe": "接続された動画からオーディオトラックを抽出し、単体の MP3 として出力します。",
   "proccfg.noSettingsConnectAVideoTo": "設定項目はありません。入力に動画を接続して実行してください。無音の動画が必要な場合は「{node}」を使用してください。",
-  "proccfg.stripsTheAudioTrackFromThe": "接続された動画からオーディオトラックを取り除き、無音のクリップにします（ロスレス：動画は再エンコードされず、ストリームコピーされます）。",
-  "proccfg.noSettingsConnectAVideoTo2": "設定項目はありません。入力に動画を接続して実行してください。オーディオトラックが必要な場合は「{node}」を使用してください。",
   "proccfg.connectAudioNodesToSetPer": "オーディオノードを接続すると、トラックごとの音量を設定できます。",
   "proccfg.mixDuckUnder": "ダッキングの基準トラック",
   "proccfg.mixDuckUnderAria": "ほかのトラックが音量を下げる基準のトラック",
@@ -6351,8 +6349,6 @@ export const ja: ChromeDict = {
   "node.connectACharacterObjectOr": "メイン画像のあるキャラクター、オブジェクト、またはロケーションを接続してください",
   "node.referenceSheet": "リファレンスシート",
   "node.deleteThisSheet": "このシートを削除",
-  "node.removeAudio": "オーディオを削除",
-  "node.silent": "無音",
   "node.rendered": "レンダリング済み",
   "node.resized": "リサイズ済み",
   "node.finalPromptUsed": "使用された最終プロンプト",
@@ -10907,7 +10903,6 @@ export const ja: ChromeDict = {
   "apiErr.startTrimAudio": "「オーディオのトリミング」を開始できませんでした",
   "apiErr.startSplitMedia": "「チャンクに分割」を開始できませんでした",
   "apiErr.startExtractAudio": "「オーディオを抽出」を開始できませんでした",
-  "apiErr.startRemoveAudio": "「オーディオを削除」を開始できませんでした",
   "apiErr.startSilenceDetect": "「無音検出」を開始できませんでした",
   "apiErr.startAudioSync": "「音声同期」を開始できませんでした",
   "apiErr.startTrimVideo": "「動画のトリミング」を開始できませんでした",
@@ -12441,5 +12436,10 @@ export const ja: ChromeDict = {
   "apiErr.startVideoMask": "「動画マスク」を開始できませんでした",
   "apiErr.startMaskComposite": "「マスク合成」を開始できませんでした",
   // gen:units start
+  "apiErr.startRemoveAudio": "「オーディオを削除」を開始できませんでした",
+  "node.removeAudio": "オーディオを削除",
+  "node.silent": "無音",
+  "proccfg.noSettingsConnectAVideoTo2": "設定項目はありません。入力に動画を接続して実行してください。オーディオトラックが必要な場合は「{node}」を使用してください。",
+  "proccfg.stripsTheAudioTrackFromThe": "接続された動画からオーディオトラックを取り除き、無音のクリップにします（ロスレス：動画は再エンコードされず、ストリームコピーされます）。",
   // gen:units end
 }

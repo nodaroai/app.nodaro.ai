@@ -1,13 +1,12 @@
 // @test-units-by-name composes only the in-memory fixture unit it declares, and looks the aggregates up by prototype keys only
 import { describe, expect, it } from "vitest"
 import type { UnitDescriptor, UnitPrice } from "../../nodes/kit.js"
-import { composeRecord, composeSet, placeAfter, registryCategoryOf, unitRecord, unitSavedOutput, unitStaticCosts, unitsWith } from "../unit-compose.js"
+import { composeRecord, composeRecordSorted, composeSet, placeAfter, registryCategoryOf, unitRecord, unitSavedOutput, unitStaticCosts, unitsWith } from "../unit-compose.js"
 
 /**
  * Every server seam the node units compose through (§5.8 B PR1b,
  * tools/units/README.md), on an in-memory fixture unit — and with no unit,
- * each hands its legacy table back unchanged (the real registries are held to
- * their pre-composition snapshot by units-composed-baseline.test.ts).
+ * each hands its legacy table back unchanged.
  */
 const FIXTURE: UnitDescriptor = {
   type: "fixture-echo",
@@ -41,6 +40,14 @@ describe("tables and sets", () => {
     expect([...composeSet("S", legacy, ["x"])]).toEqual(["a", "b", "x"])
     expect(() => composeSet("S", legacy, ["a"])).toThrow(/exactly one place/)
   })
+  it("composeRecordSorted: each unit row at its place in the table's type order; legacy order kept", () => {
+    const legacy = { "apply-edl": 1, "extract-audio": 2, "remove-background": 3 }
+    expect(composeRecordSorted("T", legacy, {})).toBe(legacy)
+    expect(Object.keys(composeRecordSorted("T", legacy, { "remove-audio": 9, "a-first": 0, "zz-last": 0 }))).toEqual(["a-first", "apply-edl", "extract-audio", "remove-audio", "remove-background", "zz-last"])
+    expect(composeRecordSorted("T", legacy, { "remove-audio": 9 })["remove-audio"]).toBe(9)
+    expect(legacy).toEqual({ "apply-edl": 1, "extract-audio": 2, "remove-background": 3 })
+    expect(() => composeRecordSorted("T", legacy, { "apply-edl": 0 })).toThrow(/exactly one place/)
+  })
   it("capabilities, required media and handle rows", () => {
     expect(unitsWith([FIXTURE], "finalize:own-writer")).toEqual(["fixture-echo"])
     expect(unitsWith([FIXTURE], "ffmpeg-media")).toEqual([])
@@ -58,6 +65,14 @@ describe("registry order", () => {
     expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "only-in-the-editor", entry }]).map((d) => d.type)).toEqual(["a", "b", "c", "fixture-echo"])
     expect(placeAfter(legacy, (d) => d.type, [])).toEqual(legacy)
   })
+  it("a unit may follow another unit; a cycle throws instead of dropping them", () => {
+    const u = (type: string, after: string | null) => ({ type, after, entry: { type } })
+    expect(placeAfter(legacy, (d) => d.type, [u("y", "x"), u("x", "a")]).map((d) => d.type)).toEqual(["a", "x", "y", "b", "c"])
+    expect(placeAfter(legacy, (d) => d.type, [u("y", "x"), u("x", "only-in-the-editor")]).map((d) => d.type)).toEqual(["a", "b", "c", "x", "y"])
+    expect(placeAfter(legacy, (d) => d.type, [u("x", "a"), u("w", "a")]).map((d) => d.type)).toEqual(["a", "w", "x", "b", "c"])
+    expect(() => placeAfter(legacy, (d) => d.type, [u("x", "y"), u("y", "x")])).toThrow(/cycle: x, y/)
+    expect(() => placeAfter(legacy, (d) => d.type, [u("x", "x")])).toThrow(/cycle: x/)
+  })
   it("the /v1/nodes category is the manifest's when the server shares it", () => {
     expect(registryCategoryOf(FIXTURE, ["input", "processing"])).toBe("processing")
     expect(() => registryCategoryOf({ ...FIXTURE, category: "ai" }, ["input", "processing"])).toThrow(/no \/v1\/nodes category/)
@@ -69,7 +84,7 @@ describe("prices", () => {
     expect(unitStaticCosts({ "fixture-echo": PRICE })).toEqual({ "fixture-echo": 3, "fixture-echo:hd": 6 })
     expect(unitStaticCosts({})).toEqual({})
     expect(() => unitStaticCosts({ "fixture-echo": PRICE, other: { ...PRICE } })).toThrow(/priced by another unit/)
-    expect(PRICE.creditId({ hd: true })).toBe("fixture-echo:hd")
+    expect(PRICE.creditId?.({ hd: true })).toBe("fixture-echo:hd")
   })
 })
 

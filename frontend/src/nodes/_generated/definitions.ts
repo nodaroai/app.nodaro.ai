@@ -2,12 +2,17 @@
 // @registry frontend/src/nodes/*/definition.generated.ts
 // @registry-exports definitions: UNIT_DEFINITIONS UnitNodeType UnitNodeData
 import type { UnitDefinition } from "../kit"
+import { definition as unit_remove_audio } from "../remove-audio/definition.generated" // unit:remove-audio
+import type { RemoveAudioData as unit_remove_audio_data } from "../remove-audio/types" // unit:remove-audio
 
 export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
+  unit_remove_audio, // unit:remove-audio
 ]
 
 export type UnitNodeType =
   | never
+  | "remove-audio" // unit:remove-audio
 
 export type UnitNodeData =
   | never
+  | unit_remove_audio_data // unit:remove-audio

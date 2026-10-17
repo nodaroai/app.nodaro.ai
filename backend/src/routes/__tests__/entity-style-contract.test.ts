@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
+import { unitRouteFiles } from "../../lib/unit-source-files.js"
 
 // ---------------------------------------------------------------------------
 // Invariant: an entity's `style` is persisted as FREE TEXT.
@@ -42,14 +43,15 @@ const FORBIDDEN_PATTERNS: ReadonlyArray<RegExp> = [
 
 // Save routes (plural) + create/asset/motion routes (generate-*) for the five
 // entity families. Globbed so a NEW entity route is auto-covered.
+const ENTITY_ROUTE = /^(?:generate-(character|object|location|creature|face)(-asset|-motion)?|(characters|objects|locations|creatures|faces))$/
 function entityRouteFiles(): string[] {
-  return readdirSync(routesDir)
-    .filter(
-      (f) =>
-        /^generate-(character|object|location|creature|face)(-asset|-motion)?\.ts$/.test(f) ||
-        /^(characters|objects|locations|creatures|faces)\.ts$/.test(f),
-    )
-    .map((f) => join(routesDir, f))
+  return [
+    ...readdirSync(routesDir)
+      .filter((f) => f.endsWith(".ts") && ENTITY_ROUTE.test(f.slice(0, -3)))
+      .map((f) => join(routesDir, f)),
+    // …and a node unit's route (nodes/<type>/route.ts) whose type names an entity route the same way.
+    ...unitRouteFiles(join(here, "..", "..", "..", "..")).filter((f) => ENTITY_ROUTE.test(basename(dirname(f)))),
+  ]
 }
 
 // MCP entity verb surfaces (create / variant / motion tools + the shared

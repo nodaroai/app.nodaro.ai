@@ -1,3 +1,4 @@
+// @test-watches backend/src/routes/** backend/src/ee/routes/** backend/src/nodes/*/route*.ts
 /**
  * Regression test: every path in `SYNC_HTTP_ROUTES` must actually be a route
  * registered by one of the backend route modules.
@@ -19,6 +20,7 @@ import { join } from "node:path"
 import { IDEMPOTENT_SYNC_HTTP_NODES, SYNC_HTTP_NODES, SYNC_HTTP_ROUTES } from "../node-executor.js"
 import { PLUGIN_SERVED_SYNC_TYPES } from "../ugc-sync-nodes.js"
 import { CLOUD_ONLY_NODE_TYPES } from "../../../lib/cloud-only-nodes.js"
+import { unitRouteFiles } from "../../../lib/route-inventory.js"
 
 /** The sync-HTTP routes the Nodaro Cloud plugin serves (the UGC nodes), by node type. */
 const PLUGIN_SERVED_SYNC_ROUTES: Readonly<Record<string, string>> = {
@@ -131,7 +133,11 @@ describe("SYNC_HTTP_ROUTES ↔ the routes the Nodaro Cloud plugin serves", () =>
       if (statSync(path).isDirectory()) return name === "__tests__" ? [] : routeSources(path)
       return name.endsWith(".ts") ? [readFileSync(path, "utf8")] : []
     })
-  const APP_ROUTE_SOURCES = [join(REPO_ROOT, "backend/src/routes"), join(REPO_ROOT, "backend/src/ee/routes")].flatMap(routeSources)
+  // …plus every node unit's route (backend/src/nodes/<type>/route.ts | route.ee.ts).
+  const APP_ROUTE_SOURCES = [
+    ...[join(REPO_ROOT, "backend/src/routes"), join(REPO_ROOT, "backend/src/ee/routes")].flatMap(routeSources),
+    ...unitRouteFiles(REPO_ROOT).map((f) => readFileSync(f, "utf8")),
+  ]
 
   it("are exactly the executor's plugin-served nodes, each at its pinned path", () => {
     expect([...PLUGIN_SERVED_SYNC_TYPES].sort()).toEqual(Object.keys(PLUGIN_SERVED_SYNC_ROUTES).sort())

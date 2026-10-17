@@ -9,6 +9,8 @@ import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg
  */
 export interface RemoveAudioOptions {
   readonly videoUrl: string
+  /** The work directory's name prefix — the caller's node type, passed in by the node unit's worker. */
+  readonly workDirPrefix: string
 }
 
 export interface RemoveAudioResult {
@@ -16,8 +18,8 @@ export interface RemoveAudioResult {
   readonly videoPath: string
 }
 
-export async function removeAudio({ videoUrl }: RemoveAudioOptions): Promise<RemoveAudioResult> {
-  const workDir = await createWorkDir("remove-audio")
+export async function removeAudio({ videoUrl, workDirPrefix }: RemoveAudioOptions): Promise<RemoveAudioResult> {
+  const workDir = await createWorkDir(workDirPrefix)
   try {
     const inputPath = join(workDir, "input.mp4")
     console.log("[removeAudio] Downloading video")

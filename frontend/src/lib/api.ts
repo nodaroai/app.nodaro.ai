@@ -506,8 +506,9 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
  * Behavior is identical to the inline form (pinned by
  * `__tests__/api-{error-dispatch,common-contract,context-injection}.test.ts`).
  * NOT for FormData uploads or SSE/`streamRequest` calls — those stay bespoke.
+ * Exported for the node units' own api.ts (frontend/src/nodes/<type>/api.ts).
  */
-async function apiJson<T>(
+export async function apiJson<T>(
   path: string,
   opts: {
     method?: string
@@ -4055,18 +4056,6 @@ export async function extractAudioApi(videoUrl: string, userId?: string): Promis
     body,
     workflowId: true,
     label: "apiErr.startExtractAudio",
-  })
-}
-
-export async function removeAudioApi(videoUrl: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl }
-  if (userId) {
-    body.userId = userId
-  }
-  return apiJson("/v1/remove-audio", {
-    body,
-    workflowId: true,
-    label: "apiErr.startRemoveAudio",
   })
 }
 

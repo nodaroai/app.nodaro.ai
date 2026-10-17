@@ -6,7 +6,7 @@
 //
 // What a unit file exports, by file:
 //   definition.generated.ts → `definition: UnitDefinition` (generated from unit.json)
-//   node.tsx                → `NodeComponent: UnitNodeComponent`
+//   node.tsx                → `NodeComponent: UnitNodeComponent` (its store access: `UnitNodeKit`)
 //   config.tsx              → `ConfigPanel: UnitConfigPanel`       (exec-kit.ts)
 //   option.tsx              → `option: UnitOption`
 //   exec.ts                 → `executor: UnitExecutor`             (exec-kit.ts)
@@ -81,6 +81,25 @@ export interface UnitDefinition {
 
 /** node.tsx — the canvas component. */
 export type UnitNodeComponent = ComponentType<NodeProps>
+
+/**
+ * The editor services a node.tsx reaches, bound to its node — given by
+ * `useUnitNodeKit(id)` (components/nodes/use-unit-node-kit.ts), which reads the
+ * workflow store so the unit never imports it (G5: the store sits in the
+ * editor's import cycle).
+ */
+export interface UnitNodeKit {
+  /** The node's config panel is the one open. */
+  readonly isSettingsOpen: boolean
+  readonly videoAutoplay: boolean
+  updateNodeData(patch: Record<string, unknown>): void
+  /** Run this node alone (the Run button). */
+  run(): void
+  /** Open its config panel, or close it when it is the one open. */
+  toggleSettings(): void
+  /** Open a video result in the FreeCut editor. */
+  openFreeCut(videoUrl: string, freecutProjectUrl?: string): void
+}
 
 /** option.tsx — what the picker entry needs beyond unit.json: its icon. */
 export interface UnitOption {

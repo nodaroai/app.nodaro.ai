@@ -1,25 +1,23 @@
-"use client"
-
 import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { VolumeX, Loader2, AlertCircle, X, Film, LayoutGrid } from "lucide-react"
-import { BaseNode } from "./base-node"
-import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
-import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
-import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
+import { BaseNode } from "@/components/nodes/base-node"
+import { NodeJobProgress } from "@/components/nodes/node-job-progress"
+import { RunNodeButton } from "@/components/nodes/run-node-button"
+import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
+import { HandleWithPopover } from "@/components/nodes/handle-with-popover"
+import { ResultsThumbnailsPanel } from "@/components/nodes/results-thumbnails-panel"
 import { ACCEPTS_VIDEO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useUnitNodeKit } from "@/components/nodes/use-unit-node-kit"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { VideoResultOverlay } from "./video-result-overlay"
+import { VideoResultOverlay } from "@/components/nodes/video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { videoNodeSizing } from "./video-node-defaults"
+import { videoNodeSizing } from "@/components/nodes/video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
-import type { RemoveAudioData } from "@/types/nodes"
+import type { RemoveAudioData } from "./types"
 
 // Remove Audio: video in → silent video out. Modeled on resize-video-node
 // (the canonical single-in/single-out video-output FFmpeg node).
@@ -29,12 +27,9 @@ function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
   // The id the route reserves (its own row), not the generic "ffmpeg" one,
   // which quoted half the charge.
   const credits = useModelCredits("remove-audio", 20)
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
-  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
-  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
-  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
+  // The workflow store's services, bound to this node (the unit kit — a unit never imports the store).
+  const kit = useUnitNodeKit(id)
+  const { updateNodeData, isSettingsOpen, videoAutoplay } = kit
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -61,8 +56,8 @@ function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
     [results],
   )
   const handleSelectResult = useCallback(
-    (i: number) => updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: results[i].url }),
-    [id, updateNodeData, results],
+    (i: number) => updateNodeData({ activeResultIndex: i, generatedVideoUrl: results[i].url }),
+    [updateNodeData, results],
   )
   const requestDelete = useCallback(
     (i: number) => {
@@ -74,17 +69,17 @@ function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
   const activeJobId = activeResult?.jobId
 
   function handleDeleteResult(indexToDelete: number) {
-    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
+    updateNodeData(computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   return (
     <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
-      <EditableNodeLabel label={nodeData.label} icon={<VolumeX className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
+      <EditableNodeLabel label={nodeData.label} icon={<VolumeX className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData({ label: newLabel })} />
       <BaseNode id={id} label={nodeData.label} icon={<VolumeX className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
-        topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
+        topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={() => kit.run()} />)}
         bottomToolbarContent={
           showThumbnails && canBrowseAlternates ? (
             <ResultsThumbnailsPanel
@@ -161,7 +156,7 @@ function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
-          onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)}
+          onEdit={() => kit.openFreeCut(activeUrl!, activeResult?.freecutProjectUrl)}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 0}
@@ -170,7 +165,7 @@ function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
           onRawDimensions={handleLoadDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
-          onSettings={() => selectNode(isSettingsOpen ? null : id)}
+          onSettings={() => kit.toggleSettings()}
           isSettingsOpen={isSettingsOpen}
         />
       )}
@@ -191,4 +186,4 @@ function RemoveAudioNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const RemoveAudioNode = memo(RemoveAudioNodeComponent)
+export const NodeComponent = memo(RemoveAudioNodeComponent)

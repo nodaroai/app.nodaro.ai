@@ -2,6 +2,8 @@
 // @registry frontend/src/nodes/*/option.tsx
 // @registry-exports options: UNIT_OPTIONS
 import type { UnitOption } from "../kit"
+import { option as unit_remove_audio } from "../remove-audio/option" // unit:remove-audio
 
 export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

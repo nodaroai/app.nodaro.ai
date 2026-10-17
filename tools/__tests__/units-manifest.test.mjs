@@ -110,6 +110,8 @@ const fileCases = [
   ["route.ts and route.ee.ts together", (root) => writeFileSync(path.join(root, BACKEND, "route.ee.ts"), "export const route = 1\n"), /exclusive/],
   ["a unit without node.tsx", (root) => rmSync(path.join(root, UNIT, "node.tsx")), /every unit needs frontend\/src\/nodes\/fixture-echo\/node\.tsx/],
   ["a picker unit without option.tsx", (root) => rmSync(path.join(root, UNIT, "option.tsx")), /needs frontend\/src\/nodes\/fixture-echo\/option\.tsx \(its icon\)/],
+  // The fixture is a worker with no "ffmpeg-media" capability: the harness characterizes ffmpeg workers only.
+  ["characterize.char.ts on a unit that is not an ffmpeg worker", (root) => writeFileSync(path.join(root, BACKEND, "characterize.char.ts"), "export const characterization = 1\n"), /characterize\.char\.ts characterizes an ffmpeg worker/],
   ["an unknown unit file", (root) => writeFileSync(path.join(root, UNIT, "helpers.ts"), "export const x = 1\n"), /not a unit file/],
   ["types.ts without the <Pascal>Data interface", (root) => writeFileSync(path.join(root, UNIT, "types.ts"), "export interface Other { a: 1 }\n"), /must export FixtureEchoData/],
   ["a backend folder with no manifest", (root) => cpSync(path.join(root, BACKEND), path.join(root, "backend/src/nodes/orphan-node"), { recursive: true }), /orphan-node: frontend\/src\/nodes\/orphan-node\/unit\.json is missing/],
@@ -131,6 +133,39 @@ for (const [name, mutate, re] of fileCases) {
   })
 }
 
+test("docs.index \"hand-written\": needs docs.page and a hand-written README row linking it (outside the region)", () => {
+  const root = tree()
+  try {
+    const readme = path.join(root, "docs/nodes/README.md")
+    const ctx = ctxFor(root, { readText: (p) => { try { return readFileSync(path.join(root, p), "utf8") } catch { return null } } })
+    withManifest(root, (m) => { m.docs.index = "hand-written" })
+    assert.ok(problems(root, ctx).some((e) => /has no hand-written row linking docs\/nodes\/utility\/fixture-echo\.md/.test(e)))
+    // A link inside the generated region is not a hand-written row.
+    writeFileSync(readme, readFileSync(readme, "utf8").replace("<!-- gen:units start -->", "<!-- gen:units start -->\n| [Fixture Echo](./utility/fixture-echo.md) | x | y |"))
+    assert.ok(problems(root, ctx).some((e) => /has no hand-written row/.test(e)))
+    writeFileSync(readme, readFileSync(readme, "utf8").replace("| Node |", "| [Fixture Echo](./utility/fixture-echo.md) | Echo | Test |\n| Node |"))
+    assert.deepEqual(problems(root, ctx), [])
+    withManifest(root, (m) => { m.docs.index = "generated" })
+    assert.ok(problems(root, ctx).some((e) => /docs\.index: "generated" — the only value is "hand-written"/.test(e)))
+    withManifest(root, (m) => { m.docs = { awaiting: "not written yet", index: "hand-written" } })
+    assert.ok(problems(root, ctx).some((e) => /needs docs\.page/.test(e)))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("registry.after: a known type or null; unknown registry keys are refused", () => {
+  const root = tree()
+  try {
+    withManifest(root, (m) => { m.registry.after = "text-prompt" })
+    assert.deepEqual(problems(root), [])
+    withManifest(root, (m) => { m.registry.after = null })
+    assert.deepEqual(problems(root), [])
+    withManifest(root, (m) => { m.registry.after = "no-such-node" })
+    assert.ok(problems(root).some((e) => /registry\.after: "no-such-node" is not a node type/.test(e)))
+    withManifest(root, (m) => { delete m.registry.after; m.registry.order = 3 })
+    assert.ok(problems(root).some((e) => /registry\.order: unknown/.test(e)))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test("insertAtPositions: each unit right after its anchor, null first, chains followed, cycles refused", () => {
   assert.deepEqual(insertAtPositions(["a", "b", "c"], [{ type: "x", after: "a" }, { type: "y", after: "x" }, { type: "w", after: null }]), ["w", "a", "x", "y", "b", "c"])
   assert.deepEqual(insertAtPositions(["a"], [{ type: "q", after: "a" }, { type: "p", after: "a" }]), ["a", "p", "q"])
@@ -138,7 +173,7 @@ test("insertAtPositions: each unit right after its anchor, null first, chains fo
   assert.throws(() => insertAtPositions(["a"], [{ type: "x", after: "zz" }]), /not a node type/)
 })
 
-test("the real tree: zero units today, and the context reads the legacy list and the families", () => {
+test("the real tree: its units are valid, and the context reads the legacy list and the families", () => {
   const ctx = repoContext(REPO)
   assert.ok(ctx.legacyTypes.size > 200, "legacy-nodes.json lists every hand-written node")
   assert.ok(ctx.families.size > 20, "node-families.ts family ids are found")

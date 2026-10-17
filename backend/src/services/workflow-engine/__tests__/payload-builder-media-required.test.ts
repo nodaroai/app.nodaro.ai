@@ -1,4 +1,4 @@
-// @test-watches frontend/src/components/editor/workflow-editor/execute-node.ts frontend/src/lib/i18n/en.ts
+// @test-watches frontend/src/components/editor/workflow-editor/execute-node.ts frontend/src/nodes/** frontend/src/lib/i18n/en.ts
 /**
  * B3 (spec §7, audit §7 "B3"). The DAG engine enqueued ffmpeg nodes with an
  * `undefined` media URL (`resolvedInputs.videoUrl || data.videoUrl`, both
@@ -9,7 +9,7 @@
  * deletes the placeholder job row on a buildPayload throw, :1310-1330; the
  * reservation happens after, :1404-1456).
  */
-import { readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { buildPayload, REQUIRED_MEDIA_INPUTS, assertRequiredMediaInputs } from "../payload-builder.js"
@@ -469,10 +469,16 @@ describe("required media inputs", () => {
   it("pins the frontend's media-refusal count so a NEW guard fails the build", () => {
     // backend/src/services/workflow-engine/__tests__/ → up 5 → repo root
     const REPO_ROOT = join(__dirname, "..", "..", "..", "..", "..")
-    const src = readFileSync(
-      join(REPO_ROOT, "frontend/src/components/editor/workflow-editor/execute-node.ts"),
-      "utf8",
-    )
+    // execute-node.ts, plus every node unit's own executor (frontend/src/nodes/<type>/exec.ts),
+    // where a unit's media guard now lives (kit.nodeRunError).
+    const unitsDir = join(REPO_ROOT, "frontend/src/nodes")
+    const unitExecs = readdirSync(unitsDir)
+      .filter((n) => !n.startsWith("_") && existsSync(join(unitsDir, n, "exec.ts")))
+      .map((n) => readFileSync(join(unitsDir, n, "exec.ts"), "utf8"))
+    const src = [
+      readFileSync(join(REPO_ROOT, "frontend/src/components/editor/workflow-editor/execute-node.ts"), "utf8"),
+      ...unitExecs,
+    ].join("\n")
     const dictionary = readFileSync(join(REPO_ROOT, "frontend/src/lib/i18n/en.ts"), "utf8")
     const englishOf = (key: string): string | undefined =>
       dictionary.match(new RegExp(`^\\s*"${key.replace(/\./g, "\\.")}":\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m"))?.[1]

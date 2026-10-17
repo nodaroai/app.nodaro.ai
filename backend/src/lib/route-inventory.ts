@@ -1,6 +1,7 @@
 /**
  * The static inventory of the REST routes this repo registers: every
  * `<app>.<verb>("/v1/…")` call under backend/src/routes/ and backend/src/ee/routes/,
+ * and in every node unit's route (backend/src/nodes/<type>/route.ts | route.ee.ts),
  * read from the source without booting the app.
  *
  * Shared by the frontend ↔ backend path-parity test (route-path-parity.test.ts)
@@ -13,9 +14,10 @@
  * app to see the exact set. One loop is read from its registry instead: the
  * use-case route factories (see {@link usecaseFactoryRegistrations}).
  */
-// @reads backend/src/routes/** backend/src/ee/routes/**
+// @reads backend/src/routes/** backend/src/ee/routes/** backend/src/nodes/*/route*.ts
 import { readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { UNIT_SOURCE_ROOT, unitRouteFiles } from "./unit-source-files.js"
 import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseDescriptor } from "@nodaro/render-rules"
 
 export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const
@@ -164,3 +166,12 @@ export function walkRouteFiles(dir: string): string[] {
 
 /** The two route trees, relative to the repo root. */
 export const ROUTE_DIRS = ["backend/src/routes", "backend/src/ee/routes"] as const
+
+/** Where node units live (tools/units/README.md); a unit's route is its route.ts or, Cloud-only, route.ee.ts. */
+export const UNIT_ROUTE_ROOT = UNIT_SOURCE_ROOT
+export { unitRouteFiles }
+
+/** Every file that registers routes (absolute): the two route trees and every node unit's route. */
+export function allRouteFiles(repoRoot: string): string[] {
+  return [...ROUTE_DIRS.flatMap((d) => walkRouteFiles(join(repoRoot, d))), ...unitRouteFiles(repoRoot)]
+}

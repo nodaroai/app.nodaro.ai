@@ -432,7 +432,6 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
     { anyOf: ["audioSources", "audioUrl"], kind: "audio", noun: "an audio track" },
   ],
   "extract-audio": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
-  "remove-audio": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "trim-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "extract-frame": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "resize-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
@@ -6690,13 +6689,6 @@ export function buildPayload(
         audioSyncCreditId(sources.length),
       )
     }
-
-    case "remove-audio":
-      return ffmpegResult("remove-audio", {
-        jobId,
-        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        usageLogId,
-      })
 
     case "trim-video": {
       const trimMode = (data.trimMode as string | undefined) ?? "time"

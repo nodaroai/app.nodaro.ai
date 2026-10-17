@@ -4,8 +4,7 @@
 // of the two. Pure and aggregate-free — each composer passes its legacy table
 // and the unit collection in — so lib/__tests__/unit-compose.test.ts proves
 // every seam on an in-memory fixture unit, and an EMPTY unit collection
-// returns every legacy table unchanged (the composed-baseline test proves that
-// on the real registries).
+// returns every legacy table unchanged.
 import type { UnitDescriptor, UnitPrice } from "../nodes/kit.js"
 
 /** Throws when a unit key is also a legacy key: a node type lives in exactly one place (G1). */
@@ -27,6 +26,33 @@ export function composeRecord<V>(what: string, legacy: Record<string, V>, additi
   if (keys.length === 0) return legacy
   assertDisjoint(what, Object.keys(legacy), keys)
   return { ...legacy, ...additions }
+}
+
+/**
+ * A record whose legacy keys are in `compare` order (the gen:skills handle
+ * table, sorted by type with localeCompare): every unit row inserted at its
+ * place in that order — before the first legacy key that sorts after it — so
+ * the composed record is in the same order a table holding the unit too would
+ * be. Legacy keys keep their own order. With nothing to add it returns
+ * `legacy` itself.
+ */
+export function composeRecordSorted<V>(
+  what: string,
+  legacy: Record<string, V>,
+  additions: Readonly<Record<string, V>>,
+  compare: (a: string, b: string) => number = (a, b) => a.localeCompare(b),
+): Record<string, V> {
+  const added = Object.keys(additions).sort(compare)
+  if (added.length === 0) return legacy
+  assertDisjoint(what, Object.keys(legacy), added)
+  const out: Record<string, V> = {}
+  let i = 0
+  for (const k of Object.keys(legacy)) {
+    while (i < added.length && compare(added[i], k) < 0) { out[added[i]] = additions[added[i]]; i++ }
+    out[k] = legacy[k]
+  }
+  for (; i < added.length; i++) out[added[i]] = additions[added[i]]
+  return out
 }
 
 /** `legacy` plus `additions`, legacy order first. With nothing to add it returns `legacy` itself. */
@@ -53,9 +79,10 @@ export const unitsWith = (units: ReadonlyArray<UnitDescriptor>, capability: stri
 
 /**
  * `legacy` (in its order) with each unit placed right after the type its
- * `after` names — or, when that type is not in this collection (a registry
- * that lists fewer nodes than NODE_DEFINITIONS), at the end. Units naming the
- * same place keep type order.
+ * `after` names — a legacy entry or another unit, so a unit may follow a unit
+ * — or, when that type is not in this collection (a registry that lists fewer
+ * nodes than NODE_DEFINITIONS), at the end. Units naming the same place keep
+ * type order. A cycle among units throws.
  */
 export function placeAfter<T>(legacy: ReadonlyArray<T>, typeOf: (t: T) => string, units: ReadonlyArray<{ readonly type: string; readonly after: string | null; readonly entry: T }>): T[] {
   if (units.length === 0) return [...legacy]
@@ -75,6 +102,9 @@ export function placeAfter<T>(legacy: ReadonlyArray<T>, typeOf: (t: T) => string
   for (const u of byAnchor.get(null) ?? []) place(u.entry, u.type)
   for (const t of legacy) place(t, typeOf(t))
   for (const u of byAnchor.get("\0end") ?? []) place(u.entry, u.type)
+  const placed = new Set(out.map(typeOf))
+  const unplaced = sorted.map((u) => u.type).filter((t) => !placed.has(t))
+  if (unplaced.length) throw new Error(`placeAfter: the units' anchors form a cycle: ${unplaced.join(", ")}`)
   return out
 }
 
@@ -105,16 +135,19 @@ export function registryCategoryOf<C extends string>(u: UnitDescriptor, categori
  */
 export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string, unknown>>): Record<string, string> | undefined {
   const out: Record<string, string> = {}
-  const results = Array.isArray(data.generatedResults) ? (data.generatedResults as ReadonlyArray<{ url?: unknown }>) : []
-  const active = typeof data.activeResultIndex === "number" ? data.activeResultIndex : 0
-  const activeUrl = typeof results[active]?.url === "string" && results[active]?.url ? (results[active]?.url as string) : undefined
+  // Exactly the legacy media read (output-extractor.ts getActiveResultUrl, then
+  // the field): `activeResultIndex ?? 0`, the active result's url when it is not
+  // nullish — an empty one included, which then saves nothing — else the field.
+  const results = (data.generatedResults as ReadonlyArray<{ url?: string }> | undefined) ?? []
+  const active = (data.activeResultIndex as number | undefined) ?? 0
+  const activeUrl = results[active]?.url
   for (const h of u.handles.outputs) {
     if (!h.from) continue
-    const field = typeof data[h.from] === "string" && data[h.from] ? (data[h.from] as string) : undefined
+    const value = data[h.from] as string | undefined
     if (h.kind === "video" || h.kind === "audio" || h.kind === "image") {
-      const url = activeUrl ?? field
+      const url = activeUrl ?? value
       if (url && out[`${h.kind}Url`] === undefined) out[`${h.kind}Url`] = url
-    } else if (h.kind === "text" && field && out.text === undefined) out.text = field
+    } else if (h.kind === "text" && typeof value === "string" && value && out.text === undefined) out.text = value
   }
   return Object.keys(out).length ? out : undefined
 }

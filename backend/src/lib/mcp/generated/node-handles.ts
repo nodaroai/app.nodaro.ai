@@ -130,7 +130,6 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "reference-audio": { inputs: ["in"], outputs: ["audio"] },
   "reference-board": { inputs: ["prompt", "references"], outputs: ["image"] },
   "reference-sheet": { inputs: ["in"], outputs: ["sheet", "panels"] },
-  "remove-audio": { inputs: ["in"], outputs: ["video-out"] },
   "remove-background": { inputs: ["image"], outputs: ["image"] },
   "render-quality": { inputs: ["in"], outputs: ["out"] },
   "render-video": { inputs: ["composition"], outputs: ["video"] },

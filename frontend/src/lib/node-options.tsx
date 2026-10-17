@@ -1589,14 +1589,6 @@ const LEGACY_NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["extract audio", "rip audio", "audio from video", "demux", "detach audio", "get audio", "mp3", "split video audio"],
   },
   {
-    type: "remove-audio",
-    label: "Remove Audio",
-    icon: <VolumeX className="h-4 w-4" />,
-    category: "Processing",
-    group: "video-sound",
-    keywords: ["remove audio", "mute", "strip audio", "silent video", "delete audio", "no sound", "detach audio", "split video audio"],
-  },
-  {
     type: "mix-audio",
     label: "Mix Audio",
     icon: <Music className="h-4 w-4" />,

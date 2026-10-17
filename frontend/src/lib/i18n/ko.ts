@@ -1940,8 +1940,6 @@ export const ko: ChromeDict = {
   "proccfg.videoChunks": "동영상 구간({count})",
   "proccfg.extractsTheAudioTrackFromThe": "연결된 동영상에서 오디오 트랙을 추출해 별도의 MP3로 만듭니다.",
   "proccfg.noSettingsConnectAVideoTo": "설정이 없습니다. 입력에 동영상을 연결하고 실행하세요. 소리 없는 동영상이 필요하면 “{node}” 노드를 사용하세요.",
-  "proccfg.stripsTheAudioTrackFromThe": "연결된 동영상에서 오디오 트랙을 제거해 소리 없는 클립을 만듭니다(무손실 — 동영상을 다시 인코딩하지 않고 스트림 복사).",
-  "proccfg.noSettingsConnectAVideoTo2": "설정이 없습니다. 입력에 동영상을 연결하고 실행하세요. 오디오 트랙이 필요하면 “{node}” 노드를 사용하세요.",
   "proccfg.connectAudioNodesToSetPer": "오디오 노드를 연결하면 트랙별 볼륨을 설정할 수 있습니다.",
   "proccfg.mixDuckUnder": "볼륨 낮추기 기준 트랙",
   "proccfg.mixDuckUnderAria": "다른 트랙의 볼륨을 낮출 기준 트랙",
@@ -6351,8 +6349,6 @@ export const ko: ChromeDict = {
   "node.connectACharacterObjectOr": "대표 이미지가 있는 캐릭터, 오브젝트 또는 장소를 연결하세요",
   "node.referenceSheet": "레퍼런스 시트",
   "node.deleteThisSheet": "이 시트 삭제",
-  "node.removeAudio": "오디오 제거",
-  "node.silent": "무음",
   "node.rendered": "렌더링 완료",
   "node.resized": "크기 조정 완료",
   "node.finalPromptUsed": "사용된 최종 프롬프트",
@@ -10907,7 +10903,6 @@ export const ko: ChromeDict = {
   "apiErr.startTrimAudio": "오디오 자르기를 시작하지 못했습니다",
   "apiErr.startSplitMedia": "구간 분할을 시작하지 못했습니다",
   "apiErr.startExtractAudio": "오디오 추출을 시작하지 못했습니다",
-  "apiErr.startRemoveAudio": "오디오 제거를 시작하지 못했습니다",
   "apiErr.startSilenceDetect": "무음 감지를 시작하지 못했습니다",
   "apiErr.startAudioSync": "오디오 동기화를 시작하지 못했습니다",
   "apiErr.startTrimVideo": "동영상 자르기를 시작하지 못했습니다",
@@ -12441,5 +12436,10 @@ export const ko: ChromeDict = {
   "apiErr.startVideoMask": "“동영상 마스크”를 시작하지 못했습니다",
   "apiErr.startMaskComposite": "“마스크 합성”을 시작하지 못했습니다",
   // gen:units start
+  "apiErr.startRemoveAudio": "오디오 제거를 시작하지 못했습니다",
+  "node.removeAudio": "오디오 제거",
+  "node.silent": "무음",
+  "proccfg.noSettingsConnectAVideoTo2": "설정이 없습니다. 입력에 동영상을 연결하고 실행하세요. 오디오 트랙이 필요하면 “{node}” 노드를 사용하세요.",
+  "proccfg.stripsTheAudioTrackFromThe": "연결된 동영상에서 오디오 트랙을 제거해 소리 없는 클립을 만듭니다(무손실 — 동영상을 다시 인코딩하지 않고 스트림 복사).",
   // gen:units end
 }

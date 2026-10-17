@@ -2,6 +2,8 @@
 // @registry frontend/src/nodes/*/config.tsx
 // @registry-exports configs: UNIT_CONFIGS
 import type { UnitConfigPanel } from "../exec-kit"
+import { ConfigPanel as unit_remove_audio } from "../remove-audio/config" // unit:remove-audio
 
 export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

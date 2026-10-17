@@ -2,6 +2,8 @@
 // @registry backend/src/nodes/*/descriptor.generated.ts
 // @registry-exports registry: UNIT_REGISTRY
 import type { UnitDescriptor } from "../kit.js"
+import { descriptor as unit_remove_audio } from "../remove-audio/descriptor.generated.js" // unit:remove-audio
 
 export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

@@ -2,6 +2,8 @@
 // @registry frontend/src/nodes/*/labels.generated.ts
 // @registry-exports labels: UNIT_LABELS
 import type { UnitLabels } from "../kit"
+import { labels as unit_remove_audio } from "../remove-audio/labels.generated" // unit:remove-audio
 
 export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

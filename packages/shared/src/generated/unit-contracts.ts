@@ -4,4 +4,5 @@
 // composes these rows into the producer sets. Every row is an irrevocable Apache grant.
 
 export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "audio" | "video" | "image" | "dynamic"]> = [
+  ["remove-audio", "video"], // unit:remove-audio
 ]

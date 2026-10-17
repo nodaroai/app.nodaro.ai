@@ -1,0 +1,12 @@
+{
+  "keys": {
+    "node.removeAudio": {"en": "Remove Audio", "he": "הסרת אודיו", "ja": "オーディオを削除", "ko": "오디오 제거", "pt-br": "Remover áudio"},
+    "node.silent": {"en": "Silent", "he": "ללא אודיו", "ja": "無音", "ko": "무음", "pt-br": "Sem áudio"},
+    "proccfg.stripsTheAudioTrackFromThe": {"en": "Strips the audio track from the connected video, leaving a silent clip (lossless — the video is stream-copied, not re-encoded).", "he": "מסיר את רצועת האודיו מהווידאו המחובר ומשאיר קליפ שקט (ללא אובדן — הווידאו מועתק כזרם, בלי קידוד מחדש).", "ja": "接続された動画からオーディオトラックを取り除き、無音のクリップにします（ロスレス：動画は再エンコードされず、ストリームコピーされます）。", "ko": "연결된 동영상에서 오디오 트랙을 제거해 소리 없는 클립을 만듭니다(무손실 — 동영상을 다시 인코딩하지 않고 스트림 복사).", "pt-br": "Remove a faixa de áudio do vídeo conectado, deixando um clipe sem som (sem perdas — o vídeo é copiado direto, sem recodificação)."},
+    "proccfg.noSettingsConnectAVideoTo2": {"en": "No settings — connect a video to the input and run. Use {node} if you want the audio track instead.", "he": "אין הגדרות — חברו וידאו לקלט והריצו. השתמשו ב{node} אם אתם רוצים את רצועת האודיו במקום.", "ja": "設定項目はありません。入力に動画を接続して実行してください。オーディオトラックが必要な場合は「{node}」を使用してください。", "ko": "설정이 없습니다. 입력에 동영상을 연결하고 실행하세요. 오디오 트랙이 필요하면 “{node}” 노드를 사용하세요.", "pt-br": "Sem configurações — conecte um vídeo à entrada e execute. Use o nó “{node}” se preferir a faixa de áudio."},
+    "apiErr.startRemoveAudio": {"en": "Failed to start remove-audio", "he": "התחלת הסרת האודיו נכשלה", "ja": "「オーディオを削除」を開始できませんでした", "ko": "오디오 제거를 시작하지 못했습니다", "pt-br": "Não foi possível iniciar a remoção do áudio"}
+  },
+  "labels": {
+    "Remove Audio": {"he": "הסרת אודיו", "ja": "オーディオを削除", "ko": "오디오 제거", "pt-br": "Remover áudio"}
+  }
+}

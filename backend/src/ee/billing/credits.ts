@@ -1948,7 +1948,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...AUDIO_SYNC_CREDIT_COSTS,
   "split-media": 20,
   "extract-audio": 10,
-  "remove-audio": 20,
   "mix-audio": 20,
   "combine-audio": 10,
   "adjust-volume": 10,
@@ -2329,7 +2328,11 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   "episode-chapters": () => "use-case-fee:episode-chapters",
   "episode-trailer": () => "use-case-fee:episode-trailer",
   "clip-pack": () => "use-case-fee:clip-pack",
-}, Object.fromEntries(Object.entries(UNIT_PRICES).map(([type, p]) => [type, (data: Record<string, unknown>) => p.creditId(data)])))
+// A unit with a creditId resolver (price.ee.ts); a flat-priced unit has none and reserves the row of its type.
+}, Object.fromEntries(Object.entries(UNIT_PRICES).flatMap(([type, p]) => {
+  const creditId = p.creditId
+  return creditId ? [[type, (data: Record<string, unknown>) => creditId(data)]] : []
+})))
 
 // ============================================================
 // Helper Functions

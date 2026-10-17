@@ -165,7 +165,6 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Reframe": "リフレーム",
   "Follow the speaker": "話者を追う",
   "Speaker Frames": "話者フレーム",
-  "Remove Audio": "オーディオを削除",
   "Mix Audio": "オーディオをミックス",
   "Combine Audio": "オーディオを結合",
   "Adjust Volume": "音量調整",

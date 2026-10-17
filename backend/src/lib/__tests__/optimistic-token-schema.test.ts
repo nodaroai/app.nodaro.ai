@@ -1,9 +1,11 @@
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
 import { expectedUpdatedAtSchema } from "../optimistic-token-schema.js"
+import { unitRouteFiles } from "../unit-source-files.js"
 
 const ROUTES_DIR = join(__dirname, "..", "..", "routes")
+const REPO = join(__dirname, "..", "..", "..", "..")
 
 describe("expectedUpdatedAtSchema", () => {
   it("accepts the timestamp exactly as the database hands it out", () => {
@@ -20,9 +22,11 @@ describe("expectedUpdatedAtSchema", () => {
   })
 
   it("no route validates the token with the offset-blind bare form", () => {
-    const offenders = readdirSync(ROUTES_DIR)
-      .filter((f) => f.endsWith(".ts"))
-      .filter((f) => /expectedUpdatedAt:\s*z\.string\(\)\.datetime\(\)/.test(readFileSync(join(ROUTES_DIR, f), "utf8")))
+    // The routes/ files, plus every node unit's route.
+    const files = [...readdirSync(ROUTES_DIR).filter((f) => f.endsWith(".ts")).map((f) => join(ROUTES_DIR, f)), ...unitRouteFiles(REPO)]
+    const offenders = files
+      .filter((f) => /expectedUpdatedAt:\s*z\.string\(\)\.datetime\(\)/.test(readFileSync(f, "utf8")))
+      .map((f) => relative(REPO, f))
     expect(offenders, "use expectedUpdatedAtSchema from lib/optimistic-token-schema.ts").toEqual([])
   })
 })

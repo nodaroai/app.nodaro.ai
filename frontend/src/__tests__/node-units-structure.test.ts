@@ -1,5 +1,5 @@
 // @vitest-environment node
-// @test-watches frontend/src/**/*.{ts,tsx} backend/src/**/*.ts tools/units/** frontend/src/lib/i18n/*.ts
+// @test-watches frontend/src/**/*.{ts,tsx} backend/src/**/*.ts packages/*/src/**/*.ts tools/units/** frontend/src/lib/i18n/*.ts
 import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -26,7 +26,9 @@ import { isProductFile } from "../../../tools/structure/scanner.mjs"
 const ROOT = path.resolve(__dirname, "../../..")
 const FIXTURE = path.join(ROOT, "tools/units/__fixtures__/tree")
 const read = (p: string, root = ROOT) => readFileSync(path.join(root, p), "utf8")
-const tracked = execFileSync("git", ["ls-files", "frontend/src", "backend/src"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 }).split("\n").filter(Boolean)
+// Both trees and every workspace package's source: a package composes units too
+// (producer-types.ts, kept-length.ts), so a type id hand-written there is a central mention.
+const tracked = execFileSync("git", ["ls-files", "frontend/src", "backend/src", ":(glob)packages/*/src/**"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 }).split("\n").filter(Boolean)
 const products = tracked.filter((p) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs)$/.test(p) && isProductFile(p))
 const units = loadUnits(ROOT)
 const unitTypes = units.map((u) => u.type)
@@ -37,8 +39,12 @@ const inUnit = (p: string, type: string) => p.startsWith(`frontend/src/nodes/${t
 // The places that may name a unit's type id: its own folders, the generated
 // outputs (gen:units, and the gen:skills outputs under backend/src), and a
 // reasoned central-mentions.json entry.
-const GEN_SKILLS_IN_SRC = ["backend/src/lib/mcp/generated/**"]
-const allowed = (p: string, type: string) => inUnit(p, type) || matchesAny(p, GEN_UNITS_OUTPUTS) || matchesAny(p, GEN_SKILLS_IN_SRC) || Boolean(centralList[p]?.[type])
+const GEN_SKILLS_IN_SRC = ["backend/src/lib/mcp/generated/**", "packages/render-rules/src/generated/**"]
+// The node-docs snapshot (scripts/gen-node-docs.mjs, refreshed from the live
+// docs site): keyed by every node type that has a page, unit or not — a
+// deliberately central step of every node (tools/units/README.md).
+const GEN_NODE_DOCS_IN_SRC = ["frontend/src/lib/node-docs/**/*.generated.ts"]
+const allowed = (p: string, type: string) => inUnit(p, type) || matchesAny(p, GEN_UNITS_OUTPUTS) || matchesAny(p, GEN_SKILLS_IN_SRC) || matchesAny(p, GEN_NODE_DOCS_IN_SRC) || Boolean(centralList[p]?.[type])
 
 describe("composers declare every export that reads their composed collection", () => {
   type Entry = { exports?: Record<string, string[]>; lookups?: string[] }
@@ -167,10 +173,14 @@ describe("G7 — unit modules have no top-level side effects", () => {
     const ok = [
       'import { memo } from "react"\nexport const N = memo(() => null)\nexport function f() { run() }\nexport default async function route() {}',
       'import { z } from "zod"\nexport const Body = z.object({ a: z.string() })\nexport const s = new Set(["a"])\nexport type T = 1\nexport const o = { a: 1, f() {}, ...{ b: 2 } } as const',
+      'import { z } from "zod"\nexport const Body = z.object({ id: z.string().uuid().optional(), n: z.number().int().min(1).default(2) })',
     ]
     for (const src of ok) expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", src)).toEqual([])
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", 'registerNode("x")')[0]).toMatch(/:1 a top-level ExpressionStatement/)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export const a = load()")[0]).toMatch(/initializer of a may have a side effect/)
+    // A call chain is pure only when it is a zod schema all the way down, with pure arguments.
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export const a = load().optional()")).toHaveLength(1)
+    expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export const a = z.string().transform(register())")).toHaveLength(1)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "if (x) {}\n")).toHaveLength(1)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export default setup()")[0]).toMatch(/export default/)
     expect(sideEffectProblems(ts, "frontend/src/nodes/x/exec.ts", "export let n = 0\nn = 1\n")).toHaveLength(1)
