@@ -1869,7 +1869,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -1935,14 +1935,28 @@ The same holds for every run priced per unit: the minutes of an Apply EDL
 or Speaker View render, the 5-second units of Trim Video, Loop Video,
 Combine Videos, Assemble Narrated Video and Mask Composite, the
 seconds of an LTX 2.3 Pro extend or retake, and the started minutes of a
-dub (`elevenlabs-dubbing`, Hebrew `elevenlabs-dubbing-v2`). The row is the
+dub (`elevenlabs-dubbing`, Hebrew `elevenlabs-dubbing-v2`), and the started
+blocks of 1,000 sampled frames of a Speaker Frames run (`speaker-frames`, at
+least one block). The row is the
 price of one unit, and a run is priced as a whole and rounded once, so
 `N × the row` can come to more than the run costs. The exact price of N
 units is the identifier `<row>:<N>u` — for example `apply-edl:4u`,
-`elevenlabs-dubbing:3u`, or `ltx-2.3-pro-retake:per-second:2.5u` (N is
+`elevenlabs-dubbing:3u`, `speaker-frames:11u`, or `ltx-2.3-pro-retake:per-second:2.5u` (N is
 fractional where the run's units are; a dub is charged whole minutes, 1 to
-30) — which both endpoints answer. A row not charged per unit, or a unit
+30, and Speaker Frames whole blocks) — which both endpoints answer. A row not charged per unit, or a unit
 count no run of it can have, lands in `missing`.
+
+So `GET /v1/credits/model-cost?model=speaker-frames` answers ONE block's
+price, 3<!-- credits: speaker-frames --> — the least a run is charged, never
+a run's price: a run of 11 blocks is charged 25<!-- credits: speaker-frames@11 -->,
+where 11 × 3<!-- credits: speaker-frames --> would say 33<!-- credits: 11*speaker-frames -->. A Speaker Frames run's blocks are counted by the
+server from the edit it samples, so to quote a run before it starts, send the
+workflow to `POST /v1/credits/estimate-workflow` (`{ nodes, edges? }` →
+`{ data: { totalCredits, … } }`): it counts the wired edit's frames the way the
+[editor's estimate](./nodes/processing-video/speaker-frames.md#what-the-estimate-shows-before-you-run)
+does. With the block count in hand, `speaker-frames:<N>u` is its exact price,
+and `GET /v1/nodes/speaker-frames` serves the per-block rate as `creditRate`
+([§11](#11-node-discovery)).
 
 A Voice Changer Pro convert (`POST /v1/voice-changer-pro`) is priced the
 same way: each recast voice is priced in base units and the convert is

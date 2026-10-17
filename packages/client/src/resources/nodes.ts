@@ -49,6 +49,28 @@ export interface NodeInputSchema {
 }
 
 /**
+ * A per-unit price on a node descriptor. A run of N units is charged
+ * `ceil(N × creditsPerUnit)`, rounded up once — so `GET /v1/credits/model-cost`
+ * for `identifier` (one unit, rounded up: the least a run pays) times N can come
+ * to more. `<identifier>:<N>u` is the exact price of N units; for a whole run
+ * use `POST /v1/credits/estimate-workflow`.
+ */
+export interface NodeCreditRate {
+  /** The price id the rate is read from. */
+  identifier: string
+  /** What one unit is, as a token (`"1000-frames"`: one started block of 1,000 sampled frames). */
+  unit: string
+  /** The credits one unit adds to a run's total — exact, not rounded. */
+  creditsPerUnit: number
+  /** The fewest units a run is charged for. */
+  minUnits: number
+  /** `"ceil-run-total"`: the run's total is rounded up to a whole credit once, never per unit. */
+  rounding: "ceil-run-total"
+  /** The rule in words. */
+  note: string
+}
+
+/**
  * Node descriptor returned by `GET /v1/nodes` and `GET /v1/nodes/:type`.
  * Mirrors `backend/src/lib/node-registry.ts#NodeDescriptor`.
  */
@@ -64,6 +86,10 @@ export interface NodeDescriptor {
    *  without a credit system (community/business omit the field entirely;
    *  it is meaningful on Cloud only). */
   creditCost?: number | string
+  /** A node charged per unit of its own measure (its `creditCost` is a word
+   *  such as `"per-1000-frames"`): the charged price of one unit and how a run
+   *  rounds. Cloud only, like `creditCost`. */
+  creditRate?: NodeCreditRate
   /** Input fields the node exposes for user override (subset of full config). */
   inputSchema?: NodeInputSchema
   /** For AI nodes: list of provider IDs supported. */

@@ -19,6 +19,16 @@ const NodeDescriptorSchema = z.object({
   description: z.string(),
   outputType: z.string(),
   creditCost: z.union([z.number(), z.string()]).optional(),
+  creditRate: z.object({
+    identifier: z.string(),
+    unit: z.string(),
+    creditsPerUnit: z.number(),
+    minUnits: z.number(),
+    rounding: z.literal("ceil-run-total"),
+    note: z.string(),
+  }).optional().openapi({
+    description: "A node charged per unit of its own measure: the charged credits of one unit (exact) and the rounding rule — a run is charged ceil(units × creditsPerUnit) once.",
+  }),
   inputSchema: z.object({ fields: z.array(z.object({
     key: z.string(), type: z.string(), required: z.boolean().optional(), options: z.array(z.string()).optional(),
   })) }).optional(),

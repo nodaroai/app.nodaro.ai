@@ -17,6 +17,10 @@ vi.mock("@/lib/pricing/charged-prices.js", async () => {
         const base = STATIC_CREDIT_COSTS[identifier]
         return base === undefined ? undefined : Math.ceil((base * units * 110) / 100)
       },
+      rate: (identifier: string) => {
+        const base = STATIC_CREDIT_COSTS[identifier]
+        return base === undefined ? undefined : Math.ceil(base * 100 * 1.1 - 1e-9) / 100
+      },
     }),
   }
 })
@@ -70,6 +74,26 @@ describe("GET /v1/nodes — the charged price", () => {
   it("figures that are not a price stay as declared", async () => {
     expect(await listed("apply-edl")).toBe("per-minute")
     expect(await listed("composite")).toBe(0)
+  })
+
+  it("a per-unit node keeps its word and adds the charged rate of one unit (Speaker Frames: base 2 a block, charged 2.2)", async () => {
+    expect(STATIC_CREDIT_COSTS["speaker-frames"]).toBe(2)
+    const body = (await app.inject({ method: "GET", url: "/v1/nodes/speaker-frames" })).json() as {
+      data: { creditCost?: number | string; creditRate?: Record<string, unknown> }
+    }
+    expect(body.data.creditCost).toBe("per-1000-frames")
+    expect(body.data.creditRate).toMatchObject({
+      identifier: "speaker-frames",
+      unit: "1000-frames",
+      creditsPerUnit: 2.2,
+      minUnits: 1,
+      rounding: "ceil-run-total",
+    })
+    // No other node carries one.
+    const list = (await app.inject({ method: "GET", url: "/v1/nodes" })).json() as {
+      data: Array<{ type: string; creditRate?: unknown }>
+    }
+    expect(list.data.filter((n) => n.creditRate !== undefined).map((n) => n.type)).toEqual(["speaker-frames"])
   })
 
   it("/v1/nodes/:type quotes the same charged price as the list", async () => {

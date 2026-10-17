@@ -373,7 +373,8 @@ describe("GET /v1/admin/model-pricing", () => {
       { id: TEST_MODEL_ID, model_identifier: "flux", credit_cost: 10, is_enabled: true },
     ]
     const mockRange = vi.fn().mockResolvedValue({ data: models, error: null, count: 1 })
-    const mockOrder = vi.fn().mockReturnValue({ range: mockRange })
+    const ordered = { order: vi.fn(), range: mockRange }
+    const mockOrder = ordered.order.mockReturnValue(ordered)
     const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -390,6 +391,8 @@ describe("GET /v1/admin/model-pricing", () => {
     expect(body.limit).toBe(100)
     expect(body.offset).toBe(0)
     expect(supabase.from).toHaveBeenCalledWith("model_pricing")
+    // A total order: offset pages over rows tied on category are stable.
+    expect(mockOrder).toHaveBeenLastCalledWith("model_identifier", { ascending: true })
   })
 
   it("returns 500 on DB error", async () => {
@@ -398,7 +401,8 @@ describe("GET /v1/admin/model-pricing", () => {
       error: { message: "DB down" },
       count: null,
     })
-    const mockOrder = vi.fn().mockReturnValue({ range: mockRange })
+    const ordered = { order: vi.fn(), range: mockRange }
+    const mockOrder = ordered.order.mockReturnValue(ordered)
     const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 

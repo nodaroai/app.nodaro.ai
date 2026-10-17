@@ -234,6 +234,9 @@ export async function adminRoutes(app: FastifyInstance) {
       .from("model_pricing")
       .select("*", { count: "exact" })
       .order("category", { ascending: true })
+      // A total order: `category` alone ties, and offset pages over tied rows
+      // can repeat one row and never return another.
+      .order("model_identifier", { ascending: true })
       .range(offset, offset + limit - 1)
 
     if (error) {

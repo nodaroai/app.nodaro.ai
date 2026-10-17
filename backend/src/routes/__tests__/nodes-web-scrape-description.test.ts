@@ -14,7 +14,7 @@ vi.mock("@/lib/surface-deny.js", async (importOriginal) => ({
   effectiveDeniedWebScrapeSources: () => withdrawn.sources,
 }))
 vi.mock("@/lib/pricing/charged-prices.js", () => ({
-  loadChargedPrices: async () => ({ credits: () => undefined }),
+  loadChargedPrices: async () => ({ credits: () => undefined, rate: () => undefined }),
 }))
 
 import { nodesRoutes } from "../nodes.js"

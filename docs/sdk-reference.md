@@ -1890,6 +1890,19 @@ const { data } = await client.nodes.get("generate-image")
 console.log(data.providers, data.creditCost) // creditCost: the charged price, Cloud only
 ```
 
+A node charged per unit of its own measure also carries `creditRate`
+(`NodeCreditRate`) — Speaker Frames, whose `creditCost` is the word
+`"per-1000-frames"`. `creditsPerUnit` is the exact charged credits of one unit,
+and a run of N units is charged `Math.ceil(N * creditsPerUnit)`, rounded up
+once (`rounding: "ceil-run-total"`), so never multiply the one-unit price from
+`/v1/credits/model-cost`. See [Node discovery](./api-integration.md#11-node-discovery).
+
+```ts
+const { data: frames } = await client.nodes.get("speaker-frames")
+const rate = frames.creditRate // { identifier: "speaker-frames", unit: "1000-frames", creditsPerUnit, minUnits: 1, rounding: "ceil-run-total", note }
+const runCredits = rate && Math.ceil(Math.max(rate.minUnits, blocks) * rate.creditsPerUnit)
+```
+
 #### `run(type, params?)`
 
 ```ts

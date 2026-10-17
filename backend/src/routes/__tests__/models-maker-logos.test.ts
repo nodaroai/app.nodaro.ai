@@ -43,7 +43,7 @@ vi.mock("../../lib/storage.js", async (importOriginal) => ({
 
 // The prices come from the billing module; these cases are not about prices.
 vi.mock("../../lib/pricing/charged-prices.js", () => ({
-  loadChargedPrices: async () => ({ credits: () => undefined }),
+  loadChargedPrices: async () => ({ credits: () => undefined, rate: () => undefined }),
 }))
 
 const { modelsRoutes } = await import("../models.js")

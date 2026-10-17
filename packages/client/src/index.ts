@@ -394,6 +394,7 @@ export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput } from "./resourc
 
 export type {
   NodeDescriptor,
+  NodeCreditRate,
   NodeCategory,
   OutputType,
   NodeInputField,

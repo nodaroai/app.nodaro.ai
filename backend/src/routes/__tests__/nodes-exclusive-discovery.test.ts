@@ -39,7 +39,7 @@ vi.mock("@/lib/node-registry.js", () => {
 // Discovery here is about WHICH nodes list; their prices are pinned in
 // nodes-charged-prices.test.ts.
 vi.mock("@/lib/pricing/charged-prices.js", () => ({
-  loadChargedPrices: async () => ({ credits: () => undefined }),
+  loadChargedPrices: async () => ({ credits: () => undefined, rate: () => undefined }),
 }))
 
 import { nodesRoutes } from "../nodes.js"

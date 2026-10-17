@@ -63,6 +63,8 @@ Priced **per started block of 1,000 sampled frames**, at 2.2<!-- credits-rate: s
 
 The rate is one price row, `speaker-frames`, which an administrator can change in the admin panel's model prices (`/admin/models`).
 
+**Quoting it from the API.** `GET /v1/credits/model-cost?model=speaker-frames` answers **one block's** price, 3<!-- credits: speaker-frames --> — the least a run is charged, not what a run costs (11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × 3<!-- credits: speaker-frames -->). For a run's total, send the workflow to `POST /v1/credits/estimate-workflow`: it counts the frames as [the estimate below](#what-the-estimate-shows-before-you-run) does. For a block count you already know, `GET /v1/credits/model-cost?model=speaker-frames:<N>u` is its exact price. `GET /v1/nodes/speaker-frames` serves the rate as `creditRate`: `creditsPerUnit` 2.2<!-- credits-rate: speaker-frames --> (one block, not rounded), `unit: "1000-frames"`, `minUnits: 1` and `rounding: "ceil-run-total"` — a run is charged `ceil(blocks × creditsPerUnit)`, rounded up once ([Node discovery](../../api-integration.md#11-node-discovery)).
+
 ### What the estimate shows before you run
 
 The cost on the node, the **Run** button, the run-confirm dialog and the credit check before a run is an **estimate**, and it leans high:
