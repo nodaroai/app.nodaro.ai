@@ -1,5 +1,26 @@
 # @nodaro/cli
 
+## 1.33.0
+
+### Minor Changes
+
+- b40902e: `client.edit.continueUseCase` continues a run on its own node type's route (`POST /v1/<type>/continue`). It takes an optional `nodeType`; without one it reads the job first (`GET /v1/jobs/:id`) for the type the run records, and a token without `jobs:read` continues on the Tighten Episode route as before. New exports: `UseCaseNodeType`, `USE_CASE_NODE_TYPES`, and `UseCaseJobResult` / `UseCaseEstimate` (the `TightenEpisodeJobResult` / `TightenEpisodeEstimate` shapes, which stay as aliases). The CLI's `nodaro edit continue-use-case` takes an optional `--type <type>`, passed through so the job is not read for it.
+
+### Patch Changes
+
+- b60db72: The built-in ("factory") preset catalog is readable without a token: `GET /v1/node-presets/factory` is now a public route, so `client.presets.listFactory(nodeType)` works on a tokenless client (`createClient({ baseUrl, auth: { getToken: async () => null } })`) — a client app can show the catalog (names, example pictures via `previewUrl`, how many photos a preset needs via `minReferences` / `needsImage`) to visitors who are not signed in and ask for a login only when they generate. The response is cached for 5 minutes like the model catalog, and an invalid or expired token sent with the request is ignored (an OAuth app needs no scope for it). `@nodaro/prompts`: `getFactoryPresets()` and `presetMinReferences()` answer an empty catalog / zero for a node type that is not a catalog key even when it names an `Object.prototype` member (`constructor`, `toString`), instead of throwing. Your own presets, favorites and folders still need auth exactly as before. Nothing to change in an existing app. CLI: `nodaro presets list --factory --node-type <type>` no longer needs a saved profile (`--base-url <url>` asks another instance; without `--factory`, `presets list` still needs one).
+- Updated dependencies [447292c]
+- Updated dependencies [2caffe2]
+- Updated dependencies [d551823]
+- Updated dependencies [8eacb99]
+- Updated dependencies [b60db72]
+- Updated dependencies [8eacb99]
+- Updated dependencies [b40902e]
+- Updated dependencies [0541d0b]
+  - @nodaro/sdk@2.30.0
+  - @nodaro/shared@3.34.0
+  - @nodaro/prompts@1.39.1
+
 ## 1.32.0
 
 ### Minor Changes

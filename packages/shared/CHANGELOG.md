@@ -1,5 +1,16 @@
 # @nodaro/shared
 
+## 3.34.0
+
+### Minor Changes
+
+- 8eacb99: `DESCRIBE_TO_PICKER_FALLBACK_MODEL` (`@nodaro/shared/llm-models`): the model describe-to-picker re-asks once, at its own price, when a Claude analyzer is unavailable for a reason on the platform's side — `gemini-3.8-flash`.
+- 8eacb99: `LLM_FEATURE_DEFAULTS`: every feature that defaulted to `claude-sonnet-4.6` — `ai-writer`, `scene-graph-ai`, `after-effects`, `motion-graphics`, `motion-graphics-lottie`, `lottie-overlay`, `3d-title`, `3d-scene`, `image-to-text`, `image-critic`, `pick-best-llm` — now defaults to `claude-sonnet-5.5`. Same standard tier, so the same credit rung; `claude-sonnet-4.6` stays in the registry for callers that name it.
+
+### Patch Changes
+
+- d551823: The producer sets (`VIDEO_PRODUCER_TYPES`, `AUDIO_PRODUCER_TYPES`, `IMAGE_PRODUCER_TYPES`, `DYNAMIC_PRODUCER_TYPES` in `@nodaro/shared/nodes`) now also take their members from generated per-node contract rows (a node type and its producer kind). There are none yet, so every set is unchanged.
+
 ## 3.33.0
 
 ### Minor Changes
