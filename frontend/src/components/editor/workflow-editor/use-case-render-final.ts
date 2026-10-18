@@ -80,7 +80,6 @@ export async function runUseCaseRenderFinal(
   const { nodes, edges } = collapseExpandedClones()
   const run = usecaseRenderFinalRun(nodeId, nodes, edges)
   if (!run) return
-  clearConnectedListRows(nodes)
   warnUnderMinRows(nodes.filter((n) => run.runSet.has(n.id)))
   const runnableIds = new Set(previewRunnable(run.executable, run.graph, edges).map((n) => n.id))
   if (runnableIds.size === 0) {
@@ -95,12 +94,16 @@ export async function runUseCaseRenderFinal(
     toast.error(tx("renderFinal.saveFailed"))
     return
   }
+  // Cleared only once nothing above can stop the run; every way out below
+  // that starts nothing puts it back (`giveUp`).
+  const undoRows = clearConnectedListRows(nodes)
   const undoReset = resetNodeAccumulation(executableNodes, { preserveHistory: true })
   const { markNodesStatus } = useWorkflowStore.getState()
   markNodesStatus(executableIds, "pending")
   setIsRunning(true)
   const giveUp = () => {
     undoReset()
+    undoRows()
     setIsRunning(false)
     markNodesStatus(executableIds, undefined)
   }
@@ -130,13 +133,16 @@ export async function runUseCaseRenderFinal(
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded)
   } catch (err: unknown) {
     if (err instanceof WorkflowAlreadyRunningError) {
+      // Another run holds the workflow: this final started nothing, so the
+      // canvas data goes back; the marks follow the run it attaches to.
+      undoReset()
+      undoRows()
       toast.info(tx("renderFinal.inProgress"))
       onExecutionStarted?.(err.executionId)
       void attachToRunningExecution(err.executionId, ctx, setIsRunning, onExecutionEnded, () => markNodesStatus(executableIds, undefined))
       return
     }
-    setIsRunning(false)
-    markNodesStatus(executableIds, undefined)
+    giveUp()
     toast.error(tx("run.failedToStartExecution"), {
       description: err instanceof Error ? err.message : tx("run.unknownError"),
     })

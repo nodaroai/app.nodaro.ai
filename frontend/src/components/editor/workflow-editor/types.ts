@@ -1148,16 +1148,19 @@ export interface RunConfirmGroup {
 
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
 export interface RunConfirmInfo {
-  /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`). */
-  readonly trigger: "all" | "selected" | "from-here" | "up-to-here" | "single" | "render-final" | "update-preview";
+  /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`).
+   *  "continue-failed" / "finish-review": a run continuing an earlier one
+   *  (`continue-failed-run.ts`) — always asked, itemised like Render final. */
+  readonly trigger: "all" | "selected" | "from-here" | "up-to-here" | "single" | "render-final" | "update-preview" | "continue-failed" | "finish-review";
   readonly nodeCount: number;
   /** Estimated credits, or null in non-credit editions (cost line hidden). */
   readonly estimatedCredits: number | null;
   /** True for Execute-All (confirm regardless of cost). */
   readonly alwaysConfirm: boolean;
   /**
-   * Render final / Update preview only (U1, decided 2026-10-06): one line per
-   * node the run executes, in graph order. `estimatedCredits` is their sum.
+   * Render final / Update preview only (U1, decided 2026-10-06), and a
+   * continuation (Continue from failed, Finish review): one line per node the
+   * run executes, in graph order. `estimatedCredits` is their sum.
    */
   readonly lines?: readonly RunConfirmLine[];
   /**
@@ -1261,6 +1264,12 @@ export interface ExecutionContext {
    * Same contract as `confirmRun`: absent means "proceed".
    */
   askConfirm?: (info: AskConfirmInfo) => Promise<boolean>;
+  /**
+   * Continue a server run of this workflow that FAILED, from where it stopped
+   * (`continue-failed-run.ts`). The failure toast offers it; absent (tests, a
+   * read-only canvas), the toast offers nothing.
+   */
+  continueFailedRun?: (executionId: string) => void;
 }
 
 // `iterationIdempotencyKey` lives in `frontend/src/lib/idempotency-key.ts`

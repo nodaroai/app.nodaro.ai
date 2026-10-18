@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { executionErrorText, nodeStateErrorText } from "@/lib/execution-error-text";
+import { nodeStateErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
 import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline";
 import {
@@ -36,7 +36,7 @@ import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-co
 import { estimateRunCreditLines, sumRunCreditLines } from "./estimate-run-credits";
 import { runCreditsWithUgc, ugcPriceNoteKey, ugcRunFigureNow, ugcRunParts, type UgcRunPriced } from "./ugc-run-estimate";
 import { creditUnits } from "@/lib/credit-units";
-import { renderConfirmDetail } from "./render-confirm-detail";
+import { continuationConfirmDetail, renderConfirmDetail } from "./render-confirm-detail";
 import { groupCreditSubtotals, macroGroupOf } from "./macro-credit-groups";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { runUpToHereSet } from "./run-up-to-here-set";
@@ -63,7 +63,7 @@ import { serverNowIso } from "@/lib/server-clock"
 import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
-import { toastBackendRunCompleted } from "./run-ended-toast";
+import { toastBackendRunCompleted, toastBackendRunFailed } from "./run-ended-toast";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListFanOutForNode } from "./node-input-resolver";
@@ -326,11 +326,23 @@ export function resetNodeAccumulation(
   }
 }
 
-export function clearConnectedListRows(nodes: WorkflowNode[]): void {
+/**
+ * Clear the rows a run refills on every connected List. Returns the undo: it
+ * puts back exactly the rows this call cleared, for a caller that then gives up
+ * without running anything (a refused save, a run that did not start).
+ */
+export function clearConnectedListRows(nodes: WorkflowNode[]): () => void {
   const { updateNodeData } = useWorkflowStore.getState()
+  const undo: Array<[string, unknown]> = []
   for (const node of nodes) {
     const rows = clearedConnectedListRows(node)
-    if (rows) updateNodeData(node.id, { rows })
+    if (!rows) continue
+    undo.push([node.id, (node.data as Record<string, unknown>).rows])
+    updateNodeData(node.id, { rows })
+  }
+  return () => {
+    const { updateNodeData: restore } = useWorkflowStore.getState()
+    for (const [id, rows] of undo) restore(id, { rows })
   }
 }
 
@@ -351,6 +363,11 @@ const RUN_CONFIRM_USD = 2
 /** Exported so tests bracket the real gate instead of restating a literal that
  *  goes stale the next time the credit base moves. */
 export const RUN_CONFIRM_CREDITS = Math.round(RUN_CONFIRM_USD / CREDIT_BASE_USD)
+
+/** A run continuing an earlier one (`continue-failed-run.ts`): always confirmed, itemised. */
+export function isContinuationTrigger(trigger: RunConfirmInfo["trigger"]): trigger is "continue-failed" | "finish-review" {
+  return trigger === "continue-failed" || trigger === "finish-review";
+}
 
 /**
  * Run-confirmation gate. Returns true to proceed, false to abort. It writes
@@ -383,7 +400,13 @@ export async function confirmRunOrAbort(
   /** Render final / Update preview: the render whose run this is (the itemised confirm). */
   renderId?: string,
   /** `ugcRedrawId`: the UGC Creator whose own re-draw this is — the one run its waiting options let through. */
-  opts?: { readonly ugcRedrawId?: string; readonly onPriced?: (priced: UgcRunPriced) => void; readonly alive?: () => boolean },
+  opts?: {
+    readonly ugcRedrawId?: string
+    readonly onPriced?: (priced: UgcRunPriced) => void
+    readonly alive?: () => boolean
+    /** A continuation: the nodes the run it continues completed, listed as kept. */
+    readonly keptIds?: readonly string[]
+  },
 ): Promise<boolean> {
   const alive = opts?.alive ?? (() => true);
   try { assertCanvasExecutionAllowed(executable); }
@@ -449,7 +472,7 @@ export async function confirmRunOrAbort(
       executable.map((n) => previewSingleRunRefusal(n.id, allNodes, edges)).find(Boolean) ??
       executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges)).find(Boolean);
     if (refusal) { toast.error(refusal); return false; }
-  } else if (trigger === "from-here" || trigger === "up-to-here" || trigger === "selected") {
+  } else if (trigger === "from-here" || trigger === "up-to-here" || trigger === "selected" || isContinuationTrigger(trigger)) {
     const ids = new Set(executable.map((n) => n.id));
     const refusal = executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges, ids)).find(Boolean);
     if (refusal) { toast.error(refusal); return false; }
@@ -471,6 +494,34 @@ export async function confirmRunOrAbort(
       if (!(await ctx.askConfirm({ title: tx("renderFinal.replanTitle"), body, confirmLabel: tx("renderFinal.replanConfirm") }))) return false;
       if (!alive()) return false;
     }
+  }
+  // A continuation (Continue from failed, Finish review) is ALWAYS asked,
+  // whatever its figure, and names every node it runs with its price: a node
+  // the run it continues did not complete runs, and is charged, again — one
+  // the person has since run by hand with ▶ included. What that run completed
+  // is listed as kept. The editor's own estimate of the set: the server's set
+  // is the authority, and may be smaller (a newer continuation built on).
+  // Asked even when the editor expects nothing to run: the server decides.
+  if (isContinuationTrigger(trigger)) {
+    const pricesUgc = hasCredits() && executable.length > 0 && ugcRunParts(executable, allNodes, edges) !== null;
+    const own = estimateRunCreditLines(executable, allNodes, edges, hasCredits() ? getCachedCredits : () => undefined);
+    const priced = pricesUgc ? await runCreditsWithUgc(executable, allNodes, edges, getCachedCredits) : null;
+    if (!alive()) return false;
+    if (priced) opts?.onPriced?.(priced);
+    const shares = priced?.nodeCredits;
+    const detail = continuationConfirmDetail(
+      shares ? own.map((l) => (shares.has(l.nodeId) ? { ...l, credits: shares.get(l.nodeId)! } : l)) : own,
+      opts?.keptIds ?? [],
+      allNodes,
+      edges,
+    );
+    const estimatedCredits = hasCredits() ? sumRunCreditLines(detail.lines) : null;
+    const notes = ugcPriceNotes(priced);
+    if (!ctx.confirmRun) {
+      if (priced?.unchecked) toast.info(notes[0]!);
+      return true;
+    }
+    return (await ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm: true, ...detail, ...priceFields(priced, notes) })) && alive();
   }
   if (executable.length === 0) return true;
   // A run set holding UGC nodes is priced with the server's figure for its UGC
@@ -1803,7 +1854,7 @@ export function streamBackendExecution(
         if (finished) return;
         if (status === "failed" || status === "cancelled" || status === "timed_out") revertActiveNodesToIdle();
         cleanup();
-        if (status === "failed") toast.error(tx("run.backendFailed"), { description: executionErrorText(errorMessage) });
+        if (status === "failed") toastBackendRunFailed(executionId, errorMessage, ctx.continueFailedRun);
         else if (status === "cancelled") toast.info(tx("run.backendCancelled"));
         else if (status === "timed_out") toast.error(tx("run.backendTimedOut"));
         else toastBackendRunCompleted(finalStates);
@@ -1816,9 +1867,7 @@ export function streamBackendExecution(
         // still "pending" — settle those instead of leaving them spinning.
         revertActiveNodesToIdle();
         cleanup();
-        toast.error(tx("run.backendFailed"), {
-          description: executionErrorText(data.errorMessage as string | undefined),
-        });
+        toastBackendRunFailed(executionId, data.errorMessage as string | undefined, ctx.continueFailedRun);
       },
       onCancelled: () => {
         if (finished) return;
@@ -1879,9 +1928,7 @@ export function streamBackendExecution(
         if (exec.status === "completed") {
           toastBackendRunCompleted(nodeStates);
         } else if (exec.status === "failed") {
-          toast.error(tx("run.backendFailed"), {
-            description: executionErrorText(exec.errorMessage),
-          });
+          toastBackendRunFailed(executionId, exec.errorMessage, ctx.continueFailedRun);
         } else if (exec.status === "cancelled") {
           toast.info(tx("run.backendCancelled"));
         } else {
@@ -1933,7 +1980,7 @@ export function streamBackendExecution(
           if (finalExec.status === "failed") {
             revertActiveNodesToIdle();
             cleanup();
-            toast.error(tx("run.backendFailed"), { description: executionErrorText(finalExec.errorMessage) });
+            toastBackendRunFailed(executionId, finalExec.errorMessage, ctx.continueFailedRun);
             return;
           }
           if (finalExec.status === "cancelled") {

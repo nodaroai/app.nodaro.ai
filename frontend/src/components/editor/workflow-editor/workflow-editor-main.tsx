@@ -6,6 +6,7 @@ import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { filterCloneNodes } from "@nodaro/shared/workflow"
 import { getOutputType } from "@nodaro/shared/apps"
 import { ReactFlowProvider } from "@xyflow/react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Play,
   Loader2,
@@ -17,6 +18,7 @@ import {
   ChevronDown,
   Trash2,
   RotateCcw,
+  StepForward,
   ExternalLink,
   Copy,
 } from "lucide-react";
@@ -80,6 +82,9 @@ import { StorageExceededModal } from "@/ee/components/credits/StorageExceededMod
 import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionRequiredModal";
 import { useRunConfirm } from "./run-confirm-dialog";
 import { handleRenderFinal } from "./render-final-handler";
+import { handleContinueFailedRun } from "./continue-failed-run";
+import { continuableFailedRun } from "./continuable-failed-run";
+import { executionsPageQuery } from "../executions-query";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { estimateRunCredits, estimateWholeRun, wholeRunExecutable } from "./estimate-run-credits";
 import { ugcPriceNoteKey, ugcRunCredits, ugcRunFigureNow, ugcRunParts, type UgcPriceState } from "./ugc-run-estimate";
@@ -181,6 +186,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // (defined before that) reaches the watch through this ref.
   const followHandledRef = useRef<(executionId: string) => void>(() => {});
   const followWorkflowId = useWorkflowStore((s) => s.workflowId);
+  /** "Continue from failed", wired below once the run callbacks exist. */
+  const continueFailedRef = useRef<(executionId: string) => void>(() => {});
   // Not before the nodes are in: `load()` sets the workflow id first, and a
   // look at an empty canvas would paint nothing and lose the run's marks.
   const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading);
@@ -870,6 +877,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setShowSubscriptionRequired,
     confirmRun,
     askConfirm,
+    // Read at click time through the ref: a stream keeps the ctx of the run it follows.
+    continueFailedRun: isReadOnly ? undefined : (id: string) => continueFailedRef.current(id),
   };
 
   // ---------------------------------------------------------------------------
@@ -888,6 +897,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setActiveExecutionId((current) => (endedId !== undefined && current !== null && current !== endedId ? current : null));
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
+
+  // "Continue from failed": the failure toast's action and the button beside Run.
+  continueFailedRef.current = (id: string) => {
+    void handleContinueFailedRun(id, {
+      ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded,
+      renderFinal: (renderId, continueFrom) =>
+        handleRenderFinal(renderId, "final", ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded, { continueFrom }),
+    });
+  };
+  // The newest run of the workflow, when it failed (the Executions tab's cache entry, polled by the run follow).
+  const { data: firstRunsPage } = useQuery({
+    ...executionsPageQuery(followWorkflowId ?? ""),
+    enabled: Boolean(followWorkflowId) && !isReadOnly,
+  });
+  const failedRunId = continuableFailedRun(firstRunsPage?.data);
 
   // A run the editor did not start: followed live on the nodes like a Run
   // (status bar, spinners, results) when a person started it (Telegram, MCP,
@@ -1519,6 +1543,19 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   >
                     <Copy className="w-4 h-4 me-2" />
                     {t("run.cloneRemix")}
+                  </Button>
+                )}
+                {failedRunId && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="rounded-full px-5 bg-background"
+                    title={t("continueFailed.actionTitle")}
+                    disabled={isConfirming}
+                    onClick={() => continueFailedRef.current(failedRunId)}
+                  >
+                    <StepForward className="w-4 h-4 me-2" />
+                    {t("continueFailed.action")}
                   </Button>
                 )}
                 <Button

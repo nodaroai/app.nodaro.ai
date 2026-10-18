@@ -1015,3 +1015,206 @@ describe("Render final and Update preview check a UGC run's balance against its 
     expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * Render final continues the server run whose Preview it renders, so a
+ * continue-from-failed lineage sees its final (`via: "subset"` on the server).
+ * The same nodes and the same override are sent either way: continuing adds
+ * only `continueFromExecutionId`, and only while every node feeding the final
+ * reads the same from that run as from the saved workflow.
+ */
+const continuationApi = await import("@/lib/api")
+const { ContinuationRefusedError } = await import("@/lib/run-workflow-errors")
+
+describe("Render final continues the run whose Preview it renders", () => {
+  const read = vi.mocked(continuationApi.getWorkflowExecution)
+  /** The run that made the Preview: it ran the plan and the render (the canvas shows both). */
+  /** The plan the run made, as it recorded it and as the canvas holds it. */
+  const PLAN_JSON = { version: 1, segments: [{ source: "s1", start: 0, end: 4 }] }
+  const PREVIEW_RUN = {
+    id: "exec-prev", kind: "execution", workflowId: "wf-1", status: "completed", triggerType: "manual",
+    nodeStates: { plan: { status: "completed", startedAt: "t", jobId: "j-plan", output: { json: PLAN_JSON } }, cut: { status: "completed", startedAt: "t", jobId: "j-cut" } },
+  }
+  const shownFrom = (id: string) => ({ resultsRunId: id, generatedJson: PLAN_JSON })
+  const plan = (data: Record<string, unknown> = shownFrom("exec-prev")) => n("plan", "edit-plan", data)
+  const take = n("cut", "apply-edl", { quality: "proxy", resultsRunId: "exec-prev" })
+  const PLAIN = { inputOverrides: { cut: { quality: "final" } } }
+
+  afterEach(() => read.mockReset())
+
+  it("a canvas painted from that run: sends it as continueFromExecutionId, beside the same nodes and override", async () => {
+    mockNodes = [plan(), take, CAP]
+    read.mockImplementation(async (id: string) => ({ ...PREVIEW_RUN, id }) as never)
+    await run("final")
+    expect(read).toHaveBeenCalledWith("exec-prev")
+    const [, nodeIds, , opts] = mockRunWorkflow.mock.calls[0]!
+    expect([...nodeIds].sort()).toEqual(["cap", "cut"])
+    expect(opts).toEqual({ ...PLAIN, continueFromExecutionId: "exec-prev" })
+  })
+
+  it("an Edit Plan holding a review still continues: the server re-applies the saved review to the plan it recorded (regression)", async () => {
+    mockNodes = [plan({ ...shownFrom("exec-prev"), editedEdl: { segments: [{ source: "s1", start: 1, end: 4 }] } }), take, CAP]
+    read.mockImplementation(async (id: string) => ({ ...PREVIEW_RUN, id }) as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual({ ...PLAIN, continueFromExecutionId: "exec-prev" })
+  })
+
+  it("a plain run when the Edit Plan was planned again since (another plan, whatever its stamp)", async () => {
+    mockNodes = [plan({ ...shownFrom("exec-prev"), generatedJson: { ...PLAN_JSON, segments: [] } }), take, CAP]
+    read.mockResolvedValue(PREVIEW_RUN as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a feeder that run handed on from an earlier run (a continued run's seed) reads the same when the canvas shows that earlier run", async () => {
+    mockNodes = [plan(shownFrom("exec-root")), take, CAP]
+    read.mockResolvedValue({ ...PREVIEW_RUN, nodeStates: { ...PREVIEW_RUN.nodeStates, plan: { status: "completed", seededFromExecution: "exec-root", output: { json: PLAN_JSON } } } } as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual({ ...PLAIN, continueFromExecutionId: "exec-prev" })
+  })
+
+  it.each([
+    { why: "the take is a browser run of the render (a job id)", exec: { ...PREVIEW_RUN, kind: "job" } },
+    { why: "the run did not complete", exec: { ...PREVIEW_RUN, status: "failed" } },
+    { why: "the run is another workflow's", exec: { ...PREVIEW_RUN, workflowId: "wf-other" } },
+    { why: "the run is an app's run", exec: { ...PREVIEW_RUN, triggerType: "app_run" } },
+    { why: "the run holds no completed state of a feeder", exec: { ...PREVIEW_RUN, nodeStates: { cut: PREVIEW_RUN.nodeStates.cut } } },
+  ])("a plain run, as before, when $why", async ({ exec }) => {
+    mockNodes = [plan(), take, CAP]
+    read.mockResolvedValue(exec as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a plain run when the take's run cannot be read", async () => {
+    mockNodes = [plan(), take, CAP]
+    read.mockRejectedValue(new Error("404"))
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a plain run when the render's take names no run (nothing to continue)", async () => {
+    await run("final")
+    expect(read).not.toHaveBeenCalled()
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a plain run when a feeder shows another result than that run's (run again on its own since)", async () => {
+    mockNodes = [plan(shownFrom("job-9")), take, CAP]
+    read.mockResolvedValue(PREVIEW_RUN as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a plain run when a feeder holds several takes (a list reader of a plain run reads them all)", async () => {
+    mockNodes = [plan({ ...shownFrom("exec-prev"), generatedResults: [{ url: "a" }, { url: "b" }] }), take, CAP]
+    read.mockResolvedValue(PREVIEW_RUN as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a plain run when an input the run read from its data (a text) was edited since", async () => {
+    const note = n("note", "text-prompt", { text: "edited since" })
+    mockNodes = [plan(), take, CAP, note]
+    mockEdges = [...EDGES, { id: "t", source: "note", target: "cap", targetHandle: "text" }]
+    read.mockResolvedValue({ ...PREVIEW_RUN, nodeStates: { ...PREVIEW_RUN.nodeStates, note: { status: "completed", fromSavedData: true, output: { text: "as it ran" } } } } as never)
+    await run("final")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual(PLAIN)
+  })
+
+  it("a run the server named (Continue from failed) is continued whatever the take", async () => {
+    read.mockImplementation(async (id: string) => ({ ...PREVIEW_RUN, id }) as never)
+    await handleRenderFinal("cut", "final", makeCtx() as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn(), undefined, undefined, { continueFrom: "exec-held" })
+    expect(read).toHaveBeenCalledWith("exec-held")
+    expect(mockRunWorkflow.mock.calls[0]![3]).toEqual({ ...PLAIN, continueFromExecutionId: "exec-held" })
+  })
+
+  it("a continuation the server refuses runs as a plain run, once", async () => {
+    mockNodes = [plan(), take, CAP]
+    read.mockResolvedValue(PREVIEW_RUN as never)
+    mockRunWorkflow.mockRejectedValueOnce(new ContinuationRefusedError("not completed", "continuation_not_completed"))
+    await run("final")
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(2)
+    expect(mockRunWorkflow.mock.calls[0]![3]).toMatchObject({ continueFromExecutionId: "exec-prev" })
+    expect(mockRunWorkflow.mock.calls[1]![3]).toEqual(PLAIN)
+    expect(mockToastError).not.toHaveBeenCalled()
+  })
+})
+
+// A Render final that starts nothing never wipes canvas data (fix round 2): a
+// connected List's rows and the render's Preview batch are cleared only once
+// nothing before the save can stop the run, and every way out after that which
+// starts nothing (a refused save, a request that fails, a run already in
+// progress) puts back exactly what the click cleared.
+describe("a Render final that starts nothing never wipes canvas data", () => {
+  const BATCH = [{ url: "a.mp4" }, { url: "b.mp4" }]
+  const ROWS = [["first"], ["second"]]
+  const LIST = n("list", "list", { columns: [{ id: "c1", name: "Captions", connectedSourceId: "cap" }], rows: ROWS })
+  /** The node's data after every write the click made, in order. */
+  const dataOf = (id: string) => {
+    const state: Record<string, unknown> = { ...(mockNodes.find((x) => x.id === id)!.data as object) }
+    for (const [pid, patch] of mockUpdateNodeData.mock.calls as [string, Record<string, unknown>][]) {
+      if (pid === id) Object.assign(state, patch)
+    }
+    return state
+  }
+  const rowsTouched = () => mockUpdateNodeData.mock.calls.some(([id]) => id === "list")
+  beforeEach(() => {
+    mockNodes = [PLAN, n("cut", "apply-edl", { quality: "proxy", __listResults: BATCH, __listTotal: 2 }), CAP, LIST]
+  })
+
+  it("a run that starts clears the List's rows and the Preview batch", async () => {
+    await run("final")
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    expect(dataOf("list").rows).toEqual([[""]])
+    expect(dataOf("cut").__listResults).toBeUndefined()
+  })
+
+  it("a refused save puts the List's rows back", async () => {
+    mockDirty = true
+    await handleRenderFinal("cut", "final", makeCtx() as never, "p1", vi.fn().mockResolvedValue({ success: false }), vi.fn())
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(rowsTouched()).toBe(true)
+    expect(dataOf("list").rows).toEqual(ROWS)
+    expect(dataOf("cut").__listResults).toEqual(BATCH)
+  })
+
+  it("a request that fails puts back the List's rows and the Preview batch, and unmarks the nodes", async () => {
+    mockRunWorkflow.mockRejectedValue(new Error("network down"))
+    const setIsRunning = vi.fn()
+    await handleRenderFinal("cut", "final", makeCtx() as never, "p1", vi.fn().mockResolvedValue({ success: true }), setIsRunning)
+    expect(mockToastError).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ description: "network down" }))
+    expect(dataOf("list").rows).toEqual(ROWS)
+    expect(dataOf("cut").__listResults).toEqual(BATCH)
+    expect(dataOf("cut").__listTotal).toBe(2)
+    expect(mockMarkNodesStatus).toHaveBeenLastCalledWith(["cut", "cap"], undefined)
+    expect(setIsRunning).toHaveBeenLastCalledWith(false)
+  })
+
+  it("a run already in progress: this final started nothing, so the data goes back", async () => {
+    mockRunWorkflow.mockRejectedValue(new MockAlreadyRunning("busy"))
+    await run("final")
+    expect(mockToastInfo).toHaveBeenCalledWith(expect.stringMatching(/run is in progress/))
+    expect(dataOf("list").rows).toEqual(ROWS)
+    expect(dataOf("cut").__listResults).toEqual(BATCH)
+  })
+
+  it("refused before the save (unsaved edits, no project): the rows are never touched", async () => {
+    mockDirty = true
+    await handleRenderFinal("cut", "final", makeCtx() as never, undefined, vi.fn(), vi.fn())
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(rowsTouched()).toBe(false)
+  })
+
+  it("nothing left to run once the canvas is collapsed: the rows are never touched", async () => {
+    // The confirm saw a runnable set; the graph the run is built from holds none of it any more.
+    mockCollapseExpandedClones.mockImplementation(() => ({
+      nodes: mockNodes.map((x) => (x.id === "cut" || x.id === "cap" ? { ...x, hidden: true } : x)),
+      edges: mockEdges,
+    }))
+    await run("final")
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/No executable nodes/))
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(rowsTouched()).toBe(false)
+  })
+})

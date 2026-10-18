@@ -3,18 +3,19 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 
 const mockToastSuccess = vi.fn()
 const mockToastInfo = vi.fn()
+const mockToastError = vi.fn()
 vi.mock("sonner", () => ({
   toast: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     info: (...args: unknown[]) => mockToastInfo(...args),
-    error: vi.fn(),
+    error: (...args: unknown[]) => mockToastError(...args),
   },
 }))
 vi.mock("@/lib/i18n", () => ({
   tx: (key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${JSON.stringify(vars)}` : key),
 }))
 
-import { toastBackendRunCompleted } from "../run-ended-toast"
+import { toastBackendRunCompleted, toastBackendRunFailed } from "../run-ended-toast"
 
 /**
  * The end-of-run toast for a backend run that completed: "nothing new" with
@@ -61,5 +62,26 @@ describe("toastBackendRunCompleted", () => {
     toastBackendRunCompleted({ creator: { status: "completed", output: { ugcOutputs: { creator: "{}" } } } } as never)
     expect(mockToastSuccess).toHaveBeenCalledWith("run.backendCompleted")
     expect(mockToastInfo).not.toHaveBeenCalled()
+  })
+})
+
+/** A run that failed: the toast carries the one action that continues it from where it stopped. */
+describe("toastBackendRunFailed", () => {
+  beforeEach(() => mockToastError.mockClear())
+
+  it("offers Continue from failed, which continues that run", () => {
+    const continueFailedRun = vi.fn()
+    toastBackendRunFailed("exec-1", "boom", continueFailedRun)
+    const [title, opts] = mockToastError.mock.calls[0]!
+    expect(title).toBe("run.backendFailed")
+    expect(opts.description).toBe("boom")
+    expect(opts.action.label).toBe("continueFailed.action")
+    opts.action.onClick()
+    expect(continueFailedRun).toHaveBeenCalledWith("exec-1")
+  })
+
+  it("with no way to continue (a read-only canvas), the toast is as it was", () => {
+    toastBackendRunFailed("exec-1", "boom", undefined)
+    expect(mockToastError).toHaveBeenCalledWith("run.backendFailed", { description: "boom" })
   })
 })

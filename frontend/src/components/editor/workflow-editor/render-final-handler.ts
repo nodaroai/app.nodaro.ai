@@ -63,7 +63,10 @@ import { previewRunnable } from "./preview-gate"
 import { liveExecutable } from "./run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "./render-final-set"
 import { finalIsUnchanged, renderRuleVerdict } from "./render-final-checks"
-import { NEWER_RUN_UNCHECKED, refuseForNewerRun, startNewerRunCheck, type NewerRunCheck } from "./newer-run-check"
+import { NEWER_RUN_CHECK_TIMEOUT_MS, NEWER_RUN_UNCHECKED, refuseForNewerRun, startNewerRunCheck, type NewerRunCheck } from "./newer-run-check"
+import { continueFromFor, readContinuableRun, takeRunOf, type ContinuableRun } from "./render-final-continuation"
+import { ContinuationRefusedError } from "@/lib/run-workflow-errors"
+import { saveRefused } from "@/lib/save-result"
 import type { UgcRunPriced } from "./ugc-run-estimate"
 import { runUseCaseRenderFinal } from "./use-case-render-final"
 import {
@@ -101,9 +104,17 @@ function refusedLate(check: NewerRunCheck): boolean {
   return true
 }
 
+/** `p`, or `null` once the newer-run check's limit passes first (a plain run then). */
+function withinLimit<T>(p: Promise<T | null>): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const limit = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), NEWER_RUN_CHECK_TIMEOUT_MS)
+  })
+  return Promise.race([p, limit]).finally(() => clearTimeout(timer))
+}
+
 /** A save that came back refused (`SaveResult`), as opposed to one that did not say. */
-const saveFailed = (result: unknown): boolean =>
-  typeof result === "object" && result !== null && (result as { success?: unknown }).success === false
+const saveFailed = saveRefused
 
 export async function handleRenderFinal(
   renderId: string,
@@ -114,6 +125,10 @@ export async function handleRenderFinal(
   setIsRunning: (v: boolean) => void,
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
+  /** `continueFrom`: the run to continue, as the server named it (a
+   *  "Continue from failed" answered that the run's newest continuation waits
+   *  at this render's Preview). Absent: the run the render's take came from. */
+  opts?: { readonly continueFrom?: string },
 ): Promise<void> {
   if (_renderFinalLock) return
   // Update preview is the stop rule's own partner: with the rollout flag off
@@ -136,6 +151,8 @@ export async function handleRenderFinal(
     let balanceRun: BalanceCheckRun | null = null
     /** The nodes whose linked videos the run fetches before it starts. */
     let fetchIds: string[] = []
+    /** The server run this final continues, when it may continue one (`render-final-continuation.ts`), read beside the newer-run check. */
+    let continuable: Promise<ContinuableRun | null> = Promise.resolve(null)
     const st = useWorkflowStore.getState()
     const render = st.nodes.find((n) => n.id === renderId)
     // A use-case node's render lives in its own hidden run: its Render final
@@ -170,6 +187,7 @@ export async function handleRenderFinal(
         return
       }
       check = startNewerRunCheck(workflowId, st.nodes, st.edges)
+      continuable = withinLimit(readContinuableRun(opts?.continueFrom ?? takeRunOf(render), workflowId, opts?.continueFrom !== undefined))
       st.setRenderCheck({ renderId, kind })
       let newer: Awaited<NewerRunCheck["withinLimit"]>
       try {
@@ -215,11 +233,13 @@ export async function handleRenderFinal(
     // A linked video the run reads that was never fetched is fetched now: the
     // server renders from the saved workflow, which must hold the file.
     if (!(await ensureVideoLinksBeforeRun(fetchIds, setIsRunning)) || !alive()) return
+    // Settled by now in all but a slow read; it touches nothing either way.
+    const continued = await continuable
+    if (!alive()) return
     if (refuseWhileReadOnly()) return
     rejectAllManualEdits()
     const { nodes, edges } = collapseExpandedClones()
     if (!nodes.some((n) => n.id === renderId)) return
-    clearConnectedListRows(nodes)
 
     const runSet = renderFinalRunSet(renderId, nodes, edges)
     const overrides = renderRunOverrides(renderId, kind, runSet)
@@ -236,6 +256,9 @@ export async function handleRenderFinal(
     }
     const executableNodes = nodes.filter((n) => runnableIds.has(n.id))
     const executableIds = executableNodes.map((n) => n.id)
+    // The same nodes, the same override: continuing only stamps the final into
+    // the run's lineage and hands on that run's output, which the canvas shows.
+    const continueFrom = continueFromFor(continued, runSet, nodes, edges)
 
     const wasDirty = useWorkflowStore.getState().isDirty
     // Without a project there is nowhere to save an unsaved review to.
@@ -244,10 +267,21 @@ export async function handleRenderFinal(
       return
     }
 
+    // Cleared only once nothing above can stop the run, and put back by every
+    // way out below that starts nothing: a refused or failed Render final never
+    // wipes a List's rows or the render's Preview batch.
+    const undoRows = clearConnectedListRows(nodes)
     const undoReset = resetNodeAccumulation(executableNodes, { preserveHistory: true })
     const { markNodesStatus } = useWorkflowStore.getState()
     markNodesStatus(executableIds, "pending")
     setIsRunning(true)
+    /** Nothing ran: what this click cleared goes back (or the next autosave would persist the loss). */
+    const giveUp = () => {
+      undoReset()
+      undoRows()
+      setIsRunning(false)
+      markNodesStatus(executableIds, undefined)
+    }
 
     // The save MUST succeed: the server renders from the saved workflow, so a
     // review that is not saved is a final of the unedited plan.
@@ -259,11 +293,9 @@ export async function handleRenderFinal(
         saved = { success: false }
       }
       if (saveFailed(saved)) {
-        // Nothing ran: the render's Preview batch (and every cleared list
-        // state) goes back, or the next autosave would persist the loss.
-        undoReset()
-        setIsRunning(false)
-        markNodesStatus(executableIds, undefined)
+        // Nothing ran: the render's Preview batch, every cleared list state and
+        // the List rows go back, or the next autosave would persist the loss.
+        giveUp()
         toast.error(tx("renderFinal.saveFailed"))
         return
       }
@@ -271,9 +303,7 @@ export async function handleRenderFinal(
 
     // The last point a late answer counts: the run is not submitted yet.
     if (refusedLate(check)) {
-      undoReset()
-      setIsRunning(false)
-      markNodesStatus(executableIds, undefined)
+      giveUp()
       return
     }
 
@@ -282,21 +312,40 @@ export async function handleRenderFinal(
     })
 
     try {
-      const idempotencyKey = generateIdempotencyKey()
-      const result = await withDedupRaceRetry(() =>
-        runWorkflow(workflowId, [...runSet], idempotencyKey, { inputOverrides: overrides }),
-      )
+      const send = (from: string | undefined) => {
+        const idempotencyKey = generateIdempotencyKey()
+        return withDedupRaceRetry(() =>
+          runWorkflow(workflowId, [...runSet], idempotencyKey, {
+            inputOverrides: overrides,
+            ...(from ? { continueFromExecutionId: from } : {}),
+          }),
+        )
+      }
+      let result: Awaited<ReturnType<typeof send>>
+      try {
+        result = await send(continueFrom)
+      } catch (err) {
+        // A run the server will not continue (no longer found, or not completed
+        // after all): nothing was created, and the final runs as it always did.
+        if (!continueFrom || !(err instanceof ContinuationRefusedError)) throw err
+        result = await send(undefined)
+      }
       onExecutionStarted?.(result.executionId)
       streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded)
     } catch (err: unknown) {
       if (err instanceof WorkflowAlreadyRunningError) {
+        // Another run holds the workflow: this final started nothing, so the
+        // canvas data goes back; the marks follow the run it attaches to.
+        undoReset()
+        undoRows()
         toast.info(tx("renderFinal.inProgress"))
         onExecutionStarted?.(err.executionId)
         void attachToRunningExecution(err.executionId, ctx, setIsRunning, onExecutionEnded, () => markNodesStatus(executableIds, undefined))
         return
       }
-      setIsRunning(false)
-      markNodesStatus(executableIds, undefined)
+      // The run did not start (the plain re-send after a refused continuation
+      // included): nothing ran, so nothing this click cleared stays cleared.
+      giveUp()
       toast.error(tx("run.failedToStartExecution"), {
         description: err instanceof Error ? err.message : tx("run.unknownError"),
       })
