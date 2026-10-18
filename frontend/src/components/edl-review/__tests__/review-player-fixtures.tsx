@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, vi } from "vitest"
-import { fireEvent, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, screen, within } from "@testing-library/react"
 import { effectiveRenderBasis, buildEffectiveEdl } from "@nodaro/render-rules"
 import { normalizeEdl } from "@nodaro/shared/edl"
 import { renderReadBasis } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
 import { PLAN, layOut, loadCanvas } from "./review-test-canvas"
-import { unmountAndSettle } from "./unmount-and-settle"
 
 /**
  * What the review player's tests share: the jsdom stand-in for a media
@@ -43,8 +42,8 @@ export function useHarness(): void {
     })
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined)
   })
-  afterEach(async () => {
-    await unmountAndSettle()
+  afterEach(() => {
+    cleanup()
     h.page.restore()
     vi.restoreAllMocks()
     delete (window as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__

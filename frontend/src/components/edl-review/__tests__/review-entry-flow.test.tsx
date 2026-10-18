@@ -3,8 +3,7 @@
 // the URL, the model, the footer. The pieces have their own tests.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useState } from "react"
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { unmountAndSettle } from "./unmount-and-settle"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, useLocation } from "react-router-dom"
 
 vi.mock("@xyflow/react", () => ({
@@ -48,8 +47,8 @@ beforeEach(() => {
   page = layOut()
   useWorkflowStore.setState({ renderFinal: vi.fn() } as never)
 })
-afterEach(async () => {
-  await unmountAndSettle()
+afterEach(() => {
+  cleanup()
   page.restore()
   delete (window as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__
   useReviewOpenStore.setState({ hostMounted: false, renderId: null })

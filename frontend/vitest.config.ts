@@ -17,7 +17,12 @@ const exclude = [...configDefaults.exclude, "playwright/**"]
 // worker is actually reused (shared-worker-sequencer.ts) — unless the command
 // line asks for a shuffled order.
 const projects = testProjects(readNoIsolateFiles(__dirname), exclude)
-const sequence = projects && !shuffleRequested(process.argv) ? { sequencer: SharedWorkerSequencer } : undefined
+const sequencer = projects && !shuffleRequested(process.argv) ? { sequencer: SharedWorkerSequencer } : {}
+// `afterEach` hooks run in reverse order of registration. Vitest's default,
+// spelled out because the teardown drain depends on it: setup.ts registers the
+// drain before Testing Library registers its cleanup, so cleanup runs first
+// (src/test/teardown-drain.ts).
+const sequence = { hooks: "stack" as const, ...sequencer }
 
 export default defineConfig({
   test: {
@@ -35,7 +40,7 @@ export default defineConfig({
     server: { deps: { inline: [/@nodaro[\\/]picker-ui/, /picker-ui[\\/]dist/] } },
     exclude,
     ...(projects ? { projects } : {}),
-    ...(sequence ? { sequence } : {}),
+    sequence,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
