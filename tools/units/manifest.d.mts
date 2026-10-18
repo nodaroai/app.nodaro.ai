@@ -23,7 +23,8 @@ export interface ValidationContext {
   /** Ids a unit may not take, with why (Object.prototype names are refused regardless). */
   reserved?: Map<string, string>
   live: Set<string>
-  capabilities: Record<string, { seam: string; why?: string }>
+  /** The seam that reads each capability, or each tree's seam when both trees read it. */
+  capabilities: Record<string, { seam: string | string[]; why?: string }>
   exists: (repoPath: string) => boolean
 }
 export const TYPE_ID: RegExp

@@ -10,8 +10,8 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../units/seams.mjs"
-import * as vocabulary from "../units/vocabulary.mjs"
 import { CAPABILITIES } from "../units/capabilities.mjs"
+import * as vocabulary from "../units/vocabulary.mjs"
 import { descriptorSource, keptLengthsSource } from "../units/templates.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -113,6 +113,53 @@ for (const [name, edit, re, over] of cases) {
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 }
+
+test("\"input:entity-subject\" needs an input whose field is imageUrl (both input resolvers put the entity there)", () => {
+  const root = tree()
+  try {
+    const ctx = ctxFor(root, { capabilities: { "input:entity-subject": CAPABILITIES["input:entity-subject"] } })
+    const rule = /capability "input:entity-subject" puts a wired entity in imageUrl/
+    withManifest(root, (m) => { m.capabilities = ["input:entity-subject"] })
+    assert.ok(problems(root, ctx).some((e) => rule.test(e)), "an input on videoUrl only is refused")
+    withManifest(root, (m) => { m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["image"] })
+    assert.deepEqual(problems(root, ctx), [])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("\"input:entity-subject\" needs its imageUrl input to accept image (an entity is an image)", () => {
+  const root = tree()
+  try {
+    const ctx = ctxFor(root, { capabilities: { "input:entity-subject": CAPABILITIES["input:entity-subject"] } })
+    const rule = /capability "input:entity-subject": its imageUrl input must accept "image"/
+    withManifest(root, (m) => { m.capabilities = ["input:entity-subject"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["video"] })
+    const errs = problems(root, ctx)
+    assert.ok(errs.some((e) => rule.test(e)), errs.join("\n"))
+    assert.ok(!errs.some((e) => /it needs an input whose field is "imageUrl"/.test(e)), "the field rule is met: only the accepts rule fires")
+    withManifest(root, (m) => { m.handles.inputs[0].accepts = ["video", "image"] })
+    assert.deepEqual(problems(root, ctx), [])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("a capability read by both trees needs each tree's seam live (\"input:entity-subject\": the definitions and the registry)", () => {
+  assert.deepEqual(CAPABILITIES["input:entity-subject"].seam, ["definitions", "registry"])
+  const root = tree()
+  try {
+    withManifest(root, (m) => { m.capabilities = ["input:entity-subject"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["image"] })
+    for (const seam of ["definitions", "registry"]) {
+      const ctx = ctxFor(root, { capabilities: { "input:entity-subject": CAPABILITIES["input:entity-subject"] }, live: liveSeams({ ...Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, true])), [seam]: false }) })
+      const errs = problems(root, ctx)
+      assert.ok(errs.some((e) => e.includes(`capability "input:entity-subject" needs the "${seam}" seam, which is not live`)), errs.join("\n"))
+    }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("every capability names seams that exist", () => {
+  for (const [name, cap] of Object.entries(CAPABILITIES)) {
+    const seams = [cap.seam].flat()
+    assert.ok(seams.length > 0, name)
+    for (const seam of seams) assert.ok(ALL_SEAM_IDS.includes(seam), `${name}: "${seam}" is not a seam in tools/units/seams.mjs`)
+  }
+})
 
 test("G6 accepts: an input that takes images, alone or with another kind (the canvas judges it by unit-connections.ts)", () => {
   for (const accepts of [["image"], ["video", "image"]]) {

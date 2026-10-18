@@ -4,6 +4,9 @@
  * Stateless function with no React/Zustand dependencies.
  */
 
+import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
+import { composeSet, unitsWith } from "../../lib/unit-compose.js"
+// @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
 import type {
   SimpleNode,
   SimpleEdge,
@@ -1458,6 +1461,21 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "location"])
 
+/** Targets whose wired entity is the node's SUBJECT — it lands in `imageUrl` —
+ *  rather than one more reference image (`referenceImageUrls`, every other
+ *  target). Legacy rows ∪ every node unit declaring the "input:entity-subject"
+ *  capability (tools/units/capabilities.mjs), so a migrated node is never named
+ *  here. The editor's twin is `ENTITY_SUBJECT_TARGET_TYPES` in
+ *  frontend/src/components/editor/workflow-editor/node-input-resolver.ts,
+ *  composed from the same capability. Its legacy rows lack "gif-to-video",
+ *  which the editor's have: a server-run Character → GIF to Video sends the
+ *  portrait as a reference, which its payload never reads. */
+export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
+  "ENTITY_SUBJECT_TARGET_TYPES",
+  new Set(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video"]),
+  unitsWith(UNIT_NODE_DESCRIPTORS, "input:entity-subject"),
+)
+
 // Entity node types that carry a stored `data.voice` (the character voice
 // shape) which auto-fills a connected text-to-speech node. character + creature
 // share the identical column/shape (migration 220 "talking creature"); object /
@@ -2448,7 +2466,7 @@ function routeOutput(
 
   // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer / ai-avatar image mode / still-to-video's still) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer" || targetType === "ai-avatar" || targetType === "still-to-video") {
+    if (ENTITY_SUBJECT_TARGET_TYPES.has(targetType)) {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

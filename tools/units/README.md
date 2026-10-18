@@ -88,7 +88,7 @@ the first node of such a kind builds its seam and flips its `live`.
 |---|---|
 | `manifest.mjs` | The one loader + validator (G6). gen:skills loads units through it too. |
 | `seams.mjs` | Every seam: the aggregates, projections, splice regions and data files, each with its composer and a `live` flag. |
-| `capabilities.mjs` | The closed list of manifest `capabilities`, each read by exactly one seam. |
+| `capabilities.mjs` | The closed list of manifest `capabilities`, each naming the seam that reads it (or each tree's seam, when both trees read it). |
 | `vocabulary.mjs` | Categories, handle kinds, producer kinds, execution kinds, queues — pinned to the product by `frontend/src/__tests__/units-vocabulary.test.ts`. |
 | `templates.mjs` | The emitters and the region splice. |
 | `scaffold.mjs` | `gen:units -- --new`: flags, the in-memory validation, the write, the printed next steps. |
@@ -120,6 +120,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
 | `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
 | everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, the MCP handle table `lib/node-handles.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| the entity-subject targets (`ENTITY_SUBJECT_TARGET_TYPES`; capability `input:entity-subject`: a wired Character / Face / Object / Creature / Location is the node's subject, so it lands in `imageUrl`, not `referenceImageUrls`; the validator requires an input whose `field` is `imageUrl` and whose `accepts` includes `image`) | both input resolvers, legacy rows ∪ the units declaring it: `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) and `workflow-engine/input-resolver.ts` (through `unit-descriptors.ts`). The server's legacy rows lack `gif-to-video`, which the editor's have, so declaring it on that node changes how a server-run workflow routes it |
 | the canvas connection rule of a unit's inputs (each `handles.inputs[].accepts`) | `frontend/src/lib/connection-validation.ts` asks `lib/unit-connections.ts` (below) |
 | the producer sets | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` |
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |

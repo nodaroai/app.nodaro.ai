@@ -1,5 +1,8 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions";
+import { composeSet, unitsWith } from "@/lib/unit-compose";
+// @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
@@ -935,6 +938,20 @@ function injectLocationContext(
     inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), urlToInject];
   }
 }
+
+/** Targets whose wired entity (Character / Face / Object / Creature / Location)
+ *  is the node's SUBJECT — it lands in `imageUrl` — rather than one more
+ *  reference image (`referenceImageUrls`, every other target). Legacy rows ∪
+ *  every node unit declaring the "input:entity-subject" capability
+ *  (tools/units/capabilities.mjs), so a migrated node is never named here.
+ *  The server's twin is `ENTITY_SUBJECT_TARGET_TYPES` in
+ *  backend/src/services/workflow-engine/input-resolver.ts, composed from the
+ *  same capability. */
+export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
+  "ENTITY_SUBJECT_TARGET_TYPES",
+  new Set<string>(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video", "gif-to-video"]),
+  unitsWith(UNIT_NODE_DEFINITIONS, "input:entity-subject"),
+)
 
 // Node types that produce a Suno track/task ID for downstream passthrough:
 // `SUNO_TRACK_SOURCE_TYPES` from @nodaro/shared — one set with the orchestrator
@@ -2493,7 +2510,7 @@ export function resolveNodeInputs(
       // The character node's "image" handle emits a PLAIN portrait — no entity
       // id and no identity injection. Both guards below skip it.
       const isPlainImageHandle = srcEdge?.sourceHandle === "image";
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video" || node.type === "gif-to-video") {
+      if (ENTITY_SUBJECT_TARGET_TYPES.has(node.type ?? "")) {
         inputs.imageUrl = output;
       } else {
         inputs.referenceImageUrls = [
@@ -2549,7 +2566,7 @@ export function resolveNodeInputs(
       // consumer can field-map a specific variant via a `"bucket[idx]"`
       // string in its `fieldMappings`; otherwise the helper falls back to
       // the anchor image. See `injectLocationContext` above for details.
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video" || node.type === "gif-to-video") {
+      if (ENTITY_SUBJECT_TARGET_TYPES.has(node.type ?? "")) {
         inputs.imageUrl = output;
       } else if (isPlainImageHandle) {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];

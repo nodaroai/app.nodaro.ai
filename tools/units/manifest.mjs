@@ -337,7 +337,7 @@ function checkSeams(unit, m, ctx, errors) {
   if (m.contract?.producer) missing("contracts", "contract.producer")
   for (const c of Array.isArray(m.capabilities) ? m.capabilities : []) {
     const cap = ctx.capabilities[c]
-    if (cap) missing(cap.seam, `capability "${c}"`)
+    if (cap) for (const seam of [cap.seam].flat()) missing(seam, `capability "${c}"`)
   }
 }
 
@@ -419,6 +419,12 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   else {
     for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
     if (m.capabilities.includes("length:pass-video") && m.capabilities.includes("length:exact-video")) errors.push("capabilities: \"length:exact-video\" already keeps the length — drop \"length:pass-video\"")
+    // The entity lands in imageUrl (both input resolvers), so the node must read it there, on an input that takes images.
+    if (m.capabilities.includes("input:entity-subject")) {
+      const imageUrlInputs = Array.isArray(m.handles?.inputs) ? m.handles.inputs.filter((h) => isObject(h) && h.field === "imageUrl") : []
+      if (!imageUrlInputs.length) errors.push("capability \"input:entity-subject\" puts a wired entity in imageUrl: it needs an input whose field is \"imageUrl\"")
+      else if (!imageUrlInputs.some((h) => Array.isArray(h.accepts) && h.accepts.includes("image"))) errors.push("capability \"input:entity-subject\": its imageUrl input must accept \"image\" (a wired entity is an image) — add \"image\" to its accepts")
+    }
     if (m.capabilities.includes("length:unknown")) {
       for (const keeps of ["length:pass-video", "length:exact-video"]) if (m.capabilities.includes(keeps)) errors.push(`capabilities: "length:unknown" (no rule bounds its length) contradicts "${keeps}" (it keeps its video input's) — a node has one length rule`)
       if (m.contract?.producer !== "video") errors.push("capabilities: \"length:unknown\" is the length rule of a video output — it needs contract.producer \"video\"")
