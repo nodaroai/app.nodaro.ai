@@ -281,6 +281,11 @@
       },
       "description": "Closed list: tools/units/capabilities.mjs"
     },
+    "lengthUnknownReason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required with (and only with) the \"length:unknown\" capability: one sentence on why no rule bounds the video output's length before it has run (backend UNBOUNDED_LENGTH_REASONS)."
+    },
     "registry": {
       "type": "object",
       "required": [

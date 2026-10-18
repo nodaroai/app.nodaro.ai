@@ -63,6 +63,8 @@ export interface UnitDescriptor {
   readonly execution: { readonly kind: "source" | "inline" | "sync" | "worker"; readonly queue?: string; readonly requires?: UnitRequiredMedia }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
+  /** Why no rule bounds its video output's length: unit.json's lengthUnknownReason, present exactly with the "length:unknown" capability (UNBOUNDED_LENGTH_REASONS). */
+  readonly lengthUnknownReason?: string
 }
 
 /** route.ts / route.ee.ts — the unit's Fastify plugin (Zod body, creditGuard, the insert-job funnel). */

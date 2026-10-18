@@ -17,7 +17,7 @@ import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MEDIA_INPUT_KINDS, REGISTRY_CA
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
-const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "registry", "contract", "docs"]
+const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs"]
 const CONTRACT_KEYS = ["producer"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
@@ -419,6 +419,15 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   else {
     for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
     if (m.capabilities.includes("length:pass-video") && m.capabilities.includes("length:exact-video")) errors.push("capabilities: \"length:exact-video\" already keeps the length — drop \"length:pass-video\"")
+    if (m.capabilities.includes("length:unknown")) {
+      for (const keeps of ["length:pass-video", "length:exact-video"]) if (m.capabilities.includes(keeps)) errors.push(`capabilities: "length:unknown" (no rule bounds its length) contradicts "${keeps}" (it keeps its video input's) — a node has one length rule`)
+      if (m.contract?.producer !== "video") errors.push("capabilities: \"length:unknown\" is the length rule of a video output — it needs contract.producer \"video\"")
+      if (m.lengthUnknownReason === undefined) errors.push("capabilities: \"length:unknown\" needs lengthUnknownReason — one sentence on why no rule bounds its length before it has run (UNBOUNDED_LENGTH_REASONS)")
+    }
+    if (m.lengthUnknownReason !== undefined && !m.capabilities.includes("length:unknown")) errors.push("lengthUnknownReason is only for a unit with the \"length:unknown\" capability")
+  }
+  if (m.lengthUnknownReason !== undefined && !isNonEmptyString(m.lengthUnknownReason)) {
+    errors.push("lengthUnknownReason must be a non-empty sentence")
   }
   if (!isObject(m.registry) || !isNonEmptyString(m.registry.description) || !OUTPUT_TYPES.includes(m.registry.outputType)) {
     errors.push(`registry needs a description and an outputType (${OUTPUT_TYPES.join(", ")}) — /v1/nodes lists every node`)

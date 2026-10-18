@@ -175,7 +175,7 @@ export function nextSteps(o) {
   if (o.characterizeAfter !== undefined) steps.push(`write its characterization (backend/src/nodes/${o.type}/characterize.char.ts run: the node's real provider function on a fixture), then bless its golden inside the pinned-ffmpeg image (backend/scripts/characterize-in-image.sh; backend/CLAUDE.md "ffmpeg: pinned version + output characterization")`)
   else if (o.kind === "worker") steps.push("an ffmpeg worker should be characterized: re-scaffold with --characterize <operation it follows>, or add characterize.char.ts and the \"ffmpeg-media\" capability by hand (tools/units/README.md)")
   if (o.kind === "worker") {
-    steps.push("its output length: a video output needs a length rule (capability \"length:exact-video\" when it keeps the input's exact length, \"length:pass-video\" when at most that; video-output-length.test.ts)")
+    steps.push("its output length: a video output needs a length rule (capability \"length:exact-video\" when it keeps the input's exact length, \"length:pass-video\" when at most that, \"length:unknown\" with a unit.json lengthUnknownReason sentence when no rule can bound it before it has run, and added by hand to the shrink-only unbounded pin; video-output-length.test.ts)")
     steps.push("a @nodaro/shared changeset: contract.producer adds a row to packages/shared/src/generated/unit-contracts.ts")
   }
   steps.push("npm run gen (gen:units, then gen:skills — INTERNAL_ORCHESTRATOR_SECRET inline), npm run build:packages (render-rules carries the node's settings), then npm run typecheck")

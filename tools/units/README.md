@@ -65,7 +65,8 @@ npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inli
      (`node-docs.test.ts`), then the snapshot is refreshed
      (`npm -w frontend run gen:node-docs -- --live`) and the line dropped;
      a video output also needs its length rule (`length:exact-video` /
-     `length:pass-video`);
+     `length:pass-video`, or `length:unknown` with a `lengthUnknownReason`
+     when no rule can bound it);
   4. a node with a route: the `model_pricing` seed migration at the same price
      as `price.ee.ts`;
   5. a media output: a `@nodaro/shared` changeset (`contract.producer` adds a
@@ -118,7 +119,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | `nodeTypes`, config panels, `NODE_OPTIONS` + families, executors, label tables | `components/nodes/index.ts`, `config-panel.tsx`, `node-options.tsx` + `node-families.ts`, `execute-node.ts` (kit: `workflow-editor/unit-exec-kit.ts`), `lib/i18n/labels.ts` |
 | everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
 | `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
-| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, the MCP handle table `lib/node-handles.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, the MCP handle table `lib/node-handles.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
 | the producer sets | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` |
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
@@ -175,6 +176,20 @@ registry; the snapshot was retired once remove-audio landed, decided
 - `registry.after` (optional): the node's place in `/v1/nodes`
   (`NODE_REGISTRY`, which keeps its own hand-curated order) when that differs
   from `position.after`.
+- A video output has one length rule. `length:pass-video` (keeps at most its
+  video input's length) and `length:exact-video` (exactly it) join the
+  kept-length sets; `length:unknown` (no rule bounds it before it has run — a
+  GIF's length, which only the file says) gives it the unbounded rule and, in
+  `UNBOUNDED_LENGTH_REASONS`, the sentence its top-level `lengthUnknownReason`
+  states (required with the capability, refused without it; the descriptor
+  carries it), so the listing prices a length-priced step after it at the
+  run's own stand-in, and adds no kept-length row (the run estimates read the
+  node's own length). `length:unknown` combines with neither other `length:*`
+  capability and needs `contract.producer: "video"`; `length:exact-video`
+  already implies `length:pass-video`. A **new** node with `length:unknown`
+  is also added by hand to the shrink-only unbounded-producers pin in
+  `backend/src/lib/__tests__/video-output-length.test.ts` (a migrating legacy
+  node is already in it).
 - Parameter pickers and canvas macros are not units.
 
 ## Guards

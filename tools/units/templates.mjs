@@ -108,6 +108,8 @@ export function descriptorSource(unit) {
     handles: m.handles,
     execution: m.execution,
     capabilities: m.capabilities,
+    // Why no rule bounds its length (the "length:unknown" capability), when it has one.
+    ...(m.lengthUnknownReason !== undefined ? { lengthUnknownReason: m.lengthUnknownReason } : {}),
   }
   return [GENERATED_HEADER, "// The projection of frontend/src/nodes/" + m.type + "/unit.json the server reads.", "", `export const descriptor = ${json(desc)} as const`, ""].join("\n")
 }

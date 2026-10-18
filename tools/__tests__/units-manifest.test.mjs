@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url"
 import { familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../units/seams.mjs"
 import * as vocabulary from "../units/vocabulary.mjs"
+import { CAPABILITIES } from "../units/capabilities.mjs"
+import { descriptorSource, keptLengthsSource } from "../units/templates.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.join(here, "../units/__fixtures__/tree")
@@ -93,6 +95,12 @@ const cases = [
   ["docs needs a page or a reason", (m) => { delete m.docs.page }, /docs needs exactly one of page/],
   ["docs page must exist", (m) => { m.docs.page = "docs/nodes/utility/missing.md" }, /does not exist/],
   ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["image"] }, /"image" has no editor connection rule for a unit input yet/],
+  ["length:unknown with length:pass-video", (m) => { m.capabilities = ["length:unknown", "length:pass-video"] }, /"length:unknown" \(no rule bounds its length\) contradicts "length:pass-video"/, { capabilities: CAPABILITIES }],
+  ["length:unknown with length:exact-video", (m) => { m.capabilities = ["length:exact-video", "length:unknown"] }, /"length:unknown" \(no rule bounds its length\) contradicts "length:exact-video"/, { capabilities: CAPABILITIES }],
+  ["length:unknown without a reason", (m) => { m.capabilities = ["length:unknown"] }, /"length:unknown" needs lengthUnknownReason/, { capabilities: CAPABILITIES }],
+  ["a reason without length:unknown", (m) => { m.lengthUnknownReason = "Its length is the file's." }, /lengthUnknownReason is only for a unit with the "length:unknown" capability/],
+  ["an empty reason", (m) => { m.capabilities = ["length:unknown"]; m.lengthUnknownReason = " " }, /lengthUnknownReason must be a non-empty sentence/, { capabilities: CAPABILITIES }],
+  ["length:unknown on a node with no video output", (m) => { m.capabilities = ["length:unknown"]; m.handles.outputs[0].kind = "audio"; m.contract.producer = "audio" }, /"length:unknown" is the length rule of a video output — it needs contract\.producer "video"/, { capabilities: CAPABILITIES }],
   ["inline runs no route", (m) => { m.execution = { kind: "inline" }; m.contract = { producer: "video" } }, /runs no route/],
 ]
 for (const [name, edit, re, over] of cases) {
@@ -240,4 +248,20 @@ test("unit.schema.json's enums are the validator's vocabularies", () => {
   assert.deepEqual(schema.properties.execution.properties.queue.enum, vocabulary.QUEUES)
   assert.deepEqual(schema.properties.registry.properties.outputType.enum, vocabulary.OUTPUT_TYPES)
   assert.deepEqual(schema.properties.contract.properties.producer.enum, vocabulary.PRODUCER_KINDS)
+})
+
+test("length:unknown: a video unit may hold it alone, and it adds no kept-length row (the run estimates read the node's own length)", () => {
+  const root = tree()
+  try {
+    const reason = "Its length is the fixture's, which only the file says."
+    withManifest(root, (m) => { m.capabilities = ["length:unknown"]; m.lengthUnknownReason = reason })
+    assert.deepEqual(problems(root, ctxFor(root, { capabilities: CAPABILITIES })), [])
+    assert.equal(CAPABILITIES["length:unknown"].seam, "registry")
+    assert.doesNotMatch(keptLengthsSource(loadUnits(root)), /fixture-echo/)
+    // The descriptor carries the reason the server's UNBOUNDED_LENGTH_REASONS reads, and only when stated.
+    assert.match(descriptorSource(loadUnits(root)[0]), new RegExp(`"lengthUnknownReason": ${JSON.stringify(reason).replace(/[.']/g, "\\$&")}`))
+    withManifest(root, (m) => { m.capabilities = ["length:pass-video"]; delete m.lengthUnknownReason })
+    assert.match(keptLengthsSource(loadUnits(root)), /\["fixture-echo", "bound"\]/)
+    assert.doesNotMatch(descriptorSource(loadUnits(root)[0]), /lengthUnknownReason/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

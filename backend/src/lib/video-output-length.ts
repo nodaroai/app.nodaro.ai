@@ -52,6 +52,10 @@ import { LENGTH_KEEPING_VIDEO_TYPES, utilityOutputLength } from "@nodaro/render-
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
+// @registry-enumerates VIDEO_OUTPUT_LENGTH_RULES and UNBOUNDED_LENGTH_REASONS carry every node unit with the "length:unknown" capability
+import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
+import { composeRecord, unitsWith } from "./unit-compose.js"
+import type { UnitDescriptor } from "../nodes/kit.js"
 
 /** A length that does not depend on the episode, plus seconds per minute of it. */
 export interface InputLength {
@@ -142,8 +146,35 @@ const passMedia: OutputLengthRule = { via: "rule", run: (_n, inputs) => (inputs.
 /** A run's own stitch seam: the plan pads a stitched clip by less than this (generate-video-pro-length.ts). */
 const STITCH_SLACK_SEC = 1
 
-/** Why a node's output cannot always be bounded, for the nodes that declare it. */
-export const UNBOUNDED_LENGTH_REASONS: Readonly<Record<string, string>> = {
+/** A node no rule can bound: the rule every node unit with the "length:unknown" capability gets (the hand-written unbounded nodes below have the same). */
+const unboundedRule: OutputLengthRule = { via: "rule", run: () => "unknown" }
+
+/**
+ * The rows the node units with the "length:unknown" capability add (tools/units/README.md):
+ * the unbounded rule in {@link VIDEO_OUTPUT_LENGTH_RULES} and, in
+ * {@link UNBOUNDED_LENGTH_REASONS}, the reason its manifest states
+ * (`lengthUnknownReason`, required with the capability), so a unit no rule can
+ * bound is named like every hand-written one. Pure over the descriptors, so a
+ * fixture unit proves it; a unit with the capability and no reason throws at
+ * load (the validator refuses that manifest first).
+ */
+export function unitUnknownLengths(units: ReadonlyArray<UnitDescriptor>): {
+  readonly rules: Readonly<Record<string, OutputLengthRule>>
+  readonly reasons: Readonly<Record<string, string>>
+} {
+  const types = unitsWith(units, "length:unknown")
+  return {
+    rules: Object.fromEntries(types.map((t) => [t, unboundedRule])),
+    reasons: Object.fromEntries(units.filter((u) => types.includes(u.type)).map((u) => {
+      if (!u.lengthUnknownReason) throw new Error(`${u.type}: the "length:unknown" capability needs lengthUnknownReason in its unit.json (tools/units/README.md)`)
+      return [u.type, u.lengthUnknownReason]
+    })),
+  }
+}
+const UNIT_UNKNOWN_LENGTHS = unitUnknownLengths(UNIT_NODE_DESCRIPTORS)
+
+/** Why a node's output cannot always be bounded, for the nodes that declare it: the hand-written ones ∪ the "length:unknown" node units. */
+export const UNBOUNDED_LENGTH_REASONS: Readonly<Record<string, string>> = composeRecord("UNBOUNDED_LENGTH_REASONS", {
   "youtube-video": "a pasted link the user cannot replace and that carries no length: its length is the video's, which a run reads at download (a link the user replaces is the episode, per minute)",
   "extend-video": "VEO and Runway extend add a length the catalog does not declare",
   "suno-music-video": "the song's length: a Suno task id carries none",
@@ -158,7 +189,7 @@ export const UNBOUNDED_LENGTH_REASONS: Readonly<Record<string, string>> = {
   "list": "fans out an unknown count of items",
   "sub-workflow": "its length is its inner workflow's",
   "reduce": "its length is its inputs' combined, an unknown count",
-}
+}, UNIT_UNKNOWN_LENGTHS.reasons)
 
 // ── The rules ──────────────────────────────────────────────────────────────
 
@@ -363,9 +394,12 @@ function utilityLength(node: LengthNode, inputs: readonly WireInput[]): WireLeng
 /**
  * The length rule of every node that delivers a video. Every member of
  * `VIDEO_PRODUCER_TYPES` is a key (guarded), plus the dual-mode steps that can
- * deliver one.
+ * deliver one. The hand-written rules ∪ the node units with the
+ * "length:unknown" capability ({@link unitUnknownLengths}); a unit with a
+ * "length:pass-video" / "length:exact-video" capability arrives through
+ * `LENGTH_KEEPING_VIDEO_TYPES` below.
  */
-export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = {
+export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = composeRecord("VIDEO_OUTPUT_LENGTH_RULES", {
   // Recordings and renders: read off the file / the render's own estimate (credits.ts).
   "upload-video": { via: "recording" },
   "youtube-video": { via: "recording" },
@@ -435,7 +469,7 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "list": { via: "rule", run: () => "unknown" },
   "sub-workflow": { via: "rule", run: () => "unknown" },
   "reduce": { via: "rule", run: () => "unknown" },
-}
+}, UNIT_UNKNOWN_LENGTHS.rules)
 
 /** The steps that deliver their input's video whole (pinned by the listing's chain guard). */
 export const PASS_THROUGH_VIDEO_TYPES: readonly string[] = Object.entries(VIDEO_OUTPUT_LENGTH_RULES)
