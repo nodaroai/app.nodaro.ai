@@ -22,9 +22,9 @@ import { PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared/scene3d"
 import { getCachedCredits, getCachedVideoProCredits } from "@/ee/hooks/use-model-credits"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // Node units (tools/units/README.md): EXECUTABLE_TYPES and the price mirror
-// are the legacy tables below ∪ every unit (its execution.kind / priceFallback).
+// are the legacy tables below ∪ every unit (its execution.kind / priceRows).
 import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
-import { composeRecord, composeSet, unitRecord } from "@/lib/unit-compose"
+import { composeRecord, composeSet, unitPriceRows } from "@/lib/unit-compose"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -34,7 +34,7 @@ export class WorkflowStaleError extends Error {
   }
 }
 
-// Legacy rows ∪ each node unit's priceFallback (projected by gen:units from its price.ee.ts).
+// Legacy rows ∪ each node unit's priceRows (every staticCosts row of its price.ee.ts, projected by gen:units).
 export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CREDIT_COSTS", {
   "generate-script": 20,
   "generate-image": 20,
@@ -81,11 +81,11 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
   "apply-edl:proxy": 1,
-  // The podcast use-case nodes' flat per-run fee (their steps bill at their
-  // own rows). Pinned to STATIC_CREDIT_COSTS by
+  // The flat per-run fee of the podcast use-case nodes still to come (their
+  // steps bill at their own rows): written here because their nodes are not
+  // units yet — a use-case unit's fee comes from its price.ee.ts. Pinned to
+  // STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
-  "use-case-fee:tighten-episode": 10,
-  "use-case-fee:episode-chapters": 10,
   "use-case-fee:episode-trailer": 10,
   "use-case-fee:clip-pack": 10,
   // speaker-view: per-minute RATES, one row per quality × price tier
@@ -242,7 +242,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // a last-resort floor: every real quoting path (node badge, canvas total,
   // run-confirm, precheck) resolves a bucketed composite first.
   "video-audit": 1073,
-}, unitRecord(UNIT_NODE_DEFINITIONS, (u) => u.priceFallback ?? undefined));
+}, unitPriceRows(UNIT_NODE_DEFINITIONS));
 
 /** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
 const MOTION_CREDIT_COSTS: Record<string, number> = {
@@ -757,8 +757,6 @@ export const EXECUTABLE_TYPES = composeSet("EXECUTABLE_TYPES", new Set([
   "render-video",
   "combine-videos",
   "apply-edl",
-  "tighten-episode",
-  "episode-chapters",
   "edit-plan",
   "camera-switch",
   "speaker-frames",

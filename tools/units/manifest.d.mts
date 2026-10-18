@@ -22,10 +22,16 @@ export interface ValidationContext {
   familyTypes?: Map<string, string[]>
   /** Ids a unit may not take, with why (Object.prototype names are refused regardless). */
   reserved?: Map<string, string>
+  /** The add-node option types of LEGACY_NODE_OPTIONS (node-options.tsx); a unit first in its family must follow one (or a picker unit). */
+  optionTypes?: Set<string>
+  /** The builder keys of USE_CASE_SPECS (packages/render-rules/src/use-case-specs.ts); a use-case unit's execution.builder must be one. */
+  useCaseBuilders?: Set<string>
   live: Set<string>
-  /** The seam that reads each capability, or each tree's seam when both trees read it. */
-  capabilities: Record<string, { seam: string | string[]; why?: string }>
+  /** Each capability with every seam that reads it (tools/units/capabilities.mjs). */
+  capabilities: Record<string, { seams: string[]; why?: string }>
   exists: (repoPath: string) => boolean
+  /** A repo file's text, or null; the checks that read files skip without it. */
+  readText?: (repoPath: string) => string | null
 }
 export const TYPE_ID: RegExp
 export function pascalCase(type: string): string
@@ -34,6 +40,7 @@ export function unitBinding(type: string): string
 export function loadUnits(root: string): Unit[]
 export function familyIdsFrom(source: string): string[]
 export function familyTypesFrom(source: string): Map<string, string[]>
+export function optionTypesFrom(options: string): Set<string>
 export function reservedIdsFrom(sources?: { credits?: string; options?: string; macros?: string[]; codeBuiltCreditIds?: string[] }): Map<string, string>
 export function repoContext(root: string): ValidationContext
 export function validateUnit(unit: Unit, ctx: ValidationContext, knownTypes: Set<string>, unitFamilies?: Map<string, string>): string[]

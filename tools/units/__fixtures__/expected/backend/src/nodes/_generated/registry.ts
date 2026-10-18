@@ -2,8 +2,10 @@
 // @registry backend/src/nodes/*/descriptor.generated.ts
 // @registry-exports registry: UNIT_REGISTRY
 import type { UnitDescriptor } from "../kit.js"
+import { descriptor as unit_fixture_case } from "../fixture-case/descriptor.generated.js" // unit:fixture-case
 import { descriptor as unit_fixture_echo } from "../fixture-echo/descriptor.generated.js" // unit:fixture-echo
 
 export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.assign(Object.create(null), {
+  "fixture-case": unit_fixture_case, // unit:fixture-case
   "fixture-echo": unit_fixture_echo, // unit:fixture-echo
 })

@@ -5,6 +5,8 @@ export interface GenerateResult {
   errors: string[]
   outputs: Map<string, string>
   orphans: string[]
+  /** gen:skills tables with the units' rows removed (tools/units/handle-prune.mjs). */
+  prunes: Map<string, string>
 }
 export const REPO_ROOT: string
 export const GEN_UNITS_OUTPUTS: string[]

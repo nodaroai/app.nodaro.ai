@@ -9,7 +9,7 @@
 // template itself) is fixed text, so a template change is a plain change.
 import path from "node:path"
 import { GENERATED_HEADER } from "./seams.mjs"
-import { dataInterfaceName, unitBinding } from "./manifest.mjs"
+import { dataInterfaceName, insertAtPositions, unitBinding } from "./manifest.mjs"
 
 const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 const tag = (type) => `// unit:${type}`
@@ -62,7 +62,7 @@ export function aggregateSource(agg, members) {
 const handleIds = (list) => (Array.isArray(list) ? list.map((h) => h.id) : [])
 
 /** frontend/src/nodes/<type>/definition.generated.ts — the manifest as the editor reads it. */
-export function definitionSource(unit, priceFallback) {
+export function definitionSource(unit, priceRows) {
   const m = unit.manifest
   const def = {
     type: m.type,
@@ -77,9 +77,9 @@ export function definitionSource(unit, priceFallback) {
     execution: m.execution,
     capabilities: m.capabilities,
     docs: m.docs,
-    // The editor's price mirror (estimates before the server answers),
-    // projected from price.ee.ts — never written by hand, never in unit.json.
-    priceFallback: priceFallback ?? null,
+    // The editor's price mirror (estimates before the server answers): every
+    // staticCosts row of price.ee.ts — never written by hand, never in unit.json.
+    priceRows: Object.fromEntries(Object.keys(priceRows ?? {}).sort(byCodeUnit).map((k) => [k, priceRows[k]])),
   }
   return [GENERATED_HEADER, "// The projection of unit.json the editor reads: edit unit.json, then run npm run gen:units.", "", `export const definition = ${json(def)} as const`, ""].join("\n")
 }
@@ -141,17 +141,89 @@ export function docsRows(units) {
   return rows.length ? ["| Node | Description | When to Use |", "|------|-------------|-------------|", ...rows] : []
 }
 
-/** packages/shared/src/generated/unit-contracts.ts — type id + producer kind, nothing else. */
-export function contractsSource(units) {
-  const rows = units.filter((u) => u.manifest.contract?.producer)
+/**
+ * Units in position order: tools/units/legacy-nodes.json's list (alphabetical,
+ * not the NODE_DEFINITIONS literal's order) with each unit inserted right after
+ * the type its position.after names — a unit that follows a unit comes right
+ * after it. The editor's composer places units over the literal's order
+ * instead, so units anchored to different legacy types may be listed in a
+ * different relative order there; a chain (one unit after another) reads the
+ * same in both.
+ */
+export function inPositionOrder(units, legacyTypes) {
+  const order = insertAtPositions([...legacyTypes], units.filter((u) => u.manifest?.position).map((u) => ({ type: u.type, after: u.manifest.position.after })))
+  const rank = new Map(order.map((t, i) => [t, i]))
+  return [...units].sort((a, b) => (rank.get(a.type) ?? 0) - (rank.get(b.type) ?? 0))
+}
+
+const isUseCase = (u) => u.manifest.execution?.kind === "use-case"
+const row = (type, values) => `  [${[JSON.stringify(type), ...values].join(", ")}], ${tag(type)}`
+
+/**
+ * packages/shared/src/generated/unit-contracts.ts — type ids with closed
+ * vocabularies, nothing else: the producer kind, the use-case types, what each
+ * JSON pip carries, the non-prompt input pips, the review holds and how an app
+ * presents the result. Comments are `//` lines only (unit-contracts.test.ts
+ * holds every other line to a declaration or a row). Every block lists its
+ * units in position order (inPositionOrder): one order for the whole file, the
+ * one the use-case types need.
+ */
+export function contractsSource(units, legacyTypes = []) {
+  const ordered = inPositionOrder(units, legacyTypes)
+  const contract = (u) => u.manifest.contract ?? {}
+  const rows = ordered.filter((u) => u.manifest.contract?.producer)
+  const sorted = (o) => Object.fromEntries(Object.keys(o).sort(byCodeUnit).map((k) => [k, o[k]]))
   return [
     GENERATED_HEADER,
-    "// The unit contract published in @nodaro/shared (decided 2026-10-16): a node type id and its",
-    "// producer kind — never a price, credit id, prompt or doctrine string. producer-types.ts",
-    "// composes these rows into the producer sets. Every row is an irrevocable Apache grant.",
+    "// The unit contract published in @nodaro/shared (decided 2026-10-16, widened 2026-10-18): node type",
+    "// ids with closed vocabularies — each unit's producer kind, the use-case types, what each JSON pip",
+    "// carries, the input pips that are never a prompt lane, the review holds and how a published app",
+    "// presents the result. Never a price, credit id, number, prompt or doctrine string. Each block",
+    "// replaces a hand-written published list, which composes its rows (unit-contract-compose.ts);",
+    "// every row is an irrevocable Apache grant.",
     "",
     "export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: \"audio\" | \"video\" | \"image\" | \"dynamic\"]> = [",
     ...rows.map((u) => `  [${JSON.stringify(u.type)}, ${JSON.stringify(u.manifest.contract.producer)}], ${tag(u.type)}`),
+    "]",
+    "",
+    "// The use-case node units (execution.kind \"use-case\"), in position order — each a route POST /v1/<type> (+ /estimate, /continue).",
+    "export const UNIT_USE_CASE_TYPES = [",
+    ...ordered.filter(isUseCase).map((u) => `  ${JSON.stringify(u.type)}, ${tag(u.type)}`),
+    "] as const",
+    "",
+    "// What each JSON (look) output pip carries (contract.jsonPips) — json-kinds.ts composes these.",
+    "export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonly<Record<string, \"transcript\" | \"edl\" | \"other\">>]> = [",
+    ...ordered.filter((u) => Object.keys(contract(u).jsonPips ?? {}).length).map((u) => row(u.type, [`{ ${Object.entries(sorted(contract(u).jsonPips)).map(([pip, v]) => `${JSON.stringify(pip)}: ${JSON.stringify(v)}`).join(", ")} }`])),
+    "]",
+    "",
+    "// Input pips that are never a prompt lane (contract.nonPromptInputs) — fan-out-rows.ts composes these.",
+    "export const UNIT_NON_PROMPT_INPUTS: ReadonlyArray<readonly [type: string, handles: ReadonlyArray<string>]> = [",
+    ...ordered.filter((u) => (contract(u).nonPromptInputs ?? []).length).map((u) => row(u.type, [`[${contract(u).nonPromptInputs.map((h) => JSON.stringify(h)).join(", ")}]`])),
+    "]",
+    "",
+    "// Use-case units whose review-on run ends at a Preview that holds what follows (contract.reviewHold) — preview-gate.ts.",
+    "export const UNIT_REVIEW_HOLDS: ReadonlyArray<string> = [",
+    ...ordered.filter((u) => contract(u).reviewHold === true).map((u) => `  ${JSON.stringify(u.type)}, ${tag(u.type)}`),
+    "]",
+    "",
+    "// How a published app shows each unit's result where the producer sets do not decide it (contract.presents) — presentation-utils.ts.",
+    "export const UNIT_PRESENTS: ReadonlyArray<readonly [type: string, presents: \"image\" | \"video\" | \"audio\" | \"text\"]> = [",
+    ...ordered.filter((u) => contract(u).presents).map((u) => row(u.type, [JSON.stringify(contract(u).presents)])),
+    "]",
+    "",
+  ].join("\n")
+}
+
+/** packages/render-rules/src/unit-use-cases.generated.ts — each use-case unit's builder key, label and inputs (private package). */
+export function useCaseRowsSource(units, legacyTypes = []) {
+  const rows = inPositionOrder(units, legacyTypes).filter(isUseCase)
+  return [
+    GENERATED_HEADER,
+    "// The use-case node units (execution.kind \"use-case\"), in position order: each one's graph",
+    "// builder (a USE_CASE_SPECS key), label and input pips. use-case-rows.ts composes them.",
+    "",
+    "export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<\"media\" | \"music\" | \"introCard\"> }> = [",
+    ...rows.map((u) => `  { type: ${JSON.stringify(u.type)}, builder: ${JSON.stringify(u.manifest.execution.builder)}, label: ${JSON.stringify(u.manifest.label)}, inputs: [${u.manifest.handles.inputs.map((h) => JSON.stringify(h.id)).join(", ")}] }, ${tag(u.type)}`),
     "]",
     "",
   ].join("\n")

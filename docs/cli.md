@@ -529,8 +529,9 @@ nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <f
                                                          # With --json that refusal is written to stdout as
                                                          # { "error": { "code", "message" }, "jobId" } (exit 1); other errors as usual.
                                                          # The run is continued on its own type's route: --type names it; without
-                                                         # --type the job is read for its type (a token without jobs:read
-                                                         # continues on the Tighten Episode route).
+                                                         # --type the job is read for its type. When it cannot be read (a token
+                                                         # without jobs:read, or a job that records no use-case type) nothing is
+                                                         # sent: the command exits 1 asking for --type (code use_case_type_unknown).
 
 # Organizations — only on instances that have them
 nodaro org list [--json]

@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the tighten-episode body (USE_CASE_BODIES["tighten-episode"])
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { TIGHTEN_EPISODE_DEFAULTS } from "@nodaro/render-rules"
 
@@ -6,13 +7,16 @@ const probe = vi.hoisted(() => ({
   duration: vi.fn(async (_u: string) => 3600),
 }))
 vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({ probeMediaStreams: probe.streams, probeMediaDuration: probe.duration }))
-import { prepareUseCase, tightenEpisodeBody, usecaseReviewerPresent } from "../request.js"
+import { prepareUseCase, usecaseReviewerPresent } from "../request.js"
+import { USE_CASE_BODIES, type UseCaseBody } from "../bodies.js"
+
+const tightenEpisodeBody = USE_CASE_BODIES["tighten-episode"]
 
 beforeEach(() => {
   probe.streams.mockReset().mockResolvedValue({ hasVideo: true, hasAudio: true })
   probe.duration.mockReset().mockResolvedValue(3600)
 })
-const body = (over = {}) => tightenEpisodeBody.parse({ mediaUrls: ["https://r2/ep.mp4"], ...over })
+const body = (over = {}): UseCaseBody => tightenEpisodeBody.parse({ mediaUrls: ["https://r2/ep.mp4"], ...over }) as UseCaseBody
 const renderOf = (r: Awaited<ReturnType<typeof prepareUseCase>>) => (r.ok ? r.graph.nodes.find((n) => n.id === "uc-render")! : null)
 
 describe("tightenEpisodeBody", () => {

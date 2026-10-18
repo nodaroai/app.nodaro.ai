@@ -1,0 +1,13 @@
+{
+  "keys": {
+    "node.chaptersText": {"en": "Show notes", "he": "תיאור הפרק", "ja": "概要欄テキスト", "ko": "쇼 노트", "pt-br": "Notas do episódio"},
+    "node.chaptersList": {"en": "Chapters (JSON)", "he": "פרקים (JSON)", "ja": "チャプター（JSON）", "ko": "챕터(JSON)", "pt-br": "Capítulos (JSON)"},
+    "node.chaptersCopy": {"en": "Copy the chapter list", "he": "העתקת רשימת הפרקים", "ja": "チャプター一覧をコピー", "ko": "챕터 목록 복사", "pt-br": "Copiar a lista de capítulos"},
+    "node.chaptersNone": {"en": "No chapters were found in this recording", "he": "לא נמצאו פרקים בהקלטה הזו", "ja": "この録音ではチャプターが見つかりませんでした", "ko": "이 녹음에서 챕터를 찾지 못했습니다", "pt-br": "Nenhum capítulo foi encontrado nesta gravação"},
+    "proccfg.chaptersHint": {"en": "Lists the episode's chapters with their start times, ready to paste into show notes. Nothing is rendered.", "he": "מפרט את פרקי ההקלטה עם זמני ההתחלה שלהם, מוכנים להדבקה בתיאור הפרק. שום דבר לא מרונדר.", "ja": "エピソードのチャプターを開始時刻付きで一覧にします。そのまま概要欄に貼り付けられます。レンダリングは行いません。", "ko": "에피소드의 챕터를 시작 시간과 함께 나열합니다. 쇼 노트에 바로 붙여 넣을 수 있습니다. 렌더링은 하지 않습니다.", "pt-br": "Lista os capítulos do episódio com os tempos de início, prontos para colar nas notas do episódio. Nada é renderizado."},
+    "proccfg.chaptersPlanTier": {"en": "Planning quality", "he": "איכות התכנון", "ja": "計画の品質", "ko": "계획 품질", "pt-br": "Qualidade do planejamento"}
+  },
+  "labels": {
+    "Chapters": {"he": "חלוקה לפרקים", "ja": "チャプター", "ko": "챕터", "pt-br": "Índice de capítulos"}
+  }
+}

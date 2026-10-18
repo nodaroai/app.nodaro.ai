@@ -24,6 +24,9 @@ import { applyEdlCutFields } from "@/lib/apply-edl-cut"
 import { usecaseTakeMedium } from "@/lib/use-case-run-result"
 import { takeKeptTranscript, type ApplyEdlTake } from "@/lib/apply-edl-take-transcript"
 import { isAudioUrl, isImageUrl, isVideoUrl } from "@/lib/media-type"
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { composeSet, unitNoMediumResults } from "@/lib/unit-compose"
+// @registry-enumerates NO_MEDIUM_RESULT_TYPES carries every gallery node unit whose outputs carry no medium
 
 export type ResultsGalleryMediaType = "image" | "video" | "audio"
 
@@ -41,18 +44,18 @@ export const IMAGE_RESULT_TYPES: ReadonlySet<string> = new Set([
 
 /** Gallery node types with no medium of their own: their result is text, JSON
  *  or a plan (a result with no URL shows no gallery), or, for Component,
- *  whatever its sub-workflow returns. Each result is typed by its own file. */
-export const NO_MEDIUM_RESULT_TYPES: ReadonlySet<string> = new Set([
+ *  whatever its sub-workflow returns. Each result is typed by its own file.
+ *  The legacy list ∪ every gallery node unit (a Generate or Run button) with
+ *  no video, audio or image output. */
+export const NO_MEDIUM_RESULT_TYPES: ReadonlySet<string> = composeSet("NO_MEDIUM_RESULT_TYPES", new Set([
   "generate-script", "forced-alignment", "suno-lyrics", "suno-style-boost",
   "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "site-capture",
   "video-analysis", "video-audit", "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "composite",
   "edit-plan", "camera-switch", "speaker-frames", "silence-detect", "audio-sync",
-  // Chapters: its results are show notes (text), never media.
-  "episode-chapters",
   "router", "component",
-])
+]), unitNoMediumResults(UNIT_NODE_DEFINITIONS))
 
 /** Video mode is "holds a video result" (voice-changer-node.tsx, dubbing-node.tsx). */
 function holdsVideo(data: NodeData): "video" | "audio" {

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth, NodaroError, NotFoundError, ForbiddenError, ContinuationRefusedError, EditResource, unwrapEditPlanOutput } from "../../index.js"
 import type { Edl, Transcript, SilenceRanges } from "../../index.js"
+import { USE_CASE_NODE_TYPES } from "../../index.js"
+import { USE_CASE_NODE_TYPES as SHARED_USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -405,25 +407,62 @@ describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () =>
     expect(JSON.parse(init.body)).toEqual({ jobId: "job-1", mode: "render-final" })
   })
 
-  it("a key that may not read jobs (403) continues on the Tighten Episode route, as before the read", async () => {
-    const fetchMock = vi.fn()
-      .mockReturnValueOnce(mockErr(403, { error: { code: "insufficient_scope", message: "Missing required scope: jobs:read", missingScope: "jobs:read" } }))
-      .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
-    const out = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }, { idempotencyKey: "k-1" })
-    expect(out.jobId).toBe("job-2")
-    const [url, init] = fetchMock.mock.calls[1]! as [string, { body: string; headers: Record<string, string> }]
-    expect(url).toBe("https://api.example.com/v1/tighten-episode/continue")
-    expect(JSON.parse(init.body)).toEqual({ jobId: "job-1", mode: "from-failed" })
-    expect(init.headers["Idempotency-Key"]).toBe("k-1")
+  it("USE_CASE_NODE_TYPES is @nodaro/shared's list itself, not a copy", () => {
+    expect(USE_CASE_NODE_TYPES).toBe(SHARED_USE_CASE_NODE_TYPES)
   })
 
-  it("a job that is not a use-case run is sent to the Tighten Episode route, which answers its own not_found", async () => {
+  it("continueUseCase with nodeType posts to /v1/<type>/continue for every use-case type", async () => {
+    for (const t of USE_CASE_NODE_TYPES) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+      await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed", nodeType: t })
+      expect(fetchMock, t).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0]! as [string, { method: string }]
+      expect(url, t).toBe(`https://api.example.com/v1/${t}/continue`)
+      expect(init.method, t).toBe("POST")
+    }
+  })
+
+  it("continueUseCase reads each use-case type off its run and continues it on that type's route", async () => {
+    for (const t of USE_CASE_NODE_TYPES) {
+      const fetchMock = vi.fn()
+        .mockReturnValueOnce(mockOk({ data: { id: "job-1", job_type: t, input_data: { type: t, mode: "run" } } }))
+        .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+      await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" })
+      expect(fetchMock.mock.calls[1]![0], t).toBe(`https://api.example.com/v1/${t}/continue`)
+    }
+  })
+
+  /** The rejection a run whose type cannot be read gets: it asks for nodeType, and nothing is posted. */
+  function expectTypeUnknown(err: unknown, fetchMock: ReturnType<typeof vi.fn>): void {
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).toMatchObject({ code: "use_case_type_unknown", status: 400 })
+    expect((err as Error).message).toMatch(/pass nodeType/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect((fetchMock.mock.calls[0]![1] as { method: string }).method).toBe("GET")
+  }
+
+  it("a key that may not read jobs (403 jobs:read) rejects with use_case_type_unknown and posts nothing", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockErr(403, { error: { code: "insufficient_scope", message: "Missing required scope: jobs:read", missingScope: "jobs:read" } }))
+    const err = await client(fetchMock)
+      .edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }, { idempotencyKey: "k-1" })
+      .catch((e: unknown) => e)
+    expectTypeUnknown(err, fetchMock)
+  })
+
+  it("a job that is not a use-case run rejects with use_case_type_unknown and posts nothing", async () => {
     const fetchMock = vi.fn()
       .mockReturnValueOnce(mockOk({ data: { id: "job-1", job_type: "apply-edl", input_data: { edl: {} } } }))
-      .mockReturnValueOnce(mockErr(404, { error: { code: "not_found", message: "That run was not found." } }))
     const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
-    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
-    expect(err).toBeInstanceOf(NotFoundError)
+    expectTypeUnknown(err, fetchMock)
+  })
+
+  it("a job that records no type at all rejects with use_case_type_unknown and posts nothing", async () => {
+    for (const data of [{ id: "job-1", input_data: { mode: "run" } }, { id: "job-1" }, undefined]) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data }))
+      const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+      expectTypeUnknown(err, fetchMock)
+    }
   })
 
   it("a read that fails otherwise (500, 401) rethrows and posts nothing", async () => {
@@ -455,7 +494,7 @@ describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () =>
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NodaroError)
     expect(err).toMatchObject({ code: "invalid_node_type", status: 400 })
-    expect((err as Error).message).toMatch(/apply-edl.*tighten-episode/)
+    expect((err as Error).message).toBe(`continueUseCase: nodeType "apply-edl" is not a use-case node type (${USE_CASE_NODE_TYPES.join(", ")})`)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

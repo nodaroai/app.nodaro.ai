@@ -1,8 +1,9 @@
 // @vitest-environment node
 // @test-watches tools/units/** frontend/src/nodes/*.ts backend/src/nodes/*.ts frontend/tsconfig.json backend/tsconfig.json
-// @test-watches frontend/src/types/nodes.ts frontend/src/lib/api.ts frontend/src/lib/ffmpeg-handles.ts frontend/src/lib/handle-colors.ts
+// @test-watches frontend/src/types/nodes.ts frontend/src/lib/api.ts frontend/src/lib/ffmpeg-handles.ts frontend/src/lib/handle-colors.ts frontend/src/lib/data-handles.ts
 // @test-watches frontend/src/components/nodes/base-node.tsx frontend/src/components/nodes/handle-with-popover.tsx frontend/src/components/nodes/node-quick-strip.tsx frontend/src/components/nodes/video-node-defaults.ts
 // @test-watches frontend/src/components/editor/config-panels/types.ts
+// @test-watches backend/src/lib/use-case/body-shapes.ts packages/shared/src/entries/edl.ts packages/shared/src/edit-plan-contract.ts
 // @test-watches backend/src/lib/url-validator.ts backend/src/lib/request-helpers.ts backend/src/lib/job-input-data.ts backend/src/lib/zod-error.ts backend/src/lib/http-errors.ts
 // @test-watches backend/src/providers/video/__characterization__/operation-types.ts
 // @test-watches backend/src/lib/insert-job.ts backend/src/lib/queue.ts backend/src/lib/job-failure.ts backend/src/middleware/credit-guard.ts backend/src/workers/shared.ts
@@ -34,7 +35,7 @@ import { matchesAny } from "../../../tools/test-select/glob.mjs"
  */
 
 const ROOT = path.resolve(__dirname, "../../..")
-const KINDS = ["worker", "sync", "inline", "source"] as const
+const KINDS = ["worker", "sync", "inline", "source", "use-case"] as const
 type Kind = (typeof KINDS)[number]
 
 /** Every template file of every kind: repo path → source. */
@@ -50,13 +51,30 @@ function scaffolded(): Map<string, string> {
       after: null,
       family: "f",
       pickerAfter: null,
-      price: kind === "worker" || kind === "sync" ? 1 : null,
+      price: kind === "worker" || kind === "sync" || kind === "use-case" ? 1 : null,
       // The worker carries the optional ffmpeg characterization too (characterize.char.ts).
       characterizeAfter: kind === "worker" ? "first" : undefined,
-    } as { type: string; category: string; kind: Kind; label: string; description: string; after: null; family: string; pickerAfter: null; price: number | null; characterizeAfter?: string | null })
+      ...(kind === "use-case" ? { builder: "scaffold" } : {}),
+    } as { type: string; category: string; kind: Kind; label: string; description: string; after: null; family: string; pickerAfter: null; price: number | null; characterizeAfter?: string | null; builder?: string })
     for (const [p, src] of files) if (/\.tsx?$/.test(p)) all.set(p, src)
   }
   return all
+}
+
+/**
+ * Null when the imported repo file `rel` is watched, else what to watch. A
+ * workspace package resolves to its untracked build (packages/<pkg>/dist/…):
+ * an entry's build is held to its exact source entry
+ * (dist/entries/<x>.* → src/entries/<x>.ts, dist/index.* → src/index.ts).
+ */
+function unwatchedImport(rel: string, watches: readonly string[]): string | null {
+  const build = /^packages\/([^/]+)\/dist\/(?:entries\/([^/.]+)|(index))\.(?:d\.ts|d\.cts|d\.mts|js|cjs|mjs)$/.exec(rel)
+  if (build) {
+    const source = `packages/${build[1]}/src/${build[2] !== undefined ? `entries/${build[2]}` : "index"}.ts`
+    return matchesAny(source, watches) ? null : `${source} (the source of ${rel})`
+  }
+  if (/^packages\/[^/]+\/dist\//.test(rel)) return `${rel} is not a package entry: import the package by an entry (its source is then watched)`
+  return matchesAny(rel, watches) ? null : rel
 }
 
 /** A program over `tree`'s tsconfig whose roots are the in-memory scaffold files of that tree. */
@@ -102,12 +120,12 @@ describe("the gen:units --new templates typecheck against the product", () => {
   const files = scaffolded()
 
   it("frontend: every kind's unit files", () => {
-    expect([...files.keys()].filter((p) => p.startsWith("frontend/")).length).toBe(6 + 6 + 5 + 4)
+    expect([...files.keys()].filter((p) => p.startsWith("frontend/")).length).toBe(6 + 6 + 5 + 4 + 4)
     expect(diagnostics("frontend", files)).toEqual([])
   }, 120_000)
 
   it("backend: every kind's unit files", () => {
-    expect([...files.keys()].filter((p) => p.startsWith("backend/")).length).toBe(5 + 2)
+    expect([...files.keys()].filter((p) => p.startsWith("backend/")).length).toBe(5 + 2 + 2)
     expect(diagnostics("backend", files)).toEqual([])
   }, 120_000)
 
@@ -124,10 +142,25 @@ describe("the gen:units --new templates typecheck against the product", () => {
           if (!resolved) { missing.add(`${path.relative(ROOT, f)}: "${st.moduleSpecifier.text}" does not resolve`); continue }
           const rel = path.relative(ROOT, resolved).split(path.sep).join("/")
           if (rel.startsWith("..") || rel.includes("node_modules/") || roots.includes(resolved)) continue
-          if (!matchesAny(rel, watches)) missing.add(rel)
+          const problem = unwatchedImport(rel, watches)
+          if (problem !== null) missing.add(problem)
         }
       }
     }
     expect([...missing].sort()).toEqual([])
   }, 120_000)
+
+  it("the watch rule: a package entry's build is held to its exact source entry", () => {
+    const watches = ["packages/shared/src/entries/edl.ts", "packages/shared/src/index.ts", "frontend/src/lib/a.ts"]
+    expect(unwatchedImport("packages/shared/dist/entries/edl.d.ts", watches)).toBeNull()
+    expect(unwatchedImport("packages/shared/dist/entries/edl.cjs", watches)).toBeNull()
+    expect(unwatchedImport("packages/shared/dist/index.d.ts", watches)).toBeNull()
+    expect(unwatchedImport("frontend/src/lib/a.ts", watches)).toBeNull()
+    // An entry whose source entry is unwatched fails, though another entry of the package is watched.
+    expect(unwatchedImport("packages/shared/dist/entries/nodes.d.ts", watches)).toBe("packages/shared/src/entries/nodes.ts (the source of packages/shared/dist/entries/nodes.d.ts)")
+    expect(unwatchedImport("packages/render-rules/dist/index.js", watches)).toBe("packages/render-rules/src/index.ts (the source of packages/render-rules/dist/index.js)")
+    // A build file that is neither an entry nor the root has no source to hold it to.
+    expect(unwatchedImport("packages/shared/dist/chunk-abc.js", watches)).toMatch(/is not a package entry/)
+    expect(unwatchedImport("frontend/src/lib/b.ts", watches)).toBe("frontend/src/lib/b.ts")
+  })
 })

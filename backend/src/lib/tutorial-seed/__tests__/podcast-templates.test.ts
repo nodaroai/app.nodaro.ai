@@ -7,11 +7,11 @@
  * handle migration), so the real guard for a shipped template's wiring is here.
  *
  * For every node in each template this asserts the type is registered in
- * NODE_HANDLES (the generated handle registry — the same source /v1/nodes and
- * gen:skills read), and every edge's `source`/`target` id exists and its
+ * ALL_NODE_HANDLES (the handle registry: gen:skills' generated table ∪ every
+ * node unit's handles — what the MCP edge normalizer checks a wire against), and every edge's `source`/`target` id exists and its
  * `sourceHandle`/`targetHandle` is a real handle on that node. The `list` node
  * is special-cased: its handles are dynamic per column (`col_<id>` out,
- * `col_<id>_in` in), derived from `data.columns[]`, not the static NODE_HANDLES
+ * `col_<id>_in` in), derived from `data.columns[]`, not the static ALL_NODE_HANDLES
  * entry (which only carries the bare `in`).
  */
 import { describe, it, expect } from "vitest"
@@ -20,7 +20,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { TEMPLATE_CATEGORIES } from "@nodaro/shared/apps"
 import { isKineticCaptionStyle } from "@nodaro/shared/captions"
-import { NODE_HANDLES } from "../../mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -42,7 +42,7 @@ type Edge = { id: string; source: string; target: string; sourceHandle?: string 
 /** The valid input/output handle ids for a node, resolving the `list` node's
  *  dynamic per-column handles from its stored columns. */
 function handlesFor(node: Node): { inputs: Set<string>; outputs: Set<string> } {
-  const spec = NODE_HANDLES[node.type]
+  const spec = ALL_NODE_HANDLES[node.type]
   const inputs = new Set<string>(spec?.inputs ?? [])
   const outputs = new Set<string>(spec?.outputs ?? [])
   if (node.type === "list") {
@@ -79,8 +79,8 @@ describe("podcast editing templates — structural validity", () => {
         for (const node of t.nodes as Node[]) {
           expect(node.id, `node ${JSON.stringify(node.id)} has an id`).toBeTruthy()
           expect(
-            NODE_HANDLES[node.type],
-            `node type "${node.type}" (node ${node.id}) is registered in NODE_HANDLES`,
+            ALL_NODE_HANDLES[node.type],
+            `node type "${node.type}" (node ${node.id}) is registered in ALL_NODE_HANDLES`,
           ).toBeDefined()
         }
       })

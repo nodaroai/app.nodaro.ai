@@ -2,8 +2,12 @@
 // @registry backend/src/nodes/*/price.ee.ts
 // @registry-exports prices: UNIT_PRICES
 import type { UnitPrice } from "../../../nodes/kit.js"
+import { price as unit_episode_chapters } from "../../../nodes/episode-chapters/price.ee.js" // unit:episode-chapters
 import { price as unit_remove_audio } from "../../../nodes/remove-audio/price.ee.js" // unit:remove-audio
+import { price as unit_tighten_episode } from "../../../nodes/tighten-episode/price.ee.js" // unit:tighten-episode
 
 export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Object.create(null), {
+  "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

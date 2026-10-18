@@ -7,7 +7,7 @@ central registration files (§5.8 option B, decided 2026-10-16):
 | Tree | Folder | Holds |
 |---|---|---|
 | frontend | `frontend/src/nodes/<type>/` | `unit.json` (**the manifest, source of truth**), `strings.json`, `types.ts`, `node.tsx`, `config.tsx`, `option.tsx`, `exec.ts`, `api.ts`, generated `definition.generated.ts` / `labels.generated.ts`, `__tests__/` |
-| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), generated `descriptor.generated.ts`, `__tests__/` |
+| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), generated `descriptor.generated.ts`, `__tests__/` |
 
 The central registries become **generated, checked-in aggregates** built from
 the manifests (`frontend/src/nodes/_generated/`, `backend/src/nodes/_generated/`,
@@ -26,18 +26,23 @@ npm run gen                    # gen:units, then gen:skills
 New nodes are units (decided 2026-10-16). Start one with the scaffold:
 
 ```sh
-npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inline|source> \
+npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inline|source|use-case> \
   --after <type|first> --description "One sentence for /v1/nodes." \
   (--family <family id> --picker-after <type|first> | --no-picker) \
-  [--label "<Label>"] [--price <credits>] [--characterize <operation|first>]
+  [--label "<Label>"] [--price <credits>] [--builder <key>] [--characterize <operation|first>]
 ```
 
 - Every flag but `--label` is stated, never guessed: `--after` is the place in
   `NODE_DEFINITIONS` and the skills catalog, `--picker-after` the place in the
   picker family (a type of that family, or `first`) — both user-visible order;
   `--description` is what `/v1/nodes` and MCP show; `--price` (required for
-  `worker` and `sync`, refused otherwise) is the `price.ee.ts` row — 0 for a
-  free node, stated.
+  `worker`, `sync` and `use-case`, refused otherwise) is the `price.ee.ts`
+  row — 0 for a free node, stated; for a use-case node it is the per-run fee,
+  the row `use-case-fee:<type>`.
+- `--builder <key>` (`use-case` only, required): the node's graph builder, a
+  key of `USE_CASE_SPECS` in `packages/render-rules/src/use-case-specs.ts`
+  (read as text: a `  <key>: defineUseCase<…>({` line). Write the builder
+  first; a key no spec has, or one another unit already uses, is refused.
 - The would-be unit is validated **in memory**, with every existing unit, by
   the same validator as `gen:units --check`. A refusal writes nothing and says
   why — including a seam that is not live (a node that needs one builds it in
@@ -53,9 +58,12 @@ npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inli
   write — and adds the `ffmpeg-media` capability it requires. Bless its golden
   inside the pinned-ffmpeg image (`backend/scripts/characterize-in-image.sh`).
 - It writes no `strings.json` (translations cannot be scaffolded) and starts
-  `docs` as `docs.awaiting`. It prints what stays central:
-  1. fill the folders: the node's step, its handles in `unit.json` with the
-     matching `types.ts` fields and `node.tsx` pips;
+  `docs` as `docs.awaiting`. It prints what stays central (`nextSteps` in
+  `scaffold.mjs`, pinned by `units-scaffold.test.mjs`). For a worker (and the
+  other kinds):
+  1. fill the folders: the node's step (the one that throws "is not written
+     yet"), its handles in `unit.json` with the matching `types.ts` fields and
+     `node.tsx` pips;
   2. `strings.json`: the node label in he/ja/ko/pt-br (`labels`) and any UI
      string only the unit uses, in all five dicts (`keys`);
   3. its page under `docs/nodes/`, in the same PR: `docs.page` replaces the
@@ -64,23 +72,81 @@ npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inli
      the page is on the docs site the type is listed in `AWAITING_DOCS_PAGE`
      (`node-docs.test.ts`), then the snapshot is refreshed
      (`npm -w frontend run gen:node-docs -- --live`) and the line dropped;
-     a video output also needs its length rule (`length:exact-video` /
+  4. with `--price`: the `model_pricing` seed migration for its credit id
+     (`<type>`) at the same price as `price.ee.ts`;
+  5. a worker: its characterization when it runs ffmpeg (`characterize.char.ts`,
+     golden blessed in the pinned-ffmpeg image), its output length rule (`length:exact-video` /
      `length:pass-video`, or `length:unknown` with a `lengthUnknownReason`
-     when no rule can bound it);
-  4. a node with a route: the `model_pricing` seed migration at the same price
-     as `price.ee.ts`;
-  5. a media output: a `@nodaro/shared` changeset (`contract.producer` adds a
-     row to `packages/shared/src/generated/unit-contracts.ts`);
-  6. `npm run gen`, `npm run build:packages` (render-rules carries the node's
-     settings), `npm run typecheck`.
+     when no rule can bound it) and a `@nodaro/shared` changeset — needed whenever a
+     contract key (`contract.producer` or any other) adds a row to
+     `packages/shared/src/generated/unit-contracts.ts`.
+
+  For a use-case node:
+  1. its builder, written first: `USE_CASE_SPECS.<builder>` in
+     `packages/render-rules/src/use-case-specs.ts`, the graph a run expands into;
+  2. `backend/src/nodes/<type>/use-case.ts`'s body with the node's settings,
+     `settingKeys` in its spec, its handles in `unit.json` and the matching
+     `types.ts` fields;
+  3. its MCP verb: the `REGISTER_BY_BUILDER` entry for its builder in
+     `backend/src/lib/mcp/tools/verbs-use-case.ts` (typecheck fails until it is
+     there), and that tool's entry in `docs/mcp/tools.md` (gen:skills:check);
+  4. its settings table: a `SETTINGS_TABLES` row in
+     `backend/src/lib/__tests__/use-case-graph-validity.test.ts` (typecheck
+     fails until it is there);
+  5. `strings.json`, as above;
+  6. the `model_pricing` seed migration for `use-case-fee:<type>` at the same
+     price as `price.ee.ts`;
+  7. its docs page, as above;
+  8. a `@nodaro/shared` changeset: a use-case node always adds published rows
+     (the use-case list and its contract rows in `unit-contracts.ts`).
+
+  Then, for every kind: `npm run build:packages` (gen:skills captures the MCP
+  tools from the built packages, which carry the tables gen:units wrote),
+  `npm run gen` (gen:units, then gen:skills — `INTERNAL_ORCHESTRATOR_SECRET`
+  inline), `npm run build:packages` again (render-rules carries the node's
+  settings), then `npm run typecheck`.
 
 **Which kinds a new node can be today.** The editor runs every kind, but a
 server-run workflow (API, MCP, webhook, schedule, a published app) runs a unit
-only through an execution seam (`EXECUTION_SEAMS` in `seams.mjs`). Only
-`worker` is live: `payload.ts` through `UNIT_PAYLOADS`, `worker.ts` through
-`UNIT_WORKERS`. `sync` (SYNC_HTTP_NODES), `inline` (INLINE_NODES) and `source`
+only through an execution seam (`EXECUTION_SEAMS` in `seams.mjs`). Two are
+live:
+
+- `worker` (`run-worker`): `payload.ts` through `UNIT_PAYLOADS`, `worker.ts`
+  through `UNIT_WORKERS`.
+- `use-case` (`run-use-case`): a node that expands into a graph of existing
+  nodes (Tighten Episode, Chapters). `node-executor.ts` sends it to the
+  use-case run through `isUseCaseNodeType` (`@nodaro/shared/nodes`, which
+  composes the generated `UNIT_USE_CASE_TYPES`), and the factory route
+  `POST /v1/<type>` (+ `/estimate`, `/continue`) serves it. The unit has no
+  route, payload, worker, `exec.ts` or `api.ts` of its own: the editor runs
+  it through `executeUseCase` (`workflow-editor/use-case-executor.ts`). Its
+  backend folder holds `use-case.ts` — `body` (the request body, spreading
+  the shared shapes of `lib/use-case/body-shapes.ts`) and `inputSchema` (its
+  `/v1/nodes` fields), composed into `USE_CASE_BODIES` by
+  `lib/use-case/bodies.ts` — and `price.ee.ts`, whose `staticCosts` holds the
+  per-run fee row `use-case-fee:<type>` (an estimate expands the run into its
+  steps, each priced at its own rate). Its canvas Continue runs through
+  `useUseCaseContinue(nodeId)` in `components/nodes/use-case-node-hooks.ts`
+  (beside `useUseCaseListDriven(nodeId)`), never the workflow store (G5).
+  Beyond its folders it needs its builder in `use-case-specs.ts` (first), its
+  MCP verb (the `REGISTER_BY_BUILDER` entry for its builder in
+  `backend/src/lib/mcp/tools/verbs-use-case.ts`, a typed total table), and a
+  `SETTINGS_TABLES` row in `backend/src/lib/__tests__/use-case-graph-validity.test.ts`;
+  typecheck fails until both of the last two exist.
+
+`sync` (SYNC_HTTP_NODES), `inline` (INLINE_NODES) and `source`
 (SOURCE_NODE_TYPES) do not compose units yet, so the validator refuses them;
 the first node of such a kind builds its seam and flips its `live`.
+
+**Regenerating, in order.** `npm run build:packages`, then `npm run gen`
+(gen:skills captures the MCP tools from the built packages, so a table
+gen:units wrote into `@nodaro/shared` or `@nodaro/render-rules` reaches it
+only once built), then `npm run build:packages` again (gen:skills writes
+render-rules' `node-data-fields.ts`), then `npm run typecheck`. gen:units
+also deletes unit rows from gen:skills' legacy handle table
+(`backend/src/lib/mcp/generated/node-handles.ts`, `handle-prune.mjs`):
+`lib/node-handles.ts` throws on a type that is both a row and a unit, and
+gen:skills could not get past that throw to rewrite the table itself.
 
 ## Files
 
@@ -88,18 +154,21 @@ the first node of such a kind builds its seam and flips its `live`.
 |---|---|
 | `manifest.mjs` | The one loader + validator (G6). gen:skills loads units through it too. |
 | `seams.mjs` | Every seam: the aggregates, projections, splice regions and data files, each with its composer and a `live` flag. |
-| `capabilities.mjs` | The closed list of manifest `capabilities`, each naming the seam that reads it (or each tree's seam, when both trees read it). |
+| `capabilities.mjs` | The closed list of manifest `capabilities`, each naming the seams that read it (`seams: [...]`, every one live). |
 | `vocabulary.mjs` | Categories, handle kinds, producer kinds, execution kinds, queues — pinned to the product by `frontend/src/__tests__/units-vocabulary.test.ts`. |
+| `use-case-rules.mjs` | The rules of `execution.kind: "use-case"` (required and refused files, `execution.builder` against `USE_CASE_SPECS`, use-case input ids) and of the contract keys `@nodaro/shared` composes; `manifest.mjs` calls it. |
+| `handle-prune.mjs` | Deletes unit rows from `backend/src/lib/mcp/generated/node-handles.ts` (gen:skills' legacy-only handle table) on every gen:units run. |
 | `templates.mjs` | The emitters and the region splice. |
 | `scaffold.mjs` | `gen:units -- --new`: flags, the in-memory validation, the write, the printed next steps. |
 | `scaffold-templates.mjs` | The scaffold's file templates, one worked shape per `execution.kind`. |
-| `price-reader.mjs` | Reads `price.ee.ts` `staticCosts` with the TypeScript parser (lazily) for the editor's `priceFallback`. |
+| `price-reader.mjs` | Reads `price.ee.ts` `staticCosts` with the TypeScript parser (lazily) for the editor's `priceRows` (every `staticCosts` row). |
 | `gen.mjs` | The CLI. |
 | `unit.schema.json` | Editor autocomplete (`"$schema"` in `unit.json`); the validator is the authority. |
 | `legacy-nodes.json` | Types still in the hand-written `NODE_DEFINITIONS` literal — a burn-down that only shrinks (G1). |
 | `registry-composers.json` | The reviewed composition points: the only product modules that may import an aggregate (G3), and the collections each re-exports (`exports`: the registry names G4 and the test-select registry rule read), and `foldsAtLoad`: the registries a composer reads every unit of while it loads — their enumerator, derived by `structure.mjs` `loadTimeRegistryReads` and held to it by `node-units-structure.test.ts`. |
 | `central-mentions.json` | Reasoned exceptions to G2 (a unit's type id named outside its folders) — only shrinks. |
-| `__fixtures__/tree/` | The fixture unit `fixture-echo`: every optional file, every seam, used by the generator and guard tests. |
+| `__fixtures__/tree/` | The fixture units `fixture-echo` (every optional file, every seam) and `fixture-case` (a use-case unit, with its own `use-case-specs.ts`), used by the generator and guard tests. |
+| `__fixtures__/use-case-output-shapes.json` | The saved shapes a use-case node's output is read from; both engines' `use-case-unit-output-parity` tests walk them. |
 
 ## Seams go live one at a time
 
@@ -109,7 +178,7 @@ nothing for it, and a unit that needs it fails validation with
 builds that seam in its own PR** — there is no exceptions list. Every output
 seam in `seams.mjs` is live (PR1b): the aggregates exist (empty until the
 first unit), each composed once into the collection the product reads. Of the
-execution seams only `run-worker` is (above). The same rule holds below the
+execution seams `run-worker` and `run-use-case` are (above). The same rule holds below the
 seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 (`REGISTRY_CATEGORIES`) is added only with the composition that reads it.
 
@@ -119,10 +188,15 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | `nodeTypes`, config panels, `NODE_OPTIONS` + families, executors, label tables | `components/nodes/index.ts`, `config-panel.tsx`, `node-options.tsx` + `node-families.ts`, `execute-node.ts` (kit: `workflow-editor/unit-exec-kit.ts`), `lib/i18n/labels.ts` |
 | everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
 | `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
-| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, the MCP handle table `lib/node-handles.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability), `TEXT_SOURCE_NODE_TYPES` (a first output of kind `text`), the MCP handle table `lib/node-handles.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| `USE_CASE_BODIES` (a use-case unit's request body) and its `GET /v1/nodes` input schema (`usecaseInputSchemaOf`) | `backend/src/lib/use-case/bodies.ts` ∪ the `use-cases` aggregate. A unit's `use-case.ts` spreads the shared shapes of `lib/use-case/body-shapes.ts` (never `bodies.ts`, a composer — G5) and, being a declaration only (G7), writes an enum over a list as `z.enum(LIST as unknown as [string, ...string[]])`: a helper call such as `z.enum(tuple(LIST))` is not a pure argument |
 | the entity-subject targets (`ENTITY_SUBJECT_TARGET_TYPES`; capability `input:entity-subject`: a wired Character / Face / Object / Creature / Location is the node's subject, so it lands in `imageUrl`, not `referenceImageUrls`; the validator requires an input whose `field` is `imageUrl` and whose `accepts` includes `image`) | both input resolvers, legacy rows ∪ the units declaring it: `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) and `workflow-engine/input-resolver.ts` (through `unit-descriptors.ts`). The server's legacy rows lack `gif-to-video`, which the editor's have, so declaring it on that node changes how a server-run workflow routes it |
 | the canvas connection rule of a unit's inputs (each `handles.inputs[].accepts`) | `frontend/src/lib/connection-validation.ts` asks `lib/unit-connections.ts` (below) |
 | the producer sets | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` |
+| the contract rows (`contract.jsonPips`, `nonPromptInputs`, `reviewHold`, `presents`) | `generated/unit-contracts.ts` (`UNIT_JSON_PIPS`, `UNIT_NON_PROMPT_INPUTS`, `UNIT_REVIEW_HOLDS`, `UNIT_PRESENTS`), composed into the five shared tables that already existed: `JSON_OUTPUT_KINDS` (`json-kinds.ts`), `NON_PROMPT_TEXT_LANES` (`fan-out-rows.ts`), `REVIEW_HOLDING_USE_CASE_TYPES` (`preview-gate.ts`), `VIDEO_OUTPUT_TYPES` / `TEXT_OUTPUT_TYPES` (`presentation-utils.ts`) |
+| `USE_CASE_NODE_TYPES` / `isUseCaseNodeType` (`@nodaro/shared/nodes`, re-exported by `@nodaro/render-rules` and the SDK) | `packages/shared/src/use-case-types.ts` ∪ `UNIT_USE_CASE_TYPES` (units in `NODE_DEFINITIONS` order) |
+| `USE_CASE_ROWS` (type → builder, label, inputs) and so `USE_CASE_DESCRIPTORS` (rows × `USE_CASE_SPECS`) | `packages/render-rules/src/use-case-rows.ts` ∪ the `use-case-rows` data file `unit-use-cases.generated.ts` |
+| `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability) | `frontend/src/lib/cloud-only-nodes.ts` and `backend/src/lib/cloud-only-nodes.ts` |
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
 
@@ -164,7 +238,9 @@ vocabulary). `unit-connections.test.ts` proves it on a fixture unit.
 
 **Ordered registries.** Where a user or an agent sees a registry's order, a
 unit is placed, never appended: NODE_DEFINITIONS after its `position.after`,
-NODE_OPTIONS and its family after its `picker.after`, NODE_REGISTRY (/v1/nodes)
+NODE_OPTIONS after its `picker.after` (a unit first in its family —
+`picker.after: null` — after its `position.after`, which must then have an
+add-node option) and its family after its `picker.after`, NODE_REGISTRY (/v1/nodes)
 after its `registry.after` (else `position.after`), TARGET_HANDLE_ACCEPTS (the
 handle popover's candidates) after its `picker.after` (else `position.after`),
 and the Copilot's ALL_NODE_HANDLES at its place in type order — so a migrated
@@ -173,7 +249,11 @@ membership. The keyed aggregates are null-prototype objects, so a lookup by
 any `node.type` a workflow carries ("constructor", "toString") finds no unit.
 (The pilot's migration was proven against a snapshot of every composed
 registry; the snapshot was retired once remove-audio landed, decided
-2026-10-16.)
+2026-10-16. It was restored once more for the conversion of Tighten Episode
+and Chapters into use-case units, with sections for the use-case paths, and
+retired again when that conversion landed. What outlives it is the shared
+use-case output shapes fixture, `__fixtures__/use-case-output-shapes.json`,
+which the two engines' parity tests read.)
 
 ## Rules the validator enforces
 
@@ -185,14 +265,18 @@ registry; the snapshot was retired once remove-audio landed, decided
   may be another unit: every ordered composition (the editor's
   `insertAtPositions` and `composeRecordAfter`, the server's `placeAfter`)
   places a unit after a unit, transitively, and refuses a cycle among units.
-- Handle ids unique; kinds from the vocabulary; a media output needs a
+- Handle ids unique on each side (an input and an output may share one); kinds from the vocabulary; a media output needs a
   matching `contract.producer` (`dynamic` for more than one media kind).
-- `contract` is a whitelist (`producer`). It is the only thing a unit puts in
+- `contract` is a whitelist (`producer`, `jsonPips`, `nonPromptInputs`,
+  `reviewHold`, `presents`). It is the only thing a unit puts in
   `@nodaro/shared`, so **no price, credit id, doctrine or prompt text** may
   appear anywhere in a manifest.
 - `execution.kind` decides the required files: `worker` → route, payload,
   worker, exec, api; `sync` → route, exec, api; `inline` → exec; `source` →
-  none. Any route needs `price.ee.ts` (a zero-cost one too). `price.ee.ts`
+  none; `use-case` → backend `use-case.ts` + `price.ee.ts`, and it refuses
+  `exec.ts`, `api.ts`, a route, `payload.ts`, `worker.ts`,
+  `characterize.char.ts`, `execution.queue` and `execution.requires`. Any
+  route needs `price.ee.ts` (a zero-cost one too). `price.ee.ts`
   exports `staticCosts`, plus `creditId(data)` only when the id a run reserves
   depends on the node's data (a flat-priced unit reserves the row of its type).
 - `docs.page` exists, or `docs.awaiting` gives the reason. `docs.index:
@@ -219,6 +303,20 @@ registry; the snapshot was retired once remove-audio landed, decided
   node is already in it).
 - Parameter pickers and canvas macros are not units.
 
+### Manifest keys beyond the basics
+
+| Key | Rule |
+|---|---|
+| `execution.builder` | `use-case` only, required: a key of `USE_CASE_SPECS` (`packages/render-rules/src/use-case-specs.ts`), unique across units. |
+| `handles.inputs[].id` (use-case) | one of `media`, `music`, `introCard` (`USE_CASE_INPUT_HANDLES`; the run routes only these), with no `field`. |
+| `handles.outputs[].from` (use-case) | absent: the use-case reader (`use-case-io.ts` in the editor, `use-case-output.ts` on the server) reads a use-case node's outputs, never `from`. |
+| `handles.outputs[].runtimeTyped: true` | only on an audio/video/image output with `contract.producer: "dynamic"`: the pip's kind is decided at run time, so it gets no `HANDLE_OUTPUT_TYPES` row. |
+| `picker.alsoOnTabs` | picker tabs (other than its family's own) that also list the node (`TAB_SUPERSET`). |
+| `contract.jsonPips` | `{ <look output id>: "transcript" \| "edl" \| "other" }`, every `look` output declared (`JSON_OUTPUT_KINDS`). |
+| `contract.nonPromptInputs` | input ids that are never a prompt lane (`NON_PROMPT_TEXT_LANES`). |
+| `contract.reviewHold` | `use-case` only: a review-on run ends at a Preview that holds what follows (`REVIEW_HOLDING_USE_CASE_TYPES`). |
+| `contract.presents` | `image` \| `video` \| `audio` \| `text`: how a published app shows the result, where the producer sets do not already decide it. |
+
 ## Guards
 
 | | Guard | Where |
@@ -230,6 +328,13 @@ registry; the snapshot was retired once remove-audio landed, decided
 | G5 | a unit imports no other unit, no aggregate, no engine module | the `node-units-*` boundary rules in `tools/structure/` |
 | G6 | the manifest is valid | `gen:units --check` + `tools/__tests__/units-manifest.test.mjs` |
 | | the scaffold of every kind passes the guards above, and its templates typecheck against the product (in memory, nothing written) | `tools/__tests__/units-scaffold.test.mjs`, `frontend/src/__tests__/units-scaffold.test.ts`, `frontend/src/__tests__/units-scaffold-typecheck.test.ts` |
-| G7 | unit modules have no top-level side effects | `node-units-structure.test.ts` |
+| G7 | unit modules have no top-level side effects. A top-level call is pure only as a known constructor or a zod chain whose callee text starts `z.` — so keep `z.enum(` on one line (`z` then `.enum(` on the next line is refused) — with pure arguments: an enum over a list is `z.enum(LIST as unknown as [string, ...string[]])`, never `z.enum(tuple(LIST))` | `node-units-structure.test.ts` |
+
+A unit's `node.tsx` and `config.tsx` live under `frontend/src/nodes/<type>/`,
+not in `components/nodes/` or `components/editor/config-panels/`. A guard
+that scans those directories for every canvas component or config panel
+also reads `unitComponentFiles("node" | "config")`
+(`frontend/src/test-utils/unit-component-files.ts`, discovered at test time),
+so a node that becomes a unit does not drop out of it.
 
 How test selection treats the aggregates: `tools/test-select/README.md`, "Registries".

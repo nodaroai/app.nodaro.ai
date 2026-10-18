@@ -1,5 +1,3 @@
-"use client"
-
 import { useEffect } from "react"
 import { ALL_CAPTION_STYLES, type CaptionStyle } from "@nodaro/shared/captions"
 import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
@@ -18,11 +16,12 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SPEAKER_LAYOUT_LABEL_KEYS } from "@/components/nodes/speaker-view-label-keys"
 import { useT } from "@/lib/i18n"
-import type { TightenEpisodeData } from "@/types/nodes"
-import type { ConfigProps } from "./types"
-import { RunUpToHereNotice } from "./run-up-to-here-notice"
-import { CAPTION_STYLE_LABEL_KEYS } from "./caption-style-labels"
-import { UseCasePlanFields } from "./use-case-plan-fields"
+import type { ConfigProps } from "@/components/editor/config-panels/types"
+import { RunUpToHereNotice } from "@/components/editor/config-panels/run-up-to-here-notice"
+import { CAPTION_STYLE_LABEL_KEYS } from "@/components/editor/config-panels/caption-style-labels"
+import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
+import type { UnitConfigKit } from "../exec-kit"
+import type { TightenEpisodeData } from "./types"
 
 const NO_FRAMING = "none"
 const D = TIGHTEN_EPISODE_DEFAULTS
@@ -40,7 +39,8 @@ const D = TIGHTEN_EPISODE_DEFAULTS
  *  - a stored framing the run would not read at all (a shape it has no
  *    renderer for) is cleared, as the run's resolver clears it.
  */
-export function TightenEpisodeConfig({ data, onUpdate, nodeId, nodes, edges }: ConfigProps<TightenEpisodeData> & { readonly nodeId?: string }) {
+export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }) {
+  const data = raw as unknown as TightenEpisodeData
   const t = useT()
   const wireInto = (handle: string) => (edges ?? []).find((e) => e.target === nodeId && e.targetHandle === handle && !!e.source)
   const mediaWire = wireInto("media")

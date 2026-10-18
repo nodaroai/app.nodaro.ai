@@ -1,4 +1,7 @@
 import { PARAMETER_NODE_TYPES, HINT_EXEMPT_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { unitTextSources } from "./unit-compose"
+// @registry-enumerates NON_PARAMETER_TEXT_SOURCES carries every node unit whose first output is text
 
 /**
  * Main text input handle per consumer node type.
@@ -57,8 +60,10 @@ export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHan
   "cinematic-avatar": [{ handle: "prompt", field: "prompt" }],
 }
 
-/** Non-parameter node types whose `extractNodeOutput` produces text. */
-const NON_PARAMETER_TEXT_SOURCES: ReadonlyArray<string> = [
+/** Non-parameter node types whose `extractNodeOutput` produces text: the
+ *  legacy list ∪ every node unit whose first output (what an edge naming no
+ *  pip reads) is text. */
+const NON_PARAMETER_TEXT_SOURCES: ReadonlyArray<string> = [...[
   "text-prompt",
   "llm-chat",
   "combine-text",
@@ -79,9 +84,7 @@ const NON_PARAMETER_TEXT_SOURCES: ReadonlyArray<string> = [
   "webhook-trigger",
   "schedule-trigger",
   "list",
-  // Chapters: its show notes (an edge naming no pip reads them).
-  "episode-chapters",
-]
+], ...unitTextSources(UNIT_NODE_DEFINITIONS)]
 
 /** Node types whose `extractNodeOutput` produces text (including parameter
  *  nodes whose hint is prose). Used by the auto-fill logic to avoid writing

@@ -193,6 +193,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   const data = node.data as Record<string, unknown>;
   const type = node.type;
 
+  // A use-case node — legacy or a node unit — hands on what the use-case reader
+  // reads (use-case-io.ts): its plan on `json`, its text on `text`, else the
+  // episode. Ahead of the unit branch, whose generic `from` read would hand on
+  // the wrong value (decided 2026-10-18). Mirrors the server's saved branch.
+  if (isUseCaseNodeType(type)) return usecaseSavedOutput(type, data, sourceHandle);
+
   // A node unit hands on what its manifest declares (handles.outputs[].from;
   // a media output prefers the active result) — never a legacy type below.
   const unit = unitDefinitionOf(type);
@@ -214,11 +220,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return ugcPipValue(data.ugcOutputs, type, sourceHandle);
   }
-  // A use-case node (Tighten Episode, Chapters): its plan (Chapters: its
-  // chapter list) on `json`, its text on `text`, else the episode
-  // (use-case-io.ts). Mirrors the server's saved branch.
-  if (isUseCaseNodeType(type)) return usecaseSavedOutput(type, data, sourceHandle);
-
   if (type === "list") {
     // New format: columns + rows
     const loopData = data as LoopNodeData;

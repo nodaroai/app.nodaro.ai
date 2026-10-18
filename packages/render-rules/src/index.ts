@@ -508,6 +508,8 @@ export {
   type UseCaseSettings,
   type UseCaseSources,
 } from "./use-case-registry"
+export { USE_CASE_ROWS, composeUseCaseRows, usecaseRowOf, usecaseTypeOfBuilder, type UseCaseRow } from "./use-case-rows"
+export { USE_CASE_SPECS, type UseCaseBuilderKey, type UseCaseBuilderSpec } from "./use-case-specs"
 export {
   previewHoldKind,
   previewHoldKindOf,
@@ -532,7 +534,6 @@ export {
   type UseCaseExpansion,
 } from "./use-case-expand"
 export {
-  TIGHTEN_EPISODE,
   TIGHTEN_EPISODE_DEFAULTS,
   TIGHTEN_MAX_EPISODE_SEC,
   TIGHTEN_NODE_IDS,
@@ -552,7 +553,6 @@ export {
 } from "./tighten-episode-graph"
 export {
   CHAPTERS_NODE_IDS,
-  EPISODE_CHAPTERS,
   EPISODE_CHAPTERS_DEFAULTS,
   buildEpisodeChaptersGraph,
   resolveEpisodeChaptersSettings,

@@ -1,11 +1,10 @@
-"use client"
-
 import { EPISODE_CHAPTERS_DEFAULTS } from "@nodaro/render-rules"
 import { useT } from "@/lib/i18n"
-import type { EpisodeChaptersData } from "@/types/nodes"
-import type { ConfigProps } from "./types"
-import { RunUpToHereNotice } from "./run-up-to-here-notice"
-import { UseCasePlanFields } from "./use-case-plan-fields"
+import type { ConfigProps } from "@/components/editor/config-panels/types"
+import { RunUpToHereNotice } from "@/components/editor/config-panels/run-up-to-here-notice"
+import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
+import type { UnitConfigKit } from "../exec-kit"
+import type { EpisodeChaptersData } from "./types"
 
 /**
  * Chapters' settings: the plan step's tier, instructions and style guide —
@@ -13,7 +12,8 @@ import { UseCasePlanFields } from "./use-case-plan-fields"
  * depends on a provider or on the recording, so nothing needs snapping
  * (CLAUDE.md Provider Enum Sync 12b does not apply).
  */
-export function EpisodeChaptersConfig({ data, onUpdate, nodeId, nodes, edges }: ConfigProps<EpisodeChaptersData> & { readonly nodeId?: string }) {
+export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }) {
+  const data = raw as unknown as EpisodeChaptersData
   const t = useT()
   return (
     <div className="space-y-4">

@@ -168,8 +168,6 @@ import {
   GenerateMusicConfig,
   CombineVideosConfig,
   ApplyEdlConfig,
-  TightenEpisodeConfig,
-  EpisodeChaptersConfig,
   EditPlanConfig,
   CameraSwitchConfig,
   SpeakerViewConfig,
@@ -342,8 +340,12 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
 
   // A node unit's own panel (frontend/src/nodes/<type>/config.tsx) — never a
   // legacy type below — with the services a unit may not import (UnitConfigKit).
+  // `nodeId` is the DISPLAYED node, where a legacy case passes `selectedNodeId`.
+  // The two differ only during the ~200 ms slide-out after a deselect, when a
+  // unit panel can still render its nodeId-gated parts (Chapters'
+  // RunUpToHereNotice). This is a deliberate, negligible delta (decided 2026-10-18).
   const UnitConfig = UNIT_CONFIGS[nodeType]
-  if (UnitConfig) return <UnitConfig {...configProps} kit={unitConfigKit} />
+  if (UnitConfig) return <UnitConfig {...configProps} kit={unitConfigKit} nodeId={displayedNodeId} />
 
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} nodeId={selectedNodeId} />
@@ -497,8 +499,6 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "video-mask": return <VideoMaskConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
-    case "tighten-episode": return <TightenEpisodeConfig {...configProps} nodeId={selectedNodeId} />
-    case "episode-chapters": return <EpisodeChaptersConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />

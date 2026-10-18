@@ -364,7 +364,7 @@ central files.
 | Folder | Holds |
 |---|---|
 | `frontend/src/nodes/<type>/` | `unit.json` (the manifest: label, category, handles, default data, how it runs, its place in the picker), `types.ts` (its data type), `node.tsx` (canvas card), `config.tsx` (config panel), `option.tsx` (picker icon), `exec.ts` (editor executor), `api.ts` (client call), `strings.json` (its translations) |
-| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row) |
+| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row); a use-case node has `use-case.ts` (its request body) and `price.ee.ts` instead |
 
 Start from the scaffold — it writes both folders from templates, checks
 them with the same validator CI runs, and regenerates:
@@ -381,9 +381,21 @@ npm run gen:units -- --new <type> --category <category> --kind worker \
   scaffold never guesses it; `--no-picker` keeps a node out of the picker.
 - `--kind` says how it runs. Today a server-run workflow (API, MCP,
   webhooks, schedules, published apps) can run a `worker` unit — a route
-  that queues a job a worker runs. `sync`, `inline` and `source` units
-  also need their server-side seam, so the scaffold refuses them until a
-  node that needs one builds it (in that node's own PR).
+  that queues a job a worker runs — and a `use-case` unit, which runs as a
+  graph of existing nodes (Tighten Episode and Chapters are use-case
+  nodes). `sync`, `inline` and `source` units also need their server-side
+  seam, so the scaffold refuses them until a node that needs one builds it
+  (in that node's own PR).
+- `--kind use-case --builder <key> --price <credits>`: `--builder` names
+  the node's graph builder, a key of `USE_CASE_SPECS` in
+  `packages/render-rules/src/use-case-specs.ts` — write the builder first.
+  The node has no `exec.ts`, `api.ts`, route, payload or worker: the editor
+  runs it through `executeUseCase` and the server through the shared
+  use-case route (`POST /v1/<type>`). `--price` is its per-run fee, the
+  `price.ee.ts` row `use-case-fee:<type>`. It also needs its MCP verb (the
+  `REGISTER_BY_BUILDER` entry in `backend/src/lib/mcp/tools/verbs-use-case.ts`,
+  plus that tool's entry in `docs/mcp/tools.md`) and its row in
+  `use-case-graph-validity.test.ts`; the scaffold lists them.
 - `--characterize` (worker only) adds `characterize.char.ts`: the ffmpeg
   output characterization the opt-in suite runs after the named operation,
   with the `ffmpeg-media` capability it needs. Its golden is blessed inside
@@ -400,8 +412,9 @@ for a node with a media output, a `@nodaro/shared` changeset. Regenerate and
 check:
 
 ```bash
+npm run build:packages                                              # gen:skills reads the built packages
 INTERNAL_ORCHESTRATOR_SECRET="<any 32+ characters>" npm run gen   # gen:units, then gen:skills (which needs the secret inline)
-npm run build:packages
+npm run build:packages                                              # render-rules carries the node's settings
 npm run typecheck
 ```
 

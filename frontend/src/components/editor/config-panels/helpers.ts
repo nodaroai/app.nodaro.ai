@@ -53,12 +53,11 @@ import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // a speech unit row cached there means the server prices speech by length.
 import { getCachedModelCredits } from "@/hooks/use-model-credit-cost"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
-/** Every node type whose output is prose/text. Used to build the compatible
- *  source list for any text-shaped field so the MappableField dropdown is
- *  visible whenever *any* text source is wired — not just a literal Text
- *  Prompt. Includes parameter nodes because their extracted output is the
- *  rich prompt hint (see `getParameterPromptHint`). */
-export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { unitTextSources } from "@/lib/unit-compose"
+// @registry-enumerates TEXT_SOURCE_TYPES carries every node unit whose first output is text
+/** The legacy node types (not parameter pickers) whose output is prose/text. */
+const LEGACY_TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "text-prompt",
   "llm-chat",
   "combine-text",
@@ -79,8 +78,18 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "webhook-trigger",
   "schedule-trigger",
   "list",
-  // Chapters: its show notes.
-  "episode-chapters",
+]
+
+/** Every node type whose output is prose/text. Used to build the compatible
+ *  source list for any text-shaped field so the MappableField dropdown is
+ *  visible whenever *any* text source is wired — not just a literal Text
+ *  Prompt. Includes parameter nodes because their extracted output is the
+ *  rich prompt hint (see `getParameterPromptHint`). The legacy list, then
+ *  every node unit whose first output is text, then the parameter nodes;
+ *  only membership is read. */
+export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
+  ...LEGACY_TEXT_SOURCE_TYPES,
+  ...unitTextSources(UNIT_NODE_DEFINITIONS),
   // Parameter nodes — their extractNodeOutput returns the prompt hint.
   "tone",
   "style-guide",

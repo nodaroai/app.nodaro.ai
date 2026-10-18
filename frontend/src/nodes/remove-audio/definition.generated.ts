@@ -75,5 +75,7 @@ export const definition = {
     "index": "hand-written",
     "useCase": "Mute a clip losslessly before adding new sound"
   },
-  "priceFallback": 20
+  "priceRows": {
+    "remove-audio": 20
+  }
 } as const

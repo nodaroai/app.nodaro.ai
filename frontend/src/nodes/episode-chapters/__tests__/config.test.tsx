@@ -4,18 +4,19 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 
-vi.mock("../run-up-to-here-notice", () => ({ RunUpToHereNotice: () => null }))
+vi.mock("@/components/editor/config-panels/run-up-to-here-notice", () => ({ RunUpToHereNotice: () => null }))
 
-import { EpisodeChaptersConfig } from "../episode-chapters-config"
+import { ConfigPanel as EpisodeChaptersConfig } from "../config"
 import { translate } from "@/lib/i18n"
-import type { EpisodeChaptersData, WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import type { EpisodeChaptersData } from "../types"
 
 const t = (key: Parameters<typeof translate>[1]) => translate("en", key)
 
 function renderConfig(data: Partial<EpisodeChaptersData>, onUpdate: (d: Record<string, unknown>) => void = () => {}) {
   return render(
     <EpisodeChaptersConfig
-      data={{ label: "Chapters", fieldMappings: {}, ...data } as EpisodeChaptersData}
+      data={{ label: "Chapters", fieldMappings: {}, ...data } as EpisodeChaptersData as never}
       onUpdate={onUpdate}
       sources={[]}
       fieldMappings={{}}
@@ -23,6 +24,7 @@ function renderConfig(data: Partial<EpisodeChaptersData>, onUpdate: (d: Record<s
       nodes={[] as unknown as WorkflowNode[]}
       edges={[] as unknown as WorkflowEdge[]}
       nodeId="c1"
+      kit={{ localizeNodeLabel: (label: string) => label }}
     />,
   )
 }

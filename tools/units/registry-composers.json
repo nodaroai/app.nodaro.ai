@@ -78,14 +78,15 @@
       ]
     },
     "frontend/src/lib/node-families.ts": {
-      "composes": "NODE_FAMILIES types arrays + each unit's picker.family",
+      "composes": "NODE_FAMILIES types arrays + each unit's picker.family; TAB_SUPERSET + each unit's picker.alsoOnTabs",
       "exports": {
         "options": [
           "NODE_FAMILIES",
           "OWNER_FAMILY_BY_TYPE",
           "FAMILY_RANK",
           "tabForType",
-          "familyById"
+          "familyById",
+          "TAB_SUPERSET"
         ]
       },
       "lookups": [
@@ -200,6 +201,21 @@
       },
       "foldsAtLoad": [
         "characterizations"
+      ]
+    },
+    "backend/src/lib/use-case/bodies.ts": {
+      "composes": "USE_CASE_BODIES = legacy bodies ∪ UNIT_USE_CASES[type].body; usecaseInputSchemaOf(type) = the unit's inputSchema",
+      "exports": {
+        "use-cases": [
+          "USE_CASE_BODIES",
+          "usecaseBodyTakesNull"
+        ]
+      },
+      "foldsAtLoad": [
+        "use-cases"
+      ],
+      "lookups": [
+        "usecaseInputSchemaOf"
       ]
     }
   }

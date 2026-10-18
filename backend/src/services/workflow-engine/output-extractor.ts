@@ -1,4 +1,4 @@
-import { usecaseJobOutput } from "./use-case-output.js"
+import { usecaseJobOutput, usecaseSavedNodeOutput } from "./use-case-output.js"
 import {
   collectionRecordHeadline,
   collectionRecordsDigest,
@@ -1439,6 +1439,11 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   const data = node.data
   const type = node.type
 
+  // A use-case node (legacy or a unit): the episode it shows, its plan with the
+  // review applied, and its text. Ahead of the unit branch (decided 2026-10-18),
+  // whose generic `from` read would save the wrong value, and of the media sets.
+  if (isUseCaseNodeType(type)) return usecaseSavedNodeOutput(data)
+
   // A node unit's saved output is what its manifest declares (handles.outputs[].from,
   // the active result first for media) — never a legacy type below. Mirrors the
   // editor's extractNodeOutput (unit-compose.ts unitOutputValue).
@@ -1448,17 +1453,6 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // The UGC nodes, by pip (savedUgcNodeOutput). Ahead of the media sets below:
   // UGC Clip is a video producer and would otherwise be read as a bare video.
   if (UGC_NODE_TYPES.has(type)) return savedUgcNodeOutput(type, data)
-  // A use-case node: the episode it shows and its plan with the person's
-  // review applied — the read an Edit Plan's saved output makes — and its text
-  // (Chapters' show notes). Ahead of the media sets for the same reason.
-  if (isUseCaseNodeType(type)) {
-    const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
-    const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
-    const json = editPlanSavedOutput(data)?.json
-    const text = typeof data.generatedText === "string" && data.generatedText ? data.generatedText : undefined
-    const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}), ...(text ? { text } : {}) }
-    return out.videoUrl || out.audioUrl || out.json !== undefined || out.text ? out : undefined
-  }
 
   // Generate-mask → { imageUrl, maskUrl } from the bespoke per-result shape
   // (generatedResults[i] = { imageUrl, maskUrl }, NOT GeneratedResult.url).

@@ -16,12 +16,15 @@
  *
  * A route the SDK takes from a table in `@nodaro/shared` (`nodes.run` reads
  * `nodeRunRoute(type)`) cannot be read from the SDK's own AST, so the function
- * it imports is run for real with the bound type (SHARED_NATIVES).
+ * it imports is run for real with the bound type (SHARED_NATIVES). A route
+ * built from a parameter typed by a finite type it imports
+ * (`/v1/${type}/continue`, `type: UseCaseNodeType`) is every route that type's
+ * values spell (SHARED_DOMAINS).
  */
 // @reads packages/client/src/**
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { NODE_RUN_ROUTES, nodeRunRoute } from "@nodaro/shared/nodes"
+import { NODE_RUN_ROUTES, USE_CASE_NODE_TYPES, nodeRunRoute } from "@nodaro/shared/nodes"
 import ts from "typescript"
 import { lineOf, parseText, walk } from "../../../src/lib/__tests__/source-ast.js"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
@@ -42,18 +45,45 @@ const SHARED_NATIVES: Readonly<Record<string, NativeFn>> = {
     ),
 }
 
-/** The SHARED_NATIVES a file imports from `@nodaro/shared` (the root or a subpath entry), by local name. */
-function sharedNatives(sf: ts.SourceFile): Map<string, NativeFn> {
-  const out = new Map<string, NativeFn>()
+/**
+ * `@nodaro/shared` finite types an SDK file may type a route's parameter with:
+ * every value the type holds, so a template over it (`/v1/${type}/continue`)
+ * is one route per value.
+ */
+const SHARED_DOMAINS: Readonly<Record<string, readonly string[]>> = {
+  UseCaseNodeType: USE_CASE_NODE_TYPES,
+}
+
+/** The named imports a file takes from `@nodaro/shared` (the root or a subpath entry). */
+function sharedImports(sf: ts.SourceFile): Array<{ imported: string; local: string; typeOnly: boolean }> {
+  const out: Array<{ imported: string; local: string; typeOnly: boolean }> = []
   for (const st of sf.statements) {
     if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier) || !/^@nodaro\/shared(?:\/[\w-]+)?$/.test(st.moduleSpecifier.text)) continue
     const named = st.importClause?.namedBindings
-    if (!named || !ts.isNamedImports(named) || st.importClause?.isTypeOnly) continue
+    if (!named || !ts.isNamedImports(named)) continue
     for (const el of named.elements) {
-      const imported = (el.propertyName ?? el.name).text
-      const fn = SHARED_NATIVES[imported]
-      if (fn && !el.isTypeOnly) out.set(el.name.text, fn)
+      out.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text, typeOnly: Boolean(st.importClause?.isTypeOnly || el.isTypeOnly) })
     }
+  }
+  return out
+}
+
+/** The SHARED_NATIVES a file imports from `@nodaro/shared`, by local name. */
+function sharedNatives(sf: ts.SourceFile): Map<string, NativeFn> {
+  const out = new Map<string, NativeFn>()
+  for (const i of sharedImports(sf)) {
+    const fn = SHARED_NATIVES[i.imported]
+    if (fn && !i.typeOnly) out.set(i.local, fn)
+  }
+  return out
+}
+
+/** The SHARED_DOMAINS a file imports from `@nodaro/shared` (type-only or not), by local name. */
+function sharedDomains(sf: ts.SourceFile): Map<string, readonly string[]> {
+  const out = new Map<string, readonly string[]>()
+  for (const i of sharedImports(sf)) {
+    const values = SHARED_DOMAINS[i.imported]
+    if (values) out.set(i.local, values)
   }
   return out
 }
@@ -140,7 +170,7 @@ export function extractSdk(repoRoot: string): SdkInventory {
   const files = [join(repoRoot, SDK_DIR, "client.ts"), join(repoRoot, SDK_DIR, "core.ts"), ...readdirSync(resDir).filter((f) => f.endsWith(".ts")).map((f) => join(resDir, f))]
   for (const file of files) {
     const sf = parseText(file, readFileSync(file, "utf8"))
-    const mod = moduleScope(sf, sharedNatives(sf))
+    const mod = moduleScope(sf, sharedNatives(sf), sharedDomains(sf))
     const rel = file.slice(repoRoot.length + 1)
     walk(sf, (n) => {
       if (ts.isClassDeclaration(n) && n.name) classes.set(n.name.text, { cls: n, sf, rel, scope: classScope(n, mod) })

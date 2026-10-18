@@ -11,7 +11,7 @@
  * - The app-demo template (`ugc-app-demo`): an app's phone screenshots.
  *
  * All three share one graph. Each template runs the `steal-the-format.test.ts` checks — every node
- * type registered in NODE_HANDLES, every edge on a real handle, the gallery copy through the
+ * type registered in ALL_NODE_HANDLES, every edge on a real handle, the gallery copy through the
  * Publish as template form — plus the rules the templates exist to keep:
  * - it is content-free: no node holds a model id, a prompt, a result or a kept result, and it
  *   carries no run state. The only filled values are the example inputs, on input nodes: the
@@ -53,7 +53,7 @@ import type {
 import { ADULT_AGE_IDS, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts/presets"
 import { stripUgcPublishState, ugcChainInput, ugcChains } from "@nodaro/render-rules"
-import { NODE_HANDLES } from "../../mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import { CLOUD_ONLY_NODE_TYPES } from "../../cloud-only-nodes.js"
 import { publishBodySchema } from "../../template-publish-schema.js"
 import { ugcAppRunMissesPhoto } from "../../ugc-app-run.js"
@@ -292,7 +292,7 @@ describe.each(SPECS)("$slug template", (spec) => {
     const { doc, nodes } = await get()
     for (const node of nodes) {
       expect(node.id, `node ${JSON.stringify(node.id)} has an id`).toBeTruthy()
-      expect(NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
+      expect(ALL_NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
     }
     expect(new Set(nodes.map((n) => n.id)).size).toBe(nodes.length)
     expect(new Set(doc.nodeTypesUsed)).toEqual(new Set(nodes.map((n) => n.type)))
@@ -310,8 +310,8 @@ describe.each(SPECS)("$slug template", (spec) => {
       const tgt = ids.get(edge.target)
       expect(src, `edge ${edge.id} source "${edge.source}" exists`).toBeDefined()
       expect(tgt, `edge ${edge.id} target "${edge.target}" exists`).toBeDefined()
-      expect(NODE_HANDLES[src!.type]!.outputs, `edge ${edge.id}: output of ${src!.type}`).toContain(edge.sourceHandle)
-      expect(NODE_HANDLES[tgt!.type]!.inputs, `edge ${edge.id}: input of ${tgt!.type}`).toContain(edge.targetHandle)
+      expect(ALL_NODE_HANDLES[src!.type]!.outputs, `edge ${edge.id}: output of ${src!.type}`).toContain(edge.sourceHandle)
+      expect(ALL_NODE_HANDLES[tgt!.type]!.inputs, `edge ${edge.id}: input of ${tgt!.type}`).toContain(edge.targetHandle)
       expect(edge.id).toBe(`e-${edge.source}-${edge.target}-${edge.targetHandle}`)
     }
   })

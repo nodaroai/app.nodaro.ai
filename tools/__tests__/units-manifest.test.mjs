@@ -1,15 +1,16 @@
 // tools/__tests__/units-manifest.test.mjs
 // The unit manifest validator (G6) and loader, tools/units/manifest.mjs, on
 // the fixture unit (tools/units/__fixtures__/tree) and on mutations of it.
-// @test-watches tools/units/** frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
+// @test-watches tools/units/** packages/render-rules/src/use-case-*.ts frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
+import { familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, optionTypesFrom, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../units/seams.mjs"
+import { useCaseBuildersFrom } from "../units/use-case-rules.mjs"
 import { CAPABILITIES } from "../units/capabilities.mjs"
 import * as vocabulary from "../units/vocabulary.mjs"
 import { descriptorSource, keptLengthsSource } from "../units/templates.mjs"
@@ -19,6 +20,9 @@ const FIXTURE = path.join(here, "../units/__fixtures__/tree")
 const REPO = path.join(here, "../..")
 const UNIT = "frontend/src/nodes/fixture-echo"
 const BACKEND = "backend/src/nodes/fixture-echo"
+// The fixture use-case unit (execution.kind "use-case", builder "fixture").
+const CASE = "frontend/src/nodes/fixture-case"
+const CASE_BACKEND = "backend/src/nodes/fixture-case"
 
 function tree() {
   const dir = mkdtempSync(path.join(tmpdir(), "units-manifest-"))
@@ -31,7 +35,9 @@ const ctxFor = (root, over = {}) => ({
   families: new Set(["fixture-family"]),
   live: allLive(),
   capabilities: {},
+  useCaseBuilders: new Set(["fixture"]),
   exists: (p) => { try { readFileSync(path.join(root, p)); return true } catch { return false } },
+  readText: (p) => { try { return readFileSync(path.join(root, p), "utf8") } catch { return null } },
   ...over,
 })
 function withManifest(root, edit, dir = UNIT) {
@@ -46,7 +52,15 @@ test("the fixture unit is valid with every seam live", () => {
   const root = tree()
   try {
     const units = loadUnits(root)
-    assert.deepEqual(units.map((u) => u.type), ["fixture-echo"])
+    assert.deepEqual(units.map((u) => u.type), ["fixture-case", "fixture-echo"])
+    assert.deepEqual(problems(root), [])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("an input and an output may share an id — only one side's ids must be unique", () => {
+  const root = tree()
+  try {
+    withManifest(root, (m) => { m.handles.outputs[0].id = "in" })
     assert.deepEqual(problems(root), [])
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
@@ -81,7 +95,7 @@ const cases = [
   ["picker missing", (m) => { delete m.picker }, /picker is required/],
   ["picker.after missing", (m) => { delete m.picker.after }, /picker\.after is required/],
   ["unknown family", (m) => { m.picker.family = "nope" }, /picker\.family "nope"/],
-  ["duplicate handle ids", (m) => { m.handles.outputs[0].id = "in" }, /handle ids must be unique/],
+  ["duplicate handle ids", (m) => { m.handles.inputs.push({ ...m.handles.inputs[0] }) }, /handle ids must be unique within handles\.inputs: in/],
   ["unknown handle kind", (m) => { m.handles.inputs[0].accepts = ["smell"] }, /"smell" is not a handle kind/],
   ["media output without producer", (m) => { delete m.contract }, /declares no contract\.producer/],
   ["producer disagrees with outputs", (m) => { m.contract.producer = "audio" }, /contract\.producer is "audio"/],
@@ -141,7 +155,7 @@ test("\"input:entity-subject\" needs its imageUrl input to accept image (an enti
 })
 
 test("a capability read by both trees needs each tree's seam live (\"input:entity-subject\": the definitions and the registry)", () => {
-  assert.deepEqual(CAPABILITIES["input:entity-subject"].seam, ["definitions", "registry"])
+  assert.deepEqual(CAPABILITIES["input:entity-subject"].seams, ["definitions", "registry"])
   const root = tree()
   try {
     withManifest(root, (m) => { m.capabilities = ["input:entity-subject"]; m.handles.inputs[0].field = "imageUrl"; m.handles.inputs[0].accepts = ["image"] })
@@ -155,8 +169,8 @@ test("a capability read by both trees needs each tree's seam live (\"input:entit
 
 test("every capability names seams that exist", () => {
   for (const [name, cap] of Object.entries(CAPABILITIES)) {
-    const seams = [cap.seam].flat()
-    assert.ok(seams.length > 0, name)
+    const seams = cap.seams
+    assert.ok(Array.isArray(seams) && seams.length > 0, `${name}: needs seams: ["<seam id>", …]`)
     for (const seam of seams) assert.ok(ALL_SEAM_IDS.includes(seam), `${name}: "${seam}" is not a seam in tools/units/seams.mjs`)
   }
 })
@@ -286,6 +300,37 @@ test("picker.after names a type of the unit's own family (or null)", () => {
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+// composeNodeOptions places a family-first unit after its position.after:
+// one with no add-node option is refused here, before anything is written,
+// rather than thrown at the editor's module load.
+test("a unit first in its family follows a position.after that has an add-node option (or a picker unit)", () => {
+  const root = tree()
+  try {
+    const ctx = ctxFor(root, { optionTypes: new Set(["upload-video"]) })
+    withManifest(root, (m) => { m.picker.after = null; m.position.after = "upload-video" })
+    assert.deepEqual(problems(root, ctx), [])
+    withManifest(root, (m) => { m.position.after = "text-prompt" })
+    assert.ok(problems(root, ctx).some((e) => /^fixture-echo: picker\.after is null \(first in its family\), so the add-node list places it after position\.after "text-prompt" — which has no add-node option/.test(e)), problems(root, ctx).join("\n"))
+    // A unit in the picker is an option too; null (first of all) and a stated picker.after need none.
+    withManifest(root, (m) => { m.position.after = "upload-video" }, CASE)
+    withManifest(root, (m) => { m.position.after = "fixture-case" })
+    assert.deepEqual(problems(root, ctx), [])
+    withManifest(root, (m) => { m.position.after = null })
+    assert.deepEqual(problems(root, ctx), [])
+    withManifest(root, (m) => { m.position.after = "text-prompt"; m.picker.after = "fixture-case" })
+    assert.ok(!problems(root, ctx).some((e) => /no add-node option/.test(e)))
+    // A context that reads no node-options.tsx (fixture contexts) does not apply it.
+    withManifest(root, (m) => { m.picker.after = null })
+    assert.ok(!problems(root, ctxFor(root)).some((e) => /no add-node option/.test(e)))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("optionTypesFrom: the LEGACY_NODE_OPTIONS types", () => {
+  assert.deepEqual([...optionTypesFrom('const OTHER = [\n    type: "no",\n]\nconst LEGACY_NODE_OPTIONS = [\n  {\n    type: "a",\n  },\n  {\n    type: "b",\n  },\n]\n')], ["a", "b"])
+  assert.ok(repoContext(REPO).optionTypes.has("remove-audio") === false, "a unit's option is composed, never in the legacy list")
+  assert.ok(repoContext(REPO).optionTypes.has("apply-edl"))
+})
+
 test("familyTypesFrom: each legacy family's string types", () => {
   const src = 'const LEGACY_NODE_FAMILIES: readonly F[] = [\n  {\n    id: "a",\n    types: ["x", "y"],\n  },\n  {\n    id: "b",\n    types: [MACRO_ID],\n  },\n]\n'
   assert.deepEqual([...familyTypesFrom(src)], [["a", ["x", "y"]], ["b", []]])
@@ -307,20 +352,158 @@ test("unit.schema.json's enums are the validator's vocabularies", () => {
   assert.deepEqual(schema.properties.execution.properties.queue.enum, vocabulary.QUEUES)
   assert.deepEqual(schema.properties.registry.properties.outputType.enum, vocabulary.OUTPUT_TYPES)
   assert.deepEqual(schema.properties.contract.properties.producer.enum, vocabulary.PRODUCER_KINDS)
+  assert.deepEqual(schema.properties.contract.properties.presents.enum, vocabulary.PRESENTS)
+  assert.deepEqual(schema.properties.contract.properties.jsonPips.additionalProperties.enum, vocabulary.JSON_PIP_KINDS)
+  assert.deepEqual(schema.properties.picker.oneOf[1].properties.alsoOnTabs.items.enum, vocabulary.PICKER_TABS)
+})
+
+// ── execution.kind "use-case" and the contract keys @nodaro/shared composes ──
+
+/** The problems of the fixture tree after `mutate(root)`; `over` widens the context. */
+function problemsAfter(mutate, over = {}) {
+  const root = tree()
+  try {
+    mutate(root)
+    return problems(root, ctxFor(root, over))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+}
+const expectProblem = (errs, re) => assert.ok(errs.some((e) => re.test(e)), `expected ${re} in:\n${errs.join("\n")}`)
+
+test("use-case: the fixture unit (use-case.ts + price.ee.ts, no route, a known builder) is valid", () => {
+  assert.deepEqual(problemsAfter(() => {}), [])
+})
+
+test("use-case: price.ee.ts without a route passes only for a use-case node", () => {
+  const errs = problemsAfter((root) => withManifest(root, (m) => { m.execution = { kind: "inline" } }, CASE))
+  expectProblem(errs, /^fixture-case: price\.ee\.ts without a route prices nothing/)
+  assert.ok(!problemsAfter(() => {}).some((e) => /prices nothing/.test(e)))
+})
+
+test("use-case: exec.ts, api.ts, route.ts, payload.ts and worker.ts are each refused, naming the kind", () => {
+  for (const [tree_, file] of [["frontend", "exec.ts"], ["frontend", "api.ts"], ["backend", "route.ts"], ["backend", "payload.ts"], ["backend", "worker.ts"]]) {
+    const dir = tree_ === "frontend" ? CASE : CASE_BACKEND
+    const errs = problemsAfter((root) => writeFileSync(path.join(root, dir, file), "export const x = 1\n"))
+    expectProblem(errs, new RegExp(`^fixture-case: .*${file.replace(".", "\\.")}.*|^fixture-case: execution\\.kind "use-case" .*${file.replace(".", "\\.")}`))
+    assert.ok(errs.some((e) => e.includes(file) && e.includes('"use-case"')), `${file}: ${errs.join("\n")}`)
+  }
+})
+
+test("use-case: route.ee.ts, characterize.char.ts, execution.queue and execution.requires are each refused", () => {
+  expectProblem(problemsAfter((root) => writeFileSync(path.join(root, CASE_BACKEND, "route.ee.ts"), "export const x = 1\n")), /^fixture-case: execution\.kind "use-case" runs no route — remove route\.ee\.ts or change the kind$/)
+  expectProblem(problemsAfter((root) => writeFileSync(path.join(root, CASE_BACKEND, "characterize.char.ts"), "export const x = 1\n")), /^fixture-case: characterize\.char\.ts characterizes an ffmpeg worker: it needs execution\.kind "worker" and the "ffmpeg-media" capability$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.execution.queue = vocabulary.QUEUES[0] }, CASE)), /^fixture-case: execution\.queue is only for execution\.kind "worker"$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.execution.requires = { anyOf: ["videoUrl"], kind: "video", noun: "a video" } }, CASE)), /^fixture-case: execution\.requires is only for execution\.kind "worker" or "sync"$/)
+})
+
+test("use-case: a missing or unknown execution.builder is refused", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete m.execution.builder }, CASE)), /^fixture-case: execution\.builder is required for a use-case node/)
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { m.execution.builder = "nope" }, CASE)),
+    /^fixture-case: execution\.builder "nope" is not a use-case spec in packages\/render-rules\/src\/use-case-specs\.ts — write its builder first$/,
+  )
+  expectProblem(problemsAfter(() => {}, { useCaseBuilders: new Set() }), /execution\.builder "fixture" is not a use-case spec/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.execution.builder = "fixture" })), /^fixture-echo: execution\.builder is only for execution\.kind "use-case"/)
+})
+
+test("use-case: two units naming one builder are refused", () => {
+  const errs = problemsAfter((root) => {
+    cpSync(path.join(root, CASE), path.join(root, "frontend/src/nodes/fixture-case-two"), { recursive: true })
+    cpSync(path.join(root, CASE_BACKEND), path.join(root, "backend/src/nodes/fixture-case-two"), { recursive: true })
+    withManifest(root, (m) => { m.type = "fixture-case-two" }, "frontend/src/nodes/fixture-case-two")
+  })
+  expectProblem(errs, /^fixture-case, fixture-case-two: execution\.builder "fixture" is named by more than one unit/)
+})
+
+test("contract.nonPromptInputs naming an input twice is refused", () => {
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { m.contract.nonPromptInputs = ["media", "media"] }, CASE)),
+    /^fixture-case: contract\.nonPromptInputs lists "media" more than once — name each input once$/,
+  )
+})
+
+test("use-case: an input with a field or an unknown id, and an output with from, are refused", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.inputs[0].field = "videoUrl" }, CASE)), /handles\.inputs\[0\]\.field: a use-case input lands in useCaseMedia/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.inputs[0].id = "video" }, CASE)), /handles\.inputs\[0\]\.id "video": a use-case input is one of media, music, introCard/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[0].from = "text" }, CASE)), /handles\.outputs\[0\]\.from: a use-case node's outputs are read by the use-case reader/)
+})
+
+test("use-case: a worker's capability is refused", () => {
+  const capabilities = { "length:pass-video": { seams: ["lengths"], why: "t" } }
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["length:pass-video"] }, CASE), { capabilities }), /capability "length:pass-video" describes a worker; a use-case node runs none/)
+})
+
+test("runtimeTyped: only on a media output, and only with contract.producer \"dynamic\"", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[1].runtimeTyped = true }, CASE)), /^fixture-case: handles\.outputs\[1\]\.runtimeTyped: only true, and only on an audio\/video\/image output/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[0].runtimeTyped = true })), /^fixture-echo: handles\.outputs\[0\]\.runtimeTyped needs contract\.producer "dynamic"/)
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[0].runtimeTyped = true; m.contract.producer = "dynamic" })), [])
+})
+
+test("jsonPips: every look output declared, every key a look output (any kind of unit)", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete m.contract.jsonPips }, CASE)), /^fixture-case: outputs "json" is JSON \(kind "look"\) but contract\.jsonPips does not say what it carries/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.jsonPips = { "video-out": "other" } })), /^fixture-echo: contract\.jsonPips\.video-out: not a "look" output/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.jsonPips = { json: "subtitles" } }, CASE)), /contract\.jsonPips\.json: "subtitles" is not transcript \| edl \| other/)
+})
+
+test("contract.reviewHold, nonPromptInputs and presents", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.reviewHold = true })), /^fixture-echo: contract\.reviewHold is only for execution\.kind "use-case"/)
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => { m.contract.reviewHold = true; m.contract.nonPromptInputs = ["media"] }, CASE)), [])
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.nonPromptInputs = ["music"] }, CASE)), /contract\.nonPromptInputs must list input handle ids/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.presents = "data" }, CASE)), /contract\.presents: "data" is not image \| video \| audio \| text/)
+})
+
+test("picker.alsoOnTabs: each a picker tab", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.picker.alsoOnTabs = ["nowhere"] }, CASE)), /^fixture-case: picker\.alsoOnTabs: each a picker tab/)
+})
+
+test("use-case: price.ee.ts must export creditId (the fee row a run reserves)", () => {
+  const errs = problemsAfter((root) => writeFileSync(path.join(root, CASE_BACKEND, "price.ee.ts"), 'export const staticCosts = { "use-case-fee:fixture-case": 1 } as const\nexport const price = { staticCosts }\n'))
+  expectProblem(errs, /^fixture-case: a use-case unit reserves its fee row: price\.ee\.ts exports creditId$/)
+})
+
+test("use-case.ts is refused on any other kind", () => {
+  expectProblem(problemsAfter((root) => writeFileSync(path.join(root, BACKEND, "use-case.ts"), "export const useCase = 1\n")), /^fixture-echo: use-case\.ts is only for execution\.kind "use-case"/)
+})
+
+test("use-case: its execution seam and its data files must be live", () => {
+  const off = (ids) => liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, !ids.includes(id)])))
+  const errs = problemsAfter(() => {}, { live: off(["run-use-case", "use-case-rows", "use-cases"]) })
+  expectProblem(errs, /^fixture-case: execution\.kind "use-case" \(a server-run workflow cannot run it: isUseCaseNodeType .*\) needs the "run-use-case" seam/)
+  expectProblem(errs, /^fixture-case: execution\.kind "use-case" \(its builder row\) needs the "use-case-rows" seam/)
+  expectProblem(errs, /^fixture-case: use-case\.ts needs the "use-cases" seam/)
+  expectProblem(problemsAfter(() => {}, { live: off(["contracts"]) }), /^fixture-case: contract\.jsonPips needs the "contracts" seam/)
+  // All three are live: the execution seam and the builder rows (@nodaro/render-rules'
+  // use-case-rows.ts composes them) and the body aggregate (backend/src/lib/use-case/bodies.ts).
+  for (const id of ["run-use-case", "use-case-rows", "use-cases"]) assert.equal(liveSeams().has(id), true, id)
+})
+
+test("a capability names every seam that reads it, and each must be live", () => {
+  const capabilities = { "test:two-seams": { seams: ["definitions", "lengths"], why: "t" } }
+  const errs = problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["test:two-seams"] }), { capabilities, live: liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, id !== "lengths"]))) })
+  expectProblem(errs, /^fixture-echo: capability "test:two-seams" needs the "lengths" seam/)
+})
+
+test("useCaseBuildersFrom: the `  <key>: defineUseCase` lines of USE_CASE_SPECS, read as text", () => {
+  assert.deepEqual([...useCaseBuildersFrom(readFileSync(path.join(FIXTURE, "packages/render-rules/src/use-case-specs.ts"), "utf8"))], ["fixture"])
+  const src = 'const OTHER = {\n  early: defineUseCase({}),\n}\nexport const USE_CASE_SPECS = {\n  tighten: defineUseCase({\n    nested: defineUseCase,\n  }),\n  chapters: defineUseCase({}),\n  plain: 1,\n}\n'
+  assert.deepEqual([...useCaseBuildersFrom(src)], ["tighten", "chapters"])
+  assert.deepEqual([...useCaseBuildersFrom("")], [])
+  assert.ok(repoContext(REPO).useCaseBuilders instanceof Set, "the repo context reads packages/render-rules/src/use-case-specs.ts")
 })
 
 test("length:unknown: a video unit may hold it alone, and it adds no kept-length row (the run estimates read the node's own length)", () => {
   const root = tree()
   try {
     const reason = "Its length is the fixture's, which only the file says."
+    // The fixture tree holds fixture-case (the use-case fixture) beside fixture-echo: read echo's descriptor by type.
+    const echo = () => loadUnits(root).find((u) => u.manifest.type === "fixture-echo")
     withManifest(root, (m) => { m.capabilities = ["length:unknown"]; m.lengthUnknownReason = reason })
     assert.deepEqual(problems(root, ctxFor(root, { capabilities: CAPABILITIES })), [])
-    assert.equal(CAPABILITIES["length:unknown"].seam, "registry")
+    assert.deepEqual(CAPABILITIES["length:unknown"].seams, ["registry"])
     assert.doesNotMatch(keptLengthsSource(loadUnits(root)), /fixture-echo/)
     // The descriptor carries the reason the server's UNBOUNDED_LENGTH_REASONS reads, and only when stated.
-    assert.match(descriptorSource(loadUnits(root)[0]), new RegExp(`"lengthUnknownReason": ${JSON.stringify(reason).replace(/[.']/g, "\\$&")}`))
+    assert.match(descriptorSource(echo()), new RegExp(`"lengthUnknownReason": ${JSON.stringify(reason).replace(/[.']/g, "\\$&")}`))
     withManifest(root, (m) => { m.capabilities = ["length:pass-video"]; delete m.lengthUnknownReason })
     assert.match(keptLengthsSource(loadUnits(root)), /\["fixture-echo", "bound"\]/)
-    assert.doesNotMatch(descriptorSource(loadUnits(root)[0]), /lengthUnknownReason/)
+    assert.doesNotMatch(descriptorSource(echo()), /lengthUnknownReason/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

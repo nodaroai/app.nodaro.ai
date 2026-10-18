@@ -1,0 +1,14 @@
+{
+  "empty": {},
+  "videoTakes": { "generatedVideoUrl": "https://r/g.mp4", "generatedResults": [{ "url": "https://r/a.mp4" }, { "url": "https://r/b.mp4" }], "activeResultIndex": 1, "generatedJson": { "version": 1, "segments": [{ "start": 0, "end": 10 }], "dropped": [] } },
+  "reviewedPlan": { "generatedVideoUrl": "https://r/g.mp4", "generatedJson": { "version": 1, "segments": [{ "start": 0, "end": 10 }, { "start": 20, "end": 30 }], "dropped": [] }, "editedEdl": { "v": 1, "kind": "edl", "basis": "575414c10e997cac", "edl": { "segments": [{ "start": 20, "end": 30 }], "dropped": [] } } },
+  "staleEdit": { "generatedVideoUrl": "https://r/g.mp4", "generatedJson": { "version": 1, "segments": [{ "start": 0, "end": 10 }, { "start": 20, "end": 30 }], "dropped": [] }, "editedEdl": { "v": 1, "kind": "edl", "basis": "0000000000000000", "edl": { "segments": [{ "start": 20, "end": 30 }], "dropped": [] } } },
+  "unenvelopedEdit": { "generatedVideoUrl": "https://r/g.mp4", "generatedJson": { "version": 1, "segments": [{ "start": 0, "end": 10 }, { "start": 20, "end": 30 }], "dropped": [] }, "editedEdl": { "version": 1, "segments": [{ "start": 20, "end": 30 }], "dropped": [] } },
+  "audioEpisode": { "generatedAudioUrl": "https://r/e.mp3", "generatedJson": { "version": 1, "segments": [], "dropped": [] } },
+  "emptyStrings": { "generatedVideoUrl": "", "generatedAudioUrl": "https://r/e.mp3", "generatedText": "" },
+  "chapters": { "generatedText": "0:00 Intro\n1:02 Main", "generatedJson": [{ "startMs": 0, "title": "Intro" }, { "startMs": 62000, "title": "Main" }] },
+  "chaptersReviewed": { "generatedText": "0:00 Intro\n1:02 Main", "generatedJson": [{ "startMs": 0, "title": "Intro" }, { "startMs": 62000, "title": "Main" }], "editedEdl": { "v": 1, "kind": "clips", "basis": "939d46a29b04c4e6", "clips": [{ "keep": true, "hook": "Hi" }, { "keep": false }] } },
+  "textAndVideo": { "generatedText": "notes", "generatedVideoUrl": "https://r/g.mp4", "generatedJson": [] },
+  "scalarPlan": { "generatedJson": "a plan held as text" },
+  "nullPlan": { "generatedVideoUrl": "https://r/g.mp4", "generatedJson": null }
+}

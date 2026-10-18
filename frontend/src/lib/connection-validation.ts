@@ -715,17 +715,6 @@ function connectionTypesAccepted(
     if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
     return false
   }
-  // tighten-episode — `media` takes the recording (video or audio), `music` an
-  // optional music bed (audio only).
-  if (targetType === "tighten-episode" && connection.targetHandle) {
-    if (connection.targetHandle === "media") return ACCEPTS_MEDIA(imageSourceType)
-    if (connection.targetHandle === "music") return ACCEPTS_AUDIO(imageSourceType)
-    return false
-  }
-  // episode-chapters — `media` takes the recording (video or audio).
-  if (targetType === "episode-chapters" && connection.targetHandle) {
-    return connection.targetHandle === "media" ? ACCEPTS_MEDIA(imageSourceType) : false
-  }
   // edit-plan — the json inputs (transcript, silence ranges, audio-sync
   // offsets) take a data producer; `sources` takes the recordings.
   if (targetType === "edit-plan" && connection.targetHandle) {

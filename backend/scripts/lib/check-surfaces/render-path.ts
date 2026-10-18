@@ -9,7 +9,11 @@
  * `type` bound) takes one branch, otherwise both, so a method that picks its
  * route at run time yields each route it can call. A lookup in a const object
  * literal (`PATHS[type]`) is the one entry its key names, or every entry when
- * the key is not known — a route table picked from at run time.
+ * the key is not known — a route table picked from at run time. A parameter
+ * typed by a finite type a package publishes (`type: UseCaseNodeType`) and
+ * not bound to a known value takes every value of that type
+ * (`/v1/${type}/continue` → one route per use-case type): a route chosen from
+ * that list at run time.
  */
 import ts from "typescript"
 
@@ -27,6 +31,8 @@ export interface Scope {
    * every spelling the call can return.
    */
   native?(name: string): NativeFn | undefined
+  /** Every value of a finite type imported from a package (`UseCaseNodeType`), by its local name. */
+  domain?(typeName: string): readonly string[] | undefined
 }
 
 export type NativeFn = (args: string[][]) => string[]
@@ -192,12 +198,22 @@ export function bindCall(
   depth = 0,
 ): Scope {
   const bound = new Map<string, Binding>()
+  // A parameter typed by a known finite type: every value it can hold, when the call does not name one.
+  const domainOf = (p: ts.ParameterDeclaration): string[] | undefined => {
+    const t = p.type
+    if (!t || !ts.isTypeReferenceNode(t) || !ts.isIdentifier(t.typeName)) return undefined
+    const values = target.scope.domain?.(t.typeName.text)
+    return values ? [...values] : undefined
+  }
   target.params.forEach((p, i) => {
     if (!ts.isIdentifier(p.name)) return
     const arg = args[i]
-    if (arg) bound.set(p.name.text, { values: renderExpr(arg, callerScope, depth + 1) })
-    else if (p.initializer) bound.set(p.name.text, { expr: p.initializer, scope: target.scope })
-    else bound.set(p.name.text, { values: null })
+    if (arg) {
+      const values = renderExpr(arg, callerScope, depth + 1)
+      const unknown = values.every((v) => v === PARAM)
+      bound.set(p.name.text, { values: unknown ? domainOf(p) ?? values : values })
+    } else if (p.initializer) bound.set(p.name.text, { expr: p.initializer, scope: target.scope })
+    else bound.set(p.name.text, { values: domainOf(p) ?? null })
   })
   for (const [name, expr] of target.locals) if (!bound.has(name)) bound.set(name, { expr, scope: target.scope })
   return childScope(target.scope, bound)
@@ -213,6 +229,7 @@ export function childScope(parent: Scope, names: Map<string, Binding>): Scope {
     },
     callable: (name, viaThis) => parent.callable(name, viaThis),
     native: (name) => parent.native?.(name),
+    domain: (typeName) => parent.domain?.(typeName),
   }
   return self
 }

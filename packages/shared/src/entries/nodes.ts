@@ -1,5 +1,5 @@
 /**
- * `@nodaro/shared/nodes` — Per-node-type rules: producer types, handle aliases, render nodes, JSON kinds, preview/render-final, settings inputs, node presets, collections.
+ * `@nodaro/shared/nodes` — Per-node-type rules: producer types, use-case node types, handle aliases, render nodes, JSON kinds, preview/render-final, settings inputs, node presets, collections.
  *
  * One of the package's subpath entries (see `src/index.ts`). The root
  * re-exports every entry, so each name here is also importable from
@@ -99,6 +99,7 @@ export {
   type SavedRenderQualityStamp,
   type SavedRenderStampReader,
 } from "../preview-gate.js"
+export { USE_CASE_NODE_TYPES, isUseCaseNodeType, type UseCaseNodeType } from "../use-case-types.js"
 export {
   CONTINUATION_NOT_FOUND,
   CONTINUATION_WORKFLOW_MISMATCH,

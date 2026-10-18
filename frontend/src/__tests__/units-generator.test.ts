@@ -9,8 +9,9 @@ import { ALL_SEAM_IDS, liveSeams } from "../../../tools/units/seams.mjs"
 import { staticCostsOf, loadTypeScript } from "../../../tools/units/price-reader.mjs"
 
 /**
- * gen:units on the fixture unit `fixture-echo` (tools/units/__fixtures__/tree:
- * every optional file, every seam live), byte-compared with the goldens in
+ * gen:units on the fixture units — `fixture-echo` (a worker with every optional
+ * file) and `fixture-case` (a use-case node) in tools/units/__fixtures__/tree,
+ * every seam live — byte-compared with the goldens in
  * tools/units/__fixtures__/expected/. Here, not in the tools self-test job,
  * because the price projection reads price.ee.ts with the TypeScript parser.
  * Update the goldens after a deliberate template change: npx vitest run -u <this file>.
@@ -42,7 +43,7 @@ afterAll(() => { if (tree) rmSync(tree, { recursive: true, force: true }) })
 describe("gen:units on the fixture unit", () => {
   it("validates and emits", () => {
     expect(result.errors).toEqual([])
-    expect(result.outputs.size).toBe(24) // 13 aggregates, 3 projections, 5 dicts, the docs index, the contracts, the kept lengths
+    expect(result.outputs.size).toBe(28) // 14 aggregates, 5 projections (fixture-case has no labels), 5 dicts, the docs index, the contracts, the kept lengths, the use-case rows
   })
 
   it("every output matches its golden", async () => {
@@ -51,8 +52,9 @@ describe("gen:units on the fixture unit", () => {
     }
   })
 
-  it("the price fallback comes from price.ee.ts through the TypeScript parser", () => {
-    expect(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts")).toMatch(/"priceFallback": 3\n/)
+  it("the price rows come from price.ee.ts through the TypeScript parser", () => {
+    expect(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts")).toMatch(/"priceRows": \{\n {4}"fixture-echo": 3\n {2}\}\n/)
+    expect(result.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts")).toMatch(/"priceRows": \{\n {4}"use-case-fee:fixture-case": 1\n {2}\}\n/)
   })
 
   it("written, the tree is clean", async () => {

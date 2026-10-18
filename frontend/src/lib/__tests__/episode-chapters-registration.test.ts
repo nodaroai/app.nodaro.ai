@@ -52,6 +52,6 @@ describe("Chapters is registered everywhere it must be", () => {
   it("picker: the Podcast family on the Video tab, and shown on the Audio tab (a recording may be audio only)", () => {
     expect(NODE_FAMILIES.find((f) => f.id === "video-podcast")!.types).toContain("episode-chapters")
     expect(NODE_OPTIONS.find((o) => o.type === "episode-chapters")!.group).toBe("video-podcast")
-    expect(TAB_SUPERSET.audio["video-podcast"]).toEqual(["tighten-episode", "episode-chapters"])
+    expect(TAB_SUPERSET.audio["video-podcast"]).toContain("episode-chapters")
   })
 })

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
-import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../../lib/node-handles.js"
 import { resolveNodeInputs } from "../input-resolver.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
@@ -16,7 +16,7 @@ const BED = "https://r2/bed.mp3"
 
 /** The producer's video pip: the declared output that names video, else its first. */
 const videoHandleOf = (type: string): string | null => {
-  const outs = NODE_HANDLES[type]?.outputs ?? []
+  const outs = ALL_NODE_HANDLES[type]?.outputs ?? []
   return outs.find((h) => h.includes("video")) ?? outs[0] ?? null
 }
 

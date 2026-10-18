@@ -38,6 +38,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 import { NODE_REGISTRY, CREDIT_BAND_SOURCES } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "../fixed-row-credit-ids.js"
@@ -60,11 +61,10 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   // Priced per started block of 1,000 sampled frames (P3.7): the count is the
   // run's own, so there is no fixed band to state.
   "speaker-frames": "per-1000-frames",
-  // A use-case node: its steps bill as their own jobs at their own rows (the
-  // transcribe and the render per minute), plus a flat per-run fee.
-  "tighten-episode": "per-minute",
-  // The same for Chapters (its transcribe per minute, its plan, the fee).
-  "episode-chapters": "per-minute",
+  // Every use-case node (the use-case branch of /v1/nodes): its steps bill as
+  // their own jobs at their own rows (the transcribe, the plan, the render per
+  // minute), plus a flat per-run fee.
+  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((type) => [type, "per-minute"])),
 }
 
 /** The static table as the lookup a source's `band` computer takes. */

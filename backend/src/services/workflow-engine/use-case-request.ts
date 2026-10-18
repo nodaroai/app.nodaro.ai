@@ -1,3 +1,4 @@
+// @registry-lookup asks the body of the one use-case type it is given (usecaseBodyTakesNull)
 /**
  * What a use-case node (decided 2026-10-13) asks its type's route for, and
  * the one call that asks it — the request half of use-case-node.ts. The

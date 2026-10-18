@@ -181,7 +181,6 @@
  "frontend/src/components/editor/workflow-editor/__tests__/mix-audio-video-totality.test.ts",
  "frontend/src/components/editor/workflow-editor/__tests__/paint-mask.test.ts",
  "frontend/src/components/editor/workflow-editor/__tests__/types.test.ts",
- "frontend/src/components/nodes/__tests__/handle-color-guard.test.ts",
  "frontend/src/components/nodes/__tests__/node-quick-configs.test.tsx",
  "frontend/src/components/nodes/__tests__/telegram-account-trigger-outputs.test.ts",
  "frontend/src/components/nodes/__tests__/voice-changer-pro-node.test.tsx",

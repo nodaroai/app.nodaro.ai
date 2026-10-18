@@ -21,8 +21,8 @@ export interface UnitConfigKit {
   localizeNodeLabel(label: string): string
 }
 
-/** config.tsx — the config panel body. */
-export type UnitConfigPanel = ComponentType<ConfigProps<never> & { readonly kit: UnitConfigKit }>
+/** config.tsx — the config panel body; `nodeId` is the node the panel shows. */
+export type UnitConfigPanel = ComponentType<ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }>
 
 /**
  * The engine services exec.ts reaches. execute-node.ts builds one per run

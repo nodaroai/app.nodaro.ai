@@ -7,6 +7,7 @@
 import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
 import { composeSet, unitsWith } from "../../lib/unit-compose.js"
 // @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
+// @registry-enumerates TEXT_SOURCE_NODE_TYPES carries every node unit whose primary output is text
 import type {
   SimpleNode,
   SimpleEdge,
@@ -1398,7 +1399,9 @@ function routeLoneMediaLinkToSocialPost(inputs: ResolvedInputs, src: SimpleNode,
 // Media type sets for source type classification
 // ---------------------------------------------------------------------------
 
-const TEXT_SOURCE_NODE_TYPES = new Set([
+// The text sources: these, and a unit whose primary output (its first, what an
+// edge naming no pip reads — the editor's unitOutputValue rule) is text.
+export const TEXT_SOURCE_NODE_TYPES = composeSet("TEXT_SOURCE_NODE_TYPES", new Set([
   "text-prompt",
   "list",
   "transcribe",
@@ -1426,8 +1429,6 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
-  // Chapters (a use-case node): its show notes on `text`, its chapter list on `json`.
-  "episode-chapters",
   // Collections — Read Collection's digest, Save to Collection's headline.
   "collection-read",
   "collection-write",
@@ -1438,7 +1439,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // or the digest) — text is the primary output of both.
   "content-recipe",
   "content-ideas",
-])
+]), UNIT_NODE_DESCRIPTORS.filter((u) => u.handles.outputs[0]?.kind === "text").map((u) => u.type))
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
 // Social-media-format may produce images (handled in routeOutput)

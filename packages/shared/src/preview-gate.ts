@@ -26,6 +26,7 @@ import { buildFeedMaps } from "./trigger-feeds.js"
 import { defaultEdgeOutputMode } from "./producer-types.js"
 import { mergeNodeInputOverrides } from "./presentation-utils.js"
 import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
+import { unitReviewHolds } from "./unit-contract-compose.js"
 
 /** Render nodes a run can stop at: every render in the registry (SV18). */
 export const PREVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = new Set(RENDER_NODE_TYPE_IDS)
@@ -34,9 +35,10 @@ export const PREVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = new Set(RENDER_NOD
  * Use-case nodes whose review-on run ends at a Preview of their own: what
  * follows them waits for their Render final, exactly as after a render at
  * Preview. They are not render nodes (`PREVIEW_RENDER_NODE_TYPES` stays the
- * renders), so they join the hold here.
+ * renders), so they join the hold here: the node units that declare
+ * `contract.reviewHold` (generated/unit-contracts.ts).
  */
-export const REVIEW_HOLDING_USE_CASE_TYPES: ReadonlySet<string> = new Set(["tighten-episode"])
+export const REVIEW_HOLDING_USE_CASE_TYPES: ReadonlySet<string> = new Set(unitReviewHolds())
 
 /** A node whose take can be a Preview that holds what follows it. */
 export function isPreviewHoldingType(type: string | null | undefined): boolean {

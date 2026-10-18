@@ -42,9 +42,11 @@ export interface UnitOutputHandle {
   readonly kind: UnitHandleKind
   /** The node-data field that holds this output (declarative output extraction). */
   readonly from?: string
+  /** Its medium is decided at run time (contract.producer "dynamic"): the pip gets no HANDLE_OUTPUT_TYPES row. */
+  readonly runtimeTyped?: true
 }
 
-export type UnitExecutionKind = "source" | "inline" | "sync" | "worker"
+export type UnitExecutionKind = "source" | "inline" | "sync" | "worker" | "use-case"
 
 export interface UnitRequiredMedia {
   readonly anyOf: ReadonlyArray<string>
@@ -69,14 +71,22 @@ export interface UnitDefinition {
     readonly after: string | null
     readonly pickerCategory?: string
     readonly keywords?: ReadonlyArray<string>
+    /** Other picker tabs it is also shown on (TAB_SUPERSET), besides its family's own. */
+    readonly alsoOnTabs?: ReadonlyArray<string>
   } | null
   readonly handles: { readonly inputs: ReadonlyArray<UnitInputHandle>; readonly outputs: ReadonlyArray<UnitOutputHandle> }
-  readonly execution: { readonly kind: UnitExecutionKind; readonly queue?: string; readonly requires?: UnitRequiredMedia }
+  readonly execution: {
+    readonly kind: UnitExecutionKind
+    readonly queue?: string
+    readonly requires?: UnitRequiredMedia
+    /** execution.kind "use-case": its graph builder's key in USE_CASE_SPECS (@nodaro/render-rules). */
+    readonly builder?: string
+  }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
   readonly docs: { readonly page?: string; readonly awaiting?: string; readonly useCase?: string }
-  /** The editor's price mirror before the server answers — projected from price.ee.ts, never hand-written. */
-  readonly priceFallback: number | null
+  /** The editor's price mirror before the server answers: every `staticCosts` row of price.ee.ts, projected by gen:units — never hand-written. */
+  readonly priceRows: Readonly<Record<string, number>>
 }
 
 /** node.tsx — the canvas component. */

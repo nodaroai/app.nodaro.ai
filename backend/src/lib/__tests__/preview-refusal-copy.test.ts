@@ -1,4 +1,4 @@
-// @test-watches frontend/src/lib/i18n/en.ts
+// @test-watches frontend/src/lib/i18n/en.ts backend/src/nodes/*/descriptor.generated.ts
 /**
  * Every preview refusal names the remedy for what holds the run: a render at
  * Preview is set to Final; a use-case node with review on has its review
@@ -11,6 +11,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { REVIEW_HOLDING_USE_CASE_TYPES } from "@nodaro/shared/nodes"
 import { previewHoldKind } from "@nodaro/render-rules"
+import { unitDescriptorOf } from "../unit-descriptors.js"
 
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => true }))
 
@@ -48,8 +49,15 @@ describe("a review-on use-case node's remedy is its review, never a Final", () =
     expect(previewRefusalMessage(situation)).toBe(previewRefusalMessage(situation, "render"))
   })
 
-  it("the copy names the one use-case node that holds today (a new one needs its own words)", () => {
-    expect([...REVIEW_HOLDING_USE_CASE_TYPES]).toEqual(["tighten-episode"])
+  it("the copy names every review-holding use-case node by its label (a new one needs its own words)", () => {
+    expect(REVIEW_HOLDING_USE_CASE_TYPES.size).toBeGreaterThan(0)
+    for (const type of REVIEW_HOLDING_USE_CASE_TYPES) {
+      const label = unitDescriptorOf(type)?.label
+      expect(label, `${type} is a unit with a label`).toBeTruthy()
+      for (const situation of SITUATIONS) {
+        for (const kind of ["review", "any"] as const) expect(previewRefusalMessage(situation, kind), `${type} ${situation} ${kind}`).toContain(label)
+      }
+    }
   })
 })
 

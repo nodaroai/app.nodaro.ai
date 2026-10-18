@@ -11,10 +11,13 @@
 //   payload.ts              → `payload: UnitPayload`
 //   worker.ts               → `worker: UnitWorker`
 //   price.ee.ts             → `price: UnitPrice` (Enterprise License, by filename)
+//   use-case.ts             → `useCase: UnitUseCase` (execution.kind "use-case")
 // The aggregates (backend/src/nodes/_generated/, backend/src/ee/nodes/_generated/)
 // are typed with these, so a unit whose export does not fit fails typecheck at
 // its aggregate line.
 import type { FastifyPluginAsync } from "fastify"
+import type { z } from "zod"
+import type { NodeDescriptor } from "../lib/node-registry.js"
 import type { HandlerFn } from "../workers/shared.js"
 import type { PayloadResult } from "../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/types.js"
@@ -37,6 +40,8 @@ export interface UnitOutputHandle {
   readonly kind: UnitHandleKind
   /** The node-data field that holds this output. */
   readonly from?: string
+  /** Its medium is decided at run time (contract.producer "dynamic"): the pip gets no HANDLE_OUTPUT_TYPES row. */
+  readonly runtimeTyped?: true
 }
 
 export interface UnitRequiredMedia {
@@ -60,7 +65,13 @@ export interface UnitDescriptor {
   readonly inputs: ReadonlyArray<string>
   readonly outputs: ReadonlyArray<string>
   readonly handles: { readonly inputs: ReadonlyArray<UnitInputHandle>; readonly outputs: ReadonlyArray<UnitOutputHandle> }
-  readonly execution: { readonly kind: "source" | "inline" | "sync" | "worker"; readonly queue?: string; readonly requires?: UnitRequiredMedia }
+  readonly execution: {
+    readonly kind: "source" | "inline" | "sync" | "worker" | "use-case"
+    readonly queue?: string
+    readonly requires?: UnitRequiredMedia
+    /** execution.kind "use-case": its graph builder's key in USE_CASE_SPECS (@nodaro/render-rules). */
+    readonly builder?: string
+  }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
   /** Why no rule bounds its video output's length: unit.json's lengthUnknownReason, present exactly with the "length:unknown" capability (UNBOUNDED_LENGTH_REASONS). */
@@ -86,6 +97,12 @@ export type UnitPayload = (kit: UnitPayloadKit) => PayloadResult
 
 /** worker.ts — the BullMQ handler, registered on the unit's `execution.queue`. */
 export type UnitWorker = HandlerFn
+
+/** use-case.ts — a use-case node's request body (the factory route POST /v1/<type> parses it) and its GET /v1/nodes input schema. */
+export interface UnitUseCase {
+  readonly body: z.ZodObject<z.ZodRawShape>
+  readonly inputSchema: NonNullable<NodeDescriptor["inputSchema"]>
+}
 
 /**
  * price.ee.ts — the unit's static credit rows and, when the id a run reserves

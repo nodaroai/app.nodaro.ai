@@ -3834,69 +3834,6 @@ export type ApplyEdlData = {
   activeResultIndex?: number
 }
 
-/** Tighten Episode (podcast use-case node): one recording in, the tightened
- *  episode out — the shipped transcribe → silence → plan → render chain, built
- *  and run on the server as one job. Settings mirror @nodaro/render-rules'
- *  TightenEpisodeSettings; results mirror the wrapper job's output. */
-export type TightenEpisodeData = {
-  [key: string]: unknown
-  label: string
-  fieldMappings: FieldMappings
-  output?: "video" | "audio"
-  /** Frame the episode with Speaker View: an output aspect and a layout, on
-   *  automatic boxes — the shipped default boxes over the speakers on screen,
-   *  tracked speakers followed. null/absent = no framing. */
-  framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null
-  captions?: boolean
-  captionStyle?: CaptionStyle
-  reviewBeforeRender?: boolean
-  planTier?: "economy" | "standard" | "premium"
-  instructions?: string
-  styleGuide?: string
-  musicDuckAmount?: number
-  /** The run's wrapper job (Continue / Render final address it). */
-  useCaseJobId?: string
-  useCaseExecutionId?: string
-  /** Set by Continue / Render final for the next single-node run, then cleared. */
-  useCaseContinue?: { mode: "from-failed" | "render-final"; jobId: string }
-  /** The plan (an EDL, dropped[] included) and the reviewer's edit of it. */
-  generatedJson?: unknown
-  editedEdl?: unknown
-  generatedTranscript?: unknown
-  generatedVideoUrl?: string
-  generatedAudioUrl?: string
-  generatedResults?: readonly GeneratedResult[]
-  activeResultIndex?: number
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  currentJobProgress?: number
-}
-
-/** Chapters (podcast use-case node, decided 2026-10-14): one recording in;
- *  its chapters out as show notes on `text` (`generatedText`, one
- *  `0:00 Title` line per chapter) and as a list on `json` (`generatedJson`,
- *  `{ startMs, title }[]`). Nothing renders and nothing is reviewed. Settings
- *  mirror @nodaro/render-rules' EpisodeChaptersSettings. */
-export type EpisodeChaptersData = {
-  [key: string]: unknown
-  label: string
-  fieldMappings: FieldMappings
-  planTier?: "economy" | "standard" | "premium"
-  instructions?: string
-  styleGuide?: string
-  /** The run's wrapper job (Continue addresses it). */
-  useCaseJobId?: string
-  useCaseExecutionId?: string
-  /** The show notes. */
-  generatedText?: string
-  /** The chapter list. */
-  generatedJson?: unknown
-  generatedTranscript?: unknown
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  currentJobProgress?: number
-}
-
 /** speaker-view (Track C, C3.2) — an EDL rendered with its speakers framed.
  *  Nodaro-EXCLUSIVE (the cloud plugin's renderer, relayed from a self-host).
  *  Reads an edit (`edl`, Edit Plan's or Camera Switch's) and the diarized
@@ -7493,8 +7430,6 @@ export type SceneNodeData =
   | ForcedAlignmentData
   | CombineVideosData
   | ApplyEdlData
-  | TightenEpisodeData
-  | EpisodeChaptersData
   | SpeakerViewData
   | ImageCollageData
   | ImageOverlayData
@@ -7723,8 +7658,6 @@ export type SceneNodeType =
   | "video-audit"
   | "combine-videos"
   | "apply-edl"
-  | "tighten-episode"
-  | "episode-chapters"
   | "speaker-view"
   | "edit-plan"
   | "camera-switch"
@@ -9285,43 +9218,6 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["edl", "transcript", "sources"],
     outputs: ["media", "json"],
     defaultData: { label: "Apply EDL", output: "video", quality: "final", crossfadeMs: 0, fieldMappings: {} } as ApplyEdlData,
-  },
-  {
-    type: "tighten-episode",
-    label: "Tighten Episode",
-    category: "processing",
-    // A use-case node: its steps bill at their own rates plus a flat 10-credit
-    // fee per run; the estimate expands it (@nodaro/render-rules use-case-expand).
-    inputs: ["media", "music"],
-    outputs: ["media", "json"],
-    defaultData: {
-      label: "Tighten Episode",
-      output: "video",
-      captions: true,
-      captionStyle: "word-highlight",
-      reviewBeforeRender: false,
-      planTier: "standard",
-      instructions: "",
-      fieldMappings: {},
-      executionStatus: "idle",
-    } as TightenEpisodeData,
-  },
-  {
-    type: "episode-chapters",
-    label: "Chapters",
-    category: "processing",
-    // A use-case node: its steps bill at their own rates plus a flat 10-credit
-    // fee per run; the estimate expands it (@nodaro/render-rules use-case-expand).
-    inputs: ["media"],
-    outputs: ["text", "json"],
-    defaultData: {
-      label: "Chapters",
-      planTier: "economy",
-      instructions: "",
-      styleGuide: "",
-      fieldMappings: {},
-      executionStatus: "idle",
-    } as EpisodeChaptersData,
   },
   {
     type: "speaker-view",

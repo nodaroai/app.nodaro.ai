@@ -35,10 +35,10 @@ import type {
   UseCaseMediaSource,
 } from "./use-case-graph"
 import { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
+import { usecaseTypeOfBuilder } from "./use-case-rows"
 
 export type { PlanTier, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
 
-export const TIGHTEN_EPISODE = "tighten-episode" as const
 /** Edit Plan's and Apply EDL's ceiling: a longer recording is refused up front. */
 export const TIGHTEN_MAX_EPISODE_SEC = 180 * 60
 
@@ -222,7 +222,7 @@ export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sourc
   }
 
   return {
-    nodeType: TIGHTEN_EPISODE,
+    nodeType: usecaseTypeOfBuilder("tighten"),
     nodes,
     edges,
     outputMap: {

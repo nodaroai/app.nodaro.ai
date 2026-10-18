@@ -63,5 +63,7 @@ export const definition = {
     "page": "docs/nodes/utility/fixture-echo.md",
     "useCase": "Prove every gen:units emitter"
   },
-  "priceFallback": 3
+  "priceRows": {
+    "fixture-echo": 3
+  }
 } as const

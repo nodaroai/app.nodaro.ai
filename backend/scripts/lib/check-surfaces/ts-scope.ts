@@ -12,9 +12,14 @@ function callableOf(fn: ts.SignatureDeclaration & { body?: ts.Node }, scope: Sco
 
 /**
  * The top-level names of a source file. `natives` are imported functions the
- * checker evaluates for real, keyed by their local name.
+ * checker evaluates for real, keyed by their local name; `domains` the values
+ * of finite types it imports (`UseCaseNodeType`), keyed the same way.
  */
-export function moduleScope(sf: ts.SourceFile, natives: ReadonlyMap<string, NativeFn> = new Map()): Scope {
+export function moduleScope(
+  sf: ts.SourceFile,
+  natives: ReadonlyMap<string, NativeFn> = new Map(),
+  domains: ReadonlyMap<string, readonly string[]> = new Map(),
+): Scope {
   const consts = new Map<string, ts.Expression>()
   const fns = new Map<string, ts.SignatureDeclaration & { body?: ts.Node }>()
   for (const st of sf.statements) {
@@ -40,6 +45,7 @@ export function moduleScope(sf: ts.SourceFile, natives: ReadonlyMap<string, Nati
       return fn ? callableOf(fn, scope) : undefined
     },
     native: (name) => (consts.has(name) || fns.has(name) ? undefined : natives.get(name)),
+    domain: (typeName) => domains.get(typeName),
   }
   return scope
 }
@@ -60,6 +66,7 @@ export function classScope(cls: ts.ClassDeclaration, module: Scope): Scope {
       return m ? callableOf(m, scope) : undefined
     },
     native: (name) => module.native?.(name),
+    domain: (typeName) => module.domain?.(typeName),
   }
   return scope
 }

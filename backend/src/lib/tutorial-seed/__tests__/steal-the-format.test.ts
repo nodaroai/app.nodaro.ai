@@ -4,7 +4,7 @@
  * brand in, five content ideas with a script each out.
  *
  * Same guard as podcast-templates.test.ts — every node type is registered in
- * NODE_HANDLES and every edge lands on a real handle — plus the wiring this
+ * ALL_NODE_HANDLES and every edge lands on a real handle — plus the wiring this
  * template exists for: the Video URL feeds both the analysis and the recipe's
  * `link` (so every idea can cite the post), the brand reaches Content Ideas as
  * a field, and the script node (a Prompt) writes the script for the ONE idea the
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url"
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared/nodes"
 import { TEMPLATE_CATEGORIES } from "@nodaro/shared/apps"
 import { buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
-import { NODE_HANDLES } from "../../mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import { CLOUD_ONLY_NODE_TYPES } from "../../cloud-only-nodes.js"
 import { publishBodySchema } from "../../template-publish-schema.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -90,7 +90,7 @@ describe("steal-the-format template", () => {
     const { doc, nodes } = await load()
     for (const node of nodes) {
       expect(node.id, `node ${JSON.stringify(node.id)} has an id`).toBeTruthy()
-      expect(NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
+      expect(ALL_NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
     }
     expect(new Set(doc.nodeTypesUsed)).toEqual(new Set(nodes.map((n) => n.type)))
   })
@@ -103,8 +103,8 @@ describe("steal-the-format template", () => {
       const tgt = byId.get(edge.target)
       expect(src, `edge ${edge.id} source "${edge.source}" exists`).toBeDefined()
       expect(tgt, `edge ${edge.id} target "${edge.target}" exists`).toBeDefined()
-      expect(NODE_HANDLES[src!.type]!.outputs, `edge ${edge.id}: output of ${src!.type}`).toContain(edge.sourceHandle)
-      expect(NODE_HANDLES[tgt!.type]!.inputs, `edge ${edge.id}: input of ${tgt!.type}`).toContain(edge.targetHandle)
+      expect(ALL_NODE_HANDLES[src!.type]!.outputs, `edge ${edge.id}: output of ${src!.type}`).toContain(edge.sourceHandle)
+      expect(ALL_NODE_HANDLES[tgt!.type]!.inputs, `edge ${edge.id}: input of ${tgt!.type}`).toContain(edge.targetHandle)
     }
   })
 

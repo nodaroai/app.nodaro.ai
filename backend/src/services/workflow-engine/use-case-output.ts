@@ -1,17 +1,23 @@
 /**
- * A use-case node's output (Tighten Episode, decided 2026-10-13), read off
- * its wrapper job's `output_data` (lib/use-case/wrapper-output.ts): the
- * episode as video or audio, the plan on `json` (Chapters: the chapter list,
- * its show notes on `text`), the transcript, the take's
- * quality ("proxy" is a review-on run's preview) and its render's bases, and
- * the settings the run was built from, and the episode's length
- * (`durationSec`, with the take only: what a Trim, Loop or Combine Videos
- * after the node is charged by). Pure — the one
- * mapping the node's executor (completed and failed) and every rebuild of a
- * node output from a job row (`buildNodeOutputFromJobData`) share. The
- * wrapper's `plan` is the same value as its `json` and is not copied
- * (`NodeOutput.plan` is another node's field).
+ * A use-case node's output (Tighten Episode, decided 2026-10-13). Two pure
+ * mappings live here:
+ *
+ *  - `usecaseJobOutput`: read off its wrapper job's `output_data`
+ *    (lib/use-case/wrapper-output.ts): the episode as video or audio, the plan
+ *    on `json` (Chapters: the chapter list, its show notes on `text`), the
+ *    transcript, the take's quality ("proxy" is a review-on run's preview) and
+ *    its render's bases, and the settings the run was built from, and the
+ *    episode's length (`durationSec`, with the take only: what a Trim, Loop or
+ *    Combine Videos after the node is charged by). The one mapping the node's
+ *    executor (completed and failed) and every rebuild of a node output from a
+ *    job row (`buildNodeOutputFromJobData`) share. The wrapper's `plan` is the
+ *    same value as its `json` and is not copied (`NodeOutput.plan` is another
+ *    node's field).
+ *  - `usecaseSavedNodeOutput`: the saved-data reader, read off what the node
+ *    holds — the use-case branch of `extractSavedNodeOutput`, ahead of its
+ *    unit branch.
  */
+import { editPlanSavedOutput } from "@nodaro/shared/edl"
 import type { NodeOutput } from "./types.js"
 
 const url = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
@@ -44,4 +50,21 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
     ...(durationSec !== undefined ? { durationSec } : {}),
     ...(text ? { text } : {}),
   }
+}
+
+/**
+ * A use-case node's saved output, read off what the node holds (the
+ * orchestrator's `extractSavedNodeOutput`, for "run from here"): the episode it
+ * shows, its plan with the person's review applied — the read an Edit Plan's
+ * saved output makes — and its text (Chapters' show notes). Undefined when it
+ * holds none of them. The server twin of the editor's `usecaseSavedOutput`
+ * (use-case-io.ts).
+ */
+export function usecaseSavedNodeOutput(data: Record<string, unknown>): NodeOutput | undefined {
+  const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
+  const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
+  const json = editPlanSavedOutput(data)?.json
+  const text = typeof data.generatedText === "string" && data.generatedText ? data.generatedText : undefined
+  const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}), ...(text ? { text } : {}) }
+  return out.videoUrl || out.audioUrl || out.json !== undefined || out.text ? out : undefined
 }

@@ -6,8 +6,9 @@ import type { UnitDefinition } from "@/nodes/kit"
 import type { NodeTypeDefinition } from "@/types/nodes"
 import type { NodeOption } from "@/lib/node-compatibility"
 import {
-  composeFamilyTypes, composeNodeDefinitions, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
-  toNodeTypeDefinition, unitNodeLabels, unitOutputTypes, unitOutputValue, unitRecord, unitsWith,
+  composeFamilyTypes, composeNodeDefinitions, composeTabSuperset, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
+  toNodeTypeDefinition, unitJsonProducers, unitNoMediumResults, unitNodeLabels, unitOutputTypes, unitOutputValue, unitPriceRows, unitRecord,
+  unitsWith, unitTabSuperset, unitTextSources,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
@@ -43,7 +44,7 @@ const FIXTURE: UnitDefinition = {
   execution: { kind: "worker", queue: "video", requires: { anyOf: ["videoUrl"], kind: "video", noun: "a video" } },
   capabilities: ["ffmpeg-media", "panel:generate-button"],
   docs: { page: "docs/nodes/processing-video/fixture-echo.md" },
-  priceFallback: 3,
+  priceRows: { "fixture-echo": 3, "fixture-echo:hd": 6 },
 }
 const def = (type: string) => ({ type, label: type, category: "processing", inputs: [], outputs: [], defaultData: { label: type } }) as unknown as NodeTypeDefinition
 const opt = (type: string) => ({ type, label: type, icon: null, category: "Processing", group: "fam" }) as unknown as NodeOption
@@ -89,6 +90,14 @@ describe("options and families", () => {
   })
   it("a unit's option lands after its picker.after", () => {
     expect(composeNodeOptions(legacy, [FIXTURE], optionOf).map((o) => o.type)).toEqual(["a", "b", "fixture-echo", "c"])
+  })
+  it("first in its family (picker.after null): placed after its position.after, not first in the list", () => {
+    const familyFirst: UnitDefinition = { ...FIXTURE, position: { after: "b" }, picker: { family: "fam", after: null } }
+    expect(composeNodeOptions(legacy, [familyFirst], optionOf).map((o) => o.type)).toEqual(["a", "b", "fixture-echo", "c"])
+    // A unit placed first in NODE_DEFINITIONS too is first here.
+    expect(composeNodeOptions(legacy, [{ ...familyFirst, position: { after: null } }], optionOf).map((o) => o.type)).toEqual(["fixture-echo", "a", "b", "c"])
+    // A position.after with no option of its own names nothing here: refused loudly, never appended silently.
+    expect(() => composeNodeOptions(legacy, [{ ...familyFirst, position: { after: "no-option" } }], optionOf)).toThrow(/fixture-echo: picker\.after is null \(first in its family\), so the add-node list places it after position\.after "no-option" — which has no add-node option/)
   })
   it("a family gains its units at picker.after; other families are untouched", () => {
     const types = ["a", "b", "c"] as const
@@ -136,11 +145,64 @@ describe("tables and sets", () => {
     expect(() => composeRecordAfter("T", legacy, [{ type: "a", anchors: [], value: 0 }])).toThrow(/exactly one place/)
   })
   it("the derived rows: price mirror, executable, capabilities, output handles", () => {
-    expect(unitRecord([FIXTURE], (u) => u.priceFallback ?? undefined)).toEqual({ "fixture-echo": 3 })
-    expect(unitRecord([{ ...FIXTURE, priceFallback: null }], (u) => u.priceFallback ?? undefined)).toEqual({})
+    // Every staticCosts row of each unit; a credit id priced by two units is refused (unitStaticCosts' twin).
+    expect(unitPriceRows([FIXTURE])).toEqual({ "fixture-echo": 3, "fixture-echo:hd": 6 })
+    expect(unitPriceRows([{ ...FIXTURE, priceRows: {} }])).toEqual({})
+    expect(unitPriceRows([])).toEqual({})
+    expect(() => unitPriceRows([FIXTURE, { ...FIXTURE, type: "other", priceRows: { "fixture-echo:hd": 6 } }])).toThrow(/other: credit id "fixture-echo:hd" is priced by another unit too/)
+    expect(unitRecord([FIXTURE], (u) => u.label)).toEqual({ "fixture-echo": "Fixture Echo" })
     expect(unitsWith([FIXTURE], "ffmpeg-media")).toEqual(["fixture-echo"])
     expect(unitsWith([FIXTURE], "panel:run-button")).toEqual([])
     expect(unitOutputTypes(FIXTURE)).toEqual({ "video-out": "video" })
+  })
+})
+
+describe("the derived editor sets", () => {
+  const out = (id: string, kind: UnitDefinition["handles"]["outputs"][number]["kind"], extra: object = {}) => ({ id, label: id, kind, ...extra })
+  const unit = (type: string, outputs: UnitDefinition["handles"]["outputs"], capabilities: string[] = []): UnitDefinition =>
+    ({ ...FIXTURE, type, handles: { inputs: [], outputs }, capabilities })
+  const notes = unit("notes", [out("text", "text"), out("json", "look")], ["panel:generate-button"])
+  const plan = unit("plan", [out("media", "video", { runtimeTyped: true }), out("json", "look")], ["panel:run-button"])
+  const silent = unit("silent", [out("json", "look")])
+  const textSecond = unit("text-second", [out("video", "video"), out("text", "text")], ["panel:generate-button"])
+
+  it("a runtime-typed pip has no HANDLE_OUTPUT_TYPES row; its typed siblings do", () => {
+    expect(unitOutputTypes(plan)).toEqual({ json: "look" })
+    expect(unitOutputTypes(notes)).toEqual({ text: "text", json: "look" })
+  })
+  it("text sources: units whose FIRST output is text (what an edge naming no pip reads)", () => {
+    expect(unitTextSources([notes, plan, silent, textSecond])).toEqual(["notes"])
+    expect(unitTextSources([])).toEqual([])
+  })
+  it("JSON producers: units with any look output", () => {
+    expect(unitJsonProducers([notes, plan, silent, textSecond])).toEqual(["notes", "plan", "silent"])
+  })
+  it("no-medium results: gallery units (Generate or Run button) with no video, audio or image output", () => {
+    // plan's media pip is runtime-typed but still a medium; silent has no gallery; text-second carries video.
+    expect(unitNoMediumResults([notes, plan, silent, textSecond])).toEqual(["notes"])
+    expect(unitNoMediumResults([FIXTURE])).toEqual([])
+  })
+  it("tab superset: tab → family → its units shown there too, in family order", () => {
+    const shown = (type: string, family: string, alsoOnTabs?: string[]): UnitDefinition =>
+      ({ ...FIXTURE, type, picker: { family, after: null, ...(alsoOnTabs ? { alsoOnTabs } : {}) } })
+    const familyTypes = (id: string) => (id === "pod" ? ["first", "second", "third"] : id === "refs" ? ["r1"] : [])
+    expect(unitTabSuperset([], familyTypes)).toEqual({})
+    expect(unitTabSuperset([shown("second", "pod")], familyTypes)).toEqual({})
+    expect(unitTabSuperset([{ ...FIXTURE, picker: null }], familyTypes)).toEqual({})
+    // Listed out of family order: sorted by it; two tabs at once; another family on the same tab.
+    expect(unitTabSuperset([shown("third", "pod", ["audio"]), shown("first", "pod", ["audio", "image"]), shown("r1", "refs", ["audio"])], familyTypes))
+      .toEqual({ audio: { pod: ["first", "third"], refs: ["r1"] }, image: { pod: ["first"] } })
+  })
+  it("TAB_SUPERSET merge: legacy itself with no unit row; a unit appended, then its family's members in family order", () => {
+    const familyTypes = (id: string) => (id === "pod" ? ["first", "second", "third"] : [])
+    const legacy = { audio: { pod: ["third"], own: ["other-family", "x"] }, video: { add: ["link", "text"] } }
+    expect(composeTabSuperset(legacy, {}, familyTypes)).toBe(legacy)
+    const merged = composeTabSuperset(legacy, { audio: { pod: ["first"], add: ["y"] }, image: { pod: ["second"] } }, familyTypes)
+    expect(merged).toEqual({ audio: { pod: ["first", "third"], own: ["other-family", "x"], add: ["y"] }, video: { add: ["link", "text"] }, image: { pod: ["second"] } })
+    expect(legacy.audio.pod).toEqual(["third"])
+    // A type from another family keeps its slot; the family's own members are re-sorted around it.
+    expect(composeTabSuperset({ audio: { pod: ["third", "text"] } }, { audio: { pod: ["first"] } }, familyTypes).audio?.pod).toEqual(["first", "text", "third"])
+    expect(() => composeTabSuperset(legacy, { audio: { pod: ["third"] } }, familyTypes)).toThrow(/exactly one place/)
   })
 })
 

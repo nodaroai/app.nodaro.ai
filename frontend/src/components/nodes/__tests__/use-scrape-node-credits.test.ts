@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/nodes/*-node.tsx frontend/src/nodes/*/{node,config}.tsx
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { readdirSync, readFileSync } from "node:fs"
@@ -10,6 +11,7 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({
 }))
 
 import { useScrapeNodeCredits } from "../use-scrape-node-credits"
+import { FRONTEND_SRC, unitComponentFiles } from "@/test-utils/unit-component-files"
 
 /**
  * A site crawl read "Run (50 CR)" on the node beside "Run This Node (55
@@ -66,15 +68,19 @@ describe("useScrapeNodeCredits", () => {
  * table instead, and nothing on the screen says the two differ.
  */
 describe("node cards never price their Run button from the static table", () => {
-  const dir = join(__dirname, "..")
-  const cards = readdirSync(dir).filter((f) => f.endsWith("-node.tsx"))
+  // The cards here and every node unit's canvas component (nodes/<type>/node.tsx), relative to frontend/src.
+  const cards = [
+    ...readdirSync(join(__dirname, "..")).filter((f) => f.endsWith("-node.tsx")).map((f) => `components/nodes/${f}`),
+    ...unitComponentFiles("node"),
+  ]
 
-  it("finds the node cards", () => {
+  it("finds the node cards, the units' included", () => {
     expect(cards.length).toBeGreaterThan(50)
+    expect(cards.filter((f) => f.startsWith("nodes/")).length).toBeGreaterThan(0)
   })
 
   it.each(cards)("%s", (file) => {
-    const source = readFileSync(join(dir, file), "utf8")
+    const source = readFileSync(join(FRONTEND_SRC, file), "utf8")
     expect(source).not.toMatch(/const\s+credits\s*=\s*estimateNodeCredits\(/)
   })
 })

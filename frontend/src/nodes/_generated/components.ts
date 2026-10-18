@@ -2,8 +2,12 @@
 // @registry frontend/src/nodes/*/node.tsx
 // @registry-exports components: UNIT_COMPONENTS
 import type { UnitNodeComponent } from "../kit"
+import { NodeComponent as unit_episode_chapters } from "../episode-chapters/node" // unit:episode-chapters
 import { NodeComponent as unit_remove_audio } from "../remove-audio/node" // unit:remove-audio
+import { NodeComponent as unit_tighten_episode } from "../tighten-episode/node" // unit:tighten-episode
 
 export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Object.assign(Object.create(null), {
+  "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

@@ -1,69 +1,32 @@
+// @registry-enumerates USE_CASE_BODIES carries every use-case node unit's body
 /**
  * The request bodies of the use-case routes (decided 2026-10-14): one schema
- * per type, sharing the lane fields every use-case route reads. REST, the MCP
- * loopback, the SDK, the editor and the backend engine all send these.
+ * per type, sharing the lane fields every use-case route reads (body-shapes.ts).
+ * REST, the MCP loopback, the SDK, the editor and the backend engine all send
+ * these. Each is its use-case node unit's `use-case.ts` (the "use-cases"
+ * aggregate).
  */
 import { z } from "zod"
-import { SPEAKER_VIEW_LAYOUT_SETTINGS, type UseCaseNodeType } from "@nodaro/render-rules"
-import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
-import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
-import { safeUrlSchema } from "../url-validator.js"
+import { USE_CASE_NODE_TYPES, type UseCaseNodeType } from "@nodaro/render-rules"
+import type { UnitUseCase } from "../../nodes/kit.js"
+import { UNIT_USE_CASES } from "../../nodes/_generated/use-cases.js"
 
-const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
+/**
+ * Every use-case type's body: each use-case unit's (its use-case.ts). A
+ * use-case type with none throws at load — the route factory would otherwise
+ * serve a type it cannot parse.
+ */
+export const USE_CASE_BODIES: { readonly [K in UseCaseNodeType]: z.ZodObject<z.ZodRawShape> } = (() => {
+  const out: Record<string, z.ZodObject<z.ZodRawShape>> = {}
+  for (const [type, u] of Object.entries(UNIT_USE_CASES)) out[type] = u.body
+  const missing = USE_CASE_NODE_TYPES.filter((t) => !Object.hasOwn(out, t))
+  if (missing.length) throw new Error(`USE_CASE_BODIES: no body for ${missing.join(", ")} (a use-case unit's use-case.ts)`)
+  return out as { readonly [K in UseCaseNodeType]: z.ZodObject<z.ZodRawShape> }
+})()
 
-/** Honoured on the internal lane only (the backend engine); ignored from any other caller. Then the usual job stamps. */
-export const usecaseLaneShape = {
-  componentDepth: z.number().int().min(0).max(5).optional(),
-  executingComponentIds: z.array(z.string()).max(10).optional(),
-  previewStopRule: z.boolean().optional(),
-  reviewerPresent: z.boolean().optional(),
-  billingContext: z.unknown().optional(),
-  userId: z.string().uuid().optional(),
-  workflowId: z.string().uuid().optional(),
-  nodeId: z.string().max(200).optional(),
-  mcp_client: z.string().max(200).optional(),
-} satisfies z.ZodRawShape
-
-/** The plan settings every use-case node has. */
-const planShape = {
-  planTier: z.enum(tuple(EDIT_PLAN_TIERS)).optional(),
-  instructions: z.string().max(4000).optional(),
-  styleGuide: z.string().max(4000).optional(),
-} satisfies z.ZodRawShape
-
-/** The recording. One in this phase; multicam arrives with the Cameras section. */
-const recording = { mediaUrls: z.array(safeUrlSchema).min(1).max(1) } satisfies z.ZodRawShape
-
-export const tightenEpisodeBody = z.object({
-  ...recording,
-  musicUrl: safeUrlSchema.optional(),
-  output: z.enum(["video", "audio"]).optional(),
-  /**
-   * Frame the episode with Speaker View: an output aspect and a layout, on
-   * automatic boxes over the speakers on screen. null/absent = no framing. A
-   * layout the aspect does not draw is snapped by the settings resolver, as
-   * the render would snap it.
-   */
-  framing: z
-    .object({ aspect: z.enum(tuple(EDL_TARGET_ASPECTS)), layout: z.enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS)) })
-    .nullable()
-    .optional(),
-  captions: z.boolean().optional(),
-  captionStyle: z.enum(tuple(ALL_CAPTION_STYLES)).optional(),
-  reviewBeforeRender: z.boolean().optional(),
-  ...planShape,
-  musicDuckAmount: z.number().min(0).max(100).optional(),
-  ...usecaseLaneShape,
-})
-export type TightenEpisodeBody = z.infer<typeof tightenEpisodeBody>
-
-/** Chapters: the recording and the plan's settings — nothing renders. */
-export const episodeChaptersBody = z.object({ ...recording, ...planShape, ...usecaseLaneShape })
-
-/** Every type's body; each use-case node adds its own. */
-export const USE_CASE_BODIES: { readonly [K in UseCaseNodeType]: z.ZodObject<z.ZodRawShape> } = {
-  "tighten-episode": tightenEpisodeBody,
-  "episode-chapters": episodeChaptersBody,
+/** A use-case unit's GET /v1/nodes input schema (its use-case.ts); undefined for any other type. */
+export function usecaseInputSchemaOf(type: string): UnitUseCase["inputSchema"] | undefined {
+  return Object.hasOwn(UNIT_USE_CASES, type) ? UNIT_USE_CASES[type]!.inputSchema : undefined
 }
 
 /**

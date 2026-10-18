@@ -17,16 +17,16 @@ vi.mock("@xyflow/react", () => ({
   useUpdateNodeInternals: vi.fn(() => () => {}),
   useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
 }))
-vi.mock("../base-node", () => ({
+vi.mock("@/components/nodes/base-node", () => ({
   BaseNode: ({ children }: any) => <div data-testid="base-node">{children}</div>,
 }))
-vi.mock("../handle-with-popover", () => ({
+vi.mock("@/components/nodes/handle-with-popover", () => ({
   HandleWithPopover: ({ handleId, type, label }: any) => <div data-testid={`pip-${type}-${handleId}`}>{label}</div>,
   HANDLE_COLORS: { video: "#000", audio: "#111" },
 }))
-vi.mock("../run-node-button", () => ({ RunNodeButton: () => null }))
-vi.mock("../editable-node-label", () => ({ EditableNodeLabel: () => null }))
-vi.mock("../node-job-progress", () => ({ NodeJobProgress: () => null }))
+vi.mock("@/components/nodes/run-node-button", () => ({ RunNodeButton: () => null }))
+vi.mock("@/components/nodes/editable-node-label", () => ({ EditableNodeLabel: () => null }))
+vi.mock("@/components/nodes/node-job-progress", () => ({ NodeJobProgress: () => null }))
 vi.mock("lucide-react", () => new Proxy({}, {
   get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined),
   has: () => true,
@@ -45,7 +45,7 @@ vi.mock("@/components/editor/workflow-editor/use-case-render-final-set", async (
 }))
 vi.mock("@/components/render/review-cut-button", () => ({ ReviewCutButton: () => null }))
 
-import { TightenEpisodeNode } from "../tighten-episode-node"
+import { NodeComponent as TightenEpisodeNode } from "../node"
 import { translate } from "@/lib/i18n"
 
 const t = (key: Parameters<typeof translate>[1]) => translate("en", key)

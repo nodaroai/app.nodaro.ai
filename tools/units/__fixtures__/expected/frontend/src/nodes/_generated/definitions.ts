@@ -2,17 +2,22 @@
 // @registry frontend/src/nodes/*/definition.generated.ts
 // @registry-exports definitions: UNIT_DEFINITIONS UnitNodeType UnitNodeData
 import type { UnitDefinition } from "../kit"
+import { definition as unit_fixture_case } from "../fixture-case/definition.generated" // unit:fixture-case
 import { definition as unit_fixture_echo } from "../fixture-echo/definition.generated" // unit:fixture-echo
+import type { FixtureCaseData as unit_fixture_case_data } from "../fixture-case/types" // unit:fixture-case
 import type { FixtureEchoData as unit_fixture_echo_data } from "../fixture-echo/types" // unit:fixture-echo
 
 export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
+  unit_fixture_case, // unit:fixture-case
   unit_fixture_echo, // unit:fixture-echo
 ]
 
 export type UnitNodeType =
   | never
+  | "fixture-case" // unit:fixture-case
   | "fixture-echo" // unit:fixture-echo
 
 export type UnitNodeData =
   | never
+  | unit_fixture_case_data // unit:fixture-case
   | unit_fixture_echo_data // unit:fixture-echo

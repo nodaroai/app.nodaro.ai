@@ -1,4 +1,5 @@
 // @vitest-environment node
+// @test-watches frontend/src/components/editor/** frontend/src/components/nodes/** frontend/src/nodes/*/{node,config}.tsx
 /**
  * Theme-surface guard — canvas + editor chrome must follow the theme.
  *
@@ -14,22 +15,26 @@
  * BY DESIGN — full-screen media editors where the dark surface makes the image
  * pop regardless of theme (Mask editor, FreeCut, Filerobot) — are allowlisted
  * explicitly, and the allowlist is verified so a stale entry is caught.
+ * Node units' canvas components and panels (frontend/src/nodes/<type>/
+ * {node,config}.tsx) are canvas chrome too and are scanned with them; keys
+ * are paths relative to frontend/src.
  *
  * Source-level, like handle-color-guard.test.ts.
  */
 import { describe, expect, it } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative, sep } from "node:path"
+import { FRONTEND_SRC, unitComponentFiles } from "@/test-utils/unit-component-files"
 
 const COMPONENTS_ROOT = join(__dirname, "..")
 const SCAN_DIRS = ["editor", "nodes"].map((d) => join(COMPONENTS_ROOT, d))
 
-/** Dark-by-design media editors: an intentionally dark surface in every theme. */
+/** Dark-by-design media editors: an intentionally dark surface in every theme (paths relative to frontend/src). */
 const DARK_BY_DESIGN: ReadonlySet<string> = new Set([
-  "editor/mask-painter-modal.tsx",
-  "editor/filerobot-editor-modal.tsx",
-  "editor/freecut-editor-modal.tsx",
-  "editor/freecut-import-picker.tsx",
+  "components/editor/mask-painter-modal.tsx",
+  "components/editor/filerobot-editor-modal.tsx",
+  "components/editor/freecut-editor-modal.tsx",
+  "components/editor/freecut-import-picker.tsx",
 ])
 
 // App chrome darks, plus the canvas palette's dark tokens (globals.css .dark:
@@ -52,7 +57,7 @@ function listSourceFiles(dir: string): string[] {
 }
 
 function relKey(p: string): string {
-  return relative(COMPONENTS_ROOT, p).split(sep).join("/")
+  return relative(FRONTEND_SRC, p).split(sep).join("/")
 }
 
 /** Bare (non-`dark:`) dark-hex surface classes in a file, deduped. */
@@ -65,11 +70,13 @@ function bareDarkClasses(src: string): string[] {
   return [...found]
 }
 
-const FILES = SCAN_DIRS.flatMap(listSourceFiles)
+const UNIT_FILES = [...unitComponentFiles("node"), ...unitComponentFiles("config")].map((rel) => join(FRONTEND_SRC, rel))
+const FILES = [...SCAN_DIRS.flatMap(listSourceFiles), ...UNIT_FILES]
 
 describe("theme-surface guard (canvas + editor chrome)", () => {
-  it("scanned a non-trivial number of component files (>= 150)", () => {
+  it("scanned a non-trivial number of component files (>= 150), the units' included", () => {
     expect(FILES.length).toBeGreaterThanOrEqual(150)
+    expect(UNIT_FILES.length).toBeGreaterThan(0)
   })
 
   it("no component paints a dark-palette hex on a surface without a dark: variant", () => {

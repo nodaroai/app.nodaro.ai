@@ -6,14 +6,13 @@
  * continuation compares (`hash`). Pure; no I/O.
  */
 import type { EditPlanTier } from "@nodaro/shared/edl"
+import { USE_CASE_NODE_TYPES, isUseCaseNodeType, type UseCaseNodeType } from "@nodaro/shared/nodes"
 import { ancestorsOf } from "./graph-walk"
 
-export const USE_CASE_NODE_TYPES = ["tighten-episode", "episode-chapters"] as const
-export type UseCaseNodeType = (typeof USE_CASE_NODE_TYPES)[number]
-
-export function isUseCaseNodeType(type: string | null | undefined): type is UseCaseNodeType {
-  return typeof type === "string" && (USE_CASE_NODE_TYPES as readonly string[]).includes(type)
-}
+// The use-case node types are @nodaro/shared's one list (hand-registered ∪ the
+// node units of execution.kind "use-case"); re-exported so every reader of
+// this package keeps its import.
+export { USE_CASE_NODE_TYPES, isUseCaseNodeType, type UseCaseNodeType }
 
 /**
  * The use-case type of a run, read from its job row: the type its input

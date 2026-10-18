@@ -2,8 +2,10 @@
 // @registry frontend/src/nodes/*/option.tsx
 // @registry-exports options: UNIT_OPTIONS
 import type { UnitOption } from "../kit"
+import { option as unit_fixture_case } from "../fixture-case/option" // unit:fixture-case
 import { option as unit_fixture_echo } from "../fixture-echo/option" // unit:fixture-echo
 
 export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(Object.create(null), {
+  "fixture-case": unit_fixture_case, // unit:fixture-case
   "fixture-echo": unit_fixture_echo, // unit:fixture-echo
 })

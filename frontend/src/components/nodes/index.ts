@@ -113,8 +113,6 @@ import { DescribeToPickerNode } from "./describe-to-picker-node";
 import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
-import { TightenEpisodeNode } from "./tighten-episode-node";
-import { EpisodeChaptersNode } from "./episode-chapters-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { CameraSwitchNode } from "./camera-switch-node";
 import { SpeakerViewNode } from "./speaker-view-node";
@@ -353,8 +351,6 @@ const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.Comp
   // Processing
   "combine-videos": CombineVideosNode,
   "apply-edl": ApplyEdlNode,
-  "tighten-episode": TightenEpisodeNode,
-  "episode-chapters": EpisodeChaptersNode,
   "edit-plan": EditPlanNode,
   "camera-switch": CameraSwitchNode,
   "speaker-view": SpeakerViewNode,

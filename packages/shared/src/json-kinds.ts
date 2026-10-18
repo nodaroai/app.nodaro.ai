@@ -29,6 +29,7 @@
  */
 import { RENDER_JSON_HANDLE, RENDER_NODE_TYPES, type RenderNodeDescriptor } from "./render-nodes.js"
 import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
+import { unitJsonPips } from "./unit-contract-compose.js"
 
 /** The two JSON shapes the platform's handle vocabulary tells apart. */
 export type JsonKind = "transcript" | "edl"
@@ -46,8 +47,8 @@ interface JsonOutputs {
   readonly pips: Readonly<Record<string, JsonOutputDeclaration>>
 }
 
-/** JSON outputs of the nodes that are not renders: pip id → what it carries. */
-const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
+/** JSON outputs of the hand-written nodes that are not renders: pip id → what it carries. */
+const LEGACY_JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   // Edit Plan: the plan on `edl` — a Tighten EDL, a clip set (`Edl[]`) or a chapter list.
   "edit-plan": { primary: "edl", pips: { edl: "edl" } },
   // Transcribe: its json is the normalized Transcript (its `text` pip is plain text, no kind).
@@ -59,8 +60,6 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "speaker-frames": { primary: "tracks", pips: { tracks: "other" } },
   // Text to Dialogue: the Transcript built from the model's own word timings (its default read is the audio).
   "text-to-dialogue": { pips: { json: "transcript" } },
-  // Tighten Episode: its json is the plan's EDL (dropped[] included); its default read is the media.
-  "tighten-episode": { pips: { json: "edl" } },
 
   // ── JSON that is neither a Transcript nor an EDL (decided 2026-10-08) ──
   // Forced Alignment: `{ alignment: [{ word, start, end }] }` in seconds — a word list, not a Transcript.
@@ -71,8 +70,6 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   // Silence Detect: `{ version, ranges, durationMs }`. Audio Sync: `{ version, reference, offsets, notes }`.
   "silence-detect": { primary: "json", pips: { json: "other" } },
   "audio-sync": { primary: "json", pips: { json: "other" } },
-  // Chapters: a chapter list `{ startMs, title }[]`. Its default read is not JSON (no primary).
-  "episode-chapters": { pips: { json: "other" } },
   // Scrapers and searches: the scraped page / ad array / post list.
   "web-scrape": { primary: "json", pips: { json: "other" } },
   "meta-ads-scrape": { primary: "json", pips: { json: "other" } },
@@ -99,6 +96,27 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "ugc-clips": { primary: UGC_PRIMARY_HANDLE["ugc-clips"], pips: { clips: "other", "plan-out": "other" } },
   "ugc-cards": { primary: UGC_PRIMARY_HANDLE["ugc-cards"], pips: { layerPlan: "other", captionPlan: "other" } },
 })
+
+/**
+ * The JSON outputs of the nodes that are not renders: the hand-written table ∪
+ * the node units' `contract.jsonPips` rows (generated/unit-contracts.ts). A unit
+ * declares every one of its JSON pips (the validator's twin of the guard test)
+ * and has no `primary`: an edge with no `sourceHandle` from a unit reads no JSON.
+ */
+const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze(composeJsonOutputs(LEGACY_JSON_OUTPUT_KINDS, unitJsonPips()))
+
+/** `legacy` with each unit row added as `{ pips }`, refusing a type that is in both (throws at load). */
+function composeJsonOutputs(
+  legacy: Readonly<Record<string, JsonOutputs>>,
+  rows: ReadonlyArray<readonly [string, Readonly<Record<string, JsonOutputDeclaration>>]>,
+): Record<string, JsonOutputs> {
+  const out: Record<string, JsonOutputs> = { ...legacy }
+  for (const [type, pips] of rows) {
+    if (Object.hasOwn(out, type)) throw new Error(`JSON_OUTPUT_KINDS: ${type} is both a legacy entry and a node unit`)
+    out[type] = { pips }
+  }
+  return out
+}
 
 /** The input pips whose kind is fixed by the handle vocabulary. */
 const JSON_INPUT_KINDS: Readonly<Record<string, JsonKind>> = Object.freeze({

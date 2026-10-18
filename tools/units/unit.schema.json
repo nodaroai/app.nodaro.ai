@@ -97,6 +97,22 @@
               "items": {
                 "type": "string"
               }
+            },
+            "alsoOnTabs": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "image",
+                  "video",
+                  "audio",
+                  "models",
+                  "assets",
+                  "automate",
+                  "publish",
+                  "controls"
+                ]
+              },
+              "description": "Other picker tabs the node is also shown on (TAB_SUPERSET), besides its family's own tab."
             }
           }
         }
@@ -139,7 +155,8 @@
                 }
               },
               "field": {
-                "type": "string"
+                "type": "string",
+                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard)."
               }
             }
           }
@@ -185,6 +202,10 @@
               },
               "from": {
                 "type": "string"
+              },
+              "runtimeTyped": {
+                "const": true,
+                "description": "The medium is decided at run time (contract.producer \"dynamic\"): the pip gets no HANDLE_OUTPUT_TYPES row. Only on an audio/video/image output."
               }
             }
           }
@@ -206,7 +227,8 @@
             "source",
             "inline",
             "sync",
-            "worker"
+            "worker",
+            "use-case"
           ]
         },
         "queue": {
@@ -256,6 +278,10 @@
               "type": "string"
             }
           }
+        },
+        "builder": {
+          "type": "string",
+          "description": "execution.kind \"use-case\" only (required there): its graph builder's key in USE_CASE_SPECS (packages/render-rules/src/use-case-specs.ts). Unique across units."
         }
       }
     },
@@ -313,6 +339,37 @@
             "image",
             "dynamic"
           ]
+        },
+        "jsonPips": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "transcript",
+              "edl",
+              "other"
+            ]
+          },
+          "description": "What each JSON (kind \"look\") output carries: exactly the look output ids."
+        },
+        "nonPromptInputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Input handle ids that are never a prompt lane."
+        },
+        "reviewHold": {
+          "const": true,
+          "description": "execution.kind \"use-case\" only: a review-on run ends at a Preview that holds what follows."
+        },
+        "presents": {
+          "enum": [
+            "image",
+            "video",
+            "audio",
+            "text"
+          ],
+          "description": "How a published app shows the result, where the producer sets do not decide it."
         }
       },
       "description": "Published in @nodaro/shared: never a price, prompt or doctrine."

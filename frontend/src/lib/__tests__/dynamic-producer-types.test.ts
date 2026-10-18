@@ -1,10 +1,13 @@
 // @vitest-environment node
+// @test-watches frontend/src/nodes/*/unit.json tools/units/manifest.mjs
+import path from "node:path"
 import { describe, it, expect } from "vitest"
 import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { isValidGenerateImageConnection } from "../generate-image-handles"
 import { isValidGenerateVideoConnection } from "../generate-video-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "../ffmpeg-handles"
 import { isVisualPickerType } from "../parameter-picker-types"
+import { loadUnits } from "../../../../tools/units/manifest.mjs"
 
 /**
  * Regression net for the dynamic-producer escape hatch. The class of bug
@@ -21,7 +24,16 @@ import { isVisualPickerType } from "../parameter-picker-types"
 
 const DYNAMIC = Array.from(DYNAMIC_PRODUCER_TYPES)
 
+/** Node units that declare a runtime-typed output (unit.json contract.producer "dynamic"). */
+const DYNAMIC_UNITS = loadUnits(path.resolve(__dirname, "../../../.."))
+  .filter((u) => (u.manifest?.contract as { producer?: string } | undefined)?.producer === "dynamic")
+  .map((u) => u.type)
+
 describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
+  it("reads the node units' manifests (never vacuous while a dynamic unit exists)", () => {
+    expect(DYNAMIC_UNITS.length).toBeGreaterThan(0)
+  })
+
   it("contains the documented runtime-typed producers", () => {
     // Pinning the exact set so adding/removing a producer is a deliberate
     // change (forcing the next dev to update both this test AND the
@@ -49,10 +61,10 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       // its `json` handle (the remapped transcript) is classified via
       // JSON_PRODUCER_TYPES + VIDEO_OUTPUT_TYPES for getOutputType.
       "apply-edl",
-      // tighten-episode: the episode is video OR audio by its `output` setting
-      // (an audio recording forces audio) — its `json` handle (the plan) is
-      // classified via JSON_PRODUCER_TYPES + VIDEO_OUTPUT_TYPES, like apply-edl's.
-      "tighten-episode",
+      // Node units join through their manifest (contract.producer "dynamic"),
+      // e.g. Tighten Episode: the episode is video OR audio by its `output`
+      // setting (an audio recording forces audio).
+      ...DYNAMIC_UNITS,
     ]))
   })
 

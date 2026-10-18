@@ -20,7 +20,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { NON_PROMPT_TEXT_LANES, fanOutTextFeedsPrompt } from "@nodaro/shared/workflow"
-import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../../lib/node-handles.js"
 import { resolveNodeInputs } from "../input-resolver.js"
 import type { SimpleNode, SimpleEdge } from "../types.js"
 
@@ -44,13 +44,13 @@ function laneOf(nodeType: string, handle: string): { lane: Lane; key?: string } 
 }
 
 describe("NON_PROMPT_TEXT_LANES matches the backend router", () => {
-  const pairs = Object.entries(NODE_HANDLES).flatMap(([nodeType, spec]) =>
+  const pairs = Object.entries(ALL_NODE_HANDLES).flatMap(([nodeType, spec]) =>
     spec.inputs.map((handle) => ({ nodeType, handle, ...laneOf(nodeType, handle) })),
   )
   const textLanes = pairs.filter((p) => p.lane !== "not-a-text-lane")
 
   it("probes a meaningful surface (the generated handle map is wired in)", () => {
-    expect(Object.keys(NODE_HANDLES).length).toBeGreaterThan(100)
+    expect(Object.keys(ALL_NODE_HANDLES).length).toBeGreaterThan(100)
     expect(textLanes.filter((p) => p.lane === "prompt").length).toBeGreaterThan(20)
     expect(textLanes.filter((p) => p.lane === "other-text").length).toBeGreaterThan(5)
   })

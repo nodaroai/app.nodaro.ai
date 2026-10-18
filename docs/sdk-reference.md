@@ -7306,15 +7306,16 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 type's route. Without it, `continueUseCase` first reads the job
 (`GET /v1/jobs/:id`) for the type the run records (`input_data.type`, else
 its `job_type`), then continues on that type's route. That read needs the
-`jobs:read` scope on a connected app's token. A token without it (`403
-insufficient_scope` naming `jobs:read`; any other refusal of the read is
-thrown) falls back to the Tighten Episode route — what every continuation used before
-there was a choice — so a token that could continue a run before still can.
-Pass `nodeType` to skip the read. A job that names no use-case type is sent
-to the Tighten Episode route too, which answers `not_found` for it. A version
-of the SDK from before Chapters knows only `"tighten-episode"`, so it continues
-a Chapters run on the Tighten Episode route, which answers `not_found`:
-upgrade to continue Chapters runs.
+`jobs:read` scope on a connected app's token. When the type cannot be read —
+a token without that scope (`403 insufficient_scope` naming `jobs:read`), or a
+job that records no use-case type — `continueUseCase` throws a `NodaroError`
+(`use_case_type_unknown`, 400) asking for `nodeType`, and nothing is posted: no
+route is guessed for the run. Any other refusal of the read is thrown as is.
+Pass `nodeType` to skip the read. A version of the SDK from before Chapters
+knows only `"tighten-episode"`, so it continues a Chapters run on the Tighten
+Episode route, which answers `not_found`: upgrade to continue Chapters runs.
+Earlier versions also continued on the Tighten Episode route whenever the type
+could not be read; this version throws instead.
 
 Answers a new job to poll, like `tightenEpisode`. A completed Render final does
 not block another Render final of the same preview with a changed edit (the

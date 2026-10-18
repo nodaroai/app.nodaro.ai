@@ -2,8 +2,10 @@
 // @registry frontend/src/nodes/*/config.tsx
 // @registry-exports configs: UNIT_CONFIGS
 import type { UnitConfigPanel } from "../exec-kit"
+import { ConfigPanel as unit_fixture_case } from "../fixture-case/config" // unit:fixture-case
 import { ConfigPanel as unit_fixture_echo } from "../fixture-echo/config" // unit:fixture-echo
 
 export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.assign(Object.create(null), {
+  "fixture-case": unit_fixture_case, // unit:fixture-case
   "fixture-echo": unit_fixture_echo, // unit:fixture-echo
 })

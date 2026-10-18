@@ -9,6 +9,7 @@ import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
 import { canonicalizeOverrideKeys } from "./exposed-field-keys.js"
 import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
 import { dropStaleVideoLinkFields } from "./video-link.js"
+import { composeUnitSet, unitsPresenting } from "./unit-contract-compose.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -130,18 +131,20 @@ const MEDIA_PRODUCING_TYPES = new Set([
   "video-depth",
 ])
 
-// Output type categorizations
-const IMAGE_OUTPUT_TYPES = new Set([
+// Output type categorizations — each the hand-written list ∪ the node units
+// that declare the same presentation (contract.presents, generated rows); a
+// type in both throws at load (composeUnitSet).
+const IMAGE_OUTPUT_TYPES = composeUnitSet("IMAGE_OUTPUT_TYPES", [
   "generate-image", "edit-image", "image-to-image",
   "upload-image",
-])
+], unitsPresenting("image"))
 
 /**
  * Video-output types NOT already declared by `VIDEO_PRODUCER_TYPES` — the two
  * are unioned in `getOutputType`, which is where the reading order (and the
  * reason the literal sets win) is documented.
  */
-const VIDEO_OUTPUT_TYPES = new Set([
+const VIDEO_OUTPUT_TYPES = composeUnitSet("VIDEO_OUTPUT_TYPES", [
   "image-to-video", "text-to-video", "video-to-video", "extend-video",
   "render-video", "video-composer", "after-effects", "lottie-overlay",
   "3d-title", "motion-graphics", "composite",
@@ -158,30 +161,24 @@ const VIDEO_OUTPUT_TYPES = new Set([
   // audio-only cut still plays in a video element). Asserted in
   // producer-types.test.ts.
   ...RENDER_NODE_TYPE_IDS,
-  // Tighten Episode: a published app shows the episode as media, never as data
-  // (it is not a render, so RENDER_NODE_TYPE_IDS does not bring it).
-  "tighten-episode",
-])
+], unitsPresenting("video"))
 
-const AUDIO_OUTPUT_TYPES = new Set([
+const AUDIO_OUTPUT_TYPES = composeUnitSet("AUDIO_OUTPUT_TYPES", [
   "text-to-speech", "generate-music", "text-to-audio",
   "text-to-dialogue", "voice-changer", "dubbing", "voice-remix",
   "voice-design", "mix-audio", "adjust-volume", "audio-fx", "pitch-tempo", "trim-audio",
   "audio-isolation",
   "audio-separation",
   "upload-audio",
-])
+], unitsPresenting("audio"))
 
-const TEXT_OUTPUT_TYPES = new Set([
+const TEXT_OUTPUT_TYPES = composeUnitSet("TEXT_OUTPUT_TYPES", [
   "generate-script", "ai-writer", "llm-chat", "transcribe", "image-to-text", "qa-check",
   "text-prompt",
   // UGC Cards' output card is its Notes: a run hands it on as the node's text
   // (`output.text`, `generatedText` on the canvas).
   "ugc-cards",
-  // Chapters: a published app shows its show notes (`output.text`), never the
-  // chapter list as data.
-  "episode-chapters",
-])
+], unitsPresenting("text"))
 
 // ---------------------------------------------------------------------------
 // Output type enum

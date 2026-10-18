@@ -2,8 +2,10 @@
 // @registry frontend/src/nodes/*/node.tsx
 // @registry-exports components: UNIT_COMPONENTS
 import type { UnitNodeComponent } from "../kit"
+import { NodeComponent as unit_fixture_case } from "../fixture-case/node" // unit:fixture-case
 import { NodeComponent as unit_fixture_echo } from "../fixture-echo/node" // unit:fixture-echo
 
 export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Object.assign(Object.create(null), {
+  "fixture-case": unit_fixture_case, // unit:fixture-case
   "fixture-echo": unit_fixture_echo, // unit:fixture-echo
 })
