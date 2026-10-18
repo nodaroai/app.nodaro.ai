@@ -59,7 +59,7 @@ export interface LanguageDefinition {
  * dropdown. English first as canonical default, then mainstream LTR
  * languages, then RTL languages last.
  */
-export const LANGUAGES: ReadonlyArray<LanguageDefinition> = [
+const LANGUAGE_TABLE = [
   { id: "en",    englishName: "English",              nativeName: "English",         shortCode: "EN",  dir: "ltr" },
   { id: "es",    englishName: "Spanish",              nativeName: "Español",         shortCode: "ES",  dir: "ltr" },
   { id: "fr",    englishName: "French",               nativeName: "Français",        shortCode: "FR",  dir: "ltr" },
@@ -72,7 +72,18 @@ export const LANGUAGES: ReadonlyArray<LanguageDefinition> = [
   { id: "zh-CN", englishName: "Chinese (Simplified)", nativeName: "简体中文",        shortCode: "ZH",  dir: "ltr" },
   { id: "he",    englishName: "Hebrew",               nativeName: "עברית",           shortCode: "HE",  dir: "rtl" },
   { id: "ar",    englishName: "Arabic",               nativeName: "العربية",         shortCode: "AR",  dir: "rtl" },
-] as const
+] as const satisfies ReadonlyArray<LanguageDefinition>
+
+export const LANGUAGES: ReadonlyArray<LanguageDefinition> = LANGUAGE_TABLE
+
+// Compile-time: the registry's ids are exactly the LocaleId union. `satisfies`
+// above rejects an id that is not a LocaleId; this rejects a LocaleId with no
+// LANGUAGES entry (the error names the missing ids). Types only: nothing is
+// emitted or exported.
+type LocaleIdsWithoutALanguage = Exclude<LocaleId, (typeof LANGUAGE_TABLE)[number]["id"]>
+type MustBeNever<T extends never> = T
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type EveryLocaleIdHasALanguage = MustBeNever<LocaleIdsWithoutALanguage>
 
 export const LOCALE_IDS: ReadonlyArray<LocaleId> = LANGUAGES.map((l) => l.id)
 export const NON_EN_LOCALE_IDS: ReadonlyArray<Exclude<LocaleId, "en">> = LANGUAGES
