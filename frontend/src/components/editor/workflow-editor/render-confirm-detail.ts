@@ -167,3 +167,40 @@ function heldAtFinal(
   const runsAtFinal = new Set(previewRunnable(executable, asFinal, edges).map((n) => n.id))
   return new Set(executable.filter((n) => !runsAtFinal.has(n.id)).map((n) => n.id))
 }
+
+/**
+ * What a continuation's confirm shows ("Continue from failed", "Finish review"):
+ * one line per node it runs, in graph order, each with an Apply EDL render's
+ * quality and its macro group; and `kept`, the executable nodes it hands on
+ * (`keptIds`: the nodes the run it continues completed), in graph order.
+ */
+export function continuationConfirmDetail(
+  lines: readonly RunCreditLine[],
+  keptIds: readonly string[],
+  allNodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+): Pick<RenderConfirmDetail, "lines" | "kept"> {
+  const { children, parents } = buildFeedMaps(allNodes as unknown as readonly FeedNode[], edges as unknown as readonly FeedEdge[])
+  const order = graphOrder(allNodes, children, parents)
+  const byOrder = (a: string, b: string) => (order.get(a) ?? 0) - (order.get(b) ?? 0)
+  const byId = new Map(allNodes.map((n) => [n.id, n]))
+  const runs = new Set(lines.map((l) => l.nodeId))
+  const shown: RunConfirmLine[] = [...lines]
+    .sort((a, b) => byOrder(a.nodeId, b.nodeId))
+    .map((line) => {
+      const node = byId.get(line.nodeId)
+      const quality = (node?.data as { quality?: unknown } | undefined)?.quality
+      return {
+        ...line,
+        ...(isRenderNodeType(node?.type) ? { renderQuality: quality === "proxy" ? ("proxy" as const) : ("final" as const) } : {}),
+        ...groupOf(node, allNodes),
+      }
+    })
+  const kept = [...new Set(keptIds)]
+    .filter((id) => !runs.has(id))
+    .map((id) => byId.get(id))
+    .filter((n): n is WorkflowNode => n !== undefined && isExecutableNode(n))
+    .sort((a, b) => byOrder(a.id, b.id))
+    .map(runNodeLabel)
+  return { lines: shown, kept }
+}

@@ -8,3 +8,11 @@ export interface TestAnnotations {
 export function parseAnnotations(source: string): TestAnnotations
 export function parseReads(source: string): { reads: string[]; readsNone: string | null }
 export function isScanner(source: string): boolean
+export interface RegistryAnnotations {
+  members: string[]
+  exports: { aggregate: string; names: string[] }[]
+  lookup: string | null
+  enumerates: string | null
+  unitsByName: string | null
+}
+export function parseRegistryAnnotations(source: string): RegistryAnnotations

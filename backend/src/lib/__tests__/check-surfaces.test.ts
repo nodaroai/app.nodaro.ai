@@ -345,6 +345,18 @@ describe("path rendering", () => {
     expect(renderExpr(expr("none"), scope)).toEqual([":p"])
   })
 
+  it("a parameter typed by a known finite type, with no value bound, takes every value of the type", () => {
+    const src = "const continuePathOf = (type: UseCaseNodeType) => `/v1/${type}/continue`\n" +
+      'const any = continuePathOf(input.nodeType)\nconst one = continuePathOf("b")\nconst plain = (t: string) => `/v1/${t}`\nconst untyped = plain(x)'
+    const sf = ts.createSourceFile("x.ts", src, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
+    const scope = moduleScope(sf, new Map(), new Map([["UseCaseNodeType", ["a", "b"]]]))
+    const expr = (name: string) => { const b = scope.lookup(name); if (!b || !("expr" in b)) throw new Error(name); return b.expr }
+    expect(renderExpr(expr("any"), scope)).toEqual(["/v1/a/continue", "/v1/b/continue"])
+    expect(renderExpr(expr("one"), scope)).toEqual(["/v1/b/continue"])
+    // Only a named, known type expands; anything else stays :p.
+    expect(renderExpr(expr("untyped"), scope)).toEqual(["/v1/:p"])
+  })
+
   it("turns an unknown interpolation into :p", () => {
     const { scope, expr } = scopeOf("const u = `/v1/jobs/${encodeURIComponent(id)}/status`")
     expect(renderExpr(expr("u"), scope)).toEqual(["/v1/jobs/:p/status"])

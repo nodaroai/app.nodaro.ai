@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest"
 import { RENDERED_OUTPUT_HANDLES } from "@nodaro/shared/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
+import { UNIT_NODE_DEFINITIONS } from "../unit-definitions"
 
 /**
  * Drift guard for the "stale NODE_DEFINITIONS.outputs" bug class — the
@@ -34,12 +35,18 @@ const DECLARED_WHILE_DRIFTING: Readonly<Record<string, readonly string[]>> = {}
 
 /**
  * Pips created at run time that the color registry cannot list: a `media`
- * pip whose kind (video / audio / image) is decided by the result.
+ * pip whose kind (video / audio / image) is decided by the result. A node
+ * unit's come from its manifest (`runtimeTyped: true` on the output).
  */
 const DYNAMIC_EXTRA_OUTPUTS: Readonly<Record<string, readonly string[]>> = {
   "apply-edl": ["media"],
-  "tighten-episode": ["media"],
   "social-media-format": ["media"],
+  ...Object.fromEntries(
+    UNIT_NODE_DEFINITIONS.flatMap((u) => {
+      const ids = u.handles.outputs.filter((o) => o.runtimeTyped).map((o) => o.id)
+      return ids.length ? [[u.type, ids]] : []
+    }),
+  ),
 }
 
 const sorted = (xs: readonly string[]) => [...xs].sort()

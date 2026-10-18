@@ -5,6 +5,7 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
+import { unitConnectionVerdict } from "./unit-connections"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS } from "@nodaro/shared/nodes"
 import { VIDEO_ONLY_PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { UGC_NODE_TYPES } from "@nodaro/shared/ugc"
@@ -696,7 +697,9 @@ export function getCompatibleNodes(
     const direct: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
-      if (!isValidFfmpegConnection(consumerNodeType, handleId, option.type)) continue
+      // A node unit is judged by its own declared inputs (unit-connections.ts),
+      // the same rule the canvas drop applies; a legacy ffmpeg node by its case.
+      if (!(unitConnectionVerdict(consumerNodeType, handleId, option.type) ?? isValidFfmpegConnection(consumerNodeType, handleId, option.type))) continue
       direct.push(option)
       directTypes.add(option.type)
     }

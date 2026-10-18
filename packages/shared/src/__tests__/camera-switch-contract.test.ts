@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, cameraSwitchEdlProblem,
-  cameraSwitchSettingsPayload, clampCameraSwitchSetting, cleanSpeakerNames, defaultSpeakerMap, transcriptSpeakerLabels,
+  cameraSwitchSettingsPayload, cameraSwitchSpeakerMap, clampCameraSwitchSetting, cleanSpeakerNames, defaultSpeakerMap, transcriptSpeakerLabels,
 } from "../camera-switch-contract.js"
 
 // camera-switch (B5, decided 2026-10-03): the shared reads every caller makes.
@@ -104,5 +104,37 @@ describe("cameraSwitchSettingsPayload — one funnel for both engines", () => {
       minShotMs: 500,
       leadMs: 300,
     })
+  })
+})
+
+describe("the wired Speaker Map (decided 2026-10-17)", () => {
+  const edl = { version: 1, clock: "master", sources: [{ id: "a", url: "u", kind: "video" }, { id: "b", url: "u", kind: "video" }, { id: "w", url: "u", kind: "video", role: "wide" }], segments: [{ id: "s", inMs: 0, outMs: 1000, video: "a" }] }
+  const transcript = { words: [{ text: "x", startMs: 0, endMs: 100, speaker: "s0" }, { text: "y", startMs: 200, endMs: 300, speaker: "s1" }, { text: "z", startMs: 400, endMs: 500, speaker: "s2" }] }
+  const wired = { version: 1, speakerMap: { s0: "b", s1: "" }, confidence: {}, notes: [] }
+  it("a wired map beats the order default; its \"\" is sent as \"\" (the wide shot); an unmapped speaker keeps the default", () => {
+    // s2 (a third voice, past the two close-ups) stays unmapped, as defaultSpeakerMap leaves a speaker past the last camera
+    expect(cameraSwitchSettingsPayload({}, edl, transcript, { speakerMap: wired }).speakerMap).toEqual({ s0: "b", s1: "" })
+  })
+  it("the ordinal override beats the wired map; an explicit label beats both", () => {
+    expect(cameraSwitchSettingsPayload({ speakerMapByOrder: { "1": "a" } }, edl, transcript, { speakerMap: wired }).speakerMap).toMatchObject({ s0: "a", s1: "" })
+    expect(cameraSwitchSettingsPayload({ speakerMap: { s0: "" }, speakerMapByOrder: { "1": "a" } }, edl, transcript, { speakerMap: wired }).speakerMap).toMatchObject({ s0: "" })
+  })
+  it("an explicit entry that is not a string is ignored: it never hides the layers below it", () => {
+    const bad = { s0: null, s1: 7 } as unknown as Record<string, string>
+    expect(cameraSwitchSettingsPayload({ speakerMap: bad }, edl, transcript, { speakerMap: wired }).speakerMap).toEqual({ s0: "b", s1: "" })
+    expect(cameraSwitchSettingsPayload({ speakerMap: bad }, edl, transcript).speakerMap).toEqual({ s0: "a", s1: "b" })
+  })
+  it("the payload sends exactly the one merge (cameraSwitchSpeakerMap) the config panel shows", () => {
+    const cases = [
+      [{}, undefined],
+      [{}, { speakerMap: wired }],
+      [{ speakerMapByOrder: { "3": "a" } }, { speakerMap: wired }],
+      [{ speakerMap: { s2: "w" }, speakerMapByOrder: { "1": "" } }, { speakerMap: JSON.stringify(wired) }],
+    ] as const
+    for (const [data, w] of cases) expect(cameraSwitchSettingsPayload(data, edl, transcript, w).speakerMap).toEqual(cameraSwitchSpeakerMap(data, edl, transcript, w))
+  })
+  it("nothing wired and no ordinal: exactly today's payload", () => {
+    expect(cameraSwitchSettingsPayload({}, edl, transcript)).toEqual(cameraSwitchSettingsPayload({}, edl, transcript, {}))
+    expect(cameraSwitchSettingsPayload({}, edl, transcript).speakerMap).toEqual({ s0: "a", s1: "b" })
   })
 })

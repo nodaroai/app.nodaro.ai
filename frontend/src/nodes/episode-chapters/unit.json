@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "episode-chapters",
+  "label": "Chapters",
+  "category": "processing",
+  "position": { "after": "tighten-episode" },
+  "picker": {
+    "family": "video-podcast",
+    "after": "tighten-episode",
+    "pickerCategory": "Processing",
+    "keywords": ["podcast", "chapters", "show notes", "timestamps", "episode", "youtube chapters", "one step"],
+    "alsoOnTabs": ["audio"]
+  },
+  "handles": {
+    "inputs": [{ "id": "media", "label": "Recording", "accepts": ["video", "audio"] }],
+    "outputs": [
+      { "id": "text", "label": "Show notes", "kind": "text" },
+      { "id": "json", "label": "Chapters (JSON)", "kind": "look" }
+    ]
+  },
+  "defaultData": { "label": "Chapters", "planTier": "economy", "instructions": "", "styleGuide": "", "fieldMappings": {}, "executionStatus": "idle" },
+  "execution": { "kind": "use-case", "builder": "chapters" },
+  "capabilities": ["panel:generate-button", "edition:nodaro-exclusive"],
+  "registry": {
+    "description": "List a podcast's chapters in one step: transcribes the recording and finds its chapters, with titles and start times, ready for show notes. Video or audio. Its steps are priced at their own rates, plus a per-run fee.",
+    "outputType": "text"
+  },
+  "contract": { "jsonPips": { "json": "other" }, "presents": "text" },
+  "docs": { "page": "docs/nodes/processing-video/episode-chapters.md", "index": "hand-written" }
+}

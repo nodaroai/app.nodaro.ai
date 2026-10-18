@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { COMPOSER_PLAN_FIELDS } from "@nodaro/shared/models"
+import type { CameraSwitchNodeSettings } from "@nodaro/shared/edl"
 import { NODE_DATA_FIELDS, RUN_INPUT_COPY_KEYS, nodeSettingKeys } from "@nodaro/render-rules"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
@@ -47,6 +48,13 @@ describe("every node type's settings are declared", () => {
       expect(nodeSettingKeys(d.type).has("label"), d.type).toBe(true)
       expect(nodeSettingKeys(d.type).has("fieldMappings"), d.type).toBe(true)
     }
+  })
+
+  it("every key Camera Switch's shared payload funnel reads is a setting (the server reads them through `cameraSwitchSettingsPayload`, which the executor-reads guard cannot see)", () => {
+    // `satisfies` makes a key added to CameraSwitchNodeSettings fail to compile until it is listed here.
+    const funnelKeys = { speakerMap: true, speakerMapByOrder: true, speakerNames: true, minShotMs: true, leadMs: true, maxShotMs: true, wideEvery: true, layoutHints: true } satisfies Record<keyof CameraSwitchNodeSettings, true>
+    expect(Object.keys(funnelKeys).filter((key) => !nodeSettingKeys("camera-switch").has(key))).toEqual([])
+    expect(nodeSettingKeys("camera-switch").has("speakerMapByOrder")).toBe(true)
   })
 
   it("every composer plan is rebuilt from the node's input and goes, or is a document the person authors, kept with its reason", () => {

@@ -29,7 +29,7 @@ export interface ImageCriticGlobalStyle {
 /**
  * Shared implementation for character and location image critics. Each
  * wrapper module passes its own systemPrompt + task + schema. The behavior
- * (Sonnet 4.6 vision, URL-source image, temp 0.2, maxRetries 1) is uniform
+ * (Sonnet 5.5 vision, URL-source image, maxRetries 1) is uniform
  * across image-level critics in Phase 1D.2c-a.
  */
 export interface RunImageCriticArgs<TVerdict> {
@@ -71,7 +71,7 @@ export async function runImageCritic<TVerdict>(
     userId: args.userId,
     role: "critic",
     task: args.task,
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt: args.systemPrompt,
     userPrompt,

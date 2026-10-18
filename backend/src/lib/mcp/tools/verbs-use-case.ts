@@ -20,17 +20,18 @@ import { z } from "zod"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import {
-  EPISODE_CHAPTERS,
   EPISODE_CHAPTERS_DEFAULTS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
-  TIGHTEN_EPISODE,
   TIGHTEN_EPISODE_DEFAULTS,
   USE_CASE_NODE_TYPES,
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseFeeCreditId,
   usecaseResultIsText,
+  usecaseRowOf,
   usecaseRunType,
+  usecaseTypeOfBuilder,
+  type UseCaseBuilderKey,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { hasCredits } from "../../config.js"
@@ -46,8 +47,8 @@ import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiM
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
 const D = TIGHTEN_EPISODE_DEFAULTS
-const TIGHTEN = usecaseDescriptor(TIGHTEN_EPISODE)
-const CHAPTERS = usecaseDescriptor(EPISODE_CHAPTERS)
+/** What each use-case verb's registration takes. */
+type RegisterCtx = RegisterOpts
 
 /** A type's run price, as a description states it — the fee read from the static table, never typed. */
 function priceSentence(type: UseCaseNodeType): string {
@@ -137,6 +138,12 @@ function refusalText(statusCode: number, body: string): string | null {
   return `Nodaro rejected the request (409 ${code}): ${message}${next}`
 }
 
+/** Each use-case node's own verb, by its graph builder (a USE_CASE_SPECS key) — never by its type id. */
+const REGISTER_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, (ctx: RegisterCtx) => void>> = {
+  tighten: registerTightenEpisode,
+  chapters: registerMakeChapters,
+}
+
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
   // A deployment that does not offer a node lists no tool for it (the routes
@@ -144,8 +151,14 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
   const offered = USE_CASE_NODE_TYPES.filter((type) => !isNodeDenied(type, USER_VIEWER))
   if (offered.length === 0) return
 
-  if (offered.includes(TIGHTEN_EPISODE)) registerTightenEpisode({ server, session, fastify })
-  if (offered.includes(EPISODE_CHAPTERS)) registerMakeChapters({ server, session, fastify })
+  // Each offered node's own verb, found by its graph builder, in USE_CASE_NODE_TYPES order.
+  for (const type of offered) {
+    const builder = usecaseRowOf(type).builder
+    const register: ((ctx: RegisterCtx) => void) | undefined = REGISTER_BY_BUILDER[builder as UseCaseBuilderKey]
+    // Typecheck holds the table total over USE_CASE_SPECS; this names the gap when a built package is ahead of it.
+    if (!register) throw new Error(`use-case node "${type}": builder "${builder}" has no MCP verb in REGISTER_BY_BUILDER (lib/mcp/tools/verbs-use-case.ts)`)
+    register({ server, session, fastify })
+  }
 
   server.registerTool(
     "continue_use_case",
@@ -200,7 +213,8 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
   )
 }
 
-function registerTightenEpisode({ server, session, fastify }: RegisterOpts): void {
+function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void {
+  const TIGHTEN = usecaseDescriptor(usecaseTypeOfBuilder("tighten"))
   server.registerTool(
     "tighten_episode",
     {
@@ -214,7 +228,7 @@ function registerTightenEpisode({ server, session, fastify }: RegisterOpts): voi
         "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish — " +
         "finished steps are kept and not charged again. Returns a job id: the episode is the job result " +
         "(`output_data.videoUrl` or `audioUrl`), the edit is `output_data.json`." +
-        priceSentence(TIGHTEN_EPISODE),
+        priceSentence(usecaseTypeOfBuilder("tighten")),
       inputSchema: {
         media_url: z.string().url().describe("The recording (video or audio URL)."),
         music_url: z.string().url().optional().describe("Optional music bed, ducked under the voice and ending with the episode."),
@@ -277,7 +291,8 @@ function registerTightenEpisode({ server, session, fastify }: RegisterOpts): voi
   )
 }
 
-function registerMakeChapters({ server, session, fastify }: RegisterOpts): void {
+function registerMakeChapters({ server, session, fastify }: RegisterCtx): void {
+  const CHAPTERS = usecaseDescriptor(usecaseTypeOfBuilder("chapters"))
   server.registerTool(
     "make_chapters",
     {
@@ -288,7 +303,7 @@ function registerMakeChapters({ server, session, fastify }: RegisterOpts): void 
         "`output_data.text` (one line per chapter, `0:00 Title`; once a chapter starts at 1:00:00 or later, every line is `H:MM:SS`), " +
         "the list itself is `output_data.json` (`[{ startMs, title }]`, the same rows; the first starts at 0). A run that finds no chapters fails, and its fee is refunded. " +
         "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish." +
-        priceSentence(EPISODE_CHAPTERS),
+        priceSentence(usecaseTypeOfBuilder("chapters")),
       inputSchema: {
         media_url: z.string().url().describe("The recording (video or audio URL)."),
         plan_tier: z

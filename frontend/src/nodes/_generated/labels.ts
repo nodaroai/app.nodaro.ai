@@ -2,8 +2,12 @@
 // @registry frontend/src/nodes/*/labels.generated.ts
 // @registry-exports labels: UNIT_LABELS
 import type { UnitLabels } from "../kit"
+import { labels as unit_episode_chapters } from "../episode-chapters/labels.generated" // unit:episode-chapters
 import { labels as unit_remove_audio } from "../remove-audio/labels.generated" // unit:remove-audio
+import { labels as unit_tighten_episode } from "../tighten-episode/labels.generated" // unit:tighten-episode
 
 export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(Object.create(null), {
+  "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

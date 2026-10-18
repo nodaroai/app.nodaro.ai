@@ -6,7 +6,9 @@ import path from "node:path"
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
 import { loadUnits } from "../../../tools/units/manifest.mjs"
-import { centralMentions, composerExportProblems, sideEffectProblems, unitStringProblems } from "../../../tools/units/structure.mjs"
+import { centralMentions, composerExportProblems, loadTimeRegistryReads, sideEffectProblems, unitStringProblems } from "../../../tools/units/structure.mjs"
+import { AGGREGATE_FILE, collectRegistries } from "../../../tools/test-select/registry.mjs"
+import { parseRegistryAnnotations } from "../../../tools/test-select/annotations.mjs"
 import { GEN_UNITS_OUTPUTS } from "../../../tools/units/gen.mjs"
 import { matchesAny } from "../../../tools/test-select/glob.mjs"
 import { isProductFile } from "../../../tools/structure/scanner.mjs"
@@ -106,6 +108,144 @@ describe("composers declare every export that reads their composed collection", 
     expect(check('export type { UnitNodeType } from "@/nodes/_generated/definitions"')).toEqual([])
     expect(check('export { type UnitNodeType } from "@/nodes/_generated/definitions"')).toEqual([])
     expect(check('export { other } from "@/lib/other"\nexport * from "@/lib/more"')).toEqual([])
+  })
+})
+
+describe("composers that read every unit while they load are enumerators (registry-composers.json foldsAtLoad)", () => {
+  type Entry = { exports?: Record<string, string[]>; foldsAtLoad?: string[] }
+  const composers = JSON.parse(read("tools/units/registry-composers.json")).composers as Record<string, Entry>
+  // Every name each registry is consumed through: the aggregates' own
+  // @registry-exports and the composers' `exports` — what the engine reads.
+  const aggregates = tracked.filter((p) => AGGREGATE_FILE.test(p))
+  const registries = collectRegistries([...aggregates, ...Object.keys(composers)].map((p) => ({ path: p, source: read(p) })), composers)
+  const namesById = registries.exportsById as Map<string, Set<string>>
+  // The modules that hold a registry's values: each aggregate, and each
+  // composer for the registries it exports — so a default, namespace or
+  // dynamic import of one is known.
+  const modules = new Map<string, Set<string>>([
+    ...[...registries.aggregates].map(([p, a]: [string, { id: string }]) => [p, new Set([a.id])] as [string, Set<string>]),
+    ...Object.entries(composers).filter(([, e]) => e.exports).map(([p, e]) => [p, new Set(Object.keys(e.exports ?? {}))] as [string, Set<string>]),
+  ])
+  const loadReads = (p: string, src = read(p), strict = false) => loadTimeRegistryReads(ts, p, src, namesById, { modules, strict })
+
+  it("the real composers: `foldsAtLoad` is exactly the registries they read at load (of those they export)", () => {
+    const problems = Object.entries(composers).flatMap(([p, e]) => {
+      const own = Object.keys(e.exports ?? {})
+      const declared = [...(e.foldsAtLoad ?? [])].sort()
+      const derived = loadReads(p).filter((id: string) => own.includes(id))
+      const out = []
+      for (const id of declared) if (!own.includes(id)) out.push(`${p}: foldsAtLoad names "${id}", which is not one of its \`exports\``)
+      for (const id of derived) if (!declared.includes(id)) out.push(`${p}: reads every unit of "${id}" while it loads — add it to foldsAtLoad (a test importing it fails when one unit breaks, so it is an enumerator, not a pass-through)`)
+      for (const id of declared) if (own.includes(id) && !derived.includes(id)) out.push(`${p}: foldsAtLoad names "${id}" but no longer reads it at load — remove it`)
+      return out
+    })
+    expect(problems).toEqual([])
+  })
+
+  it("the evidence cases stay folds (the derivation is not vacuous)", () => {
+    const folds = (p: string) => loadReads(p)
+    expect(folds("frontend/src/lib/node-options.tsx")).toContain("options")
+    expect(folds("frontend/src/types/nodes.ts")).toContain("definitions")
+    expect(folds("frontend/src/lib/i18n/labels.ts")).toContain("labels")
+    expect(folds("backend/src/lib/node-registry.ts")).toContain("registry")
+    expect(folds("frontend/src/components/editor/workflow-editor/execute-node.ts")).toEqual([])
+  })
+
+  // A module that folds a registry at load and declares @registry-lookup is
+  // forbidden here; the engine would still count it an enumerator (the
+  // fold wins — test-select-registry.test.mjs), so the combination fails safe.
+  it("a @registry-lookup module reads no registry while it loads (it answers for one given type only)", () => {
+    const lookups = products.filter((p) => !AGGREGATE_FILE.test(p)).map((p) => ({ p, src: read(p) })).filter(({ src }) => src.includes("@registry-lookup") && parseRegistryAnnotations(src).lookup)
+    expect(lookups.length).toBeGreaterThan(3)
+    const problems = lookups.flatMap(({ p, src }) => loadReads(p, src, true).map((id: string) => `${p}: declares @registry-lookup but reads every unit of "${id}" while it loads — declare @registry-enumerates instead`))
+    expect(problems).toEqual([])
+  })
+
+  describe("fixtures: loadTimeRegistryReads", () => {
+    const N = new Map([
+      ["options", new Set(["UNIT_OPTIONS", "NODE_OPTIONS", "NODE_FAMILIES"])],
+      ["definitions", new Set(["UNIT_DEFINITIONS", "UNIT_NODE_DEFINITIONS"])],
+      ["registry", new Set(["UNIT_NODE_DESCRIPTORS"])],
+      ["labels", new Set(["UNIT_LABELS"])],
+    ])
+    const M = new Map([
+      ["frontend/src/nodes/_generated/definitions.ts", new Set(["definitions"])],
+      ["frontend/src/lib/unit-definitions.ts", new Set(["definitions"])],
+      ["backend/src/lib/unit-descriptors.ts", new Set(["registry"])],
+    ])
+    const reads = (src: string, path = "frontend/src/lib/x.ts", strict = false) => loadTimeRegistryReads(ts, path, src, N, { modules: M, strict })
+    const bare = (src: string, path = "frontend/src/lib/x.ts") => loadTimeRegistryReads(ts, path, src, N)
+    it("a callback through a local function (node-options.tsx unitOption)", () => {
+      expect(reads([
+        'import { UNIT_OPTIONS } from "@/nodes/_generated/options"',
+        'import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"',
+        "function unitOption(u) { return { icon: UNIT_OPTIONS[u.type].icon } }",
+        "export const NODE_OPTIONS = composeNodeOptions(LEGACY, UNIT_NODE_DEFINITIONS, unitOption)",
+      ].join("\n"))).toEqual(["definitions", "options"])
+    })
+    it("a .map lambda calling a local helper (node-registry.ts)", () => {
+      expect(reads('import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"\nconst entry = (u) => ({ c: category(u) })\nexport const NODE_REGISTRY = place(LEGACY, UNIT_NODE_DESCRIPTORS.map((u) => entry(u)))\n')).toEqual(["registry"])
+    })
+    it("Object.values / new Map over the collection, a destructuring, an IIFE, a statement, a static member", () => {
+      expect(reads('import { UNIT_LABELS } from "@/nodes/_generated/labels"\nconst L = unitNodeLabels(Object.values(UNIT_LABELS))\n')).toEqual(["labels"])
+      expect(reads('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nconst BY_TYPE = new Map(UNIT_DEFINITIONS.map((d) => [d.type, d]))\n')).toEqual(["definitions"])
+      expect(reads('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nconst [first] = UNIT_DEFINITIONS\n')).toEqual(["definitions"])
+      expect(reads('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nconst n = (() => UNIT_DEFINITIONS.length)()\n')).toEqual(["definitions"])
+      expect(reads('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nfor (const d of UNIT_DEFINITIONS) check(d)\n')).toEqual(["definitions"])
+      expect(reads('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nexport class A { static all = UNIT_DEFINITIONS.length }\n')).toEqual(["definitions"])
+      expect(reads('import { UNIT_DEFINITIONS as U } from "@/nodes/_generated/definitions"\nexport const o = { all: [...U] }\n'), "renamed, inside a value of an object literal").toEqual(["definitions"])
+      expect(reads('import * as agg from "@/nodes/_generated/definitions"\nexport const n = agg.UNIT_DEFINITIONS.length\n'), "a namespace import of a known aggregate").toEqual(["definitions"])
+      expect(bare('import * as agg from "@/nodes/_generated/definitions"\nexport const n = Object.keys(agg).length\n'), "an aggregate it is not told about counts for every registry").toEqual(["definitions", "labels", "options", "registry"])
+    })
+    it("lazy reads, a bare alias, types, memo, and the composer's own export names read nothing at load", () => {
+      expect(reads('import { UNIT_OPTIONS } from "@/nodes/_generated/options"\nexport function get(t) { return UNIT_OPTIONS[t] }\nexport const run = (t) => UNIT_OPTIONS[t]\nexport const kit = { run(t) { return UNIT_OPTIONS[t] }, all: () => UNIT_OPTIONS }\nexport class K { all = UNIT_OPTIONS; m() { return UNIT_OPTIONS } }\n')).toEqual([])
+      expect(reads('import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nexport const UNIT_NODE_DEFINITIONS: ReadonlyArray<D> = UNIT_DEFINITIONS as ReadonlyArray<D>\nexport { UNIT_DEFINITIONS as ALL }\n')).toEqual([])
+      expect(reads('import type { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"\nexport const n: typeof UNIT_DEFINITIONS = []\n')).toEqual([])
+      expect(reads('import React, { memo } from "react"\nimport { UNIT_OPTIONS } from "@/nodes/_generated/options"\nfunction C() { return UNIT_OPTIONS.x }\nexport const N = memo(C)\nexport const F = React.forwardRef(() => UNIT_OPTIONS.y)\nexport const L = React.lazy(() => import("./c"))\n', "frontend/src/lib/x.tsx")).toEqual([])
+      expect(reads('import { UNIT_OPTIONS } from "@/nodes/_generated/options"\nconst inner = () => UNIT_OPTIONS\nexport function outer() { return inner() }\n'), "a reader reached only from a lazy function").toEqual([])
+      expect(reads("export const NODE_FAMILIES = [{ id: 1 }]\nexport const FAMILY_RANK = new Map(NODE_FAMILIES.map((f, i) => [f.id, i]))\n"), "its own names are not the units").toEqual([])
+      expect(reads("const x = { NODE_OPTIONS: 1 }\nexport const y = x.NODE_OPTIONS\n")).toEqual([])
+    })
+    it("memo / forwardRef / lazy: only React's, and only the FUNCTION arguments are stored unrun", () => {
+      expect(reads('import React from "react"\nimport { UNIT_OPTIONS } from "@/nodes/_generated/options"\nexport const C = React.memo(build(UNIT_OPTIONS))\n')).toEqual(["options"])
+      expect(reads('import { memo } from "react"\nimport { UNIT_OPTIONS } from "@/nodes/_generated/options"\nexport const C = memo(Base, () => UNIT_OPTIONS.x === 1)\nexport const D = memo(UNIT_OPTIONS.Comp)\n')).toEqual(["options"])
+      expect(reads('import { UNIT_OPTIONS } from "@/nodes/_generated/options"\nconst lazy = (xs) => xs\nexport const all = lazy(UNIT_OPTIONS.map((o) => o.icon))\n'), "a local `lazy` is any call").toEqual(["options"])
+      expect(reads('import { UNIT_OPTIONS } from "@/nodes/_generated/options"\nfunction C() { return UNIT_OPTIONS.x }\nexport const N = memo(C)\n'), "an unimported `memo` is any call: it may run C").toEqual(["options"])
+    })
+    it("namespace, default and dynamic imports of a module that holds the registry", () => {
+      expect(reads('import * as UD from "@/lib/unit-definitions"\nconst BY = new Map(UD.UNIT_NODE_DEFINITIONS.map((d) => [d.type, d]))\n')).toEqual(["definitions"])
+      expect(reads('import * as UD from "@/lib/unit-definitions"\nexport const all = Object.values(UD)\n'), "a bare namespace of a composer").toEqual(["definitions"])
+      expect(reads('import * as Any from "@/lib/anything"\nexport const n = Any.UNIT_NODE_DEFINITIONS.length\nexport const m = Any.other.length\n'), "any namespace, by name").toEqual(["definitions"])
+      expect(reads('import defs from "../nodes/_generated/definitions"\nexport const n = defs.length\n')).toEqual(["definitions"])
+      expect(reads('import descriptors from "./unit-descriptors.js"\nexport const n = descriptors.length\n', "backend/src/lib/x.ts")).toEqual(["registry"])
+      expect(reads('const { UNIT_NODE_DEFINITIONS: D } = await import("@/lib/unit-definitions")\n')).toEqual(["definitions"])
+      expect(reads('const m = await import("@/lib/unit-definitions")\nexport const n = m.UNIT_NODE_DEFINITIONS.length\n')).toEqual(["definitions"])
+      expect(reads('export const loaded = import("@/lib/unit-definitions").then((m) => check(m))\n')).toEqual(["definitions"])
+      expect(reads('export async function later() { return (await import("@/lib/unit-definitions")).UNIT_NODE_DEFINITIONS }\n'), "a dynamic import in a lazy function").toEqual([])
+      expect(reads('import React from "react"\nimport * as UD from "@/lib/unit-definitions"\nexport function f() { return UD.unitDefinitionOf("x") }\nexport const k = UD.unitDefinitionOf\n'), "a namespace's other member, named or read lazily").toEqual([])
+    })
+    it("a class constructed at load runs its constructor and instance fields", () => {
+      expect(reads('import { UNIT_LABELS as A } from "@/nodes/_generated/labels"\nexport const x = new (class { constructor() { fold(A) } })()\n')).toEqual(["labels"])
+      expect(reads('import { UNIT_LABELS as A } from "@/nodes/_generated/labels"\nexport const x = new (class { all = Object.keys(A) })()\n')).toEqual(["labels"])
+      expect(reads('import { UNIT_LABELS as A } from "@/nodes/_generated/labels"\nclass K { all = Object.keys(A) }\nexport const k = new K()\n')).toEqual(["labels"])
+      expect(reads('import { UNIT_LABELS as A } from "@/nodes/_generated/labels"\nexport class K { all = Object.keys(A); constructor() { fold(A) } }\nexport const C = class { m() { return A } }\n'), "defined, never constructed").toEqual([])
+    })
+    it("naming a function is not reading it; strict (the @registry-lookup guard) counts only a call or a read", () => {
+      const get = 'import { UNIT_OPTIONS } from "@/nodes/_generated/options"\nconst get = (t) => UNIT_OPTIONS[t]\n'
+      for (const src of ["export const API = { get }\n", "export const list = [get]\n", "export default { get }\n", "[get]\n", "export const t = typeof UNIT_OPTIONS\n", "export const g = get\n"]) {
+        expect(reads(get + src), src).toEqual([])
+        expect(reads(get + src, undefined, true), src).toEqual([])
+      }
+      expect(reads(get + 'registerResolver("x", get)\n'), "handed to a call, it may run now").toEqual(["options"])
+      expect(reads(get + 'registerResolver("x", get)\n', undefined, true), "strict: a reference handed over is not a read").toEqual([])
+      expect(reads(get + 'registerResolver("x", (t) => get(t))\n', undefined, true)).toEqual([])
+      expect(reads(get + 'export const all = TYPES.map(get)\n', undefined, true), "strict: an iterating method runs it").toEqual(["options"])
+      expect(reads(get + 'export const one = get("x")\n', undefined, true)).toEqual(["options"])
+      expect(reads(get + 'export const n = Object.keys(UNIT_OPTIONS).length\n', undefined, true), "strict: a value handed to a call is read").toEqual(["options"])
+    })
+    it("unparseable source counts as reading what it names", () => {
+      expect(reads('import { UNIT_LABELS } from "@/nodes/_generated/labels"\nexport const = (\n')).toEqual(["labels"])
+    })
   })
 })
 

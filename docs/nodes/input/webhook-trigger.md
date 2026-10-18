@@ -27,6 +27,8 @@ A trigger that is **wired to something** runs only the branch behind it — the 
 | Name | Text | Parameter name (matches JSON key in request body) |
 | Type | Select | Data type: text, imageUrl, videoUrl, audioUrl |
 
+A few top-level body keys are reserved for the platform's own run records and are dropped from the payload before the run starts: `appRun`, `appRenderFinal`, `continueFromFailed` and `runRoot`. Don't use them as parameter names. Keys nested inside other fields are kept.
+
 ### Generated Fields (Read-only)
 
 | Field | Description |

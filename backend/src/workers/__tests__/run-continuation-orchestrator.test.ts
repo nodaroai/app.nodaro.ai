@@ -314,7 +314,7 @@ describe("the run that finishes a Tighten Episode review hold, from the API", ()
   beforeEach(() => {
     mocks.workflows.set("wf-1", { ...graphWithT(), settings: {}, user_id: OWNER })
     mocks.executions.set("exec-h", {
-      id: "exec-h", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at,
+      id: "exec-h", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at, trigger_type: "manual",
       trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: false, reviewHolds: ["t"] } },
       node_states: {
         rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" }, completedAt: at, fromSavedData: true },
@@ -647,6 +647,8 @@ describe("continue-from-failed of a saved workflow's run", () => {
         workflow_id: "wf-1",
         status: "completed",
         started_at: at,
+        // The run route started it (lib/server-started-runs.ts): its stamp is the platform's.
+        trigger_type: "manual",
         trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: false } },
         node_states: {
           rec: { ...a.rec, seededFromExecution: "exec-0" },
@@ -690,6 +692,8 @@ describe("continue-from-failed of a saved workflow's run", () => {
       ["one that ran all it was left", { trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", all: true } } }, "continuation_not_found"],
       ["of another lineage", { trigger_data: { continueFromFailed: { from: "exec-9", root: "exec-9", all: false } } }, "continuation_not_found"],
       ["no continuation at all", { trigger_data: null }, "continuation_not_found"],
+      // Its stamp is a caller's on a run no stamp-writing lane started (lib/server-started-runs.ts).
+      ["a webhook's run carrying the same stamp", { trigger_type: "webhook" }, "continuation_not_found"],
     ]
     it.each(refusedHeads)("refuses a seed execution that is %s, before anything runs", async (_name, over, code) => {
       if (over === null) mocks.executions.delete("exec-b")
@@ -739,7 +743,7 @@ describe("continue-from-failed of a saved workflow's run", () => {
       mocks.workflows.set("wf-1", { ...branches(), settings: {}, user_id: OWNER })
       mocks.executions.set("exec-0", { id: "exec-0", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, node_states: statesOfA })
       mocks.executions.set("exec-b", {
-        id: "exec-b", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at, trigger_data: stamp, node_states: statesOfB(),
+        id: "exec-b", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at, trigger_type: "manual", trigger_data: stamp, node_states: statesOfB(),
       })
     })
 
@@ -776,7 +780,7 @@ describe("continue-from-failed of a saved workflow's run", () => {
 
     it("a narrow B that itself FAILED, continued: T (outside B) still resumes A's attempt", async () => {
       mocks.executions.set("exec-b", {
-        id: "exec-b", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, trigger_data: stamp,
+        id: "exec-b", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, trigger_type: "manual", trigger_data: stamp,
         node_states: { ...statesOfB(), g: { status: "failed", nodeType: "generate-image", jobId: "job-g-b", startedAt: at, completedAt: at, error: "again" } },
       })
       await processWorkflowExecution(job({ continueMode: "from-failed", continueFromExecutionId: "exec-b", nodeIds: ["rec", "t", "g"], inputOverrides: undefined }))
@@ -828,7 +832,7 @@ describe("continue-from-failed of a saved workflow's run", () => {
         new Set(["rec"]),
       )
       mocks.executions.set("exec-r", {
-        id: "exec-r", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at,
+        id: "exec-r", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at, trigger_type: "mcp",
         trigger_data: { continueFromFailed: { from: "exec-b", root: "exec-0", seededFrom: "exec-b", all: false, via: "subset" } },
         node_states: { ...Object.fromEntries(seedsOfR), rec: { status: "completed", output: { videoUrl: fixedUrl }, completedAt: at, fromSavedData: true } },
       })

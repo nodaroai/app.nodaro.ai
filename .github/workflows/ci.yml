@@ -888,34 +888,21 @@ jobs:
           FAILED_DIR: ${{ runner.temp }}/failed
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # failed-<p>.txt: failed again when re-run alone (or not re-run);
-          # failed-<p>.txt.flaky: passed alone — labelled, never forgiven;
-          # failed-<p>.txt.unknown: the re-run crashed without a report.
-          # One artifact per shard: failed-<p>-<shard>/failed-<p>.txt…
-          read_list() {
-            for f in "$FAILED_DIR"/failed-"$1"-*/failed-"$1".txt"${2:-}"; do
-              if [ -f "$f" ]; then cat "$f"; fi
-            done
-          }
-          FAILED_FRONTEND="$(read_list frontend)"
-          FAILED_BACKEND="$(read_list backend)"
-          FLAKY_FRONTEND="$(read_list frontend .flaky)"
-          FLAKY_BACKEND="$(read_list backend .flaky)"
-          UNKNOWN_FRONTEND="$(read_list frontend .unknown)"
-          UNKNOWN_BACKEND="$(read_list backend .unknown)"
+          # The three lists each failed shard uploads (failed-<p>.txt,
+          # .flaky, .unknown) are found at any depth: one matching artifact is
+          # extracted straight into $FAILED_DIR, several into a subdirectory
+          # each (tools/test-select/failed-lists.mjs).
           PREVIOUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$BEFORE&event=push&branch=dev&per_page=1" --jq '.workflow_runs[0].conclusion // "none"' || echo none)"
-          export FAILED_FRONTEND FAILED_BACKEND FLAKY_FRONTEND FLAKY_BACKEND UNKNOWN_FRONTEND UNKNOWN_BACKEND PREVIOUS
+          export PREVIOUS
           # commits/{sha}/pulls also lists OPEN PRs that contain the commit;
           # only the PR whose merge commit IS this commit produced it.
           PR="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq "[.[] | select(.merge_commit_sha == \"$GITHUB_SHA\")][0].number // empty" || true)"
           node --input-type=module -e '
             import { buildAttributionComment } from "./tools/test-select/attribution.mjs"
-            const split = (s) => (s ?? "").split("\n").filter(Boolean)
+            import { readFailedLists } from "./tools/test-select/failed-lists.mjs"
             process.stdout.write(buildAttributionComment({
               sha: process.env.GITHUB_SHA, before: process.env.BEFORE, runUrl: process.env.RUN_URL,
-              failed: { frontend: split(process.env.FAILED_FRONTEND), backend: split(process.env.FAILED_BACKEND) },
-              flaky: { frontend: split(process.env.FLAKY_FRONTEND), backend: split(process.env.FLAKY_BACKEND) },
-              unknown: { frontend: split(process.env.UNKNOWN_FRONTEND), backend: split(process.env.UNKNOWN_BACKEND) },
+              ...readFailedLists(process.env.FAILED_DIR),
               previousConclusion: process.env.PREVIOUS,
             }))' > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"

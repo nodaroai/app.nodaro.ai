@@ -238,3 +238,56 @@ describe("Render final on a Tighten Episode node", () => {
     expect(mockRunWorkflow).not.toHaveBeenCalled()
   })
 })
+
+// Fix round 2: a use-case Render final that starts nothing never wipes a
+// connected List's rows — cleared only once nothing before the save can stop
+// the run, put back by every way out that starts nothing.
+describe("a use-case Render final that starts nothing never wipes a List's rows", () => {
+  const ROWS = [["first"], ["second"]]
+  const LIST = n("list", "list", { columns: [{ id: "c1", name: "Posts", connectedSourceId: "post" }], rows: ROWS })
+  const rowsNow = () => {
+    let rows: unknown = ROWS
+    for (const [id, patch] of mockUpdateNodeData.mock.calls as [string, Record<string, unknown>][]) if (id === "list" && "rows" in patch) rows = patch.rows
+    return rows
+  }
+  const rowsTouched = () => mockUpdateNodeData.mock.calls.some(([id]) => id === "list")
+  beforeEach(() => {
+    mockNodes = [REC, T1, FMT, POST, LIST]
+  })
+
+  it("a run that starts clears them", async () => {
+    await run("final")
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    expect(rowsNow()).toEqual([[""]])
+  })
+
+  it("a refused save puts them back", async () => {
+    mockDirty = true
+    await run("final", makeCtx(), vi.fn().mockResolvedValue({ success: false }))
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(rowsTouched()).toBe(true)
+    expect(rowsNow()).toEqual(ROWS)
+  })
+
+  it("a request that fails puts them back and unmarks the nodes", async () => {
+    mockRunWorkflow.mockRejectedValue(new Error("network down"))
+    await run("final")
+    expect(mockToastError).toHaveBeenCalled()
+    expect(rowsNow()).toEqual(ROWS)
+    expect(mockMarkNodesStatus).toHaveBeenLastCalledWith(expect.any(Array), undefined)
+  })
+
+  it("a run already in progress puts them back", async () => {
+    mockRunWorkflow.mockRejectedValue(new MockAlreadyRunning("busy"))
+    await run("final")
+    expect(mockToastInfo).toHaveBeenCalledWith(expect.stringMatching(/run is in progress/))
+    expect(rowsNow()).toEqual(ROWS)
+  })
+
+  it("unsaved edits and no project: refused before the rows are touched", async () => {
+    mockDirty = true
+    await handleRenderFinal("t1", "final", makeCtx() as never, undefined, vi.fn(), vi.fn())
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(rowsTouched()).toBe(false)
+  })
+})

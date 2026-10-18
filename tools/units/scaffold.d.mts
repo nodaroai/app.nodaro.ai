@@ -4,7 +4,7 @@ import type { Unit, ValidationContext } from "./manifest.mjs"
 export interface ScaffoldOptions {
   type: string
   category: string
-  kind: "worker" | "sync" | "inline" | "source"
+  kind: "worker" | "sync" | "inline" | "source" | "use-case"
   label: string
   description: string
   after: string | null
@@ -13,6 +13,8 @@ export interface ScaffoldOptions {
   price: number | null
   /** The characterization operation it follows (null = first); undefined = none. */
   characterizeAfter?: string | null
+  /** use-case: its graph builder's key in USE_CASE_SPECS (packages/render-rules/src/use-case-specs.ts). */
+  builder?: string
 }
 export const USAGE: string
 export function parseScaffoldArgs(argv: string[]): { opts: Record<string, string | true>; errors: string[] }

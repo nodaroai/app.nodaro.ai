@@ -287,7 +287,7 @@ describe("Render final of an app run", () => {
     })
 
     it("the second Render final continues from the first final, and runs only the second render onward", async () => {
-      mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: firstFinalStates, trigger_data: stamp(RUN_EXEC) }]
+      mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: firstFinalStates, trigger_type: "app_run", trigger_data: stamp(RUN_EXEC) }]
       const res = await post({ renderNodeId: "cut2", reviewer: "app" })
       expect(res.statusCode).toBe(202)
       const job = mocks.queueAdd.mock.calls[0]![1]
@@ -302,7 +302,7 @@ describe("Render final of an app run", () => {
     })
 
     it("the render the first final finished made a Final there: it offers no second final", async () => {
-      mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: firstFinalStates, trigger_data: stamp(RUN_EXEC) }]
+      mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: firstFinalStates, trigger_type: "app_run", trigger_data: stamp(RUN_EXEC) }]
       const res = await post({ renderNodeId: "cut", reviewer: "app" })
       expect(res.statusCode).toBe(409)
       expect(res.json().error.code).toBe("render_final_not_preview")
@@ -313,8 +313,8 @@ describe("Render final of an app run", () => {
       const FAILED = "00000000-0000-4000-8000-000000000033"
       mocks.run = { ...mocks.run!, final_execution_id: FAILED }
       mocks.priorFinals = [
-        { id: FAILED, status: "failed", node_states: {}, trigger_data: stamp(FIRST) },
-        { id: FIRST, status: "completed", node_states: firstFinalStates, trigger_data: stamp(RUN_EXEC) },
+        { id: FAILED, status: "failed", node_states: {}, trigger_type: "app_run", trigger_data: stamp(FIRST) },
+        { id: FIRST, status: "completed", node_states: firstFinalStates, trigger_type: "app_run", trigger_data: stamp(RUN_EXEC) },
       ]
       const res = await post({ renderNodeId: "cut2", reviewer: "app" })
       expect(res.statusCode).toBe(202)
@@ -338,9 +338,10 @@ describe("Render final of an app run", () => {
             cut2: { status: "completed", output: { videoUrl: "https://r2/final2.mp4", quality: "final" } },
             hook: { status: "failed", error: "boom" },
           },
+          trigger_type: "app_run",
           trigger_data: stamp(FIRST),
         },
-        { id: FIRST, status: "completed", node_states: firstFinalStates, trigger_data: stamp(RUN_EXEC) },
+        { id: FIRST, status: "completed", node_states: firstFinalStates, trigger_type: "app_run", trigger_data: stamp(RUN_EXEC) },
       ]
       const res = await post({ renderNodeId: "cut2", reviewer: "app" })
       expect(res.statusCode).toBe(202)
@@ -365,7 +366,7 @@ describe("Render final of an app run", () => {
     })
 
     it("one render at a time: the chain's newest final still rendering refuses the next", async () => {
-      mocks.priorFinals = [{ id: FIRST, status: "running", node_states: {}, trigger_data: stamp(RUN_EXEC) }]
+      mocks.priorFinals = [{ id: FIRST, status: "running", node_states: {}, trigger_type: "app_run", trigger_data: stamp(RUN_EXEC) }]
       const res = await post({ renderNodeId: "cut2", reviewer: "app" })
       expect(res.statusCode).toBe(409)
       expect(res.json()).toMatchObject({ error: { code: "already_running" }, executionId: FIRST })
@@ -466,7 +467,7 @@ describe("Render final of an app run", () => {
     it("after a final of it failed, Render final again continues the same Preview (from the run's own execution)", async () => {
       const FAILED = "00000000-0000-4000-8000-000000000033"
       mocks.run = { ...mocks.run!, final_execution_id: FAILED }
-      mocks.priorFinals = [{ id: FAILED, status: "failed", node_states: {}, trigger_data: { appRenderFinal: { appRunId: RUN, appVersionId: VERSION, continuedFrom: RUN_EXEC } } }]
+      mocks.priorFinals = [{ id: FAILED, status: "failed", node_states: {}, trigger_type: "app_run", trigger_data: { appRenderFinal: { appRunId: RUN, appVersionId: VERSION, continuedFrom: RUN_EXEC } } }]
       const res = await post({ renderNodeId: "t1", reviewer: "app" })
       expect(res.statusCode).toBe(202)
       const job = mocks.queueAdd.mock.calls[0]![1]
@@ -487,7 +488,7 @@ describe("Render final of an app run", () => {
 
       beforeEach(() => {
         mocks.run = { ...mocks.run!, final_execution_id: FIRST }
-        mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: ucStates(seeded), trigger_data: stamp }]
+        mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: ucStates(seeded), trigger_type: "app_run", trigger_data: stamp }]
       })
 
       it("is followed back to the run that made it: that run's wrapper is continued, from the newest final", async () => {

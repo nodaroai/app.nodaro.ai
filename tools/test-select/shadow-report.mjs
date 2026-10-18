@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // tools/test-select/shadow-report.mjs
-// The evidence for flipping TEST_SELECT_ENFORCE=true: across the shadow-mode
-// CI runs of PRs into dev since a date, every selector miss (a failing test
-// file the selection would have skipped), the median share of each suite
-// the selector would have run (over every run, and over the runs it narrowed
-// only), and which cause sent the other runs full — each global trigger, a
-// removal, test data… with example PRs. A local, owner-run tool — not run in CI.
+// The selector's record across the CI runs of PRs into dev since a date. For
+// the shadow-mode runs: every selector miss (a failing test file the
+// selection would have skipped), the median share of each suite the selector
+// would have run (over every run, and over the runs it narrowed only), and
+// which cause sent the other runs full — each global trigger, a removal, test
+// data… with example PRs. For the enforced runs (TEST_SELECT_ENFORCE=true):
+// the audit of each merged PR through its merge commit's post-merge dev run
+// (enforced-audit.mjs). A local, owner-run tool — not run in CI.
 //   node tools/test-select/shadow-report.mjs --since 2026-10-13 [--repo owner/name] [--run <id>]…
 // --run limits the report to those runs (still listed from --since) — to re-check one run.
 // Needs an authenticated `gh` (GH_TOKEN works too).
@@ -17,6 +19,7 @@ import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
 import { matchesAny } from "./glob.mjs"
 import { GLOBAL_TRIGGERS, NOT_VERSION_ONLY, isGlobalTrigger } from "./select.mjs"
+import { JOBS, aggregateEnforced, baseNote, collectEnforcedAudits, overallClean, renderEnforced, selectLineFromLog, selectionFromArtifacts } from "./enforced-audit.mjs"
 
 const PROJECTS = ["frontend", "backend"]
 
@@ -97,7 +100,7 @@ export function aggregateShadow(runs, registryChecks = []) {
   let registryChecked = 0
   for (const run of runs) {
     for (const project of run.expected ?? []) {
-      if (!run.projects?.[project]) missing.push({ project, url: run.url, ...(run.baseUnknown && { baseUnknown: true }) })
+      if (!run.projects?.[project]) missing.push({ project, url: run.url, ...(run.baseUnknown && { baseUnknown: run.baseUnknown }) })
     }
     for (const project of PROJECTS) {
       const entry = run.projects?.[project]
@@ -179,16 +182,6 @@ export function aggregateShadow(runs, registryChecks = []) {
   }
 }
 
-// Why a miss stays a miss although its base was looked at (none: not looked at).
-function baseNote(base, file) {
-  if (!base) return {}
-  const at = base.sha ? ` ${base.sha.slice(0, 9)}` : ""
-  if (base.error) return { baseNote: `base${at} not checked: ${base.error}` }
-  if (base.flaky?.includes(file)) return { baseNote: `failed on the base${at}'s dev run too, but passed alone there (labelled flaky): ${base.url}` }
-  if (base.unknown?.includes(file)) return { baseNote: `failed on the base${at}'s dev run too; its re-run left no report: ${base.url}` }
-  return {}
-}
-
 // The base a pull_request job was tested on: actions/checkout logs the merge
 // commit it checked out as "HEAD is now at <short> Merge <head> into <base>".
 // For runs whose selection JSON predates its `base` field (cli.mjs).
@@ -249,21 +242,38 @@ export function shadowExpected({ base, hasArtifacts, expected }) {
 
 // GitHub's own transient errors (a 5xx) are retried, a few times, with a
 // pause: a report reads hundreds of runs over half an hour, and one 502 used to
-// end it with nothing printed. Any other failure is the caller's to judge.
+// end it with nothing printed. So is a response gh could not parse because it
+// was empty or cut off. gh then prints Go's "unexpected end of JSON input" or
+// "unexpected EOF", with no HTTP status. A call that still fails after the
+// retries is reported where it is used. Any other failure is the caller's to judge.
 export function withRetry(call, { tries = 4, pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
   for (let attempt = 1; ; attempt++) {
     try {
       return call()
     } catch (err) {
-      const transient = /HTTP 5\d\d/.test(`${err?.stderr ?? ""} ${err?.message ?? ""}`)
+      const transient = /HTTP 5\d\d|unexpected end of JSON input|unexpected EOF/.test(`${err?.stderr ?? ""} ${err?.message ?? ""}`)
       if (!transient || attempt >= tries) throw err
       pause(2000 * attempt)
     }
   }
 }
 
+// gh's stderr is piped, never inherited: a failing call that a caller handles
+// used to print gh's own message ("unexpected end of JSON input") above the
+// report with nothing saying which call or run it was. The error now carries
+// the call and gh's message, and the caller reports it.
+export function ghError(args, err) {
+  const said = String(err?.stderr ?? "").trim().split("\n").filter(Boolean).pop() || String(err?.message ?? err).split("\n")[0]
+  const what = args[0] === "api" ? `gh api ${args.slice(1).find((a) => !a.startsWith("-"))}` : `gh ${args.slice(0, 3).join(" ")}${args.includes("--name") ? ` --name ${args[args.indexOf("--name") + 1]}` : ""}`
+  return Object.assign(new Error(`${what}: ${said}`), { stderr: err?.stderr })
+}
+
 function gh(...args) {
-  return withRetry(() => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20 })).trim()
+  try {
+    return withRetry(() => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "pipe"] })).trim()
+  } catch (err) {
+    throw ghError(args, err)
+  }
 }
 
 // Missing → null; present but unreadable → throws, so the caller reports it.
@@ -272,8 +282,6 @@ function readJson(file) {
   try { text = readFileSync(file, "utf8") } catch { return null }
   try { return JSON.parse(text) } catch (err) { throw new Error(`${path.basename(file)}: ${String(err.message).split("\n")[0]}`) }
 }
-
-const JOBS = { frontend: "Frontend Tests", backend: "Backend Tests" }
 
 // Each test job runs in shards (decided 2026-10-14), each leaving its own
 // shadow-<project>-<shard> artifact; a run from before sharding left one
@@ -352,17 +360,21 @@ export function mergeShardEntries(allParts, expectedShards = []) {
 }
 
 // The base from the checkout log of one of the project's shard jobs that
-// finished — for runs whose selection JSON has no `base` yet. Null when none
-// can be read.
+// finished — for runs whose selection JSON has no `base` yet. { sha } or, when
+// none can be read, { error } saying why (each log that failed, and how).
 function baseFromJobLog(repo, jobs, project) {
+  const failures = []
   for (const [name, conclusion, jobId] of jobs) {
     if (!name.startsWith(JOBS[project]) || !["success", "failure"].includes(conclusion)) continue
     try {
       const sha = baseFromCheckoutLog(gh("api", `repos/${repo}/actions/jobs/${jobId}/logs`, "--allow-escape-sequences"))
-      if (sha) return sha
-    } catch { /* try the next shard */ }
+      if (sha) return { sha }
+      failures.push(`${name}: no checkout line in its log`)
+    } catch (err) {
+      failures.push(`${name}: ${String(err?.message ?? err).split("\n")[0]}`) // then try the next shard
+    }
   }
-  return null
+  return { error: `the commit the PR was tested on could not be found${failures.length ? ` (${failures.join("; ")})` : ""}` }
 }
 
 // Shadow mode is PRs into dev, so --since must not reach back before shadow
@@ -372,17 +384,45 @@ function collectRuns({ repo, since, only = [] }) {
     `repos/${repo}/actions/workflows/ci.yml/runs?event=pull_request&created=>=${since}&per_page=100`,
     "--jq", '.workflow_runs[] | [.id, .html_url, .head_sha, .head_branch, (.head_repository.full_name == .repository.full_name), ([.pull_requests[].base.ref] | join(",")), ([.pull_requests[].number | tostring] | join(","))] | @tsv')
   const pullsBySha = new Map() // one lookup per head sha
+  // Why a lookup failed, carried into whatever the failure leads to (a base
+  // counted unknown, an enforced run whose PR could not be found) — reported, never dropped.
+  const lookupErrors = new Map()
   const pullsFor = (sha) => {
     if (!pullsBySha.has(sha)) {
       let pulls = null
       try {
         pulls = JSON.parse(gh("api", `repos/${repo}/commits/${sha}/pulls?per_page=100`))
-      } catch { /* unknown → fails closed */ }
+        if (!Array.isArray(pulls)) lookupErrors.set(sha, `commits/${sha.slice(0, 9)}/pulls is not a list`)
+      } catch (err) {
+        lookupErrors.set(sha, String(err?.message ?? err).split("\n")[0]) // unknown → fails closed
+      }
       pullsBySha.set(sha, Array.isArray(pulls) ? pulls : null)
     }
     return pullsBySha.get(sha)
   }
+  const prsByBranch = new Map() // one lookup per branch
+  const prOfBranch = (branch) => {
+    if (!prsByBranch.has(branch)) {
+      let number = null
+      try {
+        const owner = repo.split("/")[0]
+        number = Number(gh("api", `repos/${repo}/pulls?head=${owner}:${encodeURIComponent(branch)}&base=dev&state=all&per_page=10`, "--jq", ".[0].number // empty")) || null
+      } catch (err) {
+        lookupErrors.set(`branch:${branch}`, String(err?.message ?? err).split("\n")[0]) // the run is reported as one whose PR could not be found
+      }
+      prsByBranch.set(branch, number)
+    }
+    return prsByBranch.get(branch)
+  }
   const dir = mkdtempSync(path.join(tmpdir(), "shadow-report-"))
+  // One failed-<project>[-<shard>] artifact of a dev run: its three lists
+  // (an absent list is empty — run-suite.sh writes all three, empty or not).
+  const readLists = (runId, name, project) => {
+    const out = path.join(dir, `dev-${runId}`, name)
+    gh("run", "download", runId, "--repo", repo, "--name", name, "--dir", out)
+    const list = (suffix) => { try { return readFileSync(path.join(out, `failed-${project}.txt${suffix}`), "utf8").split("\n").map((l) => l.trim()).filter(Boolean) } catch { return [] } }
+    return { failed: list(""), flaky: list(".flaky"), unknown: list(".unknown") }
+  }
   const failuresBySha = new Map() // one lookup per base commit and project
   const devFailures = (sha, project) => {
     const key = `${sha}\t${project}`
@@ -399,12 +439,7 @@ function collectRuns({ repo, since, only = [] }) {
         if (done?.conclusion === "failure") {
           done.artifacts = gh("api", `repos/${repo}/actions/runs/${done.id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n").filter(Boolean)
         }
-        result = baseFailures({ sha, project, devRuns, readLists: (name) => {
-          const out = path.join(dir, `base-${done.id}`, name)
-          gh("run", "download", done.id, "--repo", repo, "--name", name, "--dir", out)
-          const list = (suffix) => { try { return readFileSync(path.join(out, `failed-${project}.txt${suffix}`), "utf8").split("\n").map((l) => l.trim()).filter(Boolean) } catch { return [] } }
-          return { failed: list(""), flaky: list(".flaky"), unknown: list(".unknown") }
-        } })
+        result = baseFailures({ sha, project, devRuns, readLists: (name) => readLists(done.id, name, project) })
       } catch (err) {
         result = { sha, error: String(err?.message ?? err).split("\n")[0] }
       }
@@ -414,22 +449,27 @@ function collectRuns({ repo, since, only = [] }) {
   }
   const runs = []
   const registryChecks = []
+  // A registry-check that could not be read: reported, never skipped.
+  const registryErrors = []
+  // Enforced runs (TEST_SELECT_ENFORCE=true): audited through their PR's
+  // post-merge dev run (enforced-audit.mjs), never counted as missing shadow data.
+  const enforcedRuns = []
+  // Runs whose mode could not be told (no artifact, no readable Select line).
+  const unclassified = []
+  // Where every listed run went, so the counts add up to the listing.
+  const kinds = { shadow: 0, enforced: 0, "not into dev": 0, "no test job finished": 0, "mode unreadable": 0 }
+  const listedByHead = new Map()
   const listed = lines.split("\n").filter(Boolean).filter((l) => !only.length || only.includes(l.split("\t")[0]))
+  const why = (err) => String(err?.message ?? err).split("\n")[0]
   for (const line of listed) {
     const [id, url, headSha, headBranch, sameRepo, bases = "", numbers = ""] = line.split("\t")
-    const artifacts = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n")
-    const names = artifacts.filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
-    // An affected run (the main selector enforcing) checks the registry rule
-    // after it ran; the result rides in its selection artifact.
-    for (const name of artifacts.filter((n) => /^selection-(frontend|backend)(-\d+)?$/.test(n))) {
-      const project = name.match(/^selection-(frontend|backend)/)[1]
-      const out = path.join(dir, id, name)
-      try {
-        gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
-        const check = readJson(path.join(out, `registry-check-${project}.json`))
-        if (check) registryChecks.push({ project, url, check })
-      } catch { /* the selection artifact itself is the main report's concern */ }
+    const kind = (k) => {
+      kinds[k]++
+      if (!listedByHead.has(headSha)) listedByHead.set(headSha, [])
+      listedByHead.get(headSha).push({ id, kind: k })
     }
+    const artifacts = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n").filter(Boolean)
+    const names = artifacts.filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
     // A test job that finished (success or failure) in a shadow run must have
     // left shadow data; skipped (the Diff Gate) and cancelled (superseded)
     // jobs are not expected to.
@@ -439,17 +479,104 @@ function collectRuns({ repo, since, only = [] }) {
     const conclusions = Object.fromEntries(jobs.map(([name, conclusion]) => [name, conclusion]))
     const testSteps = Object.fromEntries(jobs.filter(([, , , step]) => step).map(([name, , , step]) => [name, step]))
     const { expected, expectedShards } = expectedFromJobs(conclusions, testSteps)
+    // the PR, for the report's examples and the enforced audit: listed while
+    // it is open, else through the commit's pulls — the PR whose head is this
+    // sha, else one into dev (an earlier push of a PR is no longer its head)
+    // — and, for a head that was force-pushed away (no PR lists the commit any
+    // more: run 39117277649 of #2305), the PR into dev from this run's branch
+    const prOf = () => {
+      const pulls = numbers ? null : pullsFor(headSha)
+      return Number(numbers.split(",").filter(Boolean)[0])
+        || pulls?.find((p) => p.head?.sha === headSha)?.number || pulls?.find((p) => p.base?.ref === "dev")?.number
+        || (sameRepo === "true" && headBranch ? prOfBranch(headBranch) : null) || null
+    }
+    const lookupErrorOf = () => [lookupErrors.get(headSha), lookupErrors.get(`branch:${headBranch}`)].filter(Boolean).join("; ") || null
+    // An enforced run (the main selector enforcing) uploads selection-<project>-<shard>
+    // only when its selection was `affected` (ci.yml); it also carries the
+    // registry rule's check of the run's own failures.
+    const selectionParts = { frontend: [], backend: [] }
+    for (const name of artifacts.filter((n) => /^selection-(frontend|backend)(-\d+)?$/.test(n))) {
+      const [, project, shardText] = name.match(/^selection-(frontend|backend)(?:-(\d+))?$/)
+      const part = { shard: shardText ? Number(shardText) : null }
+      selectionParts[project].push(part)
+      const out = path.join(dir, id, name)
+      try {
+        gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
+      } catch (err) {
+        part.error = `${name}: ${why(err)}`
+        registryErrors.push({ project, url, error: part.error })
+        continue
+      }
+      try {
+        const check = readJson(path.join(out, `registry-check-${project}.json`))
+        if (check) registryChecks.push({ project, url, check })
+      } catch (err) {
+        registryErrors.push({ project, url, error: `${name}: ${why(err)}` })
+      }
+      try {
+        part.selection = readJson(path.join(out, `selection-${project}.json`))
+        if (!part.selection) part.error = `${name}: selection-${project}.json missing from the artifact`
+      } catch (err) {
+        part.error = `${name}: ${why(err)}`
+      }
+    }
+    const hasSelection = Object.values(selectionParts).some((l) => l.length)
     // The base matters only for a run without shadow artifacts.
-    const base = names.length ? "dev"
+    const base = names.length || hasSelection ? "dev"
       : resolveBase({ listedBases: bases.split(",").filter(Boolean), headSha, headBranch, sameRepo: sameRepo === "true", pulls: expected.length ? pullsFor(headSha) : [] })
-    if (!shadowExpected({ base, hasArtifacts: names.length > 0, expected })) continue
+    if (!shadowExpected({ base, hasArtifacts: names.length > 0 || hasSelection, expected })) {
+      kind(base === "other" ? "not into dev" : "no test job finished")
+      continue
+    }
+    // No shadow artifact: an enforced run, or a shadow run that lost its data.
+    // Without a selection artifact either (an enforced selector that chose
+    // none or full uploads none), the Select line in the job log tells.
+    if (!names.length) {
+      const lineOf = {}
+      const unreadable = []
+      for (const project of expected) {
+        if (selectionParts[project].length) continue
+        for (const [name, conclusion, jobId, step] of jobs) {
+          if (!name.startsWith(`${JOBS[project]} (`) || !["success", "failure"].includes(conclusion) || step === "skipped") continue
+          try {
+            lineOf[project] = selectLineFromLog(gh("api", `repos/${repo}/actions/jobs/${jobId}/logs`, "--allow-escape-sequences"), project)
+            if (lineOf[project]) break
+            unreadable.push(`${name}: no Select line in its log`)
+          } catch (err) {
+            unreadable.push(`${name}: ${why(err)}`)
+          }
+        }
+      }
+      const lines = Object.values(lineOf).filter(Boolean)
+      const shadowLine = lines.some((l) => l.ci === "shadow")
+      const enforced = hasSelection || lines.some((l) => l.ci === "enforced")
+      if (enforced && !shadowLine) {
+        kind("enforced")
+        const projects = {}
+        for (const project of ["frontend", "backend"]) {
+          if (selectionParts[project].length) projects[project] = selectionFromArtifacts(project, selectionParts[project])
+          else if (lineOf[project]?.selection === "affected") projects[project] = { error: `the Select step chose affected, but no selection-${project} artifact was uploaded` }
+          else if (lineOf[project]) projects[project] = { status: lineOf[project].selection }
+          else if (expected.includes(project)) projects[project] = { error: `its selection could not be read (${unreadable.join("; ") || "no finished shard job"})` }
+          else projects[project] = { status: "untested", why: "no test job of it ran on the PR (the Diff Gate skipped it, or it did not finish)" }
+        }
+        const pr = prOf()
+        enforcedRuns.push({ id, url, headSha, pr, jobs, projects, ...(!pr && { prError: lookupErrorOf() }) })
+        continue
+      }
+      if (!shadowLine) {
+        kind("mode unreadable")
+        unclassified.push({ url, error: `no shadow or selection artifact, and the job logs do not say shadow or enforced (${unreadable.join("; ") || "no Select line"})` })
+        continue
+      }
+      // a shadow run without its shadow data: counted as missing below
+    }
     const parts = { frontend: [], backend: [] }
     for (const name of names) {
       const [, project, shardText] = name.match(/^shadow-(frontend|backend)(?:-(\d+))?$/)
       const part = { shard: shardText ? Number(shardText) : null }
       parts[project].push(part)
       const out = path.join(dir, id, name)
-      const why = (err) => String(err.message).split("\n")[0]
       try {
         gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
         part.shadow = readJson(path.join(out, `shadow-${project}.json`))
@@ -472,23 +599,64 @@ function collectRuns({ repo, since, only = [] }) {
       if (entry) projects[project] = entry
     }
     // every artifact came from an unfinished shard and no shard job finished: nothing to check
-    if (!Object.keys(projects).length && !expected.length) continue
+    if (!Object.keys(projects).length && !expected.length) { kind("no test job finished"); continue }
+    kind("shadow")
     // A miss is checked against the PR's base: did the same file fail on dev there?
     const testedOn = {}
     for (const [project, entry] of Object.entries(projects)) {
       if (!entry.shadow?.misses?.length) continue
-      const sha = entry.selection?.base ?? baseFromJobLog(repo, jobs, project)
-      testedOn[project] = sha ? devFailures(sha, project) : { error: "the commit the PR was tested on could not be found" }
+      const found = entry.selection?.base ? { sha: entry.selection.base } : baseFromJobLog(repo, jobs, project)
+      testedOn[project] = found.sha ? devFailures(found.sha, project) : { error: found.error }
     }
-    // the PR, for the report's examples: listed while it is open, else through
-    // the commit's pulls — the PR whose head is this sha, else one into dev
-    // (an earlier push of a PR is no longer its head)
-    const pulls = numbers ? null : pullsFor(headSha)
-    const pr = Number(numbers.split(",").filter(Boolean)[0])
-      || pulls?.find((p) => p.head?.sha === headSha)?.number || pulls?.find((p) => p.base?.ref === "dev")?.number || null
-    runs.push({ url, expected, projects, ...(pr && { pr }), ...(Object.keys(testedOn).length && { bases: testedOn }), ...(base === "unknown" && { baseUnknown: true }) })
+    const pr = prOf()
+    runs.push({ url, expected, projects, ...(pr && { pr }), ...(Object.keys(testedOn).length && { bases: testedOn }), ...(base === "unknown" && { baseUnknown: lookupErrorOf() ?? true }) })
   }
-  return { listed: listed.length, runs, registryChecks }
+  const enforced = collectEnforcedAudits({
+    repo, enforcedRuns, listedByHead, gh, readLists, devFailures,
+    baseFromJobLog: (jobs, project) => baseFromJobLog(repo, jobs, project),
+  })
+  return { listed: listed.length, kinds, runs, registryChecks, registryErrors, enforced: { prs: enforced.prs, unclassified: [...unclassified, ...enforced.unclassified] } }
+}
+
+// The printed report. kinds: where each listed run went (collectRuns), so
+// the listing is accounted for in full; enforced: aggregateEnforced.
+export function renderReport({ since, listed, kinds, report, enforced, registryErrors = [] }) {
+  const pct = (x) => (x === null ? "n/a" : `${(x * 100).toFixed(1)}%`)
+  const example = (e) => `${e.pr ? `#${e.pr}` : e.url}${e.file ? ` ${e.file}` : ""}`
+  const clean = overallClean(report, enforced)
+  return [
+    // both counts, so "no shadow runs" cannot pass for a broken listing
+    `PR runs listed since ${since}: ${listed} — ${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join(", ")}`,
+    `── Shadow runs (the full suite ran; the selector's choice was checked): ${report.runsChecked}`,
+    `Selector misses: ${report.misses.length}`,
+    ...report.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}${m.baseNote ? `  (${m.baseNote})` : ""}`),
+    `Inherited from dev (failed again on the PR's base commit's own dev run — not a miss, not blocking Clean): ${report.inherited.length}`,
+    ...report.inherited.map((m) => `  - ${m.project}: ${m.file}  ${m.url}  (base ${m.base.slice(0, 9)}: ${m.baseUrl})`),
+    `Unattributed failures (failed with no failing test file — possible misses): ${report.unattributed.length}`,
+    ...report.unattributed.map((u) => `  - ${u.project}: ${u.url}`),
+    `Selector crashes (the job fell back to a full run): ${report.crashed.length}`,
+    ...report.crashed.map((c) => `  - ${c.project}: ${c.error}  ${c.url}`),
+    `Missing shadow data (a shadow run's test job ran, no shadow artifact): ${report.missing.length}`,
+    ...report.missing.map((m) => `  - ${m.project}: ${m.url}${m.baseUnknown ? `  (PR base unknown${typeof m.baseUnknown === "string" ? `: ${m.baseUnknown}` : ""} — counted as missing)` : ""}`),
+    `Checks that could not run or be read: ${report.errors.length}`,
+    ...report.errors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
+    `Selections that could not be read (share unknown, result kept): ${report.selectionErrors.length}`,
+    ...report.selectionErrors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
+    `Median share the selector would have run — frontend: ${pct(report.medianShare.frontend)}, backend: ${pct(report.medianShare.backend)}`,
+    `Median share among narrowed runs only (did not go full) — frontend: ${pct(report.narrowed.medianShare.frontend)} of ${report.narrowed.runs.frontend} run(s), backend: ${pct(report.narrowed.medianShare.backend)} of ${report.narrowed.runs.backend} run(s)`,
+    `Runs that went full: ${report.full.runs} of ${report.runsChecked} — by the first trigger the selector found (a run counts once per cause; frontend/backend count project runs):`,
+    ...report.full.byCause.map((row) => `  - ${row.cause}: ${row.runs} run(s) of ${row.prs} PR(s) (frontend ${row.projects.frontend}, backend ${row.projects.backend}), e.g. ${row.examples.slice(0, 3).map(example).join("; ")}`),
+    ...renderEnforced(enforced),
+    clean
+      ? `Clean: across ${report.runsChecked} shadow run(s) and ${enforced.prs.audited} audited enforced PR(s), no miss, unattributed failure, selector crash, missing shadow data, unreadable check, or post-merge run still pending.`
+      : "Not clean.",
+    `Registry rule (TEST_SELECT_REGISTRY_RULE — in shadow its misses are reported here and never decide Clean; where it is enforced its selection is what ran, so its misses are selector misses and do): ${report.registry.checked} shadow/PR project run(s) where its selection differed, ${report.registry.misses.length} miss(es)`,
+    ...report.registry.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}`),
+    `  on enforced PRs' post-merge runs: ${enforced.registry.checked} project run(s) with the rule in shadow where its selection differed, ${enforced.registry.misses.length} miss(es); ${enforced.registry.enforced} with the rule enforced (its selection is what ran: its ${enforced.registry.enforcedMisses} miss(es) are the selector misses above)`,
+    ...enforced.registry.misses.map((m) => `  - ${m.project}: ${m.file}  #${m.pr} ${m.url}`),
+    `  registry checks that could not be read: ${registryErrors.length}`,
+    ...registryErrors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
+  ]
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -498,34 +666,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(2)
   }
   const repo = o.repo ?? gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-  const { listed, runs, registryChecks } = collectRuns({ repo, since: o.since, only: o.run ?? [] })
+  const { listed, kinds, runs, registryChecks, registryErrors, enforced } = collectRuns({ repo, since: o.since, only: o.run ?? [] })
   const report = aggregateShadow(runs, registryChecks)
-  const pct = (x) => (x === null ? "n/a" : `${(x * 100).toFixed(1)}%`)
-  const example = (e) => `${e.pr ? `#${e.pr}` : e.url}${e.file ? ` ${e.file}` : ""}`
-  const out = [
-    // both counts, so "no shadow runs" cannot pass for a broken listing
-    `PR runs listed since ${o.since}: ${listed}, shadow runs checked: ${report.runsChecked}`,
-    `Selector misses: ${report.misses.length}`,
-    ...report.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}${m.baseNote ? `  (${m.baseNote})` : ""}`),
-    `Inherited from dev (failed again on the PR's base commit's own dev run — not a miss, not blocking Clean): ${report.inherited.length}`,
-    ...report.inherited.map((m) => `  - ${m.project}: ${m.file}  ${m.url}  (base ${m.base.slice(0, 9)}: ${m.baseUrl})`),
-    `Unattributed failures (failed with no failing test file — possible misses): ${report.unattributed.length}`,
-    ...report.unattributed.map((u) => `  - ${u.project}: ${u.url}`),
-    `Selector crashes (the job fell back to a full run): ${report.crashed.length}`,
-    ...report.crashed.map((c) => `  - ${c.project}: ${c.error}  ${c.url}`),
-    `Missing shadow data (the test job ran, no shadow artifact): ${report.missing.length}`,
-    ...report.missing.map((m) => `  - ${m.project}: ${m.url}${m.baseUnknown ? "  (PR base unknown — counted as missing)" : ""}`),
-    `Checks that could not run or be read: ${report.errors.length}`,
-    ...report.errors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
-    `Selections that could not be read (share unknown, result kept): ${report.selectionErrors.length}`,
-    ...report.selectionErrors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
-    `Median share the selector would have run — frontend: ${pct(report.medianShare.frontend)}, backend: ${pct(report.medianShare.backend)}`,
-    `Median share among narrowed runs only (did not go full) — frontend: ${pct(report.narrowed.medianShare.frontend)} of ${report.narrowed.runs.frontend} run(s), backend: ${pct(report.narrowed.medianShare.backend)} of ${report.narrowed.runs.backend} run(s)`,
-    `Runs that went full: ${report.full.runs} of ${report.runsChecked} — by the first trigger the selector found (a run counts once per cause; frontend/backend count project runs):`,
-    ...report.full.byCause.map((row) => `  - ${row.cause}: ${row.runs} run(s) of ${row.prs} PR(s) (frontend ${row.projects.frontend}, backend ${row.projects.backend}), e.g. ${row.examples.slice(0, 3).map(example).join("; ")}`),
-    report.clean ? "Clean: no miss, unattributed failure, selector crash, missing shadow data or unreadable check." : "Not clean.",
-    `Registry rule (TEST_SELECT_REGISTRY_RULE, its own shadow period — not part of Clean): ${report.registry.checked} project run(s) where its selection differed, ${report.registry.misses.length} miss(es)`,
-    ...report.registry.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}`),
-  ]
-  process.stdout.write(`${out.join("\n")}\n`)
+  const audit = aggregateEnforced(enforced.prs, enforced.unclassified)
+  process.stdout.write(`${renderReport({ since: o.since, listed, kinds, report, enforced: audit, registryErrors }).join("\n")}\n`)
 }

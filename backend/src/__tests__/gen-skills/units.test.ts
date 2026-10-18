@@ -9,6 +9,7 @@ import { renderNodeDataFieldsModule } from "../../../scripts/lib/gen-skills/rend
 import { renderNodeHandlesModule } from "../../../scripts/lib/gen-skills/render-node-handles.js"
 import { GEN_SKILLS_OUTPUTS } from "../../../scripts/lib/gen-skills/outputs.js"
 import { GEN_UNITS_OUTPUTS } from "../../../../tools/units/gen.mjs"
+import { pruneUnitRows } from "../../../../tools/units/handle-prune.mjs"
 import { insertAtPositions, loadUnits } from "../../../../tools/units/manifest.mjs"
 
 /**
@@ -34,7 +35,8 @@ describe("gen:skills sees node units", () => {
   const defs = parseNodeDefinitions(NODES_TS)
 
   it("inserts the unit right after its position.after, from its manifest", () => {
-    expect(defs.map((d) => d.type)).toEqual(["text-prompt", "upload-video", "fixture-echo", "list"])
+    // fixture-case (the use-case fixture) follows fixture-echo: a unit may follow a unit.
+    expect(defs.map((d) => d.type)).toEqual(["text-prompt", "upload-video", "fixture-echo", "fixture-case", "list"])
     const echo = defs.find((d) => d.type === "fixture-echo")!
     expect(echo).toMatchObject({ label: "Fixture Echo", category: "utility", inputs: ["in"], outputs: ["video-out"], defaultDataKeys: ["label", "fieldMappings"] })
     expect(echo.unit?.typesFile).toBe(join(tree, "frontend/src/nodes/fixture-echo/types.ts"))
@@ -72,5 +74,20 @@ describe("gen:units and gen:skills never write the same file", () => {
       .filter((s) => prefix(u).startsWith(s) || s.startsWith(prefix(u)))
       .map((s) => `${u} ∩ ${s}`))
     expect(clashes).toEqual([])
+  })
+})
+
+describe("gen:units prunes a converted node's row from the handle table, so gen:skills can run", () => {
+  // A conversion leaves the node's row in mcp/generated/node-handles.ts; lib/node-handles.ts
+  // throws on a type that is both a row and a unit, and gen:skills reaches it through its
+  // static imports before it could re-render the table. gen:units runs first and prunes.
+  const real = parseNodeDefinitions(join(REPO, "frontend/src/types/nodes.ts"))
+  const unitTypes = new Set(real.filter((d) => d.unit).map((d) => d.type))
+
+  it("the pruned stale table is exactly what gen:skills renders, so it then writes nothing", () => {
+    expect(unitTypes.size).toBeGreaterThan(0)
+    const stale = renderNodeHandlesModule(real.map((d) => ({ ...d, unit: undefined })))
+    for (const t of unitTypes) expect(stale).toContain(`  ${JSON.stringify(t)}: {`)
+    expect(pruneUnitRows(stale, unitTypes)).toBe(renderNodeHandlesModule(real))
   })
 })

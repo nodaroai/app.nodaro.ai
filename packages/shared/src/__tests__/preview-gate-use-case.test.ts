@@ -28,7 +28,7 @@ const edges = [
 
 describe("a review-on use-case node holds what follows it until its Render final", () => {
   it("is a preview-holding type without joining the render set", () => {
-    expect([...REVIEW_HOLDING_USE_CASE_TYPES]).toEqual(["tighten-episode"])
+    expect(REVIEW_HOLDING_USE_CASE_TYPES.has("tighten-episode")).toBe(true)
     expect(isPreviewHoldingType("tighten-episode")).toBe(true)
     expect(isPreviewHoldingType("apply-edl")).toBe(true)
     expect(isPreviewHoldingType("speaker-view")).toBe(true)

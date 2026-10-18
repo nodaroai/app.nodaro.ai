@@ -113,6 +113,8 @@ const ALLOWLIST: readonly Entry[] = [
   ["frontend/src/types/nodes.ts", `| "apply-edl"`, "SceneNodeType union"],
   ["frontend/src/types/nodes.ts", `type: "apply-edl"`, "NODE_DEFINITIONS"],
 
+  // Node units placed after Apply EDL are not listed: see isUnitAnchor.
+
   // ── Packages registration ─────────────────────────────────────────────────
   ["packages/cli/src/commands/edit.ts", `.command("apply-edl"`, "CLI verb"],
   ["packages/render-rules/src/generated/node-data-fields.ts", `"apply-edl"`, "generated node-data table (gen:skills): its declared settings"],
@@ -166,6 +168,19 @@ function census(): { keys: string[]; scanned: number; where: Map<string, string[
   return { keys, scanned: files.length, where }
 }
 
+/**
+ * A node unit's anchor on Apply EDL — `position.after` or `picker.after` in its
+ * unit.json, and the same value in its two generated projections — names where
+ * the unit SITS in the ordered registries (its neighbour), never what a render
+ * means. Exempt by rule, so a unit placed after Apply EDL needs no rows here:
+ * the line's only literal is an `after` value, in one of those three files.
+ */
+const UNIT_ANCHOR_FILE = /^(?:frontend\/src\/nodes\/[a-z][a-z0-9-]*\/(?:unit\.json|definition\.generated\.ts)|backend\/src\/nodes\/[a-z][a-z0-9-]*\/descriptor\.generated\.ts)$/
+const ANCHOR_KEY = /^(?:"(?:position|picker)":\s*\{.*)?"after":\s*"apply-edl"$/
+function isUnitAnchor(file: string, key: string): boolean {
+  return UNIT_ANCHOR_FILE.test(file) && ANCHOR_KEY.test(key) && [...key.matchAll(LITERAL)].length === 1
+}
+
 const countOf = (keys: readonly string[]): Map<string, number> => {
   const m = new Map<string, number>()
   for (const k of keys) m.set(k, (m.get(k) ?? 0) + 1)
@@ -194,6 +209,29 @@ describe("render-node census: what counts as an apply-edl literal", () => {
   })
 })
 
+describe("render-node census: a node unit's anchor on apply-edl is exempt, nothing else is", () => {
+  it.each([
+    ["frontend/src/nodes/some-unit/unit.json", `"position": { "after": "apply-edl" },`],
+    ["frontend/src/nodes/some-unit/unit.json", `"picker": { "family": "video-podcast", "after": "apply-edl" },`],
+    ["frontend/src/nodes/some-unit/definition.generated.ts", `"after": "apply-edl",`],
+    ["backend/src/nodes/some-unit/descriptor.generated.ts", `"after": "apply-edl"`],
+  ])("exempts %s: %s", (file, line) => {
+    expect(isUnitAnchor(file, keyOfLine(line)!)).toBe(true)
+  })
+
+  it.each([
+    // Not an anchor: what an input accepts, a builder key, a second literal on the line.
+    ["frontend/src/nodes/some-unit/unit.json", `{ "id": "media", "accepts": ["apply-edl"] },`],
+    ["frontend/src/nodes/some-unit/unit.json", `"execution": { "kind": "use-case", "builder": "apply-edl" },`],
+    ["frontend/src/nodes/some-unit/unit.json", `"before": "apply-edl", "after": "apply-edl"`],
+    // An anchor-shaped line outside a unit's three files.
+    ["frontend/src/lib/node-options.tsx", `"after": "apply-edl"`],
+    ["frontend/src/nodes/some-unit/node.tsx", `"after": "apply-edl"`],
+  ])("still counts %s: %s", (file, line) => {
+    expect(isUnitAnchor(file, keyOfLine(line)!)).toBe(false)
+  })
+})
+
 describe("render-node census: no render-meaning site names apply-edl (SV18)", () => {
   const { keys, scanned, where } = census()
 
@@ -207,6 +245,8 @@ describe("render-node census: no render-meaning site names apply-edl (SV18)", ()
     const actual = countOf(keys)
     const extra: string[] = []
     for (const [key, n] of actual) {
+      const bar = key.indexOf("|")
+      if (isUnitAnchor(key.slice(0, bar), key.slice(bar + 1))) continue
       const over = n - (allowed.get(key) ?? 0)
       if (over > 0) extra.push(`${(where.get(key) ?? []).join(", ")}  ×${over}  ${key.split("|")[1]}`)
     }

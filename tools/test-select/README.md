@@ -140,6 +140,48 @@ not block "Clean". Anything short of that — the base unknown, its dev run
 missing, unfinished or unreadable, the file only flaky there — leaves the miss
 a miss, with a note saying why.
 
+**After enforcement** (decided 2026-10-18, `enforced-audit.mjs`). An enforced
+PR run leaves no shadow check, so the report audits it through its merge.
+- **Which runs are enforced.** The selection artifact `selection-<project>-<shard>`
+  is uploaded only when the Select step's output is `selection=affected`, and
+  only an enforced run writes that. The `mode` field inside the JSON is the
+  selector's own choice and cannot tell the two apart: a shadow run's copy says
+  `affected` too. An enforced run whose selector chose `none` or `full`
+  uploads no selection. For those, the Select line `cli.mjs` prints in the job
+  log (`backend: full — …`) tells the mode. Such runs are no longer counted as
+  missing shadow data.
+- **What is audited.** Each merged PR is audited through its final run (the
+  newest run of the head it merged with; earlier pushes are superseded). The
+  report finds the CI run that the PR's merge commit (`merge_commit_sha`, the
+  squash commit) got on `dev`, and reads its `failed-<project>-<shard>` lists.
+  - A **miss** is a file that failed again there, was not in the final
+    selection, and did not fail again on its base's own dev run (inherited,
+    as above).
+  - **Flaky** files, which failed in the full run and passed alone, are listed
+    apart, with whether the selection held them. They never count as misses.
+    Example: #2332's `video-overlay-config` on run 39120351077.
+  - A file whose re-run left no report, outside the selection, is a possible
+    miss.
+  - A shard whose `Run tests` step failed while naming no file is
+    unattributed.
+  - A red shard with no list, or a `Run tests` step that never finished, is an
+    unreadable check.
+- **How to compare.** Selection files are repo-relative and the lists are
+  project-relative, so they are compared project-relative.
+- **The registry rule.** `registryRule.mode` in the selection says whether the
+  rule was enforced on that run. If it was, its selection is what ran, so its
+  misses are the selector misses. If not, a registry miss is a file the main
+  selection held and the rule's did not, counted only where the two differ.
+- **Counts.** A PR that never merged has nothing to audit and is counted as
+  such. A post-merge run that has not finished blocks "Clean". The first line
+  of the report accounts for every listed run (shadow, enforced, not into dev,
+  no test job finished, mode unreadable).
+- **"Clean"** now covers both records: the shadow runs and the audited
+  enforced PRs.
+- **`gh` errors.** `gh`'s stderr is piped, never inherited. A failing call is
+  reported with the call and `gh`'s own message, and is never printed bare
+  above the report.
+
 ## Post-merge failures are never re-run green
 
 On a dev commit, a test file that fails is re-run once, alone, only to label
@@ -345,7 +387,8 @@ registry. `registry.mjs` holds the rule (decided 2026-10-16):
 | Annotation | On | Meaning |
 |---|---|---|
 | `// @registry <glob>…` | aggregate | its imports of matching files are **member edges** |
-| `// @registry-exports <aggregate>: <Name>…` | aggregate | the names the aggregate's collection is consumed through. A **composer** declares the names it re-exports in `tools/units/registry-composers.json` (`exports`), and is a pass-through for those registries, not an enumerator |
+| `// @registry-exports <aggregate>: <Name>…` | aggregate | the names the aggregate's collection is consumed through. A **composer** declares the names it re-exports in `tools/units/registry-composers.json` (`exports`), and is a pass-through for those registries, not an enumerator — except those it lists in `foldsAtLoad` |
+| `foldsAtLoad: [<aggregate>…]` | composer, in `registry-composers.json` | it reads every unit of those registries **while it loads** (validates or folds them at module evaluation), so it is their **enumerator**. Derived from code, not chosen (below) |
 | `// @registry-lookup <reason>` | product module | names a registry export but only looks up the entry for a type it is given |
 | `// @registry-enumerates <reason>` | product module | iterates the collection (what an undeclared module is assumed to do) |
 | `// @test-units-by-name <reason>` | test or helper | names a registry export but only looks up the unit types it names literally |
@@ -353,7 +396,8 @@ registry. `registry.mjs` holds the rule (decided 2026-10-16):
 A changed file **inside a unit folder** that a test reaches **only through
 member edges** does not select it by "imports". It selects the test when (a)
 the test reaches an **enumerator** of that registry (a module that names an
-export, is not a pass-through and does not declare `@registry-lookup`), (b)
+export, is not a pass-through and does not declare `@registry-lookup`, or a
+composer that folds the registry at load), (b)
 the test names the unit's type id as a string literal, (c) the test names a
 registry export and declares neither `@test-units-by-name`, `@test-always`
 nor a `@test-watches` covering the changed file (a watch of migrations,
@@ -367,7 +411,38 @@ composed collection (`getEnrichedRegistry`, `FAMILY_RANK`, `localize*`) are
 listed in `registry-composers.json` (`exports`, or `lookups` for one-type
 answers), and `node-units-structure.test.ts` fails an unlisted one. An
 aggregate diff made only of `// unit:<type>` lines (a member added or
-removed; `--merge-commit` only) is narrowed the same way. `@test-always`, `@test-watches`, `@reads` and the
+removed; `--merge-commit` only) is narrowed the same way.
+
+**Composers that fold at load** (decided 2026-10-18). Most composers do more
+than pass a collection on: `types/nodes.ts` places every unit at its
+`position.after` and throws on a duplicate type, `node-options.tsx` demands each
+unit's option.tsx icon, `i18n/labels.ts` folds `Object.values(UNIT_LABELS)`,
+`node-registry.ts` maps each descriptor's category. That code runs when the
+module is imported, so one broken unit fails every test that merely loads the
+composer — including a test that reaches the unit only through a member edge,
+names no export, or is waived by `@test-units-by-name`. A mutation replay of
+the remove-audio unit found exactly those tests dropped and failing. Such a
+composer is therefore an enumerator of the registries it folds: they are listed
+in its `foldsAtLoad`, and `node-units-structure.test.ts` holds that list to
+`loadTimeRegistryReads` (`tools/units/structure.mjs`), in both directions. The
+predicate starts from the composer's values of a registry — a binding
+imported under one of its names, a default, namespace or dynamic `import()` of
+a module that holds it (an aggregate or a composer), `NS.<name>` of any
+namespace — and every local declaration derived from them. It counts a use by
+code that runs at module evaluation (a top-level initializer or statement,
+class statics and decorators, the constructor and instance members of a class
+constructed there, any function invoked or handed to a call there): a call, a
+member read, iteration, a spread, a destructuring, or a value or function
+handed to a call. Naming one is not a read: a bare alias, an object or array
+literal that is only named (`export const API = { get }`), `typeof`. The
+functions React's `memo` / `forwardRef` / `lazy` are given are stored, not run;
+their other arguments are evaluated. The same test holds every
+`@registry-lookup` module to reading no registry at load, judged strictly: a
+call or a read counts, a function handed over only to an iterating method
+(`.map`, `.forEach`, …). A composer that only reads a collection when called
+(`execute-node.ts`: `UNIT_EXECUTORS[node.type]`) keeps the narrowing.
+
+`@test-always`, `@test-watches`, `@reads` and the
 scanner rules keep their precedence. The full closure stays the test's
 `deps`, so the pass cache is still invalidated by any unit change.
 
@@ -381,5 +456,8 @@ is a **Registry-rule miss**: an annotation, a summary line, and
 `registry-check-<project>.json` in the selection artifact). `shadow-report.mjs`
 reports them apart from the selector's own misses (also from affected runs'
 selection artifacts), counts only runs where the two selections differ, and
-they never decide its "clean". This works whether the main selector is in shadow mode or enforcing.
+they never decide its "clean". Once the variable is `enforce` (since
+2026-10-18 15:22Z; `registryRule.mode` in the selection says so per run), the
+rule's selection is the one that ran: an enforced PR's misses are then
+selector misses, and they do decide "clean". This works whether the main selector is in shadow mode or enforcing.
 With no unit in the tree, nothing here runs and selection is byte-identical.

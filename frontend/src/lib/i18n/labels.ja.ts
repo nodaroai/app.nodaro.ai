@@ -159,8 +159,6 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Apply EDL": "EDL 適用",
   "Edit Plan": "編集プラン",
   "Camera Switch": "カメラ切り替え",
-  "Tighten Episode": "エピソードを引き締める",
-  "Chapters": "チャプター",
   "Speaker View": "話者ビュー",
   "Reframe": "リフレーム",
   "Follow the speaker": "話者を追う",

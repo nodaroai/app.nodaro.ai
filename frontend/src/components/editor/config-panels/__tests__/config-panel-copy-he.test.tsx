@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/config-panels/** frontend/src/components/nodes/** frontend/src/components/editor/{save-to-library-button,asset-selection-modal}.tsx frontend/src/lib/generate-text-templates.ts frontend/src/nodes/*/{node,config}.tsx
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, cleanup, act } from "@testing-library/react"
 import fs from "node:fs"
@@ -21,8 +22,11 @@ import { useLocaleStore } from "@/lib/locale-store"
 import { translate } from "@/lib/i18n"
 import { isLocalizedTableKey } from "@/lib/i18n/labels"
 import { scanRawEnglish, scanBootFrozenTables, listSourceFiles, BRAND_ALLOW, ALLOW_SINGLE } from "@/test-utils/raw-english-scan"
+import { unitComponentFiles } from "@/test-utils/unit-component-files"
 
 const SRC = path.resolve(__dirname, "../../../..")
+/** Every node unit's canvas component and config panel (frontend/src/nodes/<type>/{node,config}.tsx), absolute. */
+const UNIT_COMPONENT_FILES = [...unitComponentFiles("node"), ...unitComponentFiles("config")].map((rel) => path.join(SRC, rel))
 /** Surfaces outside config-panels/ that render inside the panels (or share their copy). */
 const EXTRA_COPY_FILES = [
   "components/editor/save-to-library-button.tsx",
@@ -111,12 +115,15 @@ describe("config-panel copy in Hebrew", () => {
  * button, the asset picker modal) and the node-card toolbar that shares the
  * panels' copy. Strings that a runtime localizer translates by lookup
  * (node/handle names, model descriptions, option labels) are not leaks.
+ * Node units' canvas components and panels (nodes/<type>/{node,config}.tsx)
+ * are the same surfaces and are scanned with them.
  */
 describe("config panels render no raw English", () => {
   // The node CARDS (components/nodes/) share the panels' copy and render on
   // the same canvas — covered by the same scan since the node-cards round.
   const files = [
     ...listSourceFiles([path.join(SRC, "components/editor/config-panels"), path.join(SRC, "components/nodes")]),
+    ...UNIT_COMPONENT_FILES,
     ...EXTRA_COPY_FILES.map((rel) => path.join(SRC, rel)),
   ]
   expect(files.length).toBeGreaterThan(300)
@@ -139,10 +146,13 @@ describe("config panels render no raw English", () => {
 describe("no label table resolves its copy at import time", () => {
   const files = [
     ...listSourceFiles([path.join(SRC, "components/editor/config-panels"), path.join(SRC, "components/nodes")]),
+    ...UNIT_COMPONENT_FILES,
     path.join(SRC, "lib/generate-text-templates.ts"),
   ]
-  it("covers the panels and the node components", () => {
+  it("covers the panels and the node components, the units' included", () => {
     expect(files.length).toBeGreaterThan(150)
+    expect(UNIT_COMPONENT_FILES.length).toBeGreaterThan(0)
+    for (const f of UNIT_COMPONENT_FILES) expect(files).toContain(f)
   })
   it("reports nothing in the current tree", () => {
     const hits = files.flatMap((f) => scanBootFrozenTables(fs.readFileSync(f, "utf8"), path.relative(SRC, f)))

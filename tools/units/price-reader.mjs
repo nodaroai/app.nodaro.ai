@@ -1,7 +1,7 @@
 // tools/units/price-reader.mjs
 // Reads a unit's `staticCosts` object literal from backend/src/nodes/<type>/price.ee.ts
 // through the TypeScript parser (the repo-root TS 5.9, as tools/structure does),
-// for the editor's `priceFallback` projection. Loaded lazily by gen.mjs: the
+// for the editor's `priceRows` projection. Loaded lazily by gen.mjs: the
 // tools self-test job has no npm install, so nothing that job imports may
 // load `typescript` at module scope.
 // @reads backend/src/nodes/*/price.ee.ts

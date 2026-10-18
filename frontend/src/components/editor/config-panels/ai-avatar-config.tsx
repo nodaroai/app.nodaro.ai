@@ -366,7 +366,7 @@ export function AiAvatarConfig({
             <SelectContent>
               {AI_AVATAR_ENGINE_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
-                  {o.label}
+                  {localizeOption(o.label)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -9,6 +9,9 @@
  */
 import { DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared/nodes"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeSet, unitTextSources } from "./unit-compose"
+// @registry-enumerates TEXT_PRODUCER_TYPES carries every node unit whose first output is text
 
 // + the Settings input (Aspect Ratio / Provider), one input for all.
 export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look", SETTINGS_INPUT_HANDLE] as const
@@ -87,8 +90,9 @@ export function classifyPickerForGenerateImage(sourceType: string): "look" | "el
  *  type that's a text producer at runtime MUST be in this frontend set, or
  *  drag-to-connect on any `prompt` / `negative` / `text` / `transcript`
  *  handle will silently reject the source while the backend would have
- *  happily routed its output. */
-export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+ *  happily routed its output. The legacy list ∪ every node unit whose first
+ *  output is text (the backend composes its set the same way). */
+export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = composeSet("TEXT_PRODUCER_TYPES", new Set([
   "text-prompt", "ai-writer", "llm-chat", "generate-script", "combine-text", "image-to-text", "split-text",
   // Audio/Suno text producers (added with the audio+text typed-handle migration).
   "transcribe", "suno-lyrics", "suno-style-boost",
@@ -110,8 +114,6 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // string (extractNodeOutput stringifies) — lets the analysis wire straight
   // into prompt/text inputs (generate-video-pro etc.) without a paste.
   "video-analysis",
-  // Chapters (podcast use-case node): its show notes on `text`.
-  "episode-chapters",
   // video-audit ships the identical `text` handle emitting the identical
   // stringified payload (the CORRECTED analysis). Its producer-set membership
   // must mirror video-analysis everywhere or a downstream node could tell an
@@ -137,7 +139,7 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // way, so both feed prompt/text inputs (Generate Script's topic above all).
   "content-recipe",
   "content-ideas",
-])
+]), unitTextSources(UNIT_NODE_DEFINITIONS))
 
 /** Source node types whose output is structured JSON that both runtimes
  *  stringify into a consumer's PROMPT (backend output-extractor `web-scrape`

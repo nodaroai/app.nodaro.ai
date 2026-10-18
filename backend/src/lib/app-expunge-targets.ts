@@ -11,8 +11,10 @@ import { IN_FLIGHT_JOB_STATUSES } from "./job-status.js"
 import { noteInputOverridesColumnError } from "./execution-input-overrides.js"
 import { noteVideoLinkFilesColumnError } from "./execution-video-link-files.js"
 import { noteInlineGraphColumnError } from "./execution-inline-graph.js"
-import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
-import { APP_RENDER_FINAL_STAMP_PATH, APP_RUN_STAMP_PATH, appRunStampOf } from "./app-run-stamp.js"
+import { finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
+import { APP_RENDER_FINAL_STAMP_PATH, APP_RUN_STAMP_PATH } from "./app-run-stamp.js"
+import { onlyServerStampedRows } from "./server-started-runs.js"
+import { serverStamps } from "./trigger-data-stamps.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "./job-budget.js"
 import { executionBudgetExcessMs } from "./execution-budget.js"
 import { USE_CASE_WRAPPER_PROVIDER, isWrapperJobProvider } from "./wrapper-providers.js"
@@ -124,6 +126,7 @@ interface ExecutionRow {
   status: unknown
   started_at: unknown
   created_at: unknown
+  trigger_type: unknown
   trigger_data: unknown
 }
 
@@ -174,7 +177,7 @@ async function readAll<T extends { id: unknown }>(at: string, build: () => Paged
 async function readExecutionsById(ids: readonly string[]): Promise<ExecutionRow[]> {
   const out: ExecutionRow[] = []
   for (const chunk of chunks(ids)) {
-    const { data, error } = await supabase.from("workflow_executions").select("id, user_id, workflow_id, status, started_at, created_at, trigger_data").in("id", chunk)
+    const { data, error } = await supabase.from("workflow_executions").select("id, user_id, workflow_id, status, started_at, created_at, trigger_type, trigger_data").in("id", chunk)
     if (error) fail("workflow_executions", error)
     for (const row of (data ?? []) as ExecutionRow[]) if (typeof row.id === "string") out.push(row)
   }
@@ -329,13 +332,15 @@ async function collectRunsPage(
     const runners = [...new Set(chunk.map(([, runner]) => runner))]
     for (const path of [APP_RUN_STAMP_PATH, APP_RENDER_FINAL_STAMP_PATH]) {
       const stamped = await readAll<ExecutionRow>("stamped workflow_executions", () => {
-        let q = supabase.from("workflow_executions").select("id, user_id, workflow_id, status, started_at, created_at, trigger_data").in("user_id", runners).in(path, runIds)
+        // Found by a stamp: only among the runs a stamp-writing lane started (lib/server-started-runs.ts).
+        let q = onlyServerStampedRows(supabase.from("workflow_executions").select("id, user_id, workflow_id, status, started_at, created_at, trigger_type, trigger_data").in("user_id", runners).in(path, runIds))
         if (appWorkflowId) q = q.eq("workflow_id", appWorkflowId)
         return q as unknown as PagedQuery
       })
       for (const row of stamped) {
         if (typeof row.id !== "string") continue
-        const runId = appRunStampOf(row.trigger_data) ?? appRenderFinalStampOf(row.trigger_data)?.appRunId ?? null
+        const stamps = serverStamps(row)
+        const runId = stamps.appRun ?? stamps.appRenderFinal?.appRunId ?? null
         if (runId && runnerOf.has(runId) && isRunsOwn(row, runId)) take(row, runId, 0)
       }
     }
@@ -423,7 +428,7 @@ async function collectRunsPage(
     targets.runIds.push(runId)
     const current = currentOf.get(runId)
     const row = current ? rowOf.get(current) : undefined
-    if (row && runsOf.get(row.id)?.has(runId) && appRunStampOf(row.trigger_data) === null) targets.runsBeforeRunTag++
+    if (row && runsOf.get(row.id)?.has(runId) && serverStamps(row).appRun === null) targets.runsBeforeRunTag++
   }
 
   const levelAt = (depth: number): AppExpungeLevel => {

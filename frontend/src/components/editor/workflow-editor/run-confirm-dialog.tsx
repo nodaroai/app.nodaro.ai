@@ -46,6 +46,17 @@ export function runConfirmText(
       : t("editor.runConfirmNodes", { n: info.nodeCount })
     : ""
   const isRenderFinal = info?.trigger === "render-final"
+  // A continuation (Continue from failed, Finish review) is always asked: its
+  // own words, its figure in the title, and a body that says every listed step
+  // runs and is charged.
+  if (info && (info.trigger === "continue-failed" || info.trigger === "finish-review")) {
+    const finish = info.trigger === "finish-review"
+    const title = credits != null && !info.priceUnchecked
+      ? t(finish ? "continueFailed.finishConfirmTitleCredits" : "continueFailed.confirmTitleCredits", { credits: creditUnits(credits) })
+      : t(finish ? "continueFailed.finishConfirmTitle" : "continueFailed.confirmTitle")
+    const body = t(finish ? "continueFailed.finishConfirmBody" : "continueFailed.confirmBody")
+    return { title, body, action: runConfirmAction(info, t) }
+  }
   // A run whose UGC price could not be checked asks first whatever its figure: its title states no price,
   // and its body gives the figure the note under it speaks of.
   if (info?.priceUnchecked) {
@@ -79,6 +90,8 @@ export function runConfirmText(
 function runConfirmAction(info: RunConfirmInfo | null, t: TFunction): string {
   return info?.trigger === "render-final" ? t("renderFinal.action")
     : info?.trigger === "update-preview" ? t("renderFinal.updatePreview")
+      : info?.trigger === "continue-failed" ? t("continueFailed.action")
+      : info?.trigger === "finish-review" ? t("continueFailed.finishReview")
       : info?.trigger === "up-to-here" ? t("node.runUpToHere")
         : t("common.run")
 }

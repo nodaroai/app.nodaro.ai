@@ -10,8 +10,7 @@
 import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import type { ChaptersOutputMap, PlanTier, UseCaseGraph, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
 import { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
-
-export const EPISODE_CHAPTERS = "episode-chapters" as const
+import { usecaseTypeOfBuilder } from "./use-case-rows"
 
 export interface EpisodeChaptersSettings {
   readonly planTier: PlanTier
@@ -53,7 +52,7 @@ export function buildEpisodeChaptersGraph(settings: EpisodeChaptersSettings, sou
   const ID = CHAPTERS_NODE_IDS
   const pip = sources.media.kind === "audio" ? "audio" : "video"
   return {
-    nodeType: EPISODE_CHAPTERS,
+    nodeType: usecaseTypeOfBuilder("chapters"),
     nodes: [
       usecaseSourceNode(ID.source, sources.media, 0, 1),
       usecaseTranscribeNode(ID.transcribe, 1, 0),

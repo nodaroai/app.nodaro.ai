@@ -52,7 +52,7 @@ describe("runVideoCritic", () => {
     expect(args.role).toBe("critic")
     expect(args.task).toBe("video_critic")
     expect(args.maxRetries).toBe(1)
-    expect(args.modelId).toBe("claude-sonnet-4-6")
+    expect(args.modelId).toBe("claude-sonnet-5-5")
     expect(args.temperature).toBe(0.2)
     // The real doctrine text now lives in the plugin repo (moved by S9); here
     // we assert the WIRING — the exact string the registry holds for this

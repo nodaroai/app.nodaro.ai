@@ -12,9 +12,10 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
 import { GEN_UNITS_OUTPUTS, generate, main, staleFiles, writeOutputs } from "../units/gen.mjs"
+import { GEN_UNITS_PRUNES, NODE_HANDLES_TABLE, pruneUnitRows } from "../units/handle-prune.mjs"
 import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../units/seams.mjs"
 import { loadUnits } from "../units/manifest.mjs"
-import { aggregateSource, importSpecifier } from "../units/templates.mjs"
+import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, useCaseRowsSource } from "../units/templates.mjs"
 import { memberLineTypes } from "../test-select/registry.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -33,8 +34,9 @@ const ctxFor = (root, live = liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) 
   capabilities: {},
   exists: (p) => existsSync(path.join(root, p)),
 })
-const stubPrice = () => ({ "fixture-echo": 3 })
-const run = (root, ctx = ctxFor(root)) => generate({ root, ctx, readPrice: stubPrice })
+const PRICES = { "fixture-case": { "use-case-fee:fixture-case": 1 }, "fixture-echo": { "fixture-echo": 3 } }
+const stubPrice = (rel) => PRICES[rel.split("/").at(-2)]
+const run = (root, ctx = ctxFor(root), readPrice = stubPrice) => generate({ root, ctx, readPrice })
 
 test("every live seam produces its output; each unit line is tagged // unit:<type>", async () => {
   const root = tree()
@@ -57,7 +59,8 @@ test("every live seam produces its output; each unit line is tagged // unit:<typ
     assert.match(executors, /^import \{ executor as unit_fixture_echo \} from "\.\.\/fixture-echo\/exec" \/\/ unit:fixture-echo$/m)
     const prices = r.outputs.get("backend/src/ee/nodes/_generated/prices.ts")
     assert.match(prices, /from "\.\.\/\.\.\/\.\.\/nodes\/fixture-echo\/price\.ee\.js" \/\/ unit:fixture-echo$/m, "backend imports end in .js")
-    assert.match(r.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /"priceFallback": 3/)
+    assert.match(r.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /"priceRows": \{\n {4}"fixture-echo": 3\n {2}\}/)
+    assert.match(r.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts"), /"priceRows": \{\n {4}"use-case-fee:fixture-case": 1\n {2}\}/)
     assert.doesNotMatch(r.outputs.get("backend/src/nodes/fixture-echo/descriptor.generated.ts"), /price|credit/i, "no price in the descriptor")
     assert.match(r.outputs.get("frontend/src/lib/i18n/he.ts"), /\/\/ gen:units start\n {2}"fixtureEcho\.help": "[^"]+",\n {2}"node\.fixtureEcho": "הד בדיקה",\n {2}\/\/ gen:units end/)
     assert.match(r.outputs.get("docs/nodes/README.md"), /\| \[Fixture Echo\]\(\.\/utility\/fixture-echo\.md\) \| Echo the input video back unchanged/)
@@ -68,8 +71,11 @@ test("every live seam produces its output; each unit line is tagged // unit:<typ
 test("the contract rows hold only a type id and a producer kind", async () => {
   const root = tree()
   try {
-    const src = (await run(root)).outputs.get("packages/shared/src/generated/unit-contracts.ts")
+    const all = (await run(root)).outputs.get("packages/shared/src/generated/unit-contracts.ts")
+    // The UNIT_CONTRACTS block (the declarations after it hold other closed vocabularies).
+    const src = all.slice(0, all.indexOf("\n]\n") + 3)
     const rows = src.split("\n").filter((l) => l.includes("// unit:"))
+    assert.equal(rows.length, 1)
     for (const l of rows) assert.match(l, /^ {2}\["[a-z0-9-]+", "(?:audio|video|image|dynamic)"\], \/\/ unit:[a-z0-9-]+$/)
     const code = src.split("\n").filter((l) => !l.startsWith("//")).join("\n").replace(/\["[a-z0-9-]+", /g, "")
     assert.doesNotMatch(code, /\d/, "no number (price, credit) outside the type ids")
@@ -95,7 +101,7 @@ test("check → write → check: stale, then clean; orphans are listed and remov
     assert.deepEqual(staleFiles(root, r), [])
     // An aggregate whose seam is switched off is an orphan: --check lists it, a write removes it.
     const off = ctxFor(root, liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, id !== "configs"]))))
-    rmSync(path.join(root, "frontend/src/nodes/fixture-echo/config.tsx"))
+    for (const t of ["fixture-echo", "fixture-case"]) rmSync(path.join(root, `frontend/src/nodes/${t}/config.tsx`))
     r = await run(root, off)
     assert.deepEqual(r.errors, [])
     assert.deepEqual(r.orphans, ["frontend/src/nodes/_generated/configs.ts"])
@@ -139,6 +145,22 @@ test("docs.index \"hand-written\" keeps the unit out of the generated README reg
     assert.ok(!readme.includes("Fixture Echo"), "no generated row (and no header) for a hand-written one")
     assert.match(readme, /<!-- gen:units start -->\n<!-- gen:units end -->/)
     assert.match(result.outputs.get("backend/src/nodes/fixture-echo/descriptor.generated.ts"), /"registryPosition": \{\n\s+"after": "text-prompt"\n\s+\}/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("mcp.widgetModelFor reaches the descriptor only when declared", async () => {
+  const root = tree()
+  const DESC = "backend/src/nodes/fixture-echo/descriptor.generated.ts"
+  try {
+    assert.doesNotMatch((await run(root)).outputs.get(DESC), /"mcp"/, "no mcp key on a unit that declares none")
+    const file = path.join(root, "frontend/src/nodes/fixture-echo/unit.json")
+    const m = JSON.parse(readFileSync(file, "utf8"))
+    m.mcp = { widgetModelFor: ["fixture_echo"] }
+    writeFileSync(file, JSON.stringify(m))
+    const result = await run(root)
+    assert.deepEqual(result.errors, [])
+    assert.match(result.outputs.get(DESC), /"mcp": \{\n\s+"widgetModelFor": \[\n\s+"fixture_echo"\n\s+\]\n\s+\}/)
+    assert.doesNotMatch(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /widgetModelFor/, "server-only: the editor's definition does not carry it")
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -189,5 +211,78 @@ test("a live splice seam whose region is missing fails loudly", async () => {
     writeFileSync(path.join(root, "frontend/src/lib/i18n/ko.ts"), "export const ko = {\n}\n")
     await assert.rejects(run(root), /frontend\/src\/lib\/i18n\/ko\.ts: needs exactly one "\/\/ gen:units start" line/)
     assert.ok(readFileSync(path.join(root, "frontend/src/lib/i18n/en.ts"), "utf8").includes("gen:units start"))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("use-case: the shared contract and the render-rules rows, in position order", async () => {
+  const root = tree()
+  try {
+    const r = await run(root)
+    assert.deepEqual(r.errors, [])
+    const contracts = r.outputs.get("packages/shared/src/generated/unit-contracts.ts")
+    assert.match(contracts, /^export const UNIT_USE_CASE_TYPES = \[\n {2}"fixture-case", \/\/ unit:fixture-case\n\] as const$/m)
+    assert.match(contracts, /^ {2}\["fixture-case", \{ "json": "other" \}\], \/\/ unit:fixture-case$/m)
+    assert.match(contracts, /^ {2}\["fixture-case", "text"\], \/\/ unit:fixture-case$/m)
+    assert.doesNotMatch(contracts, /\/\*\*/, "line comments only: unit-contracts.test.ts holds every other line to a declaration or a row")
+    assert.match(r.outputs.get("packages/render-rules/src/unit-use-cases.generated.ts"), /^ {2}\{ type: "fixture-case", builder: "fixture", label: "Fixture Case", inputs: \["media"\] \}, \/\/ unit:fixture-case$/m)
+    assert.match(r.outputs.get("backend/src/nodes/_generated/use-cases.ts"), /^import \{ useCase as unit_fixture_case \} from "\.\.\/fixture-case\/use-case\.js" \/\/ unit:fixture-case$/m)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("use-case: its price.ee.ts holds exactly its use-case-fee row", async () => {
+  const root = tree()
+  try {
+    const extra = (rel) => (rel.includes("fixture-case") ? { "use-case-fee:fixture-case": 1, "fixture-case": 2 } : stubPrice(rel))
+    assert.deepEqual((await run(root, ctxFor(root), extra)).errors, ['fixture-case: a use-case unit\'s price.ee.ts holds exactly its "use-case-fee:fixture-case" row'])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("inPositionOrder: units by position.after over the (alphabetical) legacy list — a unit may follow a unit, so a use-case chain reads as the editor shows it", () => {
+  const u = (type, after, kind = "use-case") => ({ type, manifest: { type, label: type, position: { after }, execution: { kind, builder: type }, handles: { inputs: [{ id: "media" }], outputs: [] } } })
+  const units = [u("a-chapters", "z-tighten"), u("b-other", "legacy-a", "worker"), u("z-tighten", "legacy-b")]
+  assert.deepEqual(inPositionOrder(units, new Set(["legacy-a", "legacy-b"])).map((x) => x.type), ["b-other", "z-tighten", "a-chapters"])
+  assert.match(useCaseRowsSource(units, new Set(["legacy-a", "legacy-b"])), /"z-tighten".*\n.*"a-chapters"/)
+  assert.match(contractsSource(units, new Set(["legacy-a", "legacy-b"])), /UNIT_USE_CASE_TYPES = \[\n {2}"z-tighten", \/\/ unit:z-tighten\n {2}"a-chapters", \/\/ unit:a-chapters\n\] as const/)
+})
+
+// A node converted into a unit leaves its row in gen:skills' legacy handle table, and
+// backend/src/lib/node-handles.ts throws on a type in both places — before gen:skills could
+// re-render the table. gen:units (first in `npm run gen`) prunes it (decided 2026-10-18).
+const HANDLES_HEAD = "export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {\n"
+const handlesTable = (...types) => `${HANDLES_HEAD}${types.map((t) => `  "${t}": { inputs: ["in"], outputs: ["out", "json"] },\n`).join("")}}\n`
+
+test("pruneUnitRows: drops only the rows of unit types, every other byte kept", () => {
+  const src = handlesTable("era", "fixture-echo", "upload-video")
+  assert.equal(pruneUnitRows(src, new Set(["fixture-echo", "not-a-row"])), handlesTable("era", "upload-video"))
+  assert.equal(pruneUnitRows(src, new Set()), src)
+  // A line that merely mentions a unit type is not a row.
+  const prose = `// "fixture-echo" is a unit\n${src}`
+  assert.ok(pruneUnitRows(prose, new Set(["fixture-echo"])).startsWith('// "fixture-echo" is a unit\n'))
+})
+
+test("a stale unit row in the handle table: --check flags it, a write prunes it, then no drift", async () => {
+  const root = tree()
+  try {
+    const abs = path.join(root, NODE_HANDLES_TABLE)
+    mkdirSync(path.dirname(abs), { recursive: true })
+    writeFileSync(abs, handlesTable("fixture-echo", "upload-video"))
+    const opts = { ctx: ctxFor(root), readPrice: stubPrice }
+    const err = { text: "", write(x) { this.text += x } }
+    const out = { text: "", write(x) { this.text += x } }
+    assert.equal(await main(["--check"], root, out, err, opts), 1)
+    assert.match(err.text, new RegExp(`^ {2}- ${NODE_HANDLES_TABLE.replaceAll("/", "\\/").replaceAll(".", "\\.")}$`, "m"))
+    assert.equal(await main([], root, out, err, opts), 0)
+    assert.equal(readFileSync(abs, "utf8"), handlesTable("upload-video"))
+    assert.equal(await main(["--check"], root, out, { write() {} }, opts), 0)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("the handle table is pruned, never rendered: it is not one of GEN_UNITS_OUTPUTS, and a tree without it prunes nothing", async () => {
+  const { matchesAny } = await import("../test-select/glob.mjs")
+  assert.deepEqual(GEN_UNITS_PRUNES, [NODE_HANDLES_TABLE])
+  assert.equal(matchesAny(NODE_HANDLES_TABLE, GEN_UNITS_OUTPUTS), false)
+  const root = tree()
+  try {
+    assert.equal((await run(root)).prunes.size, 0)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

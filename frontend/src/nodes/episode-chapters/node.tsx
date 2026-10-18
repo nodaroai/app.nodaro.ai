@@ -1,23 +1,21 @@
-"use client"
-
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ListOrdered, Braces, Type, Film, Loader2, AlertCircle, RotateCcw, Copy } from "lucide-react"
-import { BaseNode } from "./base-node"
-import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
-import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { BaseNode } from "@/components/nodes/base-node"
+import { NodeJobProgress } from "@/components/nodes/node-job-progress"
+import { RunNodeButton } from "@/components/nodes/run-node-button"
+import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
+import { HandleWithPopover, HANDLE_COLORS } from "@/components/nodes/handle-with-popover"
+import { useUnitNodeKit } from "@/components/nodes/use-unit-node-kit"
+import { useUseCaseContinue, useUseCaseListDriven } from "@/components/nodes/use-case-node-hooks"
 import { ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUseCaseCredits } from "@/hooks/use-use-case-credits"
 import { Button } from "@/components/ui/button"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard, cn } from "@/lib/utils"
 import { executionErrorText, nodeErrorCodeText } from "@/lib/execution-error-text"
-import { usecaseListDriven } from "@/components/editor/workflow-editor/use-case-render-final-set"
-import type { EpisodeChaptersData } from "@/types/nodes"
+import type { EpisodeChaptersData } from "./types"
 
 /**
  * Chapters (decided 2026-10-14): one recording in, its chapters out — as show
@@ -33,16 +31,14 @@ function EpisodeChaptersNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as EpisodeChaptersData
   const t = useT()
   const credits = useUseCaseCredits(id)
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  // The workflow store's services, bound to this node (the unit kit — a unit never imports the store).
+  const kit = useUnitNodeKit(id)
+  const continueUseCase = useUseCaseContinue(id)
   const status = nodeData.executionStatus ?? "idle"
   const text = typeof nodeData.generatedText === "string" ? nodeData.generatedText : ""
   const hasResult = status !== "running" && text !== ""
   // A list-driven node runs once per item: no one run for Continue to name.
-  const listDriven = useWorkflowStore((s) => {
-    const self = s.nodes.find((n) => n.id === id)
-    return self ? usecaseListDriven(self, s.nodes, s.edges) : false
-  })
+  const listDriven = useUseCaseListDriven(id)
   const errorCode = (nodeData as { errorCode?: unknown }).errorCode
   const coded = typeof errorCode === "string" ? (nodeErrorCodeText(errorCode, "episode-chapters") ?? executionErrorText(errorCode)) : null
   const shownError = coded && coded !== errorCode ? coded : nodeData.errorMessage
@@ -53,12 +49,12 @@ function EpisodeChaptersNodeComponent({ id, data, selected }: NodeProps) {
   // never starts leaves nothing behind, and the next Run is a fresh run.
   const continueRun = () => {
     if (!jobId) return
-    runSingleNode?.(id, { usecaseContinue: { mode: "from-failed", jobId } })
+    continueUseCase(jobId)
   }
 
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>
-      <EditableNodeLabel label={nodeData.label} icon={<ListOrdered className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
+      <EditableNodeLabel label={nodeData.label} icon={<ListOrdered className="w-3.5 h-3.5" />} onSave={(newLabel) => kit.updateNodeData({ label: newLabel })} />
       <BaseNode
         id={id}
         label={nodeData.label}
@@ -70,7 +66,7 @@ function EpisodeChaptersNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={280}
         minHeight={220}
-        topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />}
+        topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={() => kit.run()} />}
         handles={[
           { id: "media", type: "target", position: Position.Left,  customStyle: { top: "24px",              left: "-29px" },  external: true },
           { id: "json",  type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
@@ -144,4 +140,4 @@ function ChaptersShowNotes({ text }: { readonly text: string }) {
   )
 }
 
-export const EpisodeChaptersNode = memo(EpisodeChaptersNodeComponent)
+export const NodeComponent = memo(EpisodeChaptersNodeComponent)

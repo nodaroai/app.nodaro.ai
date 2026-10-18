@@ -25,7 +25,7 @@ import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
 import { SAVED_RESULT_FIELDS } from "../saved-data.js"
 
 const SRC = join(__dirname, "..", "..", "..")
-const READERS = ["extractSavedNodeOutput", "extractAllGeneratedResults", "extractGeneratedJsonAsList", "extractSavedTextFallback", "readSunoIdsFromData", "editPlanSavedOutput", "savedRenderOutput", "savedRenderBatch", "savedRenderBatchUrls", "splitMediaPartsFor"]
+const READERS = ["extractSavedNodeOutput", "extractAllGeneratedResults", "extractGeneratedJsonAsList", "extractSavedTextFallback", "readSunoIdsFromData", "editPlanSavedOutput", "savedRenderOutput", "savedRenderBatch", "savedRenderBatchUrls", "splitMediaPartsFor", "usecaseSavedNodeOutput"]
 const CALL = new RegExp(String.raw`(?<!function )\b(?:${READERS.join("|")})\(`, "g")
 const FIELDS = [...SAVED_RESULT_FIELDS].join("|")
 const FIELD_READ = new RegExp(
@@ -50,7 +50,11 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
   },
   "services/workflow-engine/output-extractor.ts": {
     count: 5,
-    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied, and a use-case node's plan read the same way); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
+    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied) and, beside it, usecaseSavedNodeOutput (a use-case node's saved output, its plan read the same way); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
+  },
+  "services/workflow-engine/use-case-output.ts": {
+    count: 10,
+    why: "the saved-output reader itself (usecaseSavedNodeOutput), reached only through extractSavedNodeOutput — fields: its generatedVideoUrl / generatedAudioUrl / generatedText reads; calls: editPlanSavedOutput (a use-case node's plan with the person's review applied)",
   },
   "services/workflow-engine/payload-builder.ts": {
     count: 5,

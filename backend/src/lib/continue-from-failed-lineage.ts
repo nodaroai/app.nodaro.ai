@@ -57,10 +57,19 @@
  * preview gate, a preflight) holds no states, and sending a caller there would
  * run everything again. Cancelled generations do not count; one still under
  * way is the run route's `already_running`.
+ *
+ * A stamp is the platform's only on a run the run route started (`manual`,
+ * `mcp`; lib/server-started-runs.ts): the lineage read finds generations only
+ * among those, and a stamp on any other row (a webhook's, whose body a caller
+ * wrote) reads as none.
  */
+import { onlyServerStampedRows, serverTriggerData } from "./server-started-runs.js"
 import { supabase } from "./supabase.js"
 
 const STAMP_KEY = "continueFromFailed"
+
+/** The `trigger_data` key a continue-from-failed is stamped under (reserved: never caller data, lib/trigger-data-stamps.ts). */
+export const CONTINUE_FROM_FAILED_STAMP_KEY = STAMP_KEY
 
 export interface ContinueFromFailedStamp {
   /** The execution this one was asked to continue (it had ended `failed`). */
@@ -175,7 +184,8 @@ export interface Generation {
 /**
  * The NEWEST generation of the lineage `root` — by `created_at`, of the
  * caller's own runs of this workflow that STARTED and ended `failed` or
- * `completed` — or `null` when there is none. Throws on a read error (never
+ * `completed`, started by a lane that writes stamps — or `null` when there
+ * is none. Throws on a read error (never
  * read as "none").
  */
 export async function newestGeneration(input: {
@@ -183,21 +193,23 @@ export async function newestGeneration(input: {
   readonly workflowId: string
   readonly root: string
 }): Promise<Generation | null> {
-  const { data, error } = await supabase
-    .from("workflow_executions")
-    .select("id, status, trigger_data")
-    .eq("user_id", input.userId)
-    .eq("workflow_id", input.workflowId)
-    .eq(`trigger_data->${STAMP_KEY}->>root`, input.root)
+  const { data, error } = await onlyServerStampedRows(
+    supabase
+      .from("workflow_executions")
+      .select("id, status, trigger_type, trigger_data")
+      .eq("user_id", input.userId)
+      .eq("workflow_id", input.workflowId)
+      .eq(`trigger_data->${STAMP_KEY}->>root`, input.root),
+  )
     .in("status", ["failed", "completed"])
     .not("started_at", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle()
   if (error) throw new Error(`continue-from-failed: later continuations unreadable: ${error.message}`)
-  const row = data as { id?: unknown; status?: unknown; trigger_data?: unknown } | null
+  const row = data as { id?: unknown; status?: unknown; trigger_type?: unknown; trigger_data?: unknown } | null
   if (!row || typeof row.id !== "string") return null
-  const stamp = continueFromFailedStampOf(row.trigger_data)
+  const stamp = continueFromFailedStampOf(serverTriggerData(row))
   return {
     id: row.id,
     status: String(row.status),

@@ -119,7 +119,7 @@ describe("runValidateMatchCut", () => {
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("helper")
     expect(call.task).toBe("validate_match_cut")
-    expect(call.modelId).toBe("claude-sonnet-4-6")
+    expect(call.modelId).toBe("claude-sonnet-5-5")
     expect(Array.isArray(call.userPrompt)).toBe(true)
     const imageUrls = call.userPrompt
       .filter((b: { type: string }) => b.type === "image")

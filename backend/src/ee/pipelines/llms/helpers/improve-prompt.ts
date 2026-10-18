@@ -56,7 +56,7 @@ Rewrite and respond as JSON.`
     userId: args.userId,
     role: "helper",
     task: "improve_prompt",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.4,
     systemPrompt,
     userPrompt,

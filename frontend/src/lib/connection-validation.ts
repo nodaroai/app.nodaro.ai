@@ -111,6 +111,7 @@ import {
   UGC_NODE_TYPES,
 } from "@nodaro/shared/ugc"
 import { isValidUgcConnection } from "./ugc-handles"
+import { unitConnectionVerdict } from "./unit-connections"
 import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
 import { isVisualPickerType } from "./parameter-picker-types"
@@ -407,6 +408,14 @@ function connectionTypesAccepted(
   if (ugcOutsideRulesRefuse(imageSourceType, connection.sourceHandle, targetType ?? "", connection.targetHandle ?? "")) {
     return false
   }
+
+  // A node unit's inputs are judged by what its manifest declares they accept
+  // (unit.json handles.inputs[].accepts — unit-connections.ts): the validator is
+  // the legacy rules below ∪ the units'. A unit is never a legacy type, so no
+  // per-type rule below would have answered for it; the rules above, which
+  // every node shares, still apply to a unit.
+  const unitVerdict = unitConnectionVerdict(targetType, connection.targetHandle, imageSourceType)
+  if (unitVerdict !== undefined) return unitVerdict
 
   if (targetType === "generate-image" && connection.targetHandle) {
     return isValidGenerateImageConnection(
@@ -705,17 +714,6 @@ function connectionTypesAccepted(
     if (connection.targetHandle === "edl" || connection.targetHandle === "transcript") return ACCEPTS_JSON(imageSourceType)
     if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
     return false
-  }
-  // tighten-episode — `media` takes the recording (video or audio), `music` an
-  // optional music bed (audio only).
-  if (targetType === "tighten-episode" && connection.targetHandle) {
-    if (connection.targetHandle === "media") return ACCEPTS_MEDIA(imageSourceType)
-    if (connection.targetHandle === "music") return ACCEPTS_AUDIO(imageSourceType)
-    return false
-  }
-  // episode-chapters — `media` takes the recording (video or audio).
-  if (targetType === "episode-chapters" && connection.targetHandle) {
-    return connection.targetHandle === "media" ? ACCEPTS_MEDIA(imageSourceType) : false
   }
   // edit-plan — the json inputs (transcript, silence ranges, audio-sync
   // offsets) take a data producer; `sources` takes the recordings.

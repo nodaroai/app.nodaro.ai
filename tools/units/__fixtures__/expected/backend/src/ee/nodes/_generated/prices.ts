@@ -2,8 +2,10 @@
 // @registry backend/src/nodes/*/price.ee.ts
 // @registry-exports prices: UNIT_PRICES
 import type { UnitPrice } from "../../../nodes/kit.js"
+import { price as unit_fixture_case } from "../../../nodes/fixture-case/price.ee.js" // unit:fixture-case
 import { price as unit_fixture_echo } from "../../../nodes/fixture-echo/price.ee.js" // unit:fixture-echo
 
 export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Object.create(null), {
+  "fixture-case": unit_fixture_case, // unit:fixture-case
   "fixture-echo": unit_fixture_echo, // unit:fixture-echo
 })

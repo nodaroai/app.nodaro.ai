@@ -37,7 +37,7 @@ Propose 1-4 insert shots and respond as JSON.`
     userId: args.userId,
     role: "helper",
     task: "add_broll",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.5,
     systemPrompt,
     userPrompt,

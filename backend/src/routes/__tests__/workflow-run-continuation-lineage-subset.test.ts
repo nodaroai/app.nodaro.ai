@@ -214,6 +214,7 @@ const row = (id: string, stamp: Record<string, unknown>, over: Record<string, un
   status: "completed",
   started_at: at,
   created_at: at,
+  trigger_type: "manual",
   trigger_data: { continueFromFailed: stamp },
   ...over,
 })

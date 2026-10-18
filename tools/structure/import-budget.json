@@ -296,7 +296,6 @@
       "frontend/src/components/nodes/__tests__/telegram-channel-feed-node.test.tsx": 316,
       "frontend/src/components/nodes/__tests__/text-items-preview-nodes.test.tsx": 311,
       "frontend/src/components/nodes/__tests__/text-to-speech-node.test.tsx": 338,
-      "frontend/src/components/nodes/__tests__/tighten-episode-node.test.tsx": 332,
       "frontend/src/components/nodes/__tests__/ugc-creator-node.test.tsx": 327,
       "frontend/src/components/nodes/__tests__/ugc-script-example-lines.test.tsx": 326,
       "frontend/src/components/nodes/__tests__/upload-nodes.test.tsx": 336,
@@ -318,7 +317,8 @@
       "frontend/src/components/presentation/views/__tests__/preview-label-views.test.tsx": 312,
       "frontend/src/components/templates/__tests__/hidden-templates-page.test.tsx": 852,
       "frontend/src/ee/app/(admin)/admin/templates/__tests__/page.test.tsx": 843,
-      "frontend/src/lib/__tests__/ugc-nodes-registration.test.ts": 822
+      "frontend/src/lib/__tests__/ugc-nodes-registration.test.ts": 822,
+      "frontend/src/nodes/tighten-episode/__tests__/node.test.tsx": 332
     }
   }
 }

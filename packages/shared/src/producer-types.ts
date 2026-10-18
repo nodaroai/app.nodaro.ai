@@ -15,33 +15,17 @@
  * execution time (the prior drift bug, see issue 1 of the Task 4.1 review).
  */
 import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
-import { UNIT_CONTRACTS } from "./generated/unit-contracts.js"
+import { composeUnitSet, unitProducers } from "./unit-contract-compose.js"
 
-/**
- * The node units (tools/units/README.md) of one producer kind, from their
- * generated contract rows — each set below is its hand-written members ∪
- * these, in that order.
- */
-function unitProducers(kind: "audio" | "video" | "image" | "dynamic"): readonly string[] {
-  return UNIT_CONTRACTS.filter(([, producer]) => producer === kind).map(([type]) => type)
-}
-
-/**
- * A hand-written set ∪ its node units, refusing a type that is in both — a
- * type lives in one place (G1; the editor's and the server's composeSet keep
- * the same rule). Throws at module load, so any import of the set fails.
- */
-function composeUnits(what: string, legacy: readonly string[], units: readonly string[]): ReadonlySet<string> {
-  const clash = units.filter((t) => legacy.includes(t))
-  if (clash.length > 0) throw new Error(`${what}: ${clash.join(", ")} is both hand-written and a node unit — a type lives in one place (tools/units/README.md)`)
-  return new Set([...legacy, ...units])
-}
+// Each producer set below is its hand-written members ∪ the node units
+// (tools/units/README.md) of that producer kind, from their generated contract
+// rows, in that order — a type in both throws at load (composeUnitSet).
 
 /**
  * Source node types whose primary output is a video URL.
  * Mirrors the backend execution-graph VIDEO_SOURCE_TYPES verbatim.
  */
-export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("VIDEO_PRODUCER_TYPES", [
+export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = composeUnitSet("VIDEO_PRODUCER_TYPES", [
   "image-to-video",
   "video-to-video",
   "switchx", // Beeble SwitchX relight/composite
@@ -158,7 +142,7 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("VIDEO_PRO
  *    that fail at execution. Users wanting trigger → media flows
  *    should wire through an upload node.
  */
-export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("DYNAMIC_PRODUCER_TYPES", [
+export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = composeUnitSet("DYNAMIC_PRODUCER_TYPES", [
   "list",
   "sub-workflow",
   "adjust-volume",
@@ -203,16 +187,13 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("DYNAMIC
   // voice-changer/dubbing precedent. Asserted in producer-types.test.ts (the
   // suite does not fail on omission).
   "apply-edl",
-  // Tighten Episode (podcast use-case node): the episode is video OR audio by
-  // its `output` setting (an audio recording forces audio) — runtime-decided.
-  "tighten-episode",
 ], unitProducers("dynamic"))
 
 /**
  * Source node types whose primary output is an audio URL.
  * Mirrors the backend execution-graph AUDIO_SOURCE_TYPES verbatim.
  */
-export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("AUDIO_PRODUCER_TYPES", [
+export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = composeUnitSet("AUDIO_PRODUCER_TYPES", [
   "text-to-speech",
   "text-to-audio",
   "generate-music",
@@ -255,7 +236,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("AUDIO_PRO
  * handle migration and the MCP edge normalizer (`llm-chat`'s legacy `in`):
  * they used to keep separate copies, and the backend's lagged by eight types.
  */
-export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("IMAGE_PRODUCER_TYPES", [
+export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = composeUnitSet("IMAGE_PRODUCER_TYPES", [
   "upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background",
   // extract-frame produces a single still image extracted from a video source.
   "extract-frame",

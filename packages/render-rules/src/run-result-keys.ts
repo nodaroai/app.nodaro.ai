@@ -12,6 +12,7 @@
  * when a run starts writing a key nobody has classified here.
  */
 import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
+import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 import { UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared/ugc"
 
 /**
@@ -141,9 +142,6 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   // The last run's warnings line, its output canvas + length, and the
   // composition it was rendered from (the "Result (old)" check).
   "video-overlay": ["resultCompositionKey", "warnings", "width", "height", "durationSec"],
-  // A use-case node's failure code (a refused Render final): its last run's, gone with it.
-  "tighten-episode": ["errorCode"],
-  "episode-chapters": ["errorCode"],
   // UGC video: each node's last run, always a subset of what publishing strips
   // (UGC_NODE_RUN_STATE_KEYS). UGC Creator's row is the options of its last
   // draw and their note: a kept-result node (the editor's KEPT_RESULT_NODE_TYPES) loses only
@@ -155,6 +153,8 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "ugc-clips": ["quote", "result", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["result", "ugcOutputs"],
+  // A use-case node's failure code (a refused Render final): its last run's, gone with it.
+  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => [t, ["errorCode"]])),
 }
 
 const RESULT_KEYS: ReadonlySet<string> = new Set([

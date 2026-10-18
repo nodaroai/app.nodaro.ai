@@ -1,5 +1,5 @@
 // @vitest-environment node
-// @test-watches frontend/src/components/editor/config-panels/*.{ts,tsx}
+// @test-watches frontend/src/components/editor/config-panels/*.{ts,tsx} frontend/src/nodes/*/{node,config}.tsx
 /**
  * A config panel shows what is wired into its node the way the run sees it: a
  * wire leaving a Teleport Receive carries exactly what entered its Send
@@ -10,17 +10,28 @@
  * `getConnectedSources` (which bypasses itself); this census fails on any raw
  * read of the store's edges in `config-panels/` beyond the ones listed here,
  * each with its reason. Mirror of workflow-editor/__tests__/run-graph-census.test.ts.
+ * Node units' panels (frontend/src/nodes/<type>/config.tsx) are config panels
+ * too, and are scanned with them; the reasoned lists are keyed by the path
+ * relative to frontend/src.
  */
 import { describe, expect, it } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
+import { FRONTEND_SRC, unitComponentFiles } from "@/test-utils/unit-component-files"
 
 const DIR = join(__dirname, "..")
+const PANELS = "components/editor/config-panels"
+/** Every config panel file, relative to frontend/src: config-panels/*.{ts,tsx} and every unit's config.tsx. */
+const FILES = [
+  ...readdirSync(DIR).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx")).map((f) => `${PANELS}/${f}`),
+  ...unitComponentFiles("config"),
+]
+const source = (file: string) => readFileSync(join(FRONTEND_SRC, file), "utf8")
 
 /** Raw reads of the store's edges, per file, and why each must stay raw. */
 const RAW_EDGE_READS: Record<string, { count: number; reason: string }> = {
-  "image-overlay-config.tsx": { count: 1, reason: "deletes the wires leaving an unticked variant: WRITES the store, by the wires' own ids" },
-  "schedule-trigger-config.tsx": {
+  "components/editor/config-panels/image-overlay-config.tsx": { count: 1, reason: "deletes the wires leaving an unticked variant: WRITES the store, by the wires' own ids" },
+  "components/editor/config-panels/schedule-trigger-config.tsx": {
     count: 1,
     reason: "asks whether the trigger feeds anything — its OUTGOING wires, which a bypass never re-points (a Send counts as fed)",
   },
@@ -37,11 +48,12 @@ function rawEdgeReads(source: string): number {
 }
 
 describe("config panels read the graph as it carries", () => {
-  const files = readdirSync(DIR).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"))
+  const files = FILES
 
-  it("finds the config panel files", () => {
-    expect(files).toContain("merge-audio-config.tsx")
-    expect(files).toContain("helpers.ts")
+  it("finds the config panel files, the units' panels included", () => {
+    expect(files).toContain(`${PANELS}/merge-audio-config.tsx`)
+    expect(files).toContain(`${PANELS}/helpers.ts`)
+    expect(files.filter((f) => f.startsWith("nodes/")).length).toBeGreaterThan(0)
   })
 
   it("the census counts a raw read", () => {
@@ -52,7 +64,7 @@ describe("config panels read the graph as it carries", () => {
 
   for (const file of files) {
     it(`${file}: no raw store-edge read outside the reasoned list`, () => {
-      const found = rawEdgeReads(readFileSync(join(DIR, file), "utf8"))
+      const found = rawEdgeReads(source(file))
       expect(found, RAW_EDGE_READS[file]?.reason ?? "read the graph through useCarriedEdges() (hooks/use-carried-edges.ts)").toBe(
         RAW_EDGE_READS[file]?.count ?? 0,
       )
@@ -70,14 +82,14 @@ describe("config panels read the graph as it carries", () => {
  * This census fails on any other `edge.source` read beyond the reasoned list.
  */
 const EDGE_SOURCE_READS: Record<string, { count: number; reason: string }> = {
-  "camera-switch-config.tsx": {
+  "components/editor/config-panels/camera-switch-config.tsx": {
     count: 2,
     reason: "the camera id offered is the CARRIED node (the id Edit Plan's run mints into the EDL; keys use drawnSourceId), and an outgoing-wire filter",
   },
-  "collect-config.tsx": { count: 1, reason: "maps each drawn id to the carried node it shows" },
-  "image-overlay-config.tsx": { count: 1, reason: "deletes this node's OUTGOING wires from the raw store edges" },
-  "tighten-episode-config.tsx": { count: 1, reason: "asks only whether a wire into a handle HAS a source; the node it then reads is looked up by id, and carried edges make that the origin" },
-  "prompt-helper-button.tsx": { count: 1, reason: "filters this node's OUTGOING wires; a carried wire leaving a pair it feeds counts" },
+  "components/editor/config-panels/collect-config.tsx": { count: 1, reason: "maps each drawn id to the carried node it shows" },
+  "components/editor/config-panels/image-overlay-config.tsx": { count: 1, reason: "deletes this node's OUTGOING wires from the raw store edges" },
+  "nodes/tighten-episode/config.tsx": { count: 1, reason: "asks only whether a wire into a handle HAS a source; the node it then reads is looked up by id, and carried edges make that the origin" },
+  "components/editor/config-panels/prompt-helper-button.tsx": { count: 1, reason: "filters this node's OUTGOING wires; a carried wire leaving a pair it feeds counts" },
 }
 
 const EDGE_VAR = String.raw`\b(?:e|ed|edge|inEdge|edlEdge|legacyEdge|srcEdge|wire)\.source\b(?!Handle)`
@@ -89,7 +101,7 @@ function edgeSourceReads(source: string): number {
 }
 
 describe("config panels key per-wire settings by the drawn id", () => {
-  const files = readdirSync(DIR).filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"))
+  const files = FILES
 
   it("the census tells a key from a node lookup", () => {
     expect(edgeSourceReads("nodes.find((n) => n.id === edge.source)")).toBe(0)
@@ -99,7 +111,7 @@ describe("config panels key per-wire settings by the drawn id", () => {
 
   for (const file of files) {
     it(`${file}: no edge.source key outside the reasoned list`, () => {
-      const found = edgeSourceReads(readFileSync(join(DIR, file), "utf8"))
+      const found = edgeSourceReads(source(file))
       expect(found, EDGE_SOURCE_READS[file]?.reason ?? "key per-wire settings by drawnSourceId(edge) (@nodaro/render-rules)").toBe(
         EDGE_SOURCE_READS[file]?.count ?? 0,
       )

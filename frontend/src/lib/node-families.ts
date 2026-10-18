@@ -14,8 +14,8 @@
 import type { SceneNodeType } from "@/types/nodes"
 import { REFRAME_ENTRY_TYPE } from "@/lib/canvas-macros"
 import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
-import { composeFamilyTypes } from "@/lib/unit-compose"
-// @registry-enumerates NODE_FAMILIES places every node unit in its picker.family
+import { composeFamilyTypes, composeTabSuperset, unitTabSuperset } from "@/lib/unit-compose"
+// @registry-enumerates NODE_FAMILIES places every node unit in its picker.family, and TAB_SUPERSET shows it on its picker.alsoOnTabs
 
 export type PickerTab =
   | "common" | "image" | "video" | "audio" | "models"
@@ -147,7 +147,7 @@ const LEGACY_NODE_FAMILIES: readonly NodeFamily[] = [
   },
   // Podcast use-case nodes (decided 2026-10-13): one node per use-case over
   // the editing primitives (Cut & Assemble keeps the primitives for manual work).
-  { id: "video-podcast", label: "Podcast", tab: "video", types: ["tighten-episode", "episode-chapters"] },
+  { id: "video-podcast", label: "Podcast", tab: "video", types: [] },
   {
     id: "audio-add-your-own",
     label: "Add Your Own",
@@ -358,11 +358,8 @@ export const CREATIVE_CONTROL_FAMILY_IDS: readonly string[] = [
 /** Only the Audio tab shows MUSIC & VOICE. */
 export const AUDIO_ONLY_CONTROL_FAMILY_ID = "cc-music-voice"
 
-/** Nodes rendered inside a tab that does not own them, keyed by tab then
- *  family id. Their `group` still points at the owning family — this only
- *  affects where they are DISPLAYED (e.g. Text sits beside the uploads on
- *  every media tab, Video URL beside Upload Video). */
-export const TAB_SUPERSET: Readonly<Record<string, Readonly<Record<string, readonly SceneNodeType[]>>>> = {
+/** The hand-written TAB_SUPERSET rows of the nodes that are not yet units. */
+const LEGACY_TAB_SUPERSET: Readonly<Record<string, Readonly<Record<string, readonly SceneNodeType[]>>>> = {
   image: {
     "image-add-your-own": ["text-prompt"],
   },
@@ -373,14 +370,22 @@ export const TAB_SUPERSET: Readonly<Record<string, Readonly<Record<string, reado
   },
   audio: {
     "audio-add-your-own": ["text-prompt"],
-    // An audio-only episode is a first-class Tighten Episode result, and an
-    // audio recording gets its chapters as a video one does.
-    "video-podcast": ["tighten-episode", "episode-chapters"],
   },
   assets: {
     "image-references": ["reference-sheet", "reference-board"],
   },
 }
+
+/** Nodes rendered inside a tab that does not own them, keyed by tab then
+ *  family id. Their `group` still points at the owning family — this only
+ *  affects where they are DISPLAYED (e.g. Text sits beside the uploads on
+ *  every media tab, Video URL beside Upload Video). The legacy rows ∪ every
+ *  node unit's picker.alsoOnTabs, listed under its own family in family order.
+ *  Reads NODE_FAMILIES directly: the family lookup below is declared later. */
+export const TAB_SUPERSET: Readonly<Record<string, Readonly<Record<string, readonly SceneNodeType[]>>>> = (() => {
+  const familyTypes = (id: string): readonly string[] => NODE_FAMILIES.find((f) => f.id === id)?.types ?? []
+  return composeTabSuperset(LEGACY_TAB_SUPERSET, unitTabSuperset(UNIT_NODE_DEFINITIONS, familyTypes), familyTypes)
+})()
 
 /** Curated Common tab. Every member also appears in its owning family on
  *  another tab — no node exists only here. */

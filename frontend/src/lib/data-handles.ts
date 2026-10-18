@@ -19,6 +19,10 @@ import {
 } from "./generate-image-handles"
 import { HANDLE_COLORS } from "./handle-colors"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeSet, unitJsonProducers } from "./unit-compose"
+
+// @registry-enumerates JSON_PRODUCER_TYPES carries every node unit with a JSON (look) output
 
 /** Producers of text/string output. Reuses generate-image-handles
  *  TEXT_PRODUCER_TYPES plus extract-field (its `text` mode emits a scalar)
@@ -81,8 +85,9 @@ export const ACCEPTS_JSON = (sourceType: string): boolean =>
   JSON_PRODUCER_TYPES.has(sourceType) || LIST_PRODUCER_TYPES.has(sourceType)
 
 /** Producers of JSON/dict-shaped data — web-scrape returns json arrays,
- *  extract-field has a `json` outputType, etc. */
-export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
+ *  extract-field has a `json` outputType, etc. The legacy list ∪ every node
+ *  unit with a JSON (look) output. */
+export const JSON_PRODUCER_TYPES: ReadonlySet<string> = composeSet("JSON_PRODUCER_TYPES", new Set<string>([
   ...SCRAPE_NODE_TYPES, "extract-field", "silence-detect",
   // Telegram Channel Feed's `json` handle carries the posts (TelegramChannelPost[]).
   "telegram-channel-feed",
@@ -113,13 +118,6 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // dual-handle node. Lets its `json` handle feed a data/json consumer (e.g.
   // add-captions' transcript input).
   "apply-edl",
-  // Tighten Episode's `json` handle carries the plan (an EDL, dropped[]
-  // included); its default `media` handle is the episode, declared in
-  // @nodaro/shared DYNAMIC_PRODUCER_TYPES — the same dual-handle shape as apply-edl.
-  "tighten-episode",
-  // Chapters: its `json` is the chapter list (`{ startMs, title }[]`); its
-  // `text` is the show notes (TEXT_PRODUCER_TYPES).
-  "episode-chapters",
   // edit-plan's single `edl` output handle carries the EDL plan (json). Its
   // clips-mode output is a bare Edl[] that fans out (edit-plan ∈
   // FAN_OUT_EACH_TYPES), but the handle is still a json/data producer — so it
@@ -147,7 +145,7 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "ugc-script",
   "ugc-clips",
   "ugc-cards",
-])
+]), unitJsonProducers(UNIT_NODE_DEFINITIONS))
 
 /** True when `sourceType` can flow into a generic data input (text, list,
  *  json, or picker fragment). Excludes identity refs (character/face/object/

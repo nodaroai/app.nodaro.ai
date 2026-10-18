@@ -1,11 +1,14 @@
 /**
  * One descriptor per use-case node (decided 2026-10-14): everything a route,
  * an estimator, the review and the editor need to know about a type, so none
- * of them names a type. Adding a use-case node = a builder + one entry here
- * (and its registrations outside this package). The boot smoke's route probe
- * follows from the entry (backend/scripts/use-case-probe-paths.mjs): no list
- * to edit in ci.yml. Pure.
+ * of them names a type. Composed (decided 2026-10-18) from each node's row
+ * (use-case-rows.ts: its builder key, label and inputs — a unit's from its
+ * unit.json) and its builder's spec (use-case-specs.ts), with `reviewable`
+ * from @nodaro/shared's review holds. The boot smoke's route probe follows
+ * from the descriptors (backend/scripts/use-case-probe-paths.mjs): no list to
+ * edit in ci.yml. Pure.
  */
+import { REVIEW_HOLDING_USE_CASE_TYPES } from "@nodaro/shared/nodes"
 import {
   isUseCaseNodeType,
   type UseCaseGraph,
@@ -14,21 +17,8 @@ import {
   type UseCaseNodeType,
   type UseCaseResultKind,
 } from "./use-case-graph"
-import {
-  TIGHTEN_EPISODE,
-  TIGHTEN_MAX_EPISODE_SEC,
-  TIGHTEN_NODE_IDS,
-  buildTightenEpisodeGraph,
-  resolveTightenEpisodeSettings,
-  type TightenEpisodeSettings,
-} from "./tighten-episode-graph"
-import {
-  CHAPTERS_NODE_IDS,
-  EPISODE_CHAPTERS,
-  buildEpisodeChaptersGraph,
-  resolveEpisodeChaptersSettings,
-  type EpisodeChaptersSettings,
-} from "./episode-chapters-graph"
+import { USE_CASE_ROWS } from "./use-case-rows"
+import { USE_CASE_SPECS, type UseCaseBuilderKey } from "./use-case-specs"
 
 export type UseCaseInputHandle = "media" | "music" | "introCard"
 export interface UseCaseSources {
@@ -57,60 +47,24 @@ export interface UseCaseDescriptor {
   build(settings: UseCaseSettings, sources: UseCaseSources): UseCaseGraph
 }
 
-/** A descriptor as written: its builder takes the settings its own resolver makes, type-checked as such. */
-interface UseCaseSpec<S extends object> extends Omit<UseCaseDescriptor, "resolveSettings" | "build"> {
-  resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind): S
-  build(settings: S, sources: UseCaseSources): UseCaseGraph
-}
-
-/**
- * A descriptor from its spec. A caller only ever builds from settings the same
- * descriptor's `resolveSettings` made, so the settings type is erased here,
- * once, and nowhere else: each builder is checked against its own settings.
- */
-function defineUseCase<S extends object>(spec: UseCaseSpec<S>): UseCaseDescriptor {
-  return {
-    ...spec,
-    resolveSettings: (raw, kind) => spec.resolveSettings(raw, kind) as unknown as UseCaseSettings,
-    build: (settings, sources) => spec.build(settings as unknown as S, sources),
-  }
-}
-
-const tighten = defineUseCase<TightenEpisodeSettings>({
-  type: TIGHTEN_EPISODE,
-  label: "Tighten Episode",
-  route: `/v1/${TIGHTEN_EPISODE}`,
-  maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
-  needsVideo: false,
-  inputs: ["media", "music"],
-  inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music },
-  settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount"],
-  reviewable: true,
-  resultKind: "episode",
-  resolveSettings: (raw, kind) => resolveTightenEpisodeSettings(raw, kind),
-  build: (settings, sources) =>
-    buildTightenEpisodeGraph(settings, { media: sources.media, ...(sources.music ? { music: sources.music } : {}) }),
-})
-
-const chapters = defineUseCase<EpisodeChaptersSettings>({
-  type: EPISODE_CHAPTERS,
-  label: "Chapters",
-  route: `/v1/${EPISODE_CHAPTERS}`,
-  maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
-  needsVideo: false,
-  inputs: ["media"],
-  inputNodeIds: { media: CHAPTERS_NODE_IDS.source },
-  settingKeys: ["planTier", "instructions", "styleGuide"],
-  reviewable: false,
-  resultKind: "chapters",
-  resolveSettings: (raw, kind) => resolveEpisodeChaptersSettings(raw, kind),
-  build: (settings, sources) => buildEpisodeChaptersGraph(settings, { media: sources.media }),
-})
-
-export const USE_CASE_DESCRIPTORS: { readonly [K in UseCaseNodeType]: UseCaseDescriptor } = Object.freeze({
-  [TIGHTEN_EPISODE]: tighten,
-  [EPISODE_CHAPTERS]: chapters,
-})
+/** Each row's descriptor: its builder's spec plus the row's type, label, route and inputs. Throws at load on a builder no spec has. */
+export const USE_CASE_DESCRIPTORS: { readonly [K in UseCaseNodeType]: UseCaseDescriptor } = Object.freeze(
+  Object.fromEntries(
+    USE_CASE_ROWS.map((row) => {
+      const spec = Object.hasOwn(USE_CASE_SPECS, row.builder) ? USE_CASE_SPECS[row.builder as UseCaseBuilderKey] : undefined
+      if (!spec) throw new Error(`${row.type}: builder "${row.builder}" is not a USE_CASE_SPECS key`)
+      const descriptor: UseCaseDescriptor = {
+        ...spec,
+        type: row.type,
+        label: row.label,
+        route: `/v1/${row.type}`,
+        inputs: row.inputs,
+        reviewable: REVIEW_HOLDING_USE_CASE_TYPES.has(row.type),
+      }
+      return [row.type, descriptor]
+    }),
+  ),
+) as { readonly [K in UseCaseNodeType]: UseCaseDescriptor }
 
 export function usecaseDescriptor(type: UseCaseNodeType): UseCaseDescriptor {
   return USE_CASE_DESCRIPTORS[type]

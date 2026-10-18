@@ -5,7 +5,9 @@
 // the ONE place that is the node's own work (the worker step, the sync
 // computation, the inline computation) throws until it is written, so an
 // unfinished scaffold fails loudly on its first run instead of shipping a node
-// that silently does nothing.
+// that silently does nothing. A use-case node's work is its graph builder
+// (USE_CASE_SPECS in @nodaro/render-rules), written before it is scaffolded:
+// validation refuses a --builder that names no spec.
 import { dataInterfaceName, pascalCase } from "./manifest.mjs"
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`
@@ -61,6 +63,17 @@ export const KIND_SHAPES = {
     producer: null,
     extraData: { text: "" },
   },
+  // One recording in; text and its JSON out (a use-case node's shape at its smallest).
+  // The use-case reader reads its outputs (no `from`); its inputs land in useCaseMedia (no `field`).
+  "use-case": {
+    inputs: [{ id: "media", label: "Recording", accepts: ["video", "audio"] }],
+    outputs: [{ id: "text", label: "Text", kind: "text" }, { id: "json", label: "JSON", kind: "look" }],
+    execution: { kind: "use-case" }, // unitJson adds `builder: o.builder`
+    outputType: "text",
+    producer: null,
+    contract: { jsonPips: { json: "other" } },
+    extraData: { planTier: "economy", instructions: "" },
+  },
 }
 
 /** frontend/src/nodes/<type>/unit.json */
@@ -76,11 +89,11 @@ export function unitJson(o) {
     picker: o.family ? { family: o.family, after: o.pickerAfter } : null,
     handles: { inputs: shape.inputs, outputs: shape.outputs },
     defaultData: { label: o.label, fieldMappings: {}, ...shape.extraData },
-    execution: shape.execution,
+    execution: o.kind === "use-case" ? { ...shape.execution, builder: o.builder } : shape.execution,
     // ffmpeg-media: its inputs follow the canvas's ffmpeg media rule; a characterized worker needs it.
     capabilities: o.characterizeAfter !== undefined ? ["ffmpeg-media"] : [],
     registry: { description: o.description, outputType: shape.outputType },
-    ...(shape.producer ? { contract: { producer: shape.producer } } : {}),
+    ...(shape.producer || shape.contract ? { contract: { ...(shape.producer ? { producer: shape.producer } : {}), ...shape.contract } } : {}),
     docs: { awaiting: `scaffolded: write docs/nodes/<folder>/${o.type}.md, then set docs.page` },
   })
 }
@@ -88,12 +101,27 @@ export function unitJson(o) {
 /** frontend/src/nodes/<type>/types.ts — the `<Pascal>Data` interface gen:skills reads. */
 export function typesTs(o) {
   const shape = KIND_SHAPES[o.kind]
-  const fields = [
-    ...shape.inputs.map((h) => `  /** Wired into the "${h.id}" input. */\n  ${h.field}?: string`),
-    ...shape.outputs.map((h) => (h.from === "text" ? "  /** The text this node emits. */\n  text: string" : `  /** The "${h.id}" output. */\n  ${h.from}?: string`)),
-  ]
+  const useCase = o.kind === "use-case"
+  // A use-case node's inputs land in useCaseMedia (never a data field); the use-case
+  // reader reads its result fields: the "text" output from generatedText, "json" from generatedJson.
+  const fields = useCase
+    ? [
+        "  planTier?: EditPlanTier",
+        "  instructions?: string",
+        "  /** The run's wrapper job (Continue addresses it). */",
+        "  useCaseJobId?: string",
+        "  /** The \"text\" output. */",
+        "  generatedText?: string",
+        "  /** The \"json\" output. */",
+        "  generatedJson?: unknown",
+      ]
+    : [
+        ...shape.inputs.map((h) => `  /** Wired into the "${h.id}" input. */\n  ${h.field}?: string`),
+        ...shape.outputs.map((h) => (h.from === "text" ? "  /** The text this node emits. */\n  text: string" : `  /** The "${h.id}" output. */\n  ${h.from}?: string`)),
+      ]
   const media = shape.outputs.some((h) => ["video", "image", "audio"].includes(h.kind))
   return [
+    ...(useCase ? ['import type { EditPlanTier } from "@nodaro/shared/edl"'] : []),
     `import type { FieldMappings${media ? ", GeneratedResult" : ""} } from "@/types/nodes"`,
     "",
     `/** ${o.label.replace(/\*\//g, "*\\/")}: the node's data. Every field here is a node setting gen:skills documents. */`,
@@ -103,7 +131,7 @@ export function typesTs(o) {
     "  fieldMappings: FieldMappings",
     '  executionStatus?: "idle" | "running" | "completed" | "failed"',
     "  errorMessage?: string",
-    ...(o.kind === "worker" ? ["  currentJobProgress?: number"] : []),
+    ...(o.kind === "worker" || useCase ? ["  currentJobProgress?: number"] : []),
     ...fields,
     ...(media ? ["  generatedResults?: readonly GeneratedResult[]", "  activeResultIndex?: number"] : []),
     "}",
@@ -118,9 +146,11 @@ const PIP = {
   video: { color: "FFMPEG_COLORS.video", icon: "Film", accepts: "ACCEPTS_VIDEO" },
   audio: { color: "FFMPEG_COLORS.audio", icon: "Music", accepts: "ACCEPTS_AUDIO" },
   text: { color: "HANDLE_COLORS.text", icon: "Type", accepts: null },
+  look: { color: "DATA_HANDLE_COLORS.json", icon: "Braces", accepts: null },
 }
 const INPUT_TOP = "calc(100% - 24px)"
-const OUTPUT_TOP = "24px"
+/** Output pips stack from the top, one row apart, so two never overlap. */
+const outputTop = (i) => `${24 + 32 * i}px`
 
 /** frontend/src/nodes/<type>/node.tsx — the canvas card: its pips, run strip and output. */
 export function nodeTsx(o) {
@@ -130,22 +160,28 @@ export function nodeTsx(o) {
   const out = shape.outputs[0]
   const runs = o.kind !== "source"
   const video = out.kind === "video"
+  // An input's pip takes its first kind's colour and icon; its connection rule is
+  // the media rule when it takes both a video and an audio (a recording).
   const pipOf = (h) => PIP[h.kind ?? h.accepts[0]]
+  const acceptsOf = (h) => (h.accepts.includes("video") && h.accepts.includes("audio") ? "ACCEPTS_MEDIA" : pipOf(h).accepts)
   const pips = [...shape.inputs, ...shape.outputs].map(pipOf)
   const icons = [...new Set(["Box", ...pips.map((p) => p.icon)])].sort()
   const usesFfmpeg = pips.some((p) => p.color.startsWith("FFMPEG_COLORS"))
-  const accepts = [...new Set(shape.inputs.map((h) => pipOf(h).accepts))].sort()
+  const accepts = [...new Set(shape.inputs.map(acceptsOf))].sort()
   const handleConfigs = [
     ...shape.inputs.map((h) => `          { id: "${h.id}", type: "target", position: Position.Left, customStyle: { top: "${INPUT_TOP}", left: "-29px" }, external: true },`),
-    ...shape.outputs.map((h) => `          { id: "${h.id}", type: "source", position: Position.Right, customStyle: { top: "${OUTPUT_TOP}", right: "-29px" }, external: true },`),
+    ...shape.outputs.map((h, i) => `          { id: "${h.id}", type: "source", position: Position.Right, customStyle: { top: "${outputTop(i)}", right: "-29px" }, external: true },`),
   ]
   const pipLines = [
-    ...shape.inputs.map((h) => `      <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="target" position={Position.Left} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="left" top="${INPUT_TOP}" accepts={${pipOf(h).accepts}} />`),
-    ...shape.outputs.map((h) => `      <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="source" position={Position.Right} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="right" top="${OUTPUT_TOP}" />`),
+    ...shape.inputs.map((h) => `      <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="target" position={Position.Left} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="left" top="${INPUT_TOP}" accepts={${acceptsOf(h)}} />`),
+    ...shape.outputs.map((h, i) => `      <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="source" position={Position.Right} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="right" top="${outputTop(i)}" />`),
   ]
+  // A use-case node's outputs have no \`from\`: the use-case reader hands on its
+  // "text" output from generatedText (use-case-io.ts usecaseSavedOutput), so the card shows that.
+  const shown = o.kind === "use-case" ? "generatedText" : out.from
   const body = video
-    ? `        {nodeData.${out.from} ? <video src={nodeData.${out.from}} controls className="w-full rounded-md" /> : null}`
-    : `        {nodeData.${out.from} ? <p className="text-xs text-muted-foreground line-clamp-4">{nodeData.${out.from}}</p> : null}`
+    ? `        {nodeData.${shown} ? <video src={nodeData.${shown}} controls className="w-full rounded-md" /> : null}`
+    : `        {nodeData.${shown} ? <p className="text-xs text-muted-foreground line-clamp-4">{nodeData.${shown}}</p> : null}`
   return [
     'import { memo } from "react"',
     'import { Position, type NodeProps } from "@xyflow/react"',
@@ -155,6 +191,7 @@ export function nodeTsx(o) {
     ...(runs ? ['import { NodeQuickStrip } from "@/components/nodes/node-quick-strip"'] : []),
     ...(video ? ['import { videoNodeSizing } from "@/components/nodes/video-node-defaults"'] : []),
     ...(usesFfmpeg ? [`import { ${[...accepts, "FFMPEG_COLORS"].join(", ")} } from "@/lib/ffmpeg-handles"`] : []),
+    ...(pips.some((p) => p.color.startsWith("DATA_HANDLE_COLORS")) ? ['import { DATA_HANDLE_COLORS } from "@/lib/data-handles"'] : []),
     ...(pips.some((p) => p.color.startsWith("HANDLE_COLORS")) ? ['import { HANDLE_COLORS } from "@/lib/handle-colors"'] : []),
     'import type { UnitNodeComponent } from "../kit"',
     `import type { ${D} } from "./types"`,
@@ -211,6 +248,17 @@ export function configTsx(o) {
       "}",
       "",
       `export const ConfigPanel: UnitConfigPanel = ${pascalCase(o.type)}Config`,
+      "",
+    ].join("\n")
+  }
+  if (o.kind === "use-case") {
+    return [
+      'import type { UnitConfigPanel } from "../exec-kit"',
+      "",
+      "// No settings yet: add the node's own here (planTier, instructions … — what",
+      "// use-case.ts's body accepts), written with onUpdate. `nodeId` is the node the",
+      "// panel shows: a use-case panel reads its run (review, Continue) by it.",
+      "export const ConfigPanel: UnitConfigPanel = ({ nodeId }) => <div data-node-id={nodeId} />",
       "",
     ].join("\n")
   }
@@ -435,19 +483,54 @@ export function workerTs(o) {
   ].join("\n")
 }
 
+/** backend/src/nodes/<type>/use-case.ts — the request body and the /v1/nodes input schema of a use-case node. */
+export function useCaseTs(o) {
+  return [
+    `// ${o.label}: its request body (the factory route POST /v1/${o.type} parses it) and its GET /v1/nodes input schema.`,
+    `import { z } from "zod"`,
+    `import { usecaseLaneShape, usecasePlanShape, usecaseRecordingShape } from "../../lib/use-case/body-shapes.js"`,
+    `import type { UnitUseCase } from "../kit.js"`,
+    ``,
+    `export const body = z.object({ ...usecaseRecordingShape, ...usecasePlanShape, ...usecaseLaneShape })`,
+    ``,
+    `export const useCase: UnitUseCase = {`,
+    `  body,`,
+    `  inputSchema: { fields: [{ key: "mediaUrls", type: "video-url-array", required: true }, { key: "planTier", type: "string" }, { key: "instructions", type: "string" }] },`,
+    `}`,
+    ``,
+  ].join("\n")
+}
+
 /** backend/src/nodes/<type>/price.ee.ts — the static credit row and the credit id a run reserves. */
 export function priceTs(o) {
+  if (o.kind === "use-case") {
+    const fee = JSON.stringify(`use-case-fee:${o.type}`)
+    return [
+      "// Enterprise License (the .ee. filename). The per-run fee: a run reserves it on its",
+      "// wrapper job, and its steps bill as their own jobs at their own rows. A price change",
+      "// ships with its model_pricing seed migration (supabase/migrations/NNN_*.sql) in the",
+      "// same PR: static-costs-match-migrations.test.ts holds the two together.",
+      'import type { UnitPrice } from "../kit.js"',
+      "",
+      `export const staticCosts = { ${fee}: ${o.price} } as const`,
+      "",
+      `export const price: UnitPrice = { staticCosts, creditId: () => ${fee} }`,
+      "",
+    ].join("\n")
+  }
   return [
     "// Enterprise License (the .ee. filename). A price change ships with its",
     "// model_pricing seed migration (supabase/migrations/NNN_*.sql) in the same PR:",
     "// static-costs-match-migrations.test.ts holds the two together.",
+    'import type { UnitPrice } from "../kit.js"',
+    "",
     `export const staticCosts = { ${JSON.stringify(o.type)}: ${o.price} } as const`,
     "",
     "export function creditId(): string {",
     `  return ${JSON.stringify(o.type)}`,
     "}",
     "",
-    "export const price = { staticCosts, creditId }",
+    "export const price: UnitPrice = { staticCosts, creditId }",
     "",
   ].join("\n")
 }

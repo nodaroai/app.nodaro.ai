@@ -221,6 +221,13 @@ describe("firePluginTrigger", () => {
     expect(state.triggerUpdates).toEqual([{ last_triggered_at: expect.any(String) }])
   })
 
+  it("an event carrying a platform stamp (an app run's, a continuation's lineage) lands without it, in the row and the job", async () => {
+    const triggerData = { ...FIRE.triggerData, appRun: { appRunId: "run-x" }, runRoot: { executionId: "exec-x" }, continueFromFailed: { root: "exec-x" } }
+    expect(await firePluginTrigger({ ...FIRE, triggerData })).toEqual({ fired: true, executionId: "exec-1" })
+    expect(state.inserted[0]!.trigger_data).toEqual(FIRE.triggerData)
+    expect((state.queued[0] as [string, Record<string, unknown>])[1].triggerData).toEqual(FIRE.triggerData)
+  })
+
   it("asks the stored graph in JSON, the only operand the jsonb nodes column reads", async () => {
     expect(await firePluginTrigger(FIRE)).toEqual({ fired: true, executionId: "exec-1" })
     expect(state.graphOperands).toHaveLength(1)

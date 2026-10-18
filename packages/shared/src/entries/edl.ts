@@ -37,6 +37,8 @@ export * from "../edl-multicam.js"
 // Speaker tracks: the face-tracking result (box body + the node's descriptor) and its validators.
 export * from "../speaker-tracks.js"
 export * from "../camera-switch-contract.js"
+// Speaker Map's result contract (which camera each speaker is on) and the override's ordinal keys.
+export * from "../speaker-map-contract.js"
 export * from "../edit-plan-contract.js"
 // A person's review of an Edit Plan (`editedEdl`) and the one resolver that applies it.
 export * from "../edit-plan-review.js"

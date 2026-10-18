@@ -70,10 +70,13 @@ export const definition = {
     "finalize:own-writer",
     "length:exact-video"
   ],
+  "producer": "video",
   "docs": {
     "page": "docs/nodes/processing-video/remove-audio.md",
     "index": "hand-written",
     "useCase": "Mute a clip losslessly before adding new sound"
   },
-  "priceFallback": 20
+  "priceRows": {
+    "remove-audio": 20
+  }
 } as const

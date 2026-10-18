@@ -29,7 +29,7 @@ import { BOUNDARY_RULES } from "../../../tools/structure/ratchets.mjs"
 
 const ROOT = path.resolve(__dirname, "../../..")
 const FIXTURE = path.join(ROOT, "tools/units/__fixtures__/tree")
-const KINDS = ["worker", "sync", "inline", "source"] as const
+const KINDS = ["worker", "sync", "inline", "source", "use-case"] as const
 const typeOf = (kind: string) => `scaffold-${kind}`
 let tree = ""
 
@@ -46,6 +46,8 @@ beforeAll(async () => {
     families: new Set(["fixture-family"]),
     live: liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id: string) => [id, true]))),
     capabilities: CAPABILITIES,
+    // "scaffold": the use-case scaffold's builder (fixture-case builds with "fixture"; one spec builds one node type).
+    useCaseBuilders: new Set(["fixture", "scaffold"]),
     exists: (p: string) => existsSync(path.join(tree, p)),
   }
   const tsApi = loadTypeScript(ROOT)
@@ -54,8 +56,9 @@ beforeAll(async () => {
     const argv = [
       "--new", typeOf(kind), "--category", "processing", "--kind", kind, "--after", "upload-video",
       "--family", "fixture-family", "--picker-after", "first", "--description", `A ${kind} scaffold.`,
-      ...(kind === "worker" || kind === "sync" ? ["--price", "5"] : []),
+      ...(kind === "worker" || kind === "sync" || kind === "use-case" ? ["--price", "5"] : []),
       ...(kind === "worker" ? ["--characterize", "first"] : []),
+      ...(kind === "use-case" ? ["--builder", "scaffold"] : []),
     ]
     const err = sink()
     const rc = await main(argv, tree, sink(), err, { ctx, readPrice })
@@ -95,20 +98,22 @@ function valueImports(file: string, source: string): string[] {
 
 describe("gen:units --new, one unit of every execution.kind", () => {
   it("each kind scaffolded and validated, and gen:units --check is clean (beforeAll)", () => {
-    expect(loadUnits(tree).map((u: { type: string }) => u.type)).toEqual(["fixture-echo", ...KINDS.map(typeOf)].sort())
+    expect(loadUnits(tree).map((u: { type: string }) => u.type)).toEqual(["fixture-case", "fixture-echo", ...KINDS.map(typeOf)].sort())
   })
 
-  it("the price fallback of a node with a route comes from its price.ee.ts", () => {
+  it("the price rows of a node with a route, or a use-case fee, come from its price.ee.ts", () => {
     for (const kind of ["worker", "sync"]) {
-      expect(readFileSync(path.join(tree, `frontend/src/nodes/${typeOf(kind)}/definition.generated.ts`), "utf8")).toMatch(/"priceFallback": 5\n/)
+      expect(readFileSync(path.join(tree, `frontend/src/nodes/${typeOf(kind)}/definition.generated.ts`), "utf8")).toMatch(new RegExp(`"priceRows": \\{\\n {4}"${typeOf(kind)}": 5\\n {2}\\}\\n`))
     }
-    expect(readFileSync(path.join(tree, "frontend/src/nodes/scaffold-source/definition.generated.ts"), "utf8")).toMatch(/"priceFallback": null\n/)
+    expect(readFileSync(path.join(tree, "frontend/src/nodes/scaffold-source/definition.generated.ts"), "utf8")).toMatch(/"priceRows": \{\}\n/)
+    // A use-case node's row is its per-run fee.
+    expect(readFileSync(path.join(tree, "frontend/src/nodes/scaffold-use-case/definition.generated.ts"), "utf8")).toMatch(/"priceRows": \{\n {4}"use-case-fee:scaffold-use-case": 5\n {2}\}\n/)
   })
 
   it("G7: every scaffolded module is declarations only", () => {
     const modules = scaffoldedModules()
-    // worker 13 (its characterize.char.ts included), sync 10, inline 7, source 6 (.ts/.tsx, the generated projections included)
-    expect(modules.length).toBe(36)
+    // worker 13 (its characterize.char.ts included), sync 10, inline 7, source 6, use-case 8 (.ts/.tsx, the generated projections included)
+    expect(modules.length).toBe(44)
     expect(modules.flatMap((m) => sideEffectProblems(ts, m.path, m.source))).toEqual([])
   })
 

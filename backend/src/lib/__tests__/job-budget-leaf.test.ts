@@ -69,6 +69,17 @@ describe("the audio-sync budget leaf", () => {
   })
 })
 
+// Speaker Map's runtime (`speaker-map.ts`) pulls ffmpeg-utils and the media
+// proxy; the mocks above throw on either. Its budget leaf is not composed into
+// the registry yet (the node registers it), so this proves the leaf alone loads
+// pure.
+describe("the speaker-map budget leaf", () => {
+  it("loads without the ffmpeg runtime or the media proxy", async () => {
+    const leaf = await import("../../providers/audio/speaker-map-budget.js")
+    expect(typeof leaf.speakerMapJobBudgetMs).toBe("function")
+  })
+})
+
 // Speaker View's renderer is the EDL timeline (`edl-timeline.ts`, which pulls
 // ffmpeg-utils): its budget must reach the registry through the pure leaf only.
 describe("the speaker-view budget leaf", () => {

@@ -1315,14 +1315,14 @@ describe("supportsForcedToolChoice / conversationBoundThinking", () => {
     expect(getLlmModel("grok-4.7")?.reasoningEfforts).not.toContain("none")
   })
 
-  // The film pipeline's callLLM (backend/src/ee/pipelines/llms/call-llm.ts) still
-  // sends a FORCED tool_choice on the raw Anthropic SDK, and it is reachable only
-  // through PIPELINE_PINNABLE_SCRIPT_LLMS. A model that 400s on forcing must not
-  // join that list until callLLM reads `supportsForcedToolChoice`.
-  it("no pipeline-pinnable script LLM rejects a forced tool choice", () => {
-    for (const id of PIPELINE_ACCEPTED_SCRIPT_LLMS) {
-      expect(getLlmModel(id)?.supportsForcedToolChoice, id).not.toBe(false)
-    }
+  // The film pipeline's callLLM (backend/src/ee/pipelines/llms/call-llm.ts)
+  // reads `supportsForcedToolChoice` and asks such a model with tool_choice auto
+  // (pinned in call-llm.test.ts), so a model that 400s on forcing may be a pin.
+  it("Claude Sonnet 5.5 is an offered Script LLM pin, though it refuses a forced tool choice", () => {
+    expect(PIPELINE_PINNABLE_SCRIPT_LLMS).toContain("claude-sonnet-5-5")
+    expect(getLlmModel("claude-sonnet-5-5")?.supportsForcedToolChoice).toBe(false)
+    expect(PipelineConfigSchema.safeParse({ script_llm: "claude-sonnet-5-5" }).success).toBe(true)
+    expect(PipelineConfigSchema.safeParse({ stage_models: { script_llm: "claude-sonnet-5-5" } }).success).toBe(true)
   })
 
   it("resolves the KIE / Anthropic dash-form ids of the new models", () => {

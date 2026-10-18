@@ -18,6 +18,7 @@
 import { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
 import { expandItemsWithRepeat } from "./repeat-types.js"
 import { isDefaultSelectorConfig, resolveIndex, selectListItems, type SelectorFields } from "./selector.js"
+import { unitNonPromptInputs } from "./unit-contract-compose.js"
 
 /**
  * The text LANES the input resolvers route somewhere OTHER than the prompt slot
@@ -37,7 +38,7 @@ import { isDefaultSelectorConfig, resolveIndex, selectListItems, type SelectorFi
  * unlisted lane keeps the old behavior (the item is the prompt), so a miss can
  * only ever reproduce the old bug on that one lane, never a new one.
  */
-export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly string[]>> = {
+const LEGACY_NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly string[]>> = {
   negative: "*",
   "system-prompt": "*",
   script: ["ai-avatar"],
@@ -55,8 +56,38 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   // the material it analyzes — a list of links fanned through it must not be
   // written into the material too.
   link: ["content-recipe"],
-  // Tighten Episode's `music` is the bed's address (inputs.useCaseMusic), never a prompt.
-  music: ["tighten-episode"],
+}
+
+/**
+ * The hand-written lanes ∪ the node units' `contract.nonPromptInputs` rows
+ * (generated/unit-contracts.ts): each unit type joins the list of every handle
+ * it names (a handle no list names yet gets one). A `"*"` lane already covers
+ * every type, so it stays as it is. A type listed twice for one handle throws
+ * at load — a type is hand-written or a node unit, never both.
+ */
+export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly string[]>> = composeNonPromptLanes(LEGACY_NON_PROMPT_TEXT_LANES, unitNonPromptInputs())
+
+function composeNonPromptLanes(
+  legacy: Readonly<Record<string, "*" | readonly string[]>>,
+  rows: ReadonlyArray<readonly [string, ReadonlyArray<string>]>,
+): Record<string, "*" | readonly string[]> {
+  const out: Record<string, "*" | readonly string[]> = { ...legacy }
+  for (const [type, handles] of rows) {
+    const own = new Set<string>()
+    for (const handle of handles) {
+      // A unit naming one handle twice in its own row is its own mistake, not a clash with the hand-written lanes.
+      if (own.has(handle)) throw new Error(`NON_PROMPT_TEXT_LANES: node unit ${type} lists "${handle}" twice in its contract.nonPromptInputs`)
+      own.add(handle)
+      const scope = Object.hasOwn(out, handle) ? out[handle] : []
+      if (scope === "*") continue
+      // Only the same handle clashes here: a unit hand-listed under a DIFFERENT
+      // handle is a string literal of a unit's id outside its folders, which
+      // G2 fails (frontend/src/__tests__/node-units-structure.test.ts).
+      if (scope.includes(type)) throw new Error(`NON_PROMPT_TEXT_LANES: ${type} is listed for "${handle}" both by hand and as a node unit — a type lives in one place`)
+      out[handle] = [...scope, type]
+    }
+  }
+  return out
 }
 
 /** Does a TEXT list wired to `targetHandle` of a `nodeType` node feed its prompt slot? */

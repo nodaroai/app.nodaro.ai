@@ -4,8 +4,9 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { editCommand } from "../edit.js"
-import { warn, emit } from "../../output.js"
-import { ContinuationRefusedError } from "@nodaro/sdk/errors"
+import { warn, emit, success } from "../../output.js"
+import { ContinuationRefusedError, NodaroError } from "@nodaro/sdk/errors"
+import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 
 const mocks = {
   silenceDetect: vi.fn(),
@@ -319,6 +320,12 @@ describe("edit tighten-episode", () => {
     expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "16:9", layout: "auto" } })
   })
 
+  it("names the command it ran on the queued line", async () => {
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-1" })
+    await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4")
+    expect(vi.mocked(success)).toHaveBeenCalledWith("job job-1 queued (tighten-episode)")
+  })
+
   it("refuses --layout without --framing before any request", async () => {
     await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--layout", "grid")).rejects.toThrow("process.exit(1)")
     expect(mocks.tightenEpisode).not.toHaveBeenCalled()
@@ -377,6 +384,12 @@ describe("edit episode-chapters", () => {
     }
   })
 
+  it("names the command it ran on the queued line", async () => {
+    mocks.episodeChapters.mockResolvedValueOnce({ jobId: "job-c" })
+    await runCmd("edit", "episode-chapters", "--media", "https://r2/ep.mp4")
+    expect(vi.mocked(success)).toHaveBeenCalledWith("job job-c queued (episode-chapters)")
+  })
+
   it("refuses an unknown --plan-tier before any request", async () => {
     await expect(runCmd("edit", "episode-chapters", "--media", "https://r2/ep.mp4", "--plan-tier", "gold")).rejects.toThrow("process.exit(1)")
     expect(mocks.episodeChapters).not.toHaveBeenCalled()
@@ -418,12 +431,36 @@ describe("edit continue-use-case", () => {
     expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "from-failed", nodeType: "episode-chapters" }, undefined)
   })
 
+  it("a run whose type the key can't read asks for --type, not the SDK's nodeType", async () => {
+    const typeUnknown = () =>
+      new NodaroError("continueUseCase: the run's node type cannot be read — pass nodeType", "use_case_type_unknown", 400)
+    mocks.continueUseCase.mockRejectedValueOnce(typeUnknown())
+    const errLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed")).rejects.toThrow("process.exit(1)")
+      const lines = errLog.mock.calls.map((c) => String(c[0]))
+      expect(lines[0]).toContain("pass --type <node type> (this key can't read the job's type)")
+      expect(lines.join("\n")).toContain("use_case_type_unknown")
+      expect(lines.join("\n")).not.toContain("nodeType")
+    } finally {
+      errLog.mockRestore()
+    }
+    // --json: the documented error shape on stdout, keeping the SDK's code.
+    vi.mocked(emit).mockClear()
+    mocks.continueUseCase.mockRejectedValueOnce(typeUnknown())
+    await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--json")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(emit)).toHaveBeenCalledWith(
+      { error: { code: "use_case_type_unknown", message: "pass --type <node type> (this key can't read the job's type)" } },
+      expect.anything(),
+    )
+  })
+
   it("refuses a --type that is no use-case node before any request", async () => {
     await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--type", "apply-edl")).rejects.toThrow(
       "process.exit(1)",
     )
     expect(mocks.continueUseCase).not.toHaveBeenCalled()
-    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/^--type must be tighten-episode, episode-chapters \(got "apply-edl"\)/)])
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([`--type must be ${USE_CASE_NODE_TYPES.join(", ")} (got "apply-edl")`])
   })
 
   it("refuses an unknown --mode, or --edit without render-final, before any request", async () => {

@@ -1,5 +1,5 @@
 {
-  "$comment": "The reviewed composition points: the only product modules that may import a _generated/ node-unit aggregate (G3, tools/__tests__/node-units-guard.test.mjs). `exports` names, per aggregate, the collections each composer re-exports — the names tests and product modules consume a registry through (G4, and the test-select registry rule: a listed composer is a pass-through for the aggregates it exports, not an enumerator). `lookups` names the composer exports that also read the collection but only ever answer for the one value they are given, AND that value is literally the node type (or the key a node type is looked up by) — so rule (b) still selects a caller that names the type; their callers are not enumerators. Anything taking a credit id (ids are not type ids: composites like \"foo:pro\", ids built by helpers or constants), a family id, or returning a collection (familyById returns `.types`) belongs in `exports`. Every export that reads a composed collection is in one of the two lists (node-units-structure.test.ts fails otherwise). Declared here, not as `// @registry-exports` comments in the composers, so PR1a touches no product file; an aggregate declares its own with that comment (it is generated). Adding a composer or an export is a reviewed change; see tools/units/README.md.",
+  "$comment": "The reviewed composition points: the only product modules that may import a _generated/ node-unit aggregate (G3, tools/__tests__/node-units-guard.test.mjs). `exports` names, per aggregate, the collections each composer re-exports — the names tests and product modules consume a registry through (G4, and the test-select registry rule: a listed composer is a pass-through for the aggregates it exports, not an enumerator). `lookups` names the composer exports that also read the collection but only ever answer for the one value they are given, AND that value is literally the node type (or the key a node type is looked up by) — so rule (b) still selects a caller that names the type; their callers are not enumerators. Anything taking a credit id (ids are not type ids: composites like \"foo:pro\", ids built by helpers or constants), a family id, or returning a collection (familyById returns `.types`) belongs in `exports`. Every export that reads a composed collection is in one of the two lists (node-units-structure.test.ts fails otherwise). Declared here, not as `// @registry-exports` comments in the composers, so PR1a touches no product file; an aggregate declares its own with that comment (it is generated). Adding a composer or an export is a reviewed change; see tools/units/README.md. `foldsAtLoad` names the registries (keys of `exports`) a composer reads EVERY unit of while it LOADS — it validates or folds the collection at module evaluation (a duplicate-type or unknown-position throw, a demanded icon, a Map keyed by each unit's type), so one broken unit fails every test that merely imports it. For those registries the composer is an ENUMERATOR, not a pass-through (decided 2026-10-18). Derived from code, never chosen: tools/units/structure.mjs `loadTimeRegistryReads` decides it, and node-units-structure.test.ts fails an entry that differs from it in either direction.",
   "composers": {
     "frontend/src/types/nodes.ts": {
       "composes": "NODE_DEFINITIONS / NODE_DEF_MAP = legacy definitions + UNIT_DEFINITIONS, each unit at its position.after",
@@ -8,7 +8,10 @@
           "NODE_DEFINITIONS",
           "NODE_DEF_MAP"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "definitions"
+      ]
     },
     "frontend/src/lib/unit-definitions.ts": {
       "composes": "UNIT_NODE_DEFINITIONS = UNIT_DEFINITIONS — the one door through which the registries derived from a unit's manifest (handle tables, EXECUTABLE_TYPES and the price mirror, the ffmpeg rule, config-panel names and sets, output extraction) read it, so none of those modules is itself a composer a unit may not import (G5)",
@@ -17,6 +20,9 @@
           "UNIT_NODE_DEFINITIONS"
         ]
       },
+      "foldsAtLoad": [
+        "definitions"
+      ],
       "lookups": [
         "unitDefinitionOf"
       ]
@@ -30,6 +36,9 @@
           "estimateNodeCredits"
         ]
       },
+      "foldsAtLoad": [
+        "definitions"
+      ],
       "lookups": [
         "isExecutableNode"
       ]
@@ -40,7 +49,10 @@
         "definitions": [
           "HANDLE_OUTPUT_TYPES"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "definitions"
+      ]
     },
     "frontend/src/components/nodes/index.ts": {
       "composes": "nodeTypes = legacy components + UNIT_COMPONENTS",
@@ -48,7 +60,10 @@
         "components": [
           "nodeTypes"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "components"
+      ]
     },
     "frontend/src/lib/node-options.tsx": {
       "composes": "NODE_OPTIONS / getNodeOptions = legacy options + UNIT_OPTIONS, each at its picker.after",
@@ -57,17 +72,21 @@
           "NODE_OPTIONS",
           "getNodeOptions"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "options"
+      ]
     },
     "frontend/src/lib/node-families.ts": {
-      "composes": "NODE_FAMILIES types arrays + each unit's picker.family",
+      "composes": "NODE_FAMILIES types arrays + each unit's picker.family; TAB_SUPERSET + each unit's picker.alsoOnTabs",
       "exports": {
         "options": [
           "NODE_FAMILIES",
           "OWNER_FAMILY_BY_TYPE",
           "FAMILY_RANK",
           "tabForType",
-          "familyById"
+          "familyById",
+          "TAB_SUPERSET"
         ]
       },
       "lookups": [
@@ -81,7 +100,7 @@
       "composes": "UNIT_EXECUTORS[type] before the legacy blocks; builds the unit kit"
     },
     "frontend/src/components/editor/workflow-editor/execution-graph.ts": {
-      "composes": "output extraction from the composed definitions' handles.outputs[].from"
+      "composes": "output extraction from the composed definitions' handles.outputs[].from; VIDEO_SOURCE_TYPES_FOR_RENDER = legacy rows + the units whose contract.producer is video"
     },
     "frontend/src/lib/i18n/labels.ts": {
       "composes": "LABEL_TABLES = legacy label tables + UNIT_LABELS",
@@ -104,6 +123,9 @@
           "useLocalizePresetGroup"
         ]
       },
+      "foldsAtLoad": [
+        "labels"
+      ],
       "lookups": [
         "isLocalizedTableKey"
       ]
@@ -129,7 +151,10 @@
           "getModelCreditBaseCost",
           "getModelCreditCostFromDB"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "prices"
+      ]
     },
     "backend/src/lib/node-registry.ts": {
       "composes": "NODE_REGISTRY = legacy descriptors + UNIT_REGISTRY",
@@ -139,7 +164,10 @@
           "getEnrichedRegistry",
           "findNode"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "registry"
+      ]
     },
     "backend/src/lib/unit-descriptors.ts": {
       "composes": "UNIT_NODE_DESCRIPTORS = the registry aggregate — the one door through which the server registries derived from a unit's manifest (required media, saved output, the finalize set, the video-length rules, the worker map, the MCP handle table) read it",
@@ -148,6 +176,9 @@
           "UNIT_NODE_DESCRIPTORS"
         ]
       },
+      "foldsAtLoad": [
+        "registry"
+      ],
       "lookups": [
         "unitDescriptorOf"
       ]
@@ -167,7 +198,25 @@
         "characterizations": [
           "OPERATIONS"
         ]
-      }
+      },
+      "foldsAtLoad": [
+        "characterizations"
+      ]
+    },
+    "backend/src/lib/use-case/bodies.ts": {
+      "composes": "USE_CASE_BODIES = legacy bodies ∪ UNIT_USE_CASES[type].body; usecaseInputSchemaOf(type) = the unit's inputSchema",
+      "exports": {
+        "use-cases": [
+          "USE_CASE_BODIES",
+          "usecaseBodyTakesNull"
+        ]
+      },
+      "foldsAtLoad": [
+        "use-cases"
+      ],
+      "lookups": [
+        "usecaseInputSchemaOf"
+      ]
     }
   }
 }

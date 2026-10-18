@@ -160,8 +160,8 @@ test('shadow mode is wired end to end and can never redden or shorten a run', ()
     assert.match(job, new RegExp(`failed-${project}\\.txt\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.flaky\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.unknown\\n\\s*if-no-files-found: ignore`))
   }
   assert.match(readFileSync('tools/test-select/run-suite.sh', 'utf8'), /^  shadow\)$/m)
-  assert.match(jobs['attribute-dev-failure'], /flaky: \{ frontend: split\(process\.env\.FLAKY_FRONTEND\), backend: split\(process\.env\.FLAKY_BACKEND\) \}/)
-  assert.match(jobs['attribute-dev-failure'], /unknown: \{ frontend: split\(process\.env\.UNKNOWN_FRONTEND\), backend: split\(process\.env\.UNKNOWN_BACKEND\) \}/)
+  // failed / flaky / unknown all reach the comment (failed-lists.mjs reads the three).
+  assert.match(jobs['attribute-dev-failure'], /\.\.\.readFailedLists\(process\.env\.FAILED_DIR\),/)
 })
 
 test('nightly coverage can never mark main red (its checks land on main HEAD, which gates deploys)', () => {
@@ -235,8 +235,16 @@ for (const project of ['frontend', 'backend']) test(`${project}: four shards, on
   assert.equal(passes('skipped', 'success', ''), false)
 })
 
+// One matching artifact is extracted straight into the download path, several
+// into a subdirectory each — the reader is layout-free (failed-lists.mjs; the
+// fixtures are in test-select-reporting.test.mjs), and the step must use it
+// rather than a glob that assumes the subdirectories.
 test('the dev failure attribution reads every shard\'s failed files', () => {
-  assert.match(jobs['attribute-dev-failure'], /"\$FAILED_DIR"\/failed-"\$1"-\*\/failed-"\$1"\.txt"\$\{2:-\}"/)
+  const job = jobs['attribute-dev-failure']
+  assert.match(job, /pattern: failed-\*\n\s*path: \$\{\{ runner\.temp \}\}\/failed\n/)
+  assert.match(job, /FAILED_DIR: \$\{\{ runner\.temp \}\}\/failed\n/)
+  assert.match(job, /import \{ readFailedLists \} from "\.\/tools\/test-select\/failed-lists\.mjs"/)
+  assert.doesNotMatch(job, /failed-"\$1"-\*/)
 })
 
 // The pass cache (§5.6): only a pull request outside shadow mode may skip a

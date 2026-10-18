@@ -4,6 +4,10 @@
  * Stateless function with no React/Zustand dependencies.
  */
 
+import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
+import { composeSet, unitsWith } from "../../lib/unit-compose.js"
+// @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
+// @registry-enumerates TEXT_SOURCE_NODE_TYPES carries every node unit whose primary output is text
 import type {
   SimpleNode,
   SimpleEdge,
@@ -1395,7 +1399,9 @@ function routeLoneMediaLinkToSocialPost(inputs: ResolvedInputs, src: SimpleNode,
 // Media type sets for source type classification
 // ---------------------------------------------------------------------------
 
-const TEXT_SOURCE_NODE_TYPES = new Set([
+// The text sources: these, and a unit whose primary output (its first, what an
+// edge naming no pip reads — the editor's unitOutputValue rule) is text.
+export const TEXT_SOURCE_NODE_TYPES = composeSet("TEXT_SOURCE_NODE_TYPES", new Set([
   "text-prompt",
   "list",
   "transcribe",
@@ -1423,8 +1429,6 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
-  // Chapters (a use-case node): its show notes on `text`, its chapter list on `json`.
-  "episode-chapters",
   // Collections — Read Collection's digest, Save to Collection's headline.
   "collection-read",
   "collection-write",
@@ -1435,7 +1439,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // or the digest) — text is the primary output of both.
   "content-recipe",
   "content-ideas",
-])
+]), UNIT_NODE_DESCRIPTORS.filter((u) => u.handles.outputs[0]?.kind === "text").map((u) => u.type))
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
 // Social-media-format may produce images (handled in routeOutput)
@@ -1457,6 +1461,21 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
 // behavior is unchanged.
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "location"])
+
+/** Targets whose wired entity is the node's SUBJECT — it lands in `imageUrl` —
+ *  rather than one more reference image (`referenceImageUrls`, every other
+ *  target). Legacy rows ∪ every node unit declaring the "input:entity-subject"
+ *  capability (tools/units/capabilities.mjs), so a migrated node is never named
+ *  here. The editor's twin is `ENTITY_SUBJECT_TARGET_TYPES` in
+ *  frontend/src/components/editor/workflow-editor/node-input-resolver.ts,
+ *  composed from the same capability. Its legacy rows lack "gif-to-video",
+ *  which the editor's have: a server-run Character → GIF to Video sends the
+ *  portrait as a reference, which its payload never reads. */
+export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
+  "ENTITY_SUBJECT_TARGET_TYPES",
+  new Set(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video"]),
+  unitsWith(UNIT_NODE_DESCRIPTORS, "input:entity-subject"),
+)
 
 // Entity node types that carry a stored `data.voice` (the character voice
 // shape) which auto-fills a connected text-to-speech node. character + creature
@@ -2448,7 +2467,7 @@ function routeOutput(
 
   // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer / ai-avatar image mode / still-to-video's still) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer" || targetType === "ai-avatar" || targetType === "still-to-video") {
+    if (ENTITY_SUBJECT_TARGET_TYPES.has(targetType)) {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

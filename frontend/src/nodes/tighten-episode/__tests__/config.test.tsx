@@ -6,14 +6,15 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
-vi.mock("../run-up-to-here-notice", () => ({ RunUpToHereNotice: () => null }))
+vi.mock("@/components/editor/config-panels/run-up-to-here-notice", () => ({ RunUpToHereNotice: () => null }))
 
 import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { tightenFramingLayouts } from "@nodaro/render-rules"
-import { TightenEpisodeConfig } from "../tighten-episode-config"
+import { ConfigPanel as TightenEpisodeConfig } from "../config"
 import { SPEAKER_LAYOUT_LABEL_KEYS } from "@/components/nodes/speaker-view-label-keys"
 import { translate } from "@/lib/i18n"
-import type { TightenEpisodeData, WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import type { TightenEpisodeData } from "../types"
 
 const t = (key: Parameters<typeof translate>[1]) => translate("en", key)
 
@@ -27,7 +28,7 @@ interface Options {
 function renderConfig({ data, onUpdate = () => {}, nodes = [], edges = [] }: Options) {
   return render(
     <TightenEpisodeConfig
-      data={{ label: "T", fieldMappings: {}, ...data } as TightenEpisodeData}
+      data={{ label: "T", fieldMappings: {}, ...data } as TightenEpisodeData as never}
       onUpdate={onUpdate}
       sources={[]}
       fieldMappings={{}}
@@ -35,6 +36,7 @@ function renderConfig({ data, onUpdate = () => {}, nodes = [], edges = [] }: Opt
       nodes={nodes as unknown as WorkflowNode[]}
       edges={edges as unknown as WorkflowEdge[]}
       nodeId="t1"
+      kit={{ localizeNodeLabel: (label: string) => label }}
     />,
   )
 }

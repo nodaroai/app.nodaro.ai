@@ -15,11 +15,12 @@ export const HANDLE_KINDS = ["text", "image", "imageRef", "endFrame", "video", "
 /**
  * The handle kinds a unit INPUT may accept today: the ones the editor has a
  * connection rule for (`unitInputAccepts` in frontend/src/lib/ffmpeg-handles.ts —
- * video, audio, or both = any media). A unit needing another kind adds its
- * rule there and its kind here in its own PR (decided 2026-10-16: a node that
- * needs a missing seam builds it).
+ * video, audio, image; several = any of them, video + audio = any media). The
+ * canvas judges every unit input by them (frontend/src/lib/unit-connections.ts).
+ * A unit needing another kind adds its rule there and its kind here in its own
+ * PR (decided 2026-10-16: a node that needs a missing seam builds it).
  */
-export const ACCEPTS_KINDS = ["video", "audio"]
+export const ACCEPTS_KINDS = ["video", "audio", "image"]
 
 /** What `execution.requires.kind` may name: `RequiredMediaInput.kind` of the server's payload builder. */
 export const MEDIA_INPUT_KINDS = ["video", "audio", "image"]
@@ -45,12 +46,33 @@ export const OUTPUT_TYPES = ["image", "video", "audio", "text", "data", "none"]
 
 /**
  * How a node runs, and which unit files that requires:
- *   source  — nothing runs (an input or a picker-free source); no files
- *   inline  — the editor computes it (exec.ts)
- *   sync    — one HTTP call answers it (route.ts + exec.ts + api.ts)
- *   worker  — a route queues a job a worker runs (route.ts + payload.ts + worker.ts + exec.ts + api.ts)
+ *   source   — nothing runs (an input or a picker-free source); no files
+ *   inline   — the editor computes it (exec.ts)
+ *   sync     — one HTTP call answers it (route.ts + exec.ts + api.ts)
+ *   worker   — a route queues a job a worker runs (route.ts + payload.ts + worker.ts + exec.ts + api.ts)
+ *   use-case — a route factory builds it into a hidden inline chain (use-case.ts + price.ee.ts; its graph builder is a USE_CASE_SPECS entry in @nodaro/render-rules)
  */
-export const EXECUTION_KINDS = ["source", "inline", "sync", "worker"]
+export const EXECUTION_KINDS = ["source", "inline", "sync", "worker", "use-case"]
+
+/**
+ * The input pips a use-case node may have: `UseCaseInputHandle` of
+ * packages/render-rules/src/use-case-registry.ts — what routeUseCaseInput
+ * routes (into useCaseMedia / useCaseMusic / useCaseIntroCard).
+ */
+export const USE_CASE_INPUT_HANDLES = ["media", "music", "introCard"]
+
+/**
+ * The add-node picker tabs a family can own (`NodeFamily["tab"]` of
+ * frontend/src/lib/node-families.ts: every PickerTab but "common" and "all",
+ * plus "controls") — what `picker.alsoOnTabs` may name.
+ */
+export const PICKER_TABS = ["image", "video", "audio", "models", "assets", "automate", "publish", "controls"]
+
+/** What a JSON (kind "look") output pip carries: `JsonOutputDeclaration` of packages/shared/src/json-kinds.ts. */
+export const JSON_PIP_KINDS = ["transcript", "edl", "other"]
+
+/** How a published app shows a node's result (`contract.presents`): `OutputType` of packages/shared/src/presentation-utils.ts but "data". */
+export const PRESENTS = ["image", "video", "audio", "text"]
 
 /** BullMQ queues a worker unit may run on (`videoQueue` in backend/src/lib/queue.ts). */
 export const QUEUES = ["video"]

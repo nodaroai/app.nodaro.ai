@@ -19,7 +19,7 @@ const staticUtilityBase = (type: string, body: Record<string, unknown>): number 
   const units = videoUtilityUnits(type, body)
   return units === undefined ? undefined : STATIC_CREDIT_COSTS[type]! * units
 }
-import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../../lib/node-handles.js"
 import {
   DYNAMIC_VIDEO_OUTPUT_TYPES,
   PASS_THROUGH_VIDEO_TYPES,
@@ -53,7 +53,7 @@ function stepDelta(graph: N[], wires: E[], op: N, from: string, replaced = ["rec
   return { fixed: withOp.preview - without.preview, perMinute: withOp.previewPerMinute - without.previewPerMinute, at: (m: number) => at(withOp, m) - at(without, m) }
 }
 
-const firstInput = (type: string) => NODE_HANDLES[type]?.inputs[0] ?? "in"
+const firstInput = (type: string) => ALL_NODE_HANDLES[type]?.inputs[0] ?? "in"
 
 describe("a step that keeps its video whole is transparent to the listing", () => {
   it.each(PASS_THROUGH_VIDEO_TYPES)("%s: rec -> %s -> Combine Videos lists as rec -> Combine Videos", (type) => {

@@ -1,15 +1,17 @@
-// @test-watches packages/client/src/resources/edit.ts
+// @test-watches frontend/src/nodes/** backend/src/nodes/**
 /**
  * A run's use-case type, as every surface reads it from the job row (the
  * continue route, the MCP verb): the type its input records, else its
- * job_type. And the SDK's own copy of the type list — it cannot import this
- * package — names exactly the types the registry has, so a new use-case node
- * reaches `continueUseCase` and the CLI's `--type` the day it ships.
+ * job_type. And the SDK's type list is shared's list itself (it re-exports
+ * `@nodaro/shared/nodes`), the one render-rules and the backend's route bodies
+ * are built from, so a new use-case node reaches `continueUseCase` and the
+ * CLI's `--type` the day it ships.
  */
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { USE_CASE_NODE_TYPES, usecaseRunType } from "@nodaro/render-rules"
+import { USE_CASE_NODE_TYPES as SHARED_USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
+import { USE_CASE_NODE_TYPES as SDK_USE_CASE_NODE_TYPES } from "../../../../packages/client/src/resources/edit.js"
+import { USE_CASE_BODIES } from "../use-case/bodies.js"
 
 describe("usecaseRunType", () => {
   it("reads the type the run's input records", () => {
@@ -35,11 +37,9 @@ describe("usecaseRunType", () => {
 })
 
 describe("the SDK's use-case type list", () => {
-  it("names exactly the registry's types", () => {
-    const source = readFileSync(join(__dirname, "..", "..", "..", "..", "packages", "client", "src", "resources", "edit.ts"), "utf8")
-    const match = source.match(/export const USE_CASE_NODE_TYPES = \[([^\]]*)\] as const/)
-    expect(match, "packages/client/src/resources/edit.ts declares USE_CASE_NODE_TYPES").not.toBeNull()
-    const sdkTypes = [...match![1].matchAll(/"([^"]+)"/g)].map((m) => m[1])
-    expect([...sdkTypes].sort()).toEqual([...USE_CASE_NODE_TYPES].sort())
+  it("is shared's list itself, the one render-rules and the backend's route bodies carry", () => {
+    expect(SDK_USE_CASE_NODE_TYPES).toBe(SHARED_USE_CASE_NODE_TYPES)
+    expect([...SDK_USE_CASE_NODE_TYPES]).toEqual([...USE_CASE_NODE_TYPES])
+    expect(Object.keys(USE_CASE_BODIES).sort()).toEqual([...SDK_USE_CASE_NODE_TYPES].sort())
   })
 })

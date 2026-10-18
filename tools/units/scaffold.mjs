@@ -4,26 +4,27 @@
 // gen:units (manifest.mjs) before anything is written, so a refused scaffold
 // leaves the tree untouched; once written, gen:units regenerates, so
 // `gen:units --check` is clean straight away. Built-ins only.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts backend/src/providers/video/__characterization__/operations.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts backend/src/providers/video/__characterization__/operations.ts packages/render-rules/src/use-case-specs.ts
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { dataInterfaceName, loadUnits, repoContext, TYPE_ID, validateUnits } from "./manifest.mjs"
 import { UNIT_ROOTS } from "./seams.mjs"
 import { EXECUTION_KINDS } from "./vocabulary.mjs"
-import { apiTs, characterizeTs, configTsx, execTs, nodeTsx, optionTsx, payloadTs, priceTs, routeTs, typesTs, unitJson, workerTs } from "./scaffold-templates.mjs"
+import { apiTs, characterizeTs, configTsx, execTs, nodeTsx, optionTsx, payloadTs, priceTs, routeTs, typesTs, unitJson, useCaseTs, workerTs } from "./scaffold-templates.mjs"
 
 /** The harness that composes every unit's characterize.char.ts (tools/units/seams.mjs "characterizations"). */
 const CHARACTERIZATION_OPERATIONS = "backend/src/providers/video/__characterization__/operations.ts"
 
 export const USAGE = [
-  "usage: npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inline|source>",
+  "usage: npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inline|source|use-case>",
   "         --after <type|first> --description \"<one sentence for /v1/nodes>\"",
   "         (--family <family id> --picker-after <type|first> | --no-picker)",
-  "         [--label \"<Label>\"] [--price <credits>   (worker and sync: required)]",
+  "         [--label \"<Label>\"] [--price <credits>   (worker, sync and use-case: required)]",
+  "         [--builder <key>   (use-case: required — its graph builder's key in packages/render-rules/src/use-case-specs.ts)]",
   "         [--characterize <operation it follows|first>   (worker: its ffmpeg characterization, characterize.char.ts)]",
 ].join("\n")
 
-const FLAGS_WITH_VALUE = new Set(["--new", "--category", "--kind", "--after", "--description", "--family", "--picker-after", "--label", "--price", "--characterize"])
+const FLAGS_WITH_VALUE = new Set(["--new", "--category", "--kind", "--after", "--description", "--family", "--picker-after", "--label", "--price", "--characterize", "--builder"])
 const BOOLEAN_FLAGS = new Set(["--no-picker"])
 
 /** `--flag value` / `--flag=value` into { new, category, … }; unknown or valueless flags are errors. */
@@ -70,12 +71,17 @@ export function scaffoldOptions(raw) {
     need("picker-after", "where it sits in its family: a type of that family, or first")
   }
   const runsARoute = raw.kind === "worker" || raw.kind === "sync"
+  // A use-case node runs the factory route: a run reserves its per-run fee (the use-case-fee:<type> row).
+  const chargesAFee = raw.kind === "use-case"
   let price = null
-  if (runsARoute) {
-    if (raw.price === undefined) errors.push(`--price is required for --kind ${raw.kind}: its route charges a price.ee.ts row (0 for a free node — stated, never defaulted)`)
+  if (runsARoute || chargesAFee) {
+    const what = runsARoute ? "its route charges a price.ee.ts row" : `a run reserves its per-run fee, the price.ee.ts row "use-case-fee:${raw.new ?? "<type>"}"`
+    if (raw.price === undefined) errors.push(`--price is required for --kind ${raw.kind}: ${what} (0 for a free node — stated, never defaulted)`)
     else if (!/^\d+$/.test(raw.price)) errors.push(`--price "${raw.price}" is not a whole number of credits (model_pricing.credit_cost is an integer)`)
     else price = Number(raw.price)
-  } else if (raw.price !== undefined) errors.push(`--price is only for --kind worker or sync (--kind ${raw.kind} runs no route, so nothing charges)`)
+  } else if (raw.price !== undefined) errors.push(`--price is only for --kind worker, sync or use-case (--kind ${raw.kind} runs no route, so nothing charges)`)
+  if (chargesAFee && (raw.builder === undefined || raw.builder === "")) errors.push("--builder is required for --kind use-case: its graph builder's key in packages/render-rules/src/use-case-specs.ts — write the builder first")
+  else if (!chargesAFee && raw.builder !== undefined) errors.push(`--builder is only for --kind use-case (--kind ${raw.kind} runs no graph builder)`)
   if (raw.characterize !== undefined && raw.kind !== "worker") errors.push(`--characterize is only for --kind worker: the characterization harness renders an ffmpeg worker's output (--kind ${raw.kind} runs none)`)
   const type = raw.new ?? ""
   if (type && !TYPE_ID.test(type)) errors.push(`"${type}" is not a kebab-case type id`)
@@ -91,6 +97,8 @@ export function scaffoldOptions(raw) {
     price,
     // The operation its characterization runs after (null = first); undefined = none.
     characterizeAfter: raw.characterize === undefined ? undefined : place(raw.characterize),
+    // use-case: its graph builder's key (USE_CASE_SPECS); set only for that kind.
+    ...(chargesAFee ? { builder: raw.builder } : {}),
   }
   return { o, errors }
 }
@@ -106,7 +114,12 @@ export function scaffoldFiles(o) {
     [`${fe}/config.tsx`, configTsx(o)],
   ])
   if (o.family) files.set(`${fe}/option.tsx`, optionTsx(o))
-  if (o.kind !== "source") files.set(`${fe}/exec.ts`, execTs(o))
+  // A use-case node runs through executeUseCase (no exec.ts) and the factory route (no route of its own).
+  if (o.kind !== "source" && o.kind !== "use-case") files.set(`${fe}/exec.ts`, execTs(o))
+  if (o.kind === "use-case") {
+    files.set(`${be}/use-case.ts`, useCaseTs(o))
+    files.set(`${be}/price.ee.ts`, priceTs(o))
+  }
   if (o.kind === "worker" || o.kind === "sync") {
     files.set(`${fe}/api.ts`, apiTs(o))
     files.set(`${be}/route.ts`, routeTs(o))
@@ -150,7 +163,13 @@ export function planScaffold(raw, { root, ctx = repoContext(root) } = {}) {
   if (taken.length) return { errors: [`${taken.join(" and ")} already exist${taken.length === 1 ? "s" : ""} — --new never overwrites`], files: new Map(), o }
   const files = scaffoldFiles(o)
   const existing = loadUnits(root)
-  const problems = validateUnits([...existing, unitFromFiles(o, files)], ctx)
+  // The validator reads unit files through ctx (price.ee.ts's creditId): serve the would-be files from memory.
+  const planned = {
+    ...ctx,
+    exists: (p) => files.has(p) || ctx.exists(p),
+    ...(ctx.readText ? { readText: (p) => (files.has(p) ? files.get(p) : ctx.readText(p)) } : {}),
+  }
+  const problems = validateUnits([...existing, unitFromFiles(o, files)], planned)
   // The characterization harness places the op after the one it names, and
   // throws at load on a name that is no operation: refuse it here instead.
   const opsFile = path.join(root, CHARACTERIZATION_OPERATIONS)
@@ -166,19 +185,35 @@ export function planScaffold(raw, { root, ctx = repoContext(root) } = {}) {
 
 /** The deliberately central steps a unit still takes after its folders exist (root CLAUDE.md). */
 export function nextSteps(o) {
-  const steps = [
-    `fill the folders: the node's work (the step that throws "is not written yet"), its handles in unit.json and the matching fields in types.ts (${dataInterfaceName(o.type)})`,
-    `add frontend/src/nodes/${o.type}/strings.json — the node label "${o.label}" in he/ja/ko/pt-br ("labels"), and any UI string the unit alone uses in all five dicts ("keys")`,
-    `write its docs page docs/nodes/<folder>/${o.type}.md and swap unit.json docs.awaiting for docs.page (docs-node-registry-parity needs the page and its docs/nodes/README.md row, which gen:units writes from docs.page); until the page is on the docs site, list the type in AWAITING_DOCS_PAGE (frontend/src/lib/node-docs/__tests__/node-docs.test.ts), then refresh the snapshot (npm -w frontend run gen:node-docs -- --live) and drop that line`,
-  ]
-  if (o.price !== null) steps.push(`seed its price: a supabase/migrations/NNN_*.sql INSERT INTO model_pricing … ON CONFLICT DO NOTHING for "${o.type}" at the same ${o.price} credits as price.ee.ts`)
+  const useCase = o.kind === "use-case"
+  const strings = `add frontend/src/nodes/${o.type}/strings.json — the node label "${o.label}" in he/ja/ko/pt-br ("labels"), and any UI string the unit alone uses in all five dicts ("keys")`
+  const docs = `write its docs page docs/nodes/<folder>/${o.type}.md and swap unit.json docs.awaiting for docs.page (docs-node-registry-parity needs the page and its docs/nodes/README.md row, which gen:units writes from docs.page); until the page is on the docs site, list the type in AWAITING_DOCS_PAGE (frontend/src/lib/node-docs/__tests__/node-docs.test.ts), then refresh the snapshot (npm -w frontend run gen:node-docs -- --live) and drop that line`
+  const creditId = useCase ? `use-case-fee:${o.type}` : o.type
+  const seed = o.price === null ? [] : [`seed its price: a supabase/migrations/NNN_*.sql INSERT INTO model_pricing … ON CONFLICT DO NOTHING for "${creditId}" at the same ${o.price} credits as price.ee.ts`]
+  const steps = useCase
+    ? [
+        `its builder is written (USE_CASE_SPECS.${o.builder} in packages/render-rules/src/use-case-specs.ts): the graph a run of this node expands into`,
+        `fill backend/src/nodes/${o.type}/use-case.ts's body with the node's settings, and \`settingKeys\` in its spec; its handles in unit.json and the matching fields in types.ts (${dataInterfaceName(o.type)})`,
+        `its MCP verb: the REGISTER_BY_BUILDER entry for "${o.builder}" in backend/src/lib/mcp/tools/verbs-use-case.ts (the node's own tool, found by its builder; typecheck fails until it is there), and that tool's entry in docs/mcp/tools.md (gen:skills:check)`,
+        `its settings table: a SETTINGS_TABLES row for "${o.type}" in backend/src/lib/__tests__/use-case-graph-validity.test.ts (every graph its builder can emit is walked; typecheck fails until it is there)`,
+        strings,
+        ...seed,
+        docs,
+        "a @nodaro/shared changeset (the use-case list and contract rows are published: packages/shared/src/generated/unit-contracts.ts)",
+      ]
+    : [
+        `fill the folders: the node's work (the step that throws "is not written yet"), its handles in unit.json and the matching fields in types.ts (${dataInterfaceName(o.type)})`,
+        strings,
+        docs,
+        ...seed,
+      ]
   if (o.characterizeAfter !== undefined) steps.push(`write its characterization (backend/src/nodes/${o.type}/characterize.char.ts run: the node's real provider function on a fixture), then bless its golden inside the pinned-ffmpeg image (backend/scripts/characterize-in-image.sh; backend/CLAUDE.md "ffmpeg: pinned version + output characterization")`)
   else if (o.kind === "worker") steps.push("an ffmpeg worker should be characterized: re-scaffold with --characterize <operation it follows>, or add characterize.char.ts and the \"ffmpeg-media\" capability by hand (tools/units/README.md)")
   if (o.kind === "worker") {
-    steps.push("its output length: a video output needs a length rule (capability \"length:exact-video\" when it keeps the input's exact length, \"length:pass-video\" when at most that; video-output-length.test.ts)")
+    steps.push("its output length: a video output needs a length rule (capability \"length:exact-video\" when it keeps the input's exact length, \"length:pass-video\" when at most that, \"length:unknown\" with a unit.json lengthUnknownReason sentence when no rule can bound it before it has run, and added by hand to the shrink-only unbounded pin; video-output-length.test.ts)")
     steps.push("a @nodaro/shared changeset: contract.producer adds a row to packages/shared/src/generated/unit-contracts.ts")
   }
-  steps.push("npm run gen (gen:units, then gen:skills — INTERNAL_ORCHESTRATOR_SECRET inline), npm run build:packages (render-rules carries the node's settings), then npm run typecheck")
+  steps.push("npm run build:packages (gen:skills captures the MCP tools from the built packages, which carry the tables gen:units wrote), npm run gen (gen:units, then gen:skills — INTERNAL_ORCHESTRATOR_SECRET inline), npm run build:packages again (render-rules carries the node's settings), then npm run typecheck")
   return steps
 }
 

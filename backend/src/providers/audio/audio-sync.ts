@@ -30,19 +30,16 @@
  *     Low confidence is a result, not an error: a silent camera has nothing to
  *     align.
  */
-import { spawnFfmpeg } from "../video/ffmpeg-process.js"
 import { join } from "node:path"
 import {
   cleanupWorkDir,
   createWorkDir,
   downloadFile,
-  ffmpegFailureMessage,
   probeMediaDuration,
-  withFfmpegSlot,
 } from "../video/ffmpeg-utils.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { ensureMediaProxy, MediaHasNoAudioError } from "../../services/media-proxy.js"
-import { INPUT_SEEK_MARGIN_SEC } from "../video/apply-edl-budget.js"
+import { PCM_SAMPLE_RATE, streamPcm } from "./pcm-stream.js"
 import { crossCorrelate, fitLine, OnsetEnvelope, peakLag, peakToSidelobe } from "./audio-sync-dsp.js"
 import {
   AUDIO_SYNC_ENVELOPE_DECODE_TIMEOUT_MS,
@@ -55,7 +52,7 @@ import {
 /** Wire version of the emitted `data`. Bump only on a breaking shape change. */
 export const AUDIO_SYNC_VERSION = 1 as const
 /** Everything is correlated at this rate: speech lives below 4 kHz. */
-export const AUDIO_SYNC_SAMPLE_RATE = 8_000
+export const AUDIO_SYNC_SAMPLE_RATE = PCM_SAMPLE_RATE
 /** Drift over the overlap past which a note warns (one frame at 30 fps). */
 export const AUDIO_SYNC_DRIFT_WARN_MS = 33
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x))
@@ -134,60 +131,9 @@ export interface AudioSyncResult {
 }
 
 
-/**
- * Stream a local file's audio as mono float PCM at 8 kHz (speech band) under a
- * shared ffmpeg slot, calling `onSamples` per chunk — so a 3-hour source never
- * sits in memory whole. `startSec`/`durationSec` seek to a window.
- */
-async function streamPcm(
-  path: string,
-  win: { readonly startSec?: number; readonly durationSec?: number },
-  timeoutMs: number,
-  onSamples: (x: Float32Array) => void,
-): Promise<void> {
-  // A window seeks like apply-edl does (INPUT_SEEK_MARGIN_SEC early), then
-  // trims on DECODED timestamps: an AAC input (every media proxy is AAC) seeked
-  // straight to the window start came back 2–9 ms off, and differently per seek,
-  // while the same seek-then-trim puts the window on the clock the render reads.
-  const start = Math.max(0, win.startSec ?? 0)
-  const seek = Math.max(0, start - INPUT_SEEK_MARGIN_SEC)
-  const trim = start > 0 || win.durationSec !== undefined
-    ? `atrim=start=${(start - seek).toFixed(6)}${win.durationSec !== undefined ? `:duration=${win.durationSec.toFixed(6)}` : ""},asetpts=PTS-STARTPTS,`
-    : ""
-  const args = [
-    "-hide_banner", "-nostats", "-v", "error",
-    ...(seek > 0 ? ["-ss", seek.toFixed(3)] : []),
-    "-i", path,
-    "-vn", "-ac", "1", "-ar", String(AUDIO_SYNC_SAMPLE_RATE), "-af", `${trim}highpass=f=120`,
-    "-f", "f32le", "pipe:1",
-  ]
-  await withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
-    const proc = spawnFfmpeg(args, { stdio: ["ignore", "pipe", "pipe"] })
-    let stderr = ""
-    let carry = Buffer.alloc(0)
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)
-    proc.stdout.on("data", (chunk: Buffer) => {
-      const buf = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk
-      const whole = buf.length - (buf.length % 4)
-      if (whole > 0) {
-        const aligned = Buffer.from(buf.subarray(0, whole)) // own the bytes: 4-aligned for the view
-        onSamples(new Float32Array(aligned.buffer, aligned.byteOffset, whole / 4))
-      }
-      carry = Buffer.from(buf.subarray(whole))
-    })
-    proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-8_000) })
-    proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
-    proc.on("close", (code, signal) => {
-      clearTimeout(watchdog)
-      if (code === 0) resolve()
-      else reject(new Error(ffmpegFailureMessage(stderr, signal ? `killed (${signal}) after ${timeoutMs} ms` : `exit ${code}`)))
-    })
-  }), { timeoutMs, label: "audio-sync decode" })
-}
-
 async function decodeWindow(path: string, startSec: number, durationSec: number): Promise<Float32Array> {
   const parts: Float32Array[] = []
-  await streamPcm(path, { startSec, durationSec }, AUDIO_SYNC_WINDOW_DECODE_TIMEOUT_MS, (x) => parts.push(x))
+  await streamPcm(path, { startSec, durationSec }, AUDIO_SYNC_WINDOW_DECODE_TIMEOUT_MS, (x) => parts.push(x), "audio-sync decode")
   const out = new Float32Array(parts.reduce((a, p) => a + p.length, 0))
   let at = 0
   for (const p of parts) { out.set(p, at); at += p.length }
@@ -196,7 +142,7 @@ async function decodeWindow(path: string, startSec: number, durationSec: number)
 
 async function envelopeOf(path: string, hopSec: number): Promise<Float64Array> {
   const env = new OnsetEnvelope(hopSec * AUDIO_SYNC_SAMPLE_RATE)
-  await streamPcm(path, {}, AUDIO_SYNC_ENVELOPE_DECODE_TIMEOUT_MS, (x) => env.push(x))
+  await streamPcm(path, {}, AUDIO_SYNC_ENVELOPE_DECODE_TIMEOUT_MS, (x) => env.push(x), "audio-sync decode")
   return env.finish()
 }
 

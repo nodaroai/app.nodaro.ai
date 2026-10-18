@@ -159,8 +159,6 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Apply EDL": "EDL 적용",
   "Edit Plan": "편집 계획",
   "Camera Switch": "카메라 전환",
-  "Tighten Episode": "에피소드 다듬기",
-  "Chapters": "챕터",
   "Speaker View": "화자 뷰",
   "Reframe": "리프레임",
   "Follow the speaker": "화자 따라가기",

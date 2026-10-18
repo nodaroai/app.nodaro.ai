@@ -89,7 +89,7 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     // (and first-visible) stage painfully slow. Opus stays available via
     // scriptLlmOverride and is the right pick for the on-demand critic/refine
     // (quality on demand, per the script-checkpoint design).
-    modelId: args.scriptLlmOverride ?? "claude-sonnet-4-6",
+    modelId: args.scriptLlmOverride ?? "claude-sonnet-5-5",
     temperature: 0.4,
     systemPrompt,
     userPrompt,

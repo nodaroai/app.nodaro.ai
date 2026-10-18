@@ -44,6 +44,7 @@ import { runtimeApiUrl } from "@/lib/runtime-config"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { usecaseBody, usecaseLabelVars, type UseCaseApiParams } from "@/lib/use-case-request-body"
 import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
+import { continuationRefusalOf } from "@/lib/run-workflow-errors"
 import { dispatchConsentRequired } from "@/lib/consent-required-event"
 import { dispatchAccessBlocked } from "@/lib/access-blocked-event"
 
@@ -8039,8 +8040,16 @@ export async function runWorkflow(
    *  run only (nested `{ nodeId: { field: value } }`; the server clears the
    *  overridden node's saved results). Render final sends
    *  `{ [renderId]: { quality: "final" } }`. */
-  opts?: { readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>> },
-): Promise<{ executionId: string }> {
+  opts?: {
+    readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+    /** Continue an earlier execution of this workflow: with `nodeIds` (no mode), a run of
+     *  those nodes that hands on that execution's output for every other node (the
+     *  editor's Render final continues the run whose Preview it renders); with
+     *  `continueMode: "from-failed"`, the run that failed, from where it stopped. */
+    readonly continueFromExecutionId?: string
+    readonly continueMode?: "from-failed"
+  },
+): Promise<{ executionId: string; continuedFrom?: string }> {
   let headers: Record<string, string> = { ...(await getAuthHeaders()), "Content-Type": "application/json" }
   // `reviewer: "editor"` marks this as the editor's run: a person is here to
   // review a Preview render and press Render final. The server refuses a
@@ -8050,6 +8059,8 @@ export async function runWorkflow(
   const body = JSON.stringify({
     ...(nodeIds ? { nodeIds } : {}),
     ...(inputOverrides ? { inputOverrides } : {}),
+    ...(opts?.continueFromExecutionId ? { continueFromExecutionId: opts.continueFromExecutionId } : {}),
+    ...(opts?.continueFromExecutionId && opts.continueMode ? { continueMode: opts.continueMode } : {}),
     reviewer: "editor",
   })
   headers = withIdempotencyHeader(headers, idempotencyKey)
@@ -8058,17 +8069,21 @@ export async function runWorkflow(
     headers,
     body,
   })
-  if (res.status === 409) {
-    const body = await res.json().catch(() => null)
-    const execId = (body as Record<string, unknown>)?.executionId as string | undefined
-    if (execId) throw new WorkflowAlreadyRunningError(execId)
-    throwApiError(body as Record<string, unknown> | null, "apiErr.runWorkflow")
-  }
   if (!res.ok) {
-    const err = await res.json().catch(() => null)
+    const err = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    // A 409 is "already running" only when its code says so: a superseded
+    // continuation names an execution too, and following it would attach the
+    // editor to a run that ended long ago.
+    const code = (err?.error as Record<string, unknown> | undefined)?.code
+    const execId = err?.executionId
+    if (res.status === 409 && code === "already_running" && typeof execId === "string" && execId) {
+      throw new WorkflowAlreadyRunningError(execId)
+    }
+    const refusal = continuationRefusalOf(err, (c, serverMessage) => apiErrorMessage({ code: c, serverMessage, fallbackKey: "apiErr.runWorkflow" }))
+    if (refusal) throw refusal
     throwApiError(err, "apiErr.runWorkflow")
   }
-  return res.json() as Promise<{ executionId: string }>
+  return res.json() as Promise<{ executionId: string; continuedFrom?: string }>
 }
 
 export interface CreatedSubWorkflow {

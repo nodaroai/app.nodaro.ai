@@ -3,7 +3,7 @@
 // and gen:skills (backend/scripts/lib/gen-skills/parse-node-definitions.ts)
 // both read units through it, so they can never disagree about what a unit
 // is. Built-ins only: the tools self-test job runs it without npm install.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts
 //
 // A unit is one node type, named by its type id. Its manifest,
 // frontend/src/nodes/<type>/unit.json, is the source of truth; the backend
@@ -13,12 +13,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
+import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
 import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
-const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "registry", "contract", "docs"]
-const CONTRACT_KEYS = ["producer"]
+const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp"]
+const CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "reviewHold", "presents"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
 // backend/src/nodes/<type>/price.ee.ts (Enterprise License), prompt content in
@@ -161,6 +162,12 @@ export function familyTypesFrom(source) {
  * backend/src/__tests__/units-reserved-ids.test.ts holds text ∪ that list to
  * the runtime tables, naming any id that is missing or listed for nothing.
  */
+/** The add-node option types of node-options.tsx (LEGACY_NODE_OPTIONS), read as text. */
+export function optionTypesFrom(options) {
+  const start = options.search(/^const LEGACY_NODE_OPTIONS\b/m)
+  return new Set(start < 0 ? [] : [...options.slice(start).matchAll(/^ {4}type: "([^"]+)",/gm)].map((m) => m[1]))
+}
+
 export function reservedIdsFrom({ credits = "", options = "", macros = [], codeBuiltCreditIds = [] } = {}) {
   const out = new Map()
   const add = (id, why) => { if (TYPE_ID.test(id) && !out.has(id)) out.set(id, why) }
@@ -168,8 +175,7 @@ export function reservedIdsFrom({ credits = "", options = "", macros = [], codeB
   for (const src of macros) {
     for (const m of src.matchAll(/^export const \w*MACRO_ID\s*=\s*"([^"]+)"/gm)) add(m[1], "a canvas macro's add-node entry (CANVAS_MACROS) — NODE_OPTIONS already holds it")
   }
-  const optionsStart = options.search(/^const LEGACY_NODE_OPTIONS\b/m)
-  if (optionsStart >= 0) for (const m of options.slice(optionsStart).matchAll(/^ {4}type: "([^"]+)",/gm)) add(m[1], "an add-node option (LEGACY_NODE_OPTIONS)")
+  for (const t of optionTypesFrom(options)) add(t, "an add-node option (LEGACY_NODE_OPTIONS)")
   const credit = "a credit id in backend/src/ee/billing/credits.ts — the unit's price.ee.ts row would collide with it"
   // Only the top-level keys (two-space indent) of the two composed literals.
   for (const lit of credits.matchAll(/composeRecord(?:<[^\n]*?>)?\("(?:STATIC_CREDIT_COSTS|CREDIT_COSTS)", \{\n([\s\S]*?)\n\}, /g)) {
@@ -196,6 +202,8 @@ export function repoContext(root) {
       macros: macroFiles.map(text),
       codeBuiltCreditIds: JSON.parse(text("tools/units/reserved-credit-ids.json") || '{"ids":[]}').ids,
     }),
+    optionTypes: optionTypesFrom(text("frontend/src/lib/node-options.tsx")),
+    useCaseBuilders: useCaseBuildersFrom(text(USE_CASE_SPECS_FILE)),
     live: liveSeams(),
     capabilities: CAPABILITIES,
     exists: (p) => existsSync(path.join(root, p)),
@@ -215,8 +223,11 @@ function forbiddenContent(value, where, out) {
 
 function checkHandles(h, errors) {
   if (!isObject(h)) return errors.push("handles must be { inputs: [...], outputs: [...] }")
-  const ids = []
+  // Ids are unique on each side. An input and an output may share one (Tighten
+  // Episode's recording in on `media`, its episode out on `media`): an edge
+  // names a source pip and a target pip apart, so the two never meet.
   for (const side of ["inputs", "outputs"]) {
+    const ids = []
     if (!Array.isArray(h[side])) { errors.push(`handles.${side} must be an array`); continue }
     h[side].forEach((handle, i) => {
       const at = `handles.${side}[${i}]`
@@ -238,9 +249,9 @@ function checkHandles(h, errors) {
         if (handle.from !== undefined && !isNonEmptyString(handle.from)) errors.push(`${at}.from must be a non-empty string`)
       }
     })
+    const dup = ids.filter((id, i) => ids.indexOf(id) !== i)
+    if (dup.length) errors.push(`handle ids must be unique within handles.${side}: ${[...new Set(dup)].join(", ")}`)
   }
-  const dup = ids.filter((id, i) => ids.indexOf(id) !== i)
-  if (dup.length) errors.push(`handle ids must be unique: ${[...new Set(dup)].join(", ")}`)
 }
 
 function checkProducer(m, errors) {
@@ -266,10 +277,11 @@ function requiredFiles(kind) {
   if (kind === "worker") return { frontend: ["exec.ts", "api.ts"], backend: ["payload.ts", "worker.ts"], route: true }
   if (kind === "sync") return { frontend: ["exec.ts", "api.ts"], backend: [], route: true }
   if (kind === "inline") return { frontend: ["exec.ts"], backend: [], route: false }
+  if (kind === "use-case") return { frontend: [], backend: ["use-case.ts", "price.ee.ts"], route: false }
   return { frontend: [], backend: [], route: false }
 }
 
-function checkFiles(unit, m, errors) {
+function checkFiles(unit, m, ctx, errors) {
   for (const tree of ["frontend", "backend"]) {
     for (const f of unit.files[tree]) {
       if (!UNIT_FILES[tree].includes(f)) errors.push(`${unit.dirs[tree]}/${f}: not a unit file (allowed: ${UNIT_FILES[tree].join(", ")}, __tests__/)`)
@@ -286,13 +298,15 @@ function checkFiles(unit, m, errors) {
   if (routes.length > 1) errors.push("route.ts and route.ee.ts are exclusive — a Cloud-only unit has route.ee.ts only")
   if (need.route && routes.length === 0) errors.push(`execution.kind "${kind}" needs ${unit.dirs.backend}/route.ts (or route.ee.ts when Cloud-only)`)
   if (!need.route && routes.length > 0) errors.push(`execution.kind "${kind}" runs no route — remove ${routes.join(", ")} or change the kind`)
-  for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
+  for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && kind !== "use-case" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
+  errors.push(...useCaseFileProblems(unit, kind, has, ctx))
   if (kind === "source" && has("frontend", "exec.ts")) errors.push("execution.kind \"source\" runs nothing — remove exec.ts or change the kind")
   // The add-node picker renders the icon of option.tsx (node-options.tsx composes it).
   if (isObject(m.picker) && !has("frontend", "option.tsx")) errors.push(`a unit in the add-node picker needs ${unit.dirs.frontend}/option.tsx (its icon), or "picker": null`)
   // getModelCreditBaseCost hard-fails on an unknown id, so a route without a price breaks the node.
   if (routes.length > 0 && !has("backend", "price.ee.ts")) errors.push(`a unit with a route needs ${unit.dirs.backend}/price.ee.ts (a zero-cost one too)`)
-  if (routes.length === 0 && has("backend", "price.ee.ts")) errors.push("price.ee.ts without a route prices nothing — remove it")
+  // A use-case node's route is the factory's (POST /v1/<type>): its price.ee.ts holds the fee row.
+  if (routes.length === 0 && kind !== "use-case" && has("backend", "price.ee.ts")) errors.push("price.ee.ts without a route prices nothing — remove it")
   // The characterization harness renders ffmpeg-backed operations through their real provider.
   if (has("backend", "characterize.char.ts") && (kind !== "worker" || !(Array.isArray(m.capabilities) && m.capabilities.includes("ffmpeg-media")))) {
     errors.push(`characterize.char.ts characterizes an ffmpeg worker: it needs execution.kind "worker" and the "ffmpeg-media" capability`)
@@ -335,10 +349,50 @@ function checkSeams(unit, m, ctx, errors) {
   if (Object.keys(unit.strings?.labels ?? {}).length) missing("labels", "strings.json labels")
   if (m.docs?.page) missing("docs-index", "docs.page")
   if (m.contract?.producer) missing("contracts", "contract.producer")
+  for (const [seam, why] of useCaseSeamNeeds(m)) missing(seam, why)
   for (const c of Array.isArray(m.capabilities) ? m.capabilities : []) {
     const cap = ctx.capabilities[c]
-    if (cap) missing(cap.seam, `capability "${c}"`)
+    for (const seam of cap?.seams ?? []) missing(seam, `capability "${c}"`)
   }
+}
+
+/** An MCP tool name, as the MCP server registers it (gif_to_video). */
+const MCP_TOOL_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
+
+/**
+ * `mcp.widgetModelFor`: the MCP verbs that dispatch this unit's job and whose
+ * result widget shows the unit's type as its `model` (widgetModelOf in
+ * backend/src/lib/mcp/widget-models.ts). The value is always the unit's own
+ * type, never free text, so it cannot drift from it.
+ */
+function checkMcp(mcp, errors) {
+  if (mcp === undefined) return
+  if (!isObject(mcp)) return errors.push("mcp must be an object ({ widgetModelFor: [<mcp tool name>, …] })")
+  for (const k of Object.keys(mcp)) if (k !== "widgetModelFor") errors.push(`mcp.${k}: unknown (widgetModelFor)`)
+  const tools = mcp.widgetModelFor
+  if (!Array.isArray(tools) || tools.length === 0) return errors.push("mcp.widgetModelFor must list the MCP tools (snake_case names) whose widget names this unit — omit mcp when there are none")
+  for (const t of tools) if (typeof t !== "string" || !MCP_TOOL_NAME.test(t)) errors.push(`mcp.widgetModelFor: ${JSON.stringify(t)} is not an MCP tool name (snake_case, e.g. "gif_to_video")`)
+  const dup = tools.filter((t, i) => tools.indexOf(t) !== i)
+  if (dup.length) errors.push(`mcp.widgetModelFor lists ${[...new Set(dup)].join(", ")} more than once`)
+}
+
+/**
+ * An MCP tool's widget names one node: two units may not claim the same tool.
+ * backend/src/lib/mcp/widget-models.ts `unitWidgetModels` enforces the same
+ * rule at run time; widget-models.test.ts feeds both one double claim.
+ */
+export function mcpToolClaims(units) {
+  const owner = new Map()
+  const errors = []
+  for (const u of units) {
+    const tools = u.manifest?.mcp?.widgetModelFor
+    if (!Array.isArray(tools)) continue
+    for (const t of new Set(tools)) {
+      if (owner.has(t)) errors.push(`${u.type}: mcp.widgetModelFor: "${t}" is already claimed by ${owner.get(t)} — an MCP tool's widget names one node`)
+      else owner.set(t, u.type)
+    }
+  }
+  return errors
 }
 
 // Always reserved, whatever context a test builds: a plain object already answers these.
@@ -392,6 +446,11 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
         if (members && typeof a === "string" && a !== unit.type && knownTypes.has(a) && !members.includes(a) && unitFamilies.get(a) !== m.picker.family) {
           errors.push(`picker.after: "${a}" is not in family "${m.picker.family}" — a unit follows a type of its own family (${members.length ? members.join(", ") : "none yet"}), or null for first`)
         }
+        // First in its family, NODE_OPTIONS places it after its position.after (composeNodeOptions): an option, or a picker unit.
+        const pa = m.position?.after
+        if (a === null && ctx.optionTypes && typeof pa === "string" && knownTypes.has(pa) && !ctx.optionTypes.has(pa) && !unitFamilies.has(pa)) {
+          errors.push(`picker.after is null (first in its family), so the add-node list places it after position.after "${pa}" — which has no add-node option; name a picker.after in its family, or a position.after that has one`)
+        }
       }
       if (m.picker.keywords !== undefined && !(Array.isArray(m.picker.keywords) && m.picker.keywords.every(isNonEmptyString))) errors.push("picker.keywords must be a list of strings")
     }
@@ -410,7 +469,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     if (ex.kind !== "worker" && ex.queue !== undefined) errors.push("execution.queue is only for execution.kind \"worker\"")
     if (ex.requires !== undefined) {
       const r = ex.requires
-      if (ex.kind !== "worker" && ex.kind !== "sync") errors.push("execution.requires is only for a node that runs on the server")
+      if (ex.kind !== "worker" && ex.kind !== "sync") errors.push("execution.requires is only for execution.kind \"worker\" or \"sync\"")
       if (!isObject(r) || !Array.isArray(r.anyOf) || r.anyOf.length === 0 || !r.anyOf.every(isNonEmptyString)) errors.push("execution.requires.anyOf must list the data fields any of which supplies the media")
       else if (!MEDIA_INPUT_KINDS.includes(r.kind) || !isNonEmptyString(r.noun)) errors.push(`execution.requires needs a media \`kind\` (${MEDIA_INPUT_KINDS.join(", ")}) and a \`noun\` ("a video")`)
     }
@@ -419,6 +478,21 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   else {
     for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
     if (m.capabilities.includes("length:pass-video") && m.capabilities.includes("length:exact-video")) errors.push("capabilities: \"length:exact-video\" already keeps the length — drop \"length:pass-video\"")
+    // The entity lands in imageUrl (both input resolvers), so the node must read it there, on an input that takes images.
+    if (m.capabilities.includes("input:entity-subject")) {
+      const imageUrlInputs = Array.isArray(m.handles?.inputs) ? m.handles.inputs.filter((h) => isObject(h) && h.field === "imageUrl") : []
+      if (!imageUrlInputs.length) errors.push("capability \"input:entity-subject\" puts a wired entity in imageUrl: it needs an input whose field is \"imageUrl\"")
+      else if (!imageUrlInputs.some((h) => Array.isArray(h.accepts) && h.accepts.includes("image"))) errors.push("capability \"input:entity-subject\": its imageUrl input must accept \"image\" (a wired entity is an image) — add \"image\" to its accepts")
+    }
+    if (m.capabilities.includes("length:unknown")) {
+      for (const keeps of ["length:pass-video", "length:exact-video"]) if (m.capabilities.includes(keeps)) errors.push(`capabilities: "length:unknown" (no rule bounds its length) contradicts "${keeps}" (it keeps its video input's) — a node has one length rule`)
+      if (m.contract?.producer !== "video") errors.push("capabilities: \"length:unknown\" is the length rule of a video output — it needs contract.producer \"video\"")
+      if (m.lengthUnknownReason === undefined) errors.push("capabilities: \"length:unknown\" needs lengthUnknownReason — one sentence on why no rule bounds its length before it has run (UNBOUNDED_LENGTH_REASONS)")
+    }
+    if (m.lengthUnknownReason !== undefined && !m.capabilities.includes("length:unknown")) errors.push("lengthUnknownReason is only for a unit with the \"length:unknown\" capability")
+  }
+  if (m.lengthUnknownReason !== undefined && !isNonEmptyString(m.lengthUnknownReason)) {
+    errors.push("lengthUnknownReason must be a non-empty sentence")
   }
   if (!isObject(m.registry) || !isNonEmptyString(m.registry.description) || !OUTPUT_TYPES.includes(m.registry.outputType)) {
     errors.push(`registry needs a description and an outputType (${OUTPUT_TYPES.join(", ")}) — /v1/nodes lists every node`)
@@ -430,6 +504,8 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     if ("after" in m.registry) after(m.registry.after, "registry.after")
   }
   checkProducer(m, errors)
+  checkMcp(m.mcp, errors)
+  errors.push(...useCaseProblems(unit, m, ctx))
   const docs = m.docs
   if (!isObject(docs) || (docs.page === undefined) === (docs.awaiting === undefined)) errors.push("docs needs exactly one of page (the docs/nodes/… page) or awaiting (why it has none yet)")
   else if (docs.page !== undefined) {
@@ -451,7 +527,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     }
   }
   forbiddenContent(m, "unit", errors)
-  checkFiles(unit, m, errors)
+  checkFiles(unit, m, ctx, errors)
   checkStrings(unit, errors)
   checkSeams(unit, m, ctx, errors)
   return errors.map((e) => `${unit.type}: ${e}`)
@@ -461,7 +537,8 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
 export function validateUnits(units, ctx) {
   const known = new Set([...ctx.legacyTypes, ...units.map((u) => u.type)])
   const unitFamilies = new Map(units.filter((u) => isObject(u.manifest?.picker)).map((u) => [u.type, u.manifest.picker.family]))
-  const errors = units.flatMap((u) => validateUnit(u, ctx, known, unitFamilies))
+  const errors = [...units.flatMap((u) => validateUnit(u, ctx, known, unitFamilies)), ...duplicateBuilderProblems(units)]
+  errors.push(...mcpToolClaims(units))
   try {
     insertAtPositions([...ctx.legacyTypes], units.filter((u) => u.manifest?.position).map((u) => ({ type: u.type, after: u.manifest.position.after })))
   } catch (err) {

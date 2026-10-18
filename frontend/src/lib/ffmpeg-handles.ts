@@ -17,13 +17,13 @@
  *   - media → HANDLE_COLORS.control (slate), neutral fallback for handles that
  *             accept BOTH video AND audio (merge-video-audio / adjust-volume)
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { HANDLE_COLORS } from "./handle-colors"
 import { ACCEPTS_JSON } from "./data-handles"
 import { ugcMayFeedPlanInput } from "./ugc-plan-inputs"
-import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "./unit-definitions"
 import { composeSet, unitsWith } from "./unit-compose"
-import type { UnitHandleKind, UnitInputHandle } from "@/nodes/kit"
+import type { UnitDefinition, UnitHandleKind, UnitInputHandle } from "@/nodes/kit"
 // @registry-enumerates FFMPEG_NODE_TYPES and isValidFfmpegConnection cover every node unit with the "ffmpeg-media" capability
 
 /** Accepts any node whose output is a video stream (URL pointing at .mp4
@@ -72,21 +72,61 @@ export const FFMPEG_COLORS = {
 
 /**
  * The connection rule of a node-unit input, from the kinds it accepts
- * (unit.json handles.inputs[].accepts): video and audio together take any
- * media stream, as merge-video-audio's input does. The kinds a unit input may
- * accept are tools/units/vocabulary.mjs ACCEPTS_KINDS — the validator refuses
- * any other, so this never meets one it cannot answer.
+ * (unit.json handles.inputs[].accepts): each kind's rule, and a wire passes
+ * when any of them does — video and audio together are any media stream, as
+ * merge-video-audio's input takes. The kinds a unit input may accept are
+ * tools/units/vocabulary.mjs ACCEPTS_KINDS — the validator refuses any other,
+ * so this never meets one it cannot answer. The canvas judges every unit
+ * input with it (unit-connections.ts), and the handle popover lists with it
+ * (TARGET_HANDLE_ACCEPTS).
  */
-export function unitInputAccepts(kinds: ReadonlyArray<UnitHandleKind>): (sourceType: string) => boolean {
-  const video = kinds.includes("video")
-  const audio = kinds.includes("audio")
-  if (video && audio) return ACCEPTS_MEDIA
-  if (video) return ACCEPTS_VIDEO
-  if (audio) return ACCEPTS_AUDIO
-  throw new Error(`a node-unit input accepting ${kinds.join(", ")} has no connection rule — see tools/units/vocabulary.mjs ACCEPTS_KINDS`)
+const UNIT_ACCEPT_RULES: Readonly<Record<string, (sourceType: string) => boolean>> = {
+  video: ACCEPTS_VIDEO,
+  audio: ACCEPTS_AUDIO,
+  // An image input: any image producer, or a dynamic one — image-producer-handles'
+  // ACCEPTS_IMAGE_OR_DYN over the same shared sets (unit-connections.test.ts holds
+  // them equal), not imported: that module loads @/types/nodes, which a module
+  // as low as this one must not.
+  image: (sourceType: string): boolean => IMAGE_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType),
 }
 
-const unitInputs = (type: string): ReadonlyArray<UnitInputHandle> | undefined => UNIT_NODE_DEFINITIONS.find((u) => u.type === type)?.handles.inputs
+export function unitInputAccepts(kinds: ReadonlyArray<UnitHandleKind>): (sourceType: string) => boolean {
+  const rules = [...new Set(kinds)].map((k) => {
+    const rule = Object.hasOwn(UNIT_ACCEPT_RULES, k) ? UNIT_ACCEPT_RULES[k] : undefined
+    if (!rule) throw new Error(`a node-unit input accepting ${kinds.join(", ")} has no connection rule — see tools/units/vocabulary.mjs ACCEPTS_KINDS`)
+    return rule
+  })
+  if (rules.length === 2 && rules.includes(ACCEPTS_VIDEO) && rules.includes(ACCEPTS_AUDIO)) return ACCEPTS_MEDIA
+  if (rules.length === 1) return rules[0]
+  return (sourceType) => rules.some((rule) => rule(sourceType))
+}
+
+// Each unit input's rule, built once: the canvas asks on every drag frame.
+// Keyed by the input object, which the generated definition holds for life.
+const INPUT_RULES = new WeakMap<UnitInputHandle, (sourceType: string) => boolean>()
+
+/**
+ * THE connection rule of a node unit's input: whether a wire from `sourceType`
+ * may enter its `targetHandle` — the rule of the input it declares under that
+ * id, and never an id it does not declare (a handle the node does not render
+ * is no input). Every path that judges a unit input calls this: the canvas
+ * (unit-connections.ts), the add-node popup (node-compatibility.ts, through
+ * it) and isValidFfmpegConnection's unit branch below.
+ */
+export function unitInputConnectionAccepted(
+  unit: Pick<UnitDefinition, "handles">,
+  targetHandle: string,
+  sourceType: string,
+): boolean {
+  const input = unit.handles.inputs.find((h) => h.id === targetHandle)
+  if (!input) return false
+  let rule = INPUT_RULES.get(input)
+  if (!rule) {
+    rule = unitInputAccepts(input.accepts)
+    INPUT_RULES.set(input, rule)
+  }
+  return rule(sourceType)
+}
 
 /** Node types that this module covers — the canvas connection validator
  *  uses this Set to short-circuit the per-type switch into a single
@@ -173,9 +213,9 @@ export function isValidFfmpegConnection(
       return targetHandle === "in" && ACCEPTS_MEDIA(sourceType)
 
     default: {
-      // A node unit: its declared inputs (unit.json handles.inputs[].accepts).
-      const input = FFMPEG_NODE_TYPES.has(targetNodeType) ? unitInputs(targetNodeType)?.find((h) => h.id === targetHandle) : undefined
-      return input ? unitInputAccepts(input.accepts)(sourceType) : false
+      // A node unit: the one unit-input rule (its unit.json handles.inputs[].accepts).
+      const unit = FFMPEG_NODE_TYPES.has(targetNodeType) ? unitDefinitionOf(targetNodeType) : undefined
+      return unit ? unitInputConnectionAccepted(unit, targetHandle, sourceType) : false
     }
   }
 }

@@ -42,7 +42,6 @@
  "backend/src/lib/mcp/tools/_credit-hint.ts",
  "backend/src/lib/mcp/tools/models.ts",
  "backend/src/lib/meter-sync-llm.ts",
- "backend/src/lib/node-registry.ts",
  "backend/src/lib/private-plugins/toolkit.ts",
  "backend/src/lib/use-case/continue-credits.ts",
  "backend/src/routes/after-effects-ai.ts",

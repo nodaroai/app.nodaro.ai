@@ -20,10 +20,13 @@ describe("execution error text — the editor's display sites", () => {
   })
 
   it("every server-run failure toast maps its description", () => {
+    // One helper says a failed run (with its Continue from failed action): it maps the error…
+    const helper = read("components/editor/workflow-editor/run-ended-toast.ts")
+    expect(helper).toMatch(/toast\.error\(tx\("run\.backendFailed"\),\s*\{\s*description:\s*executionErrorText\(errorMessage\)/)
+    // …and every place a run's failure reaches the editor goes through it, never a toast of its own.
     const src = read("components/editor/workflow-editor/run-handlers.ts")
-    const toasts = [...src.matchAll(/toast\.error\(tx\("run\.backendFailed"\),\s*\{\s*description:\s*([^}]*?)\s*,?\s*\}/g)]
-    expect(toasts.length).toBeGreaterThanOrEqual(4)
-    for (const [, description] of toasts) expect(description).toMatch(/^executionErrorText\(/)
+    expect(src).not.toContain('tx("run.backendFailed")')
+    expect([...src.matchAll(/toastBackendRunFailed\(executionId,/g)].length).toBeGreaterThanOrEqual(4)
   })
 
   it("the app runner maps a run's error both when it lands live and when a run is reopened", () => {

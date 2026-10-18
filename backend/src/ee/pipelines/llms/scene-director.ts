@@ -183,7 +183,7 @@ Return a SceneNodeData via the emit tool.`
     userId: args.userId,
     role: "scene_director",
     task: "shot_list",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.5,
     systemPrompt,
     userPrompt,

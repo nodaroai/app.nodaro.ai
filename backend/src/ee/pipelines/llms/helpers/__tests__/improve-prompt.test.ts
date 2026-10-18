@@ -52,7 +52,7 @@ describe("runImprovePrompt", () => {
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("helper")
     expect(call.task).toBe("improve_prompt")
-    expect(call.modelId).toBe("claude-sonnet-4-6")
+    expect(call.modelId).toBe("claude-sonnet-5-5")
     expect(call.sceneId).toBe("scene-1")
     expect(call.userPrompt).toContain('"shot_01"')
   })

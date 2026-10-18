@@ -4,8 +4,9 @@ import assert from "node:assert/strict"
 import { renderSummary } from "../test-select/summary.mjs"
 import { failedFiles } from "../test-select/failed-files.mjs"
 import { buildAttributionComment } from "../test-select/attribution.mjs"
+import { readFailedLists } from "../test-select/failed-lists.mjs"
 import { compareShadow, runShadowCheck } from "../test-select/shadow-check.mjs"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -164,6 +165,57 @@ test("attribution: nothing captured in either list says so; flaky defaults to em
   const md = buildAttributionComment({ sha: "a", before: "b", runUrl: "u", previousConclusion: "none", failed: { frontend: [], backend: [] } })
   assert.match(md, /not captured — see the run/)
   assert.doesNotMatch(md, /likely flaky/)
+})
+
+// The post-merge run 39120351077 (PR #2332): one failing shard uploaded an
+// empty failed-frontend.txt, the file in .flaky, and an empty .unknown. One
+// matching artifact is extracted straight into the download directory, several
+// into one subdirectory each — the lists are read from either layout.
+const OVERLAY = "src/components/editor/config-panels/__tests__/video-overlay-config.test.tsx"
+function writeShard(dir, project, { failed = "", flaky = "", unknown = "" }) {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(path.join(dir, `failed-${project}.txt`), failed)
+  writeFileSync(path.join(dir, `failed-${project}.txt.flaky`), flaky)
+  writeFileSync(path.join(dir, `failed-${project}.txt.unknown`), unknown)
+}
+const comment = (dir) => buildAttributionComment({ sha: "abc1234def", before: "999aaaa111", runUrl: "u", previousConclusion: "success", ...readFailedLists(dir) })
+
+test("attribution lists: one failing shard (extracted flat) — the flaky file is listed, labelled likely flaky", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "failed-"))
+  writeShard(dir, "frontend", { flaky: `${OVERLAY}\n` })
+  assert.deepEqual(readFailedLists(dir), {
+    failed: { frontend: [], backend: [] },
+    flaky: { frontend: [OVERLAY], backend: [] },
+    unknown: { frontend: [], backend: [] },
+  })
+  const md = comment(dir)
+  assert.match(md, /likely flaky[^\n]*:\n- frontend: `src\/components\/editor\/config-panels\/__tests__\/video-overlay-config\.test\.tsx`\n/)
+  assert.doesNotMatch(md, /not captured/)
+})
+
+test("attribution lists: several shards (one subdirectory each) — every file under its label: failed again, likely flaky, unknown", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "failed-"))
+  writeShard(path.join(dir, "failed-frontend-1"), "frontend", { flaky: `${OVERLAY}\n` })
+  writeShard(path.join(dir, "failed-frontend-3"), "frontend", { failed: "src/a.test.ts\n", unknown: "src/u.test.ts\n" })
+  writeShard(path.join(dir, "failed-backend-2"), "backend", { failed: "src/b.test.ts\nsrc/c.test.ts\n" })
+  const lists = readFailedLists(dir)
+  assert.deepEqual(lists, {
+    failed: { frontend: ["src/a.test.ts"], backend: ["src/b.test.ts", "src/c.test.ts"] },
+    flaky: { frontend: [OVERLAY], backend: [] },
+    unknown: { frontend: ["src/u.test.ts"], backend: [] },
+  })
+  const md = comment(dir)
+  assert.match(md, /Failed again when re-run alone[^\n]*:\n- frontend: `src\/a\.test\.ts`\n- backend: `src\/b\.test\.ts`\n- backend: `src\/c\.test\.ts`\n/)
+  assert.match(md, /status unknown:\n- frontend: `src\/u\.test\.ts`\n/)
+  assert.match(md, /likely flaky[^\n]*:\n- frontend: `src\/components\/editor\/config-panels\/__tests__\/video-overlay-config\.test\.tsx`\n/)
+  assert.doesNotMatch(md, /not captured/)
+})
+
+test("attribution lists: empty lists, or no artifact at all, still say not captured", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "failed-"))
+  writeShard(dir, "frontend", {})
+  assert.match(comment(dir), /not captured — see the run/)
+  assert.match(comment(path.join(dir, "never-downloaded")), /not captured — see the run/)
 })
 
 test("attribution: the wording follows the previous dev commit's result", () => {

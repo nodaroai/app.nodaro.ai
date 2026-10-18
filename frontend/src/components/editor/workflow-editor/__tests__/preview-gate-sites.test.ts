@@ -105,6 +105,7 @@ describe("preview stop rule — every derived set builder is classified (Render 
   const DERIVED_GATED = new Set([
     "components/editor/workflow-editor/run-handlers.ts", // Run from here / selected
     "components/editor/workflow-editor/render-final-handler.ts", // Render final / Update preview: previewRunnable on the overridden graph
+    "components/editor/workflow-editor/continue-failed-run.ts", // Continue from failed: its marks through previewRunnable, its price through confirmRunOrAbort's gated estimate
     "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
     "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits, through ugcRunCredits (its UGC parts through ugcRunParts' previewRunnable)
     "components/render/app-render-final-run.ts", // the app runner's Render final price (app-render-review.tsx): estimateRunCredits (via useRunSetPrice) on the overridden run graph

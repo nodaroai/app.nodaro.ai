@@ -19,7 +19,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { TEMPLATE_CATEGORIES } from "@nodaro/shared/apps"
 import { canonicalVarName, extractReferencedLabels } from "@nodaro/shared/workflow"
-import { NODE_HANDLES } from "../../mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -55,15 +55,15 @@ describe("Impossible Materials template", () => {
     const { nodes, edges } = await load()
     const byId = new Map(nodes.map((n) => [n.id, n]))
     for (const node of nodes) {
-      expect(NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
+      expect(ALL_NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
     }
     for (const edge of edges) {
       const src = byId.get(edge.source)
       const tgt = byId.get(edge.target)
       expect(src, `edge ${edge.id} source exists`).toBeDefined()
       expect(tgt, `edge ${edge.id} target exists`).toBeDefined()
-      expect(NODE_HANDLES[src!.type].outputs, `edge ${edge.id} source handle`).toContain(edge.sourceHandle)
-      expect(NODE_HANDLES[tgt!.type].inputs, `edge ${edge.id} target handle`).toContain(edge.targetHandle)
+      expect(ALL_NODE_HANDLES[src!.type].outputs, `edge ${edge.id} source handle`).toContain(edge.sourceHandle)
+      expect(ALL_NODE_HANDLES[tgt!.type].inputs, `edge ${edge.id} target handle`).toContain(edge.targetHandle)
     }
   })
 

@@ -33,7 +33,7 @@ import {
   type UseCaseSources,
 } from "@nodaro/render-rules"
 import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
-import { NODE_HANDLES } from "../mcp/generated/node-handles.js"
+import { ALL_NODE_HANDLES } from "../node-handles.js"
 
 const FRAMINGS = [null, { aspect: "9:16", layout: "stacked" }, { aspect: "16:9", layout: "side-by-side" }, { aspect: "1:1", layout: "grid" }] as const
 
@@ -108,7 +108,7 @@ function problems(g: UseCaseGraph): string[] {
   if (byId.size !== g.nodes.length) out.push("duplicate node id")
   if (new Set(g.edges.map((e) => e.id)).size !== g.edges.length) out.push("duplicate edge id")
   for (const n of g.nodes) {
-    if (!NODE_HANDLES[n.type]) out.push(`unregistered type ${n.type}`)
+    if (!ALL_NODE_HANDLES[n.type]) out.push(`unregistered type ${n.type}`)
     if (!Object.hasOwn(NODE_DATA_FIELDS, n.type) || !NODE_DATA_FIELDS[n.type]!.declared) out.push(`${n.type} has no declared data type`)
     const declared = declaredKeys(n.type)
     for (const key of Object.keys(n.data)) if (!declared.has(key)) out.push(`${n.type}.data.${key} is not a declared field`)
@@ -123,12 +123,12 @@ function problems(g: UseCaseGraph): string[] {
       out.push(`edge ${e.id} names a missing node`)
       continue
     }
-    if (!NODE_HANDLES[s.type]?.outputs.includes(e.sourceHandle)) out.push(`${s.type} has no output ${e.sourceHandle}`)
-    if (!NODE_HANDLES[t.type]?.inputs.includes(e.targetHandle)) out.push(`${t.type} has no input ${e.targetHandle}`)
+    if (!ALL_NODE_HANDLES[s.type]?.outputs.includes(e.sourceHandle)) out.push(`${s.type} has no output ${e.sourceHandle}`)
+    if (!ALL_NODE_HANDLES[t.type]?.inputs.includes(e.targetHandle)) out.push(`${t.type} has no input ${e.targetHandle}`)
   }
   for (const ref of outputRefsOf(g)) {
     const n = byId.get(ref.nodeId)
-    if (!n || !NODE_HANDLES[n.type]?.outputs.includes(ref.handle)) out.push(`outputMap → ${ref.nodeId}.${ref.handle} is not an output`)
+    if (!n || !ALL_NODE_HANDLES[n.type]?.outputs.includes(ref.handle)) out.push(`outputMap → ${ref.nodeId}.${ref.handle} is not an output`)
   }
   const renderId = usecaseRenderNodeId(g.outputMap)
   if (!byId.has(g.outputMap.planNodeId) || (renderId !== null && !byId.has(renderId))) out.push("outputMap plan/render id missing")

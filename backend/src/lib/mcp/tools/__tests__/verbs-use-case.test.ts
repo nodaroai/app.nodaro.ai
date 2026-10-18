@@ -1,20 +1,30 @@
 import { beforeEach, describe, it, expect, vi } from "vitest"
 import Fastify from "fastify"
+import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseDescriptor } from "@nodaro/render-rules"
 import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
 import { buildServer, callTool, executeSession, listTools } from "./_helpers.js"
 
-/** The node types this deployment does not offer, for the test at hand. */
-const h = vi.hoisted(() => ({ denied: new Set<string>() }))
+/** The node types this deployment does not offer, and a builder the use-case rows answer with, for the test at hand. */
+const h = vi.hoisted(() => ({ denied: new Set<string>(), builder: undefined as string | undefined }))
 vi.mock("../../../surface-deny.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../surface-deny.js")>()),
   isNodeDenied: (type: string) => h.denied.has(type),
 }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return {
+    ...real,
+    usecaseRowOf: (type: Parameters<typeof real.usecaseRowOf>[0]) =>
+      h.builder === undefined ? real.usecaseRowOf(type) : { ...real.usecaseRowOf(type), builder: h.builder },
+  }
+})
 
 const { registerUseCaseVerbs } = await import("../verbs-use-case.js")
 
 beforeEach(() => {
   h.denied = new Set()
+  h.builder = undefined
 })
 
 const RUN_ID = "00000000-0000-4000-8000-0000000000aa"
@@ -34,7 +44,7 @@ async function setup(
     seen.reads.push(req.url)
     return reply.code(job.status).send(job.body)
   })
-  for (const url of ["/v1/tighten-episode", "/v1/tighten-episode/continue", "/v1/episode-chapters", "/v1/episode-chapters/continue"]) {
+  for (const url of USE_CASE_NODE_TYPES.flatMap((t) => [usecaseDescriptor(t).route, usecaseContinuePath(t)])) {
     fastify.post(url, async (req, reply) => {
       seen.url = url
       seen.body = req.body as Record<string, unknown>
@@ -56,6 +66,10 @@ describe("registration", () => {
     const names = (await listTools(server)).map((t) => t.name)
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "continue_use_case"]))
   })
+  it("names the gap when a built package carries a builder with no MCP verb", () => {
+    h.builder = "no-such-builder"
+    expect(() => registerUseCaseVerbs({ server: buildServer(), session: executeSession(), fastify: Fastify() })).toThrow(/builder "no-such-builder" has no MCP verb in REGISTER_BY_BUILDER/)
+  })
   it("lists neither without workflows:execute", async () => {
     const server = buildServer()
     const session = newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" })
@@ -66,7 +80,7 @@ describe("registration", () => {
     expect(names).not.toContain("continue_use_case")
   })
   it("lists none when this deployment offers no use-case node", async () => {
-    h.denied = new Set(["tighten-episode", "episode-chapters"])
+    h.denied = new Set(USE_CASE_NODE_TYPES)
     const { server } = await setup()
     const names = (await listTools(server)).map((t) => t.name)
     expect(names).not.toContain("tighten_episode")

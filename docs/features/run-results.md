@@ -144,3 +144,46 @@ Results can still come from different runs in these cases:
 - **Nodes after a held-back render.** Captions and formats after the render
   are not on the way to a render, so they can load from the run while the
   render keeps its earlier result.
+
+## Continuing a run that failed
+
+When a run of the workflow on the server fails while the canvas follows it
+(a **Run**, **Run from here** or **Run selected**, or a run an MCP client or a
+Telegram message started), the failure toast offers **Continue from failed**.
+The same button sits beside **Run** whenever your newest run of the workflow
+is one that failed (including one a schedule, the API, an MCP client or a
+Telegram message started). It continues the run from where it stopped: every
+node the run completed keeps its result and is not run or charged again; the
+node that failed, the nodes it held back and the ones it never reached run,
+and are charged, then everything after them. A node that failed runs again in
+full (one that failed partway through a list runs every item again), and so
+does a node the run did not complete that you have since run yourself with ▶:
+it is charged again. The run considers every node of the workflow, and it runs
+the workflow as saved, so unsaved edits are saved first; when they cannot be
+saved, nothing is continued.
+
+It always asks first, whatever the price: the confirm lists every node that
+will run with its estimated credits, and the nodes the run completed as kept.
+The estimate is the editor's own reading of the failed run. The server decides
+the exact set, and runs less when a newer continuation of the run has already
+completed more.
+
+The newest continuation of a run decides what happens next:
+
+- **A newer continuation of that run failed.** The toast offers
+  **Continue it**, which continues that newer run instead.
+- **A newer continuation already ran everything that was left.** Nothing runs:
+  the work is done, and its results are on that run in the Executions tab.
+  The same holds when nothing of the run is left to run at all.
+- **A newer continuation stopped at a Preview.** Its final comes first. With
+  one Apply EDL render held, the editor starts that render's
+  [Render final](../nodes/processing-video/apply-edl.md#render-final), with its
+  usual checks and confirm, continuing that run. With several renders, or a
+  [Tighten Episode](../nodes/processing-video/tighten-episode.md#review-before-render)
+  review, the toast names them and offers **Finish review**: the one run that
+  renders each of them at Final and runs every node after them.
+- **A run of the workflow is already going.** The editor follows it.
+
+A run that was cancelled or timed out, and a run of a published app, are not
+offered. For the API, see
+[Continuing a failed run](../api-integration.md#continuing-a-failed-run).

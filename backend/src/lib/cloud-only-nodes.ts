@@ -3,10 +3,11 @@
  *
  * The frontend has its own copy at `frontend/src/lib/cloud-only-nodes.ts`,
  * which the node pickers import. The two are NOT allowed to drift: the guard
- * test `__tests__/cloud-only-nodes.test.ts` parses the frontend file and
- * asserts both sets are identical, so adding a type on one side and
- * forgetting the other fails CI instead of shipping a node that is offered
- * but can't run.
+ * test `__tests__/cloud-only-nodes.test.ts` reads both files and asserts the
+ * hand-written literals are identical and that both add the node units
+ * declaring the "edition:nodaro-exclusive" capability, so adding a type on
+ * one side and forgetting the other fails CI instead of shipping a node that
+ * is offered but can't run.
  *
  * They stay as two files rather than one shared module because
  * `packages/shared` is published Apache-2.0 — an irrevocable public grant —
@@ -19,15 +20,19 @@
  * edition that has no credits — and callers only found out at execution time
  * (community grind, 2026-08-13).
  */
+// @registry-enumerates NODARO_EXCLUSIVE_NODE_TYPES carries every node unit with the "edition:nodaro-exclusive" capability
+import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
+import { composeSet, unitsWith } from "./unit-compose.js"
 
 /**
  * The Nodaro-EXCLUSIVE node types (4b): served by @nodaroai/cloud-plugins on
  * the cloud, and on self-hosted editions relayed to the cloud through the
  * nodaro.ai credential (routes/nodaro-exclusive.ts + the relay worker).
  * They SAVE everywhere (a workflow is data); discovery and execution gate on
- * `isNodaroConnected()`, not on edition.
+ * `isNodaroConnected()`, not on edition. A node unit joins with the
+ * "edition:nodaro-exclusive" capability.
  */
-export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
+export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = composeSet("NODARO_EXCLUSIVE_NODE_TYPES", new Set([
   "voice-changer-pro",
   "generate-video-pro",
   "edit-video-pro",
@@ -40,15 +45,7 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   // Speaker Frames (P3.6): face tracks per camera; detection runs on the cloud
   // worker, a connected self-host relays it (P3-15).
   "speaker-frames",
-  // Tighten Episode (decided 2026-10-13): its plan/render steps run on
-  // nodaro.ai; on an unconnected install it is hidden from discovery and
-  // badged. The route itself is core — its inner exclusive steps relay one by
-  // one, the route is never relayed whole.
-  "tighten-episode",
-  // Chapters (decided 2026-10-14): the same — its plan step runs on
-  // nodaro.ai, the route is core and never relayed whole.
-  "episode-chapters",
-])
+]), unitsWith(UNIT_NODE_DESCRIPTORS, "edition:nodaro-exclusive"))
 
 /**
  * Truly Cloud-only: no relay exists. generative-pipeline is an interactive

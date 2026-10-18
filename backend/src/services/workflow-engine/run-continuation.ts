@@ -113,10 +113,9 @@ import {
   withInputOverridesColumn,
 } from "../../lib/execution-input-overrides.js"
 import { inlineGraphOf, noteInlineGraphColumnError, withInlineGraphColumns } from "../../lib/execution-inline-graph.js"
-import { appRenderFinalStampOf } from "../../lib/app-run-final-column.js"
-import { appRunStampOf } from "../../lib/app-run-stamp.js"
+import { serverStamps } from "../../lib/trigger-data-stamps.js"
 import { ancestorsOf, bypassTeleports, type WalkEdge } from "@nodaro/render-rules"
-import { continueFromFailedStampOf, lineageRootOf, type ContinueFromFailedStamp } from "../../lib/continue-from-failed-lineage.js"
+import { lineageRootOf, type ContinueFromFailedStamp } from "../../lib/continue-from-failed-lineage.js"
 import { isSkipNode, isSourceNode } from "./execution-graph.js"
 import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
@@ -193,10 +192,12 @@ export async function loadContinuationSource(
         readonly isRenderNode: (nodeId: string) => boolean
       },
 ): Promise<ContinuationSource | null> {
-  // `trigger_data`: a Render final's stamp names the version it ran (below).
+  // `trigger_data`: a Render final's stamp names the version it ran (below) —
+  // read only on a run a stamp-writing lane started (`trigger_type`,
+  // lib/server-started-runs.ts): a webhook's body is a caller's.
   const base = opts.withStates
-    ? "id, user_id, workflow_id, status, started_at, trigger_data, node_states"
-    : "id, user_id, workflow_id, status, started_at, trigger_data"
+    ? "id, user_id, workflow_id, status, started_at, trigger_type, trigger_data, node_states"
+    : "id, user_id, workflow_id, status, started_at, trigger_type, trigger_data"
   const withOverrides = opts.withStates || opts.withPin === true
   // The seeding read (and a route's `withPin` check) also takes the overrides
   // the run pinned when it started (round 3) — through the column guard: until
@@ -222,9 +223,11 @@ export async function loadContinuationSource(
     workflow_id: string | null
     status: string
     started_at?: string | null
+    trigger_type?: unknown
     trigger_data?: unknown
     node_states?: Record<string, NodeExecutionState> | null
   }
+  const stamps = serverStamps(execution)
   const pinned = withOverrides ? pinnedInputOverridesOf(row as unknown as Record<string, unknown>) : null
   // The published version an app run executed. Every app lane links its
   // execution here (`executeAppRun`, the draft run); a run of the live
@@ -245,7 +248,7 @@ export async function loadContinuationSource(
   // moves it to a new one. Every execution an app run starts is stamped with
   // the run (lib/app-run-stamp.ts), so an earlier one is still the run's — an
   // app version's execution, never the live workflow's.
-  const stampedRun = appRow ? null : appRunStampOf(execution.trigger_data)
+  const stampedRun = appRow ? null : stamps.appRun
   if (stampedRun) {
     const { data: stamped, error: stampedError } = await supabase
       .from("app_runs")
@@ -261,7 +264,7 @@ export async function loadContinuationSource(
   // 2026-10-06). Its stamp, written when it was created, names the version it
   // ran — so the check holds at the worker too, after the run's link has
   // moved on to the new final.
-  const finalVersion = appRow ? null : (appRenderFinalStampOf(execution.trigger_data)?.appVersionId ?? null)
+  const finalVersion = appRow ? null : (stamps.appRenderFinal?.appVersionId ?? null)
   return {
     id: execution.id,
     userId: execution.user_id,
@@ -272,7 +275,7 @@ export async function loadContinuationSource(
     appVersionId: (appRow?.app_id ?? null) || finalVersion || (stampedRun ? STAMPED_APP_RUN_UNKNOWN_VERSION : null),
     inlineGraphHash: inlineGraphOf(row as unknown as Record<string, unknown>)?.hash ?? null,
     startedAt: execution.started_at ?? null,
-    continueFromFailed: continueFromFailedStampOf(execution.trigger_data),
+    continueFromFailed: stamps.continueFromFailed,
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),

@@ -2,17 +2,27 @@
 // @registry frontend/src/nodes/*/definition.generated.ts
 // @registry-exports definitions: UNIT_DEFINITIONS UnitNodeType UnitNodeData
 import type { UnitDefinition } from "../kit"
+import { definition as unit_episode_chapters } from "../episode-chapters/definition.generated" // unit:episode-chapters
 import { definition as unit_remove_audio } from "../remove-audio/definition.generated" // unit:remove-audio
+import { definition as unit_tighten_episode } from "../tighten-episode/definition.generated" // unit:tighten-episode
+import type { EpisodeChaptersData as unit_episode_chapters_data } from "../episode-chapters/types" // unit:episode-chapters
 import type { RemoveAudioData as unit_remove_audio_data } from "../remove-audio/types" // unit:remove-audio
+import type { TightenEpisodeData as unit_tighten_episode_data } from "../tighten-episode/types" // unit:tighten-episode
 
 export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
+  unit_episode_chapters, // unit:episode-chapters
   unit_remove_audio, // unit:remove-audio
+  unit_tighten_episode, // unit:tighten-episode
 ]
 
 export type UnitNodeType =
   | never
+  | "episode-chapters" // unit:episode-chapters
   | "remove-audio" // unit:remove-audio
+  | "tighten-episode" // unit:tighten-episode
 
 export type UnitNodeData =
   | never
+  | unit_episode_chapters_data // unit:episode-chapters
   | unit_remove_audio_data // unit:remove-audio
+  | unit_tighten_episode_data // unit:tighten-episode

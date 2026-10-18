@@ -1,19 +1,18 @@
-"use client"
-
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Wand2, Braces, Film, AudioLines, Music, Loader2, AlertCircle, RotateCcw } from "lucide-react"
-import { BaseNode } from "./base-node"
-import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
-import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { BaseNode } from "@/components/nodes/base-node"
+import { NodeJobProgress } from "@/components/nodes/node-job-progress"
+import { RunNodeButton } from "@/components/nodes/run-node-button"
+import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
+import { HandleWithPopover, HANDLE_COLORS } from "@/components/nodes/handle-with-popover"
+import { useUnitNodeKit } from "@/components/nodes/use-unit-node-kit"
+import { useUseCaseContinue, useUseCaseListDriven } from "@/components/nodes/use-case-node-hooks"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUseCaseCredits } from "@/hooks/use-use-case-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { videoNodeSizing } from "./video-node-defaults"
+import { videoNodeSizing } from "@/components/nodes/video-node-defaults"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { RenderReviewBar } from "@/components/render/render-review-bar"
 import { ReviewCutButton } from "@/components/render/review-cut-button"
@@ -23,8 +22,8 @@ import { executionErrorText, nodeErrorCodeText } from "@/lib/execution-error-tex
 import { RENDER_FINAL_ALREADY_RENDERED } from "@nodaro/shared/nodes"
 import { cn } from "@/lib/utils"
 import { usecaseTakeMedium } from "@/lib/use-case-run-result"
-import { usecaseListDriven, usecaseRenderFinalOffered } from "@/components/editor/workflow-editor/use-case-render-final-set"
-import type { TightenEpisodeData } from "@/types/nodes"
+import { usecaseRenderFinalOffered } from "@/components/editor/workflow-editor/use-case-render-final-set"
+import type { TightenEpisodeData } from "./types"
 
 /**
  * Tighten Episode (decided 2026-10-13): one recording in, the tightened episode
@@ -41,8 +40,9 @@ function TightenEpisodeNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TightenEpisodeData
   const t = useT()
   const credits = useUseCaseCredits(id)
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  // The workflow store's services, bound to this node (the unit kit — a unit never imports the store).
+  const kit = useUnitNodeKit(id)
+  const continueUseCase = useUseCaseContinue(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -61,10 +61,7 @@ function TightenEpisodeNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult = status !== "running" && !!activeUrl && !mediaError
   const jobId = nodeData.useCaseJobId
   // A list-driven node runs once per item: no one run for Continue or Render final to name.
-  const listDriven = useWorkflowStore((s) => {
-    const self = s.nodes.find((n) => n.id === id)
-    return self ? usecaseListDriven(self, s.nodes, s.edges) : false
-  })
+  const listDriven = useUseCaseListDriven(id)
   // A failed run offers Continue; a Preview on show whose run can be finished
   // offers Render final (the take's own run, use-case-render-final-set.ts).
   // Never both: no Render final while the node shows a failure.
@@ -84,12 +81,12 @@ function TightenEpisodeNodeComponent({ id, data, selected }: NodeProps) {
   // nothing behind, and the next Run is a fresh run.
   const continueRun = () => {
     if (!jobId) return
-    runSingleNode?.(id, { usecaseContinue: { mode: "from-failed", jobId } })
+    continueUseCase(jobId)
   }
 
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>
-      <EditableNodeLabel label={nodeData.label} icon={<Wand2 className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
+      <EditableNodeLabel label={nodeData.label} icon={<Wand2 className="w-3.5 h-3.5" />} onSave={(newLabel) => kit.updateNodeData({ label: newLabel })} />
       <BaseNode
         id={id}
         label={nodeData.label}
@@ -100,7 +97,7 @@ function TightenEpisodeNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
-        topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />}
+        topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={() => kit.run()} />}
         handles={[
           { id: "media", type: "target", position: Position.Left,  customStyle: { top: "24px",              left: "-29px" },  external: true },
           { id: "music", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" },  external: true },
@@ -174,4 +171,4 @@ function TightenEpisodeNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const TightenEpisodeNode = memo(TightenEpisodeNodeComponent)
+export const NodeComponent = memo(TightenEpisodeNodeComponent)

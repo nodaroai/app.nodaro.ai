@@ -94,7 +94,7 @@ export async function runEditor(args: RunEditorArgs): Promise<EditorLLMResult> {
     userId,
     role: "specialist",
     task: "editor_llm",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.4,
     systemPrompt,
     userPrompt,

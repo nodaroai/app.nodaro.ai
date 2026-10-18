@@ -336,3 +336,33 @@ describe("the run confirmation's price notes", () => {
     expect(screen.queryByTestId("run-confirm-price-note")).toBeNull()
   })
 })
+
+/** A continuation (Continue from failed, Finish review): always asked, in its own words, never claiming a listed step is free. */
+describe("runConfirmText — a continuation", () => {
+  const cont = (extra: Partial<RunConfirmInfo> = {}) =>
+    info({ trigger: "continue-failed", alwaysConfirm: true, estimatedCredits: 12, nodeCount: 2, kept: ["Generate Image"], ...extra })
+
+  it("titles with the button's words and the figure; the body says every listed step runs and is charged", () => {
+    const text = runConfirmText(cont(), tx)
+    expect(text.title).toBe("Continue from failed · ≈12 credits")
+    expect(text.action).toBe("Continue from failed")
+    expect(text.body).toBe(tx("continueFailed.confirmBody"))
+    expect(text.body).not.toMatch(/not charged/i)
+  })
+
+  it("Finish review has its own words; a non-credit edition keeps the question", () => {
+    const finish = runConfirmText(cont({ trigger: "finish-review" }), tx)
+    expect(finish.title).toBe("Finish review · ≈12 credits")
+    expect(finish.action).toBe("Finish review")
+    expect(runConfirmText(cont({ estimatedCredits: null }), tx).title).toBe("Continue from failed?")
+  })
+
+  it.each(["he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the action and carries the figure", (locale) => {
+    useLocaleStore.setState({ locale })
+    for (const trigger of ["continue-failed", "finish-review"] as const) {
+      const text = runConfirmText(cont({ trigger }), tx)
+      expect(text.title.startsWith(text.action)).toBe(true)
+      expect(text.title).toContain("12")
+    }
+  })
+})

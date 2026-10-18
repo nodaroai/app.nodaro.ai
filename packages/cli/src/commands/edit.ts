@@ -20,7 +20,7 @@ import {
   type TightenEpisodeInput,
   type UseCaseNodeType,
 } from "@nodaro/sdk/edit"
-import { ContinuationRefusedError } from "@nodaro/sdk/errors"
+import { ContinuationRefusedError, NodaroError } from "@nodaro/sdk/errors"
 import { buildClient, handleError } from "../client.js"
 import pc from "picocolors"
 import { emit, warn, type OutputOpts } from "../output.js"
@@ -284,6 +284,7 @@ export function editCommand(): Command {
             planTier?: string
             instructions?: string
           },
+        command: Command,
       ) => {
         if (opts.output !== undefined && opts.output !== "video" && opts.output !== "audio") {
           warn(`--output must be "video" or "audio" (got "${opts.output}")`)
@@ -325,7 +326,7 @@ export function editCommand(): Command {
             json: opts.json,
             watch: opts.watch,
             pollInterval: opts.pollInterval,
-            note: "tighten-episode",
+            note: command.name(),
           })
         } catch (err) {
           handleError(err)
@@ -350,6 +351,7 @@ export function editCommand(): Command {
       async (
         opts: GlobalOpts &
           WatchOpts & { media: string; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string },
+        command: Command,
       ) => {
         if (opts.planTier !== undefined && !(EDIT_PLAN_TIERS as readonly string[]).includes(opts.planTier)) {
           warn(`--plan-tier must be ${EDIT_PLAN_TIERS.join(", ")} (got "${opts.planTier}")`)
@@ -370,7 +372,7 @@ export function editCommand(): Command {
             json: opts.json,
             watch: opts.watch,
             pollInterval: opts.pollInterval,
-            note: "episode-chapters",
+            note: command.name(),
           })
           // The show notes (one `0:00 Title` line per chapter); --json already printed the whole job.
           const text = (done?.data.output_data as { text?: unknown } | null | undefined)?.text
@@ -389,7 +391,7 @@ export function editCommand(): Command {
     .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
     .option(
       "--type <type>",
-      `the run's node type (${USE_CASE_NODE_TYPES.join(" | ")}); without it the job is read for its type`,
+      `the run's node type (${USE_CASE_NODE_TYPES.join(" | ")}); without it the job is read for its type, which needs the jobs:read scope`,
     )
     .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
     .option("--watch", "poll the job until it finishes")
@@ -437,6 +439,19 @@ export function editCommand(): Command {
             console.error(pc.red(`✗ ${err.message}`))
             console.error(pc.dim(`  code: ${err.code}`))
             console.error(pc.dim(`  job: ${err.jobId}${CONTINUATION_NEXT_STEP[err.code]?.(err.jobId) ?? ""}`))
+          }
+          process.exit(1)
+        }
+        // The SDK could not read the run's type (no jobs:read, or no use-case type
+        // recorded) and asks for `nodeType`: name this command's flag instead.
+        if (err instanceof NodaroError && err.code === "use_case_type_unknown") {
+          const message = "pass --type <node type> (this key can't read the job's type)"
+          if (opts.json) {
+            emit({ error: { code: err.code, message } }, opts)
+          } else {
+            console.error(pc.red(`✗ ${message}`))
+            console.error(pc.dim(`  code: ${err.code}`))
+            console.error(pc.dim(`  --type: ${USE_CASE_NODE_TYPES.join(" | ")}`))
           }
           process.exit(1)
         }

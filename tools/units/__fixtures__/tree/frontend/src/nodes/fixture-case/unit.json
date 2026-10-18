@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../../../unit.schema.json",
+  "schemaVersion": 1,
+  "type": "fixture-case",
+  "label": "Fixture Case",
+  "category": "utility",
+  "position": { "after": "fixture-echo" },
+  "picker": { "family": "fixture-family", "after": "fixture-echo", "alsoOnTabs": ["audio"] },
+  "handles": {
+    "inputs": [{ "id": "media", "label": "Recording", "accepts": ["video", "audio"] }],
+    "outputs": [{ "id": "text", "label": "Text", "kind": "text" }, { "id": "json", "label": "JSON", "kind": "look" }]
+  },
+  "defaultData": { "label": "Fixture Case" },
+  "execution": { "kind": "use-case", "builder": "fixture" },
+  "capabilities": [],
+  "registry": { "description": "Run the fixture use-case chain (the gen:units use-case fixture).", "outputType": "text" },
+  "contract": { "jsonPips": { "json": "other" }, "presents": "text" },
+  "docs": { "awaiting": "the gen:units use-case fixture has no docs page" }
+}

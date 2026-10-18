@@ -88,9 +88,9 @@ test("G1: a node type is a unit or a legacy literal entry — never both; the le
  * raised.
  */
 export const BURN_DOWN_PINS = {
-  "tools/units/legacy-nodes.json": 224,
-  "tools/test-select/registry-users-tests.json": 241,
-  "tools/test-select/registry-users-product.json": 208,
+  "tools/units/legacy-nodes.json": 222,
+  "tools/test-select/registry-users-tests.json": 240,
+  "tools/test-select/registry-users-product.json": 207,
 }
 const listOf = (file) => {
   const json = readJson(file)
@@ -156,7 +156,7 @@ test("G3: every aggregate declares @registry and @registry-exports; only reviewe
 // composites like "foo:pro", ids built by helpers) and functions returning a
 // collection (familyById → .types) go in `exports`. A new lookup is added here
 // with that reason, in a reviewed change.
-const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf"])
+const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "usecaseInputSchemaOf"])
 
 test("G3: composer `lookups` are only one-node-type lookups", () => {
   const bad = Object.entries(composerMap).flatMap(([f, e]) => (e.lookups ?? []).filter((n) => !LOOKUPS_BY_NODE_TYPE.has(n)).map((n) => `${f}: ${n}`))
@@ -218,13 +218,14 @@ export function undeclaredTestUsers(files, names, readSource) {
 /**
  * Product modules that name a registry export and declare neither
  * @registry-lookup nor @registry-enumerates. A composer is a pass-through only
- * for its own registries: a name of another registry counts.
+ * for its own registries: a name of another registry counts. A registry it
+ * folds at load (`foldsAtLoad`) is declared too — the enumerator that entry makes it.
  */
 export function undeclaredProductUsers(files, regs, readSource) {
   return files.filter((f) => {
     if (AGGREGATE_FILE.test(f) || unitOf(f)) return false
     const src = readSource(f)
-    const own = regs.composers.get(f) ?? new Set()
+    const own = new Set([...(regs.composers.get(f) ?? []), ...(regs.folds?.get(f) ?? [])])
     const names = new Set([...regs.exportsById].filter(([id]) => !own.has(id)).flatMap(([, s]) => [...s]))
     if (namesUsed(src, names).size === 0) return false
     const a = parseRegistryAnnotations(src)

@@ -144,6 +144,7 @@ const EXECUTOR_FILES: ReadonlyMap<string, string> = new Map([
   ["components/editor/workflow-editor/scene-story-handlers.ts", "a script scene's image, marked by its own `imageStatus`"],
   ["components/editor/workflow-editor/run-handlers.ts", "a whole-workflow run, its nodes flipped to `pending` first"],
   ["components/editor/workflow-editor/render-final-handler.ts", "Render final / Update preview: a run of the render set, its nodes flipped to `pending` first"],
+  ["components/editor/workflow-editor/continue-failed-run.ts", "Continue from failed / finishing a held Preview review: a run of the workflow, its expected nodes flipped to `pending` first"],
   ["components/editor/workflow-editor/use-case-render-final.ts", "a use-case node's Render final: a run of the node and what follows it, its nodes flipped to `pending` first"],
   ["components/editor/workflow-editor/component-executor.ts", "a component node, run by a node's Run"],
 ])

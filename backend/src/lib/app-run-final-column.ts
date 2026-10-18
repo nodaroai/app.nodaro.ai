@@ -20,6 +20,7 @@
  * app's workflow (`loadAppRunFinals`, the rule of `executionBelongsToRun`).
  */
 import { appRunFinalReplacedIds } from "@nodaro/render-rules"
+import { serverTriggerData } from "./server-started-runs.js"
 import { supabase } from "./supabase.js"
 
 /** 42703: undefined column (Postgres); PGRST204: unknown column in a write (PostgREST). */
@@ -156,6 +157,9 @@ export interface AppRenderFinalStamp {
 
 const STAMP_KEY = "appRenderFinal"
 
+/** The `trigger_data` key a Render final's execution is stamped under (reserved: never caller data, lib/trigger-data-stamps.ts). */
+export const APP_RENDER_FINAL_STAMP_KEY = STAMP_KEY
+
 /** The `trigger_data` a final's execution is created with. */
 export function appRenderFinalStamp(stamp: AppRenderFinalStamp): Record<string, AppRenderFinalStamp> {
   return { [STAMP_KEY]: { appRunId: stamp.appRunId, appVersionId: stamp.appVersionId, continuedFrom: stamp.continuedFrom } }
@@ -229,7 +233,7 @@ export async function readAppRunFinals(
   for (let step = 0; next.length > 0 && step < MAX_CHAIN_STEPS; step++) {
     let query = supabase
       .from("workflow_executions")
-      .select("id, status, node_states, completed_nodes, total_nodes, error_message, completed_at, total_credits_used, trigger_data")
+      .select("id, status, node_states, completed_nodes, total_nodes, error_message, completed_at, total_credits_used, trigger_type, trigger_data")
       .in("id", next)
       .eq("user_id", runnerId)
     if (scope.workflowId) query = query.eq("workflow_id", scope.workflowId)
@@ -240,7 +244,8 @@ export async function readAppRunFinals(
     for (const row of data as Array<Record<string, unknown>>) {
       const id = row.id as string
       if (!wanted.has(id) || out.has(id)) continue
-      const stamp = appRenderFinalStampOf(row.trigger_data)
+      // A stamp is read only on a run a stamp-writing lane started (lib/server-started-runs.ts).
+      const stamp = appRenderFinalStampOf(serverTriggerData(row))
       // An earlier final is one by its own stamp; a linked final is one by the link.
       if (!requested && !stamp) continue
       out.set(id, {

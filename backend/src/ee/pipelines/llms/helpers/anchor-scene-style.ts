@@ -7,7 +7,7 @@ import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
-const AnchorPromptSchema = z.object({
+export const AnchorPromptSchema = z.object({
   anchor_prompt: z.string().min(20).max(800),
 })
 
@@ -63,7 +63,7 @@ Write the anchor_prompt and respond as JSON.`
     userId: args.userId,
     role: "helper",
     task: "anchor_scene_style",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.5,
     systemPrompt,
     userPrompt,

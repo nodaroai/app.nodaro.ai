@@ -398,15 +398,6 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
-  // tighten-episode: the recording (video or audio) and an optional music bed.
-  "tighten-episode":    [
-    { handleId: "media", label: "Recording", accepts: ACCEPTS_MEDIA },
-    { handleId: "music", label: "Music", accepts: ACCEPTS_AUDIO },
-  ],
-  // episode-chapters: the recording (video or audio).
-  "episode-chapters":   [
-    { handleId: "media", label: "Recording", accepts: ACCEPTS_MEDIA },
-  ],
   // speaker-view: the edit (an EDL) and the diarized transcript, both json, and
   // the face tracks (P3.9). No `sources` handle: media resolves from the EDL's
   // own URLs (SV15).

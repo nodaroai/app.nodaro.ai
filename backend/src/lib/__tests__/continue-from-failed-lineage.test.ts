@@ -18,7 +18,10 @@ vi.mock("@/lib/supabase.js", () => ({
           calls.push([m, ...a])
           return q
         }
-      q.maybeSingle = async () => ({ data: db.error ? null : db.row, error: db.error })
+      // The lane filter is honoured, as the database would: a row of another lane is not found.
+      const laneOk = () =>
+        calls.every(([m, col, vals]) => m !== "in" || col !== "trigger_type" || (vals as unknown[]).includes((db.row as { trigger_type?: unknown } | null)?.trigger_type))
+      q.maybeSingle = async () => ({ data: db.error || !laneOk() ? null : db.row, error: db.error })
       return q
     },
   },
@@ -108,6 +111,7 @@ const scope = { userId: "u1", workflowId: "wf-1" }
 const gen = (id: string, status: string, all: boolean | undefined, root = "exec-a") => ({
   id,
   status,
+  trigger_type: "manual",
   trigger_data: { continueFromFailed: { from: root, root, ...(all === undefined ? {} : { all }) } },
 })
 
@@ -118,10 +122,12 @@ describe("newestGeneration", () => {
     expect(db.calls).toEqual([
       [
         ["from", "workflow_executions"],
-        ["select", "id, status, trigger_data"],
+        ["select", "id, status, trigger_type, trigger_data"],
         ["eq", "user_id", "u1"],
         ["eq", "workflow_id", "wf-1"],
         ["eq", "trigger_data->continueFromFailed->>root", "exec-a"],
+        // Only among the runs a stamp-writing lane started (lib/server-started-runs.ts).
+        ["in", "trigger_type", ["manual", "mcp", "app_run"]],
         ["in", "status", ["failed", "completed"]],
         ["not", "started_at", "is", null],
         ["order", "created_at", { ascending: false }],
@@ -136,7 +142,7 @@ describe("newestGeneration", () => {
   })
 
   it("reads the Preview renders it stopped at off its stamp", async () => {
-    db.row = { id: "exec-c", status: "completed", trigger_data: { continueFromFailed: { from: "exec-a", root: "exec-a", all: false, previewRenders: ["cut"] } } }
+    db.row = { id: "exec-c", status: "completed", trigger_type: "manual", trigger_data: { continueFromFailed: { from: "exec-a", root: "exec-a", all: false, previewRenders: ["cut"] } } }
     expect(await newestGeneration({ ...scope, root: "exec-a" })).toEqual({ id: "exec-c", status: "completed", all: false, previewRenders: ["cut"], reviewHolds: [] })
   })
 
@@ -147,6 +153,46 @@ describe("newestGeneration", () => {
   it("a read error throws (never read as none)", async () => {
     db.error = { message: "down" }
     await expect(newestGeneration({ ...scope, root: "exec-a" })).rejects.toThrow(/unreadable: down/)
+  })
+})
+
+describe("a lineage stamp is the platform's only on a run the run route started", () => {
+  const started = "2026-10-17T10:00:00Z"
+  /** A webhook's row whose posted body carried a lineage stamp: "everything is done", naming a lineage. */
+  const forged = (all: boolean) => ({
+    id: "exec-w",
+    status: "completed",
+    trigger_type: "webhook",
+    trigger_data: { message: "hi", continueFromFailed: { from: "exec-a", root: "exec-a", seededFrom: "exec-a", all } },
+  })
+
+  it("a webhook row carrying a forged stamp is no generation: the run is continued, not answered done", async () => {
+    db.row = forged(true)
+    expect(await newestGeneration({ ...scope, root: "exec-a" })).toBeNull()
+    expect(await continuationPointOf({ id: "exec-a", startedAt: started }, scope)).toEqual({ kind: "continue", seedFrom: "exec-a" })
+    expect(await supersedingRunOf({ id: "exec-a", startedAt: started }, scope)).toBeNull()
+  })
+
+  it("nor is it built on: a forged partial generation does not narrow or re-seed the continuation", async () => {
+    db.row = forged(false)
+    expect(await continuationPointOf({ id: "exec-a", startedAt: started }, scope)).toEqual({ kind: "continue", seedFrom: "exec-a" })
+    db.row = { ...forged(false), trigger_data: { continueFromFailed: { from: "exec-a", root: "exec-a", all: false, previewRenders: ["cut"] } } }
+    expect(await continuationPointOf({ id: "exec-a", startedAt: started }, scope)).toEqual({ kind: "continue", seedFrom: "exec-a" })
+  })
+
+  it("every lane but the run route's and the app lanes' is ignored; theirs still count", async () => {
+    for (const trigger_type of ["webhook", "schedule", "telegram", "telegram_account", "api", "use_case"]) {
+      db.row = { ...forged(true), trigger_type }
+      expect(await newestGeneration({ ...scope, root: "exec-a" }), trigger_type).toBeNull()
+    }
+    for (const trigger_type of ["manual", "mcp"]) {
+      db.row = { ...forged(true), id: "exec-c", trigger_type }
+      expect(await supersedingRunOf({ id: "exec-a", startedAt: started }, scope), trigger_type).toEqual({
+        executionId: "exec-c",
+        status: "completed",
+        neverStarted: false,
+      })
+    }
   })
 })
 
@@ -230,6 +276,7 @@ describe("continuationPointOf: the lineage's newest generation decides", () => {
   const stoppedAtPreview = (id = "exec-b") => ({
     id,
     status: "completed",
+    trigger_type: "manual",
     trigger_data: { continueFromFailed: { from: "exec-a", root: "exec-a", all: false, previewRenders: ["cut"] } },
   })
 
@@ -247,7 +294,7 @@ describe("continuationPointOf: the lineage's newest generation decides", () => {
   })
 
   it("the newest completed by stopping at a Tighten Episode review: refused the same way, naming the node (never built on to stop again)", async () => {
-    db.row = { id: "exec-b", status: "completed", trigger_data: { continueFromFailed: { from: "exec-a", root: "exec-a", all: false, reviewHolds: ["t"] } } }
+    db.row = { id: "exec-b", status: "completed", trigger_type: "manual", trigger_data: { continueFromFailed: { from: "exec-a", root: "exec-a", all: false, reviewHolds: ["t"] } } }
     expect(await continuationPointOf({ id: "exec-a", startedAt: started }, scope)).toEqual({
       kind: "preview-pending",
       at: "exec-b",
@@ -266,7 +313,7 @@ describe("continuationPointOf: the lineage's newest generation decides", () => {
   })
 
   it("its Render final left something: the run is built on the final", async () => {
-    db.row = { id: "exec-f", status: "completed", trigger_data: { continueFromFailed: { from: "exec-b", root: "exec-a", all: false, via: "subset" } } }
+    db.row = { id: "exec-f", status: "completed", trigger_type: "manual", trigger_data: { continueFromFailed: { from: "exec-b", root: "exec-a", all: false, via: "subset" } } }
     expect(await continuationPointOf({ id: "exec-a", startedAt: started }, scope)).toEqual({ kind: "continue", seedFrom: "exec-f" })
   })
 })

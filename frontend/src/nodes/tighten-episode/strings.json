@@ -1,0 +1,24 @@
+{
+  "keys": {
+    "proccfg.tightenOutput": {"en": "Episode", "he": "פרק", "ja": "エピソード", "ko": "에피소드", "pt-br": "Episódio"},
+    "proccfg.tightenOutputVideo": {"en": "Video", "he": "וידאו", "ja": "動画", "ko": "동영상", "pt-br": "Vídeo"},
+    "proccfg.tightenOutputAudio": {"en": "Audio only", "he": "שמע בלבד", "ja": "音声のみ", "ko": "오디오만", "pt-br": "Somente áudio"},
+    "proccfg.tightenAudioForced": {"en": "An audio recording makes an audio episode", "he": "הקלטת שמע יוצרת פרק שמע", "ja": "音声の録音からは音声のエピソードが作られます", "ko": "오디오 녹음으로는 오디오 에피소드가 만들어집니다", "pt-br": "Uma gravação de áudio gera um episódio em áudio"},
+    "proccfg.tightenFraming": {"en": "Framing", "he": "מסגור", "ja": "フレーミング", "ko": "프레이밍", "pt-br": "Enquadramento"},
+    "proccfg.tightenFramingNone": {"en": "None — the camera as recorded", "he": "ללא — המצלמה כפי שצולמה", "ja": "なし — 録画したままのカメラ", "ko": "없음 — 촬영된 그대로의 카메라", "pt-br": "Nenhum — a câmera como foi gravada"},
+    "proccfg.tightenFramingLayout": {"en": "Layout", "he": "פריסה", "ja": "レイアウト", "ko": "레이아웃", "pt-br": "Layout"},
+    "proccfg.tightenFramingHint": {"en": "Frames the episode in the chosen shape: each speaker on screen gets an automatic box, and tracked speakers are followed", "he": "ממסגר את הפרק בצורה שנבחרה: כל דובר שעל המסך מקבל מסגרת אוטומטית, ודוברים במעקב נעקבים", "ja": "選んだ形にエピソードをフレーミングします。画面上の各話者には自動でボックスが割り当てられ、トラッキングされた話者は追従されます", "ko": "선택한 형태로 에피소드를 프레이밍합니다. 화면에 나오는 각 화자에게 자동 박스가 지정되고, 추적된 화자는 따라갑니다", "pt-br": "Enquadra o episódio no formato escolhido: cada pessoa que fala na tela recebe uma caixa automática, e quem é rastreado é acompanhado"},
+    "proccfg.tightenCaptions": {"en": "Captions", "he": "כתוביות", "ja": "字幕", "ko": "자막", "pt-br": "Legendas"},
+    "proccfg.tightenCaptionStyle": {"en": "Caption style", "he": "סגנון כתוביות", "ja": "字幕のスタイル", "ko": "자막 스타일", "pt-br": "Estilo das legendas"},
+    "proccfg.tightenReview": {"en": "Review before render", "he": "סקירה לפני רינדור", "ja": "レンダリング前に確認", "ko": "렌더링 전에 검토", "pt-br": "Revisar antes de renderizar"},
+    "proccfg.tightenReviewHint": {"en": "Stops at a quick preview you can review and edit; Render final makes the full-quality episode", "he": "עוצר בתצוגה מקדימה מהירה לסקירה ועריכה; רינדור סופי יוצר את הפרק באיכות מלאה", "ja": "確認・編集できる簡易プレビューで止まります。「最終レンダリング」でフル品質のエピソードを作成します", "ko": "검토하고 편집할 수 있는 빠른 미리보기에서 멈춥니다. “최종 렌더링”으로 최고 품질의 에피소드를 만듭니다", "pt-br": "Para em uma prévia rápida que você pode revisar e editar; “Renderização final” gera o episódio em qualidade total"},
+    "proccfg.tightenPlanTier": {"en": "Editing quality", "he": "איכות העריכה", "ja": "編集の品質", "ko": "편집 품질", "pt-br": "Qualidade da edição"},
+    "proccfg.tightenMusicDuck": {"en": "Music under speech", "he": "מוזיקה מתחת לדיבור", "ja": "話し声の下の音楽", "ko": "말소리 아래 음악", "pt-br": "Música sob a fala"},
+    "node.tightenEpisodeVideo": {"en": "Episode", "he": "פרק", "ja": "エピソード", "ko": "에피소드", "pt-br": "Episódio"},
+    "node.tightenEpisodeAudio": {"en": "Episode audio", "he": "שמע הפרק", "ja": "エピソード音声", "ko": "에피소드 오디오", "pt-br": "Áudio do episódio"},
+    "node.tightenPlan": {"en": "Edit (EDL)", "he": "עריכה (EDL)", "ja": "編集（EDL）", "ko": "편집(EDL)", "pt-br": "Edição (EDL)"}
+  },
+  "labels": {
+    "Tighten Episode": {"he": "הידוק פרק", "ja": "エピソードを引き締める", "ko": "에피소드 다듬기", "pt-br": "Enxugar episódio"}
+  }
+}

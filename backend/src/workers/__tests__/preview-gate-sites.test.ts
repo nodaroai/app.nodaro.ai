@@ -12,6 +12,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
+import { USE_CASE_NODE_TYPES, usecaseDescriptor } from "@nodaro/render-rules"
 
 const SRC = join(__dirname, "..", "..")
 
@@ -136,7 +137,8 @@ describe("every enqueue producer answers reviewerPresent", () => {
     // A file that calls a use-case route names one: a route literal, or the
     // type's route through the registry. A schema field (`reviewerPresent: z…`)
     // is no forward.
-    const namesAUseCaseRoute = /["'`]\/v1\/tighten-episode|usecaseContinuePath\(|usecaseDescriptor\(/
+    const routeLiterals = USE_CASE_NODE_TYPES.map((t) => usecaseDescriptor(t).route.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&"))
+    const namesAUseCaseRoute = new RegExp(`["'\`](?:${routeLiterals.join("|")})|usecaseContinuePath\\(|usecaseDescriptor\\(`)
     const callers = FILES.filter(
       (f) => namesAUseCaseRoute.test(f.text) && /\breviewerPresent(?::(?!\s*z\.)|\s)/.test(f.text) && !f.rel.startsWith("routes/"),
     )

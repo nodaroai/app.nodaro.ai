@@ -97,7 +97,7 @@ ${feedback}
 
 Emit the regenerated SceneSpec via the emit tool.`
 
-  // 3. Call the LLM. Sonnet 4.6, temp 0.4 to match Showrunner. maxRetries=1
+  // 3. Call the LLM. Sonnet 5.5 (no temperature on this model), like the Showrunner. maxRetries=1
   //    — Sonnet's roster-ref errors don't improve with auto-retry; let the
   //    user re-prompt with clearer feedback instead.
   const systemPrompt = getPipelinePrompt(PIPELINE_PROMPT_KEYS.sceneRefiner)
@@ -108,7 +108,7 @@ Emit the regenerated SceneSpec via the emit tool.`
     userId,
     role: "specialist",
     task: "regenerate_scene",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.4,
     systemPrompt,
     userPrompt,

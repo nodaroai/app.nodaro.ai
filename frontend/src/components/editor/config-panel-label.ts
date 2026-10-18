@@ -121,8 +121,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = composeRecord("NODE_TYPE
   "llm-chat": "Generate Text - Any LLM",
   "combine-videos": "Combine Videos",
   "apply-edl": "Apply EDL",
-  "tighten-episode": "Tighten Episode",
-  "episode-chapters": "Chapters",
   "edit-plan": "Edit Plan",
   "camera-switch": "Camera Switch",
   "speaker-frames": "Speaker Frames",

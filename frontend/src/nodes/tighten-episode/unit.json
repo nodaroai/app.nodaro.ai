@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "tighten-episode",
+  "label": "Tighten Episode",
+  "category": "processing",
+  "position": { "after": "apply-edl" },
+  "picker": {
+    "family": "video-podcast",
+    "after": null,
+    "pickerCategory": "Processing",
+    "keywords": ["podcast", "tighten", "episode", "silence", "filler", "cut", "edit", "captions", "music", "one step"],
+    "alsoOnTabs": ["audio"]
+  },
+  "handles": {
+    "inputs": [
+      { "id": "media", "label": "Recording", "accepts": ["video", "audio"] },
+      { "id": "music", "label": "Music", "accepts": ["audio"] }
+    ],
+    "outputs": [
+      { "id": "media", "label": "Episode", "kind": "video", "runtimeTyped": true },
+      { "id": "json", "label": "Edit (EDL)", "kind": "look" }
+    ]
+  },
+  "defaultData": { "label": "Tighten Episode", "output": "video", "captions": true, "captionStyle": "word-highlight", "reviewBeforeRender": false, "planTier": "standard", "instructions": "", "fieldMappings": {}, "executionStatus": "idle" },
+  "execution": { "kind": "use-case", "builder": "tighten" },
+  "capabilities": ["panel:generate-button", "edition:nodaro-exclusive"],
+  "registry": {
+    "description": "Tighten a podcast recording in one step: transcribes it, removes silences and filler, cuts the episode, and optionally adds captions and a music bed. Video or audio. Its steps are priced at their own rates, plus a per-run fee (listed at 10 credits).",
+    "outputType": "video"
+  },
+  "contract": { "producer": "dynamic", "jsonPips": { "json": "edl" }, "nonPromptInputs": ["music"], "reviewHold": true, "presents": "video" },
+  "docs": { "page": "docs/nodes/processing-video/tighten-episode.md", "index": "hand-written" }
+}

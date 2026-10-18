@@ -30,9 +30,8 @@
  */
 import type { McpSession } from "../session.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
-import { appRunStampOf } from "../../app-run-stamp.js"
-import { appRenderFinalStampOf } from "../../app-run-final-column.js"
-import { continuationPointOf, continueFromFailedStampOf } from "../../continue-from-failed-lineage.js"
+import { serverStamps } from "../../trigger-data-stamps.js"
+import { continuationPointOf } from "../../continue-from-failed-lineage.js"
 import { heldFinalRun, type HeldFinalRun } from "../../continuation-held-final.js"
 
 /**
@@ -101,8 +100,10 @@ export async function resumeFailedRunHint(
   if (typeof workflowId !== "string" || workflowId.length === 0) return null
   if (execution.trigger_type === "app_run" || execution.trigger_type === "use_case") return null
   // An app run's Retry runs as `manual` but is stamped with its run, as is a
-  // Render final: both ran a published version, which `/run` refuses.
-  if (appRunStampOf(execution.trigger_data) !== null || appRenderFinalStampOf(execution.trigger_data) !== null) return null
+  // Render final: both ran a published version, which `/run` refuses. Stamps
+  // are read only on a run a stamp-writing lane started (lib/server-started-runs.ts).
+  const stamps = serverStamps(execution)
+  if (stamps.appRun !== null || stamps.appRenderFinal !== null) return null
   let point: Awaited<ReturnType<typeof continuationPointOf>>
   type Graph = { nodes: Array<{ id: string; type?: string }>; edges: Array<{ source: string; target: string }> }
   let graph: Graph
@@ -115,7 +116,7 @@ export async function resumeFailedRunHint(
       {
         id: String(execution.id),
         startedAt: typeof execution.started_at === "string" ? execution.started_at : null,
-        continueFromFailed: continueFromFailedStampOf(execution.trigger_data),
+        continueFromFailed: stamps.continueFromFailed,
       },
       { userId: session.userId, workflowId },
     )

@@ -1,9 +1,9 @@
 /**
- * A use-case run's request (decided 2026-10-13): the bodies (bodies.ts, one
- * per type; re-exported here for existing importers), the continue body, and
- * the preparation every route shares — probe the recording (what streams it
- * really carries, how long it is), refuse what the chain cannot run, resolve
- * the settings, build the type's graph from its descriptor. No row, no hold.
+ * A use-case run's request (decided 2026-10-13): the continue body (the run
+ * bodies are bodies.ts, one per type) and the preparation every route shares
+ * — probe the recording (what streams it really carries, how long it is),
+ * refuse what the chain cannot run, resolve the settings, build the type's
+ * graph from its descriptor. No row, no hold.
  */
 import { z } from "zod"
 import {
@@ -16,8 +16,6 @@ import {
 } from "@nodaro/render-rules"
 import { probeMediaDuration, probeMediaStreams } from "../../providers/video/ffmpeg-utils.js"
 import type { UseCaseBody } from "./bodies.js"
-
-export { tightenEpisodeBody, type TightenEpisodeBody } from "./bodies.js"
 
 /**
  * POST <the type's route>/continue: continue a run of yours — from where it

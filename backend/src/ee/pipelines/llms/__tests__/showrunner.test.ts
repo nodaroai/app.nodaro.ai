@@ -85,7 +85,7 @@ describe("runShowrunner", () => {
 
     expect(result.estimated_scene_count).toBe(3)
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
-    expect(call.modelId).toBe("claude-sonnet-4-6")
+    expect(call.modelId).toBe("claude-sonnet-5-5")
     expect(call.userPrompt).toContain("\"hero\"")
   })
 

@@ -15,6 +15,7 @@ import {
   type EdlTargetAspect
 } from "@nodaro/shared/edl"
 import type { CaptionStyle } from "@nodaro/shared/captions"
+import { USE_CASE_NODE_TYPES, isUseCaseNodeType, type UseCaseNodeType } from "@nodaro/shared/nodes"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -324,23 +325,11 @@ export interface TightenEpisodeInput {
   musicDuckAmount?: number
 }
 
-/**
- * The podcast use-case node types, each one a route (`POST /v1/<type>`, and
- * `POST /v1/<type>/continue` to continue one of its runs).
- */
-export const USE_CASE_NODE_TYPES = ["tighten-episode", "episode-chapters"] as const
-/** A podcast use-case node type (see {@link USE_CASE_NODE_TYPES}). */
-export type UseCaseNodeType = (typeof USE_CASE_NODE_TYPES)[number]
+/** The podcast use-case node types, each one a route (`POST /v1/<type>`, and `POST /v1/<type>/continue` to continue one of its runs). */
+export { USE_CASE_NODE_TYPES, type UseCaseNodeType }
 
-function isUseCaseNodeType(value: unknown): value is UseCaseNodeType {
-  return typeof value === "string" && (USE_CASE_NODE_TYPES as readonly string[]).includes(value)
-}
-
-/** The route that continues a run of each type (`/v1/<type>/continue`), as a table the type picks from. */
-const USE_CASE_CONTINUE_PATHS: { readonly [K in UseCaseNodeType]: `/v1/${K}/continue` } = {
-  "tighten-episode": "/v1/tighten-episode/continue",
-  "episode-chapters": "/v1/episode-chapters/continue",
-}
+/** The route that continues a run of `type`. */
+const continuePathOf = (type: UseCaseNodeType): `/v1/${UseCaseNodeType}/continue` => `/v1/${type}/continue`
 
 /** What a use-case run (`tightenEpisode`, `episodeChapters`) and `continueUseCase` answer: the run's job to poll. */
 export interface UseCaseJobResult extends EditJobResult {
@@ -404,8 +393,9 @@ export interface UseCaseContinueInput {
   /**
    * The run's node type: its continuation goes to `POST /v1/<nodeType>/continue`.
    * Optional: when absent the job is read first (`GET /v1/jobs/:id`, which
-   * needs the `jobs:read` scope on an app token) for the type the run records;
-   * a key that may not read jobs continues on the Tighten Episode route.
+   * needs the `jobs:read` scope on an app token) for the type the run records.
+   * Required when that read cannot answer: a key without `jobs:read`, or a job
+   * that records no use-case type (the call rejects with `use_case_type_unknown`).
    */
   nodeType?: UseCaseNodeType
 }
@@ -576,8 +566,10 @@ export class EditResource {
   /**
    * Continue a use-case run as a new job (`POST /v1/<type>/continue`, the
    * run's own type: `input.nodeType`, else the type the job records, read with
-   * `GET /v1/jobs/:id`): `"from-failed"` keeps the steps that finished and runs
-   * the rest (the fee is held again; the failed run's was refunded);
+   * `GET /v1/jobs/:id`; when that read cannot tell, this rejects with a
+   * `NodaroError` coded `use_case_type_unknown` — pass `nodeType` then):
+   * `"from-failed"` keeps the steps that finished and runs the rest (the fee
+   * is held again; the failed run's was refunded);
    * `"render-final"` renders the full-quality result after a review-on preview,
    * with the preview's settings and no fee. A refusal that names another job
    * (`already_running`, `continuation_superseded`,
@@ -593,7 +585,7 @@ export class EditResource {
       )
     }
     const type = input.nodeType ?? (await this.runTypeOf(input.jobId))
-    return this.client.request("POST", USE_CASE_CONTINUE_PATHS[type], {
+    return this.client.request("POST", continuePathOf(type), {
       body: { jobId: input.jobId, mode: input.mode, ...(input.editedEdl !== undefined ? { editedEdl: input.editedEdl } : {}) },
       ...idempotencyHeaders(options),
     })
@@ -601,24 +593,27 @@ export class EditResource {
 
   /**
    * The use-case type a run records (`input_data.type`, else its `job_type`).
-   * Tighten Episode — the one type before runs could be read for theirs — when
-   * the key lacks the `jobs:read` scope (403 naming that scope) or the job
-   * names no use-case type: its route then answers for the run exactly as it
-   * always has (a job that is no run of it is `not_found`). Any other failure
-   * of the read, any other 403 included, is thrown.
+   * When the key lacks the `jobs:read` scope (403 naming that scope) or the job
+   * names no use-case type, the type cannot be read: this rejects with a
+   * `NodaroError` (`use_case_type_unknown`, 400) asking for `nodeType`, and
+   * nothing is posted (decided 2026-10-18: no route is guessed for the run).
+   * Any other failure of the read, any other 403 included, is thrown as is.
    */
   private async runTypeOf(jobId: string): Promise<UseCaseNodeType> {
+    const unknown = () =>
+      new NodaroError("continueUseCase: the run's node type cannot be read — pass nodeType", "use_case_type_unknown", 400)
     let row: { job_type?: unknown; input_data?: unknown } | undefined
     try {
       row = (await this.client.request<{ data?: { job_type?: unknown; input_data?: unknown } }>("GET", `/v1/jobs/${encodeURIComponent(jobId)}`)).data
     } catch (err) {
-      if (err instanceof ForbiddenError && err.missingScope === "jobs:read") return "tighten-episode"
+      if (err instanceof ForbiddenError && err.missingScope === "jobs:read") throw unknown()
       throw err
     }
     const input = row?.input_data
     const recorded = input && typeof input === "object" && !Array.isArray(input) ? (input as { type?: unknown }).type : undefined
     const type = typeof recorded === "string" && recorded.length > 0 ? recorded : row?.job_type
-    return isUseCaseNodeType(type) ? type : "tighten-episode"
+    if (!isUseCaseNodeType(type)) throw unknown()
+    return type
   }
 
   /**

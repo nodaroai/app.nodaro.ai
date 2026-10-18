@@ -1,6 +1,8 @@
+// @test-watches frontend/src/components/editor/** frontend/src/components/ui/{select,command}.tsx frontend/src/ee/components/copilot/copilot-panel.tsx frontend/src/nodes/*/{node,config}.tsx
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
+import { unitComponentFiles } from "@/test-utils/unit-component-files"
 
 /**
  * The picker renders inside <html dir="rtl"> for Hebrew. A physical
@@ -51,12 +53,16 @@ const PICKER_FILES = [
   "components/ui/command.tsx",
 ]
 
-/** Every node config panel: the whole directory, so a new panel is covered
- *  the day it is added. Discovered at test time rather than listed. */
-const CONFIG_PANEL_FILES = fs
-  .readdirSync(path.join(SRC, "components/editor/config-panels"))
-  .filter((f) => f.endsWith(".tsx"))
-  .map((f) => `components/editor/config-panels/${f}`)
+/** Every node config panel: the whole directory and every node unit's panel
+ *  (frontend/src/nodes/<type>/config.tsx), so a new panel is covered the day
+ *  it is added. Discovered at test time rather than listed. */
+const CONFIG_PANEL_FILES = [
+  ...fs
+    .readdirSync(path.join(SRC, "components/editor/config-panels"))
+    .filter((f) => f.endsWith(".tsx"))
+    .map((f) => `components/editor/config-panels/${f}`),
+  ...unitComponentFiles("config"),
+]
 
 // A class token sits after a quote, backtick or whitespace, optionally behind
 // a variant chain (`md:`, `dark:hover:`, `data-[state=open]:`) and a leading

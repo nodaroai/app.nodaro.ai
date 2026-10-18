@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the tighten-episode body (USE_CASE_BODIES["tighten-episode"])
 /**
  * The body the backend engine sends a use-case node's route (`requestOf`).
  * Tighten Episode's bodies are pinned byte for byte (key order included) to
@@ -13,9 +14,11 @@
  */
 import { describe, expect, it } from "vitest"
 import { resolveTightenEpisodeSettings } from "@nodaro/render-rules"
-import { tightenEpisodeBody } from "../../../lib/use-case/bodies.js"
+import { USE_CASE_BODIES } from "../../../lib/use-case/bodies.js"
 import { requestOf } from "../use-case-request.js"
 import type { OrchestratorContext, ResolvedInputs, SimpleNode } from "../types.js"
+
+const tightenEpisodeBody = USE_CASE_BODIES["tighten-episode"]
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const WF = "00000000-0000-4000-8000-0000000000aa"

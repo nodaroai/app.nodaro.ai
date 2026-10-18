@@ -56,7 +56,7 @@ export async function runStoryboardCohesionCritic(
     userId: args.userId,
     role: "critic",
     task: "storyboard_cohesion",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt,

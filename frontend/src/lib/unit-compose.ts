@@ -7,7 +7,7 @@
 // collection returns every legacy table unchanged.
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { NodeTypeDefinition, SceneNodeData, SceneNodeType } from "@/types/nodes"
-import type { UnitDefinition, UnitHandleKind, UnitLabels } from "@/nodes/kit"
+import type { UnitDefinition, UnitHandleKind, UnitLabels, UnitProducerKind } from "@/nodes/kit"
 
 /**
  * `base` (the legacy order) with each unit inserted right after the type its
@@ -135,9 +135,13 @@ export function composeNodeDefinitions(legacy: ReadonlyArray<NodeTypeDefinition>
 
 /**
  * NODE_OPTIONS: the legacy options with each picker unit right after the
- * option of its `picker.after` (null = first). `optionOf` builds a unit's
- * entry (its option.tsx icon + unit.json picker); a unit with no picker entry
- * (`picker: null`) is not offered.
+ * option of its `picker.after`. A unit first in its family (picker.after null)
+ * is placed after its `position.after`, as TARGET_HANDLE_ACCEPTS places it —
+ * never first in the whole list. `optionOf` builds a unit's entry (its
+ * option.tsx icon + unit.json picker); a unit with no picker entry
+ * (`picker: null`) is not offered. A place that names no option (nor a picker
+ * unit) throws at load rather than moving the unit silently ("has no add-node
+ * option" — gen:units refuses it before that).
  */
 export function composeNodeOptions(
   legacy: ReadonlyArray<NodeOption>,
@@ -148,7 +152,14 @@ export function composeNodeOptions(
   if (picked.length === 0) return legacy
   assertDisjoint("NODE_OPTIONS", legacy.map((o) => o.type), picked.map((u) => u.type))
   const byType = new Map<string, NodeOption>([...legacy.map((o) => [o.type, o] as const), ...picked.map((u) => [u.type, optionOf(u)] as const)])
-  const order = insertAtPositions(legacy.map((o) => o.type), picked.map((u) => ({ type: u.type, after: u.picker?.after ?? null })))
+  // The validator refuses this first (tools/units/manifest.mjs); this is the backstop.
+  for (const u of picked) {
+    const anchor = u.position.after
+    if (u.picker?.after === null && anchor !== null && !byType.has(anchor)) {
+      throw new Error(`${u.type}: picker.after is null (first in its family), so the add-node list places it after position.after "${anchor}" — which has no add-node option`)
+    }
+  }
+  const order = insertAtPositions(legacy.map((o) => o.type), picked.map((u) => ({ type: u.type, after: u.picker?.after ?? u.position.after })))
   return order.map((t) => byType.get(t) as NodeOption)
 }
 
@@ -180,13 +191,103 @@ export function unitRecord<V>(units: ReadonlyArray<UnitDefinition>, make: (u: Un
   return out
 }
 
+/**
+ * The editor's price mirror rows of every unit (its `priceRows`, every
+ * staticCosts row of its price.ee.ts), merged — a credit id priced by two
+ * units is refused. The editor twin of unitStaticCosts (backend/src/lib/unit-compose.ts).
+ */
+export function unitPriceRows(units: ReadonlyArray<UnitDefinition>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const u of units) {
+    for (const [id, credits] of Object.entries(u.priceRows)) {
+      if (Object.hasOwn(out, id)) throw new Error(`${u.type}: credit id "${id}" is priced by another unit too`)
+      out[id] = credits
+    }
+  }
+  return out
+}
+
 /** The units that declare `capability` (tools/units/capabilities.mjs). */
 export const unitsWith = (units: ReadonlyArray<UnitDefinition>, capability: string): string[] =>
   units.filter((u) => u.capabilities.includes(capability)).map((u) => u.type)
 
-/** HANDLE_OUTPUT_TYPES rows: each output handle id → what it carries. */
+/** HANDLE_OUTPUT_TYPES rows: each output pip → what it carries; a runtime-typed pip (its medium decided per run) has none. */
 export const unitOutputTypes = (u: UnitDefinition): Partial<Record<string, UnitHandleKind>> =>
-  Object.fromEntries(u.handles.outputs.map((h) => [h.id, h.kind]))
+  Object.fromEntries(u.handles.outputs.filter((h) => !h.runtimeTyped).map((h) => [h.id, h.kind]))
+
+/** The units whose output is `kind` (`contract.producer` of unit.json); a "dynamic" unit is never one of a single medium. */
+export const unitProducers = (units: ReadonlyArray<UnitDefinition>, kind: UnitProducerKind): string[] =>
+  units.filter((u) => u.producer === kind).map((u) => u.type)
+
+/** Units whose primary output (the first — what an edge naming no pip reads) is text. */
+export const unitTextSources = (units: ReadonlyArray<UnitDefinition>): string[] =>
+  units.filter((u) => u.handles.outputs[0]?.kind === "text").map((u) => u.type)
+
+/** Units with a JSON (look) output. */
+export const unitJsonProducers = (units: ReadonlyArray<UnitDefinition>): string[] =>
+  units.filter((u) => u.handles.outputs.some((h) => h.kind === "look")).map((u) => u.type)
+
+/** Gallery units (a Generate or Run button) whose outputs carry no medium. */
+export const unitNoMediumResults = (units: ReadonlyArray<UnitDefinition>): string[] => units
+  .filter((u) => (u.capabilities.includes("panel:generate-button") || u.capabilities.includes("panel:run-button"))
+    && !u.handles.outputs.some((h) => h.kind === "video" || h.kind === "audio" || h.kind === "image"))
+  .map((u) => u.type)
+
+/** `types` with the members of `order` re-sorted into that order in the slots they hold; any other type keeps its slot. */
+function sortMembersInPlace(types: ReadonlyArray<string>, order: ReadonlyArray<string>): string[] {
+  const rank = new Map(order.map((t, i) => [t, i]))
+  const slots = types.flatMap((t, i) => (rank.has(t) ? [i] : []))
+  const members = slots.map((i) => types[i] as string).sort((a, b) => (rank.get(a) as number) - (rank.get(b) as number))
+  const out = [...types]
+  slots.forEach((slot, k) => { out[slot] = members[k] as string })
+  return out
+}
+
+/** TAB_SUPERSET rows: tab → family → its units shown there too (picker.alsoOnTabs), in family order. */
+export function unitTabSuperset(units: ReadonlyArray<UnitDefinition>, familyTypes: (familyId: string) => ReadonlyArray<string>): Record<string, Record<string, string[]>> {
+  const out: Record<string, Record<string, string[]>> = {}
+  for (const u of [...units].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0))) {
+    const family = u.picker?.family
+    if (family === undefined) continue
+    for (const tab of u.picker?.alsoOnTabs ?? []) {
+      const row = (out[tab] ??= {})
+      row[family] = [...(row[family] ?? []), u.type]
+    }
+  }
+  for (const [tab, row] of Object.entries(out)) {
+    for (const [family, types] of Object.entries(row)) out[tab]![family] = sortMembersInPlace(types, familyTypes(family))
+  }
+  return out
+}
+
+/**
+ * TAB_SUPERSET: the legacy table with each unit row merged in. A unit list for
+ * a [tab][family] the legacy table also has is appended after the legacy
+ * members, then the family's own members are put in family order — a type the
+ * table shows from ANOTHER family (Text beside the uploads) keeps its slot.
+ * So in a row that holds another family's type at its end (a "Text closes the
+ * family" row), a unit lands after that type: members re-sort only within the
+ * slots they already hold, and the unit's is the new last one.
+ * With no unit row it returns `legacy` itself; a type listed by both is refused.
+ */
+export function composeTabSuperset<T extends string>(
+  legacy: Readonly<Record<string, Readonly<Record<string, ReadonlyArray<T>>>>>,
+  unitRows: Readonly<Record<string, Readonly<Record<string, ReadonlyArray<string>>>>>,
+  familyTypes: (familyId: string) => ReadonlyArray<string>,
+): Readonly<Record<string, Readonly<Record<string, ReadonlyArray<T>>>>> {
+  if (Object.keys(unitRows).length === 0) return legacy
+  const out: Record<string, Record<string, ReadonlyArray<T>>> = Object.fromEntries(Object.entries(legacy).map(([tab, row]) => [tab, { ...row }]))
+  for (const [tab, row] of Object.entries(unitRows)) {
+    const merged = (out[tab] ??= {})
+    for (const [family, types] of Object.entries(row)) {
+      const own = merged[family] ?? []
+      assertDisjoint(`TAB_SUPERSET.${tab}.${family}`, own, types)
+      // A unit's type is a UnitNodeType, a member of the table's type union (SceneNodeType).
+      merged[family] = sortMembersInPlace([...own, ...types], familyTypes(family)) as T[]
+    }
+  }
+  return out
+}
 
 /**
  * A unit's output, read the way every media node's is: an output handle

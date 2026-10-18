@@ -169,7 +169,7 @@ describe("runSceneDirector", () => {
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("scene_director")
     expect(call.task).toBe("shot_list")
-    expect(call.modelId).toBe("claude-sonnet-4-6")
+    expect(call.modelId).toBe("claude-sonnet-5-5")
     expect(call.sceneId).toBe("scene-entity-1")
     expect(call.userPrompt).toContain("Hero")
     expect(call.userPrompt).toContain("first_frame")

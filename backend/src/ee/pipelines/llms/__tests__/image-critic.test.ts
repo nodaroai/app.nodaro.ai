@@ -143,7 +143,7 @@ describe("runImageCritic", () => {
 
     // Sonnet, low temp, vision blocks (array), schema = ImageCriticVerdictSchema
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
-    expect(call.modelId).toBe("claude-sonnet-4-6")
+    expect(call.modelId).toBe("claude-sonnet-5-5")
     expect(call.role).toBe("critic")
     expect(call.task).toBe("image_critic")
     expect(call.temperature).toBe(0.2)

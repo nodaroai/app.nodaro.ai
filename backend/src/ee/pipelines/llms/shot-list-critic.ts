@@ -232,7 +232,7 @@ Validate and respond as JSON.`
     userId: args.userId,
     role: "critic",
     task: "shot_list",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt,

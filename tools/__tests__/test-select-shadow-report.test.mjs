@@ -339,6 +339,16 @@ test("gh calls: a transient GitHub 5xx is retried, anything else throws at once"
   assert.equal(n, 3)
 })
 
+test("gh calls: an empty or cut-off response gh could not parse (\"unexpected end of JSON input\") is retried like a 5xx, then thrown", () => {
+  const pause = () => {}
+  let n = 0
+  const cut = () => { if (++n < 2) throw Object.assign(new Error("Command failed: gh run download"), { stderr: "unexpected end of JSON input\n" }); return "ok" }
+  assert.equal(withRetry(cut, { pause }), "ok")
+  n = 0
+  assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "unexpected EOF\n" }) }, { pause, tries: 2 }))
+  assert.equal(n, 2)
+})
+
 // decided 2026-10-18: what sent the full runs full, and the share among the runs that narrowed
 test("full-run causes: the global trigger glob the named file matches on this branch, or the other kinds of full run", () => {
   // a manifest the selector checked for a version-only change, and one it did not (judged before 2026-10-18, or a local run)
