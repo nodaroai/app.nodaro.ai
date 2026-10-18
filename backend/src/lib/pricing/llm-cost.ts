@@ -73,6 +73,9 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "claude-sonnet-4.6": { inputPricePerM: 3.00,  outputPricePerM: 15.00 },
   "gpt-5.2":           { inputPricePerM: 2.50,  outputPricePerM: 10.00 },
   "gemini-3.1-pro":    { inputPricePerM: 0.50,  outputPricePerM: 3.50 },
+  // gemini-4-argon has NO row here on purpose: it is `directOnly` (no call
+  // reaches KIE — see its registry entry), so it is costed on the direct table
+  // below only. A re-enable of its KIE lane adds the row with the re-probe.
   // KIE-routed models below are pinned to KIE's published list prices
   // (kie.ai/claude-opus-4-7, kie.ai/gpt-5-4, kie.ai/gpt-5-5, kie.ai/gpt-5-6,
   // kie.ai/claude-sonnet-5, kie.ai/claude-opus-4-8).
@@ -176,6 +179,13 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
     longContextThresholdTokens: 200_000,
     longContext: { inputPricePerM: 4.00, outputPricePerM: 18.00 },
   },
+  // Pinned to Google's STANDARD $4/$20, not the INTRO $2/$10 running through
+  // 2026-11-30 (verified 2026-10-17; thinking billed as output, no long-context
+  // band). The 3.7/3.8 rows carry their intro rate with a bump date, but this
+  // window is six weeks: a missed bump would under-report every direct call
+  // from 2026-12-01, while over-reporting during the promo is the safe
+  // direction — the `claude-sonnet-5` reasoning above.
+  "gemini-4-argon": { inputPricePerM: 4.00, outputPricePerM: 20.00 },
   // Anthropic direct-SDK lane.
   "claude-haiku-4.5": { inputPricePerM: 1.00, outputPricePerM: 5.00 },
   // Anthropic list prices, 2026-10-10: two rate cards chosen by prompt length —

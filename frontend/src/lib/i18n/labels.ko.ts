@@ -588,6 +588,7 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "AI-powered upscaling and enhancement": "AI 업스케일링 및 화질 개선",
   "Advanced motion control with prompts": "프롬프트 기반 고급 모션 제어",
   "Advanced reasoning, large context": "고급 추론, 긴 컨텍스트",
+  "Newest premium Gemini, 1M context": "최신 프리미엄 Gemini, 100만 토큰 컨텍스트",
   "Advanced upscaling with configurable factor": "배율 설정이 가능한 고급 업스케일링",
   "Greater musical expression with more natural vocals and richer details.": "더 자연스러운 보컬과 풍부한 디테일로 한층 향상된 음악 표현.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "가볍고 빠르며 품질과 속도의 균형이 잡혀 손쉽게 창작 가능.",

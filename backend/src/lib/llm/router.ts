@@ -102,6 +102,13 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
     }
   }
 
+  // Served on the vendor's own API and nowhere else: no KIE leg, primary or
+  // fallback, and no key means provider-unavailable rather than KIE.
+  if (model.directOnly) {
+    if (!geminiDirectAvailable(model)) throw await noLlmProviderError(model)
+    return callGeminiDirect(model, req, deriveParams(model, req))
+  }
+
   if (geminiDirectAvailable(model)) {
     return model.preferDirect
       ? withFallback(
@@ -192,6 +199,9 @@ function assertLanePinnable(model: LlmModelDef, lane: LlmServingLane): void {
       )
     }
     return
+  }
+  if (model.directOnly) {
+    throw new Error(`Model ${model.id} is served only on its direct lane (directOnly) — it cannot be pinned to KIE`)
   }
   if (!config.KIE_API_KEY) {
     throw new Error(`Model ${model.id} is pinned to the KIE lane but KIE_API_KEY is not set`)
@@ -300,6 +310,11 @@ export async function llmStream(
         () => streamAnthropicDirect(model, req, onToken, signal),
       )
     }
+  }
+
+  if (model.directOnly) {
+    if (!geminiDirectAvailable(model)) throw await noLlmProviderError(model)
+    return streamGeminiDirect(model, req, deriveParams(model, req), onToken, signal)
   }
 
   if (geminiDirectAvailable(model)) {

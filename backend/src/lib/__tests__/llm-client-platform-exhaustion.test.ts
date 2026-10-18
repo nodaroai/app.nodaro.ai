@@ -396,8 +396,10 @@ describe("the KIE equivalence is the registry", () => {
   it("every direct-capable model maps to its KIE twin", async () => {
     const { kieEquivalentOf } = await import("../llm-client.js")
     const table = Object.fromEntries(
-      LLM_MODELS.filter((m) => m.directFallbackModel || m.directGeminiModel).map((m) => [m.id, kieEquivalentOf(m.id)]),
+      LLM_MODELS.filter((m) => (m.directFallbackModel || m.directGeminiModel) && !m.directOnly).map((m) => [m.id, kieEquivalentOf(m.id)]),
     )
+    // A directOnly model has no twin: a drained direct account fails rather than land on KIE.
+    for (const m of LLM_MODELS.filter((x) => x.directOnly)) expect(kieEquivalentOf(m.id), m.id).toBeUndefined()
     for (const [id, kie] of Object.entries(table)) {
       expect(kie, id).toBeTruthy()
     }

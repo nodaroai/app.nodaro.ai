@@ -129,13 +129,14 @@ Credits are charged for the requested batch; a narrow period or a quiet keyword 
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds a per-ad cost on top of the scrape, by the analysis model's tier — **+1.1 credits<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> per ad** (economy model), **+3.3**<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> (standard), **+4.4**<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> (premium) — folded into the scrape's own tier and priced with it as one charge. The analysis is reserved for the whole requested batch and **settled for the ads actually analysed**: an ad the model failed on, or one a long run could not reach before its time budget, is refunded.
+Turning on **AI analysis** adds a per-ad cost on top of the scrape, by the analysis model's tier — **+1.1 credits<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> per ad** (economy model), **+3.3**<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> (standard), **+4.4**<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> (premium), **+11**<!-- credits-rate: meta-ads-analysis:premium-direct --> (a premium model that runs only on its provider's own API — Gemini 4 Argon; the premium-direct rung, as in [Generate Text](../ai-text/llm-chat.md#credit-pricing)) — folded into the scrape's own tier and priced with it as one charge. The analysis is reserved for the whole requested batch and **settled for the ads actually analysed**: an ad the model failed on, or one a long run could not reach before its time budget, is refunded.
 
 | Requested batch | Analysis model | Total |
 |-----------------|----------------|-------|
 | 20 ads | economy | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 1.1<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> = **44 CR**<!-- credits: meta-ads-scrape:20:analysis:economy --> |
 | 20 ads | standard | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 3.3<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> = **88 CR**<!-- credits: meta-ads-scrape:20:analysis --> |
 | 2 Pages × 30 ads (tier 100) | premium | 110<!-- credits-rate: meta-ads-scrape:100 --> + 100 × 4.4<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> = **550 CR**<!-- credits: meta-ads-scrape:100:analysis:premium --> |
+| 20 ads | premium-direct (Gemini 4 Argon) | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 11<!-- credits-rate: meta-ads-analysis:premium-direct --> = **242 CR**<!-- credits: meta-ads-scrape:20:analysis:premium-direct --> |
 
 The analysis rides inside each ad in the `json` output (an `analysis` object) and shows on each row in the **Results** tab.
 

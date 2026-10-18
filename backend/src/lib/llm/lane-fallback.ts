@@ -15,10 +15,11 @@ import {
 import { callKie } from "./kie-lane.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
-/** KIE as a fallback leg, or `undefined` when it isn't configured (in which
- *  case the primary lane's error must surface rather than be swallowed). */
+/** KIE as a fallback leg, or `undefined` when it isn't configured or the model
+ *  is never served there (`directOnly`) — in which case the primary lane's
+ *  error must surface rather than be swallowed. */
 export function kieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmResponse>) | undefined {
-  return config.KIE_API_KEY ? () => callKie(model, req) : undefined
+  return config.KIE_API_KEY && !model.directOnly ? () => callKie(model, req) : undefined
 }
 
 /** Which lane failed and which one is about to serve — for the fallback warn. */

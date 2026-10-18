@@ -604,6 +604,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "AI-powered upscaling and enhancement": "הגדלה ושיפור מבוססי AI",
   "Advanced motion control with prompts": "שליטה מתקדמת בתנועה באמצעות פרומפטים",
   "Advanced reasoning, large context": "חשיבה מתקדמת, הקשר גדול",
+  "Newest premium Gemini, 1M context": "Gemini הפרימיום החדש ביותר, הקשר של מיליון טוקנים",
   "Advanced upscaling with configurable factor": "הגדלה מתקדמת עם פקטור מתכוונן",
   "Greater musical expression with more natural vocals and richer details.": "הבעה מוזיקלית עשירה יותר, עם שירה טבעית יותר ופרטים עשירים יותר.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "קליל ומהיר, מאזן בין איכות למהירות ליצירה ללא מאמץ.",

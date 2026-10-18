@@ -2221,9 +2221,11 @@ export const LLM_DIRECT_RUNG_FEATURES: readonly string[] = [
  * Tier-priced ids that get NO direct rung, each with its reason. A prefix
  * entry (ending ":") covers every id under it.
  *  - workflow-copilot: reservation CEILINGS on a metered, always-direct loop.
- *  - the social scrapers' per-ad analysis tiers: built from the model's tier
- *    alone (metaAdsAnalysisCreditId / instagramAnalysisCreditId); the routes
- *    send no effort and no Advanced flag, so the call never runs direct.
+ *  - the social scrapers' per-ad analysis tiers: their ids are not built by
+ *    `buildLlmCreditIdentifier` but by the social module, which reads the same
+ *    rung (`llmCreditRung`) and carries its OWN premium-direct rows for a
+ *    model served direct (a `directOnly` one — the routes send no effort and
+ *    no Advanced flag). Held to the multiplier below by a billing test.
  */
 export const NO_DIRECT_RUNG: readonly string[] = [
   "workflow-copilot",

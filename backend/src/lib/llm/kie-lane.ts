@@ -51,14 +51,28 @@ import type { LlmRequest, LlmResponse } from "./types.js"
 // off KIE (a non-advanced, effort-free Claude call is KIE-first since then).
 const KIE_CLAUDE_NONSTREAM_VERIFIED = false
 
+/**
+ * A `directOnly` model is never sent to KIE. The routing never builds a KIE leg
+ * for one (router, lane-fallback, exhaustion-fallback); this is the backstop at
+ * the one door every KIE request goes through, so a new path that forgets the
+ * flag fails here — before any request is built — instead of spending a call.
+ */
+export function assertKieServable(model: LlmModelDef): void {
+  if (model.directOnly) {
+    throw new Error(`Model ${model.id} is served only on its direct lane (directOnly) — no KIE request is built for it`)
+  }
+}
+
 // Guarded entry points (see the lane-guard note in ./router.ts).
 export function callKie(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
+  assertKieServable(model)
   return guardLaneAccount({ lane: "kie", provider: "kie", modelId: model.id }, () => callKieUnguarded(model, req))
 }
 
 export function streamKie(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
+  assertKieServable(model)
   return guardLaneAccount({ lane: "kie", provider: "kie", modelId: model.id }, () => streamKieUnguarded(model, req, onToken, signal))
 }
 
@@ -66,6 +80,7 @@ export function streamKieMessages(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
   onToolJson?: (partialJson: string) => void,
 ): Promise<LlmResponse> {
+  assertKieServable(model)
   return guardLaneAccount(
     { lane: "kie", provider: "kie", modelId: model.id },
     () => streamKieMessagesUnguarded(model, req, onToken, signal, onToolJson),

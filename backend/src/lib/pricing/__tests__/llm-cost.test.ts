@@ -64,7 +64,8 @@ describe("calculateLlmCost", () => {
 
   it("has a rate entry for every model in LLM_MODELS (no silent 0-cost gap)", () => {
     for (const model of LLM_MODELS) {
-      const cost = calculateLlmCost(model.id, { inputTokens: 1000, outputTokens: 1000 })
+      // A directOnly model is only ever costed on the direct lane, the one it runs on.
+      const cost = calculateLlmCost(model.id, { inputTokens: 1000, outputTokens: 1000 }, model.directOnly ? "direct" : "kie")
       expect(cost, `${model.id} should have a positive computed cost`).toBeGreaterThan(0)
     }
   })
@@ -89,6 +90,10 @@ describe("calculateLlmCost", () => {
     // 45/225 KIE credits per M @ $0.005 = $0.225/$1.125.
     // (1000 * 0.225 + 500 * 1.125) / 1_000_000 = 0.0007875
     expect(calculateLlmCost("gemini-3.8-flash", { inputTokens: 1000, outputTokens: 500 })).toBeCloseTo(0.0007875, 10)
+  })
+  it("carries no KIE row for gemini-4-argon — it is directOnly, so no KIE call is ever costed", () => {
+    expect(getLlmModel("gemini-4-argon")?.directOnly).toBe(true)
+    expect(calculateLlmCost("gemini-4-argon", { inputTokens: 1000, outputTokens: 500 }, "kie")).toBe(0)
   })
   it("prices gpt-6-astra at KIE list rates", () => {
     // 560/2800 KIE credits per M @ $0.005 = $2.80/$14.00. 1M/1M: 2.80 + 14.00 = 16.80

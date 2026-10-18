@@ -40,6 +40,7 @@ export {
   getLlmTier,
   getLlmModalityCaps,
   buildLlmCreditIdentifier,
+  llmCreditRung,
   resolveLlmCreditId,
   supportsAdvancedMode,
   llmServesDirect,

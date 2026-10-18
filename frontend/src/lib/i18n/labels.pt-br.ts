@@ -588,6 +588,7 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "AI-powered upscaling and enhancement": "Aumento de resolução e aprimoramento com IA",
   "Advanced motion control with prompts": "Controle avançado de movimento com prompts",
   "Advanced reasoning, large context": "Raciocínio avançado, contexto amplo",
+  "Newest premium Gemini, 1M context": "O Gemini premium mais novo, contexto de 1M de tokens",
   "Advanced upscaling with configurable factor": "Aumento de resolução avançado com fator configurável",
   "Greater musical expression with more natural vocals and richer details.": "Maior expressividade musical, com vocais mais naturais e detalhes mais ricos.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "Leve e rápido, equilibra qualidade e velocidade para criar sem esforço.",

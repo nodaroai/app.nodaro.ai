@@ -18,7 +18,7 @@
  * can never land outside the tier set — an identifier missing from
  * `model_pricing` is a 503 `price_not_configured`, never a silent fallback.
  */
-import { LLM_FEATURE_DEFAULTS, getLlmTier } from "./llm-models.js"
+import { LLM_CREDIT_RUNGS, LLM_FEATURE_DEFAULTS, llmCreditRung } from "./llm-models.js"
 
 export const META_ADS_SCRAPE_NODE_TYPE = "meta-ads-scrape" as const
 
@@ -197,14 +197,22 @@ export type MetaAdsScrapeTier = (typeof META_ADS_SCRAPE_TIERS)[number]
  *   meta-ads-scrape:<tier>:analysis                    tier × (1 + 3)   standard models
  *   meta-ads-scrape:<tier>:analysis:economy            tier × (1 + 1)
  *   meta-ads-scrape:<tier>:analysis:premium            tier × (1 + 4)
+ *   meta-ads-scrape:<tier>:analysis:premium-direct     tier × (1 + 10)
  *
- * The per-ad SKUs (`meta-ads-analysis[:economy|:premium]`) price the
- * SETTLEMENT: a run commits tier + per-ad × ads actually analysed and
- * refunds the rest (an ad the model failed on, or one the deadline skipped).
+ * The per-ad SKUs (`meta-ads-analysis[:economy|:premium|:premium-direct]`)
+ * price the SETTLEMENT: a run commits tier + per-ad × ads actually analysed
+ * and refunds the rest (an ad the model failed on, or one the deadline skipped).
+ *
+ * The tiers are the LLM credit rungs, read through `llmCreditRung` exactly as
+ * the LLM features read them: a model served on its vendor's own API (today
+ * only a `directOnly` one — the routes send no effort and no Advanced flag)
+ * moves one rung up, so a premium one bills `premium-direct`. Its per-ad price
+ * is the premium one × the LLM direct multiplier, rounded up — the rule every
+ * LLM feature's direct rung follows (held to it by a backend billing test).
  */
-export const META_ADS_ANALYSIS_TIERS = ["economy", "standard", "premium"] as const
+export const META_ADS_ANALYSIS_TIERS = LLM_CREDIT_RUNGS
 export type MetaAdsAnalysisTier = (typeof META_ADS_ANALYSIS_TIERS)[number]
-export const META_ADS_ANALYSIS_CREDITS_PER_AD: Record<MetaAdsAnalysisTier, number> = { economy: 1, standard: 3, premium: 4 }
+export const META_ADS_ANALYSIS_CREDITS_PER_AD: Record<MetaAdsAnalysisTier, number> = { economy: 1, standard: 3, premium: 4, "premium-direct": 10 }
 export const META_ADS_ANALYSIS_CREDIT_ID = "meta-ads-analysis" as const
 /** The user's optional analyst focus, appended to the fixed prompt. */
 export const META_ADS_ANALYSIS_FOCUS_MAX = 500
@@ -214,10 +222,10 @@ export function metaAdsAnalysisCreditId(tier: MetaAdsAnalysisTier): string {
   return tier === "standard" ? META_ADS_ANALYSIS_CREDIT_ID : `${META_ADS_ANALYSIS_CREDIT_ID}:${tier}`
 }
 
-/** The analysing model's tier; an absent model is the feature default. */
+/** The analysing model's credit rung; an absent model is the feature default. */
 export function metaAdsAnalysisTier(modelId?: unknown): MetaAdsAnalysisTier {
   const id = typeof modelId === "string" && modelId ? modelId : LLM_FEATURE_DEFAULTS["meta-ads-analysis"]
-  return getLlmTier(id)
+  return llmCreditRung(id)
 }
 
 /** What one analysed ad carries (`ad.analysis`); fixed fields + string lists only — never a map (Gemini via KIE drops map fields). */

@@ -92,12 +92,13 @@ Post mode: 1 link → requested total 1 → **11 CR**<!-- credits: instagram-scr
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds a per-post cost by the model's tier — **+1.1**<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> (economy) / **+3.3**<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> (standard) / **+4.4**<!-- credits-rate: instagram-scrape:10:analysis:premium@0.08 --> (premium), priced with the scrape as one charge — settled for the posts actually analysed.
+Turning on **AI analysis** adds a per-post cost by the model's tier — **+1.1**<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> (economy) / **+3.3**<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> (standard) / **+4.4**<!-- credits-rate: instagram-scrape:10:analysis:premium@0.08 --> (premium) / **+11**<!-- credits-rate: instagram-analysis:premium-direct --> (a premium model that runs only on its provider's own API — Gemini 4 Argon; the premium-direct rung, as in [Generate Text](../ai-text/llm-chat.md#credit-pricing)), priced with the scrape as one charge — settled for the posts actually analysed.
 
 | Requested batch | Analysis model | Total |
 |-----------------|----------------|-------|
 | 20 posts | economy | 22<!-- credits-rate: instagram-scrape:20 --> + 20 × 1.1<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> = **44 CR**<!-- credits: instagram-scrape:20:analysis:economy --> |
 | 2 profiles × 30 posts (tier 100) | standard | 110<!-- credits-rate: instagram-scrape:100 --> + 100 × 3.3<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> = **440 CR**<!-- credits: instagram-scrape:100:analysis --> |
+| 20 posts | premium-direct (Gemini 4 Argon) | 22<!-- credits-rate: instagram-scrape:20 --> + 20 × 11<!-- credits-rate: instagram-analysis:premium-direct --> = **242 CR**<!-- credits: instagram-scrape:20:analysis:premium-direct --> |
 
 ## Providers
 

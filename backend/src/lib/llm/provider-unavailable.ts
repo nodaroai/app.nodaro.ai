@@ -28,7 +28,8 @@ export function isLlmProviderUnavailable(err: unknown): err is LlmProviderUnavai
 
 export async function noLlmProviderError(model: LlmModelDef): Promise<LlmProviderUnavailableError> {
   const candidates: ProviderKeyName[] = [
-    "KIE_API_KEY",
+    // A `directOnly` model is never sent to KIE, so its key is no remedy.
+    ...(model.directOnly ? [] : (["KIE_API_KEY"] as const)),
     ...(model.directFallbackModel ? (["ANTHROPIC_API_KEY"] as const) : []),
     ...(model.directGeminiModel ? (["GEMINI_API_KEY"] as const) : []),
   ]
