@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { Job } from "./jobs.js"
 
 /**
@@ -77,7 +77,7 @@ export interface SessionPage<T> {
 }
 
 export class SessionsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Create a session. Send its `id` as `sessionId` on a generation request

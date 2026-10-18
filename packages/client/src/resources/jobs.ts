@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * A job's lifecycle status. Hand-copied mirror of `JOB_STATUSES` in the
@@ -226,7 +226,7 @@ export interface JobStatusResult {
 }
 
 export class JobsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Get a single job by ID. */
   get(id: string): Promise<{ data: Job }> {

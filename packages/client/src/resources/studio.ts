@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import { StudioProductionsResource } from "./studio-productions.js"
 export * from "./studio-productions.js"
 
@@ -139,7 +139,7 @@ const path = (id: string) => `${root}/${encodeURIComponent(id)}`
 export class StudioResource {
   readonly productions: StudioProductionsResource
 
-  constructor(private readonly client: NodaroClient) {
+  constructor(private readonly client: NodaroClientCore) {
     this.productions = new StudioProductionsResource(client)
   }
 

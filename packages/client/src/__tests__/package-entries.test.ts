@@ -12,6 +12,7 @@
  * The checks live in tools/package-entries/entries-guard.mjs (shared with
  * @nodaro/shared and @nodaro/prompts); each returns the problems it found.
  */
+import { readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
@@ -29,6 +30,42 @@ const PKG = "@nodaro/sdk"
 const LEGACY_SUBPATHS = {
   "./supabase": { types: "./dist/supabase-browser.d.ts", import: "./dist/supabase-browser.js", require: "./dist/supabase-browser.cjs" },
   "./signup-signals": { types: "./dist/signup-signals.d.ts", import: "./dist/signup-signals.js", require: "./dist/signup-signals.cjs" },
+}
+
+/**
+ * The auth strategies are exported by both `client` (beside `createClient`) and
+ * `core` (beside `NodaroClientCore`): either one takes an `Auth`, and neither
+ * entry should make its user load the other — `client` loads every resource.
+ */
+const SHARED_AUTH = "both createClient (client) and NodaroClientCore (core) take an Auth"
+const AUTH_IN_CLIENT_AND_CORE = { Auth: SHARED_AUTH, StaticTokenAuth: SHARED_AUTH, CallbackAuth: SHARED_AUTH, supabaseAuth: SHARED_AUTH }
+
+/**
+ * `client.ts` (NodaroClient, every resource) is reached by VALUE only from the
+ * `client` entry and the root. A resource that imported it for real — say an
+ * `instanceof NodaroClient` check — would pull every resource into every
+ * entry, silently undoing what `NodaroClientCore` exists for (an app client
+ * that loads only its own resources). Read from the build's metafiles, the
+ * import graph esbuild actually followed: type-only imports are not in it.
+ */
+const FULL_CLIENT_SOURCE = "src/client.ts"
+const MAY_REACH_FULL_CLIENT = new Set(["src/index.ts", "src/entries/client.ts"])
+
+function entriesReachingFullClient(format: "esm" | "cjs"): string[] {
+  const meta = JSON.parse(readFileSync(path.join(PKG_DIR, "dist", `metafile-${format}.json`), "utf8")) as {
+    inputs: Record<string, { imports: Array<{ path: string; external?: boolean }> }>
+    outputs: Record<string, { entryPoint?: string }>
+  }
+  const reaches = (from: string, seen = new Set<string>()): boolean => {
+    if (from === FULL_CLIENT_SOURCE) return true
+    if (seen.has(from)) return false
+    seen.add(from)
+    return (meta.inputs[from]?.imports ?? []).some((i) => !i.external && reaches(i.path, seen))
+  }
+  const entries = [...new Set(Object.values(meta.outputs).flatMap((o) => (o.entryPoint ? [o.entryPoint] : [])))]
+  expect(entries.length).toBeGreaterThan(40)
+  expect(reaches("src/entries/client.ts"), "the metafile's import graph is readable").toBe(true)
+  return entries.filter((e) => !MAY_REACH_FULL_CLIENT.has(e) && reaches(e)).sort()
 }
 
 describe("@nodaro/sdk subpath entries", () => {
@@ -49,8 +86,12 @@ describe("@nodaro/sdk subpath entries", () => {
   }, 60_000)
 
   it("the root's names are exactly the union of the entries' names, each with one owner", () => {
-    expect(guard.unionErrors(PKG_DIR, {})).toEqual([])
+    expect(guard.unionErrors(PKG_DIR, AUTH_IN_CLIENT_AND_CORE)).toEqual([])
   }, 60_000)
+
+  it.each(["esm", "cjs"] as const)("only the client entry and the root load client.ts at run time (%s)", (format) => {
+    expect(entriesReachingFullClient(format)).toEqual([])
+  })
 
   it("each subpath's types resolve from a consumer (bundler + NodeNext)", () => {
     expect(guard.typeResolutionErrors(PKG_DIR, PKG)).toEqual([])

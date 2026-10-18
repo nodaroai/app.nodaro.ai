@@ -3,7 +3,7 @@ import type { AudioFxPreset } from "@nodaro/shared/media"
 import type { DialogueProvider } from "@nodaro/shared/models"
 export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
 export type { AudioFxPreset } from "@nodaro/shared/media"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Re-export the shared voice types so SDK consumers don't have to add
@@ -19,7 +19,7 @@ import type { NodaroClient } from "../client.js"
  * user's own pre-retirement voice clones (list / delete).
  */
 export class VoicesResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * List the premade ElevenLabs voices (`GET /v1/voices`). Falls back to a

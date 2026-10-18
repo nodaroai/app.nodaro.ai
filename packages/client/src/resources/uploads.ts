@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Result of a successful `POST /v1/upload`. Mirrors the route's `data` envelope
@@ -27,7 +27,7 @@ export interface UploadResult {
 }
 
 export class UploadsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Upload one file (`POST /v1/upload`, multipart — the file rides the `file`

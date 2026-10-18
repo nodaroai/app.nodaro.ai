@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * A published app — a workflow wrapped in a curated input/output presentation.
@@ -132,7 +132,7 @@ export interface RunAppOptions {
 }
 
 export class AppsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** List published apps. Public — no auth required for community apps. */
   list(params: ListAppsParams = {}): Promise<ListAppsResult> {

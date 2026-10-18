@@ -136,7 +136,8 @@ function fetchMethod(init: ts.Expression | undefined): string {
 export function extractSdk(repoRoot: string): SdkInventory {
   const classes = new Map<string, ClassInfo>()
   const resDir = join(repoRoot, SDK_DIR, "resources")
-  const files = [join(repoRoot, SDK_DIR, "client.ts"), ...readdirSync(resDir).filter((f) => f.endsWith(".ts")).map((f) => join(resDir, f))]
+  // core.ts holds NodaroClient's base class (transport + `me()` & co).
+  const files = [join(repoRoot, SDK_DIR, "client.ts"), join(repoRoot, SDK_DIR, "core.ts"), ...readdirSync(resDir).filter((f) => f.endsWith(".ts")).map((f) => join(resDir, f))]
   for (const file of files) {
     const sf = parseText(file, readFileSync(file, "utf8"))
     const mod = moduleScope(sf, sharedNatives(sf))
@@ -158,17 +159,27 @@ export function extractSdk(repoRoot: string): SdkInventory {
     propClass.set(path, info)
     for (const m of constructedMembers(info.cls)) queue.push({ path: `${path}.${m.prop}`, className: m.className })
   }
-  // The client's own methods (`client.me()`) are a resource of their own.
+  // The client's own methods (`client.me()`) are a resource of their own —
+  // declared on NodaroClient or inherited from a class it extends
+  // (NodaroClientCore, in core.ts).
   propClass.set("client", client)
+  const clientChain: ClassInfo[] = []
+  for (let c: ClassInfo | undefined = client; c && !clientChain.includes(c); ) {
+    clientChain.push(c)
+    const base: ts.Expression | undefined = c.cls.heritageClauses?.find((h) => h.token === ts.SyntaxKind.ExtendsKeyword)?.types[0]?.expression
+    c = base && ts.isIdentifier(base) ? classes.get(base.text) : undefined
+  }
   const topProps = new Set([...propClass.keys()].filter((p) => !p.includes(".") && p !== "client"))
 
   const declOf = new Map<string, { decl: ts.MethodDeclaration; info: ClassInfo; prop: string }>()
-  for (const [prop, info] of propClass) {
-    for (const m of info.cls.members) {
+  for (const [prop, own] of propClass) {
+    for (const info of prop === "client" ? clientChain : [own]) for (const m of info.cls.members) {
       if (!isPublicMethod(m)) continue
       const name = (m.name as ts.Identifier).text
       // The transport itself is not a feature method.
       if (prop === "client" && REQUEST_FNS.has(name)) continue
+      // A method NodaroClient declares itself wins over one it inherits.
+      if (declOf.has(`${prop}.${name}`)) continue
       declOf.set(`${prop}.${name}`, { decl: m, info, prop })
     }
   }

@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Authenticated user's credit balance — the shape of `GET /v1/user/credits`'s
@@ -172,7 +172,7 @@ export interface CreditTransactionsOptions {
 const MODEL_COSTS_LIMIT = 50
 
 export class CreditsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * `GET /v1/user/credits` → the authenticated user's credit balance and tier

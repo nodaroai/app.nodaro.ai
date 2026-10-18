@@ -1,6 +1,6 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
-import type { NodaroClient } from "../client.js"
-import type { JobStatusResult } from "./jobs.js"
+import type { NodaroClientCore } from "../core.js"
+import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
 import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared/nodes"
 import {
@@ -722,7 +722,8 @@ function batchResultOf(result: RunNodeResult): GenerateImageBatchResult | null {
 }
 
 export class NodesResource {
-  constructor(private client: NodaroClient) {}
+  /** Runs poll through `jobs`, so the client must carry that resource too. */
+  constructor(private client: NodaroClientCore & { readonly jobs: JobsResource }) {}
 
   /** List all known node descriptors. Server caches publicly for 5 minutes. */
   list(): Promise<{ data: NodeDescriptor[] }> {

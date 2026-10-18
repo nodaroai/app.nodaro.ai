@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Cine shots — the Share → Remix record behind `/s/:id` share links.
@@ -59,7 +59,7 @@ export interface CreateShotInput {
 export type UpdateShotInput = CreateShotInput
 
 export class ShotsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Create a shot record. Returns the new shot's id — an unguessable
    *  capability string that doubles as the share-link path segment. */

@@ -70,6 +70,11 @@
       "import": "./dist/entries/copilot.js",
       "require": "./dist/entries/copilot.cjs"
     },
+    "./core": {
+      "types": "./dist/entries/core.d.ts",
+      "import": "./dist/entries/core.js",
+      "require": "./dist/entries/core.cjs"
+    },
     "./creatures": {
       "types": "./dist/entries/creatures.d.ts",
       "import": "./dist/entries/creatures.js",

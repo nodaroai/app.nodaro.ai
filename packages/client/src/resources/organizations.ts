@@ -16,7 +16,7 @@ import type {
   UsageReport,
   WorkspaceRole,
 } from "@nodaro/shared/organizations"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Organizations, their members, and the invitations that fill them.
@@ -55,7 +55,7 @@ export interface ListInvitationsOptions {
 }
 
 export class OrganizationsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** The organizations this account belongs to. */
   list(): Promise<{ data: OrganizationView[] }> {

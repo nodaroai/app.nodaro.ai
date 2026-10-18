@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 export type GalleryMediaType = "image" | "video" | "audio"
 
@@ -64,7 +64,7 @@ export interface ToggleFavoriteResult {
  * deployment that hides the gallery (the routes answer 404 there).
  */
 export class GalleryResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * `GET /v1/gallery` → a page of the public gallery, newest first (no auth

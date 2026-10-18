@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Plans and prices, the subscription, and the billing surface — the shapes of
@@ -172,7 +172,7 @@ export interface BillingAccountSummary {
 }
 
 export class BillingResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * `GET /v1/billing/plans` → the plans and credit packs on sale, with their

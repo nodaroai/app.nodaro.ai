@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { ReduceStrategyId, ReduceMeta } from "@nodaro/shared/workflow"
 
 // Re-export the canonical types from `@nodaro/shared` (single source of
@@ -44,7 +44,7 @@ export interface ReduceResult {
 }
 
 export class ReduceResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Run the Reduce (fan-in) node directly — useful for scripted batch

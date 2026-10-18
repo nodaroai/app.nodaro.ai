@@ -1,7 +1,7 @@
 import type { ObjectAspectRatio, ObjectAssetType, ObjectAttachColumn } from "@nodaro/shared/entities"
 export type { ObjectAssetType, ObjectAttachColumn, ObjectAspectRatio } from "@nodaro/shared/entities"
 export { OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { GenerationSessionParams } from "./nodes.js"
 
 /**
@@ -391,7 +391,7 @@ export interface RecaptionObjectResult {
 }
 
 export class ObjectsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * List the caller's objects. By default returns active objects only;

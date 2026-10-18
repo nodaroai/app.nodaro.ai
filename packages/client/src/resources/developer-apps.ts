@@ -1,5 +1,5 @@
 import type { OAuthScope } from "@nodaro/shared/apps"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * OAuth scopes that a developer app may request — the server's own list
@@ -71,7 +71,7 @@ export interface RotateSecretResult {
 }
 
 export class DeveloperAppsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** List the authenticated user's developer apps. */
   list(): Promise<{ data: DeveloperApp[] }> {

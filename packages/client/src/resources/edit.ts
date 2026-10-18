@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import { ForbiddenError, NodaroError } from "../errors.js"
 import {
   remapTranscriptThroughEdl,
@@ -468,7 +468,7 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  * `jobId` with `client.jobs.getStatus(jobId)`.
  */
 export class EditResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Detect silence ranges in an audio/video source (`POST /v1/silence-detect`).

@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type {
   GenericNode,
   GenericEdge,
@@ -189,7 +189,7 @@ export interface DroppedCollaborator {
  * other call, so a workspace admin's grants apply automatically.
  */
 export class WorkflowCollaboratorsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** List a workflow's collaborators (id, name, avatar, role — never email). */
   list(workflowId: string): Promise<{ data: Collaborator[] }> {
@@ -237,7 +237,7 @@ export class WorkflowsResource {
   /** The people this workflow is shared with. See {@link WorkflowCollaboratorsResource}. */
   readonly collaborators: WorkflowCollaboratorsResource
 
-  constructor(private client: NodaroClient) {
+  constructor(private client: NodaroClientCore) {
     this.collaborators = new WorkflowCollaboratorsResource(client)
   }
 

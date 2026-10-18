@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * The company that made a model. `id` is stable — one id per company, the
@@ -72,7 +72,7 @@ export interface ListModelsOptions {
 }
 
 export class ModelsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Browse the models available on this instance — capability sheets,
    *  per-variant credit pricing, prompt tips, and the `doctrineCovered`

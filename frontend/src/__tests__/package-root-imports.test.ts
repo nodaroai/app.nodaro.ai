@@ -33,6 +33,8 @@ import { loadEntryMaps } from "../../../tools/package-entries/codemod.mjs"
 const ROOT_ALLOWED: Readonly<Record<string, string>> = {
   "frontend/src/lib/i18n/__tests__/picker-labels-coverage.test.ts":
     "spreads EVERY export of both packages (`{ ...prompts, ...shared }`) to find each catalog label a picker can show — a subpath would hide the catalogs of the other entries",
+  "packages/client/src/__tests__/fixtures/client-api-compat.ts":
+    "a consumer of the BUILT @nodaro/sdk, compiled (never run) by client-core.test.ts to pin the public API — it imports the root the way every external consumer of a pre-subpath version does, and needs the whole namespace to check every exported resource class",
 }
 
 const ROOTS = new Set(["@nodaro/shared", "@nodaro/prompts", "@nodaro/sdk"])

@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
 import { Menu } from "lucide-react"
 import { NodaroShell, shellTranslator } from "virtual:site-header"
-import { nodaroClient } from "@/lib/nodaro-client"
+import { createClient as createNodaroClient } from "@nodaro/sdk/client"
+import { NODARO_CLIENT_OPTIONS } from "@/lib/nodaro-client"
 import { createClient } from "@/lib/supabase"
 import { useUiLanguage } from "@/hooks/use-ui-language"
 import { useT } from "@/lib/i18n"
@@ -34,6 +35,16 @@ import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderT
 /** The app's own phone/desktop switch (Tailwind `md`). */
 const PHONE_BREAKPOINT = 768
 const SITE = readSiteEnv()
+
+/**
+ * The header takes the SDK's FULL client (`NodaroClient`, every resource),
+ * while the app's own `nodaroClient` carries only the resources the app calls
+ * (see `lib/nodaro-client.ts`). Built here, from the same options as the app
+ * client (`NODARO_CLIENT_OPTIONS`), so the two cannot drift, and only this
+ * lazily loaded module loads every SDK resource — not
+ * every module that reaches `nodaro-client.ts`.
+ */
+const headerSdk = createNodaroClient(NODARO_CLIENT_OPTIONS)
 
 export interface AppHeaderProps {
   /** Editor pages: one phone row, so the canvas keeps its height. */
@@ -99,7 +110,7 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
   return (
     <NodaroShell
       ref={shell}
-      sdk={nodaroClient}
+      sdk={headerSdk}
       supabase={createClient()}
       queryClient={queryClient}
       sourceApp="app"

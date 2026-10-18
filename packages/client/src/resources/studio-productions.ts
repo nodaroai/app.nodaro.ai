@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import { StudioPreviewAppliedError, StudioPreviewUnavailable } from "../errors.js"
 
 /**
@@ -459,7 +459,7 @@ export interface StudioExportPlanOptions {
 
 /** `client.studio.productions` — see the note at the top of this module. */
 export class StudioProductionsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   private path(productionId: string, suffix = ""): string {
     return `/v1/studio/productions/${encodeURIComponent(productionId)}${suffix}`

@@ -1,9 +1,37 @@
-import {
-  createClient as createNodaroClient,
-  CallbackAuth,
-  type NodaroClient,
-} from "@nodaro/sdk/client"
+import type { ClientOptions } from "@nodaro/sdk/client"
+import { NodaroClientCore, CallbackAuth } from "@nodaro/sdk/core"
+import { DeveloperAppsResource } from "@nodaro/sdk/developer-apps"
+import { ExecutionsResource } from "@nodaro/sdk/executions"
+import { JobsResource } from "@nodaro/sdk/jobs"
+import { NodesResource } from "@nodaro/sdk/nodes"
+import { ProjectsResource } from "@nodaro/sdk/projects"
+import { Scene3DResource } from "@nodaro/sdk/scene3d"
+import { WorkflowsResource } from "@nodaro/sdk/workflows"
 import { createClient as createSupabaseClient } from "./supabase"
+
+/**
+ * The SDK client this app uses: the SDK's core (config, auth, transport)
+ * with ONLY the resources the app calls.
+ *
+ * Not `createClient()`'s full `NodaroClient`, on purpose: that one loads every
+ * resource module, so every test reaching `api.ts` (most of the suite) would
+ * depend on all of them, and a change to any SDK resource would select those
+ * tests. Built from the core, the app — and its tests — load only these.
+ *
+ * Need another resource? Add it here as one more field, imported from its
+ * subpath entry (`@nodaro/sdk/<resource>`). A resource that calls another
+ * through the client (`nodes` polls through `jobs`, `scene3d` runs `nodes`)
+ * says so in its constructor type, so forgetting the dependency fails tsc.
+ */
+export class AppNodaroClient extends NodaroClientCore {
+  readonly executions = new ExecutionsResource(this)
+  readonly jobs = new JobsResource(this)
+  readonly nodes = new NodesResource(this)
+  readonly scene3d = new Scene3DResource(this)
+  readonly developerApps = new DeveloperAppsResource(this)
+  readonly projects = new ProjectsResource(this)
+  readonly workflows = new WorkflowsResource(this)
+}
 
 /**
  * Singleton Nodaro API client configured for the existing Vite proxy:
@@ -32,11 +60,18 @@ import { createClient as createSupabaseClient } from "./supabase"
  * until a request is made. This keeps the singleton import-safe for tests
  * that mock `@/lib/supabase` after module load.
  */
-export const nodaroClient: NodaroClient = createNodaroClient({
+export const NODARO_CLIENT_OPTIONS: ClientOptions = {
   baseUrl: "",
   auth: new CallbackAuth(async () => {
     const supabase = createSupabaseClient()
     const { data } = await supabase.auth.getSession()
     return data.session?.access_token ?? null
   }),
-})
+}
+
+/**
+ * Every SDK client the app builds takes {@link NODARO_CLIENT_OPTIONS} — this
+ * one and the shared header's full client (`ee/shell/app-header.tsx`) — so a
+ * base URL, auth, timeout or workspace set for one cannot miss the other.
+ */
+export const nodaroClient: AppNodaroClient = new AppNodaroClient(NODARO_CLIENT_OPTIONS)

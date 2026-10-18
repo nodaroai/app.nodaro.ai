@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import { readSseStream } from "../sse.js"
 import type { OverlayAnchor, VideoMaskRequest, MaskCompositeRequest } from "@nodaro/shared/media"
 import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
@@ -101,7 +101,7 @@ export interface OverlayPlacement {
 }
 
 export class MediaResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Download a social video (YouTube / TikTok / Instagram / X / Facebook) into

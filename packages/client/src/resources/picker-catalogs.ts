@@ -1,5 +1,5 @@
 import type { CharacterMotionMetadata } from "@nodaro/shared/types"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Picker-catalog types. Mirrors `@nodaro/shared`'s `ProjectedPickerCatalog` /
@@ -128,7 +128,7 @@ export interface TextToPickerResult {
 }
 
 export class PickerCatalogsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** List every parameter-picker node type + its option count. Cached publicly 5 min. */
   list(): Promise<{ data: PickerCatalogSummary[] }> {

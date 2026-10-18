@@ -2,7 +2,7 @@ import type { ObjectAspectRatio, CreatureAttachColumn } from "@nodaro/shared/ent
 import type { TtsProvider } from "@nodaro/shared/models"
 export type { CreatureAttachColumn, ObjectAspectRatio as CreatureAspectRatio } from "@nodaro/shared/entities"
 export { CREATURE_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS as CREATURE_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS as CREATURE_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { GenerationSessionParams } from "./nodes.js"
 
 /**
@@ -434,7 +434,7 @@ export interface RecaptionCreatureResult {
 }
 
 export class CreaturesResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * List the caller's creatures. By default returns active creatures only;

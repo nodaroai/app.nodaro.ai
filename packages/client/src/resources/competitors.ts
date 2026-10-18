@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type {
   CardActionResult,
   CompetitorActionsResult,
@@ -24,7 +24,7 @@ import type {
  * fail are not charged.
  */
 export class CompetitorsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** `GET /v1/competitors` → every tracked brand. */
   async list(): Promise<TrackedCompetitor[]> {

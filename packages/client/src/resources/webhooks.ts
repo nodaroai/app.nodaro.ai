@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { Job } from "./jobs.js"
 
 /** Events an endpoint can subscribe to. */
@@ -165,7 +165,7 @@ export type WebhookEvent = JobWebhookEvent | PingWebhookEvent
  * an endpoint an app registers receives only the jobs that app submitted.
  */
 export class WebhooksResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** `POST /v1/webhook-endpoints` → the endpoint and its signing secret (shown this once). */
   create(input: CreateWebhookEndpointInput): Promise<CreatedWebhookEndpoint> {

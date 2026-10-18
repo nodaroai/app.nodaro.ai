@@ -65,9 +65,10 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
+`/core` holds `NodaroClientCore` (see below) and the same auth providers;
 `/errors` holds the error classes and `throwFromResponse`; every other entry is
 named after its resource module (`/node-presets` is `client.presets`,
 `/webhooks` also holds `verifyWebhookSignature`). A type the SDK re-exports from
@@ -85,6 +86,35 @@ holds whichever path each side used. `createClient` builds every resource, so
 needs only errors, types or one resource class. The two older subpaths,
 `@nodaro/sdk/supabase` and `@nodaro/sdk/signup-signals`, are unchanged and stay
 outside the root.
+
+### A client with only the resources you use
+
+`NodaroClientCore` (`@nodaro/sdk/core`) is the client without its resources:
+the options `createClient` takes, the request transport (`request`,
+`requestText`, `requestBytes`) and `me()`, `connectedApps()`,
+`revokeConnectedApp()`. `NodaroClient` extends it with every resource. Extend
+it yourself with only the resources you call, and the other resource modules
+are never loaded:
+
+```ts
+import { NodaroClientCore, StaticTokenAuth } from "@nodaro/sdk/core"
+import { JobsResource } from "@nodaro/sdk/jobs"
+import { NodesResource } from "@nodaro/sdk/nodes"
+
+class AppClient extends NodaroClientCore {
+  readonly jobs = new JobsResource(this)
+  readonly nodes = new NodesResource(this) // polls through `jobs`
+}
+
+const client = new AppClient({ baseUrl: "https://nodaro.example.com", auth: new StaticTokenAuth(token) })
+await client.nodes.runAndWait("generate-image", { prompt: "a lighthouse at dusk" })
+```
+
+Every resource class takes a `NodaroClientCore`. Two need another resource on
+the same client, and their constructor type says so, so leaving it out fails to
+compile: `NodesResource` needs `jobs` and `Scene3DResource` needs `nodes`.
+`withWorkspace` is a `NodaroClient` method; to work in a workspace, pass
+`workspaceId` to the constructor.
 
 ## `createClient(options)`
 

@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import { readSseStream } from "../sse.js"
 
 /**
@@ -216,7 +216,7 @@ function isCopilotFrame(value: unknown): value is CopilotStreamFrame {
 }
 
 export class CopilotResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Open a conversation (`POST /v1/copilot/threads`) — on `workflowId`, or on
