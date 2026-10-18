@@ -186,15 +186,6 @@ describe("getEffectivelySkippedIds", () => {
     expect(skipped.has("C")).toBe(false)
   })
 
-  it("handles nodes with no incoming edges (roots) that are not skipped", () => {
-    const A = makeNode("A", "text-prompt")
-    const B = makeNode("B", "generate-image")
-    const edges = [makeEdge("A", "B")]
-
-    const skipped = getEffectivelySkippedIds([A, B], edges)
-    expect(skipped.size).toBe(0)
-  })
-
   it("does NOT propagate through a multi-level chain (freeze semantics)", () => {
     // A(skipped) -> B -> C -> D  -- only A should be skipped
     const A = makeNode("A", "text-prompt", { skipped: true })

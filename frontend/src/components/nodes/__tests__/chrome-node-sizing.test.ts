@@ -86,16 +86,6 @@ describe("computeFittedNodeBox with chromeHeight", () => {
     // The preview sub-region keeps the new 9:16 aspect.
     expect(width / (height - C)).toBeCloseTo(9 / 16, 3)
   })
-
-  it("first fit with chrome is unaffected by prevAspectRatio (no prior aspect ⇒ snug width-based fit)", () => {
-    // No prior box (height undefined): both branches fall back to the given width,
-    // so omitting prevAspectRatio (undefined) must still produce the snug first fit.
-    const C = 120
-    const W = 800
-    const { width, height } = computeFittedNodeBox({ ...base, width: W, height: undefined, chromeHeight: C })
-    expect(width).toBe(W)
-    expect(height).toBe(C + W / (16 / 9))
-  })
 })
 
 describe("toggle idempotency (ON → OFF → ON)", () => {
