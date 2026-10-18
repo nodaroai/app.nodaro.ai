@@ -205,7 +205,7 @@
       ]
     },
     "backend/src/lib/use-case/bodies.ts": {
-      "composes": "USE_CASE_BODIES = legacy bodies ∪ UNIT_USE_CASES[type].body; usecaseInputSchemaOf(type) = the unit's inputSchema",
+      "composes": "USE_CASE_BODIES = UNIT_USE_CASES[type].body for every use-case unit (a use-case type with no unit throws at load); usecaseInputSchemaOf(type) = the unit's inputSchema",
       "exports": {
         "use-cases": [
           "USE_CASE_BODIES",
