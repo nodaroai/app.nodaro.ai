@@ -128,7 +128,7 @@ describe("ffmpeg admission census", () => {
       heldBy: { runReencode: "reencodeToH264" },
     },
     "providers/video/youtube-video.ts": { how: "muxSectionStreams: withFfmpegSlot (copy video, aac audio: the default estimate)" },
-    "providers/audio/audio-sync.ts": { how: "withFfmpegSlot around the spawn" },
+    "providers/audio/pcm-stream.ts": { how: "streamPcm: withFfmpegSlot around the spawn" },
     "providers/video/video-mask.ts": { how: "renderMaskVideo: withFfmpegSlot (the canvas model at the mask's size) around the stdin-fed encode" },
     "services/face-detect/detect-faces.ts": {
       how:

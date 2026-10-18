@@ -585,3 +585,5 @@ export {
   type FreeVideoLock,
   type FreeVideoRequest,
 } from "./free-video-limits"
+// The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).
+export { wholeEpisodeEdl, type WholeEpisodeEdlSource } from "./whole-episode-edl"
