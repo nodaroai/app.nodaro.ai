@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { unmountAndSettle } from "./unmount-and-settle"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),
@@ -28,8 +29,8 @@ beforeEach(() => {
   page = layOut()
   loadCanvas()
 })
-afterEach(() => {
-  cleanup()
+afterEach(async () => {
+  await unmountAndSettle()
   page.restore()
   delete (window as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__
   delete (window as { matchMedia?: unknown }).matchMedia

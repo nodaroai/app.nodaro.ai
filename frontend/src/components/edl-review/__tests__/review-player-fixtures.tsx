@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, vi } from "vitest"
-import { cleanup, fireEvent, screen, within } from "@testing-library/react"
+import { fireEvent, screen, within } from "@testing-library/react"
 import { effectiveRenderBasis, buildEffectiveEdl } from "@nodaro/render-rules"
 import { normalizeEdl } from "@nodaro/shared/edl"
 import { renderReadBasis } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
 import { PLAN, layOut, loadCanvas } from "./review-test-canvas"
+import { unmountAndSettle } from "./unmount-and-settle"
 
 /**
  * What the review player's tests share: the jsdom stand-in for a media
@@ -43,13 +44,7 @@ export function useHarness(): void {
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined)
   })
   afterEach(async () => {
-    cleanup()
-    // An open dialog's Radix FocusScope dispatches its unmount event from a
-    // setTimeout(0). After a file's last test that timer otherwise fires once
-    // the jsdom window is torn down, and the dispatch throws an unhandled
-    // "parameter 1 is not of type 'Event'" (CI shard 4, 2026-10-16). Let it
-    // run while the window is alive.
-    await new Promise((r) => setTimeout(r, 0))
+    await unmountAndSettle()
     h.page.restore()
     vi.restoreAllMocks()
     delete (window as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__

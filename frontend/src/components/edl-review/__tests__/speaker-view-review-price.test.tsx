@@ -8,7 +8,8 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
   return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
 })
 
-import { cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
+import { unmountAndSettle } from "./unmount-and-settle"
 import { findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { planClipKeyAt } from "@nodaro/shared/nodes"
@@ -103,8 +104,8 @@ beforeEach(() => {
   resetUndoStacks()
   ;(window as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__ = { previewStopRule: true }
 })
-afterEach(() => {
-  cleanup()
+afterEach(async () => {
+  await unmountAndSettle()
   delete (window as { __NODARO_RUNTIME__?: unknown }).__NODARO_RUNTIME__
   useWorkflowStore.setState({ renderFinal: null, renderCheck: null })
 })

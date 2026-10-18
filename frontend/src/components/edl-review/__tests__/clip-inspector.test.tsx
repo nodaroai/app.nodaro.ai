@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { unmountAndSettle } from "./unmount-and-settle"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),
@@ -24,9 +25,9 @@ import { CLIPS, clip, keyOf, loadClipCanvas, mountClipInspector, patchNode, plan
  * controls (R15 a). The footer and the runs are in clip-inspector.runs.test.
  */
 beforeEach(() => loadClipCanvas())
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
-  cleanup()
+  await unmountAndSettle()
   useWorkflowStore.setState({ renderFinal: null, renderCheck: null })
 })
 
