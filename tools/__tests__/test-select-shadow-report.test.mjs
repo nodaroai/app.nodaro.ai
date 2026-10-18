@@ -1,7 +1,7 @@
 // tools/__tests__/test-select-shadow-report.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected } from "../test-select/shadow-report.mjs"
+import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected, baseFailures, baseFromCheckoutLog, withRetry } from "../test-select/shadow-report.mjs"
 
 const run = (url, frontend, backend) => ({ url, projects: { ...(frontend && { frontend }), ...(backend && { backend }) } })
 
@@ -89,7 +89,7 @@ test("shadow report: an unreadable selection costs the share, not the shadow res
 })
 
 test("shadow report: no runs → nothing checked", () => {
-  assert.deepEqual(aggregateShadow([]), { runsChecked: 0, misses: [], unattributed: [], crashed: [], missing: [], errors: [], selectionErrors: [], clean: false, registry: { checked: 0, misses: [], clean: false }, medianShare: { frontend: null, backend: null } })
+  assert.deepEqual(aggregateShadow([]), { runsChecked: 0, misses: [], inherited: [], unattributed: [], crashed: [], missing: [], errors: [], selectionErrors: [], clean: false, registry: { checked: 0, misses: [], clean: false }, medianShare: { frontend: null, backend: null } })
 })
 
 test("shadow report: registry-rule misses are reported apart and never decide clean", () => {
@@ -242,4 +242,98 @@ test("shards: an errored shard keeps the other shards' misses listed — and the
   assert.equal(report.misses.length, 1)
   assert.equal(report.errors.length, 1)
   assert.equal(report.clean, false)
+})
+
+// Run 38902459956 (PR #2290, a packages/shared speaker-tracks change) was
+// tested on 2caffe217 (#2288), which had broken library-render-label.test.ts on
+// dev: its own post-merge run 38901166941 failed it, and again alone. The
+// selector rightly skipped the file; the report called it a miss.
+const LABEL = "src/routes/__tests__/library-render-label.test.ts"
+const BASE = "2caffe217d20f26be49c638c692301b1eb5f324c"
+const missRun = (bases) => ({
+  url: "https://github.com/o/r/actions/runs/38902459956", expected: ["backend"],
+  projects: { backend: { shadow: { wouldRun: "affected", selected: 1146, failed: [LABEL], misses: [LABEL] }, selection: { total: 2218 } } },
+  ...(bases && { bases }),
+})
+
+test("inherited: a miss that failed again on the PR's base commit's own dev run is inherited — listed apart, not blocking clean", () => {
+  const out = aggregateShadow([missRun({ backend: { sha: BASE, url: "https://github.com/o/r/actions/runs/38901166941", failed: [LABEL], flaky: [], unknown: [] } })])
+  assert.deepEqual(out.misses, [])
+  assert.deepEqual(out.inherited, [{ project: "backend", file: LABEL, url: "https://github.com/o/r/actions/runs/38902459956", base: BASE, baseUrl: "https://github.com/o/r/actions/runs/38901166941" }])
+  assert.equal(out.clean, true)
+})
+
+test("inherited: without that proof the miss stays a miss — base not looked up, unknown, green, or only flaky/unlabelled there", () => {
+  const url = "https://github.com/o/r/actions/runs/38901166941"
+  for (const [bases, note] of [
+    [null, undefined],
+    [{ backend: { error: "the commit the PR was tested on could not be found" } }, /not checked: the commit/],
+    [{ backend: { sha: BASE, error: "no CI run of it on dev" } }, /base 2caffe217 not checked: no CI run/],
+    [{ backend: { sha: BASE, url, failed: [], flaky: [], unknown: [] } }, undefined],
+    [{ backend: { sha: BASE, url, failed: ["src/other.test.ts"], flaky: [LABEL], unknown: [] } }, /labelled flaky/],
+    [{ backend: { sha: BASE, url, failed: [], flaky: [], unknown: [LABEL] } }, /left no report/],
+    [{ frontend: { sha: BASE, url, failed: [LABEL], flaky: [], unknown: [] } }, undefined], // another project's list
+    [{ backend: { url, failed: [LABEL] } }, undefined], // no sha: not a proof
+  ]) {
+    const out = aggregateShadow([missRun(bases)])
+    assert.equal(out.misses.length, 1, JSON.stringify(bases))
+    assert.deepEqual(out.inherited, [])
+    assert.equal(out.clean, false)
+    if (note) assert.match(out.misses[0].baseNote, note)
+    else assert.equal(out.misses[0].baseNote, undefined)
+  }
+})
+
+test("base: read from the merge commit actions/checkout logs on a pull_request job", () => {
+  const log = "2026-10-16T12:45:34.7556769Z HEAD is now at ef951ce Merge 6af8dd0d1beb15a4528ce6450027ea0b66691b25 into 2caffe217d20f26be49c638c692301b1eb5f324c\n"
+  assert.equal(baseFromCheckoutLog(log), BASE)
+  assert.equal(baseFromCheckoutLog("HEAD is now at 2caffe2 feat(library): deep link (#2288)"), null) // a push checkout
+  assert.equal(baseFromCheckoutLog(undefined), null)
+})
+
+test("base failures: only a finished dev run's failed-file lists prove anything; every gap is an error", () => {
+  const url = "https://github.com/o/r/actions/runs/1"
+  const lists = { "failed-backend-1": { failed: [LABEL], flaky: [], unknown: [] }, "failed-backend-3": { failed: ["src/b.test.ts"], flaky: ["src/c.test.ts"], unknown: [] } }
+  const readLists = (name) => { if (!lists[name]) throw new Error("no such artifact"); return lists[name] }
+  const red = { url, status: "completed", conclusion: "failure", artifacts: ["ci-build-backend", "failed-backend-1", "failed-backend-3", "failed-frontend-2"] }
+  assert.deepEqual(baseFailures({ sha: BASE, project: "backend", devRuns: [red], readLists }),
+    { sha: BASE, url, failed: [LABEL, "src/b.test.ts"].sort(), flaky: ["src/c.test.ts"], unknown: [] })
+  assert.deepEqual(baseFailures({ sha: BASE, project: "backend", devRuns: [{ url, status: "completed", conclusion: "success" }], readLists }),
+    { sha: BASE, url, failed: [], flaky: [], unknown: [] })
+  assert.match(baseFailures({ sha: BASE, project: "backend", devRuns: [], readLists }).error, /no CI run/)
+  assert.match(baseFailures({ sha: BASE, project: "backend", devRuns: [{ url, status: "in_progress", conclusion: "" }], readLists }).error, /not finished/)
+  assert.match(baseFailures({ sha: BASE, project: "backend", devRuns: [{ url, status: "completed", conclusion: "cancelled" }], readLists }).error, /ended cancelled/)
+  assert.match(baseFailures({ sha: BASE, project: "backend", devRuns: [{ ...red, artifacts: ["failed-frontend-2"] }], readLists }).error, /no failed-backend list/)
+  assert.match(baseFailures({ sha: BASE, project: "frontend", devRuns: [red], readLists }).error, /failed-frontend-2: no such artifact/)
+})
+
+test("shards: a shard job that failed before its Run tests step ran no test — no shadow data is expected from it", () => {
+  // run 38786332886: the pinned-ffmpeg download failed on backend shards 2 and 3
+  const conclusions = { "Backend Tests (1/4)": "success", "Backend Tests (2/4)": "failure", "Backend Tests (3/4)": "failure", "Backend Tests (4/4)": "success" }
+  const steps = { "Backend Tests (1/4)": "success", "Backend Tests (2/4)": "skipped", "Backend Tests (3/4)": "skipped", "Backend Tests (4/4)": "success" }
+  const { expected, expectedShards } = expectedFromJobs(conclusions, steps)
+  assert.deepEqual(expected, ["backend"])
+  assert.deepEqual(expectedShards.backend, [1, 4])
+  const sh = { project: "backend", wouldRun: "affected", selected: 3, failed: [], misses: [] }
+  assert.equal(mergeShardEntries([{ shard: 1, shadow: sh }, { shard: 4, shadow: sh }], expectedShards.backend).error, undefined)
+  // a Run tests step that ran — failed, or cancelled midway (a timeout) — still owes its data; so does a job with no such step
+  assert.deepEqual(expectedFromJobs(conclusions, { ...steps, "Backend Tests (2/4)": "failure", "Backend Tests (3/4)": "cancelled" }).expectedShards.backend, [1, 2, 3, 4])
+  assert.deepEqual(expectedFromJobs(conclusions).expectedShards.backend, [1, 2, 3, 4])
+  // every shard failed before its tests: nothing ran, nothing is expected
+  assert.deepEqual(expectedFromJobs({ "Backend Tests (1/4)": "failure" }, { "Backend Tests (1/4)": "skipped" }).expected, [])
+})
+
+test("gh calls: a transient GitHub 5xx is retried, anything else throws at once", () => {
+  const pauses = []
+  const pause = (ms) => pauses.push(ms)
+  let n = 0
+  const flaky = () => { if (++n < 3) throw Object.assign(new Error("Command failed"), { stderr: "gh: Server Error (HTTP 502)\n" }); return "ok" }
+  assert.equal(withRetry(flaky, { pause }), "ok")
+  assert.deepEqual(pauses, [2000, 4000])
+  n = 0
+  assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "gh: Not Found (HTTP 404)" }) }, { pause }), /x/)
+  assert.equal(n, 1)
+  n = 0
+  assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "HTTP 503" }) }, { pause, tries: 3 }))
+  assert.equal(n, 3)
 })

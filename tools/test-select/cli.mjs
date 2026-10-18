@@ -127,11 +127,16 @@ function markVersionOnly(changes, before, after) {
     && isVersionOnlyChange(c.path, show(before, c.path), show(after, c.path)) ? { ...c, versionOnly: true } : c))
 }
 
+// --merge-commit: the commits the change was measured between, written into
+// the --json result. The shadow report reads `base` to tell a failure the PR
+// inherited (the same file failed on its base's own dev run) from a miss.
+let measured = null
 async function readChanges() {
   if (o["merge-commit"]) {
     const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
-    const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
+    const [merge, ...parents] = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ")
     if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
+    measured = { merge, base: parents[0] }
     return markRegistry(markI18nKeys(markSharedNames(markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")), "HEAD^1", "HEAD"), "HEAD^1")
   }
   if (o.pr) {
@@ -164,7 +169,7 @@ const projectRelative = result.files.map((f) => path.posix.relative(o.project, f
 if (o.list) writeFileSync(o.list, projectRelative.map((f) => `${f}\n`).join(""))
 const registrySelection = result.registryRule?.selection ?? { mode: result.mode, files: result.files }
 if (o["registry-list"]) writeFileSync(o["registry-list"], registrySelection.files.map((f) => `${path.posix.relative(o.project, f.file)}\n`).join(""))
-if (o.json) writeFileSync(o.json, `${JSON.stringify(result, null, 1)}\n`)
+if (o.json) writeFileSync(o.json, `${JSON.stringify(measured ? { ...result, ...measured } : result, null, 1)}\n`)
 if (o.summary) appendFileSync(o.summary, renderSummary(o.project, result, { shadow: Boolean(o.shadow) }))
 if (o["github-output"]) {
   appendFileSync(o["github-output"], `${o.shadow ? `selection=shadow\nshadow_selection=${result.mode}\n` : `selection=${result.mode}\n`}registry_rule=${registryRule}\nregistry_selection=${registrySelection.mode}\n`)

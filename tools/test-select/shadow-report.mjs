@@ -4,7 +4,8 @@
 // CI runs of PRs into dev since a date, every selector miss (a failing test
 // file the selection would have skipped) and the median share of each suite
 // the selector would have run. A local, owner-run tool — not run in CI.
-//   node tools/test-select/shadow-report.mjs --since 2026-10-13 [--repo owner/name]
+//   node tools/test-select/shadow-report.mjs --since 2026-10-13 [--repo owner/name] [--run <id>]…
+// --run limits the report to those runs (still listed from --since) — to re-check one run.
 // Needs an authenticated `gh` (GH_TOKEN works too).
 import { execFileSync } from "node:child_process"
 import { mkdtempSync, readFileSync } from "node:fs"
@@ -34,8 +35,19 @@ function median(xs) {
 // registryChecks: [{ project, url, check }] — the registry-check-<project>.json
 // files an AFFECTED run (the main selector enforcing) left in its selection
 // artifacts; shadow runs carry theirs inside the shadow data.
+// bases (optional, per run): { [project]: what the PR's base commit did on its
+// own post-merge dev run — { sha, url, failed, flaky, unknown } or
+// { sha?, url?, error } } (baseFailures). A miss whose file is in `failed`
+// there (failed in dev's full run and again alone) is INHERITED: dev was
+// already broken at the commit the PR was tested on, so it says nothing about
+// the selector (run 38902459956: #2288 broke library-render-label on dev, #2290
+// was tested on top of it and touched nothing the test loads). It is listed
+// apart and does not block clean. Anything short of that proof — the base
+// unknown, its run missing or unread, the file only flaky or unlabelled there —
+// leaves the miss a miss, with a note.
 export function aggregateShadow(runs, registryChecks = []) {
   const misses = []
+  const inherited = []
   const unattributed = []
   const crashed = []
   const missing = []
@@ -69,7 +81,11 @@ export function aggregateShadow(runs, registryChecks = []) {
         errors.push({ project, url: run.url, error: shadow.error })
         continue
       }
-      for (const file of shadow.misses ?? []) misses.push({ project, file, url: run.url })
+      const base = run.bases?.[project]
+      for (const file of shadow.misses ?? []) {
+        if (base?.sha && base.failed?.includes(file)) inherited.push({ project, file, url: run.url, base: base.sha, baseUrl: base.url })
+        else misses.push({ project, file, url: run.url, ...baseNote(base, file) })
+      }
       // Only a run where the rule's selection differs from the main one says anything about the rule.
       if (Array.isArray(shadow.registryMisses) && shadow.registryDiffers) {
         registryChecked++
@@ -95,10 +111,51 @@ export function aggregateShadow(runs, registryChecks = []) {
   }
   const clean = runs.length > 0 && ![misses, unattributed, crashed, missing, errors].some((l) => l.length)
   return {
-    runsChecked: runs.length, misses, unattributed, crashed, missing, errors, selectionErrors, clean,
+    runsChecked: runs.length, misses, inherited, unattributed, crashed, missing, errors, selectionErrors, clean,
     registry: { checked: registryChecked, misses: registryMisses, clean: registryChecked > 0 && registryMisses.length === 0 },
     medianShare: { frontend: median(shares.frontend), backend: median(shares.backend) },
   }
+}
+
+// Why a miss stays a miss although its base was looked at (none: not looked at).
+function baseNote(base, file) {
+  if (!base) return {}
+  const at = base.sha ? ` ${base.sha.slice(0, 9)}` : ""
+  if (base.error) return { baseNote: `base${at} not checked: ${base.error}` }
+  if (base.flaky?.includes(file)) return { baseNote: `failed on the base${at}'s dev run too, but passed alone there (labelled flaky): ${base.url}` }
+  if (base.unknown?.includes(file)) return { baseNote: `failed on the base${at}'s dev run too; its re-run left no report: ${base.url}` }
+  return {}
+}
+
+// The base a pull_request job was tested on: actions/checkout logs the merge
+// commit it checked out as "HEAD is now at <short> Merge <head> into <base>".
+// For runs whose selection JSON predates its `base` field (cli.mjs).
+export function baseFromCheckoutLog(log) {
+  return /HEAD is now at [0-9a-f]+ Merge [0-9a-f]{40} into ([0-9a-f]{40})\b/.exec(log ?? "")?.[1] ?? null
+}
+
+// What the base commit's own post-merge run on dev failed, for one project.
+// devRuns: the CI push runs of that commit on dev, newest first ([{ url,
+// status, conclusion, artifacts: [names] }]); readLists(artifactName) →
+// { failed, flaky, unknown } read from one failed-<project>[-<shard>] artifact
+// (throws when it cannot be read). Only a finished run proves anything: no
+// run, an unfinished one, a run neither green nor red, a red run with no list
+// for the project, or an unreadable list is an `error` — the miss stays.
+export function baseFailures({ sha, project, devRuns, readLists }) {
+  const done = devRuns.find((r) => r.status === "completed")
+  if (!done) return { sha, error: devRuns.length ? "its dev run has not finished" : "no CI run of it on dev" }
+  const empty = { sha, url: done.url, failed: [], flaky: [], unknown: [] }
+  if (done.conclusion === "success") return empty
+  if (done.conclusion !== "failure") return { sha, url: done.url, error: `its dev run ended ${done.conclusion || "without a conclusion"}` }
+  const names = (done.artifacts ?? []).filter((n) => new RegExp(`^failed-${project}(-\\d+)?$`).test(n))
+  if (!names.length) return { sha, url: done.url, error: `its dev run failed and left no failed-${project} list` }
+  const out = { ...empty }
+  for (const name of names) {
+    let lists
+    try { lists = readLists(name) } catch (err) { return { sha, url: done.url, error: `${name}: ${String(err?.message ?? err).split("\n")[0]}` } }
+    for (const key of ["failed", "flaky", "unknown"]) out[key] = [...new Set([...out[key], ...(lists[key] ?? [])])].sort()
+  }
+  return out
 }
 
 // Which branch a pull_request run's PR targets: "dev", "other" or "unknown".
@@ -128,8 +185,23 @@ export function shadowExpected({ base, hasArtifacts, expected }) {
   return base !== "other" && expected.length > 0
 }
 
+// GitHub's own transient errors (a 5xx) are retried, a few times, with a
+// pause: a report reads hundreds of runs over half an hour, and one 502 used to
+// end it with nothing printed. Any other failure is the caller's to judge.
+export function withRetry(call, { tries = 4, pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return call()
+    } catch (err) {
+      const transient = /HTTP 5\d\d/.test(`${err?.stderr ?? ""} ${err?.message ?? ""}`)
+      if (!transient || attempt >= tries) throw err
+      pause(2000 * attempt)
+    }
+  }
+}
+
 function gh(...args) {
-  return execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20 }).trim()
+  return withRetry(() => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20 })).trim()
 }
 
 // Missing → null; present but unreadable → throws, so the caller reports it.
@@ -154,14 +226,19 @@ const JOBS = { frontend: "Frontend Tests", backend: "Backend Tests" }
 // failure; skipped (the Diff Gate) and cancelled (superseded) are not. The
 // fan-in job of the same plain name passes on a skipped suite, so it says
 // nothing here; it counts only in a run from before sharding (no shard job).
-export function expectedFromJobs(conclusions) {
+// testSteps: { [job name]: conclusion of its "Run tests" step }. A shard job
+// that failed BEFORE that step (run 38786332886: the pinned-ffmpeg download
+// failed, curl exit 22, on shards 2 and 3) ran no test, so it has nothing to
+// miss and no shadow data to leave — only a step that was skipped counts so;
+// one that ran, failed or was cancelled midway still owes its data.
+export function expectedFromJobs(conclusions, testSteps = {}) {
   const finished = (c) => ["success", "failure"].includes(c)
   const expected = []
   const expectedShards = {}
   for (const [project, job] of Object.entries(JOBS)) {
     // A skipped matrix job keeps its unexpanded name, "Frontend Tests (${{ matrix.shard }}/4)".
     const shards = Object.entries(conclusions).filter(([name]) => name.startsWith(`${job} (`))
-    expectedShards[project] = shards.filter(([, c]) => finished(c))
+    expectedShards[project] = shards.filter(([name, c]) => finished(c) && testSteps[name] !== "skipped")
       .map(([name]) => Number(name.slice(job.length + 2).split("/")[0])).filter(Number.isInteger)
     const isExpected = shards.length ? expectedShards[project].length > 0 : finished(conclusions[job])
     if (isExpected) expected.push(project)
@@ -212,9 +289,23 @@ export function mergeShardEntries(allParts, expectedShards = []) {
   }
 }
 
+// The base from the checkout log of one of the project's shard jobs that
+// finished — for runs whose selection JSON has no `base` yet. Null when none
+// can be read.
+function baseFromJobLog(repo, jobs, project) {
+  for (const [name, conclusion, jobId] of jobs) {
+    if (!name.startsWith(JOBS[project]) || !["success", "failure"].includes(conclusion)) continue
+    try {
+      const sha = baseFromCheckoutLog(gh("api", `repos/${repo}/actions/jobs/${jobId}/logs`, "--allow-escape-sequences"))
+      if (sha) return sha
+    } catch { /* try the next shard */ }
+  }
+  return null
+}
+
 // Shadow mode is PRs into dev, so --since must not reach back before shadow
 // mode reached dev: an older PR run into dev would be reported as missing data.
-function collectRuns({ repo, since }) {
+function collectRuns({ repo, since, only = [] }) {
   const lines = gh("api", "--paginate",
     `repos/${repo}/actions/workflows/ci.yml/runs?event=pull_request&created=>=${since}&per_page=100`,
     "--jq", '.workflow_runs[] | [.id, .html_url, .head_sha, .head_branch, (.head_repository.full_name == .repository.full_name), ([.pull_requests[].base.ref] | join(","))] | @tsv')
@@ -230,9 +321,38 @@ function collectRuns({ repo, since }) {
     return pullsBySha.get(sha)
   }
   const dir = mkdtempSync(path.join(tmpdir(), "shadow-report-"))
+  const failuresBySha = new Map() // one lookup per base commit and project
+  const devFailures = (sha, project) => {
+    const key = `${sha}\t${project}`
+    if (!failuresBySha.has(key)) {
+      let result
+      try {
+        const devRuns = gh("api", `repos/${repo}/actions/workflows/ci.yml/runs?head_sha=${sha}&event=push&branch=dev&per_page=10`,
+          "--jq", ".workflow_runs[] | [.id, .html_url, .status, (.conclusion // \"\")] | @tsv")
+          .split("\n").filter(Boolean).map((l) => {
+            const [runId, runUrl, status, conclusion] = l.split("\t")
+            return { id: runId, url: runUrl, status, conclusion }
+          })
+        const done = devRuns.find((r) => r.status === "completed")
+        if (done?.conclusion === "failure") {
+          done.artifacts = gh("api", `repos/${repo}/actions/runs/${done.id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n").filter(Boolean)
+        }
+        result = baseFailures({ sha, project, devRuns, readLists: (name) => {
+          const out = path.join(dir, `base-${done.id}`, name)
+          gh("run", "download", done.id, "--repo", repo, "--name", name, "--dir", out)
+          const list = (suffix) => { try { return readFileSync(path.join(out, `failed-${project}.txt${suffix}`), "utf8").split("\n").map((l) => l.trim()).filter(Boolean) } catch { return [] } }
+          return { failed: list(""), flaky: list(".flaky"), unknown: list(".unknown") }
+        } })
+      } catch (err) {
+        result = { sha, error: String(err?.message ?? err).split("\n")[0] }
+      }
+      failuresBySha.set(key, result)
+    }
+    return failuresBySha.get(key)
+  }
   const runs = []
   const registryChecks = []
-  const listed = lines.split("\n").filter(Boolean)
+  const listed = lines.split("\n").filter(Boolean).filter((l) => !only.length || only.includes(l.split("\t")[0]))
   for (const line of listed) {
     const [id, url, headSha, headBranch, sameRepo, bases = ""] = line.split("\t")
     const artifacts = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n")
@@ -251,9 +371,12 @@ function collectRuns({ repo, since }) {
     // A test job that finished (success or failure) in a shadow run must have
     // left shadow data; skipped (the Diff Gate) and cancelled (superseded)
     // jobs are not expected to.
-    const conclusions = Object.fromEntries(gh("api", `repos/${repo}/actions/runs/${id}/jobs?per_page=100`, "--jq", ".jobs[] | [.name, (.conclusion // \"\")] | @tsv")
-      .split("\n").filter(Boolean).map((l) => l.split("\t")))
-    const { expected, expectedShards } = expectedFromJobs(conclusions)
+    const jobs = gh("api", `repos/${repo}/actions/runs/${id}/jobs?per_page=100`, "--jq",
+      ".jobs[] | [.name, (.conclusion // \"\"), (.id | tostring), ([.steps[]? | select(.name == \"Run tests\") | (.conclusion // \"\")] | first // \"\")] | @tsv")
+      .split("\n").filter(Boolean).map((l) => l.split("\t"))
+    const conclusions = Object.fromEntries(jobs.map(([name, conclusion]) => [name, conclusion]))
+    const testSteps = Object.fromEntries(jobs.filter(([, , , step]) => step).map(([name, , , step]) => [name, step]))
+    const { expected, expectedShards } = expectedFromJobs(conclusions, testSteps)
     // The base matters only for a run without shadow artifacts.
     const base = names.length ? "dev"
       : resolveBase({ listedBases: bases.split(",").filter(Boolean), headSha, headBranch, sameRepo: sameRepo === "true", pulls: expected.length ? pullsFor(headSha) : [] })
@@ -288,26 +411,35 @@ function collectRuns({ repo, since }) {
     }
     // every artifact came from an unfinished shard and no shard job finished: nothing to check
     if (!Object.keys(projects).length && !expected.length) continue
-    runs.push({ url, expected, projects, ...(base === "unknown" && { baseUnknown: true }) })
+    // A miss is checked against the PR's base: did the same file fail on dev there?
+    const testedOn = {}
+    for (const [project, entry] of Object.entries(projects)) {
+      if (!entry.shadow?.misses?.length) continue
+      const sha = entry.selection?.base ?? baseFromJobLog(repo, jobs, project)
+      testedOn[project] = sha ? devFailures(sha, project) : { error: "the commit the PR was tested on could not be found" }
+    }
+    runs.push({ url, expected, projects, ...(Object.keys(testedOn).length && { bases: testedOn }), ...(base === "unknown" && { baseUnknown: true }) })
   }
   return { listed: listed.length, runs, registryChecks }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { values: o } = parseArgs({ options: { since: { type: "string" }, repo: { type: "string" } } })
+  const { values: o } = parseArgs({ options: { since: { type: "string" }, repo: { type: "string" }, run: { type: "string", multiple: true } } })
   if (!o.since || Number.isNaN(Date.parse(o.since))) {
-    process.stderr.write("usage: shadow-report.mjs --since <ISO date> [--repo owner/name]\n")
+    process.stderr.write("usage: shadow-report.mjs --since <ISO date> [--repo owner/name] [--run <id>]…\n")
     process.exit(2)
   }
   const repo = o.repo ?? gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-  const { listed, runs, registryChecks } = collectRuns({ repo, since: o.since })
+  const { listed, runs, registryChecks } = collectRuns({ repo, since: o.since, only: o.run ?? [] })
   const report = aggregateShadow(runs, registryChecks)
   const pct = (x) => (x === null ? "n/a" : `${(x * 100).toFixed(1)}%`)
   const out = [
     // both counts, so "no shadow runs" cannot pass for a broken listing
     `PR runs listed since ${o.since}: ${listed}, shadow runs checked: ${report.runsChecked}`,
     `Selector misses: ${report.misses.length}`,
-    ...report.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}`),
+    ...report.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}${m.baseNote ? `  (${m.baseNote})` : ""}`),
+    `Inherited from dev (failed again on the PR's base commit's own dev run — not a miss, not blocking Clean): ${report.inherited.length}`,
+    ...report.inherited.map((m) => `  - ${m.project}: ${m.file}  ${m.url}  (base ${m.base.slice(0, 9)}: ${m.baseUrl})`),
     `Unattributed failures (failed with no failing test file — possible misses): ${report.unattributed.length}`,
     ...report.unattributed.map((u) => `  - ${u.project}: ${u.url}`),
     `Selector crashes (the job fell back to a full run): ${report.crashed.length}`,
