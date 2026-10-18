@@ -140,6 +140,48 @@ not block "Clean". Anything short of that — the base unknown, its dev run
 missing, unfinished or unreadable, the file only flaky there — leaves the miss
 a miss, with a note saying why.
 
+**After enforcement** (decided 2026-10-18, `enforced-audit.mjs`). An enforced
+PR run leaves no shadow check, so the report audits it through its merge.
+- **Which runs are enforced.** The selection artifact `selection-<project>-<shard>`
+  is uploaded only when the Select step's output is `selection=affected`, and
+  only an enforced run writes that. The `mode` field inside the JSON is the
+  selector's own choice and cannot tell the two apart: a shadow run's copy says
+  `affected` too. An enforced run whose selector chose `none` or `full`
+  uploads no selection. For those, the Select line `cli.mjs` prints in the job
+  log (`backend: full — …`) tells the mode. Such runs are no longer counted as
+  missing shadow data.
+- **What is audited.** Each merged PR is audited through its final run (the
+  newest run of the head it merged with; earlier pushes are superseded). The
+  report finds the CI run that the PR's merge commit (`merge_commit_sha`, the
+  squash commit) got on `dev`, and reads its `failed-<project>-<shard>` lists.
+  - A **miss** is a file that failed again there, was not in the final
+    selection, and did not fail again on its base's own dev run (inherited,
+    as above).
+  - **Flaky** files, which failed in the full run and passed alone, are listed
+    apart, with whether the selection held them. They never count as misses.
+    Example: #2332's `video-overlay-config` on run 39120351077.
+  - A file whose re-run left no report, outside the selection, is a possible
+    miss.
+  - A shard whose `Run tests` step failed while naming no file is
+    unattributed.
+  - A red shard with no list, or a `Run tests` step that never finished, is an
+    unreadable check.
+- **How to compare.** Selection files are repo-relative and the lists are
+  project-relative, so they are compared project-relative.
+- **The registry rule.** `registryRule.mode` in the selection says whether the
+  rule was enforced on that run. If it was, its selection is what ran, so its
+  misses are the selector misses. If not, a registry miss is a file the main
+  selection held and the rule's did not, counted only where the two differ.
+- **Counts.** A PR that never merged has nothing to audit and is counted as
+  such. A post-merge run that has not finished blocks "Clean". The first line
+  of the report accounts for every listed run (shadow, enforced, not into dev,
+  no test job finished, mode unreadable).
+- **"Clean"** now covers both records: the shadow runs and the audited
+  enforced PRs.
+- **`gh` errors.** `gh`'s stderr is piped, never inherited. A failing call is
+  reported with the call and `gh`'s own message, and is never printed bare
+  above the report.
+
 ## Post-merge failures are never re-run green
 
 On a dev commit, a test file that fails is re-run once, alone, only to label
@@ -414,5 +456,8 @@ is a **Registry-rule miss**: an annotation, a summary line, and
 `registry-check-<project>.json` in the selection artifact). `shadow-report.mjs`
 reports them apart from the selector's own misses (also from affected runs'
 selection artifacts), counts only runs where the two selections differ, and
-they never decide its "clean". This works whether the main selector is in shadow mode or enforcing.
+they never decide its "clean". Once the variable is `enforce` (since
+2026-10-18 15:22Z; `registryRule.mode` in the selection says so per run), the
+rule's selection is the one that ran: an enforced PR's misses are then
+selector misses, and they do decide "clean". This works whether the main selector is in shadow mode or enforcing.
 With no unit in the tree, nothing here runs and selection is byte-identical.
