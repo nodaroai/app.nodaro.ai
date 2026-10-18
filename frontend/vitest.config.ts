@@ -61,6 +61,10 @@ export default defineConfig({
       // `@remotion-pkg/scene3d` (the render-runtime-free three.js entry), so
       // the alias has to exist here too or its module graph can't resolve.
       "@remotion-pkg": path.resolve(__dirname, "../packages/remotion/src"),
+      // The shared site header is a cloud-only package; tests always get the
+      // stub (vite.config's resolver plugin is not loaded here). A test that
+      // needs the header mocks "virtual:site-header".
+      "virtual:site-header": path.resolve(__dirname, "./src/ee/shell/stub.tsx"),
     },
     // The picker-ui package is consumed via a workspace symlink; without
     // dedupe its own node_modules/react loads as a SECOND React copy and every

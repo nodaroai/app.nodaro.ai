@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
 import { getUserEarnings } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import {
   useSubscription,
@@ -119,7 +120,7 @@ export default function BillingPage() {
     if (!searchParams.get("success") && !searchParams.get("topup")) return
     const timer = setTimeout(() => {
       qc.invalidateQueries({ queryKey: queryKeys.billing.all })
-      qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user.id) })
+      void invalidateBalance(qc, user.id)
     }, 3000)
     return () => clearTimeout(timer)
   }, [searchParams, user?.id, qc])

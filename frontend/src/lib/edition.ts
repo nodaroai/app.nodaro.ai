@@ -48,6 +48,20 @@ export function hasOrganizations(): boolean {
   return isCloud() && ORGS_ENABLED
 }
 
+/**
+ * Shared site header (Cloud): "true" puts the shared Nodaro header above the
+ * app. Empty = off, which is every self-host build and production until the
+ * cut-over; staging turns it on. Build-time like ORGS_ENABLED (Dockerfile ARG +
+ * ENV), and the build's resolver forces it to "false" whenever the header
+ * itself is not in the bundle (see `ee/shell/header-module-plugin.ts`), so
+ * true here means the header is there.
+ */
+export const SHARED_HEADER = import.meta.env.VITE_SHARED_HEADER === "true"
+
+export function hasSharedHeader(): boolean {
+  return isCloud() && hasCredits() && SHARED_HEADER
+}
+
 /** business + cloud are multi-user (community is single-user → sharing is inert) */
 export function isMultiUser(): boolean {
   return EDITION === 'business' || EDITION === 'cloud'

@@ -14,6 +14,10 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join, extname, sep } from "node:path"
 
 const ROOTS = ["backend/src", "frontend/src", "packages"]
+// The frontend's root-level build/test configs (vite, vitest, playwright, …)
+// are core too, and sit outside frontend/src: scanned file by file.
+const CONFIG_DIRS = ["frontend"]
+const CONFIG_FILE = /.config.[cm]?[jt]sx?$/
 const EXTS = new Set([".ts", ".tsx"])
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", "__tests__"])
 
@@ -29,6 +33,12 @@ const ALLOWLIST = new Set([
   // PERMANENT — boot orchestrators
   "backend/src/app.ts",                                    // route registration
   "backend/src/server.ts",                                 // cleanup cron + worker startup
+  // PERMANENT — build-config edge: the resolver decides stub vs package at
+  // build time; nothing from ee/ reaches a community bundle. vite.config.ts
+  // imports the plugin; vitest.config.ts points its alias at the stub (a path
+  // string, not an import — listed so the edge is documented in one place).
+  "frontend/vite.config.ts",
+  "frontend/vitest.config.ts",
 
   // TODO Phase 3.5 — convert to dynamic-require shims (mirror workers/shared.ts).
   // These 26 files predate the migration and import CreditsService / pricing
@@ -292,8 +302,21 @@ const importRe = /^\s*(?:import|export)\s+(?:[^'"]+from\s+)?['"]([^'"]+)['"]/gm
 const violations = []
 let scanned = 0
 
-for (const root of ROOTS) {
-  const files = listFiles(root)
+function configFiles() {
+  const out = []
+  for (const dir of CONFIG_DIRS) {
+    let names = []
+    try {
+      names = readdirSync(dir)
+    } catch {
+      continue
+    }
+    for (const name of names) if (CONFIG_FILE.test(name)) out.push(join(dir, name))
+  }
+  return out
+}
+
+for (const files of [...ROOTS.map(listFiles), configFiles()]) {
   for (const file of files) {
     scanned++
     // Normalize Windows backslash paths to forward-slash so the ALLOWLIST

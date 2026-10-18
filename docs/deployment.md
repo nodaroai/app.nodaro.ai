@@ -132,6 +132,7 @@ here for each one anyway.
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
 | `LOOPS_API_KEY` | `""` | Cloud: API key for syncing marketing-email consent to Loops (loops.so). Unset = the consent-to-contact sync is inert; consent is still recorded locally and reconciled once a key is set |
 | `VITE_ORGS_ENABLED` | `""` | Cloud, organizations: `true` shows the organization surfaces in the browser. Build-time (Vite inlines it), so it needs the `ARG`+`ENV` pair in the Dockerfile — and it must match the backend's `ORGS_ENABLED`, or the UI offers something the API refuses |
+| `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`). Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |

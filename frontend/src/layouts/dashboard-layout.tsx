@@ -14,6 +14,7 @@ import { loadSurfaceAvailability, resetSurfaceAvailability } from "@/lib/surface
 import { loadScene3DProAvailability } from "@/lib/scene3d-pro-availability"
 import { watchEditPlanModes } from "@/lib/edit-plan-modes"
 import { getAuthHeaders } from "@/lib/api"
+import { whenActivated } from "@/lib/prerender"
 import { isEditorPath, loginPathFor } from "./dashboard-paths"
 
 export default function DashboardLayout() {
@@ -82,8 +83,9 @@ export default function DashboardLayout() {
     return watchEditPlanModes(getAuthHeaders)
   }, [authLoading, user])
 
-  // After OAuth login, check for a pending plan selection and redirect to pricing
-  useEffect(() => {
+  // After OAuth login, check for a pending plan selection and redirect to pricing.
+  // Not from a prerendered page nobody has seen yet: it would spend the key.
+  useEffect(() => whenActivated(() => {
     // Nothing to buy without billing — a leftover key would navigate to a
     // page this edition doesn't serve.
     if (!hasCredits()) {
@@ -95,7 +97,7 @@ export default function DashboardLayout() {
       localStorage.removeItem("nodaro_pending_plan")
       navigate(`/pricing?plan=${encodeURIComponent(pendingPlan)}`, { replace: true })
     }
-  }, [])
+  }), [])
 
   // Close mobile menu on route change
   useEffect(() => {
