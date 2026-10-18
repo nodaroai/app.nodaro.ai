@@ -26,7 +26,7 @@ node tools/test-dedup/report.mjs --project backend \
   read. Without logs the report gives no saving estimate.
 
 Its pure parts (`executions.mjs`, `clusters.mjs`, `bodies.mjs`,
-`cross-tree.mjs`) use Node built-ins only and are tested by
+`cross-tree.mjs`, `parity-filter.mjs`) use Node built-ins only and are tested by
 `tools/__tests__/test-dedup-report.test.mjs`, which runs with no npm install.
 `report.mjs` loads Vitest (through `graph.mjs`) and `typescript` lazily.
 
@@ -73,8 +73,45 @@ per-locale or per-engine twins. Parameterized forms (`it.each`, `.for`,
 grep discovers, by what ties it to the frontend tree: it reads files and
 declares `@test-watches` naming `frontend/` (`watch-frontend`) or not
 (`watch-other`), declares `@test-always`, reads files and declares nothing
-(`undeclared-scanner`), imports frontend modules (`imports-frontend`), or none
-of these (`neither`: the grep matched a string only).
+(`undeclared-scanner`), imports a module that reads files which may be
+frontend's (`module-reads`: an `@reads` glob that can reach `frontend/`, or
+no `@reads` at all), loads a computed path itself or through a module it
+reaches (`computed-import`), starts a child process other than git
+(`runs-command`), imports
+frontend modules (`imports-frontend`), or none of these (`neither`: the grep
+matched a string only).
+
+## The parity filter
+
+Type Check's parity run (`ci.yml` → `cross_tree_parity()`) re-runs the
+discovered tests for frontend-only PRs, which skip Backend Tests. It skips the
+`neither` ones: they read no file and load nothing under `frontend/`, so no
+frontend change can alter their result, and Backend Tests runs them on every
+change that can. `parity-filter.mjs` decides that on every run, never from a
+list: it builds each test's graph-shaped entry statically (a walk of relative
+and `@/` imports, type-only ones dropped, with each module's annotations; a
+bare specifier naming the frontend workspace package, read from
+`frontend/package.json`, is the frontend tree, since `npm ci` links
+`node_modules/frontend` to it) and
+classifies it with `cross-tree.mjs`, the classifier of section (d). Vitest's
+own graph would cost Type Check more than the run it saves. Two checks hold
+the static walk to the truth:
+
+- the report builds Vitest's graph and fails when the two disagree about
+  `neither` for any discovered file;
+- `backend/src/__tests__/cross-tree-selection-guard.test.ts` re-derives every
+  skip from the TypeScript AST and fails a skipped test that reads files,
+  loads a module of the frontend tree (relative or by its workspace name),
+  loads a computed path or starts a non-git child process; and fails a
+  backend, tools or workspace-package module that loads the frontend tree
+  (the walk does not enter packages).
+
+If the filter crashes or keeps nothing, the parity run runs the whole
+discovered set and emits a `::warning`: a tool bug never skips everything and
+never fails a PR.
+
+Section (a) applies the filter, so the parity run counts only the files it
+runs.
 
 ## Against the plan's figures (2026-10-16)
 

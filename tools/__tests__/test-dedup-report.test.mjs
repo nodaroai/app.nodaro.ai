@@ -10,8 +10,9 @@ import { createRequire } from "node:module"
 import { copies, duplicateBodies, extractTests, resolveSpecifier } from "../test-dedup/bodies.mjs"
 import { clusterSaving, mergeClusters, parseDurations, perDependency, stemOf } from "../test-dedup/clusters.mjs"
 import { classifyCrossTree } from "../test-dedup/cross-tree.mjs"
-import { discoverByGrep, duplicateExecutions, eventsAllowed, invocationsOf, parityDiscovery, splitJobs, splitSteps } from "../test-dedup/executions.mjs"
-import { projectsOf, renderReport } from "../test-dedup/report.mjs"
+import { discoverByGrep, duplicateExecutions, eventsAllowed, expand, invocationsOf, parityDiscovery, splitJobs, splitSteps } from "../test-dedup/executions.mjs"
+import { parityRun, staticEntry } from "../test-dedup/parity-filter.mjs"
+import { projectsOf, renderReport, staticGraphDisagreement } from "../test-dedup/report.mjs"
 
 const WORKFLOW = `name: CI
 
@@ -105,7 +106,7 @@ test("event conditions: an == pins, a != drops, an || keeps every event", () => 
 test("the parity discovery is read out of the workflow, and its grep emulated over the tree", () => {
   const run = splitSteps(splitJobs(WORKFLOW)[2].text)[0].run
   const d = parityDiscovery(run)
-  assert.deepEqual(d, { function: "cross_tree_parity", cwd: "backend", dir: "src", include: "*.test.ts", patterns: ["frontend/", 'frontend"'] })
+  assert.deepEqual(d, { function: "cross_tree_parity", cwd: "backend", dir: "src", include: "*.test.ts", patterns: ["frontend/", 'frontend"'], filtered: false })
   assert.deepEqual(discoverByGrep(d, tracked.map((p) => ({ path: p, source: SOURCES[p] }))),
     ["backend/src/lib/__tests__/a.test.ts", "backend/src/lib/__tests__/c.test.ts"])
   assert.equal(discoverByGrep({ ...d, patterns: ["front.nd"] }, []), null, "a BRE operator is not emulated")
@@ -286,9 +287,87 @@ test("cross-tree classification follows the graph summary", () => {
     { file: "i.test.ts", deps: ["frontend/src/lib/x.ts"], watches: [], always: null, scanner: false },
     { file: "n.test.ts", deps: ["backend/src/x.ts"], watches: [], always: null, scanner: false },
     { file: "a.test.ts", deps: [], watches: [], always: "walks the tree", scanner: false },
+    { file: "m.test.ts", deps: ["tools/x.mjs"], watches: [], always: null, scanner: false, reads: ["frontend/src/**"] },
+    { file: "u.test.ts", deps: ["tools/x.mjs"], watches: [], always: null, scanner: false, reads: [], undeclaredReader: "tools/x.mjs" },
+    { file: "g.test.ts", deps: ["tools/x.mjs"], watches: [], always: null, scanner: false, reads: ["{frontend,backend}/src/**"] },
+    { file: "b.test.ts", deps: ["backend/src/x.ts"], watches: [], always: null, scanner: false, reads: ["backend/src/lib/x.json"] },
+    { file: "c.test.ts", deps: [], watches: [], always: null, scanner: false, computedImport: true },
   ]
   assert.deepEqual(classifyCrossTree([...graph.map((g) => g.file), "gone.test.ts"], graph).map((x) => x.category),
-    ["watch-frontend", "watch-other", "undeclared-scanner", "imports-frontend", "neither", "always", "not-in-graph"])
+    ["watch-frontend", "watch-other", "undeclared-scanner", "imports-frontend", "neither", "always",
+      "module-reads", "module-reads", "module-reads", "neither", "computed-import", "not-in-graph"])
+})
+
+// The parity filter's static walk, over fixture sources.
+const PARITY_SOURCES = {
+  "backend/src/a/__tests__/neither.test.ts": 'import { x } from "../x.js"\nimport type { T } from "../../../../frontend/src/t.js"\n// see frontend/src/y.ts\nit("x", () => {})\n',
+  "backend/src/a/__tests__/value.test.ts": 'import { T } from "../../../../frontend/src/t.js"\n',
+  "backend/src/a/__tests__/inline-type.test.ts": 'import { type T } from "../../../../frontend/src/t.js"\n',
+  "backend/src/a/__tests__/deep.test.ts": 'import { y } from "@/a/y.js"\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/reader.test.ts": 'readFileSync(join(root, "frontend/src/t.ts"))\n',
+  "backend/src/a/__tests__/helper.test.ts": 'import { load } from "./load.js"\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/load.ts": "export const load = (p) => readFileSync(p)\n",
+  "backend/src/a/__tests__/module-reads.test.ts": 'import { gen } from "../../../../tools/gen.mjs"\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/computed.test.ts": 'const m = await import(path)\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/dynamic.test.ts": 'const m = await import("../x.js")\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/mocked.test.ts": 'vi.mock("../../../../frontend/src/t.js", () => ({}))\n',
+  "backend/src/a/__tests__/watch.test.ts": '// @test-watches backend/src/a/x.json\nreadFileSync("x.json")\nconst s = "frontend/"\n',
+  "backend/src/a/x.ts": '// import { no } from "../../../frontend/src/t.js"\n/* import { no } from "../../../frontend/src/t.js" */\nexport const x = " // "; import("./w.js")\n',
+  "backend/src/a/w.ts": "export const w = 1\n",
+  "backend/src/a/__tests__/trailing.test.ts": 'const x = 1 // import { no } from "../../../../frontend/src/t.js"\n',
+  "backend/src/a/y.ts": 'export { z } from "./z.js"\n',
+  "backend/src/a/z.ts": 'import { t } from "../../../frontend/src/t.js"\nexport const z = t\n',
+  "tools/gen.mjs": "// @reads frontend/src/**\nexport const gen = () => readFileSync(p)\n",
+  "frontend/src/t.ts": "export const t = 1\n",
+  "frontend/package.json": '{ "name": "frontend" }',
+  "backend/src/a/__tests__/bare.test.ts": 'import * as m from "frontend/src/lib/add-node-menu-tab"\n',
+  "backend/src/a/__tests__/shell.test.ts": 'execFileSync("npx", ["tsx", script])\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/git.test.ts": 'const re = /x/\nre.exec(s)\nconst s = "frontend/"\n',
+  "backend/src/a/__tests__/via-computed.test.ts": 'import { p } from "../p.js"\nconst s = "frontend/"\n',
+  "backend/src/a/p.ts": 'export const p = () => import(name)\nexport const q = () => import(\n  "./w.js"\n)\n',
+}
+const parityRead = (p) => PARITY_SOURCES[p] ?? null
+
+test("the parity filter skips only what reads nothing and loads nothing of the other tree", () => {
+  const files = Object.keys(PARITY_SOURCES).filter((f) => f.endsWith(".test.ts"))
+  const { run, skipped, classified } = parityRun(files, parityRead)
+  assert.deepEqual(skipped, ["backend/src/a/__tests__/neither.test.ts", "backend/src/a/__tests__/dynamic.test.ts", "backend/src/a/__tests__/git.test.ts"])
+  assert.equal(run.length + skipped.length, files.length)
+  const category = Object.fromEntries(classified.map((c) => [c.file.split("/").pop(), c.category]))
+  assert.deepEqual(category, {
+    "neither.test.ts": "neither", "value.test.ts": "imports-frontend", "inline-type.test.ts": "imports-frontend",
+    "deep.test.ts": "imports-frontend", "reader.test.ts": "undeclared-scanner", "helper.test.ts": "undeclared-scanner",
+    "module-reads.test.ts": "module-reads", "computed.test.ts": "computed-import", "dynamic.test.ts": "neither",
+    "mocked.test.ts": "imports-frontend", "watch.test.ts": "watch-other",
+    "trailing.test.ts": "imports-frontend", // a comment after code is kept: it can only keep a test
+    "bare.test.ts": "imports-frontend", // the workspace name: node_modules/frontend → ../frontend
+    "shell.test.ts": "runs-command", "git.test.ts": "neither",
+    "via-computed.test.ts": "computed-import", // a computed import in a module it reaches
+  })
+  assert.deepEqual(parityRun(["backend/src/a/__tests__/dynamic.test.ts"], parityRead).skipped, ["backend/src/a/__tests__/dynamic.test.ts"],
+    "a literal on the line after `import(` is not computed")
+  assert.throws(() => parityRun(["backend/src/a/__tests__/neither.test.ts"], (p) => (p === "frontend/package.json" ? null : parityRead(p))),
+    /package\.json not found/, "no manifest, no guessing the workspace name")
+  assert.ok(staticEntry("backend/src/a/__tests__/neither.test.ts", parityRead).deps.includes("backend/src/a/w.ts"),
+    "a string that looks like a comment never hides the import after it")
+  assert.deepEqual(staticEntry("backend/src/a/__tests__/deep.test.ts", parityRead).deps,
+    ["backend/src/a/y.ts", "backend/src/a/z.ts", "frontend/src/t.js"], "re-exports and @/ are followed, transitively; the other tree is never entered")
+})
+
+test("the report fails when the static filter and the graph disagree about `neither`", () => {
+  const graph = [{ file: "a", category: "neither" }, { file: "b", category: "watch-frontend" }, { file: "c", category: "neither" }]
+  const statics = [{ file: "a", category: "neither" }, { file: "b", category: "undeclared-scanner" }, { file: "c", category: "imports-frontend" }]
+  assert.deepEqual(staticGraphDisagreement(graph, statics), ["c: graph neither, static imports-frontend"])
+})
+
+test("a filtered parity discovery runs only what the filter keeps", () => {
+  const filtered = WORKFLOW.replace('            npx vitest run --testTimeout=30000 "\${files[@]}"',
+    '            node ../tools/test-dedup/parity-filter.mjs --out "$RUNNER_TEMP/p.txt" "\${files[@]}" || return 1\n            npx vitest run --testTimeout=30000 "\${files[@]}"')
+  const step = splitSteps(splitJobs(filtered)[2].text)[0]
+  const [inv] = invocationsOf(step, packageDirs)
+  assert.equal(inv.discovery.filtered, true)
+  const sources = { ...SOURCES, "backend/src/lib/__tests__/c.test.ts": 'const p = "frontend"\n', "frontend/package.json": '{ "name": "frontend" }' }
+  assert.deepEqual(expand(inv, { tracked, read: (p) => sources[p] ?? null }), ["backend/src/lib/__tests__/a.test.ts"])
 })
 
 test("the report renders every section from its inputs", () => {
@@ -314,4 +393,5 @@ test("ci.yml still has the parity discovery the report and the cross-tree guard 
   assert.equal(parity.length, 1)
   assert.equal(parity[0].discovery.cwd, "backend")
   assert.ok(parity[0].discovery.patterns.includes("frontend/"))
+  assert.equal(parity[0].discovery.filtered, true, "the parity run narrows its discovery with tools/test-dedup/parity-filter.mjs")
 })

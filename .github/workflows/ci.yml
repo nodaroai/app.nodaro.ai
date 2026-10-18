@@ -1052,7 +1052,10 @@ jobs:
       # 3. parity — the cross-tree parity tests. DISCOVERED, never hand-listed:
       #    any backend test that references a frontend path joins this gate
       #    automatically, so a new cross-tree test cannot quietly land back
-      #    inside the Diff Gate's blind spot.
+      #    inside the Diff Gate's blind spot. Of the discovered tests it skips
+      #    those that read no file and reach nothing under frontend/
+      #    (tools/test-dedup/parity-filter.mjs): they run in Backend Tests,
+      #    and no frontend-only change can alter their result.
       # 4. surfaces — the surface completeness report (`check:surfaces --all`):
       #    for every feature, which surfaces reach it (REST route, OpenAPI,
       #    SDK, CLI, MCP tools, and the docs for each). Here because docs-only
@@ -1087,6 +1090,25 @@ jobs:
             if [ ${#files[@]} -eq 0 ]; then
               echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
               return 1
+            fi
+            # Skip the discovered tests that read no frontend file and load no
+            # frontend module (the grep matched a string only): a frontend
+            # change cannot reach them, and Backend Tests runs them anyway.
+            # Derived on every run, never listed: tools/test-dedup/parity-filter.mjs,
+            # held to Vitest's graph by the duplicate report and guarded by
+            # backend/src/__tests__/cross-tree-selection-guard.test.ts.
+            # A filter that crashes, or keeps nothing, is a tool bug: run the
+            # whole discovered set (never skip all, never fail the PR on it).
+            kept=()
+            if node ../tools/test-dedup/parity-filter.mjs --out "$RUNNER_TEMP/parity-run.txt" "${files[@]}"; then
+              while IFS= read -r f; do kept+=("$f"); done < "$RUNNER_TEMP/parity-run.txt"
+              if [ ${#kept[@]} -eq 0 ]; then
+                echo "::warning::The parity filter kept 0 of ${#files[@]} cross-tree tests — a filter bug; running all of them."
+              else
+                files=("${kept[@]}")
+              fi
+            else
+              echo "::warning::tools/test-dedup/parity-filter.mjs failed — running all ${#files[@]} discovered cross-tree tests."
             fi
             echo "Cross-tree tests (${#files[@]} files):"
             printf '  %s\n' "${files[@]}"

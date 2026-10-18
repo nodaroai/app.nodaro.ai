@@ -5,6 +5,7 @@
 // built-ins only — the tools self-tests run with no npm install.
 import { posix } from "node:path"
 import { TEST_FILE } from "../test-select/test-node.mjs"
+import { parityRun } from "./parity-filter.mjs"
 
 // Top-level jobs, split the way tools/__tests__/ci-preparation-gates.test.mjs
 // does: a two-space-indented key starts a job, the next one ends it.
@@ -61,7 +62,9 @@ export function splitSteps(jobText) {
 
 // The parity run's discovery: `grep -rl -e … <dir> --include='<glob>'` inside
 // the function that hands its matches to `npx vitest run "${files[@]}"`,
-// after a `cd <dir>`. Returns null when ci.yml has no such function.
+// after a `cd <dir>`. `filtered`: the function narrows the matches with
+// parity-filter.mjs before running them. Returns null when ci.yml has no such
+// function.
 export function parityDiscovery(runText) {
   const fn = runText.match(/(\w+)\(\)\s*\{([\s\S]*?)\n\s*\}/g)?.find((f) => /npx vitest run[^\n]*"\$\{files\[@\]\}"/.test(f))
   if (!fn) return null
@@ -69,7 +72,7 @@ export function parityDiscovery(runText) {
   const grep = fn.match(/grep -rl ((?:-e (?:'[^']*'|"[^"]*") )+)(\S+) --include=(?:'([^']+)'|"([^"]+)"|(\S+))/)
   if (!grep) return null
   const patterns = [...grep[1].matchAll(/-e (?:'([^']*)'|"([^"]*)")/g)].map((m) => m[1] ?? m[2])
-  return { function: fn.match(/^(\w+)\(\)/)[1], cwd: cd, dir: grep[2], include: grep[3] ?? grep[4] ?? grep[5], patterns }
+  return { function: fn.match(/^(\w+)\(\)/)[1], cwd: cd, dir: grep[2], include: grep[3] ?? grep[4] ?? grep[5], patterns, filtered: /parity-filter\.mjs/.test(fn) }
 }
 
 // What `grep -rl -e p… <dir> --include=<glob>` run in <cwd> lists, emulated
@@ -115,6 +118,12 @@ export function expand(inv, { tracked, read }) {
   if (inv.kind === "suite") return tests(`${inv.project}/`)
   if (inv.kind === "package") return inv.files ? inv.files.map((f) => posix.join(inv.dir, f)) : tests(`${inv.dir}/`)
   if (inv.kind === "files") return inv.files.map((f) => posix.join(inv.cwd, f))
+  const found = discovered(inv, { tracked, read })
+  return inv.discovery.filtered ? parityRun(found, read).run : found
+}
+
+// The files a discovery's grep matches (before any parity filter).
+export function discovered(inv, { tracked, read }) {
   const base = posix.join(inv.discovery.cwd, inv.discovery.dir) + "/"
   const candidates = tracked.filter((p) => p.startsWith(base)).map((p) => ({ path: p, source: read(p) ?? "" }))
   return discoverByGrep(inv.discovery, candidates) ?? []
