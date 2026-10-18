@@ -472,6 +472,16 @@ export {
 } from "./ugc-template-keep"
 
 export { ancestorsOf, descendantsOf, type WalkEdge } from "./graph-walk"
+// What a continue-from-failed considers and runs: the server's set, and the editor's prediction of it.
+export {
+  fromFailedClosedRunSet,
+  fromFailedConsidered,
+  fromFailedRunSet,
+  isUnfinished,
+  leftUnfinishedBy,
+  type FromFailedNodeState,
+  type FromFailedRun,
+} from "./continue-from-failed"
 export {
   USE_CASE_FEE_STATIC_CREDITS,
   USE_CASE_NODE_TYPES,

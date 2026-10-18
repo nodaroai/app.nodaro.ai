@@ -993,7 +993,7 @@ export function registerWorkflows({
             .array(z.string())
             .optional()
             .describe(
-              "Run only these nodes. With from_failed, the nodes to consider (default every node). With continue_from_execution_id alone, the nodes the continuation runs (required then).",
+              "Run only these nodes. With from_failed, the nodes to consider. With continue_from_execution_id alone, the nodes the continuation runs (required then).",
             ),
         },
         outputSchema: {
@@ -1028,7 +1028,7 @@ export function registerWorkflows({
         // An empty list never stands for "every node": a list that names
         // nothing is a mistake, refused in every mode (decided 2026-10-18).
         if (args.node_ids && args.node_ids.length === 0) {
-          return err("node_ids names no node: list the nodes to run, or leave node_ids out to run the whole workflow (with from_failed, every node it did not complete).")
+          return err("node_ids names no node: list the nodes to run, or leave node_ids out to run the whole workflow (with from_failed, what it did not complete of the nodes its chain was first started on, plus what was left failed).")
         }
         if (args.from_failed === true && !args.continue_from_execution_id) {
           return err("from_failed needs continue_from_execution_id: the execution id of the run that failed.")

@@ -20,6 +20,7 @@ const mockReset = vi.fn()
 const mockClearListRows = vi.fn()
 type TestNode = { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }
 let mockNodes: TestNode[] = []
+let mockEdges: Array<{ id: string; source: string; target: string }> = []
 let mockDirty = false
 
 vi.mock("sonner", () => ({
@@ -34,7 +35,7 @@ vi.mock("@/lib/i18n", () => ({ tx: (key: string) => key }))
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {
     getState: () => ({
-      nodes: mockNodes, edges: [], isDirty: mockDirty, workflowId: "wf-1", isReadOnly: false,
+      nodes: mockNodes, edges: mockEdges, isDirty: mockDirty, workflowId: "wf-1", isReadOnly: false,
       markNodesStatus: (...a: unknown[]) => mockMarkNodesStatus(...a),
     }),
   },
@@ -59,7 +60,7 @@ vi.mock("../run-handlers", () => ({
   resetNodeAccumulation: (...a: unknown[]) => mockReset(...a),
   streamBackendExecution: (...a: unknown[]) => mockStream(...a),
 }))
-vi.mock("../execution-graph", () => ({ collapseExpandedClones: () => ({ nodes: mockNodes, edges: [] }) }))
+vi.mock("../execution-graph", () => ({ collapseExpandedClones: () => ({ nodes: mockNodes, edges: mockEdges }) }))
 vi.mock("../execute-node", () => ({ rejectAllManualEdits: vi.fn() }))
 vi.mock("../video-link-run-gate", () => ({ ensureVideoLinksBeforeRun: vi.fn().mockResolvedValue(true) }))
 vi.mock("../run-from-here-set", () => ({ liveExecutable: (nodes: TestNode[]) => nodes.filter((x) => x.type !== "text") }))
@@ -91,6 +92,7 @@ const lastInfoAction = () => (mockToastInfo.mock.calls.at(-1)?.[1] as { action?:
 beforeEach(() => {
   vi.clearAllMocks()
   mockNodes = NODES
+  mockEdges = []
   mockDirty = false
   mockActiveStream.mockReturnValue(false)
   mockConfirm.mockResolvedValue(true)
@@ -108,8 +110,36 @@ const expectNodeDataUntouched = () => {
 }
 
 describe("expectedFromFailed", () => {
-  it("is every executable node the failed run did not complete", () => {
-    expect(expectedFromFailed(NODES as never, FAILED.nodeStates).map((x) => x.id)).toEqual(["vid", "cut"])
+  const ids = (nodes: TestNode[]) => nodes.map((x) => x.id)
+  it("with no scope (a run of every node): every executable node the failed run did not complete", () => {
+    expect(ids(expectedFromFailed(NODES as never, [], { scope: null, states: FAILED.nodeStates }) as never)).toEqual(["vid", "cut"])
+  })
+
+  it("with a scope: of those nodes plus what the run left failed or held back — never a node added since outside them", () => {
+    // Run from here on [vid, cut] failed at cut; m was added after it, downstream of cut.
+    const nodes = [...NODES, n("m", "add-captions")]
+    const edges = [{ id: "e", source: "cut", target: "m" }]
+    const states = { img: { status: "completed" }, vid: { status: "completed" }, cut: { status: "failed" } }
+    expect(ids(expectedFromFailed(nodes as never, edges as never, { scope: ["vid", "cut"], states }) as never)).toEqual(["cut"])
+    // A failure outside the scope is retried; a node a router skipped is not.
+    const wider = { ...states, m: { status: "failed" }, x: { status: "skipped" } }
+    expect(ids(expectedFromFailed([...nodes, n("x", "add-captions")] as never, edges as never, { scope: ["vid", "cut"], states: wider }) as never)).toEqual(["cut", "m"])
+  })
+
+  it("closes over what the considered nodes need upstream that the run did not complete", () => {
+    const edges = [{ id: "e1", source: "img", target: "vid" }, { id: "e2", source: "vid", target: "cut" }]
+    const states = { img: { status: "failed" } }
+    // Scope [cut] alone: cut runs, and so do vid and img above it (neither completed).
+    expect(ids(expectedFromFailed(NODES as never, edges as never, { scope: ["cut"], states }) as never)).toEqual(["img", "vid", "cut"])
+  })
+
+  it("built on a newer continuation: what either run left unfinished counts, read against what the newer one completed", () => {
+    const states = { img: { status: "completed" }, vid: { status: "failed" }, cut: { status: "completed" } }
+    // The newer one ran only cut and handed vid on, marked as unfinished.
+    const base = { img: { status: "completed" }, vid: { status: "skipped", carriedUnfinished: true }, cut: { status: "completed" } }
+    expect(ids(expectedFromFailed(NODES as never, [], { scope: ["cut"], states }, base) as never)).toEqual(["vid"])
+    // Unmarked (a router skipped it there), the run asked for still left it failed.
+    expect(ids(expectedFromFailed(NODES as never, [], { scope: ["cut"], states }, { ...base, vid: { status: "skipped" } }) as never)).toEqual(["vid"])
   })
 })
 
@@ -306,6 +336,49 @@ describe("Continue from failed", () => {
     expect(mockToastError).toHaveBeenCalledWith("run.failedToStartExecution", { description: "Not found" })
     expect(mockMarkNodesStatus).toHaveBeenLastCalledWith(["vid", "cut"], undefined)
     expectNodeDataUntouched()
+  })
+})
+
+describe("Continue from failed of a run started on named nodes (nodeScope)", () => {
+  // Run from here on [vid, cut] failed at cut; m was added since, downstream of
+  // cut, and a List is fed by m. The server runs only cut.
+  const list = n("rows", "list", { columns: [{ id: "c0", handleId: "h0", connectedSourceId: "m" }], rows: [["x"]] })
+  beforeEach(() => {
+    mockNodes = [...NODES, n("m", "add-captions"), list]
+    mockEdges = [{ id: "e", source: "cut", target: "m" }]
+    mockGetExecution.mockResolvedValue({
+      ...FAILED,
+      nodeScope: ["vid", "cut"],
+      nodeStates: { img: { status: "completed" }, vid: { status: "completed" }, cut: { status: "failed" } },
+    })
+  })
+
+  it("prices, marks and clears only what the server runs: m and the List it feeds are left alone", async () => {
+    await handleContinueFailedRun("exec-1", deps())
+    expect((mockConfirm.mock.calls[0]![1] as TestNode[]).map((x) => x.id)).toEqual(["cut"])
+    expect(mockMarkNodesStatus).toHaveBeenCalledWith(["cut"], "pending")
+    expect(resetIds()).toEqual(["cut"])
+    // No List is cleared: nothing the run executes feeds one.
+    expect(mockClearListRows).toHaveBeenCalledWith([])
+  })
+
+  it("an older server that sends no nodeScope: every node, as it then ran", async () => {
+    mockGetExecution.mockResolvedValue({ ...FAILED, nodeStates: { img: { status: "completed" }, vid: { status: "completed" }, cut: { status: "failed" } } })
+    await handleContinueFailedRun("exec-1", deps())
+    expect((mockConfirm.mock.calls[0]![1] as TestNode[]).map((x) => x.id)).toEqual(expect.arrayContaining(["cut", "m"]))
+    expect((mockClearListRows.mock.calls[0]![0] as TestNode[]).map((x) => x.id)).toEqual(["rows"])
+  })
+
+  it("built on a newer continuation: the run asked for's failures still count against what that one completed", async () => {
+    mockRunWorkflow.mockResolvedValue({ executionId: "exec-2", continuedFrom: "exec-newer" })
+    mockGetExecution.mockImplementation(async (id: string) =>
+      id === "exec-newer"
+        ? { id, workflowId: "wf-1", status: "completed", nodeStates: { img: { status: "completed" }, vid: { status: "completed" }, cut: { status: "skipped", carriedUnfinished: true } } }
+        : { ...FAILED, nodeScope: ["vid", "cut"], nodeStates: { img: { status: "completed" }, vid: { status: "completed" }, cut: { status: "failed" } } },
+    )
+    await handleContinueFailedRun("exec-1", deps())
+    expect(resetIds()).toEqual(["cut"])
+    expect(mockClearListRows).toHaveBeenCalledWith([])
   })
 })
 

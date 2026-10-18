@@ -539,7 +539,7 @@ registers an async task for progress tracking.
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
 | `continue_from_execution_id` | UUID string | Optional; your own run of this workflow to continue: a **failed** one with `from_failed: true` (from where it stopped), or a **completed** one with `node_ids` (only those nodes run; every other node hands on that run's outputs). One of the two is required |
 | `from_failed` | boolean | With `continue_from_execution_id`: run only the nodes that run did not complete |
-| `node_ids` | string[] | Optional; run only these nodes. With `from_failed`, the nodes to consider (default every node); with `continue_from_execution_id` alone, the nodes the continuation runs. An empty list is refused in every mode: leave it out instead. A continuation its payer cannot cover (of a completed run, or `from_failed`, priced on what it still runs) is refused (`insufficient_credits`) before it starts |
+| `node_ids` | string[] | Optional; run only these nodes. With `from_failed`, the nodes to consider (default: the nodes the run's chain was first started on, every node for a run of every node, plus every node left failed or held back — see [Continuing a failed run](../api-integration.md#continuing-a-failed-run)); with `continue_from_execution_id` alone, the nodes the continuation runs. An empty list is refused in every mode: leave it out instead. A continuation its payer cannot cover (of a completed run, or `from_failed`, priced on what it still runs) is refused (`insufficient_credits`) before it starts |
 
 **Response:** `{ executionId: "...", name: "..." }` — read the run with
 [`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
@@ -552,8 +552,14 @@ and widget rendering will show live progress inline.
 **Continuing a failed run.** A run of a saved workflow that failed can be
 continued from where it stopped: `run_workflow({ workflow_id,
 continue_from_execution_id: "<the failed run>", from_failed: true })`. It runs
-every node that run did not complete; the ones it completed hand on their
-outputs and are never run or charged again. That is per node: a node that failed
+every node that run did not complete, of the nodes it was started on: a run
+started on named nodes (the editor's Run selected, a Render final, or `nodeIds`
+over the API) is continued on those, a run of every node on every node, and a
+continuation of a continuation keeps those of the first run of its chain. Every
+node left failed or held back — by the run, by a newer continuation it is built
+on, or by an earlier run of its chain — is added to them, so a failure outside
+them is always retried. The ones it completed
+hand on their outputs and are never run or charged again. That is per node: a node that failed
 runs again in full, every list item included (a few nodes reuse an identical
 item they already made). `get_app_run` and `diagnose_run`
 carry this call as `resumeHint` on a failed run `run_workflow` can continue: of

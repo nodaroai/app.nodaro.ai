@@ -854,7 +854,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           appVersionId,
           nodeIds: job.data.nodeIds,
           inlineGraphHash,
-        })
+        }, job.data.reopenHead ? { reopen: job.data.reopenHead } : {})
         if (headRefusal || !head) {
           console.warn(
             `[continuation] execution ${executionId} REFUSED — ${headRefusal} (seeded from ${job.data.seedFromExecutionId}, continuing ${source.id})`,

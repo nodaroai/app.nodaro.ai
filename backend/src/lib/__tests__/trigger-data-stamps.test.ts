@@ -115,7 +115,9 @@ const WRITERS: Record<string, { readonly kind: "stamp" | "fixed" | "caller"; rea
   "routes/api-tokens.ts": { kind: "fixed", values: ["{ apiTokenId: resolved.id }"] },
   "routes/app-runner.ts": { kind: "stamp", values: ["appRunStamp(runId)"] },
   "routes/app-run-resume.ts": { kind: "stamp", values: ["appRunResumeStamp(runId"] },
-  "routes/workflow-execution.ts": { kind: "stamp", values: ["continueFromFailedStamp(lineageStamp) } : {})"] },
+  // A continue-from-failed's lineage stamp, or a run's node selection (`nodeSelectionData`, the ids
+  // the route itself was sent, restricted to the workflow's nodes): both platform-built, never caller data.
+  "routes/workflow-execution.ts": { kind: "stamp", values: ["continueFromFailedStamp(lineageStamp) }", "runSelection }"] },
   "services/app-execution.ts": { kind: "stamp", values: ["appRunStamp(appRunId)"] },
   "services/app-render-final.ts": { kind: "stamp", values: ["appRenderFinalStamp({"] },
 }

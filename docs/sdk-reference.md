@@ -806,9 +806,17 @@ cannot cover the nodes it runs — with or without `continueMode` — throws
 
 `continueMode: "from-failed"` continues a run that FAILED from where it stopped
 (`continueFromExecutionId` is your own failed run of the workflow): `nodeIds` is
-optional (every node when left out), and the run executes only the nodes that
-run did not complete — what it completed is handed on, never run or charged
-again. That is per node: a node that failed runs again in full, every list item
+optional — left out, the nodes the run was started on (a run started on named
+`nodeIds` is continued on those, a run of every node on every node, and a
+continuation of a continuation keeps those of the first run of its chain),
+plus every node left failed or held back (by the run, by a newer continuation it
+is built on, or by an earlier run of its chain). `nodeIds` you send replace
+those nodes, and the run is built on the chain's newest continuation when it
+failed or is done (one held at a Preview review still throws
+`continuation_preview_pending`, below). `client.executions.get(id)` names the nodes the chain's first run was
+started on in `nodeScope` (`null`: every node). The run executes only the nodes
+that run did not complete — what it completed is handed on, never run or
+charged again. That is per node: a node that failed runs again in full, every list item
 included (a few nodes reuse an identical item they already made). Not combinable
 with `renderFinal`.
 

@@ -954,7 +954,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
     mocks.loadSource.mockResolvedValue(source({ nodeStates: {} }))
     const res = await run({ ...renderFinal, continueFromExecutionId: PRIOR })
     expect(res.statusCode).toBe(202)
-    expect(mocks.inserts[0]!.trigger_data).toBeUndefined()
+    // No lineage stamp: only the nodes it was started on.
+    expect(mocks.inserts[0]!.trigger_data).toEqual({ nodeSelection: ["cut", "cap"] })
     expect((mocks.queueAdd.mock.calls[0]![1] as Record<string, unknown>).continueMode).toBeUndefined()
   })
 })

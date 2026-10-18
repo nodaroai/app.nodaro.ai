@@ -8003,6 +8003,12 @@ export interface WorkflowExecution {
   mcpClient?: string | null
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
+  /**
+   * What a continue-from-failed of this run sent no nodeIds considers, besides
+   * what it left failed or held back: the nodes the first run of its chain was
+   * started on. null: every node. Absent from an older server (= every node).
+   */
+  nodeScope?: string[] | null
   totalNodes: number
   completedNodes: number
   failedNodes: number

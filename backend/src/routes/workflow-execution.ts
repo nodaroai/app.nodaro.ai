@@ -65,13 +65,17 @@ import {
   loadContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { runsInALevel } from "../services/workflow-engine/execution-graph.js"
-import { isUseCaseNodeType, usecaseContinuePath } from "@nodaro/render-rules"
+import { fromFailedConsidered, isUseCaseNodeType, usecaseContinuePath } from "@nodaro/render-rules"
 import { heldFinalRun, type HeldFinalRun } from "../lib/continuation-held-final.js"
 import {
   carriedHolds,
   continuationPointOf,
   continueFromFailedStamp,
   lineageRootOf,
+  lineageScopeOf,
+  newestGeneration,
+  nodeScopeOfRow,
+  nodeSelectionData,
   previewPendingMessage,
   subsetJoinsLineage,
   type ContinueFromFailedStamp,
@@ -96,7 +100,11 @@ openApiRegistry.registerPath({
                 .openapi({
                   description:
                     "Optional subset of node IDs to execute. If omitted, the full workflow is executed. " +
-                    "With continueMode \"from-failed\", the nodes to consider (default: every node); the run executes only those the failed run did not complete.",
+                    "With continueMode \"from-failed\", the nodes to consider (default: the nodes the run's chain was first started on — its " +
+                    "nodeIds, every node when it was sent none — plus every node the failed run left failed or held back); the run executes " +
+                    "only those the failed run did not complete. Sent, they replace that default, and the run is built on the chain's newest " +
+                    "continuation when it failed or is done (one held at a Preview review still answers continuation_preview_pending), " +
+                    "running the nodes they name that it left.",
                 }),
               continueFromExecutionId: z
                 .string()
@@ -115,13 +123,16 @@ openApiRegistry.registerPath({
                 .openapi({
                   description:
                     "\"from-failed\": continue a FAILED run from where it stopped. Requires continueFromExecutionId (the run that failed); " +
-                    "not combinable with renderFinal. Runs every node that run did not complete (of nodeIds, default every node) and hands " +
+                    "not combinable with renderFinal. Runs every node that run did not complete (of nodeIds; by default of the nodes the " +
+                    "first run of its chain was started on, every node when that run was sent no nodeIds, plus every node left failed or held " +
+                    "back by it, by the run it builds on, or by an earlier run of its chain) and hands " +
                     "on what it did complete, never dispatched or billed again (a node that failed runs again in full; a use-case node resumes " +
                     "its failed attempt). A run its payer cannot cover, priced on what is left, answers 402 insufficient_credits before " +
                     "any execution exists. When a later " +
                     "continuation of it completed only part of what it left, the run builds on the newest such one: it is seeded from that " +
                     "execution and runs only what is still left (continuedFrom in the answer names it). A run a later " +
-                    "continuation supersedes answers 409 continuation_superseded naming it (supersededBy.status \"failed\": continue that one; " +
+                    "continuation supersedes answers 409 continuation_superseded naming it (supersededBy.status \"failed\": continue that one — " +
+                    "sent nodeIds, the run is built on it instead; " +
                     "\"completed\": it ran all this run left, so the work is done and its results are there). When the newest later " +
                     "continuation completed by stopping at a Preview review, it answers 409 continuation_preview_pending naming it " +
                     "(executionId), its renders (renderNodeIds) and its review-on use-case nodes (reviewNodeIds), with the run that " +
@@ -481,6 +492,10 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // expanded loop clone is no node of the graph the run executes); an empty
     // list reads as none. A named id that is no node of the workflow is
     // dropped: it would run nothing, and complete a run that redid nothing.
+    // Sent none, it considers the lineage's node scope (and what was left
+    // unfinished) instead, once the run it continues is read (below); every
+    // node stands in until then, for the checks that only ask that the set is
+    // not empty.
     const graphOrder: string[] = filterCloneNodes(
       ((workflow.nodes ?? []) as Array<{ id: string; type?: string; data?: Record<string, unknown> }>).map((n) => ({
         ...n,
@@ -489,8 +504,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })),
       [] as Array<{ source: string; target: string }>,
     ).nodes.map((n) => n.id)
+    const nodeIdsSent = nodeIds !== undefined && nodeIds.length > 0
     if (continueFromFailed) {
-      if (nodeIds === undefined || nodeIds.length === 0) {
+      if (!nodeIds || !nodeIdsSent) {
         nodeIds = graphOrder
       } else {
         const known = new Set(graphOrder)
@@ -550,6 +566,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const reviewerPresent = req.authKind === "jwt" && !mcpClient && body.reviewer === "editor"
     let continueFromExecutionId: string | undefined
     let fromFailedStamp: ContinueFromFailedStamp | undefined
+    // Explicit nodeIds built the run on a newest generation that is done or
+    // failed (`continuationHeadRefusal`'s `reopen`): the worker asks the same.
+    let reopenHead: "done" | "failed" | undefined
     // A subset continuation (a Render final, or a run of named nodes) of the
     // newest generation of a continue-from-failed lineage joins it (lib/continue-from-failed-lineage.ts).
     let subsetStamp: ContinueFromFailedStamp | undefined
@@ -557,6 +576,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     let subsetCarried: ReturnType<typeof carriedHolds> = { previewRenders: [], reviewHolds: [] }
     let coversAllLeft = false
     let effectiveOverrides = inputOverrides
+    let lineageScope: readonly string[] | null = null
     let continuationRenders: ((nodes: readonly SimpleNode[]) => SavedRenderStampReader) | undefined
     let continuationPricing: ContinuationPricing | undefined
     if (body.continueFromExecutionId !== undefined && body.continueFromExecutionId !== null) {
@@ -586,9 +606,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         ),
       )
       const isWork = (id: string) => runsInALevel(currentTypeOf.get(id) ?? "")
-      /** Every node of work `from` did not complete is in `runs`. */
-      const takesOnAllLeftBy = (from: Parameters<typeof fromFailedClosedRunSet>[3], runs: ReadonlySet<string>) =>
-        fromFailedClosedRunSet(graphOrder, graphOrder, runGraph, from).filter(isWork).every((id) => runs.has(id))
+      /** Every node of work `from` did not complete OF `considered` (and what they need upstream) is in `runs`. */
+      const takesOnAllLeftBy = (from: Parameters<typeof fromFailedClosedRunSet>[3], considered: readonly string[], runs: ReadonlySet<string>) =>
+        fromFailedClosedRunSet(graphOrder, considered, runGraph, from).filter(isWork).every((id) => runs.has(id))
       const requested = await loadContinuationSource(parsedContinue.data, sourceOptions)
       // Asked of the set REQUESTED, before it is narrowed by the states: someone
       // else's execution must read as missing whatever it holds.
@@ -608,6 +628,18 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // from: the one asked for, or — continuing from a failure — the newer
       // generation of its lineage it builds on.
       let source = requested!
+      // The lineage's node scope (lib/continue-from-failed-lineage.ts): what
+      // its root was started on, carried by every generation; null = every
+      // node. A run sent no nodeIds considers it PLUS what the runs it
+      // continues and builds on left unfinished (a failure outside the scope —
+      // in a wider hop, or the run in `next` — is always retried), and "all
+      // that was left" is judged against that same set, of the nodes still
+      // on the workflow.
+      lineageScope = lineageScopeOf(requested!)
+      const inScope = lineageScope !== null
+      // One rule with the editor's Continue from failed (`@nodaro/render-rules`).
+      const consideredOf = (...runs: ReadonlyArray<Parameters<typeof fromFailedConsidered>[2][number]>): string[] =>
+        fromFailedConsidered(graphOrder, lineageScope, runs)
       if (continueFromFailed) {
         // The lineage's newest generation decides (lib/continue-from-failed-lineage.ts):
         // a later one that failed, or completed all that was left, supersedes
@@ -619,12 +651,49 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           return sendInternalError(reply, req, err, "Failed to check the run's later continuations")
         }
         if (point.kind === "superseded") {
-          const superseded = supersededReply(point.by)
-          return reply.status(CONTINUATION_REFUSAL_STATUS[CONTINUATION_SUPERSEDED]).send({
-            error: { code: CONTINUATION_SUPERSEDED, message: superseded.message },
-            executionId: superseded.executionId,
-            supersededBy: { executionId: superseded.executionId, status: superseded.status },
-          })
+          // Explicit nodeIds always win: the run is built on the lineage's
+          // newest generation whatever it holds — seeded from it, so nothing it
+          // completed runs or is charged again. One that is done (judged
+          // against the default set, never against them) is built on when a
+          // node they name, or one it needs upstream, is left there; one that
+          // failed always is (naming only nodes it completed is then "nothing
+          // left"). The worker is told which (`reopenHead`): it cannot tell
+          // sent nodeIds from the default set.
+          let reopened: Awaited<ReturnType<typeof loadContinuationSource>> = null
+          const reopen = point.by.status === "completed" ? ("done" as const) : point.by.status === "failed" ? ("failed" as const) : null
+          if (nodeIdsSent && reopen) {
+            // A run asked for that never started names, when the newest is a
+            // partial one, the failed run it came from — an OLDER run: seeding
+            // from it would run again what the newest completed. Only the
+            // newest is built on.
+            let isNewest = !point.by.neverStarted
+            if (!isNewest) {
+              try {
+                const newest = await newestGeneration({ userId: req.userId, workflowId, root: lineageRootOf(requested!) })
+                isNewest = newest?.id === point.by.executionId
+              } catch (err) {
+                return sendInternalError(reply, req, err, "Failed to check the run's later continuations")
+              }
+            }
+            const head = isNewest ? await loadContinuationSource(point.by.executionId, sourceOptions) : null
+            if (
+              head &&
+              !continuationHeadRefusal(head, requested!, continuationRun, { reopen }) &&
+              (reopen === "failed" || fromFailedClosedRunSet(graphOrder, nodeIds!, runGraph, head).some(isWork))
+            ) {
+              reopened = head
+              reopenHead = reopen
+            }
+          }
+          if (!reopened) {
+            const superseded = supersededReply(point.by)
+            return reply.status(CONTINUATION_REFUSAL_STATUS[CONTINUATION_SUPERSEDED]).send({
+              error: { code: CONTINUATION_SUPERSEDED, message: superseded.message },
+              executionId: superseded.executionId,
+              supersededBy: { executionId: superseded.executionId, status: superseded.status },
+            })
+          }
+          source = reopened
         }
         // The newest generation stopped at a Preview review: continuing would
         // stop at the same Preview again. The run that finishes what holds it
@@ -652,7 +721,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             ...(next ? { next } : {}),
           })
         }
-        if (point.seedFrom !== requested!.id) {
+        if (point.kind === "continue" && point.seedFrom !== requested!.id) {
           const head = await loadContinuationSource(point.seedFrom, sourceOptions)
           const headRefusal = continuationHeadRefusal(head, requested!, continuationRun)
           if (headRefusal || !head) {
@@ -664,6 +733,24 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             )
           }
           source = head
+        }
+        // Sent no nodeIds, the run considers the lineage's scope and what was
+        // left unfinished — not every node: a run started on named nodes is
+        // continued on those. A set none of whose nodes is still on the
+        // workflow leaves nothing to run.
+        const considered = consideredOf(requested!, source)
+        if (!nodeIdsSent && inScope) {
+          if (considered.length === 0) {
+            return reply.status(409).send({
+              error: {
+                code: CONTINUATION_SUBSET_REQUIRED,
+                message:
+                  "None of the nodes the first run of this chain was started on is still a node of this workflow, so there is " +
+                  "nothing to continue by default: name the nodes to run, or start a new run.",
+              },
+            })
+          }
+          nodeIds = considered
         }
         // What that run did not complete, closed over the incomplete nodes
         // it needs upstream — the set every check below judges and the
@@ -682,9 +769,15 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         // container left out runs nothing either way), from the set sent to
         // the orchestrator. A run that stops at a Preview review is never
         // all: it is decided below, once its overrides and seeds are known.
-        coversAllLeft = takesOnAllLeftBy(source, new Set(remaining))
+        coversAllLeft = takesOnAllLeftBy(source, considered, new Set(remaining))
         nodeIds = remaining
-        fromFailedStamp = { from: requested!.id, root: lineageRootOf(requested!), seededFrom: source.id, all: false }
+        fromFailedStamp = {
+          from: requested!.id,
+          root: lineageRootOf(requested!),
+          seededFrom: source.id,
+          all: false,
+          ...(lineageScope ? { scope: lineageScope } : {}),
+        }
       } else if (requested!.continueFromFailed) {
         // A subset continuation of a generation of a lineage joins it when
         // that generation is the newest. Its `all` (decided below, with its
@@ -703,10 +796,17 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             source = read
           }
           subsetGenerationDone = requested!.continueFromFailed.all
-          coversAllLeft = takesOnAllLeftBy(source, new Set(nodeIds))
+          coversAllLeft = takesOnAllLeftBy(source, consideredOf(requested!, source), new Set(nodeIds))
           // What still holds that generation and this run does not execute stays held.
           subsetCarried = carriedHolds(requested!.continueFromFailed, new Set(nodeIds))
-          subsetStamp = { from: requested!.id, root: requested!.continueFromFailed.root, seededFrom: requested!.id, all: false, via: "subset" }
+          subsetStamp = {
+            from: requested!.id,
+            root: requested!.continueFromFailed.root,
+            seededFrom: requested!.id,
+            all: false,
+            via: "subset",
+            ...(lineageScope ? { scope: lineageScope } : {}),
+          }
         }
       }
       continueFromExecutionId = parsedContinue.data
@@ -936,6 +1036,13 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       }
     }
 
+    // The nodes this run was started on, when it was started on named nodes
+    // (sent, or a Render final's) — those still on the workflow, each once.
+    const graphIds = new Set(graphOrder)
+    const selected = nodeIds ? nodeIds.filter((id) => graphIds.has(id)) : []
+    const selection = nodeSelectionData(selected)
+    const runSelection = selection.nodeSelection ? selection : null
+
     let execution: { id: string }
     let dedupHit = false
     try {
@@ -948,8 +1055,14 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           trigger_type: mcpClient ? "mcp" : "manual",
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
           // A generation of a continue-from-failed lineage names the run it
-          // continues and its lineage.
-          ...(lineageStamp ? { trigger_data: continueFromFailedStamp(lineageStamp) } : {}),
+          // continues and its lineage (and carries the lineage's node scope);
+          // any other run started on named nodes records them, the scope of a
+          // later continue-from-failed of it.
+          ...(lineageStamp
+            ? { trigger_data: continueFromFailedStamp(lineageStamp) }
+            : runSelection
+              ? { trigger_data: runSelection }
+              : {}),
           ...billingPairColumns(billingContext),
         },
         idempotencyKey,
@@ -1000,7 +1113,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       ...(fromFailedStamp ? { continueMode: "from-failed" as const } : {}),
       // Built on a newer generation of the failed run's lineage: seeded from it.
       ...(fromFailedStamp?.seededFrom && fromFailedStamp.seededFrom !== fromFailedStamp.from
-        ? { seedFromExecutionId: fromFailedStamp.seededFrom }
+        ? { seedFromExecutionId: fromFailedStamp.seededFrom, ...(reopenHead ? { reopenHead } : {}) }
         : {}),
     }
 
@@ -1752,6 +1865,10 @@ function toExecutionResponse(row: Record<string, unknown>) {
     // trim the hot-path detail/poll response. The per-node `inputs` blobs are
     // also stripped — pollers read `node_states[].output`, never `inputs`.
     nodeStates: stripNodeStateInputs(row.node_states),
+    // What a continue-from-failed of this run sent no nodeIds considers,
+    // besides what it left unfinished (lib/continue-from-failed-lineage.ts):
+    // the editor predicts the server's set by it. null: every node.
+    nodeScope: nodeScopeOfRow(row),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,

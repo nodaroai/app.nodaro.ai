@@ -37,12 +37,73 @@ import {
   continueFromFailedStamp,
   continueFromFailedStampOf,
   lineageRootOf,
+  leftUnfinishedBy,
+  nodeScopeOfRow,
+  lineageScopeOf,
+  nodeSelectionData,
+  nodeSelectionOf,
 } from "../continue-from-failed-lineage.js"
 
 beforeEach(() => {
   db.calls.length = 0
   db.row = null
   db.error = null
+})
+
+describe("a run's node selection and its lineage's node scope", () => {
+  it("a selection is written each id once, in order, and read back; none is no key at all", () => {
+    expect(nodeSelectionData(["b", "a", "b", ""])).toEqual({ nodeSelection: ["b", "a"] })
+    expect(nodeSelectionData([])).toEqual({})
+    expect(nodeSelectionOf(nodeSelectionData(["b", "a"]))).toEqual(["b", "a"])
+    expect(nodeSelectionOf({ nodeSelection: [] })).toBeNull()
+    expect(nodeSelectionOf({ nodeSelection: "a" })).toBeNull()
+    expect(nodeSelectionOf({ continueFromFailed: { from: "x", root: "x" } })).toBeNull()
+    expect(nodeSelectionOf(null)).toBeNull()
+  })
+
+  it("the stamp carries the scope through a write and a read; an empty one is left out", () => {
+    const data = continueFromFailedStamp({ from: "exec-b", root: "exec-a", all: false, scope: ["a", "b"] })
+    expect(continueFromFailedStampOf(data)).toEqual({ from: "exec-b", root: "exec-a", all: false, scope: ["a", "b"] })
+    expect(continueFromFailedStamp({ from: "exec-b", root: "exec-a", all: false, scope: [] }).continueFromFailed).not.toHaveProperty("scope")
+  })
+
+  it("a generation's scope is its stamp's, never its own selection; a run of no lineage is its own root", () => {
+    expect(lineageScopeOf({ continueFromFailed: { from: "x", root: "x", all: false, scope: ["a"] }, nodeSelection: ["b"] })).toEqual(["a"])
+    // A generation whose root recorded none: every node, whatever the hop itself was sent.
+    expect(lineageScopeOf({ continueFromFailed: { from: "x", root: "x", all: false }, nodeSelection: ["b"] })).toBeNull()
+    expect(lineageScopeOf({ continueFromFailed: null, nodeSelection: ["b"] })).toEqual(["b"])
+    expect(lineageScopeOf({ continueFromFailed: null, nodeSelection: null })).toBeNull()
+    expect(lineageScopeOf({})).toBeNull()
+  })
+
+  it("a stored row's node scope (what GET /v1/workflow-executions/:id hands the editor): trusted rows only", () => {
+    const stamp = { continueFromFailed: { from: "r", root: "r", all: false, scope: ["a", "b"] } }
+    // A generation carries its root's scope, never a selection of its own.
+    expect(nodeScopeOfRow({ trigger_type: "manual", trigger_data: { ...stamp, nodeSelection: ["z"] } })).toEqual(["a", "b"])
+    // A root started on named nodes: its selection.
+    expect(nodeScopeOfRow({ trigger_type: "mcp", trigger_data: { nodeSelection: ["a"] } })).toEqual(["a"])
+    // A run of every node, or one from before the record: every node.
+    expect(nodeScopeOfRow({ trigger_type: "manual", trigger_data: null })).toBeNull()
+    expect(nodeScopeOfRow({ trigger_type: "manual", trigger_data: { continueFromFailed: { from: "r", root: "r", all: false } } })).toBeNull()
+    // A trigger lane's payload is its caller's: never read.
+    expect(nodeScopeOfRow({ trigger_type: "webhook", trigger_data: { nodeSelection: ["a"] } })).toBeNull()
+    expect(nodeScopeOfRow({ trigger_type: "schedule", trigger_data: stamp })).toBeNull()
+  })
+
+  it("what a run left unfinished: what failed, what it held back (pending or running), and what it was handed on unfinished — never another skip, nor a node with no state", () => {
+    const nodeStates: Record<string, { status: string; carriedUnfinished?: true; skipReason?: string }> = {
+      a: { status: "completed" },
+      b: { status: "failed" },
+      c: { status: "pending" },
+      d: { status: "running" },
+      e: { status: "skipped" },
+      f: { status: "skipped", carriedUnfinished: true },
+      g: { status: "skipped", skipReason: "empty_input" },
+    }
+    expect(leftUnfinishedBy({ nodeStates })).toEqual(["b", "c", "d", "f"])
+    expect(leftUnfinishedBy({})).toEqual([])
+    expect(leftUnfinishedBy({ nodeStates: null })).toEqual([])
+  })
 })
 
 describe("continue-from-failed lineage stamp", () => {

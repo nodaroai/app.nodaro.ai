@@ -702,6 +702,85 @@ describe("continue-from-failed of a saved workflow's run", () => {
       expect(ran()).toEqual([])
       expect(failedWrite()?.error_message).toBe(code)
     })
+
+    // Explicit nodeIds always win (fix round 2): the route builds on a newest
+    // generation a default run never is — one that is done, or one that
+    // failed — and says so on the job (`reopenHead`). The worker asks the head
+    // check with that, and never re-derives it.
+    describe("a head the route reopened for explicit nodeIds (reopenHead)", () => {
+      const doneB = () =>
+        narrowB({ trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: true } } })
+      const failedB = () => {
+        const b = narrowB()
+        const states = b.node_states as Record<string, NodeExecutionState>
+        return { ...b, status: "failed", node_states: { ...states, out: { status: "failed", nodeType: "video-retake", error: "boom", completedAt: at } } }
+      }
+
+      it("done: a chain whose newest ran all it was left runs only what the named nodes still hold, built on it", async () => {
+        mocks.executions.set("exec-b", doneB())
+        await processWorkflowExecution(fromB({ reopenHead: "done", nodeIds: ["out"] }))
+        expect(failedWrite()).toBeUndefined()
+        expect(ran()).toEqual(["out"])
+        const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+        // B's captions are handed on from B: never run, never billed again.
+        expect(states.cap).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/cap-b.mp4" }, seededFromExecution: "exec-b" })
+        expect(JSON.stringify(inputsOf("out"))).toContain("https://r2/cap-b.mp4")
+      })
+
+      it("done, without the flag: the same head is still refused (a default run never builds on a done chain)", async () => {
+        mocks.executions.set("exec-b", doneB())
+        await processWorkflowExecution(fromB({ nodeIds: ["out"] }))
+        expect(ran()).toEqual([])
+        expect(failedWrite()?.error_message).toBe(CONTINUATION_NOT_FOUND)
+      })
+
+      it("failed: a newest that failed is built on — what it completed is seeded from it, and only what it left runs", async () => {
+        mocks.executions.set("exec-b", failedB())
+        await processWorkflowExecution(fromB({ reopenHead: "failed", nodeIds: ["cap", "out"] }))
+        expect(failedWrite()).toBeUndefined()
+        // cap: B completed it — dropped from the run set, seeded from B.
+        expect(ran()).toEqual(["out"])
+        const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+        expect(states.cap).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/cap-b.mp4" }, seededFromExecution: "exec-b" })
+        expect(states.cut).toMatchObject({ status: "completed", seededFromExecution: "exec-b" })
+      })
+
+      it("failed, without the flag: a failed head is refused as not completed", async () => {
+        mocks.executions.set("exec-b", failedB())
+        await processWorkflowExecution(fromB({ nodeIds: ["cap", "out"] }))
+        expect(ran()).toEqual([])
+        expect(failedWrite()?.error_message).toBe(CONTINUATION_NOT_COMPLETED)
+      })
+
+      it("the flag names what the head is: a completed head under reopenHead \"failed\" is refused", async () => {
+        mocks.executions.set("exec-b", doneB())
+        await processWorkflowExecution(fromB({ reopenHead: "failed", nodeIds: ["out"] }))
+        expect(ran()).toEqual([])
+        expect(failedWrite()?.error_message).toBe("continuation_not_failed")
+      })
+
+      it("a head of another lineage is refused under either flag", async () => {
+        mocks.executions.set("exec-b", narrowB({ trigger_data: { continueFromFailed: { from: "exec-9", root: "exec-9", all: true } } }))
+        await processWorkflowExecution(fromB({ reopenHead: "done", nodeIds: ["out"] }))
+        expect(ran()).toEqual([])
+        expect(failedWrite()?.error_message).toBe(CONTINUATION_NOT_FOUND)
+      })
+    })
+  })
+
+  // Seed provenance (fix round 2, I-B): a node the run it continues left
+  // unfinished, and that this run does not execute, is handed on `skipped`
+  // AND marked, on the states the run persists — so a later continue-from-
+  // failed built on this run still retries it.
+  it("a node the source left unfinished that the run does not execute is persisted skipped and carriedUnfinished", async () => {
+    mocks.executions.set("exec-0", failedRun())
+    // A narrow hop: only the retake, never the captions that failed.
+    await processWorkflowExecution(job({ continueMode: "from-failed", nodeIds: ["out"], inputOverrides: undefined }))
+    // (The retake then has no captions to read: it is skipped, and the run completes.)
+    const persisted = completedWrite()!.node_states as Record<string, NodeExecutionState>
+    expect(persisted.cap).toMatchObject({ status: "skipped", seededFromExecution: "exec-0", carriedUnfinished: true })
+    // A completed node is handed on completed, with no mark (a router-skipped one: run-continuation.test.ts).
+    expect(persisted.cut?.carriedUnfinished).toBeUndefined()
   })
 
   // Review round 3, I1: A failed on two branches, a Tighten Episode (T, its

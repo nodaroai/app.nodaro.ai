@@ -294,6 +294,13 @@ export interface NodeExecutionState {
    *  Never `jobId`: this execution ran no job for the node, and the state hands
    *  on no output (it stays `skipped`). Not on the wire contract. */
   failedAttemptJobId?: string
+  /** A seed (`seededFromExecution`, status `skipped`) of a node the earlier
+   *  execution left UNFINISHED — failed there, still `pending`/`running` when
+   *  it stopped, or itself seeded so — never one a router or an empty input
+   *  skipped. Carried seed to seed, so a continue-from-failed built on this
+   *  execution still counts the node as left (`leftUnfinishedBy`) and retries
+   *  it, however many narrower hops lie between. Not on the wire contract. */
+  carriedUnfinished?: true
   /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
   skipReason?: NodeSkipReason
 }
@@ -373,6 +380,16 @@ export interface WorkflowExecutionJob {
    * the lineage again, it checks this one (`continuationHeadRefusal`).
    */
   seedFromExecutionId?: string
+  /**
+   * With `seedFromExecutionId`: the caller sent explicit `nodeIds`, and that
+   * newest generation is one a default continue-from-failed is never built
+   * on — `"done"`: it completed all it was left; `"failed"`: it ended failed
+   * (explicit `nodeIds` always win: the run builds on it rather than
+   * redirecting the caller). Decided by the route, which alone knows the
+   * `nodeIds` were sent; the worker passes it to `continuationHeadRefusal`
+   * and never re-derives it. Absent: such a head is refused.
+   */
+  reopenHead?: "done" | "failed"
   /**
    * For a triggered run: the trigger node that fired (the trigger row's
    * `config.nodeId`). The worker runs the branch behind it — see

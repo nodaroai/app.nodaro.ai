@@ -135,6 +135,7 @@ nodaro workflows export <id> [--with-assets] [--output bundle.json]
 nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
 nodaro workflows run <id> --continue-from <executionId> --from-failed [--node n1 n2 ...] [--idempotency-key <key>] [--watch]
+#   --from-failed without --node considers the nodes the failed run's chain was first started on (every node for a full run), plus what that run left failed
 #   --idempotency-key (8+ characters) is sent as Idempotency-Key: the same key twice starts one run
 nodaro workflows run <id> --continue-from <executionId> --node n1 n2 ... [--override n1.quality=final ...] [--watch]
 #   a run of named nodes continuing a completed run; --override (nodeId.field=value, repeat) is a per-node override for this run only

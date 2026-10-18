@@ -52,6 +52,25 @@
  * for its final. So a Render final of a run whose only stop was its Preview
  * ends the lineage, and one that leaves anything is built on.
  *
+ * A lineage has a NODE SCOPE: what its root was started on. A run started on
+ * named nodes (`nodeIds`: the editor's Run selected, an API subset, a Render
+ * final) that is no generation records them (`trigger_data.nodeSelection`);
+ * every generation carries its root's on its stamp (`scope`), whatever
+ * `nodeIds` that hop was sent. A continue-from-failed sent no `nodeIds`
+ * considers the scope PLUS what the run it continues left unfinished — every
+ * node that failed there, and those its failure held back (`leftUnfinishedBy`)
+ * — so a failure outside the scope (in a wider hop, or the run in `next`) is
+ * always retried; "all that was left" (`all`) is judged against that same
+ * set. No scope (a root started on every node, or one from before the
+ * selection was recorded): every node, as before. Explicit `nodeIds` always
+ * win: a chain whose newest generation is done (judged against its default
+ * set) is still built on when a node they name is left there.
+ *
+ * Only a run a stamp-writing lane started carries a scope (`serverTriggerData`,
+ * lib/server-started-runs.ts): a webhook, schedule or other trigger lane
+ * stores its caller's payload in `trigger_data`, so a `nodeSelection` or stamp
+ * `scope` there is never read.
+ *
  * A generation counts only once it STARTED (`started_at` is written with the
  * seeded states when the run flips to running): one refused before that (a
  * preview gate, a preflight) holds no states, and sending a caller there would
@@ -109,6 +128,15 @@ export interface ContinueFromFailedStamp {
    * way. Absent: none (or a stamp from before the field).
    */
   readonly reviewHolds?: readonly string[]
+  /**
+   * The lineage's node scope: the nodes its root was started on (the root's
+   * `nodeSelection`, below), carried unchanged from generation to generation —
+   * never a hop's own `nodeIds`. A continue-from-failed with no `nodeIds`
+   * considers these and what the run it continues left unfinished, and `all`
+   * is judged against that set. Absent: the root was
+   * started on every node (or before the selection was recorded).
+   */
+  readonly scope?: readonly string[]
 }
 
 /** The `trigger_data` a continue-from-failed execution is created with. */
@@ -122,8 +150,71 @@ export function continueFromFailedStamp(stamp: ContinueFromFailedStamp): { conti
       ...(stamp.via === "subset" ? { via: "subset" } : {}),
       ...(stamp.previewRenders && stamp.previewRenders.length > 0 ? { previewRenders: [...stamp.previewRenders] } : {}),
       ...(stamp.reviewHolds && stamp.reviewHolds.length > 0 ? { reviewHolds: [...stamp.reviewHolds] } : {}),
+      ...(stamp.scope && stamp.scope.length > 0 ? { scope: [...stamp.scope] } : {}),
     },
   } as { continueFromFailed: ContinueFromFailedStamp }
+}
+
+const SELECTION_KEY = "nodeSelection"
+
+/**
+ * The `trigger_data` of a run started on named nodes (`nodeIds` on
+ * `POST /v1/workflows/:id/run` — the editor's Run selected, an API subset, a
+ * Render final) that is no generation of a lineage: the nodes it was started
+ * on, each once, in the order sent. A later continue-from-failed of the run
+ * considers these by default (`lineageScopeOf`), with what it left
+ * unfinished (`leftUnfinishedBy`). `{}` for none.
+ */
+export function nodeSelectionData(nodeIds: readonly string[]): { nodeSelection?: string[] } {
+  const ids = [...new Set(nodeIds.filter((id) => typeof id === "string" && id.length > 0))]
+  return ids.length > 0 ? { [SELECTION_KEY]: ids } : {}
+}
+
+// The nodes a run left unfinished: failed, held back, or handed on unfinished
+// (`carriedUnfinished`) — the rule the editor predicts by too.
+export { leftUnfinishedBy } from "@nodaro/render-rules"
+
+/** The node selection a `trigger_data` value records, or `null` when it records none. */
+export function nodeSelectionOf(triggerData: unknown): string[] | null {
+  if (typeof triggerData !== "object" || triggerData === null || Array.isArray(triggerData)) return null
+  const raw = (triggerData as Record<string, unknown>)[SELECTION_KEY]
+  if (!Array.isArray(raw)) return null
+  const ids = raw.filter((id): id is string => typeof id === "string" && id.length > 0)
+  return ids.length > 0 ? ids : null
+}
+
+/**
+ * The node scope of `source`'s lineage: what a continue-from-failed of it
+ * considers when sent no `nodeIds` (with what the run left unfinished,
+ * `leftUnfinishedBy`), and what "all that was left" is judged against with
+ * it. Read from a row only when a stamp-writing lane started it
+ * (`serverTriggerData`, in the loader). A generation of a lineage carries its root's (`stamp.scope`) —
+ * never its own selection, so a narrow hop or Render final in the chain does
+ * not narrow it. A run of no lineage is its own root: its `nodeSelection`.
+ * `null`: every node (the root was started on every node, or recorded none —
+ * a run from before the selection was recorded). Pure.
+ */
+export function lineageScopeOf(source: {
+  readonly continueFromFailed?: ContinueFromFailedStamp | null
+  readonly nodeSelection?: readonly string[] | null
+}): readonly string[] | null {
+  if (source.continueFromFailed) return source.continueFromFailed.scope ?? null
+  return source.nodeSelection && source.nodeSelection.length > 0 ? source.nodeSelection : null
+}
+
+/**
+ * The node scope of a stored `workflow_executions` row (`lineageScopeOf`),
+ * read only on a run a stamp-writing lane started (`serverTriggerData`): what a
+ * continue-from-failed of it sent no `nodeIds` considers, besides what it
+ * left unfinished. The detail read hands it on (`nodeScope`), so the editor's
+ * Continue from failed predicts the set the server runs. `null`: every node.
+ * Pure.
+ */
+export function nodeScopeOfRow(row: { readonly trigger_type?: unknown; readonly trigger_data?: unknown }): readonly string[] | null {
+  return lineageScopeOf({
+    continueFromFailed: continueFromFailedStampOf(serverTriggerData(row)),
+    nodeSelection: nodeSelectionOf(serverTriggerData(row)),
+  })
 }
 
 /** The stamp a `trigger_data` value holds, or `null` when it holds none. */
@@ -131,11 +222,12 @@ export function continueFromFailedStampOf(triggerData: unknown): ContinueFromFai
   if (typeof triggerData !== "object" || triggerData === null || Array.isArray(triggerData)) return null
   const stamp = (triggerData as Record<string, unknown>)[STAMP_KEY]
   if (typeof stamp !== "object" || stamp === null || Array.isArray(stamp)) return null
-  const { from, root, seededFrom, all, via, previewRenders, reviewHolds } = stamp as Record<string, unknown>
+  const { from, root, seededFrom, all, via, previewRenders, reviewHolds, scope } = stamp as Record<string, unknown>
   if (!(typeof from === "string" && from.length > 0 && typeof root === "string" && root.length > 0)) return null
   const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string" && id.length > 0) : [])
   const renders = ids(previewRenders)
   const reviews = ids(reviewHolds)
+  const scoped = ids(scope)
   return {
     from,
     root,
@@ -144,6 +236,7 @@ export function continueFromFailedStampOf(triggerData: unknown): ContinueFromFai
     ...(via === "subset" ? { via: "subset" as const } : {}),
     ...(renders.length > 0 ? { previewRenders: renders } : {}),
     ...(reviews.length > 0 ? { reviewHolds: reviews } : {}),
+    ...(scoped.length > 0 ? { scope: scoped } : {}),
   }
 }
 

@@ -158,15 +158,20 @@ node that failed, the nodes it held back and the ones it never reached run,
 and are charged, then everything after them. A node that failed runs again in
 full (one that failed partway through a list runs every item again), and so
 does a node the run did not complete that you have since run yourself with ▶:
-it is charged again. The run considers every node of the workflow, and it runs
-the workflow as saved, so unsaved edits are saved first; when they cannot be
-saved, nothing is continued.
+it is charged again. The run considers the nodes the failed run was started
+on — a **Run from here** or **Run selected** is continued on those nodes, a
+**Run** on every node, and a continuation of a continuation keeps the nodes of
+the first run — plus every node left failed or held back, and what those need
+upstream; a node added to the workflow since, outside them, does not run. It
+runs the workflow as saved, so unsaved edits are saved first; when they cannot
+be saved, nothing is continued.
 
 It always asks first, whatever the price: the confirm lists every node that
 will run with its estimated credits, and the nodes the run completed as kept.
-The estimate is the editor's own reading of the failed run. The server decides
-the exact set, and runs less when a newer continuation of the run has already
-completed more.
+The estimate reads the failed run by the server's own rule. The server decides
+the exact set: it builds on the newest continuation of the run, so when another
+client (an API or MCP run) starts a newer continuation while the prompt is open,
+the run can differ from the one confirmed.
 
 The newest continuation of a run decides what happens next:
 

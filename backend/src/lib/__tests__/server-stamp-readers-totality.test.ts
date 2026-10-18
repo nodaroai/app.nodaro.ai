@@ -27,8 +27,10 @@ import { describe, expect, it } from "vitest"
 import ts from "typescript"
 import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, parseText, walk } from "./source-scan.js"
 
-const PARSERS = new Set(["continueFromFailedStampOf", "appRunStampOf", "appRenderFinalStampOf", "runRootOf", "appRunResumedFromOf"])
-const STAMP_KEYS = new Set(["continueFromFailed", "appRun", "appRenderFinal", "runRoot"])
+// A run's node selection (`nodeSelection`, the scope a continue-from-failed of it considers) is
+// read as fact the same way: only off a run a stamp-writing lane started.
+const PARSERS = new Set(["continueFromFailedStampOf", "appRunStampOf", "appRenderFinalStampOf", "runRootOf", "appRunResumedFromOf", "nodeSelectionOf"])
+const STAMP_KEYS = new Set(["continueFromFailed", "appRun", "appRenderFinal", "runRoot", "nodeSelection"])
 /** The modules that define a stamp: their parser reads the key off the value it is handed. */
 const STAMP_MODULES = new Set([
   "lib/continue-from-failed-lineage.ts",

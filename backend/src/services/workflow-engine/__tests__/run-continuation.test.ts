@@ -182,6 +182,29 @@ describe("continuationSeeds: every node the run does not execute hands on the ea
     expect(seeds.get("cap")!.output).toBeUndefined()
   })
 
+  it("a node the earlier run left unfinished is marked carriedUnfinished; one a router or empty input skipped, or one with no state, is not", () => {
+    const nodes: SimpleNode[] = ["failed", "pending", "running", "carried", "router", "empty", "fresh", "done"].map((id) => ({
+      id,
+      type: "add-captions",
+      data: {},
+    }))
+    const states: Record<string, NodeExecutionState> = {
+      failed: { status: "failed", nodeType: "add-captions", error: "boom" },
+      pending: { status: "pending", nodeType: "add-captions" },
+      running: { status: "running", nodeType: "add-captions" },
+      // Handed on unfinished by the run before: the mark rides on, seed to seed.
+      carried: { status: "skipped", nodeType: "add-captions", seededFromExecution: "exec-older", carriedUnfinished: true },
+      router: { status: "skipped", nodeType: "add-captions" },
+      empty: { status: "skipped", nodeType: "add-captions", skipReason: "empty_input" },
+      done: { status: "completed", nodeType: "add-captions", output: {} },
+    }
+    const seeds = continuationSeeds(nodes, source({ nodeStates: states }), new Set())
+    for (const id of ["failed", "pending", "running", "carried"]) {
+      expect(seeds.get(id)).toMatchObject({ status: "skipped", seededFromExecution: "exec-0", carriedUnfinished: true })
+    }
+    for (const id of ["router", "empty", "fresh", "done"]) expect(seeds.get(id)?.carriedUnfinished).toBeUndefined()
+  })
+
   it("a source or parameter node the earlier run holds no state for is left to the ordinary seeding", () => {
     const { nodes } = graph({ generatedJson: tightenPlan })
     const seeds = continuationSeeds(nodes, source({ nodeStates: stoppedRun(tightenPlan) }), new Set(["cut", "cap"]))

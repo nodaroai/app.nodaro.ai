@@ -121,7 +121,11 @@ export interface RunWorkflowParams {
   /**
    * `"from-failed"`: continue a FAILED run (`continueFromExecutionId`) from
    * where it stopped. It runs every node that run did not complete — of
-   * `nodeIds`, which default to every node — and hands on what it completed,
+   * `nodeIds`, which default to the nodes the run was started on (a run
+   * started on named nodes is continued on those, a run of every node on every
+   * node; a continuation of a continuation keeps those of the first run of its
+   * chain) plus every node the run left failed or held back — and hands on
+   * what it completed,
    * never run or charged again. That is per node: a node that failed runs
    * again in full, every list item included. When a later continuation of it
    * completed only part of what it left (a narrower `nodeIds`), the run builds
