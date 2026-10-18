@@ -2102,6 +2102,16 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > Reference videos bill output seconds only here, and input + output duration
 > must stay ≤ 30 s. `wan-3-prime` is the high-speed, higher-priced SKU on the
 > same schema.
+> **Vidu Q4** (`vidu-q4`) has no text-to-video mode — use
+> `run("generate-video", …)` with an `imageUrl` (start frame) or
+> `referenceImageUrls`; `run("text-to-video", …)` answers `image_required`. A start frame alone animates that frame
+> (`prompt` optional, `aspectRatio` ignored); any `referenceImageUrls` (≤ 15) or
+> `referenceAudioUrls` (≤ 3) switches to reference mode, where `prompt` is
+> required and a sent `imageUrl` joins the reference images. Reference audio is
+> MP3 only, 3–12 s per clip (refused before the job otherwise). No reference
+> videos, end frame or seed. `duration` 3–16 (default 5); `resolution`
+> `540p` / `720p` / `1080p` / `2k` / `4k` (omitted or unsupported → 720p);
+> one per-second price ladder for both modes and audio on or off.
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same

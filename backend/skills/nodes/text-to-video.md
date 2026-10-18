@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-14T21:02:23.370Z
-generated_from: d2027cd00
+generated_at: 2026-10-17T19:22:52.223Z
+generated_from: c4aaf9ac8
 ---
 
 # Text to Video
@@ -380,6 +380,32 @@ subject → action → scene/environment → lighting → camera movement → st
 
 Source: KIE Wan 3.0 market contract (docs.kie.ai/market/wan/3-0-video,
 docs.kie.ai/market/wan/3-0-video-prime). Captured 2026-09-01.
+
+### Vidu Q4 (vidu-q4)
+
+Prompt structure (no public Vidu Q4 prompt guide is captured — the KIE API contract is the
+doctrine source; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**Modes (picked by what is wired)**
+- Start frame only → image-to-video. The frame anchors the shot and its aspect ratio; describe MOTION and camera, not the still. The prompt is optional.
+- Any reference image or reference audio → reference-to-video. The prompt is REQUIRED. A wired start frame cannot be sent as a frame here, so the platform adds it to the reference images (after the caller's own, ordinals unchanged) and names it in the prompt as the opening frame.
+- There is no text-only mode and no first+last frame mode.
+
+**Reference binding**
+- Refer to inputs by ordinal in attachment order. In the editor the reference tokens emit "@image_N" / "@audio_N" — write the binding explicitly ("the woman from @image_1 turns to the man from @image_2 and says …, in the voice of @audio_1").
+- Caps: 1-15 reference images (JPG / PNG / WEBP) and 0-3 reference audio clips. Audio must be MP3, each 3-12 seconds — the platform refuses any other format or length before the run starts.
+
+**Duration, resolution, aspect**
+- 3-16 seconds (default 5). 540p / 720p (default) / 1080p / 2K / 4K.
+- Image-to-video has no aspect setting — the output inherits the start frame's shape. Reference runs take 16:9 (default) / 9:16 / 1:1 / 4:3 / 3:4.
+- Prompts up to 20,000 characters.
+
+**Audio**
+- The "audio" boolean defaults ON and generates synchronized sound with the clip (the contract says "dialogue and sound effects"). Describe the soundscape plainly or state the exclusion, or turn the toggle off for a silent clip.
+
+Source: KIE Vidu Q4 market contracts (docs.kie.ai/market/vidu-q4/image-to-video,
+docs.kie.ai/market/vidu-q4/reference-to-video). Captured 2026-10-17.
 
 ### HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)
 

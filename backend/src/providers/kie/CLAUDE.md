@@ -87,6 +87,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `minimax-h3` | `minimax-h3/image-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired — see `minimaxH3TaskModel`) | [minimax-h3 i2v](https://docs.kie.ai/market/minimax-h3/image-to-video.md) / [r2v](https://docs.kie.ai/market/minimax-h3/reference-to-video.md) |
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
+| `vidu-q4` | `vidu-q4/image-to-video` (bespoke `runViduQ4`; swaps to `vidu-q4/reference-to-video` — `VIDU_Q4_REFERENCE_MODEL` — when a reference image or audio is wired). No t2v entry: KIE has no Q4 text-to-video. | [vidu q4 i2v](https://docs.kie.ai/market/vidu-q4/image-to-video.md) / [r2v](https://docs.kie.ai/market/vidu-q4/reference-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan-i2v` | `wan/2-6-image-to-video` | [wan 2.6 i2v](https://docs.kie.ai/market/wan/2-6-image-to-video.md) |
@@ -176,6 +177,45 @@ which is why it has a bespoke runner instead of the generic `createTask` builder
   `nsfw_checker` are deliberately never emitted **on the Wan wire**. `-1` IS
   emitted in exactly one place platform-wide — the Seedance 2.5 edit-mode
   resubmit below.
+
+### Vidu Q4 wire notes (`vidu-q4`, bespoke `runViduQ4`)
+
+ONE Nodaro id over two KIE endpoints, picked by what is wired. KIE has NO Q4
+text-to-video and NO start/end-frame mode (both 404), so the catalog's `modes`
+is `["i2v"]` (the derived `VIDEO_PROVIDERS_REQUIRING_IMAGE` gates prompt-only
+runs) and it declares no `end-frame`.
+
+- **Start frame, no references** → `vidu-q4/image-to-video`:
+  `{ image_url, prompt?, duration, resolution, audio }`. NO `aspect_ratio` —
+  the output inherits the frame's shape. The prompt is optional and is OMITTED
+  when empty (no platform default text).
+- **Any reference image or reference audio** → `vidu-q4/reference-to-video`:
+  `{ prompt, reference_image_urls (1-15), reference_audio_urls? (≤3),
+  aspect_ratio (16:9 default / 9:16 / 1:1 / 4:3 / 3:4), duration, resolution,
+  audio }`. A wired start frame is demoted into `reference_image_urls` by
+  `resolveSeedance2Inputs` (after the caller's own images, bound in prose).
+  `videos: 0` overrides the Seedance base limits, so `reference_video_urls` is
+  never emitted.
+- Both schemas are `additionalProperties: false`: the body is an explicit
+  allow-list — no `extraParams` spread, no `seed` (`omitSeed`), no end frame
+  (an end frame reaching the provider is logged and dropped).
+- `duration` is an **integer** 3-16 (default 5). `resolution` is the
+  **lowercase** enum `540p` / `720p` / `1080p` / `2k` / `4k`;
+  `normalizeViduQ4Resolution` (`@nodaro/shared`) folds case and collapses
+  anything else to **720p**, and `buildVideoCreditModelIdentifier` bills
+  through the same function, so render == billed for every spelling.
+- `audio` (boolean, KIE default true) is the native-audio lever — the
+  `field: "audio"` branch of `applyVideoAudioToggle`.
+- A reference-mode run needs a non-empty prompt and at least one image:
+  `lib/vidu-q4-inputs.ts :: viduQ4InputProblem` refuses it in the route and
+  the payload builder BEFORE the reservation; the runner throw is a backstop.
+- Reference audio is **MP3 only, 3-12 s each** (`VIDEO_REF_AUDIO_RULES`):
+  `lib/ref-audio-probe.ts` ffprobes format + length and refuses anything else
+  in the route preHandler and the DAG's `executeWorkerNode` gate. Nothing
+  converts a WAV/M4A clip for it — a converter is a follow-up.
+- Pricing is ONE per-second `vidu-q4:<N>s:<res>` ladder for both endpoints and
+  for audio on/off (no `-ref`, no `:audio`). The 4k rows are closed to the free
+  tier (`blockedModels`, derived from the duration tiers).
 
 ### Seedance 2.5 edit mode (`runVideoTaskWithSeedanceEditRetry`, video.ts)
 

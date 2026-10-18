@@ -6,10 +6,13 @@
  * the node dispatches to the text-to-video path (no start-frame image wired),
  * mirroring the /v1/text-to-video route's "image_required" 400 — instead of
  * enqueueing a job that dies at provider lookup. On the t2v path, reference
- * images alone do NOT satisfy the requirement (they're conditioning inputs,
- * not the start frame). A split-id model whose ONLY ref-capable twin is the
- * i2v one (Grok Imagine 1) never reaches that path with refs wired — the
- * shared mode resolution routes it to i2v first (#861, below).
+ * images alone do NOT satisfy the requirement. Two shapes never reach that
+ * path with refs wired, because the shared mode resolution routes them to i2v
+ * first: a split-id model whose ONLY ref-capable twin is the i2v one (Grok
+ * Imagine 1, #861), and a single-id i2v-only model whose catalog declares the
+ * `reference-to-video` capability (Vidu Q4, HappyHorse Ref2V — their provider
+ * runs from references alone). kling-3-omni declares no such capability (it
+ * has no dispatch path), so its refs-only run is still refused.
  */
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
@@ -47,6 +50,25 @@ describe("generate-video i2v-only provider guard", () => {
     expect(() => buildPayload(n, JOB_ID, inputs, undefined, ctx(n)))
       .toThrow(/kling-3-omni requires an input image/)
   })
+
+  for (const provider of ["vidu-q4", "happyhorse-ref2v"]) {
+    it(`routes ${provider} with reference images and NO start frame to image-to-video, refs forwarded`, () => {
+      // The provider runs from references alone (catalog `reference-to-video`),
+      // so a references-only run is never refused as "image required".
+      const n = gv(provider)
+      const inputs: ResolvedInputs = { referenceImageUrls: ["https://cdn.example/ref-1.png", "https://cdn.example/ref-2.png"] }
+      const result = buildPayload(n, JOB_ID, inputs, undefined, ctx(n))
+      expect(result.jobName).toBe("image-to-video")
+      expect(result.payload.provider).toBe(provider)
+      expect(result.payload.imageUrl).toBeUndefined()
+      expect(result.payload.referenceImageUrls).toEqual(["https://cdn.example/ref-1.png", "https://cdn.example/ref-2.png"])
+    })
+
+    it(`still refuses ${provider} with nothing wired`, () => {
+      const n = gv(provider)
+      expect(() => buildPayload(n, JOB_ID, {}, undefined, ctx(n))).toThrow(new RegExp(`${provider} requires an input image`))
+    })
+  }
 
   it("dispatches kling-3-omni to image-to-video when a start frame is wired (refs forwarded)", () => {
     const n = gv("kling-3-omni")

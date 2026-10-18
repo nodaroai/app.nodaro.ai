@@ -39,12 +39,15 @@ export const VIDEO_IMAGE_VIDEO_REF_HANDLES = ["videoReferences"] as const
  * text-to-video path. Using the same two shared helpers means the editor
  * cannot disagree with either engine.
  *
- * The subtlety worth keeping: reference images alone do NOT lift the gate for
- * a SINGLE-id i2v-only model (`kling-3-omni`, `happyhorse-ref2v`, …), because
- * `resolveVideoModeForInputs` sends that run to text-to-video and it throws —
- * `payload-builder-image-required.test.ts` pins it. They DO lift it for a
- * split-id model whose i2v twin alone carries refs (Grok Imagine 1). Both
- * facts come from the catalog; never hardcode a provider list here.
+ * The subtlety worth keeping: reference images alone lift the gate only where
+ * the run can actually use them. They DO for a single-id i2v-only model whose
+ * catalog declares `reference-to-video` (Vidu Q4, HappyHorse Ref2V — the
+ * provider runs from references alone, so `resolveVideoModeForInputs` sends
+ * the run to image-to-video) and for a split-id model whose i2v twin alone
+ * carries refs (Grok Imagine 1). They do NOT for an i2v-only model without the
+ * capability (`kling-3-omni`): that run resolves to text-to-video and throws —
+ * `payload-builder-image-required.test.ts` pins both sides. All of it comes
+ * from the catalog; never hardcode a provider list here.
  *
  * A connected source video (the `videoReferences` handle) ALSO lifts the gate,
  * but only for the Gemini Omni family (gemini-omni-video / gemini-omni-flash):

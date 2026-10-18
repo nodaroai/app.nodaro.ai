@@ -98,6 +98,20 @@ describe("PROVIDER_PROMPT_DOCTRINES", () => {
     expect(d.doctrine).not.toMatch(/higher quality/i)
   })
 
+  it("Vidu Q4 has its own doctrine carrying the two-endpoint contract", () => {
+    const d = getPromptDoctrine("vidu-q4")!
+    expect(d.providers).toEqual(["vidu-q4"])
+    // Mode pick, the frame fold and the hard reference-audio contract.
+    expect(d.doctrine).toMatch(/reference-to-video/)
+    expect(d.doctrine).toMatch(/prompt is REQUIRED/)
+    expect(d.doctrine).toMatch(/no text-only mode/i)
+    expect(d.doctrine).toMatch(/MP3, each 3-12 seconds/)
+    expect(d.doctrine).toMatch(/1-15 reference images/)
+    // The binding the editor actually emits, not the contract's prose form.
+    expect(d.doctrine).toContain("@image_N")
+    expect(d.doctrine).toMatch(/20,000 characters/)
+  })
+
   it("Gemini Omni Flash rides the sibling's doctrine (identical request surface)", () => {
     const d = getPromptDoctrine("gemini-omni-flash")!
     expect(d).toBe(getPromptDoctrine("gemini-omni-video"))

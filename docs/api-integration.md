@@ -861,7 +861,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, and the `wan-3` family renders 720p (both described under
+`768P`, and the `wan-3` family and `vidu-q4` render 720p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -2086,6 +2086,26 @@ so a value the model doesn't support is ignored, never a 400:
   `3:4` / `9:16` (no `21:9`). Prime is the faster, pricier SKU on an identical
   schema. Reference-video runs bill output seconds only — there is no
   input-duration surcharge on Wan 3.0.
+- **`vidu-q4`** (Vidu Q4) has **no text-to-video mode**: it needs an
+  `imageUrl` (start frame) or at least one `referenceImageUrls` entry, and
+  `POST /v1/text-to-video` answers `image_required`. One id serves two
+  provider endpoints, picked by what you send: `imageUrl` alone animates that
+  frame (`prompt` optional; the output keeps the frame's shape, so
+  `aspectRatio` is ignored); any `referenceImageUrls` (≤ 15) or
+  `referenceAudioUrls` (≤ 3) selects reference mode, where `prompt` is
+  **required** (an empty one is a `400` before anything is reserved),
+  `aspectRatio` is `16:9` (default) / `9:16` / `1:1` / `4:3` / `3:4`, and an
+  `imageUrl` sent alongside is appended to the reference images after your own
+  and named in the prompt as the opening frame. Reference audio must ride with
+  an image, and must be **MP3, 3–12 s per clip** — any other format or length
+  is refused before the job is created (`audio_format_unsupported`,
+  `audio_too_short`, `audio_too_long`). No `referenceVideoUrls`, no
+  `endFrameUrl`, no `seed`. `duration` is a whole number of seconds from **3 to
+  16** (default 5) and `resolution` is `540p` / `720p` / `1080p` / `2k` / `4k`
+  (`2K` / `4K` accepted); an omitted or unsupported resolution renders and bills
+  at **720p**. Priced per second on one ladder for both modes and audio on or
+  off (see the [Generate Video node](nodes/ai-video/generate-video.md)); the 4K
+  tier is not available on the free tier.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same

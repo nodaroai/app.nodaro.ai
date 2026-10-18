@@ -17,6 +17,7 @@ import {
   KIE_LIP_SYNC_MODELS, KIE_MUSIC_MODELS, KIE_TTS_MODELS,
   KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS,
+  VIDU_Q4_REFERENCE_MODEL,
 } from "../../providers/kie/models.js"
 import type { KieModelConfig } from "../../providers/kie/models.js"
 import { KIE_CREDIT_USD } from "../../providers/kie/models.js"
@@ -198,6 +199,10 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
   addAlias("veo-generate", "veo3.1", "i2v")
   addAlias("generate", "veo3", "i2v")
   addAlias("generate", "veo3.1", "i2v")
+
+  // Vidu Q4: one key over two KIE endpoints — the reference-to-video id is not
+  // any config's `model`, so map it back to the key that bills it.
+  addAlias(VIDU_Q4_REFERENCE_MODEL, "vidu-q4", "i2v")
 
   return map
 }

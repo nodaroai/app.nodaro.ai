@@ -138,6 +138,7 @@ describe("VIDEO_PROVIDERS_REQUIRING_IMAGE (derived from MODEL_CATALOG modes)", (
         "hailuo-2.3-pro",
         "bytedance-pro-fast",
         "happyhorse-ref2v",
+        "vidu-q4",
       ]),
     )
   })

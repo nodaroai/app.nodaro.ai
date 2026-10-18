@@ -677,6 +677,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "High quality, 5-10s": "高品質、5〜10 秒",
   "High quality, 5-15s, 1080p": "高品質、5〜15 秒、1080p",
   "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "高速版 Wan 3.0、2〜30 秒、480p/720p/1080p、ネイティブオーディオ、画像／動画／オーディオのリファレンス",
+  "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio, start frame or 15 image + 3 MP3 audio refs": "ShengShu Vidu Q4、3〜16 秒、540p〜4K、ネイティブオーディオ、開始フレームまたは画像リファレンス 15 枚 + MP3 オーディオリファレンス 3 本",
+  "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio (image required)": "ShengShu Vidu Q4、3〜16 秒、540p〜4K、ネイティブオーディオ（画像が必要）",
   "Higher detail, production images": "高精細な本番向け画像",
   "Higher detail, production-ready images": "高精細で本番にそのまま使える画像",
   "Higher quality Bytedance": "より高品質な Bytedance",

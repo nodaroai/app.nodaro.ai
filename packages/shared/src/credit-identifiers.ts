@@ -24,8 +24,10 @@ import {
   isMinimaxH3Provider,
   isGeminiOmniProvider,
   isWan3Provider,
+  isViduQ4Provider,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
+  normalizeViduQ4Resolution,
   getVideoAudioCapability,
 } from "./model-constants.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
@@ -335,6 +337,18 @@ function ltxPricedTier(
   return { band, duration: dur }
 }
 
+/**
+ * The resolution a provider whose runner NORMALIZES the lever actually renders,
+ * in the lowercase spelling of its credit composites — billing collapses
+ * through the very normalizer the runner sends, so render == billed for every
+ * spelling. `undefined` passes through untouched for every other provider.
+ */
+function wireNormalizedResolution(provider: string, resolution: string | undefined): string | undefined {
+  if (isWan3Provider(provider)) return normalizeWan3Resolution(resolution).toLowerCase()
+  if (isViduQ4Provider(provider)) return normalizeViduQ4Resolution(resolution)
+  return resolution
+}
+
 export function buildVideoCreditModelIdentifier(
   provider: string,
   duration?: number | string,
@@ -476,12 +490,11 @@ export function buildVideoCreditModelIdentifier(
     // the 720p row, a shortfall `commit_credits` (refund-only) can never collect.
     // Collapsing through the SAME normalizer the runner uses makes render == billed
     // by construction for every spelling, including garbage (→ the declared 720p).
-    // Scoped to the wan family on purpose: the other RESOLUTION_DURATION_PRICING
-    // members pass `resolution` to their wire verbatim, so case-folding their
-    // billing without probing their wire would reprice live models.
-    const requested = isWan3Provider(effectiveProvider)
-      ? normalizeWan3Resolution(resolution).toLowerCase()
-      : resolution
+    // Scoped to the families whose runner normalizes on purpose (Wan 3.0, Vidu
+    // Q4): the other RESOLUTION_DURATION_PRICING members pass `resolution` to
+    // their wire verbatim, so case-folding their billing without probing their
+    // wire would reprice live models.
+    const requested = wireNormalizedResolution(effectiveProvider, resolution)
     const res = requested && resTiers.includes(requested) ? requested : fallback
     identifier += `:${res}`
   }

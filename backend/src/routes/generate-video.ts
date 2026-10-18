@@ -12,6 +12,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
+import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
+import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { voicedAddonBaseCredits } from "../lib/voiced-dialogue-lines.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -596,6 +598,13 @@ export async function validateSeedance2AudioPreHandler(
 ): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>
   const provider = body.provider as string | undefined
+  // A provider's documented per-clip contract (format + length window,
+  // VIDEO_REF_AUDIO_RULES) — the same core check the DAG runs before its
+  // reservation, so a clip the provider would refuse never costs a run.
+  const ruleCheck = await probeAndCheckRefAudio({ provider, referenceAudioUrls: body.referenceAudioUrls })
+  if (!ruleCheck.ok) {
+    return reply.status(400).send({ error: { code: ruleCheck.code, message: ruleCheck.message } })
+  }
   const limit = seedance2AudioLimitSec(provider)
   if (limit === null) return
   const urls = body.referenceAudioUrls
@@ -1167,6 +1176,19 @@ export async function generateVideoRoutes(app: FastifyInstance) {
             "imageUrl is required — this endpoint is the image-to-video lane. For a prompt-only run use POST /v1/text-to-video.",
         },
       })
+    }
+
+    // Vidu Q4's reference endpoint needs a prompt and an image — refused here,
+    // before the reservation, rather than by the provider after it.
+    const viduProblem = viduQ4InputProblem({
+      provider,
+      prompt,
+      hasStartFrame: imageUrl !== undefined,
+      referenceImageCount: referenceImageUrls?.length ?? 0,
+      referenceAudioCount: referenceAudioUrls?.length ?? 0,
+    })
+    if (viduProblem) {
+      return reply.status(400).send({ error: viduProblem })
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)

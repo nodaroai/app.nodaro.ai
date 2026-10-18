@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { modelAvailabilityRefusal } from "../model-availability.js"
 import {
   STRIPE_PRODUCTS,
   PRICE_TO_PLAN,
@@ -128,6 +130,27 @@ describe("stripe-config", () => {
           expect(FREE_TIER_RESTRICTIONS.blockedModels).toContain(`${provider}:4k:${suffix}`)
         }
       }
+    })
+
+    it("blocks exactly Vidu Q4's 4K tier — every 4K composite the builder emits, nothing below it", () => {
+      // Exact-string gate: each 4K composite needs its own entry, so the list is
+      // compared against what buildVideoCreditModelIdentifier actually emits for
+      // every allowed duration (3-16s), not against a hand-typed copy.
+      const vidu = (FREE_TIER_RESTRICTIONS.blockedModels as readonly string[]).filter((m) => m.startsWith("vidu-q4"))
+      const emitted4k = Array.from({ length: 14 }, (_, i) =>
+        buildVideoCreditModelIdentifier("vidu-q4", i + 3, undefined, "image-to-video", undefined, "4k"))
+      expect([...vidu].sort()).toEqual([...emitted4k].sort())
+      expect(vidu).toContain("vidu-q4:16s:4k")
+      for (const res of ["540p", "720p", "1080p", "2k"]) {
+        expect(vidu).not.toContain(buildVideoCreditModelIdentifier("vidu-q4", 5, undefined, "image-to-video", undefined, res))
+      }
+      expect(vidu).not.toContain("vidu-q4")
+
+      // The shared availability decision refuses it under free semantics only.
+      const row = { isEnabled: true, tierRestriction: null }
+      expect(modelAvailabilityRefusal("vidu-q4:8s:4k", row, { tierForGates: "free", freeSemantics: true })?.reason).toBe("blocked")
+      expect(modelAvailabilityRefusal("vidu-q4:8s:2k", row, { tierForGates: "free", freeSemantics: true })).toBeNull()
+      expect(modelAvailabilityRefusal("vidu-q4:8s:4k", row, { tierForGates: "pro", freeSemantics: false })).toBeNull()
     })
 
     it("blocks no wan-3 composite (per-second family, bounded by the signup grant)", () => {

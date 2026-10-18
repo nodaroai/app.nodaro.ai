@@ -21,7 +21,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isVeoProvider, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
@@ -49,6 +49,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
   KIE_CREDIT_USD,
+  VIDU_Q4_REFERENCE_MODEL,
   kieModelAcceptsResolution,
   type KieModelConfig,
 } from "./models.js"
@@ -1458,6 +1459,135 @@ async function runWan3(
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
+/**
+ * Provider per-second rate (USD) for Vidu Q4 by WIRE resolution tier, reported
+ * as ProviderResult.cost so the credit-commit / audit path records the tier that
+ * actually rendered. Both endpoints bill the same rate. The USER-facing charge
+ * is the seeded (duration × resolution) composite, not this.
+ */
+const VIDU_Q4_RATE_USD_PER_SEC: Record<string, number> = {
+  "540p": 0.036, "720p": 0.076, "1080p": 0.096, "2k": 0.152, "4k": 0.312,
+}
+
+/** The reference-to-video aspect ratio: a declared ratio passes through, anything
+ *  else (absent, "Auto", "adaptive", an off-list ratio) lands on the nearest
+ *  declared ratio or the 16:9 default. The image-to-video body takes none. */
+function resolveViduQ4Aspect(modelKey: string, requested: string | undefined): string {
+  const token = requested?.trim()
+  const declared = getModel(modelKey)?.aspectRatios ?? []
+  if (token && declared.includes(token)) return token
+  return (token ? snapAspectRatioToken(token, declared) : undefined) ?? "16:9"
+}
+
+/**
+ * Builder for Vidu Q4, reached from imageToVideo only (the model has no
+ * text-to-video). ONE Nodaro id over two KIE endpoints, chosen by the inputs:
+ *   - a start frame and no references → `vidu-q4/image-to-video`
+ *     `{ image_url, prompt?, duration, resolution, audio }` — no aspect ratio,
+ *     the output inherits the frame's shape;
+ *   - any reference image or reference audio → `vidu-q4/reference-to-video`
+ *     `{ prompt, reference_image_urls, reference_audio_urls?, aspect_ratio,
+ *     duration, resolution, audio }`. A wired start frame cannot ride this body
+ *     as a frame, so `resolveSeedance2Inputs` demotes it into the reference
+ *     images (after the caller's own, ordinals unchanged) and binds it in prose.
+ *
+ * Both schemas are `additionalProperties: false`, so the body is built from an
+ * explicit allow-list — never by spreading `extraParams` or options (no seed, no
+ * negative prompt, no end frame). `duration` is an INTEGER and `resolution` the
+ * lowercase enum from `normalizeViduQ4Resolution`, whose 720p fallback is the
+ * tier the bare credit identifier bills.
+ *
+ * `prompt` is the USER's prompt (no platform default): optional on the frame
+ * endpoint and omitted when empty; required on the reference endpoint. The
+ * routes and the payload builder refuse an empty reference-mode prompt before
+ * any credits are reserved — the throw here is the backstop.
+ */
+async function runViduQ4(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: string,
+  prompt: string | undefined,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  firstFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const resolution = normalizeViduQ4Resolution(options?.resolution)
+  const requested = duration !== undefined && duration > 0 ? duration : 5
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+
+  // Reference images are size-normalized first (the resolver is synchronous);
+  // the start frame the caller passes is already normalized by imageToVideo.
+  // No reference VIDEO lane exists on either endpoint: `videos: 0` overrides
+  // the Seedance base so nothing can reach the wire as reference_video_urls.
+  const normalizedOptions = await normalizeSeedance2ReferenceImages(modelKey, options)
+  const limits = { ...SEEDANCE_2_REF_LIMITS, ...(VIDEO_REF_LIMITS_BY_PROVIDER[modelKey] ?? {}), videos: 0 }
+  const userPrompt = prompt?.trim() ? prompt : undefined
+  const resolved = resolveSeedance2Inputs({
+    prompt: userPrompt,
+    firstFrameUrl,
+    refImageUrls: normalizedOptions?.referenceImageUrls,
+    refAudioUrls: normalizedOptions?.referenceAudioUrls,
+    limits,
+  })
+  if (resolved.droppedRefImages > 0) {
+    console.log(
+      `[KIE.ai] ${logLabel}: dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the ${limits.images}-image cap`,
+    )
+  }
+
+  const input: Record<string, unknown> = {
+    // INTEGER on purpose — the generic createTask path sends a string.
+    duration: snapped,
+    resolution,
+    // KIE's own default is `true`; sent explicitly so the audit log and
+    // deriveKieEgressDimensions see the value that actually rendered.
+    audio: true,
+  }
+  applyVideoAudioToggle(input, modelKey, options)
+
+  let taskModel = modelConfig.model
+  if (resolved.mode === "reference") {
+    if (!userPrompt) {
+      throw createSanitizedError(`${logLabel}: a prompt is required when reference images or audio are connected`, "Video generation")
+    }
+    if (resolved.referenceImageUrls.length === 0) {
+      throw createSanitizedError(`${logLabel}: reference audio needs a start frame or at least one reference image`, "Video generation")
+    }
+    taskModel = VIDU_Q4_REFERENCE_MODEL
+    input.prompt = resolved.promptSuffix ? `${userPrompt}\n\n${resolved.promptSuffix}` : userPrompt
+    input.reference_image_urls = resolved.referenceImageUrls
+    if (resolved.referenceAudioUrls.length > 0) input.reference_audio_urls = resolved.referenceAudioUrls
+    input.aspect_ratio = resolveViduQ4Aspect(modelKey, aspectRatioValue)
+  } else {
+    if (!resolved.firstFrameUrl) {
+      throw createSanitizedError(`${logLabel}: a start frame or at least one reference image is required`, "Video generation")
+    }
+    input.image_url = resolved.firstFrameUrl
+    if (userPrompt) input.prompt = userPrompt
+  }
+
+  const rate = VIDU_Q4_RATE_USD_PER_SEC[resolution]
+  const tierCostUsd = rate !== undefined ? rate * snapped : modelConfig.cost
+
+  console.log(`[KIE.ai] ${logLabel} (${taskModel}) input:`, JSON.stringify(input, null, 2))
+  const { resultJson, taskId, providerMs } = await runKieTask(
+    taskModel, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -1804,6 +1934,29 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `Wan 3 (${provider})`,
+      )
+    }
+
+    // Vidu Q4 — bespoke builder (two endpoints by inputs, integer duration,
+    // `audio` lever, no aspect ratio on the frame body). MUST stay above the
+    // generic createTask path, which would spread extraParams and send a string
+    // duration into an additionalProperties:false schema. The end frame has no
+    // home on either endpoint (the catalog declares no end-frame, so the editor
+    // offers none) and is not forwarded.
+    if (isViduQ4Provider(provider)) {
+      if (effectiveEndFrameUrl) {
+        console.log(`[KIE.ai] Vidu Q4: end frame ignored — neither Vidu Q4 endpoint accepts one`)
+      }
+      return runViduQ4(
+        modelConfig,
+        provider,
+        effectivePrompt,
+        duration,
+        options?.aspectRatio,
+        effectiveImageUrl,
+        options,
+        reconcileOpts,
+        `Vidu Q4 (${provider})`,
       )
     }
 

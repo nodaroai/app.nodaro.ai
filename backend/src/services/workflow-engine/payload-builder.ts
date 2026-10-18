@@ -239,6 +239,7 @@ import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromN
 import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
+import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
@@ -261,6 +262,12 @@ import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNod
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
+
+/** Throw the Vidu Q4 input rule's message (a no-op for every other provider). */
+function assertViduQ4Inputs(args: Parameters<typeof viduQ4InputProblem>[0]): void {
+  const problem = viduQ4InputProblem(args)
+  if (problem) throw new Error(problem.message)
+}
 
 /** Every Edit Plan mode this app knows — the orchestrator's plannable set,
  *  since it loads no plugin to read a declaration from. */
@@ -3730,6 +3737,15 @@ export function buildPayload(
           i2vReferenceImageUrls = merged
         }
       }
+      // Vidu Q4's reference endpoint needs a prompt and an image: refused here,
+      // before any jobs row or reservation (same rule as the route).
+      assertViduQ4Inputs({
+        provider,
+        prompt: i2vPrompt,
+        hasStartFrame: !!i2vImageUrl,
+        referenceImageCount: i2vReferenceImageUrls?.length ?? 0,
+        referenceAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
+      })
       // Normalize the SAME values the branch already emits — the ui-fill is the
       // effective request for an untouched node (video-ui-defaults.ts), so
       // normalizing raw `data.*` would erase it (R5).
@@ -4188,6 +4204,16 @@ export function buildPayload(
       if (!hasStart && !hasImageRef && !hasVideoRef) generationType = "TEXT_2_VIDEO"
       else if (hasStart && !!endFrameUrl) generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
       else if (hasImageRef || hasVideoRef) generationType = "REFERENCE_2_VIDEO"
+
+      // Vidu Q4's reference endpoint needs a prompt and an image: refused here,
+      // before any jobs row or reservation (same rule as /v1/generate-video).
+      assertViduQ4Inputs({
+        provider: resolvedProvider,
+        prompt: composedPrompt,
+        hasStartFrame: !!imageUrl,
+        referenceImageCount: referenceImageUrls?.length ?? 0,
+        referenceAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
+      })
 
       // R5: the identifier already used `resolvedProvider` while the ui-fills
       // used the stored `provider` — a pre-existing disagreement. Both now read

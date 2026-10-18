@@ -5501,6 +5501,8 @@ export const en = {
   "vidcfg.wan3Note": "Priced by length and resolution; the Run button shows the price of the length you pick. Ambient audio is generated with the clip. “Adaptive” matches the wired input; pure text-to-video renders 16:9 unless a concrete ratio is picked.",
   "vidcfg.wan3VideoRefLimits": "Wan 3.0 requires each source clip to be 1–15s, all connected clips to total ≤ 15s, and input duration + output duration to stay ≤ 30s. These are checked by the provider when the job runs, not before it is submitted.",
   "vidcfg.wan3AudioRefLimits": "Each audio reference must be 1–15s (checked before the job is submitted), and all connected audio together must total ≤ 15s.",
+  "vidcfg.viduQ4Note": "Priced by length and resolution; the Run button shows the price of the length you pick. A start frame alone animates that frame; connecting reference images or audio switches to reference mode, which needs a prompt. Aspect ratio applies to reference runs only — a start-frame run keeps the frame's shape. Sound is generated with the clip.",
+  "vidcfg.viduQ4AudioRefLimits": "Vidu Q4 takes MP3 audio only, 3–12s per clip. Other formats or lengths are refused before the job is submitted — convert the clip to MP3 first.",
   "vidcfg.matchResSeam": "Matching the source video's resolution gives the cleanest seam.",
   "vidcfg.sameSeedSimilar": "Same seed produces similar results. Leave empty for random.",
   "vidcfg.veo31Audio": "VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.",

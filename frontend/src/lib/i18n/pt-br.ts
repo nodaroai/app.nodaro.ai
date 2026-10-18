@@ -5347,6 +5347,8 @@ export const ptBR: ChromeDict = {
   "vidcfg.wan3Note": "O preço depende da duração e da resolução; o botão Executar mostra o preço da duração escolhida. O áudio ambiente é gerado com o clipe. “Adaptativo” segue a entrada conectada; texto para vídeo puro é renderizado em 16:9, a menos que uma proporção específica seja escolhida.",
   "vidcfg.wan3VideoRefLimits": "O Wan 3.0 exige que cada clipe de origem tenha de 1 a 15 s, que todos os clipes conectados somem no máximo 15 s e que a duração de entrada + a duração de saída fiquem em até 30 s. O provedor verifica esses limites quando a tarefa é executada, não antes do envio.",
   "vidcfg.wan3AudioRefLimits": "Cada referência de áudio deve ter de 1 a 15 s (verificado antes do envio da tarefa), e todo o áudio conectado deve somar no máximo 15 s.",
+  "vidcfg.viduQ4Note": "O preço depende da duração e da resolução; o botão Executar mostra o preço da duração escolhida. Só um quadro inicial anima esse quadro; conectar imagens ou áudio de referência muda para o modo de referência, que exige um prompt. A proporção vale só para execuções com referência — uma execução com quadro inicial mantém o formato do quadro. O som é gerado com o clipe.",
+  "vidcfg.viduQ4AudioRefLimits": "O Vidu Q4 aceita apenas áudio em MP3, de 3 a 12 s por clipe. Outros formatos ou durações são recusados antes do envio da tarefa — converta o clipe para MP3 antes.",
   "vidcfg.matchResSeam": "Usar a mesma resolução do vídeo de origem deixa a emenda mais limpa.",
   "vidcfg.sameSeedSimilar": "A mesma seed produz resultados parecidos. Deixe vazio para usar uma aleatória.",
   "vidcfg.veo31Audio": "O VEO 3.1 cria áudio com IA a partir do prompt. Desative para um vídeo sem som e depois use um nó que adicione áudio.",

@@ -6,6 +6,8 @@ import {
   VIDEO_IMAGE_REF_HANDLES,
   VIDEO_IMAGE_VIDEO_REF_HANDLES,
 } from "../video-image-gate"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { VIDEO_GEN_PROVIDERS, videoProviderRunsFromReferences } from "@nodaro/shared/models"
 
 const gvNode = (provider: string) => ({ id: "n1", type: "generate-video", data: { provider } })
 const edge = (targetHandle: string) => ({ target: "n1", targetHandle })
@@ -30,16 +32,36 @@ describe("videoImageGateBlocked", () => {
     }
   })
 
-  it("does NOT lift on references alone for a single-id i2v-only model", () => {
-    // Engine parity: resolveVideoModeForInputs sends a refs-only single-id
-    // model to text-to-video, and payload-builder then throws. Lifting here
-    // would let the user press Run into a guaranteed failure.
+  it("does NOT lift on references alone for a single-id i2v-only model that cannot run from them", () => {
+    // Engine parity: kling-3-omni declares no `reference-to-video` capability,
+    // so resolveVideoModeForInputs sends its refs-only run to text-to-video and
+    // payload-builder throws. Lifting here would let the user press Run into a
+    // guaranteed failure.
     for (const handle of VIDEO_IMAGE_REF_HANDLES) {
       expect(
         videoImageGateBlocked(gvNode("kling-3-omni"), [edge(handle)]),
         `refs on ${handle} must not lift the gate for a single-id model`,
       ).toBe(true)
     }
+  })
+
+  it("DOES lift on references alone for EVERY reference-to-video model (catalog walk)", () => {
+    // The editor half of the references-only rule: a model whose provider runs
+    // from references alone must never show "image required" or disable Run
+    // when references are wired and no frame is.
+    const models = (VIDEO_GEN_PROVIDERS as readonly string[]).filter((p) => videoProviderRunsFromReferences(p))
+    expect(models).toEqual(expect.arrayContaining(["vidu-q4", "happyhorse-ref2v"]))
+    for (const p of models) {
+      expect(MODEL_CATALOG[p]?.features, p).toContain("reference-image")
+      for (const handle of VIDEO_IMAGE_REF_HANDLES) {
+        expect(videoImageGateBlocked(gvNode(p), [edge(handle)]), `${p} refs on ${handle}`).toBe(false)
+      }
+    }
+  })
+
+  it("still blocks a reference-to-video model with nothing wired, when it has no text mode", () => {
+    expect(videoImageGateBlocked(gvNode("vidu-q4"), [])).toBe(true)
+    expect(videoImageGateBlocked(gvNode("happyhorse-ref2v"), [])).toBe(true)
   })
 
   it("DOES lift on references alone for a split-id model whose i2v twin carries them", () => {

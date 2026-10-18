@@ -382,6 +382,46 @@ Source: KIE Wan 3.0 market contract (docs.kie.ai/market/wan/3-0-video,
 docs.kie.ai/market/wan/3-0-video-prime). Captured 2026-09-01.`,
 }
 
+// Vidu Q4 — no public Q4 prompt guide is captured, so like Wan 3.0 / MiniMax H3
+// the body is KIE contract facts plus the platform-standard structure. The
+// contract names references "reference image 2" / "reference audio 1"; the
+// editor's reference tokens emit the platform-wide `@image_N` / `@audio_N`
+// binding instead (see ref-binding.ts), which is what this doctrine teaches.
+const VIDU_Q4_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["vidu-q4"],
+  heading: "Vidu Q4 (vidu-q4)",
+  tips: [
+    "A start frame alone animates that frame (prompt optional). Any reference image or audio switches to reference mode: the prompt is REQUIRED and the start frame joins the reference images.",
+    "Reference mode: 1-15 images, up to 3 audio clips (MP3 only, 3-12s each). Name each by ordinal — \"the man from @image_2 says … in the voice of @audio_1\".",
+    "No text-only runs and no end frame: wire a start frame or at least one reference image.",
+    "3-16s (default 5); 540p / 720p (default) / 1080p / 2K / 4K; reference runs take 16:9 / 9:16 / 1:1 / 4:3 / 3:4. Prompt cap 20,000 chars.",
+    "`audio` is ON by default (synchronized sound). Cue the sound you want or state the exclusion; dialogue is not verified here, so plan key lines as a TTS + lip-sync pass.",
+  ],
+  doctrine: `Prompt structure (no public Vidu Q4 prompt guide is captured — the KIE API contract is the
+doctrine source; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**Modes (picked by what is wired)**
+- Start frame only → image-to-video. The frame anchors the shot and its aspect ratio; describe MOTION and camera, not the still. The prompt is optional.
+- Any reference image or reference audio → reference-to-video. The prompt is REQUIRED. A wired start frame cannot be sent as a frame here, so the platform adds it to the reference images (after the caller's own, ordinals unchanged) and names it in the prompt as the opening frame.
+- There is no text-only mode and no first+last frame mode.
+
+**Reference binding**
+- Refer to inputs by ordinal in attachment order. In the editor the reference tokens emit "@image_N" / "@audio_N" — write the binding explicitly ("the woman from @image_1 turns to the man from @image_2 and says …, in the voice of @audio_1").
+- Caps: 1-15 reference images (JPG / PNG / WEBP) and 0-3 reference audio clips. Audio must be MP3, each 3-12 seconds — the platform refuses any other format or length before the run starts.
+
+**Duration, resolution, aspect**
+- 3-16 seconds (default 5). 540p / 720p (default) / 1080p / 2K / 4K.
+- Image-to-video has no aspect setting — the output inherits the start frame's shape. Reference runs take 16:9 (default) / 9:16 / 1:1 / 4:3 / 3:4.
+- Prompts up to 20,000 characters.
+
+**Audio**
+- The "audio" boolean defaults ON and generates synchronized sound with the clip (the contract says "dialogue and sound effects"). Describe the soundscape plainly or state the exclusion, or turn the toggle off for a silent clip.
+
+Source: KIE Vidu Q4 market contracts (docs.kie.ai/market/vidu-q4/image-to-video,
+docs.kie.ai/market/vidu-q4/reference-to-video). Captured 2026-10-17.`,
+}
+
 const HAPPYHORSE_DOCTRINE: ProviderPromptDoctrine = {
   providers: ["happyhorse", "happyhorse-i2v", "happyhorse-ref2v", "happyhorse-edit"],
   heading: "HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)",
@@ -440,6 +480,7 @@ export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   GROK_IMAGINE_DOCTRINE,
   WAN_DOCTRINE,
   WAN_3_DOCTRINE,
+  VIDU_Q4_DOCTRINE,
   HAPPYHORSE_DOCTRINE,
   RUNWAY_KIE_DOCTRINE,
 ]

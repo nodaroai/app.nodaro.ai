@@ -919,6 +919,42 @@ describe("computeGenerateVideoProPricing — flat-priced providers", () => {
     expect(p.refPerSec).toBe(0)
   })
 
+  it("vidu-q4 prices each keyframes segment at its own ladder row (the per-second ladder)", async () => {
+    // Vidu Q4 is per-second priced (`vidu-q4:<N>s:<res>`, one row per second)
+    // with no `-ref` twin — it has no continuation (extend) transport — so,
+    // like Wan 3.0, every keyframes segment resolves the same composite a
+    // single-shot run of that length would: the GVP price IS the ladder.
+    const p = await computeGenerateVideoProPricing({
+      provider: "vidu-q4",
+      resolution: "1080p",
+      durationSec: 23,
+      segmentDurations: [10, 8, 6],
+      renderMethod: "keyframes",
+      aspectRatio: "16:9",
+    })
+    expect(p.segmentCosts).toEqual([
+      STATIC_CREDIT_COSTS["vidu-q4:10s:1080p"]!,
+      STATIC_CREDIT_COSTS["vidu-q4:8s:1080p"]!,
+      STATIC_CREDIT_COSTS["vidu-q4:6s:1080p"]!,
+    ])
+    expect(p.segmentCosts).toEqual([480, 390, 290])
+    expect(p.noRefPerSec).toBe(0)
+    expect(p.refPerSec).toBe(0)
+    expect(p.resolution).toBe("1080p")
+  })
+
+  it("vidu-q4 prices a 4K keyframes run on the 4k rows", async () => {
+    const p = await computeGenerateVideoProPricing({
+      provider: "vidu-q4",
+      resolution: "4k",
+      durationSec: 23,
+      segmentDurations: [10, 8, 6],
+      renderMethod: "keyframes",
+      aspectRatio: "16:9",
+    })
+    expect(p.segmentCosts).toEqual([1560, 1250, 940])
+  })
+
   it("gemini-omni-flash prices per DURATION TIER, like its sibling", async () => {
     const p = await computeGenerateVideoProPricing({
       provider: "gemini-omni-flash",
@@ -982,7 +1018,7 @@ describe("computeGenerateVideoProPricing — flat-priced providers", () => {
   it("refuses to price EXTEND on a provider with no reference-video transport", async () => {
     // The money-side backstop for the render-method gate: reserving credits for
     // a run whose transport does not exist is worse than a 400.
-    for (const provider of ["veo3", "gemini-omni-video", "gemini-omni-flash", "wan-3", "wan-3-prime", "kling-3-omni", "grok-i2v", "happyhorse-ref2v"]) {
+    for (const provider of ["veo3", "gemini-omni-video", "gemini-omni-flash", "wan-3", "wan-3-prime", "kling-3-omni", "grok-i2v", "happyhorse-ref2v", "vidu-q4"]) {
       await expect(
         computeGenerateVideoProPricing({ provider, resolution: "720p", durationSec: 30 }),
       ).rejects.toThrow(/renderMethod "keyframes" only/)

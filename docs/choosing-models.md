@@ -128,6 +128,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Seedance 2 Mini | Bytedance | Everyday | 209<!-- credits: seedance-2-mini --> | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
 | Topaz Video Upscale | Topaz | Everyday | 209<!-- credits: topaz-video --> | video-upscale | High-quality video upscale and enhancement. |
 | VEO Extend | Google | Everyday | 209<!-- credits: veo-extend --> | extend | Extend an existing VEO 3.1 clip by another segment. |
+| Vidu Q4 | Vidu | Everyday | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Standard | 220<!-- credits: wan-3 --> | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |

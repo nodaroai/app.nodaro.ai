@@ -81,7 +81,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "aspectRatio": { valueType: "string", fixed: false, values: ["16:9","1:1","21:9","3:4","4:3","4:5","5:4","9:16","9:21","adaptive"] },
     "draft": { valueType: "boolean", fixed: false, values: [true] },
     "duration": { valueType: "number", fixed: false, values: [-1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30] },
-    "resolution": { valueType: "string", fixed: false, values: ["1080P","1080p","2K","2k","480p","4k","512P","720P","720p","768P"] },
+    "resolution": { valueType: "string", fixed: false, values: ["1080P","1080p","2K","2k","480p","4k","512P","540p","720P","720p","768P"] },
   },
   "image-collage": {
     "aspectRatio": { valueType: "string", fixed: true, values: ["16:9","1:1","21:9","2:3","3:2","3:4","4:3","4:5","9:16"] },

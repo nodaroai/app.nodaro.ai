@@ -267,6 +267,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "gemini-omni-flash": "Google Gemini Omni Flash — faster, cheaper Omni tier; multimodal video with native audio, 4–10s, up to 4K.",
     "wan-3": "Wan 3.0 — multimodal refs (10 images / 5 videos / 5 audio) or first+last frame, native audio, 2–30s, 480p/720p/1080p",
     "wan-3-prime": "Wan 3.0 Prime — high-speed Wan 3.0 tier; same surface, faster turnaround at a higher rate",
+    "vidu-q4": "Vidu Q4 — start frame or up to 15 reference images + 3 MP3 audio refs, native audio, 3–16s, 540p–4K (image required)",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — image-to-video only; requires an input image",
   },
   "image-to-video": {
@@ -303,6 +304,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "gemini-omni-flash": "Google Gemini Omni Flash — faster, cheaper Omni tier; multimodal video with native audio, 4–10s, up to 4K.",
     "wan-3": "Wan 3.0 — multimodal refs (10 images / 5 videos / 5 audio) or first+last frame, native audio, 2–30s, 480p/720p/1080p",
     "wan-3-prime": "Wan 3.0 Prime — high-speed Wan 3.0 tier; same surface, faster turnaround at a higher rate",
+    "vidu-q4": "Vidu Q4 — animate a start frame, or direct up to 15 reference images + 3 MP3 audio refs; native audio, 3–16s, 540p–4K",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — stylized animation, 1–15s, 480p/720p (image required)",
   },
   "video-to-video": {

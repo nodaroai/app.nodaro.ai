@@ -131,6 +131,7 @@ export {
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   resolveVideoProviderForMode,
   resolveVideoModeForInputs,
+  videoProviderRunsFromReferences,
   isSeedance2Provider,
   MINIMAX_H3_PROVIDERS,
   isMinimaxH3Provider,
@@ -140,6 +141,10 @@ export {
   isWan3Provider,
   WAN_3_DEFAULT_RESOLUTION,
   normalizeWan3Resolution,
+  VIDU_Q4_PROVIDERS,
+  isViduQ4Provider,
+  VIDU_Q4_DEFAULT_RESOLUTION,
+  normalizeViduQ4Resolution,
   GEMINI_OMNI_PROVIDERS,
   isGeminiOmniProvider,
   VIDEO_PROVIDERS_WITHOUT_DISPATCH,
@@ -170,6 +175,8 @@ export {
   SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER,
   seedance2AudioLimitSec,
   findSeedance2AudioOverLimit,
+  VIDEO_REF_AUDIO_RULES,
+  checkRefAudioRules,
   DEFAULT_VIDEO_PROVIDER,
   DEFAULT_VIDEO_DURATION_SEC,
   applyDefaultVideoSelection,
@@ -224,6 +231,9 @@ export type {
   GvpAnchorChoice,
   GvpAnchorWireMode,
   RefVideoDurationLimit,
+  RefAudioRule,
+  RefAudioProbe,
+  RefAudioCheck,
 } from "../model-constants.js"
 export { GEMINI_OMNI_VOICE_PRESETS, GEMINI_OMNI_VOICE_PRESET_IDS } from "../gemini-omni-voices.js"
 export type { GeminiOmniVoicePreset, GeminiOmniVoicePresetId } from "../gemini-omni-voices.js"

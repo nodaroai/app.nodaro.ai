@@ -856,6 +856,12 @@ const SESSION_TOOLS_BYTES = 3_939
 // migration 532). Measured by this suite with and without the change:
 // 444_914 − 444_522 = 392 B.
 const SESSION_COVER_BYTES = 392
+// RAISED 2026-10-18 by one catalog model and nothing else: `vidu-q4` (Vidu Q4)
+// joins the video model enums the tools carry. No tool and no description text
+// was added, so the fixture does NOT move. Measured by this suite: origin/dev
+// alone 444_914 B, the same tree with vidu-q4 444_923 B = 9 B; the list keeps
+// the headroom it had.
+const VIDU_Q4_MODEL_ENUM_BYTES = 9
 
 // RAISED 2026-10-15 by the shared word search (lib/text-search.ts, the `?q=` of
 // `GET /v1/characters` and its siblings and of `GET /v1/library`) and nothing
@@ -1050,7 +1056,8 @@ export const TOOL_WIRE_BUDGET = {
     PRESET_WRITE_TOOLS_BYTES +
     GENERATE_IMAGE_BATCH_BYTES +
     GENERATE_IMAGE_SUBJECT_BYTES +
-    SESSION_COVER_BYTES,
+    SESSION_COVER_BYTES +
+    VIDU_Q4_MODEL_ENUM_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -229,6 +229,20 @@ describe("getHandleConnectionLimit — Seedance 2 imageReferences shared budget"
     ).toBe(5)
   })
 
+  it("vidu-q4: a 15-image pool the start frame shares, 3 audio refs, no video refs, no end frame", () => {
+    // Vidu Q4 runs resolveSeedance2Inputs too: a wired start frame is demoted
+    // into reference_image_urls on a reference run, so it consumes one of the
+    // 15 slots. No reference-video lane exists on either endpoint, and the
+    // catalog declares no end-frame, so both handles are capped at 0.
+    const vidu = { id: "n", type: "generate-video", data: { provider: "vidu-q4" } } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(vidu, "imageReferences", { seedance2ImagePoolConsumed: 1 })?.limit).toBe(14)
+    expect(getHandleConnectionLimit(vidu, "imageReferences", { seedance2ImagePoolConsumed: 0 })?.limit).toBe(15)
+    expect(getHandleConnectionLimit(vidu, "audioReferences")?.limit).toBe(3)
+    expect(getHandleConnectionLimit(vidu, "videoReferences")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(vidu, "endFrame")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(vidu, "startFrame")?.limit).toBe(1)
+  })
+
   it("wan-3 / wan-3-prime: flat 10 images / 5 videos / 5 audio, budget ignored", () => {
     // Wan 3.0 declares its own reference caps in VIDEO_REF_LIMITS_BY_PROVIDER
     // (10 images) AND runs the same resolveSeedance2Inputs resolver as
