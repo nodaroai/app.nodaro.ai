@@ -18,7 +18,7 @@ import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MEDIA_INPUT_KINDS, REGISTRY_CA
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
-const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs"]
+const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp"]
 const CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "reviewHold", "presents"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
@@ -356,6 +356,45 @@ function checkSeams(unit, m, ctx, errors) {
   }
 }
 
+/** An MCP tool name, as the MCP server registers it (gif_to_video). */
+const MCP_TOOL_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
+
+/**
+ * `mcp.widgetModelFor`: the MCP verbs that dispatch this unit's job and whose
+ * result widget shows the unit's type as its `model` (widgetModelOf in
+ * backend/src/lib/mcp/widget-models.ts). The value is always the unit's own
+ * type, never free text, so it cannot drift from it.
+ */
+function checkMcp(mcp, errors) {
+  if (mcp === undefined) return
+  if (!isObject(mcp)) return errors.push("mcp must be an object ({ widgetModelFor: [<mcp tool name>, …] })")
+  for (const k of Object.keys(mcp)) if (k !== "widgetModelFor") errors.push(`mcp.${k}: unknown (widgetModelFor)`)
+  const tools = mcp.widgetModelFor
+  if (!Array.isArray(tools) || tools.length === 0) return errors.push("mcp.widgetModelFor must list the MCP tools (snake_case names) whose widget names this unit — omit mcp when there are none")
+  for (const t of tools) if (typeof t !== "string" || !MCP_TOOL_NAME.test(t)) errors.push(`mcp.widgetModelFor: ${JSON.stringify(t)} is not an MCP tool name (snake_case, e.g. "gif_to_video")`)
+  const dup = tools.filter((t, i) => tools.indexOf(t) !== i)
+  if (dup.length) errors.push(`mcp.widgetModelFor lists ${[...new Set(dup)].join(", ")} more than once`)
+}
+
+/**
+ * An MCP tool's widget names one node: two units may not claim the same tool.
+ * backend/src/lib/mcp/widget-models.ts `unitWidgetModels` enforces the same
+ * rule at run time; widget-models.test.ts feeds both one double claim.
+ */
+export function mcpToolClaims(units) {
+  const owner = new Map()
+  const errors = []
+  for (const u of units) {
+    const tools = u.manifest?.mcp?.widgetModelFor
+    if (!Array.isArray(tools)) continue
+    for (const t of new Set(tools)) {
+      if (owner.has(t)) errors.push(`${u.type}: mcp.widgetModelFor: "${t}" is already claimed by ${owner.get(t)} — an MCP tool's widget names one node`)
+      else owner.set(t, u.type)
+    }
+  }
+  return errors
+}
+
 // Always reserved, whatever context a test builds: a plain object already answers these.
 const PROTOTYPE_NAMES = reservedIdsFrom()
 
@@ -465,6 +504,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     if ("after" in m.registry) after(m.registry.after, "registry.after")
   }
   checkProducer(m, errors)
+  checkMcp(m.mcp, errors)
   errors.push(...useCaseProblems(unit, m, ctx))
   const docs = m.docs
   if (!isObject(docs) || (docs.page === undefined) === (docs.awaiting === undefined)) errors.push("docs needs exactly one of page (the docs/nodes/… page) or awaiting (why it has none yet)")
@@ -498,6 +538,7 @@ export function validateUnits(units, ctx) {
   const known = new Set([...ctx.legacyTypes, ...units.map((u) => u.type)])
   const unitFamilies = new Map(units.filter((u) => isObject(u.manifest?.picker)).map((u) => [u.type, u.manifest.picker.family]))
   const errors = [...units.flatMap((u) => validateUnit(u, ctx, known, unitFamilies)), ...duplicateBuilderProblems(units)]
+  errors.push(...mcpToolClaims(units))
   try {
     insertAtPositions([...ctx.legacyTypes], units.filter((u) => u.manifest?.position).map((u) => ({ type: u.type, after: u.manifest.position.after })))
   } catch (err) {

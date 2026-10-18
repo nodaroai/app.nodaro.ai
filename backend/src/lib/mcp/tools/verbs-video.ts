@@ -22,6 +22,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { widgetModelOf } from "../widget-models.js"
 import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, VIDEO_UPSCALE_PROVIDERS, resolveVideoModeForInputs, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
@@ -2320,6 +2321,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   // Animated GIF → H.264 MP4, FFmpeg-only, ZERO credits. Bridges a GIF into
   // the video pipeline so it can be used as a motion reference for models that
   // reject GIF in the video slot (Seedance et al.).
+  const gifToVideoWidgetModel = widgetModelOf("gif_to_video", "gif-to-video")
   server.registerTool(
     "gif_to_video",
     {
@@ -2399,7 +2401,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         payload,
         label: "gif to video",
         widgetKind: "video",
-        widgetData: { prompt: "(gif to video)", model: "gif-to-video" },
+        widgetData: { prompt: "(gif to video)", model: gifToVideoWidgetModel },
       })
     },
   )

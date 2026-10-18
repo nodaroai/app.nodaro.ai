@@ -188,7 +188,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | `nodeTypes`, config panels, `NODE_OPTIONS` + families, executors, label tables | `components/nodes/index.ts`, `config-panel.tsx`, `node-options.tsx` + `node-families.ts`, `execute-node.ts` (kit: `workflow-editor/unit-exec-kit.ts`), `lib/i18n/labels.ts` |
 | everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
 | `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
-| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability), `TEXT_SOURCE_NODE_TYPES` (a first output of kind `text`), the MCP handle table `lib/node-handles.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability), `TEXT_SOURCE_NODE_TYPES` (a first output of kind `text`), the MCP handle table `lib/node-handles.ts`, the MCP verbs' widget model `lib/mcp/widget-models.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
 | `USE_CASE_BODIES` (a use-case unit's request body) and its `GET /v1/nodes` input schema (`usecaseInputSchemaOf`) | `backend/src/lib/use-case/bodies.ts` ∪ the `use-cases` aggregate. A unit's `use-case.ts` spreads the shared shapes of `lib/use-case/body-shapes.ts` (never `bodies.ts`, a composer — G5) and, being a declaration only (G7), writes an enum over a list as `z.enum(LIST as unknown as [string, ...string[]])`: a helper call such as `z.enum(tuple(LIST))` is not a pure argument |
 | the entity-subject targets (`ENTITY_SUBJECT_TARGET_TYPES`; capability `input:entity-subject`: a wired Character / Face / Object / Creature / Location is the node's subject, so it lands in `imageUrl`, not `referenceImageUrls`; the validator requires an input whose `field` is `imageUrl` and whose `accepts` includes `image`) | both input resolvers, legacy rows ∪ the units declaring it: `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) and `workflow-engine/input-resolver.ts` (through `unit-descriptors.ts`). The server's legacy rows lack `gif-to-video`, which the editor's have, so declaring it on that node changes how a server-run workflow routes it |
 | the canvas connection rule of a unit's inputs (each `handles.inputs[].accepts`) | `frontend/src/lib/connection-validation.ts` asks `lib/unit-connections.ts` (below) |
@@ -301,6 +301,15 @@ which the two engines' parity tests read.)
   is also added by hand to the shrink-only unbounded-producers pin in
   `backend/src/lib/__tests__/video-output-length.test.ts` (a migrating legacy
   node is already in it).
+- `mcp.widgetModelFor` (optional): the MCP tools (snake_case names) that
+  dispatch the node's job and whose result widget shows the node's type as its
+  `model`. The verb resolves it once, when it registers, with
+  `widgetModelOf("<tool>")` (`backend/src/lib/mcp/widget-models.ts`); a legacy
+  verb passes its literal instead (`widgetModelOf("<tool>", "<type>")`), and
+  passing both, or neither, throws. Migrating a node drops the verb's literal
+  and declares the tool here. The value is always the unit's own type, a tool
+  is claimed by one unit, and every declared tool must be a registered MCP
+  tool (`lib/mcp/__tests__/widget-models.test.ts`, against `tool-surface.json`).
 - Parameter pickers and canvas macros are not units.
 
 ### Manifest keys beyond the basics

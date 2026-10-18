@@ -74,6 +74,8 @@ export interface UnitDescriptor {
   }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
+  /** unit.json `mcp`, when declared: the MCP tools whose result widget names this type as its model (lib/mcp/widget-models.ts). */
+  readonly mcp?: { readonly widgetModelFor: ReadonlyArray<string> }
   /** Why no rule bounds its video output's length: unit.json's lengthUnknownReason, present exactly with the "length:unknown" capability (UNBOUNDED_LENGTH_REASONS). */
   readonly lengthUnknownReason?: string
 }

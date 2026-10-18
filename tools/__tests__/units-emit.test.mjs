@@ -148,6 +148,22 @@ test("docs.index \"hand-written\" keeps the unit out of the generated README reg
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test("mcp.widgetModelFor reaches the descriptor only when declared", async () => {
+  const root = tree()
+  const DESC = "backend/src/nodes/fixture-echo/descriptor.generated.ts"
+  try {
+    assert.doesNotMatch((await run(root)).outputs.get(DESC), /"mcp"/, "no mcp key on a unit that declares none")
+    const file = path.join(root, "frontend/src/nodes/fixture-echo/unit.json")
+    const m = JSON.parse(readFileSync(file, "utf8"))
+    m.mcp = { widgetModelFor: ["fixture_echo"] }
+    writeFileSync(file, JSON.stringify(m))
+    const result = await run(root)
+    assert.deepEqual(result.errors, [])
+    assert.match(result.outputs.get(DESC), /"mcp": \{\n\s+"widgetModelFor": \[\n\s+"fixture_echo"\n\s+\]\n\s+\}/)
+    assert.doesNotMatch(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /widgetModelFor/, "server-only: the editor's definition does not carry it")
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test("an unknown argument is a usage error", async () => {
   const err = []
   assert.equal(await main(["--wat"], REPO, { write() {} }, { write: (s) => err.push(s) }), 2)

@@ -328,6 +328,25 @@
         }
       }
     },
+    "mcp": {
+      "type": "object",
+      "required": [
+        "widgetModelFor"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "widgetModelFor": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+          },
+          "description": "The MCP tools (snake_case names, e.g. gif_to_video) that dispatch this node's job and whose result widget shows this node's type as its model. Composed by backend/src/lib/mcp/widget-models.ts; a tool is claimed by one node."
+        }
+      }
+    },
     "contract": {
       "type": "object",
       "additionalProperties": false,

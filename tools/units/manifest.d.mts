@@ -44,5 +44,7 @@ export function optionTypesFrom(options: string): Set<string>
 export function reservedIdsFrom(sources?: { credits?: string; options?: string; macros?: string[]; codeBuiltCreditIds?: string[] }): Map<string, string>
 export function repoContext(root: string): ValidationContext
 export function validateUnit(unit: Unit, ctx: ValidationContext, knownTypes: Set<string>, unitFamilies?: Map<string, string>): string[]
+/** Problems with units' mcp.widgetModelFor claims across units (empty = none): one MCP tool, one unit. */
+export function mcpToolClaims(units: Array<Pick<Unit, "type" | "manifest">>): string[]
 export function validateUnits(units: Unit[], ctx: ValidationContext): string[]
 export function insertAtPositions(base: string[], units: Array<{ type: string; after: string | null }>): string[]

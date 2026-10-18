@@ -109,6 +109,11 @@ const cases = [
   ["docs needs a page or a reason", (m) => { delete m.docs.page }, /docs needs exactly one of page/],
   ["docs page must exist", (m) => { m.docs.page = "docs/nodes/utility/missing.md" }, /does not exist/],
   ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["text"] }, /"text" has no editor connection rule for a unit input yet/],
+  ["mcp is an object", (m) => { m.mcp = ["fixture_echo"] }, /mcp must be an object/],
+  ["mcp keys are a whitelist", (m) => { m.mcp = { widgetModelFor: ["fixture_echo"], model: "x" } }, /mcp\.model: unknown \(widgetModelFor\)/],
+  ["mcp.widgetModelFor is a non-empty list", (m) => { m.mcp = { widgetModelFor: [] } }, /mcp\.widgetModelFor must list the MCP tools/],
+  ["mcp.widgetModelFor names MCP tools, not node types", (m) => { m.mcp = { widgetModelFor: ["fixture-echo"] } }, /"fixture-echo" is not an MCP tool name \(snake_case/],
+  ["mcp.widgetModelFor without duplicates", (m) => { m.mcp = { widgetModelFor: ["fixture_echo", "fixture_echo"] } }, /lists fixture_echo more than once/],
   ["length:unknown with length:pass-video", (m) => { m.capabilities = ["length:unknown", "length:pass-video"] }, /"length:unknown" \(no rule bounds its length\) contradicts "length:pass-video"/, { capabilities: CAPABILITIES }],
   ["length:unknown with length:exact-video", (m) => { m.capabilities = ["length:exact-video", "length:unknown"] }, /"length:unknown" \(no rule bounds its length\) contradicts "length:exact-video"/, { capabilities: CAPABILITIES }],
   ["length:unknown without a reason", (m) => { m.capabilities = ["length:unknown"] }, /"length:unknown" needs lengthUnknownReason/, { capabilities: CAPABILITIES }],
@@ -231,6 +236,18 @@ test("docs.index \"hand-written\": needs docs.page and a hand-written README row
     assert.ok(problems(root, ctx).some((e) => /docs\.index: "generated" — the only value is "hand-written"/.test(e)))
     withManifest(root, (m) => { m.docs = { awaiting: "not written yet", index: "hand-written" } })
     assert.ok(problems(root, ctx).some((e) => /needs docs\.page/.test(e)))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("mcp.widgetModelFor: a valid declaration passes; two units may not claim one MCP tool", () => {
+  const root = tree()
+  try {
+    withManifest(root, (m) => { m.mcp = { widgetModelFor: ["fixture_echo", "echo_twice"] } })
+    assert.deepEqual(problems(root), [])
+    // A second unit, copied from the fixture, claiming the same tool.
+    cpSync(path.join(root, UNIT), path.join(root, "frontend/src/nodes/fixture-twin"), { recursive: true })
+    withManifest(root, (m) => { m.type = "fixture-twin"; m.mcp = { widgetModelFor: ["echo_twice"] } }, "frontend/src/nodes/fixture-twin")
+    assert.ok(problems(root).includes('fixture-twin: mcp.widgetModelFor: "echo_twice" is already claimed by fixture-echo — an MCP tool\'s widget names one node'), problems(root).join("\n"))
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

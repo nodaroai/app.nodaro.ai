@@ -108,6 +108,8 @@ export function descriptorSource(unit) {
     handles: m.handles,
     execution: m.execution,
     capabilities: m.capabilities,
+    // The MCP verbs whose widget names this unit (backend/src/lib/mcp/widget-models.ts), only when declared.
+    ...(m.mcp ? { mcp: m.mcp } : {}),
     // Why no rule bounds its length (the "length:unknown" capability), when it has one.
     ...(m.lengthUnknownReason !== undefined ? { lengthUnknownReason: m.lengthUnknownReason } : {}),
   }
