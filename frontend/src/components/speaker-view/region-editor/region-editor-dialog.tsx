@@ -14,7 +14,7 @@
  * who is who, a guide asks "Which face is …?" one speaker, then one tracked
  * fragment, at a time (tap-first, decided 2026-10-13; `face-guide.ts`).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID, speakerRenameMapOf, speakerViewUnnamedSpeakers, speakerViewVideoModeLive } from "@nodaro/render-rules"
 import { ChevronLeft, ChevronRight, Crop } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -154,8 +154,11 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
     const v = videoRef.current
     if (v) v.currentTime = Math.max(0, sourceMs / 1000)
   }
-  // Each new step brings the frame to a moment it is about.
-  useEffect(() => {
+  // Each new step brings the frame to a moment it is about. A layout effect:
+  // the step, the seek and the faces at its moment land in ONE commit, so the
+  // question is never painted over the previous step's frame (a passive effect
+  // ran a frame later, whenever the scheduler got to it).
+  useLayoutEffect(() => {
     if (!step) return
     setGuided(true)
     seekTo(masterToSourceMs(step.seekMs, camera?.offsetMs))
