@@ -24,18 +24,32 @@ export interface ChargedPrices {
    * its price reserves it.
    */
   credits(identifier: string, units?: number): number | undefined
+  /**
+   * The exact credits ONE unit of a per-unit rate adds to a run's total, not
+   * rounded (2.2 where `credits(identifier)` answers 3): a run of N units is
+   * charged `ceil(N × rate)`, once. Undefined like `credits`. The docs' rule
+   * for a `credits-rate` figure (`ee/billing/docs-pricing.ts :: rateOf`).
+   */
+  rate(identifier: string): number | undefined
 }
 
-const NO_PRICES: ChargedPrices = { credits: () => undefined }
+const NO_PRICES: ChargedPrices = { credits: () => undefined, rate: () => undefined }
 
 let creditsModulePromise: Promise<typeof import("../../ee/billing/credits.js")> | null = null
 function loadCreditsModule(): Promise<typeof import("../../ee/billing/credits.js")> {
   return (creditsModulePromise ??= import("../../ee/billing/credits.js"))
 }
 
+let docsPricingModulePromise: Promise<typeof import("../../ee/billing/docs-pricing.js")> | null = null
+function loadDocsPricingModule(): Promise<typeof import("../../ee/billing/docs-pricing.js")> {
+  return (docsPricingModulePromise ??= import("../../ee/billing/docs-pricing.js"))
+}
+
 export async function loadChargedPrices(): Promise<ChargedPrices> {
   if (!hasCredits()) return NO_PRICES
-  const { getChargedPriceTable, chargedCredits } = await loadCreditsModule()
+  const [{ getChargedPriceTable, chargedCredits }, { docsPricing }] = await Promise.all([loadCreditsModule(), loadDocsPricingModule()])
   const table = await getChargedPriceTable()
-  return { credits: (identifier, units) => chargedCredits(table, identifier, units) }
+  // The live table, so no snapshot: every rate is priced from its row.
+  const { rateOf } = docsPricing(table, chargedCredits, {})
+  return { credits: (identifier, units) => chargedCredits(table, identifier, units), rate: rateOf }
 }

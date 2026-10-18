@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
-import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph } from "@nodaro/render-rules"
+import { EPISODE_CHAPTERS_DEFAULTS, TIGHTEN_EPISODE_DEFAULTS, buildEpisodeChaptersGraph, buildTightenEpisodeGraph } from "@nodaro/render-rules"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const graph = buildTightenEpisodeGraph(TIGHTEN_EPISODE_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } })
@@ -26,6 +26,7 @@ const m = vi.hoisted(() => ({
   cover: { ok: true } as { ok: boolean; balance?: number },
   coverArgs: [] as unknown[],
   estimateCalls: 0,
+  estimatedTypes: [] as Array<string | undefined>,
   reserveSeen: [] as Array<{ billingContext: unknown; creditOverride: unknown }>,
   insertJob: vi.fn(),
   insertIdem: vi.fn(),
@@ -58,8 +59,9 @@ vi.mock("@/lib/use-case/request.js", async (orig) => ({
 }))
 vi.mock("@/lib/use-case/preflight.js", () => ({ usecasePreflight: async () => m.preflight }))
 vi.mock("@/ee/billing/use-case-estimate.js", () => ({
-  estimateUseCaseCredits: async () => {
+  estimateUseCaseCredits: async (graph: { nodeType?: string }) => {
     m.estimateCalls++
+    m.estimatedTypes.push(graph?.nodeType)
     return { stepsCredits: 922, feeCredits: 10, totalCredits: 932 }
   },
 }))
@@ -137,7 +139,7 @@ const post = (app: FastifyInstance, payload: Record<string, unknown>, headers: R
 beforeEach(() => {
   Object.assign(m, {
     credits: true, denied: false, absent: false, authKind: "jwt", prepared: ok(), preflight: null, cover: { ok: true },
-    coverArgs: [], estimateCalls: 0, reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
+    coverArgs: [], estimateCalls: 0, estimatedTypes: [], reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
   })
   m.insertJob.mockReset().mockResolvedValue({ data: { id: "job-1" }, error: null })
   m.insertIdem.mockReset().mockResolvedValue({ created: true, row: { id: "job-1" } })
@@ -505,6 +507,57 @@ describe("POST /v1/tighten-episode/estimate", () => {
   it("community: zero, with the length", async () => {
     m.credits = false
     expect((await estimate()).json()).toEqual({ data: { totalCredits: 0, stepsCredits: 0, feeCredits: 0, durationSec: 3600 } })
+  })
+})
+
+describe("Chapters through the same factory", () => {
+  const chaptersGraph = buildEpisodeChaptersGraph(EPISODE_CHAPTERS_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } })
+  const chaptersOk = () => ({ ok: true, settings: EPISODE_CHAPTERS_DEFAULTS, sources: { media }, graph: chaptersGraph })
+  const postChapters = async (payload: Record<string, unknown>) =>
+    (await makeApp()).inject({ method: "POST", url: "/v1/episode-chapters", payload })
+  beforeEach(() => {
+    m.prepared = chaptersOk()
+  })
+
+  it("starts the run: a Chapters wrapper (use-case, processing), its own fee held, its graph run, 202", async () => {
+    const res = await postChapters({ mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ jobId: "job-1", executionId: "exec-1" })
+    expect(m.prepare.mock.calls[0]![0]).toBe("episode-chapters")
+    expect(m.insertJob.mock.calls[0]![1]).toMatchObject({
+      user_id: USER, provider: "use-case", job_type: "episode-chapters", status: "processing",
+      input_data: expect.objectContaining({ type: "episode-chapters", mode: "run", mediaUrl: "https://r2/ep.mp4", _feeCredits: 10 }),
+    })
+    expect(m.reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "use-case-fee:episode-chapters")
+    expect(m.estimatedTypes).toEqual(["episode-chapters"])
+    // Nothing renders, so there is no preview subset: the whole graph runs.
+    expect(m.execute.mock.calls[0]![0]).not.toHaveProperty("nodeIds")
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ graph: expect.objectContaining({ nodeType: "episode-chapters", settings: EPISODE_CHAPTERS_DEFAULTS }) })
+  })
+
+  it("a key Chapters does not have (another type's setting) is stripped, and the run starts", async () => {
+    const res = await postChapters({ mediaUrls: ["https://r2/ep.mp4"], captions: "yes", framing: { aspect: "9:16", layout: "stacked" } })
+    expect(res.statusCode).toBe(202)
+    const body = m.prepare.mock.calls[0]![1] as Record<string, unknown>
+    expect(body).not.toHaveProperty("captions")
+    expect(body).not.toHaveProperty("framing")
+    expect(m.insertJob).toHaveBeenCalledTimes(1)
+  })
+
+  it("its own settings are checked: an unknown plan tier is a 400 before any row", async () => {
+    const res = await postChapters({ mediaUrls: ["https://r2/ep.mp4"], planTier: "ultra" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(m.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("POST /v1/episode-chapters/estimate: the built graph's estimate plus its fee, and the probed length", async () => {
+    const res = await (await makeApp()).inject({ method: "POST", url: "/v1/episode-chapters/estimate", payload: { mediaUrls: ["https://r2/ep.mp4"] } })
+    expect(res.statusCode).toBe(200)
+    // Priced on Chapters' own graph (the figures are this file's mocked estimate).
+    expect(m.estimatedTypes).toEqual(["episode-chapters"])
+    expect(res.json()).toEqual({ data: { totalCredits: 932, stepsCredits: 922, feeCredits: 10, durationSec: 3600 } })
+    expect(m.insertJob).not.toHaveBeenCalled()
   })
 })
 

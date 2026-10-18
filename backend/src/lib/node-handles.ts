@@ -6,9 +6,11 @@
 // @registry-enumerates ALL_NODE_HANDLES carries every node unit's handles
 import { NODE_HANDLES, type NodeHandleSpec } from "./mcp/generated/node-handles.js"
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
-import { composeRecord, unitRecord } from "./unit-compose.js"
+import { composeRecordSorted, unitRecord } from "./unit-compose.js"
 
-export const ALL_NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = composeRecord<NodeHandleSpec>(
+// In type order, as gen:skills writes the legacy table: the Copilot's "did you
+// mean" breaks ties by this order, so a unit sits where the table would list it.
+export const ALL_NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = composeRecordSorted<NodeHandleSpec>(
   "NODE_HANDLES",
   NODE_HANDLES,
   unitRecord(UNIT_NODE_DESCRIPTORS, (u) => ({ inputs: u.inputs, outputs: u.outputs })),

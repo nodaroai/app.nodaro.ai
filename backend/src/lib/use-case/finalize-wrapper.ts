@@ -16,12 +16,13 @@
  * A cancel of the wrapper itself flips it first and refunds there; the
  * finaliser then finds it final and moves nothing.
  */
+import type { StoredInlineGraph } from "@nodaro/render-rules"
 import { supabase } from "../supabase.js"
 import { loadExecutionForWrapper } from "../execution-inline-graph.js"
 import { markJobFailed } from "../job-failure.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
+import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
 
 export type FinalizeOutcome = "not_terminal" | "not_use_case" | "already_final" | "completed" | "failed"
 
@@ -50,8 +51,14 @@ const loadShared = () =>
   }))
 
 /** The step and its error in the user's words ("Apply Cut: boom"), never an inner node id. */
-function failureMessage(status: string, errorMessage: string | null, output: UseCaseWrapperOutput): string {
-  if (status === "completed") return "The run finished without a result"
+function failureMessage(
+  status: string,
+  errorMessage: string | null,
+  output: UseCaseWrapperOutput,
+  graph: StoredInlineGraph | null,
+): string {
+  // A completed run that delivered nothing, in its kind's own words ("no chapters").
+  if (status === "completed") return usecaseNoResultMessage(graph)
   const detail = (errorMessage ?? "").replace(/^Node execution failed:\s*/, "").replace(/^uc-[a-z-]+:\s*/, "")
   if (output.failedStep) return `${output.failedStep}: ${detail || "failed"}`
   if (detail) return detail
@@ -106,7 +113,7 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
   }
 
   const flipped = await markJobFailed(exec.wrapperJobId, {
-    error_message: failureMessage(exec.status, exec.errorMessage, output),
+    error_message: failureMessage(exec.status, exec.errorMessage, output, exec.inlineGraph),
     extra: { output_data: output, ...backfill },
     from: [...OPEN],
   })

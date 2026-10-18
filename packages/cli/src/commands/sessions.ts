@@ -130,21 +130,27 @@ export function sessionsCommand(): Command {
 
   cmd
     .command("update <id>")
-    .description("rename or archive a session")
+    .description("rename or archive a session, or pick its cover")
     .option("--title <title>", "new title")
     .option("--untitled", "clear the title")
     .option("--archive", "archive it")
     .option("--unarchive", "bring it back")
+    .option("--cover <jobId>", "one of the session's items to lead its previews")
+    .option("--auto-cover", "go back to the automatic cover")
     .option("--profile <name>")
     .option("--json")
-    .action(async (id: string, opts: { title?: string; untitled?: boolean; archive?: boolean; unarchive?: boolean } & GlobalOpts) => {
+    .action(async (
+      id: string,
+      opts: { title?: string; untitled?: boolean; archive?: boolean; unarchive?: boolean; cover?: string; autoCover?: boolean } & GlobalOpts,
+    ) => {
       try {
         const title = opts.untitled ? null : opts.title
         const archived = opts.archive ? true : opts.unarchive ? false : undefined
-        if (title === undefined && archived === undefined) {
-          throw new Error("nothing to update — provide --title, --untitled, --archive or --unarchive")
+        const coverJobId = opts.autoCover ? null : opts.cover
+        if (title === undefined && archived === undefined && coverJobId === undefined) {
+          throw new Error("nothing to update — provide --title, --untitled, --archive, --unarchive, --cover or --auto-cover")
         }
-        const result = await buildClient(opts.profile).sessions.update(id, { title, archived })
+        const result = await buildClient(opts.profile).sessions.update(id, { title, archived, coverJobId })
         if (opts.json) {
           emit(result.data, opts)
           return

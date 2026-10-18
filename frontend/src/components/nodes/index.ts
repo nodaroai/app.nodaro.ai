@@ -114,6 +114,7 @@ import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
 import { TightenEpisodeNode } from "./tighten-episode-node";
+import { EpisodeChaptersNode } from "./episode-chapters-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { CameraSwitchNode } from "./camera-switch-node";
 import { SpeakerViewNode } from "./speaker-view-node";
@@ -139,7 +140,6 @@ import { SplitMediaNode } from "./split-media-node";
 import { ExtractAudioNode } from "./extract-audio-node";
 import { SilenceDetectNode } from "./silence-detect-node";
 import { AudioSyncNode } from "./audio-sync-node";
-import { RemoveAudioNode } from "./remove-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { CombineAudioNode } from "./combine-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
@@ -354,6 +354,7 @@ const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.Comp
   "combine-videos": CombineVideosNode,
   "apply-edl": ApplyEdlNode,
   "tighten-episode": TightenEpisodeNode,
+  "episode-chapters": EpisodeChaptersNode,
   "edit-plan": EditPlanNode,
   "camera-switch": CameraSwitchNode,
   "speaker-view": SpeakerViewNode,
@@ -380,7 +381,6 @@ const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.Comp
   "extract-audio": ExtractAudioNode,
   "silence-detect": SilenceDetectNode,
   "audio-sync": AudioSyncNode,
-  "remove-audio": RemoveAudioNode,
   "mix-audio": MixAudioNode,
   "combine-audio": CombineAudioNode,
   "adjust-volume": AdjustVolumeNode,

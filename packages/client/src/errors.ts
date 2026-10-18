@@ -146,6 +146,60 @@ export class ContinuationRefusedError extends NodaroError {
 }
 
 /**
+ * The one run that finishes a continuation held at a Preview review (the
+ * `next` of {@link ContinuationPreviewPendingError}): pass these three fields
+ * to `client.workflows.run`. It continues that execution, runs each held render
+ * at Final and each held Tighten Episode continuing the run that made its
+ * Preview, then every node after them.
+ */
+export interface HeldFinalRun {
+  continueFromExecutionId: string
+  /** The nodes it runs, in canvas order. */
+  nodeIds: string[]
+  /** For this run only: each held render at Final, each held use-case node's `useCaseContinue`. */
+  inputOverrides: Record<string, Record<string, unknown>>
+}
+
+/**
+ * HTTP 409 `continuation_preview_pending`: a continue-from-failed
+ * (`client.workflows.run` with `continueMode: "from-failed"`) whose run's
+ * newest later continuation completed by stopping at a Preview review, so
+ * continuing again would stop there too. `executionId` is that continuation;
+ * `renderNodeIds` the Apply EDL renders and `reviewNodeIds` the Tighten Episode
+ * nodes holding it; `next` the run that finishes them — send it first
+ * (`client.workflows.run(workflowId, error.next)`), then continue. Absent only
+ * when the server could not name it. For a single held render, `next` is that
+ * render's `client.workflows.renderFinal`.
+ */
+export class ContinuationPreviewPendingError extends NodaroError {
+  constructor(
+    message: string,
+    public readonly executionId: string,
+    public readonly renderNodeIds: readonly string[],
+    public readonly reviewNodeIds: readonly string[],
+    public readonly next?: HeldFinalRun,
+  ) {
+    super(message, "continuation_preview_pending", 409)
+    this.name = "ContinuationPreviewPendingError"
+  }
+}
+
+const stringList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((id): id is string => typeof id === "string") : [])
+
+/** A `next` as the server sends it, or undefined for anything else. */
+function heldFinalRunOf(v: unknown): HeldFinalRun | undefined {
+  if (!v || typeof v !== "object") return undefined
+  const r = v as Record<string, unknown>
+  if (typeof r.continueFromExecutionId !== "string" || !Array.isArray(r.nodeIds)) return undefined
+  if (!r.inputOverrides || typeof r.inputOverrides !== "object" || Array.isArray(r.inputOverrides)) return undefined
+  return {
+    continueFromExecutionId: r.continueFromExecutionId,
+    nodeIds: stringList(r.nodeIds),
+    inputOverrides: r.inputOverrides as Record<string, Record<string, unknown>>,
+  }
+}
+
+/**
  * HTTP 422 `job_blocked`. A job policy registered by this deployment refused
  * the generation **before it ran** — no job was created, nothing was reserved
  * and nothing was charged. `message` is the policy's user-safe text: show it
@@ -333,6 +387,11 @@ interface ApiErrorBody {
   issues?: unknown
   /** A refusal that names another job (see {@link ContinuationRefusedError}). */
   jobId?: unknown
+  /** `continuation_preview_pending`: the held continuation, what holds it, and the run that finishes it. */
+  executionId?: unknown
+  renderNodeIds?: unknown
+  reviewNodeIds?: unknown
+  next?: unknown
   /** The credit guard's 402 sends its figures beside the envelope: what the run needs… */
   required?: unknown
   /** …and what the caller has (withheld on a deployment-paid instance). */
@@ -418,6 +477,15 @@ export function throwFromResponse(status: number, body: ApiErrorBody): never {
   }
   if (status === 409 && CONTINUATION_REFUSAL_CODES.has(code) && typeof parsed.jobId === "string") {
     throw new ContinuationRefusedError(message, code, parsed.jobId)
+  }
+  if (status === 409 && code === "continuation_preview_pending" && typeof parsed.executionId === "string") {
+    throw new ContinuationPreviewPendingError(
+      message,
+      parsed.executionId,
+      stringList(parsed.renderNodeIds),
+      stringList(parsed.reviewNodeIds),
+      heldFinalRunOf(parsed.next),
+    )
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(read.message)
   if (status === 403 && code === "insufficient_scope") {

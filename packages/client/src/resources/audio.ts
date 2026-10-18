@@ -2,7 +2,7 @@ import type { AudioFxPreset } from "@nodaro/shared/media"
 import type { TranscribeProvider } from "@nodaro/shared/models"
 import type { Transcript } from "@nodaro/shared/edl"
 export type { TranscribeProvider } from "@nodaro/shared/models"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * One word of a {@link AudioResource.transcribe} result — caption-shaped, in
@@ -46,7 +46,7 @@ export interface TranscribeJobOutput {
  * pipeline. Each returns a job id to poll (`jobs.get(jobId)`).
  */
 export class AudioResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Separate an audio track into stems (`POST /v1/audio-separation`, Demucs).

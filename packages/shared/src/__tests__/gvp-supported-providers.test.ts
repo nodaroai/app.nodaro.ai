@@ -64,6 +64,7 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       "wan-3",
       "wan-3-prime",
       "happyhorse-ref2v",
+      "vidu-q4",
     ])
   })
 

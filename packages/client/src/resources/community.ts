@@ -1,6 +1,6 @@
 import type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared/apps"
 export type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared/apps"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * The community-listing types are the single source of truth in
@@ -18,7 +18,7 @@ import type { NodaroClient } from "../client.js"
  * the SDK uses).
  */
 export class CommunityResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * `GET /v1/community/browse` → a page of public listings plus a `nextCursor`.

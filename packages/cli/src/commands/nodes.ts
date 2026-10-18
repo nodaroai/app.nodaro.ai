@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { GenerateImageBatchResult } from "@nodaro/sdk"
+import type { GenerateImageBatchResult } from "@nodaro/sdk/nodes"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"

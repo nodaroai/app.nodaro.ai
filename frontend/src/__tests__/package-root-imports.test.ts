@@ -6,19 +6,21 @@ import ts from "typescript"
 import { loadEntryMaps } from "../../../tools/package-entries/codemod.mjs"
 
 /**
- * No app code imports the ROOT of @nodaro/shared or @nodaro/prompts — every
- * import names the subpath entry that owns the symbol
- * (`@nodaro/shared/<entry>`, `@nodaro/prompts/<entry>`).
+ * No app code imports the ROOT of @nodaro/shared, @nodaro/prompts or
+ * @nodaro/sdk — every import names the subpath entry that owns the symbol
+ * (`@nodaro/shared/<entry>`, `@nodaro/prompts/<entry>`, `@nodaro/sdk/<entry>`).
  *
  * Why: a root import loads the whole package, ~110 ms of CPU for shared and
  * ~165 ms for prompts per test file (measured 2026-10-13, against 3–60 ms for
  * one entry), and makes every package module "relevant" to the importer, so
- * affected-test selection cannot tell a caption change from a pricing change.
+ * affected-test selection cannot tell a caption change from a pricing change
+ * (for the SDK: one resource from another — #2313 selected 579 of 683 frontend
+ * test files through the SDK's root alone).
  *
  * It also catches a ROOT `vi.mock` / `vi.doMock` / `vi.importActual`: once the
  * code under test imports a subpath, a root mock intercepts nothing and the
  * test silently runs against the real module. The same failure has a subpath
- * form — a `vi.mock("@nodaro/shared/<entry>", …)` override of a name that
+ * form — a `vi.mock("@nodaro/shared/<entry>", …)` (or prompts / sdk) override of a name that
  * entry does not export (moved, renamed, or never there) is inert — so every
  * override key of a subpath mock must be exported by that entry.
  *
@@ -31,17 +33,20 @@ import { loadEntryMaps } from "../../../tools/package-entries/codemod.mjs"
 const ROOT_ALLOWED: Readonly<Record<string, string>> = {
   "frontend/src/lib/i18n/__tests__/picker-labels-coverage.test.ts":
     "spreads EVERY export of both packages (`{ ...prompts, ...shared }`) to find each catalog label a picker can show — a subpath would hide the catalogs of the other entries",
+  "packages/client/src/__tests__/fixtures/client-api-compat.ts":
+    "a consumer of the BUILT @nodaro/sdk, compiled (never run) by client-core.test.ts to pin the public API — it imports the root the way every external consumer of a pre-subpath version does, and needs the whole namespace to check every exported resource class",
 }
 
-const ROOTS = new Set(["@nodaro/shared", "@nodaro/prompts"])
-const ROOT_LITERAL = /["'`]@nodaro\/(?:shared|prompts)["'`]/
+const ROOTS = new Set(["@nodaro/shared", "@nodaro/prompts", "@nodaro/sdk"])
+const ROOT_LITERAL = /["'`]@nodaro\/(?:shared|prompts|sdk)["'`]/
 const REPO = path.resolve(__dirname, "..", "..", "..")
 // Everywhere code can import the packages from: the apps (src, scripts,
 // configs), every package, and the repo's tools/scripts. The packages' own
 // index.ts and src/entries/ ARE the roots; their tests import the package by a
-// computed specifier to compare root with entries.
+// computed specifier to compare root with entries. (@nodaro/sdk lives in
+// packages/client.)
 const SCAN = ["frontend", "backend", "packages", "scripts", "tools"]
-const SKIP = /^packages\/(shared|prompts)\/src\/(index\.ts$|entries\/)/
+const SKIP = /^packages\/(shared|prompts|client)\/src\/(index\.ts$|entries\/)/
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "coverage", "playwright-report", "test-results"])
 const LOADERS = new Set(["import", "require", "vi.mock", "vi.doMock", "vi.unmock", "vi.doUnmock", "vi.importActual", "vi.importMock"])
 
@@ -88,7 +93,7 @@ function rootUses(rel: string, text: string): string[] {
 }
 
 type EntryMaps = Record<string, { entries: string[]; nameToEntries: Map<string, string[]> }>
-const SUBPATH_MOCK = /vi\.(?:do)?[mM]ock\(\s*["'`]@nodaro\/(?:shared|prompts)\//
+const SUBPATH_MOCK = /vi\.(?:do)?[mM]ock\(\s*["'`]@nodaro\/(?:shared|prompts|sdk)\//
 
 /** `file:line` for every override key of a subpath vi.mock that the entry does not export. */
 function deadMockKeys(rel: string, text: string, maps: EntryMaps): string[] {
@@ -99,9 +104,11 @@ function deadMockKeys(rel: string, text: string, maps: EntryMaps): string[] {
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ["vi.mock", "vi.doMock"].includes(callee(node) ?? "")) {
       const [arg, factory] = node.arguments
-      const m = arg && ts.isStringLiteralLike(arg) ? /^(@nodaro\/(?:shared|prompts))\/([\w-]+)$/.exec(arg.text) : null
+      const m = arg && ts.isStringLiteralLike(arg) ? /^(@nodaro\/(?:shared|prompts|sdk))\/([\w-]+)$/.exec(arg.text) : null
       if (m && factory && (ts.isArrowFunction(factory) || ts.isFunctionExpression(factory))) {
         const [, pkg, entry] = m
+        // A standalone subpath outside the root (`@nodaro/sdk/supabase`) is not an entry: nothing to check.
+        if (!maps[pkg]?.entries.includes(entry)) return ts.forEachChild(node, visit)
         let obj: ts.Node | undefined
         if (!ts.isBlock(factory.body)) obj = unwrap(factory.body)
         else {
@@ -142,7 +149,10 @@ describe("package root imports", () => {
       `vi.mock("@nodaro/shared", async (o) => ({ ...(await o<typeof import("@nodaro/shared")>()) }))`,
       `const r = await vi.importActual<object>("@nodaro/prompts")`,
       `const q = require("@nodaro/shared")`,
+      `import { NotFoundError } from "@nodaro/sdk"`,
+      `vi.mock("@nodaro/sdk", () => ({}))`,
       `import { ok } from "@nodaro/shared/models"`,
+      `import { createClient } from "@nodaro/sdk/client"`,
       `const s = "@nodaro/shared is a package" // a string is not an import`,
     ].join("\n")
     expect(rootUses("sample.ts", sample).map((h) => h.replace(/^sample\.ts:\d+ /, ""))).toEqual([
@@ -155,6 +165,8 @@ describe("package root imports", () => {
       `import() type "@nodaro/shared"`,
       `vi.importActual() "@nodaro/prompts"`,
       `require() "@nodaro/shared"`,
+      `import "@nodaro/sdk"`,
+      `vi.mock() "@nodaro/sdk"`,
     ])
   })
 
@@ -175,7 +187,7 @@ describe("package root imports", () => {
     }
     expect(files.length, "the scan found no files — the repo layout changed").toBeGreaterThan(5000)
     expect(files, "tools/ and backend/scripts are scanned too").toEqual(expect.arrayContaining(["tools/scene3d-acceptance/lib/scoping.mjs", "backend/scripts/gen-skills.ts"]))
-    expect(offenders, `root imports of @nodaro/shared / @nodaro/prompts — run: node tools/package-entries/codemod.mjs --write <file>`).toEqual([])
+    expect(offenders, `root imports of @nodaro/shared / @nodaro/prompts / @nodaro/sdk — run: node tools/package-entries/codemod.mjs --write <file>`).toEqual([])
     expect(Object.keys(ROOT_ALLOWED).filter((f) => !allowedUsed.has(f)), "allowlisted files that no longer import a root — remove them from ROOT_ALLOWED").toEqual([])
   })
 
@@ -185,6 +197,10 @@ describe("package root imports", () => {
       "sample.ts:1 @nodaro/shared/models overrides \`MODEL_CATALOG\`, which is exported by @nodaro/shared/model-catalog",
       "sample.ts:1 @nodaro/shared/models overrides \`notAName\`, which @nodaro/shared does not export",
     ])
+    expect(deadMockKeys("sample.ts", `vi.mock("@nodaro/sdk/client", async (o) => ({ ...(await o()), NotFoundError: class {} }))`, maps)).toEqual([
+      "sample.ts:1 @nodaro/sdk/client overrides \`NotFoundError\`, which is exported by @nodaro/sdk/errors",
+    ])
+    expect(deadMockKeys("sample.ts", `vi.mock("@nodaro/sdk/supabase", () => ({ createSharedSupabaseClient: vi.fn() }))`, maps)).toEqual([])
     const dead: string[] = []
     for (const rel of scanFiles()) {
       const text = fs.readFileSync(path.join(REPO, rel), "utf8")

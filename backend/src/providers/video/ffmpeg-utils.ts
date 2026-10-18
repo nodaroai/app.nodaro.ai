@@ -1016,6 +1016,34 @@ export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> 
   return duration
 }
 
+/**
+ * Container format and duration of a media file in ONE ffprobe call — what a
+ * provider's reference-audio contract needs (`format_name` "mp3" for an
+ * MP3-only lane, plus the clip length). Same source handling and SSRF guard as
+ * {@link probeMediaDuration}. `formatNames` is ffprobe's comma list split
+ * ("mov,mp4,m4a,3gp,3g2,mj2" for an M4A); a field ffprobe did not report is
+ * absent rather than guessed.
+ */
+export async function probeMediaFormatAndDuration(
+  srcUrlOrPath: string,
+): Promise<{ formatNames?: string[]; durationSec?: number }> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const output = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-show_entries", "format=format_name,duration",
+    "-of", "json",
+    srcUrlOrPath,
+  ])
+  const parsed = JSON.parse(output) as { format?: { format_name?: string; duration?: string } }
+  const formatNames = (parsed.format?.format_name ?? "").split(",").map((n) => n.trim()).filter((n) => n.length > 0)
+  const durationSec = parseFloat(parsed.format?.duration ?? "")
+  return {
+    ...(formatNames.length > 0 ? { formatNames } : {}),
+    ...(Number.isFinite(durationSec) && durationSec > 0 ? { durationSec } : {}),
+  }
+}
+
 /** One track of a source file, as the window check sees it. */
 export type TrackEnd =
   /** The file carries no such track (cover art is not a picture track). */

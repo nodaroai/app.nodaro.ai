@@ -33,7 +33,13 @@ const DIR = resolve(HERE, "..")
 const EDITOR = resolve(HERE, "../..")
 
 /** Same scope as the wrapper guard: a config panel starts runs too. */
-const DIRS = [DIR, resolve(EDITOR, "config-panels")]
+// …and every node unit's folder (frontend/src/nodes/<type>/, tools/units/README.md):
+// a unit's exec.ts starts its node's run exactly as an executor here does.
+const UNITS = resolve(EDITOR, "../../nodes")
+const UNIT_DIRS = readdirSync(UNITS, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
+  .map((e) => resolve(UNITS, e.name))
+const DIRS = [DIR, resolve(EDITOR, "config-panels"), ...UNIT_DIRS]
 
 const RUN_START = /executionStatus:\s*["']running["']/
 const SITE_EXEMPTION = /\/\/\s*run-start-reset-ok:\s*\S/
@@ -125,6 +131,8 @@ describe("run-start patches reset the whole run state", () => {
       "workflow-editor/poll-job.ts": 2,
       // One per UGC node: Creator, Script, Clips, Clip, Cards, Finish.
       "workflow-editor/ugc-execute.ts": 6,
+      // A use-case run whose result is text (Chapters): landText.
+      "workflow-editor/use-case-executor.ts": 1,
     }
     const actual: Record<string, number> = {}
     for (const label of Object.keys(expected)) {

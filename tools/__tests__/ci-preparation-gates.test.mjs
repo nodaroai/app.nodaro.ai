@@ -40,10 +40,43 @@ test('independent security guards do not inherit unrelated suite skips', () => {
 test('production migrations retain every original prerequisite', () => {
   const needs = jobs.migrate.match(/^    needs: \[(.+)\]/m)[1].split(', ')
   for (const name of ['frontend-tests', 'backend-tests', 'typecheck', 'tenant-scope-lint',
-    'check-locale-completeness', 'check-ee-imports', 'check-pricing-leaks', 'check-billing-dumps',
-    'check-public-surface', 'check-surface-funnel', 'i18n-completeness', 'backend-boot-smoke',
+    'check-ee-imports', 'check-pricing-leaks', 'check-billing-dumps',
+    'check-public-surface', 'check-surface-funnel', 'backend-boot-smoke',
     'migration-behavior', 'prepare-packages', 'build-backend']) assert.ok(needs.includes(name), name)
+  for (const name of needs) assert.ok(jobs[name], `migrate needs a job that no longer exists: ${name}`)
   assert.match(jobs.migrate, /github\.ref == 'refs\/heads\/main' && github\.event_name == 'push'/)
+})
+
+// The i18n Locale Completeness and Check Locale Completeness jobs were
+// folded into the shared suite (decided 2026-10-16): it is the one owner now,
+// so it must keep running the matrix test whole, on every Backend Tests run,
+// selection or not.
+test('locale completeness has one owner: the whole @nodaro/shared suite in Backend Tests', () => {
+  const step = jobs['backend-test-shards'].match(/- name: Run @nodaro\/shared test suite\n {8}if: (.+)\n {8}run: (.+)/)
+  assert.ok(step, 'the @nodaro/shared suite step moved — the locale completeness test runs nowhere else')
+  assert.equal(step[2].trim(), 'npm run test --workspace=@nodaro/shared', 'the whole suite, no file filter')
+  assert.doesNotMatch(step[1], /steps\.select/, 'not gated on test selection')
+  const pkg = JSON.parse(readFileSync('packages/shared/package.json', 'utf8'))
+  assert.equal(pkg.scripts.test, 'vitest run')
+  assert.match(readFileSync('packages/shared/vitest.config.ts', 'utf8'), /include: \["src\/\*\*\/\*\.test\.ts"\]/)
+  const locale = readFileSync('packages/shared/src/__tests__/i18n-locale-completeness.test.ts', 'utf8')
+  assert.match(locale, /const EXPECTED_LOCALES = \[/, 'the hand-pinned locale list stays (a locale gone from the registry and every catalog)')
+  assert.match(locale, /toEqual\(\[\.\.\.EXPECTED_LOCALES\]\.sort\(\)\)/)
+  for (const gone of ['i18n-completeness', 'check-locale-completeness']) assert.equal(jobs[gone], undefined, gone)
+})
+
+// The owner above runs only when the Diff Gate sets backend=true; a sidecar
+// edit must, so its classification is run here, out of ci.yml itself.
+test('the Diff Gate routes an i18n sidecar change to Backend Tests', () => {
+  // Every `case "$f"` block of the loop, in order: the routing one is not the
+  // only one (the test de-dup block comes first).
+  const blocks = [...jobs.changes.matchAll(/\n( +)case "\$f" in\n[\s\S]*?\n\1esac/g)].map((m) => m[0])
+  assert.ok(blocks.some((b) => /\bbackend=true\b/.test(b)), "the Diff Gate's classification moved")
+  const gate = blocks.join('\n')
+  const classify = (f) => spawnSync('bash', ['-c', `frontend=false backend=false; f="$1"; ${gate}\necho "$frontend $backend"`, '_', f], { encoding: 'utf8' }).stdout.trim()
+  assert.equal(classify('packages/shared/src/i18n/seasons.fr.ts').split(' ')[1], 'true', 'packages/shared/src/i18n/* must set backend=true')
+  assert.equal(classify('packages/shared/src/i18n/types.ts').split(' ')[1], 'true')
+  assert.equal(classify('docs/x.md'), 'false false', 'the classification really ran')
 })
 
 test('both edition probes and coverage commands survive preparation sharing', () => {

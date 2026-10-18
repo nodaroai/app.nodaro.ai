@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type {
   GenericNode,
   GenericEdge,
@@ -80,7 +80,11 @@ export interface UpdateWorkflowInput {
 }
 
 export interface RunWorkflowParams {
-  /** Optional subset of node IDs to execute. Omit to run the full workflow. */
+  /**
+   * Optional subset of node IDs to execute. Omit to run the full workflow.
+   * With `continueMode: "from-failed"`, the nodes to consider (default: every
+   * node); the run executes only those the failed run did not complete.
+   */
   nodeIds?: string[]
   /**
    * Per-node field overrides for this run only, `{ [nodeId]: { field: value } }`,
@@ -99,21 +103,70 @@ export interface RunWorkflowParams {
   inputOverrides?: Record<string, Record<string, unknown>>
   /**
    * Continue from an earlier execution of this workflow — Render final after a
-   * run that stopped at its preview. The run executes `nodeIds` only (required
-   * with this field); every other node hands on what that execution produced,
-   * not the workflow's saved results, and an Edit Plan hands on its plan with
-   * the person's review applied. The execution must be your own `completed`
-   * run of this workflow (not of a published app version). Refused with
+   * run that stopped at its preview, or (with `continueMode: "from-failed"`) a
+   * failed run from where it stopped. The run executes `nodeIds` only
+   * (required with this field, except with `continueMode`); every other node
+   * hands on what that execution produced, not the workflow's saved results,
+   * and an Edit Plan hands on its plan with the person's review applied. The
+   * execution must be your own `completed` run of this workflow (`failed`,
+   * with `continueMode`), not of a published app version. Refused with
    * `continuation_subset_required`, `continuation_not_found` (404),
    * `continuation_workflow_mismatch`, `continuation_version_mismatch` or
    * `continuation_not_completed` (409).
    */
   continueFromExecutionId?: string
+  /**
+   * `"from-failed"`: continue a FAILED run (`continueFromExecutionId`) from
+   * where it stopped. It runs every node that run did not complete — of
+   * `nodeIds`, which default to every node — and hands on what it completed,
+   * never run or charged again. That is per node: a node that failed runs
+   * again in full, every list item included. When a later continuation of it
+   * completed only part of what it left (a narrower `nodeIds`), the run builds
+   * on the newest such one: it is seeded from that run and runs only what is
+   * still left ({@link RunWorkflowResult.continuedFrom} names it). A Render
+   * final, or a run of named nodes, continuing the newest of those counts as
+   * one of them too. Not combinable with {@link renderFinal}. Refused with
+   * `continuation_not_failed` (409) for a run that did not fail,
+   * `continuation_superseded` (409) when a later continuation supersedes it —
+   * the message names that run: one that failed (continue that one instead),
+   * or one that completed all this run left (the work is done, and its results
+   * are on that run) — `continuation_preview_pending` (409, a
+   * `ContinuationPreviewPendingError`) when the newest later continuation
+   * stopped at a Preview review of a render or of a Tighten Episode (the error
+   * names that run, what holds it, and in `next` the run that finishes it:
+   * `client.workflows.run(workflowId, error.next)` first — for a single render,
+   * its {@link renderFinal}), and
+   * `continuation_subset_required` (409) when nothing is left to run. Send an
+   * {@link RunWorkflowOptions.idempotencyKey} with each continuation.
+   */
+  continueMode?: "from-failed"
+}
+
+/** Per-call options for {@link WorkflowsResource.run}. */
+export interface RunWorkflowOptions {
+  /**
+   * Sent as the `Idempotency-Key` header (at least 8 characters; the server
+   * ignores a shorter one). Reuse the same value when retrying the same
+   * request: the server answers the run it already started (`deduped: true`)
+   * instead of starting a second one — or, once that run is under way or has
+   * superseded the one it continued, refuses with `already_running` or
+   * `continuation_superseded` naming it. Either way nothing runs twice.
+   */
+  idempotencyKey?: string
 }
 
 export interface RunWorkflowResult {
   executionId: string
   status: "pending" | "running"
+  /** `true` when an `idempotencyKey` retry found the run already started: `executionId` is that run. */
+  deduped?: boolean
+  /**
+   * With `continueMode: "from-failed"`: the execution the run continued from —
+   * its states seed the run. The run asked for (`continueFromExecutionId`), or
+   * the newest later continuation of it that completed part of what it left.
+   * Absent on any other run, and on a `deduped` answer.
+   */
+  continuedFrom?: string
 }
 
 /**
@@ -189,7 +242,7 @@ export interface DroppedCollaborator {
  * other call, so a workspace admin's grants apply automatically.
  */
 export class WorkflowCollaboratorsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** List a workflow's collaborators (id, name, avatar, role — never email). */
   list(workflowId: string): Promise<{ data: Collaborator[] }> {
@@ -237,7 +290,7 @@ export class WorkflowsResource {
   /** The people this workflow is shared with. See {@link WorkflowCollaboratorsResource}. */
   readonly collaborators: WorkflowCollaboratorsResource
 
-  constructor(private client: NodaroClient) {
+  constructor(private client: NodaroClientCore) {
     this.collaborators = new WorkflowCollaboratorsResource(client)
   }
 
@@ -297,11 +350,14 @@ export class WorkflowsResource {
    * Run a workflow. Returns the executionId for polling via
    * `client.executions.get(executionId)`.
    */
-  run(id: string, params: RunWorkflowParams = {}): Promise<RunWorkflowResult> {
+  run(id: string, params: RunWorkflowParams = {}, options?: RunWorkflowOptions): Promise<RunWorkflowResult> {
     return this.client.request(
       "POST",
       `/v1/workflows/${encodeURIComponent(id)}/run`,
-      { body: params },
+      {
+        body: params,
+        ...(options?.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+      },
     )
   }
 

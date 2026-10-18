@@ -100,6 +100,7 @@ import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskComposite
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import type {
@@ -2072,6 +2073,20 @@ async function executeWorkerNode(
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(refVideoCheck.message) as Error & { errorCode?: string }
     err.errorCode = "video_too_long"
+    throw err
+  }
+  // Same gate for a provider's reference-AUDIO contract (format + length,
+  // VIDEO_REF_AUDIO_RULES — Vidu Q4 takes MP3 only, 3-12s each): the route's
+  // preHandler runs the very same core check, so single-node, workflow and app
+  // runs refuse a clip the provider would reject before anything is reserved.
+  const refAudioCheck = await probeAndCheckRefAudio({
+    provider: payload.provider as string | undefined,
+    referenceAudioUrls: payload.referenceAudioUrls,
+  })
+  if (!refAudioCheck.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(refAudioCheck.message) as Error & { errorCode?: string }
+    err.errorCode = refAudioCheck.code
     throw err
   }
   // Reused by the reservation below so a legal set is ffprobed ONCE per run (R15).

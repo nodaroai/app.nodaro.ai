@@ -3,7 +3,7 @@ import Fastify from "fastify"
 import { llmChatRoutes } from "../llm-chat.js"
 import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 import { llmComplete } from "../../lib/llm-client.js"
-import { LlmOutputTruncatedError } from "../../lib/llm-errors.js"
+import { LlmContentRefusalError, LlmOutputTruncatedError } from "../../lib/llm-errors.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 const { jobUpdates, credits } = vi.hoisted(() => ({
@@ -187,6 +187,18 @@ describe("POST /v1/llm-chat/generate — capability filter", () => {
     )
   })
 
+  it("reserves a directOnly model (gemini-4-argon) on premium-direct — the rung of the only lane it runs on", async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: { systemPrompt: "", userInput: "hi", llmModel: "gemini-4-argon" },
+    })
+    expect(res.statusCode).toBe(200)
+    // The reservation is what the commit debits, so this is the charge.
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "llm-chat:premium-direct")
+  })
+
   it("calls markProviderCallStart with anthropic-sync on success (reconcile parity)", async () => {
     const app = await buildApp()
     const res = await app.inject({
@@ -231,6 +243,35 @@ describe("POST /v1/llm-chat/generate — a cut-off answer (#1588)", () => {
     // or every cost report loses a real charge the old "completed" row carried.
     expect(jobUpdates).toEqual([expect.objectContaining({ status: "failed", provider_cost: 0.03 })])
     expect(jobUpdates.some((u) => u.status === "completed")).toBe(false)
+    expect(credits.refundCredits).toHaveBeenCalledWith("ul-1")
+    expect(credits.commitCredits).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/llm-chat/generate — a provider content stop (direct Gemini RECITATION, 2026-10-17)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobUpdates.length = 0
+  })
+
+  it("fails the job with the content-policy sentence and refunds — never a completed empty answer", async () => {
+    vi.mocked(llmComplete).mockRejectedValueOnce(new LlmContentRefusalError(
+      "Content policy violation (direct-gemini gemini-4-argon stopped with RECITATION)",
+      { inputTokens: 94, outputTokens: 0, providerCost: 0.0004, complete: true },
+    ))
+    const app = await buildApp()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: { systemPrompt: "", userInput: "list them", llmModel: "gemini-4-argon" },
+    })
+
+    expect(res.statusCode).toBeGreaterThanOrEqual(400)
+    expect(JSON.parse(res.body).error.message).toMatch(/Content policy violation/)
+    expect(jobUpdates).toEqual([expect.objectContaining({ status: "failed" })])
+    expect(jobUpdates.some((u) => u.status === "completed")).toBe(false)
+    // LLM Chat refunds every failed call, a billed refusal included.
     expect(credits.refundCredits).toHaveBeenCalledWith("ul-1")
     expect(credits.commitCredits).not.toHaveBeenCalled()
   })

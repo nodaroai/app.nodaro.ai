@@ -15,9 +15,11 @@
  * — a doc line naming the vendor's host is not a call site — which falls out
  * of walking the AST rather than the text.
  */
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import ts from "typescript"
-import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, parse, walk } from "./source-scan.js"
+import { SCAN_TIMEOUT_MS, SRC, eachSourceFile, lineOf, parseText, walk } from "./source-scan.js"
 import { baseUrl, config, envSchema } from "../config.js"
 
 /** The single place each host is allowed to be spelled out. */
@@ -75,7 +77,8 @@ describe("provider base URLs are configuration", () => {
   })
 
   it("catches a literal reintroduced anywhere, including inside a template", () => {
-    const sf = parse(new URL("../../providers/kie/client.ts", import.meta.url).pathname)
+    const file = join(SRC, "providers", "kie", "client.ts")
+    const sf = parseText(file, readFileSync(file, "utf8"))
     expect(literals(sf).some((l) => l.text.includes("api.kie.ai"))).toBe(false)
   })
 

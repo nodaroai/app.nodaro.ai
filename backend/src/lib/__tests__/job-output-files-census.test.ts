@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * CENSUS: every file a job writes is one the expiry walk can find
  * (decided 2026-10-08).

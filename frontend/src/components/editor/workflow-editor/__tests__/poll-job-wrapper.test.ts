@@ -19,7 +19,13 @@ const EDITOR = resolve(HERE, "../..")
  * does. A guard whose blast radius is one directory only proves things about
  * that directory.
  */
-const DIRS = [DIR, resolve(EDITOR, "config-panels")]
+// …and every node unit's folder (frontend/src/nodes/<type>/, tools/units/README.md):
+// a unit's exec.ts owns its node exactly as an executor here does.
+const UNITS = resolve(EDITOR, "../../nodes")
+const UNIT_DIRS = readdirSync(UNITS, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
+  .map((e) => resolve(UNITS, e.name))
+const DIRS = [DIR, resolve(EDITOR, "config-panels"), ...UNIT_DIRS]
 
 /**
  * `jobAwaitingReview` is READ centrally (BaseNode mounts <NodePolicyOverlay>

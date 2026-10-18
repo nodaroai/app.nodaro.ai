@@ -32,6 +32,7 @@ import {
   type UseCaseSettings,
   type UseCaseSources,
 } from "@nodaro/render-rules"
+import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import { NODE_HANDLES } from "../mcp/generated/node-handles.js"
 
 const FRAMINGS = [null, { aspect: "9:16", layout: "stacked" }, { aspect: "16:9", layout: "side-by-side" }, { aspect: "1:1", layout: "grid" }] as const
@@ -65,6 +66,19 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
         },
       }
     }
+  },
+  "episode-chapters": function* () {
+    for (const kind of ["video", "audio"] as const)
+      for (const planTier of EDIT_PLAN_TIERS)
+        for (const durationSec of [undefined, 60, 3600])
+          for (const instructions of ["", "Short titles"])
+            for (const styleGuide of ["", "Sentence case"]) {
+              yield {
+                raw: { planTier, instructions, styleGuide },
+                kind,
+                sources: { media: { url: "https://r2/ep", kind, ...(durationSec ? { durationSec } : {}) } },
+              }
+            }
   },
 }
 

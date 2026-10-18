@@ -59,4 +59,16 @@ describe("generateVideoProviderSnap — free-credit limits", () => {
   it("without limits the defaults are unchanged", () => {
     expect(generateVideoProviderSnap({}, "wan-3")).toMatchObject({ duration: 5, resolution: "720p" })
   })
+  it("Vidu Q4 persists its declared 5 s / 720p defaults, never the 3 s / 540p first rungs", () => {
+    expect(generateVideoProviderSnap({}, "vidu-q4")).toMatchObject({ duration: 5, resolution: "720p" })
+    // A stale resolution from another model snaps to the declared 720p; a stale
+    // off-menu duration takes the generic first-rung snap (Wan 3.0 parity) —
+    // either way the persisted value is the one the badge quotes and the run bills.
+    expect(generateVideoProviderSnap({ resolution: "480p", duration: 30 }, "vidu-q4")).toMatchObject({ resolution: "720p", duration: 3 })
+    // A legal value is left alone, and no aspect ratio is invented.
+    const kept = generateVideoProviderSnap({ resolution: "2k", duration: 9 }, "vidu-q4")
+    expect(kept).not.toHaveProperty("resolution")
+    expect(kept).not.toHaveProperty("duration")
+    expect(kept).not.toHaveProperty("aspectRatio")
+  })
 })

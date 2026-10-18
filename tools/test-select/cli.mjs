@@ -12,7 +12,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
-import { fetchPrChanges, isVersionOnlyChange, mergeChanges, parseNameStatus } from "./changes.mjs"
+import { fetchPrChanges, isVersionOnlyChange, mergeChanges, parseNameStatus, workspaceMembers } from "./changes.mjs"
 import { LOCALE_DICT, changedKeys, keyUsage } from "./i18n-keys.mjs"
 import { affectedNames } from "./package-symbols.mjs"
 import { createRequire } from "node:module"
@@ -120,18 +120,34 @@ function markRegistry(changes, before) {
   })
 }
 
-// Manifests whose diff is only a version bump: no global trigger (select.mjs).
+// Manifests whose diff is only a version bump, or a move of a range on one of
+// our own workspace members: no global trigger (select.mjs). The members are
+// read at each revision; unreadable → none, and only `version` is ignored.
 function markVersionOnly(changes, before, after) {
   const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
-  return changes.map((c) => (c.status === "M" && /(?:^|\/)package(?:-lock)?\.json$/.test(c.path)
-    && isVersionOnlyChange(c.path, show(before, c.path), show(after, c.path)) ? { ...c, versionOnly: true } : c))
+  const manifests = changes.filter((c) => c.status === "M" && /(?:^|\/)package(?:-lock)?\.json$/.test(c.path))
+  if (manifests.length === 0) return changes
+  const membersAt = (rev) => {
+    try {
+      const files = execFileSync("git", ["-C", repoRoot, "ls-tree", "-r", "--name-only", rev], big).split("\n").filter(Boolean)
+      return workspaceMembers(show(rev, "package.json"), files, (p) => show(rev, p)) ?? undefined
+    } catch { return undefined }
+  }
+  const members = { before: membersAt(before), after: membersAt(after) }
+  return changes.map((c) => (manifests.includes(c)
+    ? { ...c, versionOnly: isVersionOnlyChange(c.path, show(before, c.path), show(after, c.path), members) } : c))
 }
 
+// --merge-commit: the commits the change was measured between, written into
+// the --json result. The shadow report reads `base` to tell a failure the PR
+// inherited (the same file failed on its base's own dev run) from a miss.
+let measured = null
 async function readChanges() {
   if (o["merge-commit"]) {
     const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
-    const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
+    const [merge, ...parents] = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ")
     if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
+    measured = { merge, base: parents[0] }
     return markRegistry(markI18nKeys(markSharedNames(markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")), "HEAD^1", "HEAD"), "HEAD^1")
   }
   if (o.pr) {
@@ -164,7 +180,7 @@ const projectRelative = result.files.map((f) => path.posix.relative(o.project, f
 if (o.list) writeFileSync(o.list, projectRelative.map((f) => `${f}\n`).join(""))
 const registrySelection = result.registryRule?.selection ?? { mode: result.mode, files: result.files }
 if (o["registry-list"]) writeFileSync(o["registry-list"], registrySelection.files.map((f) => `${path.posix.relative(o.project, f.file)}\n`).join(""))
-if (o.json) writeFileSync(o.json, `${JSON.stringify(result, null, 1)}\n`)
+if (o.json) writeFileSync(o.json, `${JSON.stringify(measured ? { ...result, ...measured } : result, null, 1)}\n`)
 if (o.summary) appendFileSync(o.summary, renderSummary(o.project, result, { shadow: Boolean(o.shadow) }))
 if (o["github-output"]) {
   appendFileSync(o["github-output"], `${o.shadow ? `selection=shadow\nshadow_selection=${result.mode}\n` : `selection=${result.mode}\n`}registry_rule=${registryRule}\nregistry_selection=${registrySelection.mode}\n`)

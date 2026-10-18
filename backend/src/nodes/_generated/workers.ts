@@ -2,6 +2,8 @@
 // @registry backend/src/nodes/*/worker.ts
 // @registry-exports workers: UNIT_WORKERS
 import type { UnitWorker } from "../kit.js"
+import { worker as unit_remove_audio } from "../remove-audio/worker.js" // unit:remove-audio
 
 export const UNIT_WORKERS: Readonly<Record<string, UnitWorker>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

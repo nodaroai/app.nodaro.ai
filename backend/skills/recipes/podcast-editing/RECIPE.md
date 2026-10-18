@@ -25,14 +25,20 @@ This recipe covers:
 Each of them ends the same way: **render a Preview, review it with the user, then render
 the final.**
 
-## One step: Tighten Episode
+## One step: Tighten Episode, Chapters
 
-When `tighten_episode` is in your tool list, a plain "tighten this episode" is one call: pass the recording's `media_url` — it runs the whole
-chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job.
-Set `review_before_render: true` to stop at a preview; then `continue_use_case` with `mode: "render-final"`.
-A failed run continues with `mode: "from-failed"` — finished steps are kept. Use the primitives below when you
-need control the one-node verb does not give (several cameras, hand-edited EDLs, clips, chapters), or when
-`tighten_episode` is not in your tool list.
+Each podcast use-case has a one-node verb. Reach for it first when it is in your tool list:
+
+- **`tighten_episode`** — a plain "tighten this episode" is one call: pass the recording's `media_url` — it runs the whole
+  chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job.
+  Set `review_before_render: true` to stop at a preview; then `continue_use_case` with `mode: "render-final"`.
+- **`make_chapters`** — "chapters for this episode" is one call: pass the recording's `media_url` (transcribe → plan
+  in `chapters` mode; nothing renders). The show notes are `output_data.text` (one `0:00 Title` line per chapter),
+  the list is `output_data.json` (`[{ startMs, title }]`). A run that finds no chapters fails, and its fee is refunded.
+
+A failed run of either continues with `continue_use_case` and `mode: "from-failed"` — finished steps are kept. Use the
+primitives below when you need control the one-node verbs do not give (several cameras, hand-edited EDLs, clips), or
+when the verb is not in your tool list.
 
 ## The tools (and where each one runs)
 

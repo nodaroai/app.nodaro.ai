@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { getJobStatus, type LibraryAsset } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { useT } from "@/lib/i18n"
+import { whenActivated } from "@/lib/prerender"
 import {
   DEEP_LINK_MAX_PAGES,
   assetMatcher,
@@ -67,23 +68,27 @@ export function useLibraryDeepLink({
   // snapshot, and the second run must not toast a bad link again.
   const consumedRef = useRef<string | null>(null)
 
-  // Read the link once and take it off the address.
+  // Read the link once and take it off the address — once the page is shown
+  // (lib/prerender.ts): a prerendered page must not spend the link or toast.
+  // Everything after it (the lookup and its toasts) follows from this.
   useEffect(() => {
     if (!hasDeepLinkParams(searchParams)) {
       consumedRef.current = null
       return
     }
-    const raw = searchParams.toString()
-    if (consumedRef.current === raw) return
-    consumedRef.current = raw
-    const next = readDeepLinkTarget(searchParams)
-    setSearchParams((prev) => withoutDeepLinkParams(prev), { replace: true })
-    if (next && isLookupableId(next)) {
-      setTarget(next)
-    } else {
-      setTarget(null)
-      toast.error(t("lib.deepLinkNotFound"))
-    }
+    return whenActivated(() => {
+      const raw = searchParams.toString()
+      if (consumedRef.current === raw) return
+      consumedRef.current = raw
+      const next = readDeepLinkTarget(searchParams)
+      setSearchParams((prev) => withoutDeepLinkParams(prev), { replace: true })
+      if (next && isLookupableId(next)) {
+        setTarget(next)
+      } else {
+        setTarget(null)
+        toast.error(t("lib.deepLinkNotFound"))
+      }
+    })
   }, [searchParams, setSearchParams, t])
 
   const jobId = target?.kind === "job" ? target.id : undefined

@@ -79,6 +79,8 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "webhook-trigger",
   "schedule-trigger",
   "list",
+  // Chapters: its show notes.
+  "episode-chapters",
   // Parameter nodes — their extractNodeOutput returns the prompt hint.
   "tone",
   "style-guide",

@@ -1,7 +1,7 @@
 import type { RecastSegmentPack } from "@nodaro/shared/apps"
 /** How a recast render packs scenes into parts — `RECAST_SEGMENT_PACKS` in `@nodaro/shared`. */
 export type { RecastSegmentPack } from "@nodaro/shared/apps"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Recast — regenerate an analyzed source video with your own cast (the engine
@@ -172,7 +172,7 @@ export interface ResolveRecastGateInput {
 }
 
 export class RecastResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   // ── Authored-script lane (all three endpoints are free) ────────────────
 

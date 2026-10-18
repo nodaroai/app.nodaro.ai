@@ -2,6 +2,8 @@
 // @registry backend/src/nodes/*/price.ee.ts
 // @registry-exports prices: UNIT_PRICES
 import type { UnitPrice } from "../../../nodes/kit.js"
+import { price as unit_remove_audio } from "../../../nodes/remove-audio/price.ee.js" // unit:remove-audio
 
 export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

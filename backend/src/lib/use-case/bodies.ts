@@ -57,9 +57,13 @@ export const tightenEpisodeBody = z.object({
 })
 export type TightenEpisodeBody = z.infer<typeof tightenEpisodeBody>
 
+/** Chapters: the recording and the plan's settings — nothing renders. */
+export const episodeChaptersBody = z.object({ ...recording, ...planShape, ...usecaseLaneShape })
+
 /** Every type's body; each use-case node adds its own. */
 export const USE_CASE_BODIES: { readonly [K in UseCaseNodeType]: z.ZodObject<z.ZodRawShape> } = {
   "tighten-episode": tightenEpisodeBody,
+  "episode-chapters": episodeChaptersBody,
 }
 
 /**

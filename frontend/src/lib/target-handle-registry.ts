@@ -1,5 +1,5 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts/picker-catalogs"
-import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
+import { NODE_DEFINITIONS, OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared/video"
 import { SETTINGS_INPUT_HANDLE, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
@@ -10,7 +10,7 @@ import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-r
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_CAPTION_PLAN, unitInputAccepts } from "./ffmpeg-handles"
 import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
-import { composeRecord, unitRecord } from "./unit-compose"
+import { composeRecordAfter } from "./unit-compose"
 // @registry-enumerates TARGET_HANDLE_ACCEPTS carries every node unit's declared inputs
 import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
 import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
@@ -403,6 +403,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "media", label: "Recording", accepts: ACCEPTS_MEDIA },
     { handleId: "music", label: "Music", accepts: ACCEPTS_AUDIO },
   ],
+  // episode-chapters: the recording (video or audio).
+  "episode-chapters":   [
+    { handleId: "media", label: "Recording", accepts: ACCEPTS_MEDIA },
+  ],
   // speaker-view: the edit (an EDL) and the diarized transcript, both json, and
   // the face tracks (P3.9). No `sources` handle: media resolves from the EDL's
   // own URLs (SV15).
@@ -433,7 +437,6 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "captionPlan", label: "Caption plan", accepts: ACCEPTS_CAPTION_PLAN },
   ],
   "extract-audio":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
-  "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "trim-audio":         [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "combine-audio":      [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_MEDIA }],
@@ -906,10 +909,15 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   const map: Record<string, TargetHandleEntry[]> = {}
   for (const [k, v] of Object.entries(BASE_TARGET_HANDLE_ACCEPTS)) map[k] = [...v]
   for (const t of ANALYZABLE_PICKER_TYPES) (map[t] ??= []).push(PICKER_JSON_TARGET_ENTRY)
-  // Every node unit's declared inputs (unit.json handles.inputs) — a unit is never a legacy key.
-  return composeRecord("TARGET_HANDLE_ACCEPTS", map, unitRecord(UNIT_NODE_DEFINITIONS, (u) => (u.handles.inputs.length
-    ? u.handles.inputs.map((h) => ({ handleId: h.id, label: h.label, accepts: unitInputAccepts(h.accepts) }))
-    : undefined)))
+  // Every node unit's declared inputs (unit.json handles.inputs) — a unit is
+  // never a legacy key. The key order is the popover's candidate order, so a
+  // unit sits where the add-node picker lists it (after its picker.after),
+  // else after its position.after, else last.
+  return composeRecordAfter("TARGET_HANDLE_ACCEPTS", map, UNIT_NODE_DEFINITIONS.filter((u) => u.handles.inputs.length).map((u) => ({
+    type: u.type,
+    anchors: [u.picker?.after, u.position.after],
+    value: u.handles.inputs.map((h) => ({ handleId: h.id, label: h.label, accepts: unitInputAccepts(h.accepts) })),
+  })), new Set(NODE_DEFINITIONS.map((d) => d.type as string)))
 })()
 
 export interface TargetCandidateMatch {

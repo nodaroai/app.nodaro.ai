@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type {
   AddCollectionRecordInput,
   AddCollectionRecordResult,
@@ -28,7 +28,7 @@ import type {
  * OAuth app tokens need `assets:read` for reads and `assets:write` for writes.
  */
 export class CollectionsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** `GET /v1/collections` → your collections with their record counts, whether the server has collections at all, and your caps. */
   list(): Promise<ListCollectionsResult> {

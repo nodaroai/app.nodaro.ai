@@ -326,6 +326,19 @@
 		not path /assets/*
 	}
 	header @html Cache-Control "no-cache"
+	# Another Nodaro surface on the same site may prerender the app before a
+	# click (speculation rules); Chrome activates a same-site, cross-origin
+	# prerender only when the document allows it with credentials. HTML
+	# documents only: its own matcher leaves out the API and every proxy, which
+	# @html's dot-less pattern would also catch (/v1/*, /storage/*, /mcp, …).
+	# One-shot actions wait for activation in the app (src/lib/prerender.ts).
+	# Live on every image at merge, by design: inert until a same-site page
+	# actually prerenders this one.
+	@spa_document {
+		path_regexp spa_doc ^([^.]*|/.*\.html)$
+		not path /assets/* /v1/* /.well-known/* /storage/* /supabase/* /og/* /mcp*
+	}
+	header @spa_document Supports-Loading-Mode "credentialed-prerender"
 
 	# Which SPA routes search engines may index: an allow-list, so a route
 	# added later stays out of search unless it is listed here on purpose.

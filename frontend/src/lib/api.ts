@@ -506,8 +506,9 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
  * Behavior is identical to the inline form (pinned by
  * `__tests__/api-{error-dispatch,common-contract,context-injection}.test.ts`).
  * NOT for FormData uploads or SSE/`streamRequest` calls — those stay bespoke.
+ * Exported for the node units' own api.ts (frontend/src/nodes/<type>/api.ts).
  */
-async function apiJson<T>(
+export async function apiJson<T>(
   path: string,
   opts: {
     method?: string
@@ -4055,18 +4056,6 @@ export async function extractAudioApi(videoUrl: string, userId?: string): Promis
     body,
     workflowId: true,
     label: "apiErr.startExtractAudio",
-  })
-}
-
-export async function removeAudioApi(videoUrl: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl }
-  if (userId) {
-    body.userId = userId
-  }
-  return apiJson("/v1/remove-audio", {
-    body,
-    workflowId: true,
-    label: "apiErr.startRemoveAudio",
   })
 }
 
@@ -8700,7 +8689,7 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 // Developer Apps (OAuth) — delegates to @nodaro/sdk SDK
 // ---------------------------------------------------------------------------
 
-import type { DeveloperAppKind } from "@nodaro/sdk"
+import type { DeveloperAppKind } from "@nodaro/sdk/developer-apps"
 
 export type {
   DeveloperApp,
@@ -8710,7 +8699,7 @@ export type {
   CreateDeveloperAppInput,
   UpdateDeveloperAppInput,
   CreateDeveloperAppResult,
-} from "@nodaro/sdk"
+} from "@nodaro/sdk/developer-apps"
 
 export function listDeveloperApps() {
   return nodaroClient.developerApps.list()
@@ -8721,14 +8710,14 @@ export function getDeveloperApp(id: string) {
 }
 
 export function createDeveloperApp(
-  input: import("@nodaro/sdk").CreateDeveloperAppInput,
+  input: import("@nodaro/sdk/developer-apps").CreateDeveloperAppInput,
 ) {
   return nodaroClient.developerApps.create(input)
 }
 
 export function updateDeveloperApp(
   id: string,
-  input: import("@nodaro/sdk").UpdateDeveloperAppInput,
+  input: import("@nodaro/sdk/developer-apps").UpdateDeveloperAppInput,
 ) {
   return nodaroClient.developerApps.update(id, input)
 }

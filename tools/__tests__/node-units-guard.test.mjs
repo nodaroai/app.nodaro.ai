@@ -54,10 +54,9 @@ export function literalTypes(source) {
   return [...source.slice(start, end < 0 ? undefined : end).matchAll(/^ {4}type: "([^"]+)",$/gm)].map((m) => m[1])
 }
 
-// PR3 of the plan flips this: from then on a new node must be a unit, and a
-// type that appears in the literal without being listed fails. Until the
-// scaffold and the docs exist it is reported only, so no node PR is blocked.
-const NEW_LEGACY_TYPES_FAIL = false
+// New nodes are units (decided 2026-10-16): a type in the hand-written literal
+// that tools/units/legacy-nodes.json does not list is a NEW hand-written node,
+// and it fails — `npm run gen:units -- --new` scaffolds the unit instead.
 
 test("G1: a node type is a unit or a legacy literal entry — never both; the legacy list only shrinks", () => {
   const literal = literalTypes(read("frontend/src/types/nodes.ts"))
@@ -70,12 +69,55 @@ test("G1: a node type is a unit or a legacy literal entry — never both; the le
   assert.deepEqual(listed.filter((t) => !inLiteral.has(t)), [], "these are gone from the literal — remove them from tools/units/legacy-nodes.json (it only shrinks)")
   assert.deepEqual([...listed].sort(), listed, "tools/units/legacy-nodes.json is sorted")
   const fresh = literal.filter((t) => !listed.includes(t))
-  if (fresh.length && !NEW_LEGACY_TYPES_FAIL) {
-    process.stdout.write(`::warning title=New hand-written node (G1)::${fresh.join(", ")} added to NODE_DEFINITIONS; new nodes become units (tools/units/README.md) — this is reported until the unit scaffold lands, then it fails\n`)
-  } else {
-    assert.deepEqual(fresh, [], "new nodes are units (frontend/src/nodes/<type>/, npm run gen:units -- --new); do not add them to NODE_DEFINITIONS or tools/units/legacy-nodes.json")
-  }
+  assert.deepEqual(fresh, [], "new nodes are units: scaffold one with npm run gen:units -- --new <type> … (tools/units/README.md) — do not add it to the NODE_DEFINITIONS literal or to tools/units/legacy-nodes.json")
   assert.equal(new Set(literal).size, literal.length, "the literal has no duplicate type")
+})
+
+// ---------------------------------------------------------------------------
+// The burn-down pins
+// ---------------------------------------------------------------------------
+
+/**
+ * Each burn-down list only shrinks, and its length is pinned here: a name
+ * appended to a list to get it past its guard (a new hand-written node added
+ * to legacy-nodes.json with its literal entry, an undeclared registry user
+ * added to its G4 list) makes the list longer than its pin and fails. A list
+ * SHORTER than its pin only warns (lower the pin): two PRs that each shrink a
+ * list by one would both lower the pin by one, merge cleanly, and leave dev a
+ * list one shorter than its pin — that must never turn dev red. A pin is never
+ * raised.
+ */
+export const BURN_DOWN_PINS = {
+  "tools/units/legacy-nodes.json": 224,
+  "tools/test-select/registry-users-tests.json": 241,
+  "tools/test-select/registry-users-product.json": 208,
+}
+const listOf = (file) => {
+  const json = readJson(file)
+  return Array.isArray(json) ? json : json.types
+}
+
+/** The pin check of a list of `length` entries: a failure (it grew), a warning (lower the pin), or null. */
+export function pinProblem(file, length, pin) {
+  if (length > pin) return { fail: true, message: `${file} has ${length} entries, more than its pin ${pin}: the list only shrinks — a new node is a unit (npm run gen:units -- --new), a new registry user declares how it uses the registry. Never raise the pin.` }
+  if (length < pin) return { fail: false, message: `${file} shrank to ${length}: lower its pin in BURN_DOWN_PINS (tools/__tests__/node-units-guard.test.mjs) from ${pin} to ${length}.` }
+  return null
+}
+
+for (const [file, pin] of Object.entries(BURN_DOWN_PINS)) {
+  test(`burn-down pin: ${file} is no longer than its pin (it only shrinks; shorter warns)`, () => {
+    const problem = pinProblem(file, listOf(file).length, pin)
+    if (problem && !problem.fail) process.stdout.write(`::warning title=Burn-down pin (node units)::${problem.message}\n`)
+    assert.ok(!problem?.fail, problem?.message)
+  })
+}
+
+test("burn-down pin: pinProblem on fixtures", () => {
+  assert.equal(pinProblem("l.json", 3, 3), null)
+  assert.equal(pinProblem("l.json", 4, 3).fail, true)
+  assert.match(pinProblem("l.json", 4, 3).message, /more than its pin 3: the list only shrinks/)
+  assert.equal(pinProblem("l.json", 2, 3).fail, false, "a shorter list never fails: two shrinking PRs may both lower the pin")
+  assert.match(pinProblem("l.json", 2, 3).message, /lower its pin .* from 3 to 2/)
 })
 
 test("G1: literalTypes reads only top-level entries", () => {

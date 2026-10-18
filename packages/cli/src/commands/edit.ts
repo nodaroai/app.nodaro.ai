@@ -7,8 +7,20 @@ import {
   EDL_TARGET_ASPECTS,
   SPEAKER_LAYOUT_IDS,
 } from "@nodaro/shared/edl"
-import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource, CameraSwitchInput } from "@nodaro/sdk"
-import { ContinuationRefusedError, USE_CASE_NODE_TYPES, type TightenEpisodeInput, type UseCaseNodeType } from "@nodaro/sdk"
+import {
+  type Edl,
+  type Transcript,
+  type EditPlanSource,
+  type EditPlanInput,
+  type SilenceRanges,
+  type AudioSyncSource,
+  type CameraSwitchInput,
+  USE_CASE_NODE_TYPES,
+  type EpisodeChaptersInput,
+  type TightenEpisodeInput,
+  type UseCaseNodeType,
+} from "@nodaro/sdk/edit"
+import { ContinuationRefusedError } from "@nodaro/sdk/errors"
 import { buildClient, handleError } from "../client.js"
 import pc from "picocolors"
 import { emit, warn, type OutputOpts } from "../output.js"
@@ -321,10 +333,58 @@ export function editCommand(): Command {
       },
     )
 
+  // ── episode-chapters (podcast use-case node) ────────────────────────────
+  cmd
+    .command("episode-chapters")
+    .description("list a podcast recording's chapters in one step (transcribe, then plan the chapters); with --watch, prints the show notes")
+    .requiredOption("--media <url>", "the recording (video or audio URL, up to 3 hours)")
+    .option("--plan-tier <tier>", EDIT_PLAN_TIERS.join(" | "))
+    .option("--instructions <text>", "instructions for the chapters (\"5 to 8 chapters\")")
+    .option("--style-guide <text>", "a style guide for the chapter titles")
+    .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--watch", "poll the job until it finishes, then print the chapter list")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts & { media: string; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string },
+      ) => {
+        if (opts.planTier !== undefined && !(EDIT_PLAN_TIERS as readonly string[]).includes(opts.planTier)) {
+          warn(`--plan-tier must be ${EDIT_PLAN_TIERS.join(", ")} (got "${opts.planTier}")`)
+          process.exit(1)
+        }
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.edit.episodeChapters(
+            {
+              mediaUrl: opts.media,
+              ...(opts.planTier ? { planTier: opts.planTier as NonNullable<EpisodeChaptersInput["planTier"]> } : {}),
+              ...(opts.instructions ? { instructions: opts.instructions } : {}),
+              ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
+            },
+            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
+          )
+          const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: "episode-chapters",
+          })
+          // The show notes (one `0:00 Title` line per chapter); --json already printed the whole job.
+          const text = (done?.data.output_data as { text?: unknown } | null | undefined)?.text
+          if (!opts.json && done?.data.status === "completed" && typeof text === "string" && text.length > 0) console.log(text)
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
   // ── continue-use-case (podcast use-case runs) ───────────────────────────
   cmd
     .command("continue-use-case <jobId>")
-    .description("continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review")
+    .description("continue a Tighten Episode or Chapters run as a new job: from where it failed, or its Render final after a review")
     .requiredOption("--mode <mode>", "from-failed | render-final")
     .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
     .option(

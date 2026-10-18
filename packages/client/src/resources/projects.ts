@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 export interface Project {
   id: string
@@ -23,7 +23,7 @@ export interface UpdateProjectInput {
 }
 
 export class ProjectsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** List the authenticated user's projects. */
   list(): Promise<{ data: Project[] }> {

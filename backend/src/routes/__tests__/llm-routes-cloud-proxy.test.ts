@@ -12,8 +12,12 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { unitRouteFiles } from "../../lib/unit-source-files.js"
 
 const ROUTES_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..")
+const SRC = resolve(ROUTES_DIR, "..")
+/** A route by its label here: a basename under routes/, or a node unit's route as nodes/<type>/route.ts. */
+const routePath = (label: string): string => (label.startsWith("nodes/") ? resolve(SRC, label) : resolve(ROUTES_DIR, label))
 
 /** Direct LLM entry points a route file may call. */
 const LLM_CALL = /\b(llmComplete|llmStream|llmCompleteStructured)\s*\(/
@@ -46,8 +50,12 @@ const NOT_PROXIED: Readonly<Record<string, string>> = {
 const LLM_VIA_SERVICE = ["reduce.ts"] as const
 
 describe("LLM routes on a connected keyless install", () => {
-  const routeFiles = readdirSync(ROUTES_DIR).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-  const llmRoutes = routeFiles.filter((f) => LLM_CALL.test(readFileSync(resolve(ROUTES_DIR, f), "utf8")))
+  // The routes/ files, plus every node unit's route (labelled nodes/<type>/route.ts).
+  const routeFiles = [
+    ...readdirSync(ROUTES_DIR).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts")),
+    ...unitRouteFiles(resolve(SRC, "..", "..")).map((f) => f.slice(SRC.length + 1).split("\\").join("/")),
+  ]
+  const llmRoutes = routeFiles.filter((f) => LLM_CALL.test(readFileSync(routePath(f), "utf8")))
   const mustProxy = [...new Set([...llmRoutes, ...LLM_VIA_SERVICE])].filter((f) => !(f in NOT_PROXIED))
 
   it("finds the LLM routes (sanity — the scan must not go blind)", () => {
@@ -56,7 +64,7 @@ describe("LLM routes on a connected keyless install", () => {
   })
 
   it("every LLM route forwards to the cloud (maybeProxyLlmRouteToCloud) unless it is allowlisted with a reason", () => {
-    const missing = mustProxy.filter((f) => !readFileSync(resolve(ROUTES_DIR, f), "utf8").includes("maybeProxyLlmRouteToCloud("))
+    const missing = mustProxy.filter((f) => !readFileSync(routePath(f), "utf8").includes("maybeProxyLlmRouteToCloud("))
     expect(missing, `routes that call the LLM but do not proxy to the connection: ${missing.join(", ")}`).toEqual([])
   })
 

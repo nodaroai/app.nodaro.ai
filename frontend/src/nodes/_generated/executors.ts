@@ -2,6 +2,8 @@
 // @registry frontend/src/nodes/*/exec.ts
 // @registry-exports executors: UNIT_EXECUTORS
 import type { UnitExecutor } from "../exec-kit"
+import { executor as unit_remove_audio } from "../remove-audio/exec" // unit:remove-audio
 
 export const UNIT_EXECUTORS: Readonly<Record<string, UnitExecutor>> = Object.assign(Object.create(null), {
+  "remove-audio": unit_remove_audio, // unit:remove-audio
 })

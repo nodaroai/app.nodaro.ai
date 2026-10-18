@@ -59,6 +59,8 @@ export interface ApplyEdlRunOutput {
   readonly transcript?: unknown
   /** A use-case node's plan — the same value as its `json`. */
   readonly plan?: unknown
+  /** A use-case node's text (Chapters' show notes). */
+  readonly text?: unknown
 }
 
 /**

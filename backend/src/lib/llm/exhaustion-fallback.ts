@@ -12,8 +12,8 @@ import { serveFromFallback, type LaneFallbackCtx } from "./lane-fallback.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
 /**
- * Can KIE carry this request as it stands? Every registry model has a KIE
- * twin (`kieSlugOrModel` — the same model, served by the aggregator: the
+ * Can KIE carry this request as it stands? Every registry model but a
+ * `directOnly` one has a KIE twin (`kieSlugOrModel` — the same model, served by the aggregator: the
  * registry IS the equivalence table, see `kieEquivalentOf`), but no KIE wire
  * carries inline video bytes, and a video/audio URL would reach it only as an
  * `image_url` stand-in — a differently-grounded answer, not the same call.
@@ -25,9 +25,11 @@ export function kieCanCarry(req: LlmRequest): boolean {
   )
 }
 
-/** The KIE model id a registry model is served as there — its own `kieSlugOrModel`. */
+/** The KIE model id a registry model is served as there — its own `kieSlugOrModel`;
+ *  none for a `directOnly` model, which KIE never serves. */
 export function kieEquivalentOf(modelId: string): string | undefined {
-  return getLlmModel(modelId)?.kieSlugOrModel
+  const model = getLlmModel(modelId)
+  return model?.directOnly ? undefined : model?.kieSlugOrModel
 }
 
 /**
@@ -43,10 +45,11 @@ export function kieEquivalentOf(modelId: string): string | undefined {
  * made before any lane ran; only the provider cost recorded follows the lane
  * that answered. KIE takes a Claude reasoning effort only as its binary
  * `thinkingFlag`, so an effort-bearing call answered here thinks, but not at
- * the level asked — logged, not refused.
+ * the level asked — logged, not refused. Never for a `directOnly` model: it
+ * has no KIE twin to retry on.
  */
 export function exhaustionKieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmResponse>) | undefined {
-  if (!config.KIE_API_KEY || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
+  if (!config.KIE_API_KEY || model.directOnly || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
   return () => {
     if (req.reasoningEffort !== undefined) {
       console.warn(`[llm-lane-fallback] ${model.id}: reasoning effort ${req.reasoningEffort} runs as KIE's on/off thinkingFlag, not at its level`)
@@ -120,6 +123,6 @@ export async function streamWithExhaustionFallback(
 export function exhaustionKieStreamFallback(
   model: LlmModelDef, req: LlmRequest, signal?: AbortSignal,
 ): ((onToken: (chunk: string) => void) => Promise<LlmResponse>) | undefined {
-  if (!config.KIE_API_KEY || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
+  if (!config.KIE_API_KEY || model.directOnly || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
   return (cb) => streamKie(model, req, cb, signal)
 }

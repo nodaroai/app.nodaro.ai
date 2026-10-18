@@ -2,13 +2,17 @@
  * A Tighten Episode node's wires on the backend engine: what it reads (the
  * recording on `media`, the bed on `music`, one recording per fan-out row)
  * and what it hands on (its episode as the medium it made, its plan on
- * `json`) — live, from saved data, and rebuilt from its wrapper's row.
+ * `json`) — live, from saved data, and rebuilt from its wrapper's row. And
+ * what a Chapters node hands on: its show notes on `text`, its chapter list
+ * on `json`.
  */
 import { describe, it, expect } from "vitest"
 import { planFanOut } from "@nodaro/shared/workflow"
 import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput, fanOutIterationValue, getPrimaryOutput } from "../output-extractor.js"
 import { retainedOutputOfFailedJob } from "../failed-node-output.js"
+import { executeJsonProcess } from "../inline-executor.js"
+import { usecaseJobOutput } from "../use-case-output.js"
 import { resolveFanOutIterationInputs } from "../../../workers/fan-out-inputs.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
@@ -113,5 +117,58 @@ describe("what a Tighten Episode hands on", () => {
     const failed = { json: { v: 1 }, plan: { v: 1 }, transcript: { words: [] }, quality: "final", _executionId: "exec-in", failedNodeId: "uc-render", failedStep: "Apply Cut" }
     expect(retainedOutputOfFailedJob(failed, "tighten-episode")).toEqual({ json: { v: 1 }, transcript: { words: [] } })
     expect(retainedOutputOfFailedJob({ quality: "final", _executionId: "exec-in", failedNodeId: "uc-transcribe", failedStep: "Transcribe" }, "tighten-episode")).toBeUndefined()
+  })
+})
+
+describe("what a Chapters node hands on", () => {
+  const rows = [{ startMs: 0, title: "Intro" }, { startMs: 754_000, title: "Main" }]
+  const notes = "0:00 Intro\n12:34 Main"
+  const chapters = node("c1", "episode-chapters")
+  const states = { c1: done({ text: notes, json: rows }) }
+
+  it("a Chapters wrapper hands on its text and its chapter list", () => {
+    expect(usecaseJobOutput({ text: "0:00 Intro", json: [{ startMs: 0, title: "Intro" }], quality: "final" })).toEqual({ text: "0:00 Intro", json: [{ startMs: 0, title: "Intro" }] })
+    expect(buildNodeOutputFromJobData({ text: notes, json: rows, plan: { version: 1, chapters: rows }, quality: "final", _executionId: "e" }, "episode-chapters"))
+      .toEqual({ text: notes, json: rows })
+  })
+
+  it("live: text is the show notes, json the chapter list", () => {
+    expect(getPrimaryOutput({ text: notes, json: rows }, "episode-chapters", "text")).toBe(notes)
+    expect(getPrimaryOutput({ text: notes, json: rows }, "episode-chapters", "json")).toBe(JSON.stringify(rows))
+  })
+
+  it("its text pip feeds an LLM prompt as text", () => {
+    const llm = node("l", "llm-chat")
+    const r = resolveNodeInputs(llm, [edge("c1", "l", "text", "prompt")], states, [chapters, llm])
+    expect(r.prompt).toBe(notes)
+    expect(r.videoUrl).toBeUndefined()
+    expect(r.audioUrl).toBeUndefined()
+  })
+
+  it("an edge naming no pip reads the show notes, as the editor does", () => {
+    expect(getPrimaryOutput({ text: notes, json: rows }, "episode-chapters", null)).toBe(notes)
+    expect(getPrimaryOutput({ text: notes, json: rows }, "episode-chapters", undefined)).toBe(notes)
+    const llm = node("l", "llm-chat")
+    const r = resolveNodeInputs(llm, [edge("c1", "l", null, "prompt")], states, [chapters, llm])
+    expect(r.prompt).toBe(notes)
+    expect(r.videoUrl).toBeUndefined()
+    expect(r.audioUrl).toBeUndefined()
+    // Tighten Episode's unnamed pip is still its episode.
+    expect(getPrimaryOutput({ videoUrl: "https://r2/ep.mp4", text: "x" }, "tighten-episode", null)).toBe("https://r2/ep.mp4")
+  })
+
+  it("its json pip feeds a JSON Process as the chapter list", () => {
+    const jp = node("j", "json-process", { mode: "advanced", expression: ".[].title" })
+    const out = executeJsonProcess(jp, [edge("c1", "j", "json", "in")], [chapters, jp], states)
+    expect(out.listResults).toEqual(["Intro", "Main"])
+    const r = resolveNodeInputs(jp, [edge("c1", "j", "json", "in")], states, [chapters, jp])
+    expect(r.prompt).toBe(JSON.stringify(rows))
+    expect(r.videoUrl).toBeUndefined()
+  })
+
+  it("saved: the show notes it shows and its chapter list", () => {
+    expect(extractSavedNodeOutput(node("c1", "episode-chapters", { generatedText: notes, generatedJson: rows }))).toMatchObject({ text: notes, json: rows })
+    expect(extractSavedNodeOutput(node("c1", "episode-chapters", { generatedText: notes }))).toEqual({ text: notes })
+    expect(extractSavedNodeOutput(node("c1", "episode-chapters"))).toBeUndefined()
   })
 })

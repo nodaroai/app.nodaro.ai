@@ -5,6 +5,17 @@
  * storage limits, and free-tier restrictions.
  */
 
+import { VIDEO_DURATION_TIERS } from "@nodaro/shared/models"
+
+/**
+ * Every Vidu Q4 4K composite the credit identifier can emit
+ * (`vidu-q4:<N>s:4k`), derived from the SAME duration ladder the builder reads
+ * so a new tier is blocked the moment it becomes billable.
+ */
+const VIDU_Q4_4K_COMPOSITES: readonly string[] = (VIDEO_DURATION_TIERS["vidu-q4"] ?? []).map(
+  (t) => `vidu-q4:${t.suffix}:4k`,
+)
+
 export const STRIPE_PRODUCTS = {
   basic: {
     productId: "prod_U6gPUNpvVGjE2f",
@@ -121,11 +132,13 @@ export const FREE_TIER_RESTRICTIONS = {
   dailyCreditCap: null as number | null,
   // Exact-string match (credits.ts checkCredits). Two shapes only: a whole
   // model (veo3 family) and the 4K tier of an otherwise-allowed model — the
-  // Gemini Omni family's 4K composites, gated identically for both SKUs.
+  // Gemini Omni family's 4K composites, gated identically for both SKUs, and
+  // Vidu Q4's 4K rows (every other Vidu tier stays open).
   blockedModels: [
     "veo3", "veo3.1",
     "gemini-omni-video:4k:4", "gemini-omni-video:4k:6", "gemini-omni-video:4k:8", "gemini-omni-video:4k:10", "gemini-omni-video:4k:vref",
     "gemini-omni-flash:4k:4", "gemini-omni-flash:4k:6", "gemini-omni-flash:4k:8", "gemini-omni-flash:4k:10", "gemini-omni-flash:4k:vref",
+    ...VIDU_Q4_4K_COMPOSITES,
   ],
   watermark: true,
 } as const

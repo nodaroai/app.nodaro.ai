@@ -13,14 +13,21 @@
  * locale (or just English) and the bug is invisible until reported.
  *
  * This walk asserts every (catalog, locale) pair exists. If a developer
- * adds a new locale or a new catalog, they must add 36 (or 11) new sidecar
- * files — this test fails until they're all present.
+ * adds a new locale or a new catalog, they must add a sidecar for every
+ * catalog (or every locale) — this test fails until they're all present.
+ *
+ * The locales are discovered from the sidecar suffixes, so a locale removed
+ * from EVERY catalog would leave the matrix complete. EXPECTED_LOCALES pins
+ * the list by hand, so dropping a locale from the registry AND its sidecars
+ * still fails here until the list is edited too; the registry is held to it
+ * as well. REQUIRED_CATALOGS pins the catalogs that must stay in the matrix.
+ * This is the only CI check of locale completeness.
  */
 
 import { readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { I18N_CATALOGS } from "../i18n/types.js"
+import { I18N_CATALOGS, NON_EN_LOCALE_IDS, type LocaleId } from "../i18n/types.js"
 
 const I18N_DIR = join(__dirname, "..", "i18n")
 
@@ -44,6 +51,18 @@ function discoverLocales(): string[] {
 
 const LOCALES = discoverLocales()
 
+/**
+ * The supported locales besides English (inline in each catalog's source,
+ * never a sidecar). To add a locale: add it here, to LANGUAGES and LocaleId
+ * in packages/shared/src/i18n/types.ts, and a `<catalog>.<locale>.ts` sidecar
+ * for every catalog. To drop one: remove it from all three and delete its
+ * sidecars.
+ */
+const EXPECTED_LOCALES = ["ar", "de", "es", "fr", "he", "hi", "ja", "ko", "pt-BR", "ru", "zh-CN"] as const satisfies ReadonlyArray<Exclude<LocaleId, "en">>
+
+/** Catalogs that must keep a sidecar for every locale (dropping one from I18N_CATALOGS would take it out of the matrix). */
+const REQUIRED_CATALOGS = ["seasons"] as const
+
 // Sanity: a non-trivial number of locales
 describe("locale discovery sanity", () => {
   it("found at least 5 locales (non-trivial coverage)", () => {
@@ -55,6 +74,22 @@ describe("locale discovery sanity", () => {
     expect(LOCALES).toContain("de")
     expect(LOCALES).toContain("es")
     expect(LOCALES).toContain("ja")
+  })
+
+  it("the discovered locales are exactly EXPECTED_LOCALES (a locale gone from every catalog is caught)", () => {
+    expect(
+      LOCALES,
+      "The sidecar suffixes in packages/shared/src/i18n/ do not match EXPECTED_LOCALES. English is inline in each catalog, never a sidecar. Adding a locale: add it to EXPECTED_LOCALES, to LANGUAGES and LocaleId in packages/shared/src/i18n/types.ts, and a <catalog>.<locale>.ts sidecar for every catalog. Removing one: remove it from all three and delete all of its sidecars.",
+    ).toEqual([...EXPECTED_LOCALES].sort())
+  })
+
+  it("the language registry's non-English locales are exactly EXPECTED_LOCALES", () => {
+    expect([...NON_EN_LOCALE_IDS].sort(), "LANGUAGES in packages/shared/src/i18n/types.ts and EXPECTED_LOCALES disagree — a locale is added or dropped in one only").toEqual([...EXPECTED_LOCALES].sort())
+  })
+
+  it("every REQUIRED_CATALOGS entry is still in I18N_CATALOGS (so the matrix still checks it)", () => {
+    const missing = REQUIRED_CATALOGS.filter((c) => !(I18N_CATALOGS as readonly string[]).includes(c))
+    expect(missing, `Catalogs dropped from I18N_CATALOGS (packages/shared/src/i18n/types.ts) leave the locale matrix: ${missing.join(", ")}`).toEqual([])
   })
 })
 

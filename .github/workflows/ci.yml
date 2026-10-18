@@ -60,6 +60,7 @@ jobs:
     outputs:
       frontend: ${{ steps.gate.outputs.frontend }}
       backend: ${{ steps.gate.outputs.backend }}
+      testdedup: ${{ steps.gate.outputs.testdedup }}
       mode: ${{ steps.mode.outputs.mode }}
       reason: ${{ steps.mode.outputs.reason }}
     steps:
@@ -72,8 +73,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
+            { echo "frontend=true"; echo "backend=true"; echo "testdedup=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')
@@ -81,12 +81,18 @@ jobs:
           # The files API caps at 3000 entries — if we're near it, assume the
           # diff is bigger than we can see and run everything.
           if [ "$count" -ge 2900 ]; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
+            { echo "frontend=true"; echo "backend=true"; echo "testdedup=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          frontend=false backend=false
+          frontend=false backend=false testdedup=false
           while IFS= read -r f; do
+            # The test de-dup harness's inputs: the @test-watches globs of
+            # tools/__tests__/test-dedup-equivalence-vitest.test.mjs (`**` as
+            # `*`, which crosses `/` here). A guard in
+            # tools/__tests__/test-dedup-equivalence.test.mjs holds the two equal.
+            case "$f" in
+              tools/test-dedup/*|tools/__tests__/test-dedup-*|tools/__tests__/fixtures/test-dedup/*|tools/test-select/annotations.mjs|package.json|package-lock.json|.github/workflows/ci.yml) testdedup=true ;; # test-dedup inputs
+            esac
             # First match wins. backend/ comes before the markdown rule: the
             # generated skills (backend/skills/**/*.md) are read by backend
             # tests, and a PR that regenerated them once skipped the suite and
@@ -100,9 +106,8 @@ jobs:
               *) frontend=true; backend=true ;;                # packages/, root, unknown: both
             esac
           done <<< "$files"
-          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
-          echo "backend=$backend" >> "$GITHUB_OUTPUT"
-          echo "changed=$count frontend=$frontend backend=$backend"
+          { echo "frontend=$frontend"; echo "backend=$backend"; echo "testdedup=$testdedup"; } >> "$GITHUB_OUTPUT"
+          echo "changed=$count frontend=$frontend backend=$backend testdedup=$testdedup"
       # The mode steps must never fail the Diff Gate: it is on main's migrate
       # path. A transient failure leaves `mode` empty, and the test jobs'
       # Select step treats an empty mode as a full run.
@@ -411,6 +416,36 @@ jobs:
         run: npm run test
         working-directory: packages/remotion
 
+  # The test de-dup proof harness (tools/test-dedup/) through the REAL Vitest
+  # runner, coverage and CLI — the regression cases of every probe that once
+  # produced a false PROVEN (PR #2302). They need node_modules, which the
+  # tools self-test job (no npm ci) lacks; TEST_DEDUP_REQUIRE_VITEST makes a
+  # missing install fail here instead of skipping. Runs when the Diff Gate
+  # sees one of the harness's inputs change (always on push).
+  test-dedup-harness:
+    name: Test De-dup Harness
+    needs: [changes]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.testdedup != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Equivalence harness (real Vitest runner, coverage, CLI)
+        env:
+          TEST_DEDUP_REQUIRE_VITEST: "1"
+        run: node --test tools/__tests__/test-dedup-equivalence.test.mjs tools/__tests__/test-dedup-equivalence-vitest.test.mjs
+
   backend-test-shards:
     name: Backend Tests (${{ matrix.shard }}/4)
     needs: [changes, prepare-packages]
@@ -663,6 +698,10 @@ jobs:
       # on build-packages success: prompts tests import @nodaro/shared's dist.
       # They run on every run, affected mode included: their tests read files
       # outside packages/ (docs/nodes/**, docs/node-inventory.md).
+      # The shared suite is also the one owner of i18n locale completeness
+      # (src/__tests__/i18n-locale-completeness.test.ts: every catalog ×
+      # locale sidecar, and the locale list pinned): the sidecars live under
+      # packages/, which the Diff Gate routes to Backend Tests.
       - name: Run @nodaro/shared test suite
         if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 2 }}
         run: npm run test --workspace=@nodaro/shared
@@ -1017,7 +1056,10 @@ jobs:
       # 3. parity — the cross-tree parity tests. DISCOVERED, never hand-listed:
       #    any backend test that references a frontend path joins this gate
       #    automatically, so a new cross-tree test cannot quietly land back
-      #    inside the Diff Gate's blind spot.
+      #    inside the Diff Gate's blind spot. Of the discovered tests it skips
+      #    those that read no file and reach nothing under frontend/
+      #    (tools/test-dedup/parity-filter.mjs): they run in Backend Tests,
+      #    and no frontend-only change can alter their result.
       # 4. surfaces — the surface completeness report (`check:surfaces --all`):
       #    for every feature, which surfaces reach it (REST route, OpenAPI,
       #    SDK, CLI, MCP tools, and the docs for each). Here because docs-only
@@ -1052,6 +1094,25 @@ jobs:
             if [ ${#files[@]} -eq 0 ]; then
               echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
               return 1
+            fi
+            # Skip the discovered tests that read no frontend file and load no
+            # frontend module (the grep matched a string only): a frontend
+            # change cannot reach them, and Backend Tests runs them anyway.
+            # Derived on every run, never listed: tools/test-dedup/parity-filter.mjs,
+            # held to Vitest's graph by the duplicate report and guarded by
+            # backend/src/__tests__/cross-tree-selection-guard.test.ts.
+            # A filter that crashes, or keeps nothing, is a tool bug: run the
+            # whole discovered set (never skip all, never fail the PR on it).
+            kept=()
+            if node ../tools/test-dedup/parity-filter.mjs --out "$RUNNER_TEMP/parity-run.txt" "${files[@]}"; then
+              while IFS= read -r f; do kept+=("$f"); done < "$RUNNER_TEMP/parity-run.txt"
+              if [ ${#kept[@]} -eq 0 ]; then
+                echo "::warning::The parity filter kept 0 of ${#files[@]} cross-tree tests — a filter bug; running all of them."
+              else
+                files=("${kept[@]}")
+              fi
+            else
+              echo "::warning::tools/test-dedup/parity-filter.mjs failed — running all ${#files[@]} discovered cross-tree tests."
             fi
             echo "Cross-tree tests (${#files[@]} files):"
             printf '  %s\n' "${files[@]}"
@@ -1219,45 +1280,6 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: node backend/scripts/orgs-billing-concurrency.mjs
-
-  i18n-completeness:
-    name: i18n Locale Completeness
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Pin npm 11
-        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
-      - name: Install workspace dependencies
-        run: npm ci
-      # The full i18n catalog×locale completeness matrix test lives in
-      # @nodaro/shared and was previously never run in CI (only the
-      # seasons-scoped .mjs ran), so a missing locale sidecar would silently
-      # fall back to English in prod. NOTE: the rest of the @nodaro/shared
-      # suite has pre-existing stale failures (model/LLM registry drifted while
-      # the suite went un-run in CI) — tracked separately; once those are green,
-      # broaden this to `npm run test --workspace=@nodaro/shared`.
-      - name: i18n locale completeness (full catalog × locale matrix)
-        run: npm run test --workspace=@nodaro/shared -- src/__tests__/i18n-locale-completeness.test.ts
-
-  check-locale-completeness:
-    name: Check Locale Completeness
-    runs-on: ubuntu-slim
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-      - name: Check locale sidecar completeness
-        run: node scripts/check-locale-completeness.mjs
 
   chrome-i18n-coverage:
     name: Chrome i18n Coverage Report
@@ -1555,9 +1577,13 @@ jobs:
           NODE_ENV: production
         run: |
           set -e
-          # The use-case routes the boot probes (each use-case node adds its run and continue).
-          UC_PATHS="/v1/tighten-episode /v1/tighten-episode/continue"
           cd backend
+          # The use-case routes the boot probes: every registered use-case
+          # node's run and continue, derived from the use-case registry (no
+          # list to edit; guarded by src/__tests__/use-case-probe-paths.test.ts).
+          # The script exits non-zero on an empty list, which set -e turns into
+          # a failed step rather than a probe that checks nothing.
+          UC_PATHS=$(node scripts/use-case-probe-paths.mjs)
           node dist/server.js > /tmp/backend.log 2>&1 &
           BACKEND_PID=$!
           echo "Started backend pid=$BACKEND_PID"
@@ -1672,7 +1698,7 @@ jobs:
     # Without it here, a migration whose proof failed still reached production
     # — the job ran, went red, and nothing downstream cared. Found while
     # planning the content-scoping migrations, 2026-08-23.
-    needs: [prepare-packages, build-backend, frontend-tests, backend-tests, ffmpeg-ledger-redis, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, i18n-completeness, backend-boot-smoke, migration-behavior]
+    needs: [prepare-packages, build-backend, frontend-tests, backend-tests, ffmpeg-ledger-redis, typecheck, tenant-scope-lint, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, backend-boot-smoke, migration-behavior]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious

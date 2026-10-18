@@ -32,14 +32,6 @@ describe("parseCharacterMentionToken", () => {
       usageMode: null,
     })
   })
-  it("parses @kira:1:smile with character + index + variant (no mode)", () => {
-    expect(parseCharacterMentionToken("@kira:1:smile")).toEqual({
-      characterSlug: "kira",
-      imageIndex: 1,
-      variantSlug: "smile",
-      usageMode: null,
-    })
-  })
   it("parses multi-word character + variant slugs unambiguously", () => {
     expect(parseCharacterMentionToken("@young-kira:2:soft-smile")).toEqual({
       characterSlug: "young-kira",

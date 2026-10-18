@@ -1,3 +1,4 @@
+// @test-watches backend/src/providers/**/*.ts
 /**
  * Every outbound provider HTTP call goes through providers/egress.ts::providerFetch.
  * A raw `fetch(` under providers/** would bypass decoration + observation
@@ -11,10 +12,12 @@
  */
 import { describe, it, expect } from "vitest"
 import ts from "typescript"
-import { SCAN_TIMEOUT_MS, walk, lineOf, parseText } from "../../lib/__tests__/source-scan.js"
+import { SCAN_TIMEOUT_MS, walk, lineOf, parseText } from "../../lib/__tests__/source-ast.js"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { parseAnnotations } from "../../../../tools/test-select/annotations.mjs"
+import { matchesAny } from "../../../../tools/test-select/glob.mjs"
 
 const PROVIDERS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -51,6 +54,12 @@ function bareFetchCalls(sf: ts.SourceFile): number[] {
 }
 
 describe("no raw fetch( under providers/**", () => {
+  it("this file's @test-watches admit a new file anywhere in the tree it walks", () => {
+    const dir = relative(join(PROVIDERS_DIR, "..", "..", ".."), PROVIDERS_DIR).split(sep).join("/")
+    const own = parseAnnotations(readFileSync(fileURLToPath(import.meta.url), "utf8")).watches
+    expect([`${dir}/__probe__.ts`, `${dir}/__probe__/__probe__.ts`].filter((path) => !matchesAny(path, own))).toEqual([])
+  })
+
   it("every provider HTTP call goes through providerFetch (egress.ts is the only fetch site)", () => {
     const offenders: string[] = []
     for (const file of providerSourceFiles()) {

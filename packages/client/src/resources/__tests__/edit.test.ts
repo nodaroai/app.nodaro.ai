@@ -498,3 +498,52 @@ describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () =>
     expect(err).toMatchObject({ code: "continuation_not_failed", status: 409 })
   })
 })
+
+describe("edit.episodeChapters / estimateEpisodeChapters", () => {
+  it("episodeChapters posts the recording and only the settings given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c", executionId: "exec-c" }))
+    const out = await client(fetchMock).edit.episodeChapters({ mediaUrl: "https://r2/ep.mp4", planTier: "economy" })
+    expect(out).toMatchObject({ jobId: "job-c", executionId: "exec-c" })
+    const [url, init] = fetchMock.mock.calls[0]! as [string, { method: string; body: string; headers: Record<string, string> }]
+    expect(url).toBe("https://api.example.com/v1/episode-chapters")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], planTier: "economy" })
+    expect(init.headers["Idempotency-Key"]).toBeUndefined()
+  })
+
+  it("episodeChapters sends instructions and a style guide, and an Idempotency-Key when asked", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c", deduped: true }))
+    const out = await client(fetchMock).edit.episodeChapters(
+      { mediaUrl: "https://r2/ep.mp4", instructions: "5 to 8 chapters", styleGuide: "Short titles" },
+      { idempotencyKey: "retry-c" },
+    )
+    expect(out.deduped).toBe(true)
+    const init = fetchMock.mock.calls[0]![1] as { body: string; headers: Record<string, string> }
+    expect(init.headers["Idempotency-Key"]).toBe("retry-c")
+    expect(JSON.parse(init.body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], instructions: "5 to 8 chapters", styleGuide: "Short titles" })
+  })
+
+  it("estimateEpisodeChapters posts the same body to its estimate route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 152, stepsCredits: 142, feeCredits: 10, durationSec: 2700 } }))
+    const out = await client(fetchMock).edit.estimateEpisodeChapters({ mediaUrl: "https://r2/ep.mp4" })
+    expect(out.data.feeCredits).toBe(10)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/episode-chapters/estimate")
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"] })
+  })
+
+  it("continueUseCase continues a Chapters run on its own route, read from the job", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-c", job_type: "episode-chapters", input_data: { type: "episode-chapters", mode: "run" } } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-c2" }))
+    const out = await client(fetchMock).edit.continueUseCase({ jobId: "job-c", mode: "from-failed" })
+    expect(out.jobId).toBe("job-c2")
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/episode-chapters/continue")
+  })
+
+  it("continueUseCase with nodeType episode-chapters posts straight to its route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c2" }))
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-c", mode: "from-failed", nodeType: "episode-chapters" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/episode-chapters/continue")
+  })
+})

@@ -48,7 +48,7 @@ import {
   type VideoOverlayOutputAspect,
   type VideoOverlayPresetId,
 } from "@nodaro/shared/video"
-import type { DownloadVideoProgress, CaptionEntry, CaptionSegmentInput } from "@nodaro/sdk"
+import type { DownloadVideoProgress, CaptionEntry, CaptionSegmentInput } from "@nodaro/sdk/media"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string

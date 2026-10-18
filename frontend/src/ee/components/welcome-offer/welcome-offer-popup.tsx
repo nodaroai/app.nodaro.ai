@@ -8,6 +8,7 @@ import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import { WelcomeCreditBadge } from "./welcome-credit-badge"
 import { useConsentAskVersion, useWelcomeOffer, useWelcomeOfferClaim } from "./use-welcome-offer"
+import { whenActivated } from "@/lib/prerender"
 
 /** The home (Continue) tab — the only place the popup opens on its own. */
 const HOME_PATH = "/projects"
@@ -37,8 +38,12 @@ export function WelcomeOfferPopup() {
   // First visit: open once, on the home screen, while the popup is still due.
   useEffect(() => {
     if (!offer.popupDue || pathname !== HOME_PATH || autoOpened.current) return
-    autoOpened.current = true
-    setOpen(true)
+    // Never from a prerendered page nobody has seen yet (lib/prerender.ts).
+    return whenActivated(() => {
+      if (autoOpened.current) return
+      autoOpened.current = true
+      setOpen(true)
+    })
   }, [offer.popupDue, pathname])
 
   // The server refused a creation for missing consent — ask right here.

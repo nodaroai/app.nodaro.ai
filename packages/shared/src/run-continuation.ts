@@ -27,13 +27,28 @@ export const CONTINUATION_NOT_COMPLETED = "continuation_not_completed"
  *  on the execution's output. */
 export const CONTINUATION_SUBSET_REQUIRED = "continuation_subset_required"
 
-/** A continue-from-failed run (use-case nodes) needs an execution that ended
- *  `failed`: a completed run has nothing to resume, a running one is not over. */
+/** A continue-from-failed run (a use-case node's, or a saved workflow's) needs
+ *  an execution that ended `failed`: a completed run has nothing to resume, a
+ *  running one is not over. */
 export const CONTINUATION_NOT_FAILED = "continuation_not_failed"
 
-/** A continue-from-failed (use-case nodes) of a run a later continuation of
- *  it has superseded — that later one failed too: continue it instead. */
+/** A continue-from-failed of a run a later continuation of it has superseded
+ *  — that later one failed too: continue it instead. A saved workflow's run
+ *  also answers it when a later continuation completed everything the run left
+ *  (the work is done; its results are on that run). */
 export const CONTINUATION_SUPERSEDED = "continuation_superseded"
+
+/** A continue-from-failed of a saved workflow's run whose lineage's newest
+ *  continuation COMPLETED by stopping at a Preview review — of an Apply EDL
+ *  render, or of a use-case node with review on (Tighten Episode): continuing
+ *  again would only stop at the same Preview. The answer names that execution
+ *  (`executionId`), its renders (`renderNodeIds`) and its use-case nodes
+ *  (`reviewNodeIds`), and the run that finishes them (`next`:
+ *  `continueFromExecutionId`, `nodeIds`, `inputOverrides`, to send to `/run`):
+ *  for one render, its Render final (`renderFinal` with
+ *  `continueFromExecutionId` set to that execution) is the same run. A
+ *  continue-from-failed after it builds on that run. */
+export const CONTINUATION_PREVIEW_PENDING = "continuation_preview_pending"
 
 /** A continue-from-failed (use-case nodes) of a failed run whose wrapper is not
  *  settled yet (its fee not yet refunded): ask again in a moment. A retry
@@ -55,6 +70,7 @@ export const RUN_CONTINUATION_CODES = [
   CONTINUATION_SUBSET_REQUIRED,
   CONTINUATION_NOT_FAILED,
   CONTINUATION_SUPERSEDED,
+  CONTINUATION_PREVIEW_PENDING,
 ] as const
 
 export type RunContinuationCode = (typeof RUN_CONTINUATION_CODES)[number]

@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { DeveloperAppScope } from "./developer-apps.js"
 
 /**
@@ -45,7 +45,7 @@ export interface OAuthAppInfo {
 }
 
 export class OAuthResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Server-side authorization-code exchange. Sends the standard OAuth 2.0

@@ -31,7 +31,7 @@
  * when the handler verifies ownership post-fetch (e.g., reads user_id then
  * checks `row.user_id === req.userId`).
  */
-// @reads backend/src/routes/** backend/src/ee/routes/** backend/scripts/tenant-scope-baseline.json
+// @reads backend/src/routes/** backend/src/ee/routes/** backend/src/nodes/*/route*.ts backend/scripts/tenant-scope-baseline.json
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -187,6 +187,17 @@ const IGNORE_COMMENT = /\/\/\s*tenant-scope-ignore(:|$)/
 // ---------------------------------------------------------------------------
 // Scan
 // ---------------------------------------------------------------------------
+
+// Node units' routes (backend/src/nodes/<type>/route.ts | route.ee.ts,
+// tools/units/README.md) are routes too: they are checked like src/routes.
+function unitRouteFiles() {
+  const dir = join(BACKEND_ROOT, "src", "nodes")
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((n) => !n.startsWith("_") && statSync(join(dir, n)).isDirectory())
+    .flatMap((n) => ["route.ts", "route.ee.ts"].map((f) => join(dir, n, f)))
+    .filter((f) => existsSync(f))
+}
 
 function walkTs(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -418,7 +429,7 @@ if (!isEntryPoint) {
 } else {
 
 const updateBaseline = process.argv.includes("--update-baseline")
-const files = ROUTE_DIRS.filter((d) => existsSync(d)).flatMap((d) => walkTs(d)).sort()
+const files = [...ROUTE_DIRS.filter((d) => existsSync(d)).flatMap((d) => walkTs(d)), ...unitRouteFiles()].sort()
 const { entries: baselineEntries } = loadBaseline()
 const consumed = new Set()
 

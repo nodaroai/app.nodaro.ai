@@ -453,6 +453,8 @@ that IS stable: which provider serves each node, and how its price is *shaped*.
 | render-video | flat | Remotion cloud render |
 | FFmpeg nodes | dynamic (duration-based) | combine-videos/merge-video-audio/add-captions/resize/trim/extract-audio/mix-audio/adjust-volume — computed at runtime |
 
+**A node unit's price** (decided 2026-10-16) lives in its own folder: `backend/src/nodes/<type>/price.ee.ts` exports `staticCosts` (literal numbers — the editor's price mirror is projected from it by gen:units) and `creditId(data)`. The ee aggregate `backend/src/ee/nodes/_generated/prices.ts` carries it into `STATIC_CREDIT_COSTS` / `CREDIT_COSTS` (`credits.ts` composes once), so core never imports a price. Any unit with a route has one, a free node included (`getModelCreditBaseCost` hard-fails on an unknown id), and a reprice ships its `model_pricing` migration in the same PR, exactly like a legacy row.
+
 ### Credit Flow
 1. Job created -> Reserve credits (estimate based on model)
 2. Job processing -> API call to provider
@@ -658,6 +660,10 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 | Inline | combine-text, split-text, composite | Pure logic, no external calls |
 | Source (no execution) | text-prompt, upload-*, webhook-trigger, schedule-trigger, list, reference-audio | Output read from node data |
 
+### Node units on the server
+
+A node unit (`backend/src/nodes/<type>/`, `tools/units/README.md`) reaches the engine only through the generated aggregates its composers read: `app.ts` registers `UNIT_ROUTES` (and `UNIT_EE_ROUTES` when `hasCredits()`), `payload-builder.ts` dispatches `UNIT_PAYLOADS[type]` before its legacy switch (the shared prelude — deny checks, `REQUIRED_MEDIA_INPUTS` from `execution.requires` — runs first), and `workers/handlers/ffmpeg.ts` adds `UNIT_WORKERS` for units on the `video` queue (the BullMQ job name is the node type). `/v1/nodes`, the saved-output, finalize and length rules read the descriptor through `lib/unit-descriptors.ts`. A unit file imports only its own folder, non-engine code and the type-only `backend/src/nodes/kit.ts` (never `payload-builder.ts` or `node-executor.ts`). **Only `execution.kind: "worker"` runs in a server-run workflow today** — `sync` (SYNC_HTTP_NODES), `inline` (INLINE_NODES) and `source` (SOURCE_NODE_TYPES) do not compose units yet, so the validator refuses those kinds until the node that needs one builds its seam (`EXECUTION_SEAMS` in `tools/units/seams.mjs`).
+
 ### API Routes
 
 **Execution** (`routes/workflow-execution.ts`):
@@ -729,6 +735,7 @@ Unified interface for all LLM calls across the registry's models and 3 tiers (co
 | `claude-sonnet-5.5` | Standard | messages | as Sonnet 5 plus `supportsForcedToolChoice: false` (auto + strict tool), `conversationBoundThinking`, `thinkingDefaultOn` |
 | `grok-4.7` | Standard | responses | grok-4.6 clone (`none` is overridden to `minimal` by the endpoint → not offered) |
 | `gemini-3.1-pro` | Premium | chat-completions | `thinkingDefaultOn`, reasoning floor 16384 |
+| `gemini-4-argon` | Premium | chat-completions | **`directOnly`** — Google's API only, never KIE (its KIE lane failed the 2026-10-17 probe), so it always bills `premium-direct`; efforts low/medium/high (Google 400s MINIMAL, so no `none`); image-only modality caps by decision (VA tier waits on a bake-off); KIE "Chat only" (no tool loops); `thinkingDefaultOn`, default 32768 floor |
 | `claude-opus-4.7` | Premium | messages | reasoning efforts (low–max); `supportsTemperature: false`; `preferKie` |
 | `gpt-5.4` | Premium | responses | reasoning efforts (low/medium/high only) |
 | `gpt-5.5` | Premium | responses | reasoning efforts; `supportsTemperature: false` |
@@ -759,6 +766,17 @@ over SSE (see API Formats below) and so carry no `credits_consumed`. 3.8: `respo
 json_schema enforced, `reasoning_effort` low/high, and `max_tokens 20000` was honored
 (14,892 completion tokens, `finish_reason: stop`) — hence its 16384 cap where 3.6/3.7 keep the
 8192 KIE-safe intersection.
+
+`gemini-4-argon` (direct id `gemini-4-argon`) is **direct-only** (`directOnly`, decided 2026-10-17):
+the router serves it from Google with no KIE leg (primary, failure fallback, exhausted-account retry
+or pin), `callKie`/`streamKie` refuse it as a backstop (`assertKieServable`), it has no KIE rate row,
+and with no `GEMINI_API_KEY` it fails provider-unavailable naming only that key. `llmServesDirect` is
+true on every call, so it bills `premium-direct`. Why: its KIE slug `gemini-4-argon-openai` answered 6
+of 15 completed probe calls with an empty 200 (`finish_reason: stop`, still charged — both image calls
+among them), reported negative `completion_tokens` on reasoning calls, leaked code-execution fences
+into content, did not enforce a `response_format` json_schema enum, and answered an off-enum
+`reasoning_effort` with an empty 200. Re-enable KIE only after a clean re-probe. Direct: `responseJsonSchema`
+enforced; `thinkingLevel` LOW/MEDIUM/HIGH accepted, MINIMAL a 400.
 
 ### API Formats
 - **chat-completions** — `gemini-3-flash`, `gemini-3.6-flash` (slug `gemini-3-6-flash-openai`), `gemini-3.7-flash` (slug `gemini-3-7-flash-openai`), `gemini-3.8-flash` (slug `gemini-3-8-flash-openai`), `gemini-3.1-pro`, `gpt-5.2` — `POST {KIE_API_BASE}/{model.kieSlugOrModel}/v1/chat/completions` (the model's own KIE slug prefixes the path — there's no single shared chat-completions URL)
@@ -801,7 +819,7 @@ The 3rd argument is clamped via `effectiveReasoningEffort` BEFORE the bump check
 
 ### Direct Google lane (`directGeminiModel` / `preferDirect` + `GEMINI_API_KEY`)
 
-The Google-side twin of the direct-Anthropic fallback. Two registry fields in `packages/shared/src/llm-models.ts` drive it, and nothing in `llm-client.ts` matches on a vendor name: `directGeminiModel` names the model's id on Google's own API (stated, not derived — Google carries `-preview` suffixes, so `gemini-3.1-pro` → `gemini-3.1-pro-preview`), and `preferDirect` decides lane ORDER. With `GEMINI_API_KEY` set, a `preferDirect` model goes Google-first with KIE as the fallback; any other model with a `directGeminiModel` stays KIE-first and uses Google only when KIE fails. With the key unset the direct lane doesn't exist and routing is byte-identical to before. `preferDirect` and `preferKie` are the two halves of one idea and are mutually exclusive — guarded by a registry test.
+The Google-side twin of the direct-Anthropic fallback. Two registry fields in `packages/shared/src/llm-models.ts` drive it, and nothing in `llm-client.ts` matches on a vendor name: `directGeminiModel` names the model's id on Google's own API (stated, not derived — Google carries `-preview` suffixes, so `gemini-3.1-pro` → `gemini-3.1-pro-preview`), and `preferDirect` decides lane ORDER. A third, `directOnly`, removes the KIE lane altogether (see `gemini-4-argon` above). With `GEMINI_API_KEY` set, a `preferDirect` model goes Google-first with KIE as the fallback; any other model with a `directGeminiModel` stays KIE-first and uses Google only when KIE fails. With the key unset the direct lane doesn't exist and routing is byte-identical to before. `preferDirect` and `preferKie` are the two halves of one idea and are mutually exclusive — guarded by a registry test.
 
 **Lane choice is a COST decision, not just reliability.** The two lanes bill the same model at materially different unit rates (figures live in `lib/pricing/llm-cost.ts`, the sanctioned home — keep them out of `packages/*`, which is published to npm, and out of `docs/`; `tools/check-pricing-leaks.mjs` enforces the package half). No model is direct-first unpinned since 2026-10-08 (`gemini-3.1-pro` was the last; its direct lane is now Advanced mode, billed `premium-direct`). `gemini-3.6-flash` backs five `LLM_FEATURE_DEFAULTS` plus the video-analysis fast tier, so it stays KIE-first; a routing test pins that so it can't drift onto the expensive lane silently. `calculateLlmCost(model, usage, lane)` carries a per-lane rate band (plus Gemini 3.1 Pro's >200k-prompt step-up), so `provider_cost` reflects whoever actually served the call. KNOWN GAP: the direct-Anthropic fallback still costs at the KIE row — pre-existing, and the mechanism to close it now exists.
 

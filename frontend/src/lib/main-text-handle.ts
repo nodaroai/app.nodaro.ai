@@ -79,6 +79,8 @@ const NON_PARAMETER_TEXT_SOURCES: ReadonlyArray<string> = [
   "webhook-trigger",
   "schedule-trigger",
   "list",
+  // Chapters: its show notes (an edge naming no pip reads them).
+  "episode-chapters",
 ]
 
 /** Node types whose `extractNodeOutput` produces text (including parameter

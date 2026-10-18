@@ -79,7 +79,7 @@ import { outputPipSourceType } from "@nodaro/shared/entities"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
-import { isUseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
 import { routeUseCaseInput } from "./use-case-inputs.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor, splitMediaPartsFor } from "./saved-data.js"
@@ -1423,6 +1423,8 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
+  // Chapters (a use-case node): its show notes on `text`, its chapter list on `json`.
+  "episode-chapters",
   // Collections — Read Collection's digest, Save to Collection's headline.
   "collection-read",
   "collection-write",
@@ -2680,8 +2682,9 @@ function routeOutput(
 
   // --- a use-case node's episode (Tighten Episode): video OR audio, by what
   // the run produced, for the render's reason above; its `json` (the plan)
-  // takes the generic json routing. ---
-  if (isUseCaseNodeType(srcType) && edge.sourceHandle !== "json") {
+  // takes the generic json routing, its `text` (Chapters' show notes — an
+  // unnamed pip of such a type too) the text routing. ---
+  if (isUseCaseNodeType(srcType) && edge.sourceHandle !== "json" && edge.sourceHandle !== "text" && !(edge.sourceHandle == null && usecaseResultIsText(srcType))) {
     if (producedVideoIn(src, nodeStates)) routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     else routeAudioOutput(inputs, output, targetType, src.id)
     return

@@ -1,0 +1,145 @@
+[
+  {
+    "id": "price.mjs#0",
+    "file": "price.mjs",
+    "operator": "block",
+    "start": 108,
+    "end": 205,
+    "original": "{\n  if (qty <= 0) return 0\n  const total = qty * unit\n  return total > 100 ? total - 10 : total\n}",
+    "replacement": "{}",
+    "line": 2,
+    "column": 34
+  },
+  {
+    "id": "price.mjs#1",
+    "file": "price.mjs",
+    "operator": "negate",
+    "start": 116,
+    "end": 124,
+    "original": "qty <= 0",
+    "replacement": "!(qty <= 0)",
+    "line": 3,
+    "column": 7
+  },
+  {
+    "id": "price.mjs#2",
+    "file": "price.mjs",
+    "operator": "compare",
+    "start": 120,
+    "end": 122,
+    "original": "<=",
+    "replacement": ">",
+    "line": 3,
+    "column": 11
+  },
+  {
+    "id": "price.mjs#3",
+    "file": "price.mjs",
+    "operator": "literal",
+    "start": 123,
+    "end": 124,
+    "original": "0",
+    "replacement": "1",
+    "line": 3,
+    "column": 14
+  },
+  {
+    "id": "price.mjs#4",
+    "file": "price.mjs",
+    "operator": "literal",
+    "start": 133,
+    "end": 134,
+    "original": "0",
+    "replacement": "1",
+    "line": 3,
+    "column": 24
+  },
+  {
+    "id": "price.mjs#5",
+    "file": "price.mjs",
+    "operator": "return",
+    "start": 133,
+    "end": 134,
+    "original": "0",
+    "replacement": "undefined",
+    "line": 3,
+    "column": 24
+  },
+  {
+    "id": "price.mjs#6",
+    "file": "price.mjs",
+    "operator": "arithmetic",
+    "start": 155,
+    "end": 156,
+    "original": "*",
+    "replacement": "/",
+    "line": 4,
+    "column": 21
+  },
+  {
+    "id": "price.mjs#7",
+    "file": "price.mjs",
+    "operator": "negate",
+    "start": 171,
+    "end": 182,
+    "original": "total > 100",
+    "replacement": "!(total > 100)",
+    "line": 5,
+    "column": 10
+  },
+  {
+    "id": "price.mjs#8",
+    "file": "price.mjs",
+    "operator": "return",
+    "start": 171,
+    "end": 203,
+    "original": "total > 100 ? total - 10 : total",
+    "replacement": "undefined",
+    "line": 5,
+    "column": 10
+  },
+  {
+    "id": "price.mjs#9",
+    "file": "price.mjs",
+    "operator": "compare",
+    "start": 177,
+    "end": 178,
+    "original": ">",
+    "replacement": "<=",
+    "line": 5,
+    "column": 16
+  },
+  {
+    "id": "price.mjs#10",
+    "file": "price.mjs",
+    "operator": "literal",
+    "start": 179,
+    "end": 182,
+    "original": "100",
+    "replacement": "0",
+    "line": 5,
+    "column": 18
+  },
+  {
+    "id": "price.mjs#11",
+    "file": "price.mjs",
+    "operator": "arithmetic",
+    "start": 191,
+    "end": 192,
+    "original": "-",
+    "replacement": "+",
+    "line": 5,
+    "column": 30
+  },
+  {
+    "id": "price.mjs#12",
+    "file": "price.mjs",
+    "operator": "literal",
+    "start": 193,
+    "end": 195,
+    "original": "10",
+    "replacement": "0",
+    "line": 5,
+    "column": 32
+  }
+]

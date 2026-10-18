@@ -24,7 +24,6 @@
     "test:coverage": "npm -ws --if-present run test:coverage",
     "check:surfaces": "npm -w backend run check:surfaces --",
     "gen:units": "node tools/units/gen.mjs",
-    "units:baseline": "node tools/units/dump-composed.mjs",
     "gen": "npm run gen:units && npm -w backend run gen:skills",
     "changeset": "changeset",
     "version": "changeset version",

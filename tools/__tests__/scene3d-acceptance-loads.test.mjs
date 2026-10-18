@@ -70,7 +70,7 @@ test("every static import is a node: builtin or a sibling — nothing from node_
 
 test("the SDK and the doctrine package are reached only through a dynamic import", () => {
   const client = readFileSync(join(ROOT, "lib/client.mjs"), "utf8")
-  assert.ok(/await import\("@nodaro\/sdk"\)/.test(client), "the SDK import must be dynamic and inside the factory")
+  assert.ok(/await import\("@nodaro\/sdk\/client"\)/.test(client), "the SDK import must be dynamic and inside the factory")
   const scoping = readFileSync(join(ROOT, "lib/scoping.mjs"), "utf8")
   assert.ok(/await import\("@nodaro\/prompts\/doctrine"\)/.test(scoping))
 })

@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { resumeFailedRunHint } from "./_resume-hint.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -145,7 +146,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
       const { data: execution, error: execErr } = await supabase
         .from("workflow_executions")
         .select(
-          "id, status, node_states, error_message, total_credits_used, started_at, completed_at, user_id",
+          "id, status, node_states, error_message, total_credits_used, started_at, completed_at, user_id, workflow_id, trigger_type, trigger_data",
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
@@ -213,6 +214,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         }))
         // How a completed run ended: "nothing_new" when a node was skipped for want of input.
         const outcome = executionOutcome(execution.status, nodeStates as Record<string, { status?: unknown; skipReason?: unknown }>) ?? null
+        // A failed run of a saved workflow can be continued where it stopped.
+        const resumeHint = await resumeFailedRunHint(execution, session)
         return {
           content: [
             {
@@ -225,6 +228,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                   outcome,
                   summary,
                   executionError: execution.error_message ?? null,
+                  ...(resumeHint ? { resumeHint } : {}),
                   nodes,
                   failures,
                   creditsNote: CREDITS_NOTE,

@@ -1,12 +1,16 @@
 import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 
-import { promptBindsFirstFrame } from "./seedance-2-inputs.js"
-import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js"
+import { placeFramesAfterReferences } from "./frame-reference-slots.js"
 
 /**
  * Gemini Omni Video i2v input resolution — the sibling of
  * `resolveSeedance2Inputs` for a model whose multimodal channel is ONE flat
  * `image_urls` list.
+ *
+ * THE PLATFORM CONVENTION (2026-10-18, `placeFramesAfterReferences`): the
+ * caller's identity references come first, so their image token N is their Nth
+ * reference, and the start frame is appended after them. Until then the frame
+ * led the list, so a caller's `@image_1` landed on the frame.
  *
  * WHY BINDING IS LOAD-BEARING: Gemini Omni receives the start frame and the
  * identity references in the same array, with nothing in the payload marking
@@ -14,17 +18,16 @@ import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js
  * field finding (recast keyframes run, 2026-08-14): the identity references
  * rode every call and the cast still drifted part to part, because the prompt
  * never said the images WERE identities to keep. So the resolver names the
- * roles in a prompt suffix, through the same `REF_BINDING` swap-point every
- * other video binding uses: image 1 is the opening frame; the rest are
- * identity references, explicitly not frames.
+ * roles in a prompt suffix: the references are identity references, explicitly
+ * not frames, and the last image is the opening frame.
  *
  * BUDGETED, NEVER REJECTED, for the list this resolver assembles: KIE's quota
  * is `images + 2×videos ≤ 7`, and `runGeminiOmni` hard-rejects overflow. That
  * reject is right for a caller-assembled list (the user's own images should
  * not silently thin out) and wrong for THIS merge, where the overflow is our
  * own construction — so trailing references are dropped to fit, the start
- * frame always kept, mirroring `resolveSeedance2Inputs`' drop-trailing
- * convention, and the drop count is reported for the caller to log.
+ * frame always kept (the convention's tie-break), and the drop count is
+ * reported for the caller to log.
  *
  * BYTE-IDENTICAL when there is nothing to bind: no references ⇒ no suffix and
  * a single-image list — exactly what every plain gemini-omni i2v call has
@@ -34,7 +37,7 @@ import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js
 export interface GeminiOmniI2vInputsArgs {
   /** The composed prompt, used only to detect an existing first-frame binding. */
   prompt?: string
-  /** The start frame — always kept, always first in the list. */
+  /** The start frame — always kept, appended after the references. */
   firstFrameUrl: string
   /** Identity references, in priority order (trailing ones drop first). */
   refImageUrls?: Array<string | undefined>
@@ -48,7 +51,7 @@ export interface GeminiOmniI2vInputsArgs {
 }
 
 export interface GeminiOmniI2vInputsResult {
-  /** `[firstFrameUrl, ...keptRefs]` — the `image_urls` payload, quota-fitted. */
+  /** `[...keptRefs, firstFrameUrl]` — the `image_urls` payload, quota-fitted. */
   imageUrls: string[]
   /** The role-binding sentences; empty when no reference survived the budget. */
   promptSuffix: string
@@ -64,18 +67,16 @@ function geminiOmniInputSlots(provider: string | undefined): number {
 }
 
 export function resolveGeminiOmniI2vInputs(args: GeminiOmniI2vInputsArgs): GeminiOmniI2vInputsResult {
-  const refs = (args.refImageUrls ?? []).filter((u): u is string => typeof u === "string" && u.length > 0)
   const slots = geminiOmniInputSlots(args.provider) - (args.videoConnected ? 2 : 0)
-  const refSlots = Math.max(0, slots - 1)
-  const kept = refs.slice(0, refSlots)
-  const droppedRefImages = refs.length - kept.length
-  const imageUrls = [args.firstFrameUrl, ...kept]
-  if (kept.length === 0) return { imageUrls, promptSuffix: "", droppedRefImages }
-
-  // The opening-frame sentence is suppressed when the prompt already binds it
-  // at its own (working) position — same field-finding rule as seedance-2: a
-  // duplicate directive at the end dilutes the one that works.
-  const frameSentence = promptBindsFirstFrame(args.prompt) ? "" : REF_BINDING.frame(1, "opening")
-  const promptSuffix = [frameSentence, identityRefsSentence(2, kept.length + 1)].filter(Boolean).join(" ")
-  return { imageUrls, promptSuffix, droppedRefImages }
+  const placed = placeFramesAfterReferences({
+    prompt: args.prompt,
+    firstFrameUrl: args.firstFrameUrl,
+    refImageUrls: args.refImageUrls,
+    imageCap: Math.max(1, slots),
+    bindIdentities: true,
+  })
+  if (placed.imageUrls.length === 1) {
+    return { imageUrls: placed.imageUrls, promptSuffix: "", droppedRefImages: placed.droppedRefImages }
+  }
+  return { imageUrls: placed.imageUrls, promptSuffix: placed.promptSuffix, droppedRefImages: placed.droppedRefImages }
 }

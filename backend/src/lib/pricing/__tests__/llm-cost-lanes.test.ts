@@ -38,6 +38,14 @@ describe("serving lane selects the rate band", () => {
     expect(calculateLlmCost("gemini-3.8-flash", { inputTokens: 1000, outputTokens: 500 })).toBeCloseTo(0.0007875, 10)
   })
 
+  it("costs gemini-4-argon at Google's STANDARD list price on the direct lane, not the intro", () => {
+    // Pinned to the standard $4/$20 rather than the $2/$10 intro running
+    // through 2026-11-30: a six-week promo is too short to trust a remembered
+    // bump, and over-reporting during it is the safe direction.
+    // (1000 * 4.00 + 500 * 20.00) / 1e6 = 0.014
+    expect(calculateLlmCost("gemini-4-argon", { inputTokens: 1000, outputTokens: 500 }, "direct")).toBeCloseTo(0.014, 10)
+  })
+
   it("never prices the direct lane BELOW the aggregator", () => {
     // A direct row cheaper than its KIE row would mean the two bands got
     // swapped — a vendor's own list price is never the discounted one.

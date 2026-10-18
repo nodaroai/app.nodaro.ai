@@ -98,7 +98,8 @@ describe("/embed/scene3d cannot authenticate", () => {
             offences.push(`${path.relative(SRC, file)} imports ${label} (${specifier})`)
           }
         }
-        if (BANNED_PACKAGES.includes(specifier)) {
+        // A package's subpaths count as the package (`@nodaro/sdk/client`).
+        if (BANNED_PACKAGES.some((pkg) => specifier === pkg || specifier.startsWith(`${pkg}/`))) {
           offences.push(`${path.relative(SRC, file)} imports ${specifier}`)
         }
       }

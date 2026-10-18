@@ -207,7 +207,7 @@ describe("KieVideoProvider — gemini-omni-video aspect_ratio", () => {
 // ---------------------------------------------------------------------------
 
 describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
-  it("I2V: image_urls has start + ref, and the prompt BINDS the roles — frame vs identity", async () => {
+  it("I2V: image_urls has the ref then the start frame, and the prompt BINDS the roles — frame vs identity", async () => {
     await provider.imageToVideo(
       "https://x/start.png",
       "a prompt",
@@ -220,14 +220,16 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
     const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
 
-    expect(capturedInput.image_urls).toEqual(["https://x/start.png", "https://x/r.png"])
+    // Platform convention: the caller's reference first (their @image_1), the
+    // start frame appended after it.
+    expect(capturedInput.image_urls).toEqual(["https://x/r.png", "https://x/start.png"])
     expect(capturedInput.duration).toBe("8")
     expect(capturedInput.resolution).toBe("1080p")
     // The binding is what makes the list mean something to a multimodal model:
     // without it the refs are loose context and the cast drifts (2026-08-14).
     expect(capturedInput.prompt).toBe(
-      "a prompt\n\nUse @image_1 as the opening (first) frame of the video. " +
-        "@image_2 is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.",
+      "a prompt\n\nUse @image_2 as the opening (first) frame of the video. " +
+        "@image_1 is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.",
     )
   })
 
@@ -293,11 +295,11 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
     const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
     expect(capturedInput.image_urls).toEqual([
-      "https://x/start.png",
       "https://x/r1.png",
       "https://x/r2.png",
       "https://x/r3.png",
       "https://x/r4.png",
+      "https://x/start.png",
     ])
     expect(capturedInput.video_list).toBeDefined()
   })
@@ -327,9 +329,12 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
     const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
     expect((capturedInput.image_urls as string[]).length).toBe(7)
-    expect((capturedInput.image_urls as string[])[0]).toBe("https://x/start.png")
+    // The start frame is kept (explicit intent) at the end; r7 is the ref dropped.
+    expect((capturedInput.image_urls as string[]).at(-1)).toBe("https://x/start.png")
+    expect(capturedInput.image_urls as string[]).not.toContain("https://x/r7.png")
     // The binding names exactly the kept span, not the asked-for one.
-    expect(capturedInput.prompt).toContain("@image_2 through @image_7")
+    expect(capturedInput.prompt).toContain("@image_1 through @image_6")
+    expect(capturedInput.prompt).toContain("Use @image_7 as the opening (first) frame")
   })
 
   // ---------------------------------------------------------------------------

@@ -1,0 +1,5 @@
+{
+  "max": 10,
+  "names": ["a", "b"],
+  "hang": false
+}

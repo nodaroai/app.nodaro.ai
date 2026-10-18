@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, waitFor, act } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { CHAT_TURN_CAPS } from "@nodaro/shared/pipeline"
-import type { ChatTurn } from "@nodaro/sdk"
+import type { ChatTurn } from "@nodaro/sdk/pipelines"
 import { usePipelineChat } from "../use-pipeline-chat"
 
 vi.mock("@/lib/pipelines-api", () => ({

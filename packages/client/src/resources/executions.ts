@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { ExecutionOutcome, NodeExecutionStateWire } from "@nodaro/shared/workflow"
 
 export type ExecutionStatus =
@@ -118,7 +118,7 @@ export interface CancelExecutionParams {
 }
 
 export class ExecutionsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Get an execution by ID. Falls back to standalone single-node jobs server-side. */
   get(id: string): Promise<{ data: WorkflowExecution }> {

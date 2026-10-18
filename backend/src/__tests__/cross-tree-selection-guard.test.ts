@@ -1,4 +1,4 @@
-// @test-watches backend/src/**/*.ts .github/workflows/ci.yml
+// @test-watches backend/src/**/*.ts .github/workflows/ci.yml packages/*/src/**/*.{ts,tsx,mts,js,mjs} backend/**/*.{ts,mts,js,mjs} tools/**/*.{ts,mts,js,mjs}
 /**
  * Cross-tree tests declare what they read in the other tree.
  *
@@ -18,6 +18,15 @@
  * literals, and `join(…, "<front-end dir>", "src", …)` segment runs. A new
  * cross-tree reader fails here until it declares them. Comments are prose and
  * name nothing.
+ *
+ * The parity run skips the discovered tests that read no file and load
+ * nothing of the other tree (tools/test-dedup/parity-filter.mjs, decided on
+ * every run). The filter is static and regex-based; this guard re-derives the
+ * decision from the TypeScript AST for every test it skips, and fails one that
+ * reads files, loads a module of the other tree, or loads a computed path the
+ * filter cannot follow; and it fails a backend, tools or workspace-package
+ * module that loads the other tree. The filter's own transitive walk is held
+ * to Vitest's graph by the duplicate report (tools/test-dedup/report.mjs).
  */
 import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
@@ -27,6 +36,7 @@ import { describe, expect, it } from "vitest"
 import { isScanner, parseAnnotations } from "../../../tools/test-select/annotations.mjs"
 import { matchesAny } from "../../../tools/test-select/glob.mjs"
 import { isTestSideHelper } from "../../../tools/test-select/test-node.mjs"
+import { parityRun } from "../../../tools/test-dedup/parity-filter.mjs"
 
 const REPO = join(__dirname, "..", "..", "..")
 // Spelled in two parts so this file names no path of the other tree itself.
@@ -185,6 +195,95 @@ function crossTreeProblems(file: string, read: (p: string) => string | null, tra
   return uncoveredPaths(source, watches, tracked).map((p) => `${file}: names ${p}, which no @test-watches glob covers`)
 }
 
+const LOADERS = new Set(["require", "importActual", "importMock", "mock", "doMock"])
+
+/**
+ * What one source loads at run time, from its AST: every module specifier of a
+ * value import / re-export (type-only ones are erased), and every `import()`,
+ * `require()`, `vi.importActual()` / `vi.importMock()` / `vi.mock()` and
+ * `new URL()` argument — `null` when the argument is computed. `withUrls:
+ * false` leaves `new URL()` out: in a product module it builds a path to
+ * read, which `@reads` declares, not a module it loads.
+ */
+function loadedSpecifiers(source: string, withUrls = true): (string | null)[] {
+  const sf = ts.createSourceFile("x.ts", source, ts.ScriptTarget.Latest, true)
+  const out: (string | null)[] = []
+  const literal = (e: ts.Expression | undefined) => (e && (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) ? e.text : null)
+  const visit = (n: ts.Node): void => {
+    if (ts.isImportDeclaration(n) && !n.importClause?.isTypeOnly) out.push(literal(n.moduleSpecifier))
+    else if (ts.isExportDeclaration(n) && n.moduleSpecifier && !n.isTypeOnly) out.push(literal(n.moduleSpecifier))
+    else if (ts.isCallExpression(n)) {
+      const callee = n.expression
+      const name = callee.kind === ts.SyntaxKind.ImportKeyword ? "import"
+        : ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : null
+      if (name === "import" || (name && LOADERS.has(name) && n.arguments.length > 0)) out.push(literal(n.arguments[0]))
+    } else if (withUrls && ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "URL" && n.arguments?.length) {
+      out.push(literal(n.arguments[0]))
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return out
+}
+
+/**
+ * The other tree's npm workspace name (its package.json `name`): `npm ci`
+ * links node_modules/<name> → ../<tree>, so a bare `<name>/…` specifier loads
+ * it too. Read, never assumed.
+ */
+function otherTreeName(read: (p: string) => string | null): string {
+  const manifest = read(`${TREE}/package.json`)
+  if (manifest === null) throw new Error(`${TREE}/package.json not found — cannot tell the workspace name`)
+  return (JSON.parse(manifest) as { name: string }).name
+}
+
+/** Whether a specifier `importer` loads names a module of the other tree: a relative path into it, or its workspace name. */
+function isOtherTree(importer: string, spec: string, name: string): boolean {
+  const bare = spec.replace(/[?#].*$/, "")
+  if (bare === name || bare.startsWith(`${name}/`)) return true
+  return /^\.{1,2}(?:\/|$)/.test(bare) && `${posix.normalize(posix.join(posix.dirname(importer), bare))}/`.startsWith(`${TREE}/`)
+}
+
+const RUNNERS = new Set(["exec", "execSync", "execFile", "execFileSync", "spawn", "spawnSync", "fork", "execa", "execaSync", "execaNode"])
+
+/** The child processes (other than git, a read) a source starts: their first argument, `null` when computed. */
+function commandsRun(source: string): (string | null)[] {
+  const sf = ts.createSourceFile("x.ts", source, ts.ScriptTarget.Latest, true)
+  const out: (string | null)[] = []
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) {
+      const c = n.expression
+      // `exec` only as a bare call: `re.exec(…)` is a RegExp
+      const name = ts.isIdentifier(c) ? c.text : ts.isPropertyAccessExpression(c) && c.name.text !== "exec" ? c.name.text : null
+      if (name && RUNNERS.has(name)) {
+        const a = n.arguments[0]
+        const cmd = a && (ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a)) ? a.text : null
+        if (cmd === null || !/^git(?:\s|$)/.test(cmd)) out.push(cmd)
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return out
+}
+
+/** Why a test the parity run skips might still depend on the other tree, or [] when it cannot. */
+function skippedProblems(file: string, read: (p: string) => string | null): string[] {
+  const name = otherTreeName(read)
+  const problems: string[] = []
+  for (const f of [file, ...helpersOf(file, read)]) {
+    const source = read(f) ?? ""
+    const a = parseAnnotations(source)
+    if (isScanner(source) || a.always || a.watches.length > 0) problems.push(`${f}: reads files at run time (or declares reads)`)
+    for (const spec of loadedSpecifiers(source)) {
+      if (spec === null) problems.push(`${f}: loads a computed path`)
+      else if (isOtherTree(f, spec, name)) problems.push(`${f}: loads ${spec}`)
+    }
+    for (const cmd of commandsRun(source)) problems.push(`${f}: runs ${cmd === null ? "a computed command" : `"${cmd}"`}, which can read anything`)
+  }
+  return problems.map((p) => `skipped by the parity run, but ${p}`)
+}
+
 const readRepo = (p: string): string | null => {
   const abs = join(REPO, p)
   return existsSync(abs) ? readFileSync(abs, "utf8") : null
@@ -207,12 +306,47 @@ describe("cross-tree tests declare what they read", () => {
     const problems = found.flatMap((f) => crossTreeProblems(f, readRepo, tracked))
     expect(problems, "Declare what these tests read (`// @test-watches <glob>…`, tools/test-select/README.md): test selection runs a cross-tree test only when a change reaches it.").toEqual([])
   }, 60_000)
+
+  it("ci.yml's parity run narrows the discovery with the parity filter", () => {
+    const fn = ciYml.match(/cross_tree_parity\(\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? ""
+    expect(fn, "the parity run no longer calls tools/test-dedup/parity-filter.mjs — drop the skip checks below with it").toMatch(/parity-filter\.mjs/)
+  })
+
+  it("every discovered test the parity run skips reads no file and loads nothing of the other tree", () => {
+    const cwd = join(REPO, discovery!.cwd)
+    const found = execFileSync("bash", ["-c", `${discovery!.grep} | sort`], { cwd, encoding: "utf8" })
+      .split("\n").filter(Boolean).map((f) => posix.join(discovery!.cwd, f))
+    const { skipped, run } = parityRun(found, readRepo)
+    expect(run.length + skipped.length).toBe(found.length)
+    const problems = skipped.flatMap((f) => skippedProblems(f, readRepo))
+    expect(problems, "tools/test-dedup/parity-filter.mjs skips a test that can depend on the other tree — fix the filter, or declare the test's reads (`// @test-watches`, `// @test-always`) so it is kept").toEqual([])
+  }, 60_000)
+
+  // The filter's walk from a test through the modules it imports is held to
+  // Vitest's graph only when the duplicate report runs. These two keep the
+  // other tree out of every module a backend test can reach, in CI: a skipped
+  // test can then reach it only through its own file or a test-side helper,
+  // which the check above re-derives from the AST.
+  // A computed specifier in such a module is not checked here: the filter's
+  // walk keeps every test that reaches one (category computed-import).
+  const name = otherTreeName(readRepo)
+  const loadsOtherTree = (f: string) => loadedSpecifiers(readRepo(f) ?? "", false).some((s) => s !== null && isOtherTree(f, s, name))
+  const modules = (...globs: string[]) => execFileSync("git", ["ls-files", ...globs], { cwd: REPO, encoding: "utf8", maxBuffer: 64 << 20 })
+    .split("\n").filter((f) => /\.(?:[cm]?[jt]sx?)$/.test(f) && !/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(f))
+
+  it("no workspace package module loads the other tree (the parity filter does not walk into packages)", () => {
+    expect(modules("packages/*/src/**").filter(loadsOtherTree)).toEqual([])
+  })
+
+  it("no backend or tools module other than a test file loads the other tree", () => {
+    expect(modules("backend/**", "tools/**").filter(loadsOtherTree)).toEqual([])
+  }, 60_000)
 })
 
 describe("the guard's own rules", () => {
   const fe = (rest: string) => `${TREE}/${rest}`
   const tracked = [fe("src/x.ts"), fe("src/lib/a.ts"), fe("src/lib/b.tsx"), fe("index.html")]
-  const files = (map: Record<string, string>) => (p: string) => map[p] ?? null
+  const files = (map: Record<string, string>) => (p: string) => map[p] ?? ({ [fe("package.json")]: `{ "name": "${TREE}" }` } as Record<string, string>)[p] ?? null
 
   it("fails a test that reads a frontend file with no watch, and passes it once watched", () => {
     const src = `import { readFileSync } from "node:fs"\nreadFileSync(join(root, "${fe("src/x.ts")}"))\n`
@@ -294,6 +428,26 @@ describe("the guard's own rules", () => {
     const narrowed = `// @test-watches ${fe("src/lib/**/*.ts")}\nconst ROOTS = ["${fe("src")}"]\nfor (const r of ROOTS) readdirSync(join(REPO, r))\n`
     expect(problems(narrowed)).toEqual([`backend/src/a.test.ts: names ${fe("src")}, which no @test-watches glob covers`])
     expect(problems(narrowed.replace(fe("src/lib/**/*.ts"), fe("src/**/*.{ts,tsx}")))).toEqual([])
+  })
+
+  it("fails a skipped test that reads files, loads the other tree, or loads a computed path", () => {
+    const at = "backend/src/lib/__tests__/a.test.ts"
+    const check = (src: string, extra: Record<string, string> = {}) => skippedProblems(at, files({ [at]: src, ...extra }))
+    expect(check(`import type { X } from "../../../../${fe("src/x.js")}"\nconst s = "${fe("src/x.ts")}"\n`)).toEqual([])
+    expect(check(`import { X } from "../../../../${fe("src/x.js")}"\n`)).toEqual([`skipped by the parity run, but ${at}: loads ../../../../${fe("src/x.js")}`])
+    expect(check(`const m = await import("../../../../${fe("src/x.js")}")\n`)).toHaveLength(1)
+    expect(check(`vi.mock("../../../../${fe("src/x.js")}")\n`)).toHaveLength(1)
+    expect(check(`const m = await import(join(FE, "x.js"))\n`)).toEqual([`skipped by the parity run, but ${at}: loads a computed path`])
+    expect(check(`readFileSync(p)\n`)).toEqual([`skipped by the parity run, but ${at}: reads files at run time (or declares reads)`])
+    // the workspace symlink: a bare specifier naming the other tree's package
+    expect(check(`import * as m from "${fe("src/lib/add-node-menu-tab")}"\n`)).toEqual([`skipped by the parity run, but ${at}: loads ${fe("src/lib/add-node-menu-tab")}`])
+    expect(check(`import * as m from "${TREE}"\n`)).toHaveLength(1)
+    expect(check(`import * as m from "${TREE}-utils/x"\n`)).toEqual([])
+    expect(check(`execFileSync("npx", ["tsx", script])\n`)).toEqual([`skipped by the parity run, but ${at}: runs "npx", which can read anything`])
+    expect(check(`spawnSync(cmd, args)\n`)).toHaveLength(1)
+    expect(check(`const m = /x/.exec(s)\n`)).toEqual([])
+    expect(check(`import { h } from "./h.js"\n`, { "backend/src/lib/__tests__/h.ts": "export const h = () => readFileSync(p)\n" }))
+      .toEqual([`skipped by the parity run, but backend/src/lib/__tests__/h.ts: reads files at run time (or declares reads)`])
   })
 
   it("reads the discovery out of a workflow", () => {

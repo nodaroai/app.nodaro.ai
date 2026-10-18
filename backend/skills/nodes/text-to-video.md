@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-14T21:02:23.370Z
-generated_from: d2027cd00
+generated_at: 2026-10-17T21:51:14.762Z
+generated_from: e2fb75877
 ---
 
 # Text to Video
@@ -288,7 +288,7 @@ subject → action → scene/environment → lighting → camera movement → st
 
 **Modes (picked from the wired inputs)**
 - Nothing visual → text-to-video. A concrete aspect ratio is REQUIRED — the API hard-rejects a missing one (Nodaro sends the node's ratio; there is no adaptive).
-- Image(s) wired → image-to-video: the first image anchors the scene; extra images are references — bind each in the prompt ("the woman from the first image", "the interior from the second image").
+- Image(s) wired → image-to-video. Your reference images come FIRST, in your order (`@image_1`, `@image_2`, …) — bind each in the prompt ("the woman from @image_1", "the interior from @image_2"); a wired start frame is appended after them and the platform names it as the opening frame.
 - Source video wired → video-edit (served through the same handle): describe the CHANGE ("replace the daylight with dusk, keep the motion and framing"), not a full re-description.
 
 **Audio (native)**
@@ -310,6 +310,7 @@ descriptions of static/unchanged parts — spend the words on what MOVES.
 **Image-to-video (the primary mode)**
 - The input image is the FIRST FRAME, not a loose reference: composition, subject identity, and visual style carry over. Describe motion and camera only ("she turns toward the window as the camera slowly pushes in"); re-describing the still wastes adherence.
 - grok-imagine-video-1.5 accepts up to 7 images (identity/scene references beyond the first frame); at 1080p only ONE image is allowed.
+- grok-i2v with reference images: images are addressed `@image(n)` in array order. Your references come first (`@image(1)` is your first reference); a wired start frame is appended after them and the platform names it as the opening frame.
 
 **Audio (video-1.5)**
 - Native audio generates with the clip — background music, SFX, and lip-synced dialogue. Quote the spoken line; describe the music/SFX plainly. There is no audio toggle on the KIE contract — cue (or exclude) sound in the prompt text.
@@ -381,6 +382,32 @@ subject → action → scene/environment → lighting → camera movement → st
 Source: KIE Wan 3.0 market contract (docs.kie.ai/market/wan/3-0-video,
 docs.kie.ai/market/wan/3-0-video-prime). Captured 2026-09-01.
 
+### Vidu Q4 (vidu-q4)
+
+Prompt structure (no public Vidu Q4 prompt guide is captured — the KIE API contract is the
+doctrine source; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**Modes (picked by what is wired)**
+- Start frame only → image-to-video. The frame anchors the shot and its aspect ratio; describe MOTION and camera, not the still. The prompt is optional.
+- Any reference image or reference audio → reference-to-video. The prompt is REQUIRED. A wired start frame cannot be sent as a frame here, so the platform adds it to the reference images (after the caller's own, ordinals unchanged) and names it in the prompt as the opening frame.
+- There is no text-only mode and no first+last frame mode.
+
+**Reference binding**
+- Refer to inputs by ordinal in attachment order. In the editor the reference tokens emit "@image_N" / "@audio_N" — write the binding explicitly ("the woman from @image_1 turns to the man from @image_2 and says …, in the voice of @audio_1").
+- Caps: 1-15 reference images (JPG / PNG / WEBP) and 0-3 reference audio clips. Audio must be MP3, each 3-12 seconds — the platform refuses any other format or length before the run starts.
+
+**Duration, resolution, aspect**
+- 3-16 seconds (default 5). 540p / 720p (default) / 1080p / 2K / 4K.
+- Image-to-video has no aspect setting — the output inherits the start frame's shape. Reference runs take 16:9 (default) / 9:16 / 1:1 / 4:3 / 3:4.
+- Prompts up to 20,000 characters.
+
+**Audio**
+- The "audio" boolean defaults ON and generates synchronized sound with the clip (the contract says "dialogue and sound effects"). Describe the soundscape plainly or state the exclusion, or turn the toggle off for a silent clip.
+
+Source: KIE Vidu Q4 market contracts (docs.kie.ai/market/vidu-q4/image-to-video,
+docs.kie.ai/market/vidu-q4/reference-to-video). Captured 2026-10-17.
+
 ### HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)
 
 Prompt structure (no public HappyHorse prompt guide exists — the KIE API contract is the
@@ -390,7 +417,7 @@ subject → action → scene/environment → lighting → camera movement → st
 **Contract facts (KIE, per-mode pages)**
 - Prompts: any language, up to 5000 non-Chinese / 2500 Chinese characters — excess is TRUNCATED silently, so put the load-bearing content first.
 - Duration 3-15s (default 5), billed per second. Resolution 720p / 1080p (default). Aspect 16:9 (default) / 9:16 / 1:1 / 4:3 / 3:4.
-- Modes: text-to-video (happyhorse), image-to-video (happyhorse-i2v), reference-to-video (happyhorse-ref2v) — ref2v preserves wired identities; name each reference in the prompt so the binding is explicit.
+- Modes: text-to-video (happyhorse), image-to-video (happyhorse-i2v), reference-to-video (happyhorse-ref2v) — ref2v preserves wired identities; name each reference in the prompt so the binding is explicit, as `[Image N]` in array order: your references come first (`[Image 1]` is your first), and a wired start frame is appended after them and named as the opening frame.
 
 **Style guidance (platform-standard, honestly generic)**
 - One camera movement per shot; physical, quantified action ("slowly raises a hand") over abstract emotion words; state exclusions ("no on-screen text, no watermark") in the prompt.

@@ -63,6 +63,8 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   // A use-case node: its steps bill as their own jobs at their own rows (the
   // transcribe and the render per minute), plus a flat per-run fee.
   "tighten-episode": "per-minute",
+  // The same for Chapters (its transcribe per minute, its plan, the fee).
+  "episode-chapters": "per-minute",
 }
 
 /** The static table as the lookup a source's `band` computer takes. */
@@ -263,7 +265,10 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
     const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
     const tts = registry.find((d) => d.type === "text-to-speech")!
     // A per-service margin of 10% on every row, the way the price table marks up.
-    const prices = { credits: (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil((Math.ceil(table[id]! * units) * 110) / 100) : undefined) }
+    const prices = {
+      credits: (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil((Math.ceil(table[id]! * units) * 110) / 100) : undefined),
+      rate: () => undefined,
+    }
     expect(chargedDescriptor(tts, prices).creditCost).toBe("18-880")
   })
 })

@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { Job } from "./jobs.js"
 
 /**
@@ -19,8 +19,11 @@ export interface GenerationSession {
   /** The latest activity: an item added, or an edit. */
   updatedAt: string
   archivedAt: string | null
+  /** The item picked as the session's cover (`update(id, { coverJobId })`); `null` = automatic. */
+  coverJobId: string | null
   itemCount: number
-  /** Up to four image links of the newest completed items. */
+  /** Up to four image links: the cover's image first when one is set, then the
+   *  newest completed items. */
   previewUrls: string[]
 }
 
@@ -36,6 +39,9 @@ export interface UpdateSessionInput {
   /** `null` makes the session untitled again. */
   title?: string | null
   archived?: boolean
+  /** One of the session's items to lead its previews (404 if it is not an
+   *  item of this session); `null` goes back to automatic. */
+  coverJobId?: string | null
 }
 
 export interface ListSessionsParams {
@@ -71,7 +77,7 @@ export interface SessionPage<T> {
 }
 
 export class SessionsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Create a session. Send its `id` as `sessionId` on a generation request
@@ -97,7 +103,7 @@ export class SessionsResource {
     return this.client.request("GET", `/v1/sessions/${encodeURIComponent(id)}`)
   }
 
-  /** Rename or archive a session. Its project cannot change. */
+  /** Rename or archive a session, or pick its cover. Its project cannot change. */
   update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }> {
     return this.client.request("PATCH", `/v1/sessions/${encodeURIComponent(id)}`, { body: input })
   }

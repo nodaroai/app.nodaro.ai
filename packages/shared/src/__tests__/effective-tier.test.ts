@@ -20,6 +20,9 @@ describe("resolveStoredTier", () => {
 
 describe("resolveEffectiveTier — the payg derivation matrix (design §9)", () => {
   it("never-paid free user stays free", () => {
+    // NET lifetime 0 is also what a refunded-to-zero user and the #489
+    // pre-subscribe carryover (a topup balance with NO purchase) have, so
+    // this one case pins all three: none of them may derive payg.
     expect(
       resolveEffectiveTier({ tier: "free", subscription_tier: null, lifetime_topup_credits: 0 })
     ).toBe("free")
@@ -29,20 +32,6 @@ describe("resolveEffectiveTier — the payg derivation matrix (design §9)", () 
     expect(
       resolveEffectiveTier({ tier: "free", subscription_tier: null, lifetime_topup_credits: 3300 })
     ).toBe("payg")
-  })
-
-  it("refunded-to-zero user drops back to free (NET lifetime)", () => {
-    expect(
-      resolveEffectiveTier({ tier: "free", subscription_tier: null, lifetime_topup_credits: 0 })
-    ).toBe("free")
-  })
-
-  it("#489 pre-subscribe carryover fixture: topup balance without purchase stays free", () => {
-    // Cancel-path carryover moves a pre-subscribe balance into topup_credits
-    // with NO purchase — lifetime stays 0, so the user must NOT derive payg.
-    expect(
-      resolveEffectiveTier({ tier: "free", subscription_tier: null, lifetime_topup_credits: 0 })
-    ).toBe("free")
   })
 
   it("every stored paid tier passes through untouched, regardless of lifetime", () => {

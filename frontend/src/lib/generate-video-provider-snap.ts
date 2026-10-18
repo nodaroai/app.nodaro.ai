@@ -13,6 +13,7 @@ import {
 import {
   isGeminiOmniProvider,
   isWan3Provider,
+  isViduQ4Provider,
   supportsAutoVideoDuration,
 } from "@nodaro/shared/models"
 import {
@@ -114,6 +115,18 @@ export function generateVideoProviderSnap(
     // `adaptive` is Wan 3.0's own default aspect ratio and what the backend DAG
     // path fills for an untouched node.
     if (data.aspectRatio == null) updates.aspectRatio = "adaptive"
+  }
+  if (isViduQ4Provider(provider)) {
+    // Same rule as Wan 3.0: the bare credit identifier is the 5s @ 720p tier
+    // while the catalog ladders start at 3s / 540p, so persist the declared
+    // defaults rather than `opts[0]`. No aspect fill — a frame run takes the
+    // frame's shape and a reference run defaults to 16:9.
+    if (!opts?.some((o) => o.value === resolution)) {
+      updates.resolution = openVideoResolution(limits, provider, [uiResolutionFill(provider) ?? "720p", ...(opts?.map((o) => o.value) ?? [])])
+    }
+    if (data.duration == null || ("duration" in updates && updates.duration === undefined)) {
+      updates.duration = openVideoDuration(limits, provider, [uiDurationFill(provider) ?? 5, ...(VIDEO_DURATION_OPTIONS[provider]?.map((o) => o.value) ?? [])])
+    }
   }
   if (hasStaleSeedanceDraft(provider, data.draft)) updates.draft = undefined
   return updates

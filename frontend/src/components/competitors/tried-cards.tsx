@@ -12,6 +12,7 @@ import { AdviceRecordList } from "./advice-record"
 import { CardMarkStrip } from "./card-mark-strip"
 import { isPendingMark } from "./card-outcome-text"
 import { useInView } from "./use-in-view"
+import { whenActivated } from "@/lib/prerender"
 
 /** The card as it was when acted on, phrased as the wall phrased it. */
 function snapshotCard(action: CardAction): ActionCard {
@@ -56,8 +57,12 @@ function TriedCard({ action, posts, handlers }: { readonly action: CardAction; r
   }
   useEffect(() => {
     if (!inView || !unseen || worked || asked.current) return
-    asked.current = true
-    askSeen(action)
+    // "Seen" means a person saw it — not a prerendered page (lib/prerender.ts).
+    return whenActivated(() => {
+      if (asked.current) return
+      asked.current = true
+      askSeen(action)
+    })
   }, [inView, unseen, worked, askSeen, action])
   const card = snapshotCard(action)
   // A snapshot without its numbers reads in the server's words.

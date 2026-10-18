@@ -49,6 +49,7 @@ const EXPECTED_MODEL_IDS = [
   "claude-sonnet-4.6",
   "gpt-5.2",
   "gemini-3.1-pro",
+  "gemini-4-argon",
   "claude-opus-4.7",
   "gpt-5.4",
   "gpt-5.5",
@@ -113,14 +114,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 8 economy, 7 standard, 13 premium models", () => {
+  it("has 9 economy, 7 standard, 14 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
     expect(tierCounts.economy).toBe(9)
     expect(tierCounts.standard).toBe(7)
-    expect(tierCounts.premium).toBe(13)
+    expect(tierCounts.premium).toBe(14)
   })
 
   it("all three kieFormats are represented", () => {
@@ -618,6 +619,8 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "claude-opus-5.5",
         "kimi-k3",
         "deepseek-v4.1-flash",
+        // directOnly; the direct lane enforced responseJsonSchema (2026-10-17).
+        "gemini-4-argon",
       ].sort(),
     )
   })
@@ -663,6 +666,7 @@ describe("reasoning effort registry", () => {
     expect(getLlmTier("gpt-5.6-sol")).toBe("premium")
     expect(getLlmTier("gpt-6-astra")).toBe("premium")
     expect(getLlmTier("gemini-3.8-flash")).toBe("economy")
+    expect(getLlmTier("gemini-4-argon")).toBe("premium")
     expect(getLlmTier("grok-4.6")).toBe("standard")
     expect(getLlmTier("claude-sonnet-5")).toBe("standard")
     expect(getLlmTier("claude-opus-4.8")).toBe("premium")
@@ -869,6 +873,59 @@ describe("gemini-3.8-flash exposure", () => {
 })
 
 // ---------------------------------------------------------------------------
+// gemini-4-argon exposure (2026-10-17: DIRECT-ONLY — its KIE lane failed the
+// probe; the direct lane enforced responseJsonSchema and rejected MINIMAL)
+// ---------------------------------------------------------------------------
+describe("gemini-4-argon exposure", () => {
+  it("premium Gemini served only on Google's own API — no KIE lane, no lane preference", () => {
+    const m = getLlmModel("gemini-4-argon")
+    expect(m?.tier).toBe("premium")
+    expect(m?.vendor).toBe("google")
+    expect(m?.directGeminiModel).toBe("gemini-4-argon")
+    expect(m?.directOnly).toBe(true)
+    expect(m?.preferDirect).toBeUndefined()
+    // Kept for the record and a re-enable after a re-probe; nothing sends to it.
+    expect(m?.kieSlugOrModel).toBe("gemini-4-argon-openai")
+    expect(m?.structuredOutputMode).toBe("kie-response-format")
+    expect(m?.thinkingDefaultOn).toBe(true)
+    expect(supportsAdvancedMode("gemini-4-argon")).toBe(true)
+  })
+
+  it("offers the direct ladder on every call — never `none`, which Google 400s on this model", () => {
+    // Every call runs direct, so the ladder is the direct one with or without
+    // Advanced mode; `none` maps to MINIMAL in the direct client.
+    expect(availableReasoningEfforts("gemini-4-argon")).toEqual(["low", "medium", "high"])
+    expect(availableReasoningEfforts("gemini-4-argon", true)).toEqual(["low", "medium", "high"])
+    expect(getLlmModel("gemini-4-argon")?.directReasoningEfforts).toBeUndefined()
+  })
+
+  it("floors reasoning calls at the default 32768 — its one lane is Google's, whose cap that is", () => {
+    const m = getLlmModel("gemini-4-argon")!
+    expect(m.reasoningOutputFloor).toBeUndefined()
+    expect(reasoningOutputFloor(m)).toBe(REASONING_OUTPUT_FLOOR)
+    expect(m.maxOutputTokens).toBe(16384)
+  })
+
+  it("resolves by canonical id and by its KIE slug", () => {
+    expect(getLlmModel("gemini-4-argon")?.id).toBe("gemini-4-argon")
+    expect(getLlmModel("gemini-4-argon-openai")?.id).toBe("gemini-4-argon")
+  })
+
+  it("is the default of no feature (decided 2026-10-17)", () => {
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gemini-4-argon")
+  })
+
+  it("stays OUT of video-analysis — image-only modality caps by decision, not omission", () => {
+    // The model reads video and audio; full caps here would auto-enroll it in
+    // VIDEO_ANALYSIS_LLM_MODELS and force a VA tier + pricing decision that
+    // waits on a Video Analysis bake-off. If this goes red, someone flipped the
+    // caps — only valid TOGETHER with that decision.
+    expect(getLlmModalityCaps("gemini-4-argon")).toEqual({ image: true, video: false, audio: false })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-argon")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // gpt-6-astra exposure (KIE responses lane live-verified 2026-09-06 on the
 // streaming path: enforced text.format json_schema with strict:true, the
 // documented effort enum, temperature silently ignored, reasoning on by default)
@@ -982,7 +1039,9 @@ describe("buildLlmCreditIdentifier effort bump (xhigh/max only)", () => {
     expect(buildLlmCreditIdentifier("llm-chat", "gemini-3.6-flash", "max")).toBe("llm-chat:economy")
   })
   it("back-compat: no effort arg → identical to today for every model", () => {
-    for (const m of LLM_MODELS) {
+    // A directOnly model runs direct on every call, so it bills its direct
+    // rung even with no effort (pinned in "direct-vendor lane declarations").
+    for (const m of LLM_MODELS.filter((x) => !x.directOnly)) {
       const before = m.tier === "standard" ? "x" : `x:${m.tier}`
       expect(buildLlmCreditIdentifier("x", m.id)).toBe(before)
     }
@@ -993,6 +1052,27 @@ describe("buildLlmCreditIdentifier effort bump (xhigh/max only)", () => {
 })
 
 describe("direct-vendor lane declarations", () => {
+  it("directOnly sits on a Gemini direct lane, alone — never with preferDirect or preferKie", () => {
+    // The router serves a directOnly model from `directGeminiModel` and builds
+    // no KIE leg; a lane preference beside it would be dead config that reads
+    // like a live fallback.
+    const bad = LLM_MODELS.filter((m) => m.directOnly && (!m.directGeminiModel || m.preferDirect || m.preferKie)).map((m) => m.id)
+    expect(bad).toEqual([])
+  })
+
+  it("a directOnly model is served direct on every call — the bill follows (llmServesDirect)", () => {
+    for (const m of LLM_MODELS.filter((x) => x.directOnly)) {
+      for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
+        expect(llmServesDirect(m.id, effort, false), `${m.id} ${effort}`).toBe(true)
+      }
+      // A premium model's direct rung is premium-direct, Advanced or not.
+      if (m.tier === "premium") {
+        expect(buildLlmCreditIdentifier("llm-chat", m.id)).toBe("llm-chat:premium-direct")
+        expect(buildLlmCreditIdentifier("llm-chat", m.id, "high", true)).toBe("llm-chat:premium-direct")
+      }
+    }
+  })
+
   it("no model declares BOTH preferKie and preferDirect", () => {
     // They are the two halves of one idea (which lane goes first). Declaring
     // both is meaningless and would make routing depend on branch order in
@@ -1270,8 +1350,8 @@ describe("llmServesDirect (decided 2026-10-08: priced on the lane it runs on)", 
     // Haiku 5.5 has one, and KIE ignores it like every other Claude effort.
     expect(llmServesDirect("claude-haiku-5.5", "low")).toBe(true)
   })
-  it("no effort and no Advanced: every model runs on the aggregator", () => {
-    for (const m of LLM_MODELS) expect(llmServesDirect(m.id), m.id).toBe(false)
+  it("no effort and no Advanced: every model runs on the aggregator — except one served nowhere else", () => {
+    for (const m of LLM_MODELS) expect(llmServesDirect(m.id), m.id).toBe(m.directOnly === true)
   })
   it("every Claude model with an effort ladder declares effortRequiresDirect, and is KIE-first", () => {
     for (const m of LLM_MODELS.filter((x) => x.vendor === "anthropic")) {

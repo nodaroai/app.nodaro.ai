@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
 import { reportQueuedJob } from "../util.js"
-import type { VcpAnalysis, VcpExportInput, VcpExportTrack, VoiceChangerProInput } from "@nodaro/sdk"
+import type { VcpAnalysis, VcpExportInput, VcpExportTrack, VoiceChangerProInput } from "@nodaro/sdk/voices"
 import { DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type DialogueProvider } from "@nodaro/shared/models"
 
 interface GlobalOpts extends OutputOpts {

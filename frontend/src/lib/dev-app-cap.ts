@@ -1,4 +1,4 @@
-import type { DeveloperApp } from "@nodaro/sdk"
+import type { DeveloperApp } from "@nodaro/sdk/developer-apps"
 
 /**
  * Per-user cap on hand-registered developer apps. Mirrors

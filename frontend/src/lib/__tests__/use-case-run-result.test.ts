@@ -87,3 +87,38 @@ describe("a refused Render final lands as a failure naming the final", () => {
     expect(usecaseFailedRunFields("tighten-episode", undefined, {}, "job-3")).toEqual({ useCaseJobId: "job-3", errorCode: undefined })
   })
 })
+
+describe("a Chapters run (a text result) lands on the node through the same mapping, in every lane", () => {
+  const NOTES = "0:00 Intro\n12:34 Main"
+  const ROWS = [{ startMs: 0, title: "Intro" }, { startMs: 754_000, title: "Main" }]
+  const JOB = "00000000-0000-4000-8000-0000000000c1"
+
+  it("the show notes on generatedText, the chapter list on generatedJson (no review rule), the transcript and the wrapper", () => {
+    const fields = applyEdlRunCutFields("episode-chapters", { text: NOTES, json: ROWS, transcript: TRANSCRIPT }, { editedEdl: { basis: "x" } }, JOB)
+    expect(fields).toEqual({ generatedText: NOTES, generatedJson: ROWS, generatedTranscript: TRANSCRIPT, useCaseJobId: JOB })
+  })
+
+  it("never an episode, even when an output carries a URL", () => {
+    const fields = applyEdlRunCutFields("episode-chapters", { text: NOTES, json: ROWS, videoUrl: "https://r2/x.mp4" }, {})
+    expect(fields).not.toHaveProperty("generatedVideoUrl")
+    expect(fields).not.toHaveProperty("generatedAudioUrl")
+  })
+
+  it("a list that is not rows is not landed as one; a run with no text clears an earlier run's", () => {
+    expect(applyEdlRunCutFields("episode-chapters", { json: { version: 1, chapters: ROWS }, transcript: TRANSCRIPT }, {})).toEqual({ generatedText: undefined, generatedJson: undefined, generatedTranscript: TRANSCRIPT })
+  })
+
+  it("a run that reports nothing writes nothing", () => {
+    expect(applyEdlRunCutFields("episode-chapters", {}, {})).toEqual({})
+  })
+
+  it("a failed run keeps its transcript and its wrapper for Continue", () => {
+    expect(usecaseFailedRunFields("episode-chapters", { transcript: TRANSCRIPT }, {}, JOB)).toEqual({
+      generatedText: undefined, generatedJson: undefined, generatedTranscript: TRANSCRIPT, useCaseJobId: JOB, errorCode: undefined,
+    })
+  })
+
+  it("a take never keeps a Chapters run (it has no takes)", () => {
+    expect(applyEdlTakeTranscriptField("episode-chapters", { text: NOTES, json: ROWS }, "https://r2/x.mp4")).toBeUndefined()
+  })
+})

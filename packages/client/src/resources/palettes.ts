@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /** One of your colour palettes. */
 export interface ColorPalette {
@@ -62,7 +62,7 @@ export function paletteDirectionId(id: string): `palette:${string}` {
  * `assets:read` for reads and `assets:write` for writes.
  */
 export class PalettesResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Your palettes, newest first. Page with `nextCursor`. */
   list(params: ListPalettesParams = {}): Promise<PalettePage> {

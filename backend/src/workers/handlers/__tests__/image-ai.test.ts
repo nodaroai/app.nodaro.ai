@@ -285,6 +285,7 @@ describe("edit-image handler", () => {
   })
 
   it("uses default provider 'recraft-upscale' when none specified", async () => {
+    // No prompt either: an undefined prompt is passed through as undefined.
     const job = makeJob("edit-image", { imageUrl: "https://input.png" })
     await handler(job as never, makeCtx())
 
@@ -300,16 +301,6 @@ describe("edit-image handler", () => {
 
     expect(mocks.mockEditImage).toHaveBeenCalledWith(
       "https://input.png", "recraft-remove-bg", undefined, undefined,
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
-    )
-  })
-
-  it("handles undefined prompt", async () => {
-    const job = makeJob("edit-image", { imageUrl: "https://input.png" })
-    await handler(job as never, makeCtx())
-
-    expect(mocks.mockEditImage).toHaveBeenCalledWith(
-      "https://input.png", "recraft-upscale", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })

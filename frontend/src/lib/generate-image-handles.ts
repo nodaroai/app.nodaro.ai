@@ -110,6 +110,8 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // string (extractNodeOutput stringifies) — lets the analysis wire straight
   // into prompt/text inputs (generate-video-pro etc.) without a paste.
   "video-analysis",
+  // Chapters (podcast use-case node): its show notes on `text`.
+  "episode-chapters",
   // video-audit ships the identical `text` handle emitting the identical
   // stringified payload (the CORRECTED analysis). Its producer-set membership
   // must mirror video-analysis everywhere or a downstream node could tell an

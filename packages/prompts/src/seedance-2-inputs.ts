@@ -1,5 +1,5 @@
 import { SEEDANCE_2_REF_LIMITS } from "@nodaro/shared/models"
-import { REF_BINDING } from "./video-reference-resolver.js"
+import { placeFramesAfterReferences } from "./frame-reference-slots.js"
 
 export type Seedance2Mode = "first-frame" | "first-last-frame" | "reference"
 
@@ -46,18 +46,7 @@ const cleanList = (xs?: readonly string[]): string[] =>
  * reference_image_urls (after the user's own images, so their @Image ordinals do
  * not shift) and named in a doctrine-compliant prompt suffix.
  */
-/** True when the prompt ALREADY binds an image as the first/opening frame —
- *  e.g. the gvp overlap transport's colon-position directive ("use @image_1
- *  as the first frame, it is the last keyframe of @video_1"). Field finding
- *  (2026-07-20): the first-frame directive only works adjacent to the extend
- *  colon; a duplicate sentence at the END of the prompt (this resolver's
- *  default position) dilutes it back into coin-flip behavior — so when the
- *  prompt carries its own binding, the suffix is suppressed (the frame image
- *  itself still rides the reference list). */
-export function promptBindsFirstFrame(prompt: string | undefined): boolean {
-  if (!prompt) return false
-  return /@image_\d+\s+as\s+the\s+(first|opening)\s*(\(first\))?\s*frame/i.test(prompt)
-}
+export { promptBindsFirstFrame } from "./frame-reference-slots.js"
 
 export function resolveSeedance2Inputs(args: Seedance2InputsArgs): Seedance2InputsResult {
   const limits = args.limits ?? SEEDANCE_2_REF_LIMITS
@@ -85,33 +74,19 @@ export function resolveSeedance2Inputs(args: Seedance2InputsArgs): Seedance2Inpu
   }
 
   // Reference mode: keep both frames (explicit intent), drop trailing user images
-  // if the 9-image cap is exceeded. Frames are appended AFTER the kept user
-  // images so existing user @Image ordinals are preserved.
-  const frameCount = (firstFrameUrl ? 1 : 0) + (lastFrameUrl ? 1 : 0)
-  const userImageSlots = Math.max(0, limits.images - frameCount)
-  const keptUserImages = refImages.slice(0, userImageSlots)
-  const droppedRefImages = refImages.length - keptUserImages.length
-
-  const referenceImageUrls: string[] = [...keptUserImages]
-  let firstOrdinal = 0
-  let lastOrdinal = 0
-  if (firstFrameUrl) { referenceImageUrls.push(firstFrameUrl); firstOrdinal = referenceImageUrls.length }
-  if (lastFrameUrl) { referenceImageUrls.push(lastFrameUrl); lastOrdinal = referenceImageUrls.length }
-
-  let promptSuffix = ""
-  const suppressFrameSentence = promptBindsFirstFrame(args.prompt)
-  if (suppressFrameSentence && firstOrdinal > 0 && lastOrdinal === 0) {
-    // The prompt already binds the first frame at its own (working) position.
-  } else if (firstOrdinal > 0 && lastOrdinal > 0) {
-    // Combined sentence — REF_BINDING.frame() emits a single-frame sentence, so use
-    // REF_BINDING.ordinal() for each ordinal inline to keep the combined wording AND
-    // route both ordinals through the single swap-point.
-    promptSuffix = `Use ${REF_BINDING.ordinal(firstOrdinal)} as the opening (first) frame and ${REF_BINDING.ordinal(lastOrdinal)} as the closing (last) frame of the video.`
-  } else if (firstOrdinal > 0) {
-    promptSuffix = REF_BINDING.frame(firstOrdinal, "opening")
-  } else if (lastOrdinal > 0) {
-    promptSuffix = REF_BINDING.frame(lastOrdinal, "closing")
-  }
+  // if the image cap is exceeded. Frames are appended AFTER the kept user images
+  // so existing user @Image ordinals are preserved — the platform convention
+  // (placeFramesAfterReferences), shared with every frames-in-the-list model.
+  const placed = placeFramesAfterReferences({
+    prompt: args.prompt,
+    firstFrameUrl,
+    lastFrameUrl,
+    refImageUrls: refImages,
+    imageCap: limits.images,
+  })
+  const referenceImageUrls = placed.imageUrls
+  const promptSuffix = placed.promptSuffix
+  const droppedRefImages = placed.droppedRefImages
 
   return {
     mode: "reference",

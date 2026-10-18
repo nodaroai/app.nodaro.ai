@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { unitRouteFiles } from "../unit-source-files.js"
 
 /**
  * Prompt-policy totality guard (B4b). The deployment PromptPolicy seam is only
@@ -29,6 +30,14 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROUTES = resolve(HERE, "..", "..", "routes")
 const WORKERS = resolve(HERE, "..", "..", "workers", "handlers")
 const ENGINE = resolve(HERE, "..", "..", "services", "workflow-engine")
+const SRC = resolve(HERE, "..", "..")
+/** A route by its label here: a basename under routes/, or a node unit's route as nodes/<type>/route.ts. */
+const routePath = (label: string): string => (label.startsWith("nodes/") ? resolve(SRC, label) : resolve(ROUTES, label))
+/** Every route this guard classifies: the routes/ files, plus every node unit's route. */
+const routeLabels = (): string[] => [
+  ...readdirSync(ROUTES).filter((f) => f.endsWith(".ts") && !f.endsWith(".schema.ts")),
+  ...unitRouteFiles(resolve(SRC, "..", "..")).map((f) => f.slice(SRC.length + 1).split("\\").join("/")),
+]
 
 /** Routes whose assembly point polices IN THE ROUTE FILE (checked by (a)). */
 const HOOKED_ROUTES: readonly string[] = [
@@ -97,7 +106,7 @@ function isCandidate(src: string): boolean {
 describe("prompt-policy totality — every media-prompt lane polices at its assembly point", () => {
   it("(a) every HOOKED route file actually calls applyPromptPolicies", () => {
     for (const f of HOOKED_ROUTES) {
-      const src = readFileSync(resolve(ROUTES, f), "utf8")
+      const src = readFileSync(routePath(f), "utf8")
       expect(src.includes("applyPromptPolicies("), `${f} is classified HOOKED but never calls applyPromptPolicies`).toBe(true)
     }
   })
@@ -108,8 +117,8 @@ describe("prompt-policy totality — every media-prompt lane polices at its asse
     for (const f of hooked) expect(excluded.has(f), `${f} appears in BOTH lists`).toBe(false)
 
     const unclassified: string[] = []
-    for (const f of readdirSync(ROUTES).filter((f) => f.endsWith(".ts") && !f.endsWith(".schema.ts"))) {
-      const src = readFileSync(resolve(ROUTES, f), "utf8")
+    for (const f of routeLabels()) {
+      const src = readFileSync(routePath(f), "utf8")
       if (!isCandidate(src)) continue
       if (!hooked.has(f) && !excluded.has(f)) unclassified.push(f)
     }

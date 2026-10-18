@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type {
   ListSavedPostsParams,
   ListSavedPostsResult,
@@ -17,7 +17,7 @@ import type {
  * OAuth app tokens need `assets:read` for reads and `assets:write` for writes.
  */
 export class SavedPostsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** `GET /v1/saved-posts` → your saves, newest first. Page with `nextCursor`. */
   list(params: ListSavedPostsParams = {}): Promise<ListSavedPostsResult> {

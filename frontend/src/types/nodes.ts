@@ -3872,6 +3872,31 @@ export type TightenEpisodeData = {
   currentJobProgress?: number
 }
 
+/** Chapters (podcast use-case node, decided 2026-10-14): one recording in;
+ *  its chapters out as show notes on `text` (`generatedText`, one
+ *  `0:00 Title` line per chapter) and as a list on `json` (`generatedJson`,
+ *  `{ startMs, title }[]`). Nothing renders and nothing is reviewed. Settings
+ *  mirror @nodaro/render-rules' EpisodeChaptersSettings. */
+export type EpisodeChaptersData = {
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  planTier?: "economy" | "standard" | "premium"
+  instructions?: string
+  styleGuide?: string
+  /** The run's wrapper job (Continue addresses it). */
+  useCaseJobId?: string
+  useCaseExecutionId?: string
+  /** The show notes. */
+  generatedText?: string
+  /** The chapter list. */
+  generatedJson?: unknown
+  generatedTranscript?: unknown
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobProgress?: number
+}
+
 /** speaker-view (Track C, C3.2) — an EDL rendered with its speakers framed.
  *  Nodaro-EXCLUSIVE (the cloud plugin's renderer, relayed from a self-host).
  *  Reads an edit (`edl`, Edit Plan's or Camera Switch's) and the diarized
@@ -4349,19 +4374,6 @@ export type ExtractAudioData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
-  generatedResults?: readonly GeneratedResult[]
-  activeResultIndex?: number
-}
-
-// Remove Audio: video in → silent video out. No config params.
-export type RemoveAudioData = {
-  currentJobProgress?: number
-  [key: string]: unknown
-  label: string
-  fieldMappings: FieldMappings
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
 }
@@ -7478,6 +7490,7 @@ export type SceneNodeData =
   | CombineVideosData
   | ApplyEdlData
   | TightenEpisodeData
+  | EpisodeChaptersData
   | SpeakerViewData
   | ImageCollageData
   | ImageOverlayData
@@ -7491,7 +7504,6 @@ export type SceneNodeData =
   | TrimAudioData
   | SplitMediaData
   | ExtractAudioData
-  | RemoveAudioData
   | MixAudioData
   | CombineAudioData
   | AdjustVolumeData
@@ -7708,6 +7720,7 @@ export type SceneNodeType =
   | "combine-videos"
   | "apply-edl"
   | "tighten-episode"
+  | "episode-chapters"
   | "speaker-view"
   | "edit-plan"
   | "camera-switch"
@@ -7734,7 +7747,6 @@ export type SceneNodeType =
   | "extract-audio"
   | "silence-detect"
   | "audio-sync"
-  | "remove-audio"
   | "mix-audio"
   | "combine-audio"
   | "adjust-volume"
@@ -9291,6 +9303,23 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as TightenEpisodeData,
   },
   {
+    type: "episode-chapters",
+    label: "Chapters",
+    category: "processing",
+    // A use-case node: its steps bill at their own rates plus a flat 10-credit
+    // fee per run; the estimate expands it (@nodaro/render-rules use-case-expand).
+    inputs: ["media"],
+    outputs: ["text", "json"],
+    defaultData: {
+      label: "Chapters",
+      planTier: "economy",
+      instructions: "",
+      styleGuide: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as EpisodeChaptersData,
+  },
+  {
     type: "speaker-view",
     label: "Speaker View",
     category: "processing",
@@ -9680,14 +9709,6 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["sources"],
     outputs: ["json"],
     defaultData: { label: "Audio Sync", fieldMappings: {} } as AudioSyncNodeData,
-  },
-  {
-    type: "remove-audio",
-    label: "Remove Audio",
-    category: "processing",
-    inputs: ["in"],
-    outputs: ["video-out"],
-    defaultData: { label: "Remove Audio", fieldMappings: {} },
   },
   {
     type: "mix-audio",

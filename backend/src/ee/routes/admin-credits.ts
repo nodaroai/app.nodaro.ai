@@ -17,6 +17,7 @@ import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { toUnits } from "../../lib/billing-display-unit.js"
 import type { UserAllowance } from "../../types/deployment-allowance.js"
 import { isBlockedNow } from "../lib/account-blocking.js"
+import { readAllRows } from "../../lib/postgrest-read-all.js"
 
 // ---- Zod Schemas ----
 
@@ -505,12 +506,24 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     return { role, previous_role: previousRole }
   })
 
-  // GET /v1/admin/models - List all models with pricing
-  app.get("/v1/admin/models", { preHandler: requireAdmin }, async (request, reply) => {
-    const { data, error } = await supabase
-      .from("model_pricing")
-      .select("*")
-      .order("credit_cost", { ascending: false })
+  // GET /v1/admin/models - List all models with pricing — EVERY row.
+  //
+  // The admin pages (/admin/models, /admin/pricing) filter and search this list
+  // in the browser, so it must be the whole table. One select is not: PostgREST
+  // caps a response at its `max_rows` (1000) without an error, and with the
+  // table past 1000 rows the cheapest ones (priced last in this order) could not
+  // be seen or edited at all. `readAllRows` pages until an empty page; the
+  // model_identifier tiebreak makes the order total so no row repeats or drops
+  // at a page seam. Same response shape as before.
+  app.get("/v1/admin/models", { preHandler: requireAdmin }, async (_request, reply) => {
+    const { data, error } = await readAllRows((from, to) =>
+      supabase
+        .from("model_pricing")
+        .select("*")
+        .order("credit_cost", { ascending: false })
+        .order("model_identifier", { ascending: true })
+        .range(from, to),
+    )
 
     if (error) return reply.code(500).send({ error: error.message })
     return data

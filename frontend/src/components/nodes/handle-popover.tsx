@@ -474,9 +474,9 @@ export function HandlePopover({
   // surface that in the count label and gray out overflow rows so the
   // user can see (and reorder) which refs will actually be used.
   const consumerNode = getNode(nodeId)
-  // Seedance 2 / MiniMax H3 / Wan 3.0 share one `imageReferences` budget: the
-  // start/end frame and wired identity assets consume slots in the same
-  // `reference_image_urls` pool (all three run resolveSeedance2Inputs, which
+  // Seedance 2 / MiniMax H3 / Wan 3.0 / Vidu Q4 share one `imageReferences`
+  // budget: the start/end frame and wired identity assets consume slots in the
+  // same `reference_image_urls` pool (all four run resolveSeedance2Inputs, which
   // folds frames into that pool), so subtract those from the user-ref cap. The
   // count is derived from the live edge list here (the cap fn stays pure /
   // graph-unaware). No-op for every other handle/provider —

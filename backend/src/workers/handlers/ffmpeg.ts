@@ -23,7 +23,6 @@ import { smartLoopCut } from "../../providers/video/smart-loop-cut.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { splitMedia } from "../../providers/video/split-media.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
-import { removeAudio } from "../../providers/video/remove-audio.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
@@ -1317,24 +1316,6 @@ const handleExtractAudio: HandlerFn = async function handleExtractAudio(job, ctx
   console.log(`[worker] Job ${ctx.jobId} completed: ${audioR2Url}`)
 }
 
-const handleRemoveAudio: HandlerFn = async function handleRemoveAudio(job, ctx) {
-  const { videoUrl } = job.data as { jobId: string; videoUrl: string }
-  console.log(`[worker] remove-audio ${ctx.jobId}`)
-  const result = await removeAudio({ videoUrl })
-  await setJobProgress(job, ctx.jobId, 80)
-  const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
-  await cleanupWorkDir(dirname(result.videoPath))
-  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-  })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
-}
-
 const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx) {
   const { imageUrls, imageSizes, numbered, imageLabels, badgePosition, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType } = job.data as {
     jobId: string
@@ -1581,7 +1562,6 @@ export const ffmpegHandlers: Record<string, HandlerFn> = composeRecord<HandlerFn
   "social-media-format": handleSocialMediaFormat,
   "split-media": handleSplitMedia,
   "extract-audio": handleExtractAudio,
-  "remove-audio": handleRemoveAudio,
   "silence-detect": handleSilenceDetect,
   "audio-sync": handleAudioSync,
 }, Object.fromEntries(Object.entries(UNIT_WORKERS).filter(([type]) => unitDescriptorOf(type)?.execution.queue === "video")))

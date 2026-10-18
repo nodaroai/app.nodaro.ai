@@ -23,7 +23,7 @@ import {
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, VIDEO_UPSCALE_PROVIDERS } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, VIDEO_UPSCALE_PROVIDERS, resolveVideoModeForInputs, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -366,9 +366,19 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const t2vRefCaptions = Array.isArray(args.reference_video_captions) && args.reference_video_captions.length > 0
         ? args.reference_video_captions.slice(0, t2vRefVideos.length)
         : undefined
+      // The lane is the SAME shared decision both engines make: a run with
+      // reference images and no start frame takes image-to-video when the model
+      // runs from references alone but has no text-to-video mode (Vidu Q4,
+      // HappyHorse Ref2V) or when only its i2v twin carries them (Grok Imagine
+      // 1). /v1/text-to-video would refuse those as "image required"; everything
+      // else (Seedance, Wan 3.0, Gemini Omni, a prompt-only run) stays on it.
+      const lane = resolveVideoModeForInputs(model, {
+        hasStartFrame: false,
+        hasImageRefs: t2vRefImages.length > 0 || (args.connected_references?.length ?? 0) > 0,
+      })
       const payload = {
         prompt: compositePrompt,
-        provider: model,
+        provider: lane === "image-to-video" ? resolveVideoProviderForMode(model, lane) : model,
         duration,
         aspectRatio,
         resolution,
@@ -407,7 +417,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         userId: session.userId,
       }
       return dispatchJob(fastify, session, {
-        url: "/v1/text-to-video",
+        url: lane === "image-to-video" ? "/v1/generate-video" : "/v1/text-to-video",
         payload,
         label: "generate-video",
         widgetKind: "video",

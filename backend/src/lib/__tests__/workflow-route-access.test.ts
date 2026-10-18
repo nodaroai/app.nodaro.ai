@@ -1,7 +1,9 @@
+// @test-watches backend/src/routes/*.ts backend/src/nodes/*/route*.ts
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import { toAccessRow, UnjudgeableWorkflowRow, WORKFLOW_ACCESS_COLS } from "../workflow-route-access.js"
+import { unitRouteFiles } from "../route-inventory.js"
 
 /**
  * The coercion that decides whether a row can be judged at all.
@@ -71,11 +73,18 @@ describe("every route that judges a workflow selects the columns to judge it by"
     const offenders: string[] = []
     let callSites = 0
 
-    for (const file of readdirSync(routesDir).filter((f) => f.endsWith(".ts"))) {
+    // The route files, plus every node unit's route (backend/src/nodes/<type>/route.ts | route.ee.ts).
+    const repoRoot = join(__dirname, "..", "..", "..", "..")
+    const routeFiles = [
+      ...readdirSync(routesDir).filter((f) => f.endsWith(".ts")).map((f) => join(routesDir, f)),
+      ...unitRouteFiles(repoRoot),
+    ]
+    for (const path of routeFiles) {
+      const file = relative(repoRoot, path)
       // Comment lines dropped first: the `tenant-scope-ignore` notes name
       // `loadWorkflowFor(..., "edit")` on purpose, and a scan that read those
       // as call sites would report three phantom offenders forever.
-      const src = readFileSync(join(routesDir, file), "utf8")
+      const src = readFileSync(path, "utf8")
         .split(/\r?\n/)
         .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
         .join("\n")

@@ -77,6 +77,20 @@ export interface LlmModelDef {
    * idea. Guarded by a registry test so the two can't both be set.
    */
   preferDirect?: true
+  /**
+   * true = served ONLY on the vendor's own API (`directGeminiModel`): KIE is
+   * never called for this model — not as the primary lane, not as a failure
+   * or exhausted-account fallback, not on a pin. `kieSlugOrModel` still names
+   * the aggregator's endpoint, for the record and for a later re-enable after
+   * a re-probe; nothing sends to it.
+   *
+   * Every call therefore runs direct, so {@link llmServesDirect} is true for it
+   * and it bills on the direct rung by default, Advanced mode or not. Without a
+   * direct key the call fails as provider-unavailable rather than reaching KIE.
+   * Stronger than `preferDirect` (which keeps KIE as the fallback); the two are
+   * mutually exclusive, as are `directOnly` and `preferKie` (registry test).
+   */
+  directOnly?: true
   /** Effort levels this model accepts (ascending). Absent/empty = no effort lever, picker hidden. */
   reasoningEfforts?: readonly LlmReasoningEffort[]
   /**
@@ -461,6 +475,55 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // Floored at its own 16384: its KIE fallback is not known to take more.
     thinkingDefaultOn: true,
     reasoningOutputFloor: 16384,
+  },
+  {
+    id: "gemini-4-argon",
+    displayName: "Gemini 4 Argon",
+    desc: "Newest premium Gemini, 1M context",
+    tier: "premium",
+    kieFormat: "chat-completions",
+    // DIRECT-ONLY (decided 2026-10-17): KIE serves it on the OpenAI-compatible
+    // dialect under this slug (docs.kie.ai/market/gemini/gemini-4-argon-openai.md,
+    // byte-identical to the 3.8 Flash spec apart from the name), but that lane
+    // failed its probe the same day — of 15 completed calls, 6 came back HTTP 200
+    // `finish_reason: stop` with an EMPTY reply (both image calls among them,
+    // each still charged), `completion_tokens` was NEGATIVE on reasoning calls
+    // (-33, -38), replies leaked code-execution fences (```python?code_reference),
+    // `response_format` json_schema left an enum field holding prose, and an
+    // off-enum `reasoning_effort: medium` was an empty 200 rather than an error.
+    // So no call reaches KIE (`directOnly`); the slug is kept for the record.
+    // Re-enable it only after a re-probe of that lane comes back clean.
+    // KIE also flags the page "Chat only — not yet adapted for agent use", like
+    // kimi-k3 / deepseek below: it may not back a tool-loop feature. No registry
+    // gate enforces that today — the only tool loops (Workflow Copilot, the
+    // pipeline stage calls) are Claude-only by construction.
+    kieSlugOrModel: "gemini-4-argon-openai",
+    vendor: "google",
+    // The direct lane enforces `responseJsonSchema` (an enum field came back
+    // in-enum, 2026-10-17). This mode is what turns that schema on there.
+    structuredOutputMode: "kie-response-format",
+    supportsImages: true,
+    // The registry's usual 16384 default. Google's own cap is 32,768
+    // (models.list); every call is floored to that (`thinkingDefaultOn`, below).
+    maxOutputTokens: 16384,
+    directGeminiModel: "gemini-4-argon",
+    directOnly: true,
+    // The direct lane's ladder, and the only one: every call runs there.
+    // Google rejects thinkingLevel MINIMAL on this model with a 400 ("not
+    // supported for this model") and accepts LOW / MEDIUM / HIGH (probed
+    // 2026-10-17) — 3.1 Pro's shape, not the flash one. `none` maps to MINIMAL
+    // in the direct client, so it is not offered; a `none` request clamps to
+    // Auto.
+    reasoningEfforts: ["low", "medium", "high"],
+    // Gemini's documented default (dynamic thinking with no param sent). The no-param
+    // call reported no thought tokens on a two-part puzzle (HIGH reported 452),
+    // so this is the vendor default rather than a measurement — kept because it
+    // only raises the output ceiling. No `reasoningOutputFloor`: its one lane
+    // is Google's, whose cap IS the default 32768 (models.list), and calls sent
+    // maxOutputTokens 32768 / 65536 were served, not refused (2026-10-17). How
+    // much output it gives at that cap is unmeasured — both long-output probes
+    // ended early (one declined the task, one stopped on RECITATION).
+    thinkingDefaultOn: true,
   },
   {
     id: "claude-opus-4.7",
@@ -1167,6 +1230,12 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   // with that VA-side decision.
   "gemini-3.8-flash":  { image: true,  video: false, audio: false },
   "gemini-3.1-pro":    { image: true,  video: true,  audio: true  },
+  // gemini-4-argon is IMAGE-ONLY by DECISION, not omission (decided 2026-10-17):
+  // the model DOES read video and audio, but full caps would
+  // auto-enroll it in VIDEO_ANALYSIS_LLM_MODELS (derived below) and force a
+  // video-analysis tier + pricing decision. That waits on a Video Analysis
+  // bake-off; flip these two flags ONLY together with its outcome.
+  "gemini-4-argon":    { image: true,  video: false, audio: false },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -1357,9 +1426,10 @@ export const ADVANCED_MODE_UNAVAILABLE_REASON =
  * Is this call served on the vendor's own API — and therefore billed as such?
  *
  * The rule (decided 2026-10-08): a call is priced on the lane it runs on.
- * It runs direct when Advanced mode is on, or when it carries a reasoning
- * effort on a model whose effort only works there (`effortRequiresDirect` —
- * the Claude family). Everything else runs on the aggregator at its price,
+ * It runs direct when Advanced mode is on, when the model is served nowhere
+ * else (`directOnly`), or when it carries a reasoning effort on a model whose
+ * effort only works there (`effortRequiresDirect` — the Claude family).
+ * Everything else runs on the aggregator at its price,
  * falling back to the vendor's API only if the aggregator fails (at no extra
  * charge).
  *
@@ -1373,7 +1443,7 @@ export function llmServesDirect(
   advancedMode?: boolean,
 ): boolean {
   if (!supportsAdvancedMode(modelId)) return false
-  if (advancedMode) return true
+  if (advancedMode || getLlmModel(modelId!)?.directOnly) return true
   return Boolean(
     getLlmModel(modelId!)?.effortRequiresDirect && effectiveReasoningEffort(modelId, reasoningEffort) !== undefined,
   )
@@ -1405,18 +1475,28 @@ export function buildLlmCreditIdentifier(
   advancedMode?: boolean,
 ): string {
   if (!modelId) return feature
+  return llmCreditIdForRung(feature, llmCreditRung(modelId, reasoningEffort, advancedMode))
+}
+
+/**
+ * The rung a call on `modelId` bills on — the half of
+ * {@link buildLlmCreditIdentifier} a feature with its own id shape reads (the
+ * social scrapers' per-post analysis), so its rung cannot drift from the LLM
+ * features'.
+ */
+export function llmCreditRung(modelId: string, reasoningEffort?: string, advancedMode?: boolean): LlmCreditRung {
   let tier = getLlmTier(modelId)
   const eff = effectiveReasoningEffort(modelId, reasoningEffort)
   if (eff !== undefined && EFFORT_TIER_BUMP.has(eff)) tier = bumpTier(tier)
-  // A call served on the vendor's own API (Advanced mode, or an effort on a
-  // model whose effort only works there — llmServesDirect) bills materially
-  // more per token than the aggregator. It bumps INDEPENDENTLY of the effort
-  // bump — the two are separate cost levers and genuinely stack, so a
-  // max-effort advanced economy call lands at premium — and on the four-rung
-  // ladder, so a premium model served direct lands at `premium-direct`. A stale
-  // flag on a model with no direct lane never inflates a bill.
-  const rung: LlmCreditRung = llmServesDirect(modelId, reasoningEffort, advancedMode) ? bumpToDirectRung(tier) : tier
-  return llmCreditIdForRung(feature, rung)
+  // A call served on the vendor's own API (Advanced mode, a directOnly model,
+  // or an effort on a model whose effort only works there — llmServesDirect)
+  // bills materially more per token than the aggregator. It bumps
+  // INDEPENDENTLY of the effort bump — the two are separate cost levers and
+  // genuinely stack, so a max-effort advanced economy call lands at premium —
+  // and on the four-rung ladder, so a premium model served direct lands at
+  // `premium-direct`. A stale flag on a model with no direct lane never
+  // inflates a bill.
+  return llmServesDirect(modelId, reasoningEffort, advancedMode) ? bumpToDirectRung(tier) : tier
 }
 
 /** One rung up the four-rung ladder — the direct-lane bump. */

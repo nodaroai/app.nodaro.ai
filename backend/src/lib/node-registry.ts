@@ -38,6 +38,7 @@ import type { OutputType } from "@nodaro/shared/apps"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
+import { SPEAKER_FRAMES_CREDIT_ID } from "@nodaro/render-rules"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
@@ -45,6 +46,7 @@ import type { ChargedPrices } from "./pricing/charged-prices.js"
 import type { UnitDescriptor } from "../nodes/kit.js"
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { placeAfter, registryCategoryOf } from "./unit-compose.js"
+import { NODE_HANDLES } from "./mcp/generated/node-handles.js"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -313,6 +315,49 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
 }
 
 /**
+ * A per-unit price as `GET /v1/nodes` serves it (`NodeDescriptor.creditRate`).
+ *
+ * `GET /v1/credits/model-cost?model=<identifier>` answers ONE unit's charge,
+ * rounded up to a whole credit — the least a run pays, not what a run of N
+ * units costs: a run is charged `ceil(units × creditsPerUnit)` once, so N ×
+ * that rounded figure overshoots. `creditsPerUnit` is the exact figure to
+ * multiply; `<identifier>:<N>u` is the exact price of N units at the price
+ * lookups, and `POST /v1/credits/estimate-workflow` quotes a whole run.
+ */
+export interface CreditRate {
+  /** The price id the rate is read from. */
+  identifier: string
+  /** What one unit is, as a token (`"1000-frames"`: one started block of 1,000 sampled frames). */
+  unit: string
+  /** The credits one unit adds to a run's total — exact, not rounded (2.2, where `model-cost` answers 3). */
+  creditsPerUnit: number
+  /** The fewest units a run is charged for. */
+  minUnits: number
+  /** `"ceil-run-total"`: a run's total is `ceil(units × creditsPerUnit)`, rounded up once per run, never per unit. */
+  rounding: "ceil-run-total"
+  /** The rule in words. */
+  note: string
+}
+
+/** How a node's {@link CreditRate} is stated — every field but the price, which is read from the charged prices. */
+export type CreditRateSource = Omit<CreditRate, "creditsPerUnit">
+
+/**
+ * Node type → its per-unit rate. A node here has a word for `creditCost` (the
+ * band guard's `NON_BAND_CREDIT_STRINGS`); the served descriptor adds the
+ * charged price of one unit.
+ */
+export const CREDIT_RATE_SOURCES: Readonly<Record<string, CreditRateSource>> = {
+  "speaker-frames": {
+    identifier: SPEAKER_FRAMES_CREDIT_ID,
+    unit: "1000-frames",
+    minUnits: 1,
+    rounding: "ceil-run-total",
+    note: "Per started block of 1,000 sampled frames, at least one block a run; the run's total (blocks × creditsPerUnit) is rounded up to a whole credit once.",
+  },
+}
+
+/**
  * The advertised band for a node: `"min-max"`, or a single number when the
  * whole id set prices identically.
  *
@@ -435,6 +480,14 @@ export interface NodeDescriptor {
   outputType: OutputType | "none"
   /** Credit cost; undefined if free. May be a range like "1-8" if model-dependent. */
   creditCost?: number | string
+  /**
+   * For a node charged per unit of its own measure (whose `creditCost` is a
+   * word like `"per-1000-frames"`, not a number): the charged price of one
+   * unit and how a run's total is rounded. Never on the static registry — the
+   * served descriptor fills it from the charged prices (`chargedDescriptor`),
+   * from {@link CREDIT_RATE_SOURCES}.
+   */
+  creditRate?: CreditRate
   /** Input fields the node exposes for user override (subset of full config). */
   inputSchema?: { fields: Array<{ key: string; type: string; required?: boolean; options?: string[] }> }
   /** For AI nodes: list of provider IDs supported. */
@@ -1692,6 +1745,26 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "episode-chapters",
+    label: "Chapters",
+    category: "processing",
+    // A use-case node (decided 2026-10-14): one job that transcribes the
+    // recording and plans its chapters. outputType text — the show notes on
+    // `text`; the chapter list ({ startMs, title }[]) on `json`.
+    description:
+      "List a podcast's chapters in one step: transcribes the recording and finds its chapters, with titles and start times, ready for show notes. Video or audio. Its steps are priced at their own rates, plus a per-run fee.",
+    outputType: "text",
+    creditCost: "per-minute",
+    inputSchema: {
+      fields: [
+        { key: "mediaUrls", type: "video-url-array", required: true },
+        { key: "planTier", type: "select", options: [...EDIT_PLAN_TIERS] },
+        { key: "instructions", type: "string" },
+        { key: "styleGuide", type: "string" },
+      ],
+    },
+  },
+  {
     type: "speaker-view",
     label: "Speaker View",
     category: "processing",
@@ -1832,7 +1905,6 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
   { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },
   { type: "manual-edit", label: "Manual Edit", category: "processing", description: "Open video in a browser-based web editor for manual adjustments.", outputType: "video" },
-  { type: "remove-audio", label: "Remove Audio", category: "processing", description: "Strip the audio track from a video, leaving a silent clip (stream-copied, lossless).", outputType: "video" },
   { type: "trim-audio", label: "Trim Audio", category: "processing", description: "Extract a section of audio or extract audio from video.", outputType: "audio" },
   { type: "mix-audio", label: "Mix Audio", category: "processing", description: "Blend multiple audio tracks with individual volume control.", outputType: "audio" },
   { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
@@ -2130,12 +2202,16 @@ function unitNodeDescriptor(u: UnitDescriptor): NodeDescriptor {
 
 /**
  * Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields):
- * the hand-curated entries ∪ every node unit (unit.json registry), each after its position.after.
+ * the hand-curated entries ∪ every node unit (unit.json registry), each after its registry.after
+ * (when stated — this list keeps its own hand-curated order) or else its position.after.
  */
 export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(placeAfter(
   RAW_NODE_REGISTRY,
   (d) => d.type,
-  UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: u.position.after, entry: unitNodeDescriptor(u) })),
+  UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: (u.registryPosition ?? u.position).after, entry: unitNodeDescriptor(u) })),
+  // An anchor this list does not carry may still be a node (every hand-written
+  // NODE_DEFINITIONS type has its MCP handle row): placed last. Anything else throws.
+  new Set(Object.keys(NODE_HANDLES)),
 ))
 
 /**
@@ -2177,7 +2253,22 @@ export function findNode(type: string): NodeDescriptor | undefined {
  */
 export function chargedDescriptor(desc: NodeDescriptor, prices: ChargedPrices): NodeDescriptor {
   const creditCost = chargedCreditCost(desc, prices)
-  return creditCost === desc.creditCost ? desc : { ...desc, creditCost }
+  const creditRate = chargedCreditRate(desc, prices)
+  if (creditCost === desc.creditCost && !creditRate) return desc
+  return { ...desc, creditCost, ...(creditRate ? { creditRate } : {}) }
+}
+
+/**
+ * The node's per-unit rate at the charged price of one unit — the exact figure
+ * (`prices.rate`), so `ceil(units × creditsPerUnit)` is what a run is charged.
+ * Absent for a node with no rate, where nothing is charged (no `creditCost`:
+ * an edition without credits), or when the rate is priced nowhere.
+ */
+function chargedCreditRate(desc: NodeDescriptor, prices: ChargedPrices): CreditRate | undefined {
+  const source = CREDIT_RATE_SOURCES[desc.type]
+  if (!source || desc.creditCost === undefined) return undefined
+  const creditsPerUnit = prices.rate(source.identifier)
+  return creditsPerUnit === undefined ? undefined : { ...source, creditsPerUnit }
 }
 
 function chargedCreditCost(desc: NodeDescriptor, prices: ChargedPrices): number | string | undefined {

@@ -20,6 +20,256 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./apps": {
+      "types": "./dist/entries/apps.d.ts",
+      "import": "./dist/entries/apps.js",
+      "require": "./dist/entries/apps.cjs"
+    },
+    "./audio": {
+      "types": "./dist/entries/audio.d.ts",
+      "import": "./dist/entries/audio.js",
+      "require": "./dist/entries/audio.cjs"
+    },
+    "./billing": {
+      "types": "./dist/entries/billing.d.ts",
+      "import": "./dist/entries/billing.js",
+      "require": "./dist/entries/billing.cjs"
+    },
+    "./catalogs": {
+      "types": "./dist/entries/catalogs.d.ts",
+      "import": "./dist/entries/catalogs.js",
+      "require": "./dist/entries/catalogs.cjs"
+    },
+    "./characters": {
+      "types": "./dist/entries/characters.d.ts",
+      "import": "./dist/entries/characters.js",
+      "require": "./dist/entries/characters.cjs"
+    },
+    "./client": {
+      "types": "./dist/entries/client.d.ts",
+      "import": "./dist/entries/client.js",
+      "require": "./dist/entries/client.cjs"
+    },
+    "./collections": {
+      "types": "./dist/entries/collections.d.ts",
+      "import": "./dist/entries/collections.js",
+      "require": "./dist/entries/collections.cjs"
+    },
+    "./community": {
+      "types": "./dist/entries/community.d.ts",
+      "import": "./dist/entries/community.js",
+      "require": "./dist/entries/community.cjs"
+    },
+    "./competitors": {
+      "types": "./dist/entries/competitors.d.ts",
+      "import": "./dist/entries/competitors.js",
+      "require": "./dist/entries/competitors.cjs"
+    },
+    "./copilot": {
+      "types": "./dist/entries/copilot.d.ts",
+      "import": "./dist/entries/copilot.js",
+      "require": "./dist/entries/copilot.cjs"
+    },
+    "./core": {
+      "types": "./dist/entries/core.d.ts",
+      "import": "./dist/entries/core.js",
+      "require": "./dist/entries/core.cjs"
+    },
+    "./creatures": {
+      "types": "./dist/entries/creatures.d.ts",
+      "import": "./dist/entries/creatures.js",
+      "require": "./dist/entries/creatures.cjs"
+    },
+    "./credits": {
+      "types": "./dist/entries/credits.d.ts",
+      "import": "./dist/entries/credits.js",
+      "require": "./dist/entries/credits.cjs"
+    },
+    "./developer-apps": {
+      "types": "./dist/entries/developer-apps.d.ts",
+      "import": "./dist/entries/developer-apps.js",
+      "require": "./dist/entries/developer-apps.cjs"
+    },
+    "./edit": {
+      "types": "./dist/entries/edit.d.ts",
+      "import": "./dist/entries/edit.js",
+      "require": "./dist/entries/edit.cjs"
+    },
+    "./errors": {
+      "types": "./dist/entries/errors.d.ts",
+      "import": "./dist/entries/errors.js",
+      "require": "./dist/entries/errors.cjs"
+    },
+    "./executions": {
+      "types": "./dist/entries/executions.d.ts",
+      "import": "./dist/entries/executions.js",
+      "require": "./dist/entries/executions.cjs"
+    },
+    "./gallery": {
+      "types": "./dist/entries/gallery.d.ts",
+      "import": "./dist/entries/gallery.js",
+      "require": "./dist/entries/gallery.cjs"
+    },
+    "./jobs": {
+      "types": "./dist/entries/jobs.d.ts",
+      "import": "./dist/entries/jobs.js",
+      "require": "./dist/entries/jobs.cjs"
+    },
+    "./library": {
+      "types": "./dist/entries/library.d.ts",
+      "import": "./dist/entries/library.js",
+      "require": "./dist/entries/library.cjs"
+    },
+    "./llm": {
+      "types": "./dist/entries/llm.d.ts",
+      "import": "./dist/entries/llm.js",
+      "require": "./dist/entries/llm.cjs"
+    },
+    "./locations": {
+      "types": "./dist/entries/locations.d.ts",
+      "import": "./dist/entries/locations.js",
+      "require": "./dist/entries/locations.cjs"
+    },
+    "./media": {
+      "types": "./dist/entries/media.d.ts",
+      "import": "./dist/entries/media.js",
+      "require": "./dist/entries/media.cjs"
+    },
+    "./models": {
+      "types": "./dist/entries/models.d.ts",
+      "import": "./dist/entries/models.js",
+      "require": "./dist/entries/models.cjs"
+    },
+    "./moodboards": {
+      "types": "./dist/entries/moodboards.d.ts",
+      "import": "./dist/entries/moodboards.js",
+      "require": "./dist/entries/moodboards.cjs"
+    },
+    "./node-presets": {
+      "types": "./dist/entries/node-presets.d.ts",
+      "import": "./dist/entries/node-presets.js",
+      "require": "./dist/entries/node-presets.cjs"
+    },
+    "./nodes": {
+      "types": "./dist/entries/nodes.d.ts",
+      "import": "./dist/entries/nodes.js",
+      "require": "./dist/entries/nodes.cjs"
+    },
+    "./oauth": {
+      "types": "./dist/entries/oauth.d.ts",
+      "import": "./dist/entries/oauth.js",
+      "require": "./dist/entries/oauth.cjs"
+    },
+    "./objects": {
+      "types": "./dist/entries/objects.d.ts",
+      "import": "./dist/entries/objects.js",
+      "require": "./dist/entries/objects.cjs"
+    },
+    "./organizations": {
+      "types": "./dist/entries/organizations.d.ts",
+      "import": "./dist/entries/organizations.js",
+      "require": "./dist/entries/organizations.cjs"
+    },
+    "./palettes": {
+      "types": "./dist/entries/palettes.d.ts",
+      "import": "./dist/entries/palettes.js",
+      "require": "./dist/entries/palettes.cjs"
+    },
+    "./picker-catalogs": {
+      "types": "./dist/entries/picker-catalogs.d.ts",
+      "import": "./dist/entries/picker-catalogs.js",
+      "require": "./dist/entries/picker-catalogs.cjs"
+    },
+    "./pipelines": {
+      "types": "./dist/entries/pipelines.d.ts",
+      "import": "./dist/entries/pipelines.js",
+      "require": "./dist/entries/pipelines.cjs"
+    },
+    "./projects": {
+      "types": "./dist/entries/projects.d.ts",
+      "import": "./dist/entries/projects.js",
+      "require": "./dist/entries/projects.cjs"
+    },
+    "./prompt-helper": {
+      "types": "./dist/entries/prompt-helper.d.ts",
+      "import": "./dist/entries/prompt-helper.js",
+      "require": "./dist/entries/prompt-helper.cjs"
+    },
+    "./recast": {
+      "types": "./dist/entries/recast.d.ts",
+      "import": "./dist/entries/recast.js",
+      "require": "./dist/entries/recast.cjs"
+    },
+    "./reduce": {
+      "types": "./dist/entries/reduce.d.ts",
+      "import": "./dist/entries/reduce.js",
+      "require": "./dist/entries/reduce.cjs"
+    },
+    "./saved-posts": {
+      "types": "./dist/entries/saved-posts.d.ts",
+      "import": "./dist/entries/saved-posts.js",
+      "require": "./dist/entries/saved-posts.cjs"
+    },
+    "./scene3d": {
+      "types": "./dist/entries/scene3d.d.ts",
+      "import": "./dist/entries/scene3d.js",
+      "require": "./dist/entries/scene3d.cjs"
+    },
+    "./sessions": {
+      "types": "./dist/entries/sessions.d.ts",
+      "import": "./dist/entries/sessions.js",
+      "require": "./dist/entries/sessions.cjs"
+    },
+    "./shots": {
+      "types": "./dist/entries/shots.d.ts",
+      "import": "./dist/entries/shots.js",
+      "require": "./dist/entries/shots.cjs"
+    },
+    "./studio": {
+      "types": "./dist/entries/studio.d.ts",
+      "import": "./dist/entries/studio.js",
+      "require": "./dist/entries/studio.cjs"
+    },
+    "./templates": {
+      "types": "./dist/entries/templates.d.ts",
+      "import": "./dist/entries/templates.js",
+      "require": "./dist/entries/templates.cjs"
+    },
+    "./tutorials": {
+      "types": "./dist/entries/tutorials.d.ts",
+      "import": "./dist/entries/tutorials.js",
+      "require": "./dist/entries/tutorials.cjs"
+    },
+    "./uploads": {
+      "types": "./dist/entries/uploads.d.ts",
+      "import": "./dist/entries/uploads.js",
+      "require": "./dist/entries/uploads.cjs"
+    },
+    "./video-pro": {
+      "types": "./dist/entries/video-pro.d.ts",
+      "import": "./dist/entries/video-pro.js",
+      "require": "./dist/entries/video-pro.cjs"
+    },
+    "./voices": {
+      "types": "./dist/entries/voices.d.ts",
+      "import": "./dist/entries/voices.js",
+      "require": "./dist/entries/voices.cjs"
+    },
+    "./webhooks": {
+      "types": "./dist/entries/webhooks.d.ts",
+      "import": "./dist/entries/webhooks.js",
+      "require": "./dist/entries/webhooks.cjs"
+    },
+    "./workflows": {
+      "types": "./dist/entries/workflows.d.ts",
+      "import": "./dist/entries/workflows.js",
+      "require": "./dist/entries/workflows.cjs"
+    },
+    "./workspaces": {
+      "types": "./dist/entries/workspaces.d.ts",
+      "import": "./dist/entries/workspaces.js",
+      "require": "./dist/entries/workspaces.cjs"
+    },
     "./supabase": {
       "types": "./dist/supabase-browser.d.ts",
       "import": "./dist/supabase-browser.js",

@@ -343,4 +343,23 @@ describe("node-executor free-tier blocked-models gate (Part B, Task 7)", () => {
     expect(mockCheckCredits.mock.calls[0]?.[1]).toBe("gemini-omni-flash:4k:8")
     expect(mockReserveCredits).not.toHaveBeenCalled()
   })
+
+  it("preflights a Vidu Q4 4K composite before any reservation", async () => {
+    // Vidu Q4's 4K rows are free-tier blocked (stripe-config blockedModels);
+    // the orchestrator must preflight the composite the builder emitted.
+    mockBuiltVideo.provider = "vidu-q4"
+    mockBuiltVideo.modelIdentifier = "vidu-q4:5s:4k"
+    mockCheckCredits.mockResolvedValue({
+      allowed: false,
+      error: "This model requires a paid subscription. Upgrade to Basic or higher.",
+    })
+
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(
+      /Credit reservation failed|paid subscription|blocked/,
+    )
+
+    expect(mockCheckCredits).toHaveBeenCalledTimes(1)
+    expect(mockCheckCredits.mock.calls[0]?.[1]).toBe("vidu-q4:5s:4k")
+    expect(mockReserveCredits).not.toHaveBeenCalled()
+  })
 })

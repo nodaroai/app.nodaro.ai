@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Catalog projection types. Mirror `@nodaro/shared`'s `ProjectedCatalog` so the
@@ -70,7 +70,7 @@ export interface CatalogsListResponse {
 }
 
 export class CatalogsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Every catalog, projected & pack-composed (honors the deployment's
    *  registered vendored packs). Cached publicly 5 min. `data` is absent

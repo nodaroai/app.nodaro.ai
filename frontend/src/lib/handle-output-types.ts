@@ -40,6 +40,8 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "apply-edl": { json: "look" },
   // Tighten Episode: the plan (json); its media pip is runtime-typed, like apply-edl's.
   "tighten-episode": { json: "look" },
+  // Chapters: the show notes (text) and the chapter list (json).
+  "episode-chapters": { text: "text", json: "look" },
   // edit-plan: single `edl` json output (the EDL plan). Same "look" data pip as
   // apply-edl's json / video-analysis's json.
   "edit-plan": { edl: "look" },
@@ -114,7 +116,6 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "reference-audio": { audio: "audio" },
   "reference-board": { image: "image" },
   "reference-sheet": { sheet: "image", panels: "reference" },
-  "remove-audio": { "video-out": "video" },
   "remove-background": { image: "image" },
   "render-video": { video: "video" },
   "resize-video": { "video-out": "video" },

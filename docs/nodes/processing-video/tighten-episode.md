@@ -53,6 +53,8 @@ With **Review before render** on, a run stops at a preview of the cut: the rende
 
 The steps that finished stay finished: their results (the transcript, the edit) are kept and they are not charged again. Press **Continue** on the node: only the step that failed and the ones after it run again. A node fed by a List runs once per item; it has no Continue or Render final — run it again.
 
+When the workflow is [continued from where it failed](../../api-integration.md#continuing-a-failed-run) over the API, the node continues its own run the same way, but only while its recording, music bed and settings are still the ones that run used. If any of them changed (a corrected recording upstream, or a setting sent in the continuation's overrides), it runs again from the start on what it has now, and is charged its fee for that run.
+
 ## Credit Cost
 
 Tighten Episode is charged **its steps at their own rates, plus a per-run fee of 11 credits**<!-- credits: use-case-fee:tighten-episode -->:

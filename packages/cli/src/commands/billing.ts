@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { BillingMoney, BillingPlan, BillingPriceCredits } from "@nodaro/sdk"
+import type { BillingMoney, BillingPlan, BillingPriceCredits } from "@nodaro/sdk/billing"
 import { buildClient, buildPublicClient, handleError } from "../client.js"
 import { detail, dim, emit, info, table, type OutputOpts } from "../output.js"
 

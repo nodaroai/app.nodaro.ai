@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
 import { getUserEarnings } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import {
   useSubscription,
@@ -29,6 +30,7 @@ import {
 import { useT, tx } from "@/lib/i18n"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { formatDate } from "@/lib/i18n/format"
+import { whenActivated } from "@/lib/prerender"
 
 /**
  * MiniApp earnings — preserved from the previous billing page (self-hides
@@ -119,7 +121,7 @@ export default function BillingPage() {
     if (!searchParams.get("success") && !searchParams.get("topup")) return
     const timer = setTimeout(() => {
       qc.invalidateQueries({ queryKey: queryKeys.billing.all })
-      qc.invalidateQueries({ queryKey: queryKeys.credits.balance(user.id) })
+      void invalidateBalance(qc, user.id)
     }, 3000)
     return () => clearTimeout(timer)
   }, [searchParams, user?.id, qc])
@@ -131,11 +133,13 @@ export default function BillingPage() {
   useEffect(() => {
     const isSuccess = searchParams.get("success") === "true"
     const isTopup = searchParams.get("topup") === "true"
-    if (isSuccess || isTopup) {
+    if (!isSuccess && !isTopup) return
+    // Shown to a visitor who is looking (lib/prerender.ts).
+    return whenActivated(() => {
       toast.success(
         isTopup ? tx("billing.creditsAdded") : tx("billing.subActivated"),
       )
-    }
+    })
   }, [searchParams])
 
   async function handleManageSubscription() {

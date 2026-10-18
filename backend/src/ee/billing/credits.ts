@@ -1270,6 +1270,38 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "wan-3-prime:17s:1080p": 2150, "wan-3-prime:18s:1080p": 2270, "wan-3-prime:19s:1080p": 2400, "wan-3-prime:20s:1080p": 2520, "wan-3-prime:21s:1080p": 2650,
   "wan-3-prime:22s:1080p": 2780, "wan-3-prime:23s:1080p": 2900, "wan-3-prime:24s:1080p": 3030, "wan-3-prime:25s:1080p": 3150, "wan-3-prime:26s:1080p": 3280,
   "wan-3-prime:27s:1080p": 3410, "wan-3-prime:28s:1080p": 3530, "wan-3-prime:29s:1080p": 3660, "wan-3-prime:30s:1080p": 3780,
+  // ── Vidu Q4 (KIE vidu-q4/image-to-video + vidu-q4/reference-to-video) ──
+  //    ONE per-second ladder for both endpoints and for audio on or off:
+  //    credits = the tier's per-second base rate × seconds, rounded UP to the
+  //    next 10 (the minimax-h3 / seedance-2-5 rule). Base per second:
+  //    540p 18, 720p 38, 1080p 48, 2k 76, 4k 156.
+  //    ONE ROW PER SECOND across 3-16s — the tier lookup snaps UP and falls back
+  //    to the LAST tier, and commit_credits only ever refunds a surplus.
+  //    The bare id is the DEFAULT render (5s @ 720p): PRICING_DEFAULT_RESOLUTION
+  //    ["vidu-q4"] = "720p" (@nodaro/shared), the tier runViduQ4 sends when the
+  //    request omits `resolution`. No "-ref" and no ":audio" dimension.
+  //    Machine-generated with migration 533 — never edit one value by hand.
+  "vidu-q4": 190,                 // (5s 720p default render)
+  // 540p
+  "vidu-q4:3s:540p": 60, "vidu-q4:4s:540p": 80, "vidu-q4:5s:540p": 90, "vidu-q4:6s:540p": 110, "vidu-q4:7s:540p": 130,
+  "vidu-q4:8s:540p": 150, "vidu-q4:9s:540p": 170, "vidu-q4:10s:540p": 180, "vidu-q4:11s:540p": 200, "vidu-q4:12s:540p": 220,
+  "vidu-q4:13s:540p": 240, "vidu-q4:14s:540p": 260, "vidu-q4:15s:540p": 270, "vidu-q4:16s:540p": 290,
+  // 720p
+  "vidu-q4:3s:720p": 120, "vidu-q4:4s:720p": 160, "vidu-q4:5s:720p": 190, "vidu-q4:6s:720p": 230, "vidu-q4:7s:720p": 270,
+  "vidu-q4:8s:720p": 310, "vidu-q4:9s:720p": 350, "vidu-q4:10s:720p": 380, "vidu-q4:11s:720p": 420, "vidu-q4:12s:720p": 460,
+  "vidu-q4:13s:720p": 500, "vidu-q4:14s:720p": 540, "vidu-q4:15s:720p": 570, "vidu-q4:16s:720p": 610,
+  // 1080p
+  "vidu-q4:3s:1080p": 150, "vidu-q4:4s:1080p": 200, "vidu-q4:5s:1080p": 240, "vidu-q4:6s:1080p": 290, "vidu-q4:7s:1080p": 340,
+  "vidu-q4:8s:1080p": 390, "vidu-q4:9s:1080p": 440, "vidu-q4:10s:1080p": 480, "vidu-q4:11s:1080p": 530, "vidu-q4:12s:1080p": 580,
+  "vidu-q4:13s:1080p": 630, "vidu-q4:14s:1080p": 680, "vidu-q4:15s:1080p": 720, "vidu-q4:16s:1080p": 770,
+  // 2k
+  "vidu-q4:3s:2k": 230, "vidu-q4:4s:2k": 310, "vidu-q4:5s:2k": 380, "vidu-q4:6s:2k": 460, "vidu-q4:7s:2k": 540,
+  "vidu-q4:8s:2k": 610, "vidu-q4:9s:2k": 690, "vidu-q4:10s:2k": 760, "vidu-q4:11s:2k": 840, "vidu-q4:12s:2k": 920,
+  "vidu-q4:13s:2k": 990, "vidu-q4:14s:2k": 1070, "vidu-q4:15s:2k": 1140, "vidu-q4:16s:2k": 1220,
+  // 4k
+  "vidu-q4:3s:4k": 470, "vidu-q4:4s:4k": 630, "vidu-q4:5s:4k": 780, "vidu-q4:6s:4k": 940, "vidu-q4:7s:4k": 1100,
+  "vidu-q4:8s:4k": 1250, "vidu-q4:9s:4k": 1410, "vidu-q4:10s:4k": 1560, "vidu-q4:11s:4k": 1720, "vidu-q4:12s:4k": 1880,
+  "vidu-q4:13s:4k": 2030, "vidu-q4:14s:4k": 2190, "vidu-q4:15s:4k": 2340, "vidu-q4:16s:4k": 2500,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,
@@ -1887,6 +1919,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // fails or is cancelled. Not a node type: the node's inner steps bill at
   // their own rates (CREDIT_COSTS["tighten-episode"] names this id).
   "use-case-fee:tighten-episode": 10,
+  // The same fee for the next three podcast use-case nodes (migration 531),
+  // priced ahead of their registration (decided 2026-10-14).
+  "use-case-fee:episode-chapters": 10,
+  "use-case-fee:episode-trailer": 10,
+  "use-case-fee:clip-pack": 10,
   // speaker-view — an edit rendered with its speakers on screen (the cloud
   // plugin's renderer over core's EDL timeline). Priced PER MINUTE of output
   // in two tiers by how many speakers it composites at once, decided
@@ -1943,7 +1980,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...AUDIO_SYNC_CREDIT_COSTS,
   "split-media": 20,
   "extract-audio": 10,
-  "remove-audio": 20,
   "mix-audio": 20,
   "combine-audio": 10,
   "adjust-volume": 10,
@@ -2185,9 +2221,11 @@ export const LLM_DIRECT_RUNG_FEATURES: readonly string[] = [
  * Tier-priced ids that get NO direct rung, each with its reason. A prefix
  * entry (ending ":") covers every id under it.
  *  - workflow-copilot: reservation CEILINGS on a metered, always-direct loop.
- *  - the social scrapers' per-ad analysis tiers: built from the model's tier
- *    alone (metaAdsAnalysisCreditId / instagramAnalysisCreditId); the routes
- *    send no effort and no Advanced flag, so the call never runs direct.
+ *  - the social scrapers' per-ad analysis tiers: their ids are not built by
+ *    `buildLlmCreditIdentifier` but by the social module, which reads the same
+ *    rung (`llmCreditRung`) and carries its OWN premium-direct rows for a
+ *    model served direct (a `directOnly` one — the routes send no effort and
+ *    no Advanced flag). Held to the multiplier below by a billing test.
  */
 export const NO_DIRECT_RUNG: readonly string[] = [
   "workflow-copilot",
@@ -2319,7 +2357,16 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Tighten Episode (a use-case node): its own charge is its per-run fee; its
   // steps bill as their own jobs, and an estimate expands it into them.
   "tighten-episode": () => "use-case-fee:tighten-episode",
-}, Object.fromEntries(Object.entries(UNIT_PRICES).map(([type, p]) => [type, (data: Record<string, unknown>) => p.creditId(data)])))
+  // Chapters, Trailer and Clip Pack (use-case nodes): the same — the node's own
+  // charge is its per-run fee.
+  "episode-chapters": () => "use-case-fee:episode-chapters",
+  "episode-trailer": () => "use-case-fee:episode-trailer",
+  "clip-pack": () => "use-case-fee:clip-pack",
+// A unit with a creditId resolver (price.ee.ts); a flat-priced unit has none and reserves the row of its type.
+}, Object.fromEntries(Object.entries(UNIT_PRICES).flatMap(([type, p]) => {
+  const creditId = p.creditId
+  return creditId ? [[type, (data: Record<string, unknown>) => creditId(data)]] : []
+})))
 
 // ============================================================
 // Helper Functions

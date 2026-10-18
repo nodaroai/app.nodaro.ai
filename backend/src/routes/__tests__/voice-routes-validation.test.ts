@@ -130,6 +130,7 @@ describe("POST /v1/voice-changer", () => {
   const validBody = { audioUrl: "https://example.com/a.mp3", voiceId: "voice-abc", userId: USER_ID }
 
   it("accepts a valid body", async () => {
+    // validBody carries no model: model is optional (the provider falls back to English).
     const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: validBody })
     expect(res.statusCode).not.toBe(400)
   })
@@ -212,11 +213,6 @@ describe("POST /v1/voice-changer", () => {
   it("rejects an unknown speech-to-speech model", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { ...validBody, model: "eleven_bogus_sts_v9" } })
     expect(res.statusCode).toBe(400)
-  })
-
-  it("accepts a body with no model (optional — provider falls back to English)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: validBody })
-    expect(res.statusCode).not.toBe(400)
   })
 })
 

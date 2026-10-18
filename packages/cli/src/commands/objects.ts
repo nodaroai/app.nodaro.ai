@@ -6,7 +6,7 @@ import {
   type ObjectAssetType,
   type ObjectAttachColumn,
   type ObjectCategory,
-} from "@nodaro/sdk"
+} from "@nodaro/sdk/objects"
 
 const OBJECT_CATEGORIES = [
   "furniture",

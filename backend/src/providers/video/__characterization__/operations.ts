@@ -18,12 +18,13 @@ import { trimAudio } from "../trim-audio.js"
 import { trimVideo } from "../trim-video.js"
 import { loopVideo } from "../loop-video.js"
 import { splitMedia } from "../split-media.js"
-import { removeAudio } from "../remove-audio.js"
 import { extractFrame } from "../extract-frame.js"
 import { smartLoopCut } from "../smart-loop-cut.js"
 import { applyEdl } from "../apply-edl.js"
 import { fixtureUrl, type FixtureSet } from "./fixtures.js"
-import type { Tolerances } from "./compare.js"
+import type { CharacterizedOperation, RenderedOutput, OperationResult } from "./operation-types.js"
+import { UNIT_CHARACTERIZATIONS } from "../../../nodes/_generated/characterizations.char.js"
+import { placeAfter } from "../../../lib/unit-compose.js"
 
 /**
  * The operation registry: every ffmpeg-backed operation rendered by the
@@ -41,24 +42,7 @@ import type { Tolerances } from "./compare.js"
  * never cleans up fills the disk of whatever runs it.
  */
 
-export interface RenderedOutput {
-  readonly label: string
-  readonly path: string
-  readonly kind: "audio" | "video" | "image"
-}
-
-export interface OperationResult {
-  readonly outputs: readonly RenderedOutput[]
-  readonly cleanupDirs: readonly string[]
-}
-
-export interface CharacterizedOperation {
-  readonly name: string
-  readonly tier: 1 | 2 | 3
-  /** Per-op tolerance overrides — each MUST carry a comment saying why. */
-  readonly tolerances?: Partial<Tolerances>
-  readonly run: (f: FixtureSet) => Promise<OperationResult>
-}
+export type { RenderedOutput, OperationResult, CharacterizedOperation } from "./operation-types.js"
 
 const single = (path: string, kind: RenderedOutput["kind"], cleanupDir?: string): OperationResult => ({
   outputs: [{ label: "out", path, kind }],
@@ -786,14 +770,6 @@ const tier3: CharacterizedOperation[] = [
     },
   },
   {
-    name: "remove-audio",
-    tier: 3,
-    run: async (f) => {
-      const { videoPath } = await removeAudio({ videoUrl: fixtureUrl(f.clipMp4) })
-      return single(videoPath, "video")
-    },
-  },
-  {
     name: "extract-frame-first",
     tier: 3,
     run: async (f) => {
@@ -827,4 +803,13 @@ const tier3: CharacterizedOperation[] = [
   },
 ]
 
-export const OPERATIONS: readonly CharacterizedOperation[] = [...tier1, ...tier2, ...tier3]
+/**
+ * The hand-written operations ∪ every node unit's own (its characterize.char.ts,
+ * tools/units/README.md), each named by its unit's type (its golden key) and
+ * placed right after the operation its `after` names. A name in both throws.
+ */
+export const OPERATIONS: readonly CharacterizedOperation[] = placeAfter(
+  [...tier1, ...tier2, ...tier3],
+  (op) => op.name,
+  Object.entries(UNIT_CHARACTERIZATIONS).map(([type, { after, ...op }]) => ({ type, after, entry: { name: type, ...op } })),
+)

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 
 // Node results open in ONE modal, `InspectorShell`. They used to open in private
@@ -45,7 +45,13 @@ describe("node result modals", () => {
 
   // Every node-rendered file, subfolders included (scene views, sub-workflow
   // views, …) — a modal there is just as private.
-  const nodeFiles = sources(NODES).filter((p) => p.endsWith(".tsx"))
+  // …plus every node unit's canvas component (frontend/src/nodes/<type>/node.tsx,
+  // tools/units/README.md), named relative to NODES like the rest.
+  const UNITS = join(SRC, "nodes")
+  const unitNodeFiles = readdirSync(UNITS, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && existsSync(join(UNITS, d.name, "node.tsx")))
+    .map((d) => join(UNITS, d.name, "node.tsx"))
+  const nodeFiles = [...sources(NODES).filter((p) => p.endsWith(".tsx")), ...unitNodeFiles]
 
   it("scans the node folder, subfolders included (never vacuously)", () => {
     expect(nodeFiles.length).toBeGreaterThan(50)

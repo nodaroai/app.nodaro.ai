@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * Every reader of a client address goes through `lib/client-address.ts`.
  *

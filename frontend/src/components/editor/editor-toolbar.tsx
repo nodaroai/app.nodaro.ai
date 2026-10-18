@@ -6,6 +6,7 @@ import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
 import { CreditBalance } from "@/ee/components/credits/CreditBalance"
+import { useSharedHeaderActive } from "@/lib/shared-header"
 import { Button } from "@/components/ui/button"
 import { NodeDoubleClickToggle } from "./node-double-click-toggle"
 import { ScheduleToggle } from "./schedule-toggle"
@@ -80,6 +81,7 @@ interface EditorToolbarProps {
 
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const t = useT()
+  const sharedHeader = useSharedHeaderActive()
   const projectDisplayName = useProjectDisplayName()
   const isRtl = useAppDir() === "rtl"
   const workflowName = useWorkflowStore((s) => s.workflowName)
@@ -452,7 +454,8 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        {userId && <CreditBalance userId={userId} />}
+        {/* Under the shared site header the balance is the header's (lib/shared-header.ts). */}
+        {userId && !sharedHeader && <CreditBalance userId={userId} />}
 
         <input
           type="file"

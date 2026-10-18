@@ -3,6 +3,7 @@ import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { tx, useT } from "@/lib/i18n"
 import { fetchConsentState, grantConsent, declineConsent, SOURCE_APP } from "./consent-api"
+import { whenActivated } from "@/lib/prerender"
 
 type View = "hidden" | "card" | "confirmed"
 
@@ -26,15 +27,20 @@ export function ConsentGate() {
 
   useEffect(() => {
     let cancelled = false
-    void fetchConsentState().then((s) => {
-      if (cancelled) return
-      if (s.shouldShow) {
-        setBody(s.text ?? "")
-        setView("card")
-      }
+    // The server counts this read as a showing of the card: never from a
+    // prerendered page nobody has seen yet (lib/prerender.ts).
+    const cancelHeld = whenActivated(() => {
+      void fetchConsentState().then((s) => {
+        if (cancelled) return
+        if (s.shouldShow) {
+          setBody(s.text ?? "")
+          setView("card")
+        }
+      })
     })
     return () => {
       cancelled = true
+      cancelHeld()
       if (closeTimer.current) clearTimeout(closeTimer.current)
     }
   }, [])

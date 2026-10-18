@@ -95,6 +95,15 @@ describe("buildCompletedResultPatch", () => {
     expect(buildCompletedResultPatch("generate-video-pro", { foo: "bar" }, "j", NOW)).toBeNull()
     expect(buildCompletedResultPatch("generate-video-pro", null, "j", NOW)).toBeNull()
   })
+
+  it("lands a Chapters run that finished while the editor was closed — its show notes and list, no URL needed", () => {
+    const rows = [{ startMs: 0, title: "Intro" }]
+    expect(buildCompletedResultPatch("episode-chapters", { text: "0:00 Intro", json: rows, transcript: { words: [] } }, "job-c", NOW)).toEqual({
+      executionStatus: "completed", generatedText: "0:00 Intro", generatedJson: rows, generatedTranscript: { words: [] }, useCaseJobId: "job-c",
+    })
+    // A wrapper that holds no show notes lands nothing.
+    expect(buildCompletedResultPatch("episode-chapters", { transcript: { words: [] } }, "job-c", NOW)).toBeNull()
+  })
 })
 
 describe("computeCompletedJobPatches", () => {

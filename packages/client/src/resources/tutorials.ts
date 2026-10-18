@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Public tutorials directory (`GET /v1/tutorials`) — video tutorials and
@@ -54,7 +54,7 @@ export interface TutorialCategory {
 }
 
 export class TutorialsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** All enabled tutorial categories with their videos and flow tutorials. Public. */
   list(): Promise<{ categories: TutorialCategory[] }> {

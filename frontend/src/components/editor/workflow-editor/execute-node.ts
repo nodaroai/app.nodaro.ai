@@ -165,7 +165,6 @@ import {
   trimAudioApi,
   splitMediaApi,
   extractAudioApi,
-  removeAudioApi,
   silenceDetectApi,
   audioSyncApi,
   trimVideoApi,
@@ -370,7 +369,6 @@ import type {
   TrimAudioData,
   SplitMediaData,
   ExtractAudioData,
-  RemoveAudioData,
   SilenceDetectNodeData,
   AudioSyncNodeData,
   TrimVideoData,
@@ -8032,22 +8030,6 @@ function executeNodeCore(
       () => extractAudioApi(videoUrl, ctx.userId),
       "generatedAudioUrl",
       "Extract Audio",
-      ctx,
-    );
-  }
-
-  if (node.type === "remove-audio") {
-    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
-    if (!videoUrl) {
-      toast.error(nodeRunError((node.data as RemoveAudioData).label, "nodeRun.noVideoInput"));
-      return Promise.reject(new Error("No video"));
-    }
-    setUserPromptTemplate(undefined);
-    return runProcessingNode(
-      node.id,
-      () => removeAudioApi(videoUrl, ctx.userId),
-      "generatedVideoUrl",
-      "Remove Audio",
       ctx,
     );
   }

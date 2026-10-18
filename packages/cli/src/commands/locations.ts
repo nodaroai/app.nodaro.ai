@@ -2,8 +2,10 @@ import { Command, Option } from "commander"
 import {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
-  type CharacterAspectRatio,
-} from "@nodaro/sdk"
+} from "@nodaro/sdk/locations"
+import type {
+  CharacterAspectRatio,
+} from "@nodaro/sdk/characters"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
 import { parseCount, watchUntilTerminal } from "../util.js"

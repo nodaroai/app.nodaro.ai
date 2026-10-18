@@ -21,23 +21,31 @@
  *    its wrapper exists leaves nothing for Continue to resume.
  *  - A run that fails keeps what it finished — its plan and transcript — on
  *    the node.
+ *  - How the result lands follows the type's result kind: an episode as a
+ *    take (`landEpisode`), text — Chapters' show notes and list — straight
+ *    onto the node (`landText`).
  *  - A continue answered "already running" waits on the continuation it names;
  *    "superseded" (a newer generation failed too) continues that one; "still
  *    settling" asks again shortly. Every other refusal shows its message in
  *    the reader's language where the code has one.
  */
 import { toast } from "sonner"
-import { usecaseDescriptor, type UseCaseNodeType } from "@nodaro/render-rules"
+import { usecaseDescriptor, type UseCaseNodeType, type UseCaseResultKind } from "@nodaro/render-rules"
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED } from "@nodaro/shared/nodes"
 import { continueUseCase, getJobStatus, runUseCase, type UseCaseApiParams } from "@/lib/api"
 import { executionErrorText } from "@/lib/execution-error-text"
-import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseTakeResultFields } from "@/lib/use-case-run-result"
+import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseRunResultFields, usecaseTakeResultFields } from "@/lib/use-case-run-result"
+import { isInputWarningCode } from "@/lib/input-warning-codes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { tx } from "@/lib/i18n"
 import { usecaseLabelVars } from "@/lib/use-case-request-body"
 import type { WorkflowNode } from "@/types/nodes"
 import { nodeRunError } from "./node-run-message"
-import { pollJobWithNodeUpdate } from "./poll-job"
+import { RUN_START_RESET, getJobStatusLeanForNode, guardedToast, pollJobWithNodeUpdate } from "./poll-job"
+import { jobGoneMessage, shouldStopPolling } from "./poll-connection"
+import { pollUseCaseTextJob } from "./use-case-text-poll"
+import { shouldAbandonNode } from "./abandon-guard"
+import { localizeJobLabel } from "./job-label"
 import { WorkflowStaleError, type ExecutionContext } from "./types"
 
 /** How long a continue answered "still settling" waits before it asks again. */
@@ -46,6 +54,12 @@ export const USE_CASE_SETTLING_RETRY_MS = 5_000
 export const USE_CASE_SETTLING_RETRIES = 12
 /** How many newer failed generations a continue follows before it gives up. */
 export const USE_CASE_MAX_GENERATION_HOPS = 5
+/**
+ * When a run whose result is text (Chapters: a transcription and a plan of up
+ * to 3 hours of recording) counts as taking longer than usual: the node says
+ * so once and keeps following it, less often, until it ends.
+ */
+export const USE_CASE_TEXT_LONG_RUN_MS = 4 * 60 * 60_000
 
 const OUTPUT_KEYS = ["generatedVideoUrl", "generatedAudioUrl"] as const
 
@@ -103,17 +117,14 @@ async function keepFailedRunOutputs(nodeId: string, nodeType: UseCaseNodeType, j
   }
 }
 
-/** Poll the wrapper `start` answers with, land its result, keep a failed run's finished outputs. */
-function runWrapper(nodeId: string, nodeType: UseCaseNodeType, start: () => Promise<{ jobId: string }>, ctx: ExecutionContext): Promise<string> {
-  let jobId: string | undefined
-  return pollJobWithNodeUpdate(
+/** Polls a started run to its end and lands its result on the node; resolves with what the node hands on. */
+type Landing = (nodeId: string, nodeType: UseCaseNodeType, start: () => Promise<{ jobId: string }>, ctx: ExecutionContext) => Promise<string>
+
+/** A run whose result is an episode (video or audio): landed as a take, with its plan and transcript. */
+const landEpisode: Landing = (nodeId, nodeType, start, ctx) =>
+  pollJobWithNodeUpdate(
     nodeId,
-    async () => {
-      const started = await start()
-      jobId = started.jobId
-      remember(nodeId, started.jobId)
-      return started
-    },
+    start,
     [...OUTPUT_KEYS],
     usecaseDescriptor(nodeType).label,
     ctx,
@@ -122,7 +133,102 @@ function runWrapper(nodeId: string, nodeType: UseCaseNodeType, start: () => Prom
     // The take's quality ("proxy" while it waits on review) goes on the result only.
     // The take also keeps its run's plan, transcript and settings (one mapping with the server lanes).
     { resultFields: (od) => usecaseTakeResultFields(nodeType, od) },
-  ).catch(async (err: unknown) => {
+  )
+
+/** Stop pressed: never a failure on the node. */
+const isStop = (err: unknown, ctx: ExecutionContext): boolean =>
+  (err as { name?: unknown } | null)?.name === "AbortError" || ctx.signal?.aborted === true
+
+/**
+ * A run whose result is text (Chapters' show notes, and its list on `json`):
+ * no file to land, so it is polled to its end and landed through the mapping
+ * every lane shares (`usecaseRunResultFields`). The previous run's result goes
+ * at the start, so a failed run never shows an older one as its own. A job
+ * cancelled elsewhere (another tab, the jobs list, the API) leaves the node
+ * idle, as a restored cancelled job does — never failed.
+ */
+const landText: Landing = async (nodeId, nodeType, start, ctx) => {
+  const write = (patch: Record<string, unknown>) => useWorkflowStore.getState().updateNodeData(nodeId, patch)
+  const label = localizeJobLabel(usecaseDescriptor(nodeType).label)
+  write({ ...RUN_START_RESET, generatedText: undefined, generatedJson: undefined })
+  let jobId: string | undefined
+  try {
+    const started = await start()
+    jobId = started.jobId
+    guardedToast.info(tx("run.jobStarted", { label }), { description: tx("run.jobIdLine", { id: started.jobId }) })
+    write({ currentJobId: started.jobId })
+    const outcome = await pollUseCaseTextJob(started.jobId, nodeId, ctx, {
+      status: getJobStatusLeanForNode,
+      gaveUp: (err, failures) => (shouldStopPolling(err, failures, { nodeId, jobId: started.jobId }) ? jobGoneMessage() : null),
+      stale: () => new WorkflowStaleError(),
+      onProgress: (progress) => write({ currentJobProgress: progress }),
+    }, {
+      longRunMs: USE_CASE_TEXT_LONG_RUN_MS,
+      onLongRun: () => guardedToast.info(tx("nodeRun.usecaseStillRunning", { label })),
+    })
+    if (ctx.isWorkflowStale()) throw new WorkflowStaleError()
+    // Discarded or replaced while it ran: the result stays in its job (My Library), never on the node.
+    if (shouldAbandonNode(nodeId, started.jobId)) return ""
+    if (outcome.kind === "cancelled") {
+      write({ executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined, jobAwaitingReview: undefined })
+      guardedToast.info(tx("nodeRun.usecaseCancelled", { label }))
+      return ""
+    }
+    const output = outcome.output
+    const fields = usecaseRunResultFields(nodeType, output, nodeDataOf(nodeId), started.jobId) ?? {}
+    write({
+      ...fields,
+      ...(typeof output._executionId === "string" ? { useCaseExecutionId: output._executionId } : {}),
+      executionStatus: "completed",
+      errorMessage: undefined,
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    })
+    guardedToast.success(tx("nodeRun.complete", { label }))
+    return typeof fields.generatedText === "string" ? fields.generatedText : ""
+  } catch (err) {
+    if (err instanceof WorkflowStaleError) throw err
+    if (isStop(err, ctx) || (jobId !== undefined && shouldAbandonNode(nodeId, jobId))) return ""
+    const message = err instanceof Error && err.message ? err.message : tx("lib.unknownError")
+    const code = (err as { code?: unknown } | null)?.code
+    // The episode lane's rules (pollJobWithNodeUpdate): a request-gate block carries the
+    // result gate's hint, an input the person can fix keeps its code and warns.
+    const blocked = code === "job_blocked"
+    const warning = isInputWarningCode(code)
+    write({
+      executionStatus: "failed",
+      errorMessage: message,
+      errorHint: blocked ? { kind: "policy-block", policyId: "", reason: message, hookPoint: "request" } : ((err as { errorHint?: unknown } | null)?.errorHint ?? undefined),
+      ...(warning ? { errorCode: code } : {}),
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
+    })
+    if (blocked) guardedToast.warning(tx("run.jobBlocked", { label }))
+    else if (warning) guardedToast.warning(message)
+    else guardedToast.error(tx(jobId === undefined ? "nodeRun.failedToStart" : "nodeRun.failed", { label }), { description: message })
+    throw err
+  }
+}
+
+/** How a run's result lands, by the type's result kind (`landEpisode` for a kind with no landing of its own). */
+const LANDINGS: Readonly<Partial<Record<UseCaseResultKind, Landing>>> = { chapters: landText }
+
+/**
+ * Start the wrapper (kept on the node from the moment it exists), land its
+ * result by the type's result kind, and keep a failed run's finished outputs.
+ */
+function runWrapper(nodeId: string, nodeType: UseCaseNodeType, start: () => Promise<{ jobId: string }>, ctx: ExecutionContext): Promise<string> {
+  let jobId: string | undefined
+  const tracked = async () => {
+    const started = await start()
+    jobId = started.jobId
+    remember(nodeId, started.jobId)
+    return started
+  }
+  const land = LANDINGS[usecaseDescriptor(nodeType).resultKind] ?? landEpisode
+  return land(nodeId, nodeType, tracked, ctx).catch(async (err: unknown) => {
     await keepFailedRunOutputs(nodeId, nodeType, jobId, err, ctx)
     throw err
   })

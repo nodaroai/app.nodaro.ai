@@ -41,6 +41,8 @@ import { workflowEditorUrl } from "../../deployment-urls.js"
 import { registerTask } from "../tasks.js"
 import { ensureMcpProject } from "./_mcp-project.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
+import { previewPendingHint } from "./_resume-hint.js"
+import type { HeldFinalRun } from "../../continuation-held-final.js"
 import { canChangeWorkflowVisibility } from "../../workflow-access.js"
 import { changesStudioPublishFlag } from "../../studio-audience.js"
 import {
@@ -86,6 +88,43 @@ export interface RegisterWorkflowsOpts {
 /** Standard MCP error shape — keep callers terse. */
 function err(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true as const }
+}
+
+/**
+ * A continue-from-failed refused for a later continuation of the run: the call
+ * to make instead — only when that run failed (a run that did not fail cannot
+ * be continued from a failure; read it instead). A later run that COMPLETED
+ * ran all this one left: the work is done, and its results are there. One
+ * that stopped at a Preview review (`continuation_preview_pending`): the run
+ * that finishes it (`previewPendingHint` — its Render final, or the one run
+ * the refusal names in `next`).
+ */
+function supersededHint(body: string, workflowId: string): string {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { code?: unknown }
+      supersededBy?: { executionId?: unknown; status?: unknown }
+      executionId?: unknown
+      renderNodeIds?: unknown
+      reviewNodeIds?: unknown
+      next?: HeldFinalRun
+    }
+    // The newest later continuation stopped at a Preview review: the run that finishes it comes next.
+    if (parsed.error?.code === "continuation_preview_pending" && typeof parsed.executionId === "string") {
+      const ids = (v: unknown) => (Array.isArray(v) ? v.filter((id): id is string => typeof id === "string") : [])
+      const hint = previewPendingHint(workflowId, parsed.executionId, ids(parsed.renderNodeIds), ids(parsed.reviewNodeIds), parsed.next ?? null)
+      return ` ${hint} Do not continue this run again before that.`
+    }
+    const later = parsed.supersededBy
+    if (parsed.error?.code !== "continuation_superseded" || typeof later?.executionId !== "string") return ""
+    return later.status === "failed"
+      ? ` Continue that run instead: run_workflow({ workflow_id: "${workflowId}", continue_from_execution_id: "${later.executionId}", from_failed: true }).`
+      : later.status === "completed"
+        ? ` That run completed what this one left: the work is done, and its results are on it — read them with get_app_run({ execution_id: "${later.executionId}" }). Do not continue this run again.`
+        : ` That run is ${String(later.status)}: read it with get_app_run({ execution_id: "${later.executionId}" }).`
+  } catch {
+    return ""
+  }
 }
 
 function ok(text: string, structuredContent?: Record<string, unknown>) {
@@ -929,7 +968,8 @@ export function registerWorkflows({
       {
         title: "Run Workflow",
         description:
-          "Run a saved workflow from the mcp project. Returns an execution_id. Retrying after a timeout? Reuse the same client_request_id so the run is not started or charged twice.",
+          "Run a saved workflow from the mcp project. Returns an execution_id. Retrying after a timeout? Reuse the same client_request_id so the run is not started or charged twice. " +
+          "A run that FAILED can be continued from where it stopped: pass continue_from_execution_id with from_failed: true — only the nodes it did not complete run (a failed node in full); what it completed is handed on, never re-run or re-charged.",
         inputSchema: {
           workflow_id: z.string().uuid(),
           client_request_id: clientRequestIdSchema.optional(),
@@ -939,6 +979,15 @@ export function registerWorkflows({
             .describe(
               "Optional per-node input overrides, keyed by node id. The value may be a bare scalar/array (e.g. \"blue car\" or [\"a\",\"b\"]) — it's written to that node's main input field — OR an object mapping specific fields to values (e.g. { \"prompt\": \"...\" }).",
             ),
+          continue_from_execution_id: z
+            .string()
+            .uuid()
+            .optional()
+            .describe("Your own FAILED run of this workflow (its execution id), to continue from where it stopped. Requires from_failed: true."),
+          from_failed: z
+            .boolean()
+            .optional()
+            .describe("With continue_from_execution_id: run only the nodes that run did not complete."),
         },
         outputSchema: {
           executionId: z.string(),
@@ -966,6 +1015,16 @@ export function registerWorkflows({
         // refused by the route with a reason, not a generic "not found". In
         // the no-workspace case `loadMcpWorkflow` keeps the mcp-project floor,
         // byte-identical to the pre-check this replaces.
+        // A continuation of a failed run names both; this tool has no node list,
+        // so a plain continuation (a Render final) is render_final's.
+        if (args.from_failed === true && !args.continue_from_execution_id) {
+          return err("from_failed needs continue_from_execution_id: the execution id of the run that failed.")
+        }
+        if (args.continue_from_execution_id && args.from_failed !== true) {
+          return err(
+            "continue_from_execution_id continues a run that failed: set from_failed: true. (To render a preview at Final, use render_final.)",
+          )
+        }
         const loaded = await loadMcpWorkflow(session, args.workflow_id, "view", "name")
         if (!loaded.ok) return err(loaded.message)
         const wfRow = loaded.row
@@ -974,6 +1033,9 @@ export function registerWorkflows({
           mcp_client: session.clientName,
           userId: session.userId,
           ...(args.inputs ? { inputOverrides: args.inputs } : {}),
+          ...(args.continue_from_execution_id
+            ? { continueFromExecutionId: args.continue_from_execution_id, continueMode: "from-failed" as const }
+            : {}),
         }
         const res = await mcpInject(fastify, session, {
           method: "POST",
@@ -982,12 +1044,14 @@ export function registerWorkflows({
           headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
-          return err(`Error from Nodaro: ${res.statusCode} ${res.body}`)
+          return err(`Error from Nodaro: ${res.statusCode} ${res.body}${supersededHint(res.body, args.workflow_id)}`)
         }
         let executionId: string | undefined
+        let continuedFrom: string | undefined
         try {
-          const body = JSON.parse(res.body) as { executionId?: string }
+          const body = JSON.parse(res.body) as { executionId?: string; continuedFrom?: string }
           executionId = body.executionId
+          continuedFrom = typeof body.continuedFrom === "string" ? body.continuedFrom : undefined
         } catch {
           /* fall through */
         }
@@ -1009,6 +1073,10 @@ export function registerWorkflows({
               type: "text" as const,
               text:
                 `Started workflow execution ${executionId}. ` +
+                // Built on a later continuation of the run asked for (it completed part of what was left).
+                (continuedFrom && continuedFrom !== args.continue_from_execution_id
+                  ? `It continues from ${continuedFrom}, a later continuation of that run which holds its progress: only what is still left runs. `
+                  : "") +
                 `Read it with get_app_run(execution_id) — this is an EXECUTION id, not a job id (get_job will not find it): ` +
                 `it lists every node's status, text and media, and the run's outcome once it completes ` +
                 `("nothing_new" when the nodes had nothing to work on — a feed with no new posts — and nothing failed). ` +

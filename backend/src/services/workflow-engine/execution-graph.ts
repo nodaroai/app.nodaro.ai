@@ -337,7 +337,7 @@ export function isSourceNode(nodeType: string): boolean {
 }
 
 /** A node type that is dispatched through a level: not a source, not a pass-through, not a parameter picker. */
-const runsInALevel = (nodeType: string): boolean =>
+export const runsInALevel = (nodeType: string): boolean =>
   !isSourceNode(nodeType) && !isSkipNode(nodeType) && !PARAMETER_NODE_TYPES.has(nodeType)
 
 /** Node types that should be skipped during backend execution */

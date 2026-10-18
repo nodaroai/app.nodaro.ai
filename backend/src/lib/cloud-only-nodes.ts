@@ -45,6 +45,9 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   // badged. The route itself is core — its inner exclusive steps relay one by
   // one, the route is never relayed whole.
   "tighten-episode",
+  // Chapters (decided 2026-10-14): the same — its plan step runs on
+  // nodaro.ai, the route is core and never relayed whole.
+  "episode-chapters",
 ])
 
 /**

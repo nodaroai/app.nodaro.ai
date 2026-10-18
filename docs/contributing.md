@@ -355,39 +355,66 @@ version guard will reject it.
 
 ## 6. Adding a new node
 
-Adding a new node type touches a *lot* of files — backend route,
-frontend component, executor wiring, registries — and skipping any
-one of them produces a confusing failure mode (the node doesn't
-appear in the sidebar, or the Run button silently does nothing, or
-the orchestrator can't resolve inputs). The canonical 19-step
-checklist is in `CLAUDE.md` under "New Node Registration".
+**A new node is a unit: two folders named by its type id** (decided
+2026-10-16). Everything the editor and the server need from it lives in
+those folders, and a generator turns its manifest into the entries the
+central registries read, so adding a node no longer means editing twenty
+central files.
 
-The high-level shape of a new node:
+| Folder | Holds |
+|---|---|
+| `frontend/src/nodes/<type>/` | `unit.json` (the manifest: label, category, handles, default data, how it runs, its place in the picker), `types.ts` (its data type), `node.tsx` (canvas card), `config.tsx` (config panel), `option.tsx` (picker icon), `exec.ts` (editor executor), `api.ts` (client call), `strings.json` (its translations) |
+| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row) |
 
-- One backend route file in `backend/src/routes/<node-type>.ts`
-  with a Zod schema, a credit guard, and the actual provider call.
-- One frontend node component in
-  `frontend/src/components/nodes/<node>-node.tsx` and a config
-  panel in `frontend/src/components/editor/config-panels/`.
-- Updates to a handful of registries: `nodeTypes` map, the popup
-  list, the sidebar list (these are *separate* — easy to miss
-  one), the executor switch in `execute-node.ts`, and the
-  `EXECUTABLE_NODE_TYPES` set.
-- A new `NODE_REGISTRY` entry so the node shows up in
-  `GET /v1/nodes` (the discovery endpoint used by `@nodaro/sdk`).
+Start from the scaffold — it writes both folders from templates, checks
+them with the same validator CI runs, and regenerates:
 
-Two unintuitive details that bite contributors:
+```bash
+npm run gen:units -- --new <type> --category <category> --kind worker \
+  --after <type-it-follows> --family <picker-family> --picker-after <type|first> \
+  --description "One sentence for /v1/nodes." --price <credits> \
+  [--characterize <operation-it-follows|first>]
+```
 
-- **The popup list and the sidebar list are different.** Adding to
-  one without the other means your node only appears in half the
-  UI. Steps 8 and 9 in the `CLAUDE.md` checklist.
-- **`EXECUTABLE_NODE_TYPES` is opt-in.** Without an entry there,
-  your node renders fine but the Run button can't fire it.
+- `--after` / `--picker-after` place it in the node list and in its
+  picker family (`first` for the top). Order is visible to users, so the
+  scaffold never guesses it; `--no-picker` keeps a node out of the picker.
+- `--kind` says how it runs. Today a server-run workflow (API, MCP,
+  webhooks, schedules, published apps) can run a `worker` unit — a route
+  that queues a job a worker runs. `sync`, `inline` and `source` units
+  also need their server-side seam, so the scaffold refuses them until a
+  node that needs one builds it (in that node's own PR).
+- `--characterize` (worker only) adds `characterize.char.ts`: the ffmpeg
+  output characterization the opt-in suite runs after the named operation,
+  with the `ffmpeg-media` capability it needs. Its golden is blessed inside
+  the pinned-ffmpeg image (`backend/scripts/characterize-in-image.sh`).
+- A refused scaffold writes nothing and says why.
 
-There's a more detailed walkthrough in
-the **New Node Registration** checklist in the root `CLAUDE.md`. The
-19-step checklist in `CLAUDE.md` is the version that
-actually stays in sync.
+Then fill the folders — the node's own step throws "is not written yet"
+until you write it — and finish with the steps that stay central on
+purpose: `strings.json` (the node label in every language), the
+`model_pricing` seed migration for its price, its page under `docs/nodes/`
+(in the same PR: the manifest's `docs.page` points at it, which also writes
+its row in `docs/nodes/README.md`), a length rule for a video output, and,
+for a node with a media output, a `@nodaro/shared` changeset. Regenerate and
+check:
+
+```bash
+INTERNAL_ORCHESTRATOR_SECRET="<any 32+ characters>" npm run gen   # gen:units, then gen:skills (which needs the secret inline)
+npm run build:packages
+npm run typecheck
+```
+
+CI runs `npm run gen:units -- --check` in the Type Check job, with the
+unit guards (a type lives in exactly one place, no central file names a
+unit's type id, units import only their own folder and non-engine code,
+unit modules hold declarations only). The full reference is
+`tools/units/README.md`.
+
+**Existing nodes** are still hand-registered across the central files
+until their category migrates; the checklist for editing one is in
+`CLAUDE.md` under "New Node Registration" (the legacy table). A new node
+is not added that way: the guard fails a hand-written new type.
 
 ### Factory preset pictures
 

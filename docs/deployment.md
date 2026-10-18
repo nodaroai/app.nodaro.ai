@@ -132,6 +132,7 @@ here for each one anyway.
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
 | `LOOPS_API_KEY` | `""` | Cloud: API key for syncing marketing-email consent to Loops (loops.so). Unset = the consent-to-contact sync is inert; consent is still recorded locally and reconciled once a key is set |
 | `VITE_ORGS_ENABLED` | `""` | Cloud, organizations: `true` shows the organization surfaces in the browser. Build-time (Vite inlines it), so it needs the `ARG`+`ENV` pair in the Dockerfile — and it must match the backend's `ORGS_ENABLED`, or the UI offers something the API refuses |
+| `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`). Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
@@ -571,7 +572,9 @@ build time):
 
 | Var | Description |
 |---|---|
-| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
+| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. On Nodaro Cloud with `VITE_SHARED_HEADER=true` it is also the shared header's Studio link; unset, the header keeps its own. |
+| `VITE_HOME_URL` | Nodaro Cloud with `VITE_SHARED_HEADER=true` only: where the shared header's logo links (the home page). Unset = the header's own default; a preview points it at its preview home. Ignored by every other build. |
+| `VITE_TOOLS_URL` | Nodaro Cloud with `VITE_SHARED_HEADER=true` only: the origin serving the header's Image, Video, Music and Ads links (`<origin>/image`, …). Unset = the header's own defaults; a preview points it at its preview host. Ignored by every other build. |
 | `VITE_PERSON_URL` | Base URL of the external Person app (person.nodaro.ai) for the home screen "Open Person" card. Default `https://person.nodaro.ai`. |
 
 ### Template seeder claim (Cloud)
@@ -1287,6 +1290,7 @@ not by a global switch:
 | `gemini-3.7-flash` | KIE | KIE fails |
 | `gemini-3.8-flash` | KIE | KIE fails |
 | `gemini-3.1-pro` | Direct Google | always (KIE is the fallback) |
+| `gemini-4-argon` | Direct Google — ONLY | always; it has no KIE lane, so without the key it fails as provider-unavailable |
 | **video-analysis (any tier)** | **Direct Google — ONLY** | **always; there is no fallback** |
 
 > **`GEMINI_API_KEY` is REQUIRED if you use video-analysis.** That node is

@@ -69,6 +69,7 @@ import {
   List,
   ListFilter,
   ListMusic,
+  ListOrdered,
   ListTree,
   SwitchCamera,
   LogIn,
@@ -1254,6 +1255,14 @@ const LEGACY_NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["podcast", "tighten", "episode", "silence", "filler", "cut", "edit", "captions", "music", "one step"],
   },
   {
+    type: "episode-chapters",
+    label: "Chapters",
+    icon: <ListOrdered className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-podcast",
+    keywords: ["podcast", "chapters", "show notes", "timestamps", "episode", "youtube chapters", "one step"],
+  },
+  {
     type: "edit-plan",
     label: "Edit Plan",
     icon: <ListTree className="h-4 w-4" />,
@@ -1578,14 +1587,6 @@ const LEGACY_NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-sound",
     keywords: ["extract audio", "rip audio", "audio from video", "demux", "detach audio", "get audio", "mp3", "split video audio"],
-  },
-  {
-    type: "remove-audio",
-    label: "Remove Audio",
-    icon: <VolumeX className="h-4 w-4" />,
-    category: "Processing",
-    group: "video-sound",
-    keywords: ["remove audio", "mute", "strip audio", "silent video", "delete audio", "no sound", "detach audio", "split video audio"],
   },
   {
     type: "mix-audio",

@@ -222,6 +222,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // (docs.kie.ai/market/wan/3-0-video and /3-0-video-prime).
   "wan-3": 20000,
   "wan-3-prime": 20000,
+  // Vidu Q4 — 20000 chars on both endpoints
+  // (docs.kie.ai/market/vidu-q4/image-to-video and /reference-to-video).
+  "vidu-q4": 20000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -878,6 +881,10 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   // so each id is listed in this array AND in TEXT_TO_VIDEO_PROVIDERS.
   "wan-3",
   "wan-3-prime",
+  // Vidu Q4 — one id over KIE's image-to-video and reference-to-video
+  // endpoints. No text-to-video mode: also listed in TEXT_TO_VIDEO_PROVIDERS's
+  // image-required section so the t2v route answers with the friendly 400.
+  "vidu-q4",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
@@ -939,6 +946,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "hailuo-2.3-pro",
   "bytedance-pro-fast",
   "happyhorse-ref2v",
+  "vidu-q4",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -1024,8 +1032,16 @@ export function resolveVideoProviderForMode(
  * `grok` → silently dropped (#861). When refs are present and ONLY the i2v
  * twin can carry them, the run is image-to-video with the refs as its images.
  * Derived from VIDEO_REF_LIMITS_BY_PROVIDER (= the catalog's `reference-image`
- * feature), never from a provider name; single-id models are untouched
- * because both twins are the same id.
+ * feature), never from a provider name.
+ *
+ * A SINGLE-id model with no text-to-video mode is the other nuance: its t2v
+ * lane is image-gated (VIDEO_PROVIDERS_REQUIRING_IMAGE), so a references-only
+ * run sent there was refused even when the provider runs happily from
+ * references alone (Vidu Q4, HappyHorse Ref2V). When the catalog declares the
+ * `reference-to-video` capability ({@link videoProviderRunsFromReferences}),
+ * such a run takes the image-to-video lane with the refs as its images —
+ * exactly what `/v1/generate-video` already did for the direct API. A single-id
+ * model WITH a text-to-video mode keeps the t2v lane, which carries its refs.
  */
 export function resolveVideoModeForInputs(
   provider: string | undefined,
@@ -1035,9 +1051,83 @@ export function resolveVideoModeForInputs(
   if (!provider || !inputs.hasImageRefs) return "text-to-video"
   const i2v = resolveVideoProviderForMode(provider, "image-to-video")
   const t2v = resolveVideoProviderForMode(provider, "text-to-video")
-  if (i2v === t2v) return "text-to-video"
+  if (i2v === t2v) {
+    const entry = MODEL_CATALOG[i2v]
+    const noTextMode = !!entry && !(entry.modes as readonly string[]).includes("t2v")
+    return noTextMode && videoProviderRunsFromReferences(i2v) ? "image-to-video" : "text-to-video"
+  }
   const carriesImageRefs = (id: string) => (VIDEO_REF_LIMITS_BY_PROVIDER[id]?.images ?? 0) > 0
   return carriesImageRefs(i2v) && !carriesImageRefs(t2v) ? "image-to-video" : "text-to-video"
+}
+
+/** The prompt syntax a video provider addresses its images in, by array order. */
+export type VideoReferenceSyntax = "@image_N" | "@image(n)" | "[Image N]"
+
+/**
+ * The syntax this video model's frame / identity binding sentences are written
+ * in — the catalog's `referenceSyntax`, else the platform's `@image_N`. One
+ * descriptor for the app's resolvers and for a client (the cloud plugins) that
+ * cites references by ordinal.
+ */
+export function videoProviderReferenceSyntax(provider: string | undefined): VideoReferenceSyntax {
+  return (provider ? MODEL_CATALOG[provider]?.referenceSyntax : undefined) ?? "@image_N"
+}
+
+/**
+ * Reference-capable video models whose start/end frames ride a channel of
+ * their OWN (separate frame parameters next to the reference list), so a frame
+ * never occupies a reference seat. `kling-3-omni` (Replicate `start_image` /
+ * `end_image`) is the only one — and it has no dispatch path today.
+ */
+export const VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL: ReadonlySet<string> = new Set([
+  "kling-3-omni",
+])
+
+/**
+ * True when this video model puts a start (and end) frame AFTER the caller's
+ * own reference images in ONE shared image list, bound in the prompt as the
+ * opening / closing frame in its own syntax — the platform convention, so the
+ * caller's image token N always means their Nth reference. At the image cap
+ * the frames are kept and trailing caller references are dropped.
+ *
+ * Every reference-capable video model, except one whose frames ride a separate
+ * channel ({@link VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL}).
+ */
+export function videoProviderAppendsFrames(provider: string | undefined): boolean {
+  if (!provider) return false
+  const entry = MODEL_CATALOG[provider]
+  return !!entry && entry.kind === "video" &&
+    entry.features?.includes("reference-image") === true &&
+    !VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL.has(provider)
+}
+
+/**
+ * How many of a reference run's image seats the wired frames take on this
+ * model: the start frame, plus the end frame where the model takes one (the
+ * catalog `end-frame` feature). 0 on a model whose frames do not share its
+ * reference list. A caller budgeting its own references subtracts this from
+ * the provider's image cap so no reference of its is dropped.
+ */
+export function videoProviderRefModeFrameSeats(
+  provider: string | undefined,
+  frames: { readonly hasStartFrame: boolean; readonly hasEndFrame: boolean },
+): number {
+  if (!provider) return 0
+  if (!videoProviderAppendsFrames(provider)) return 0
+  const start = frames.hasStartFrame ? 1 : 0
+  const end = frames.hasEndFrame && MODEL_CATALOG[provider]?.features?.includes("end-frame") === true ? 1 : 0
+  return start + end
+}
+
+/**
+ * True when the model's provider endpoint runs from reference images ALONE —
+ * no start frame (the catalog's `reference-to-video` feature, declared only on
+ * provider-spec evidence). The single capability every surface reads to decide
+ * whether wired references satisfy "needs an image": the mode resolver above,
+ * and through it the editor gate, the browser DAG and the orchestrator.
+ */
+export function videoProviderRunsFromReferences(provider: string | undefined): boolean {
+  return !!provider && MODEL_CATALOG[provider]?.features?.includes("reference-to-video") === true
 }
 
 /**
@@ -1631,6 +1721,9 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // this gate is consulted.
   "wan-3",
   "wan-3-prime",
+  // Vidu Q4 — per-second billing at five resolution rates, identical on both
+  // endpoints and with audio on or off.
+  "vidu-q4",
 ])
 
 /**
@@ -1733,6 +1826,45 @@ export function normalizeWan3Resolution(resolution: string | undefined): "480P" 
     case "1080p": return "1080P"
     case "720p": return "720P"
     default: return WAN_3_DEFAULT_RESOLUTION
+  }
+}
+
+/**
+ * Vidu Q4 family — the KIE "vidu-q4" market model. One Nodaro id covers two KIE
+ * endpoints (image-to-video / reference-to-video); the provider layer picks the
+ * endpoint by which inputs are wired. Exact-membership set, like the other
+ * family predicates.
+ */
+export const VIDU_Q4_PROVIDERS = new Set<string>([
+  "vidu-q4",
+])
+
+export function isViduQ4Provider(provider: string | undefined): boolean {
+  return !!provider && VIDU_Q4_PROVIDERS.has(provider)
+}
+
+/** Vidu Q4 resolution the platform renders when the param is omitted or
+ *  unknown — the tier the bare credit identifier prices (also KIE's own
+ *  default). Never `resolutions[0]`, which is the cheaper 540p. */
+export const VIDU_Q4_DEFAULT_RESOLUTION = "720p"
+
+/**
+ * SINGLE normalization for the Vidu Q4 resolution lever. The KIE wire enum is
+ * LOWERCASE ("540p" | "720p" | "1080p" | "2k" | "4k") — the same spelling as
+ * the catalog and every credit identifier — so this only folds case and
+ * collapses anything else (undefined, garbage, a stale "480p") to
+ * {@link VIDU_Q4_DEFAULT_RESOLUTION}. The provider layer sends what this
+ * returns and the credit identifier bills what this returns, so the two can
+ * never disagree.
+ */
+export function normalizeViduQ4Resolution(resolution: string | undefined): "540p" | "720p" | "1080p" | "2k" | "4k" {
+  switch (resolution?.trim().toLowerCase()) {
+    case "540p": return "540p"
+    case "1080p": return "1080p"
+    case "2k": return "2k"
+    case "4k": return "4k"
+    case "720p": return "720p"
+    default: return VIDU_Q4_DEFAULT_RESOLUTION
   }
 }
 
@@ -2148,6 +2280,70 @@ export function findSeedance2AudioOverLimit(
   return null
 }
 
+/** A provider's documented contract for each REFERENCE AUDIO clip. */
+export interface RefAudioRule {
+  /** Accepted containers, as ffprobe's `format_name` spells them ("mp3"). */
+  formats?: readonly string[]
+  minSec?: number
+  maxSec?: number
+}
+
+/**
+ * Reference-audio rules that apply on EVERY lane — the video routes' preHandler
+ * and the DAG's `executeWorkerNode` both run `checkRefAudioRules` before any
+ * reservation, so a clip the provider would refuse never costs a run.
+ *
+ * Data-driven like VIDEO_REF_VIDEO_DURATION_LIMITS: only providers with a
+ * DOCUMENTED rule are listed. (The older max-only
+ * SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER above is checked by the routes
+ * alone.)
+ *
+ * Vidu Q4: "MP3 only, each 3-12 seconds and up to 50 MB"
+ * (docs.kie.ai/market/vidu-q4/reference-to-video). Nothing converts a clip for
+ * it, so a WAV / M4A from the audio tray is refused with a clear message rather
+ * than failing at the provider.
+ */
+export const VIDEO_REF_AUDIO_RULES: Record<string, RefAudioRule | undefined> = {
+  "vidu-q4": { formats: ["mp3"], minSec: 3, maxSec: 12 },
+}
+
+/** One probed reference-audio clip. A field the probe could not read is absent. */
+export interface RefAudioProbe {
+  /** ffprobe `format_name`, split on commas ("mp3", "wav", "mov,mp4,m4a,…"). */
+  formatNames?: readonly string[]
+  durationSec?: number
+}
+
+export type RefAudioCheck =
+  | { ok: true }
+  | { ok: false; code: "audio_format_unsupported" | "audio_too_short" | "audio_too_long"; message: string }
+
+/**
+ * Check probed reference-audio clips against {@link VIDEO_REF_AUDIO_RULES}.
+ * An unreadable field is IGNORED, never rejected — a probe blip must not block
+ * a legal run (the provider still has the final say).
+ */
+export function checkRefAudioRules(provider: string | undefined, probes: readonly RefAudioProbe[]): RefAudioCheck {
+  const rule = provider ? VIDEO_REF_AUDIO_RULES[provider] : undefined
+  if (!rule) return { ok: true }
+  for (const [i, p] of probes.entries()) {
+    const n = i + 1
+    if (rule.formats && p.formatNames && p.formatNames.length > 0 && !p.formatNames.some((f) => rule.formats!.includes(f))) {
+      const want = rule.formats.map((f) => f.toUpperCase()).join(" or ")
+      return { ok: false, code: "audio_format_unsupported", message: `Reference audio ${n} must be ${want} for this model. Convert the clip to ${want} and try again.` }
+    }
+    const d = p.durationSec
+    if (d === undefined || !Number.isFinite(d) || d <= 0) continue
+    if (rule.minSec !== undefined && d < rule.minSec) {
+      return { ok: false, code: "audio_too_short", message: `Reference audio ${n} is too short for this model: ${d.toFixed(1)}s is under the ${rule.minSec}s minimum.` }
+    }
+    if (rule.maxSec !== undefined && d > rule.maxSec) {
+      return { ok: false, code: "audio_too_long", message: `Reference audio ${n} is too long for this model: ${d.toFixed(1)}s exceeds the ${rule.maxSec}s limit. Please use a shorter audio clip.` }
+    }
+  }
+  return { ok: true }
+}
+
 /**
  * Per-provider connection caps for the typed reference handles on Generate Video
  * AND the cap for the server-side `connectedReferences` assembly (`imageCap`).
@@ -2182,6 +2378,10 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // provider (docs.kie.ai/market/wan/3-0-video).
   "wan-3": { images: 10, videos: 5, audio: 5 },
   "wan-3-prime": { images: 10, videos: 5, audio: 5 },
+  // Vidu Q4 — reference-to-video takes 1-15 reference images and up to 3
+  // reference audio clips (MP3 only, each 3-12s — VIDEO_REF_AUDIO_RULES), and
+  // no reference videos (docs.kie.ai/market/vidu-q4/reference-to-video).
+  "vidu-q4": { images: 15, audio: 3 },
   // Multi-image reference providers.
   // `characters` = the dedicated identity input (KIE `character_ids`, max 3).
   // It is NOT an image-reference lane: it draws from the SAME 7-unit budget as
@@ -2336,6 +2536,11 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // the provider layer pins the same 720P so render == billed.
   "wan-3": ["480p", "720p", "1080p"],
   "wan-3-prime": ["480p", "720p", "1080p"],
+  // Vidu Q4 — per-second billing at five resolution rates, one ladder for both
+  // endpoints. Ascending; the billed default (720p) is declared in
+  // PRICING_DEFAULT_RESOLUTION, and normalizeViduQ4Resolution pins the same
+  // 720p at the wire.
+  "vidu-q4": ["540p", "720p", "1080p", "2k", "4k"],
 }
 
 /**
@@ -2558,6 +2763,12 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // per-second rate, so NOT cost-affecting (no `:audio` composite).
   "wan-3": { mode: "ambient", field: "audio", defaultOn: true },
   "wan-3-prime": { mode: "ambient", field: "audio", defaultOn: true },
+  // Vidu Q4 — the same boolean `audio` lever (KIE default true). The schema
+  // says "dialogue and sound effects", but classified "ambient" on the Wan 3.0
+  // rule: no live probe has verified lip-synced speech, and `native_speech` /
+  // `audio_driven` would reroute the Story→Video dialogue pipeline. Audio is
+  // priced into the uniform per-second rate (no `:audio` composite).
+  "vidu-q4": { mode: "ambient", field: "audio", defaultOn: true },
   // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
   // `gemini-omni-flash`; one model at two speeds, so their rows are identical
   // and a test pins that). Settled 2026-09-03 from Google's own documentation
@@ -2723,6 +2934,9 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // entry, mirroring gemini-omni-video which has none either.
   "wan-3": "duration+resolution",
   "wan-3-prime": "duration+resolution",
+  // Vidu Q4 — per-second billing at five resolution rates; no reference or
+  // audio dimension.
+  "vidu-q4": "duration+resolution",
 }
 
 /**
@@ -2835,6 +3049,9 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // first tier, so the catalog can stay ascending without repricing anything.
   "wan-3": "720p",
   "wan-3-prime": "720p",
+  // Vidu Q4 — KIE renders 720p when `resolution` is omitted, and
+  // normalizeViduQ4Resolution pins the same tier for anything unknown.
+  "vidu-q4": "720p",
 }
 
 /** HappyHorse 1.1 per-second tiers — one per allowed duration (3–15s), shared
@@ -2872,6 +3089,16 @@ const SEEDANCE_2_5_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }>
 const WAN_3_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
   { length: 29 },
   (_, i) => ({ maxSeconds: i + 2, suffix: `${i + 2}s` }),
+)
+
+/**
+ * Vidu Q4 per-second tiers — one per allowed duration (3-16s). Per-second for
+ * the same reason as Wan 3.0: a coarse ladder would snap a long render down to
+ * a shorter tier's price, which `commit_credits` can never collect afterwards.
+ */
+const VIDU_Q4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 14 },
+  (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
 )
 
 /**
@@ -2956,6 +3183,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "seedance-2-5": SEEDANCE_2_5_DURATION_TIERS,
   "wan-3": WAN_3_DURATION_TIERS,
   "wan-3-prime": WAN_3_DURATION_TIERS,
+  "vidu-q4": VIDU_Q4_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier
   // maps 1:1 to the seeded price — no rounding/overcharge for any on-menu

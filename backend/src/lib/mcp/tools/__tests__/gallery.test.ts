@@ -915,6 +915,74 @@ describe("get_app_run tool", () => {
     expect(sc.outputs[0]?.model).toBeUndefined()
     expect(JSON.stringify(result)).not.toContain("victim")
   })
+
+  // A failed run of a saved workflow can be continued from where it stopped (decided 2026-10-17).
+  it.each([
+    ["a failed saved-workflow run", { status: "failed", workflow_id: JOB_UUID_2, trigger_type: "mcp" }, true],
+    ["a failed app run (another version: /run refuses it)", { status: "failed", workflow_id: JOB_UUID_2, trigger_type: "app_run" }, false],
+    ["a failed use-case run (no workflow)", { status: "failed", workflow_id: null, trigger_type: "use_case" }, false],
+    // An app run's Retry runs as `manual`, stamped with its run: a published version's, which /run refuses.
+    ["a failed app-run Retry (stamped, trigger manual)", { status: "failed", workflow_id: JOB_UUID_2, trigger_type: "manual", trigger_data: { appRun: { appRunId: "run-1" } } }, false],
+    [
+      "a failed app Render final (stamped)",
+      { status: "failed", workflow_id: JOB_UUID_2, trigger_type: "manual", trigger_data: { appRenderFinal: { appRunId: "run-1", appVersionId: "app-1", continuedFrom: "exec-0" } } },
+      false,
+    ],
+    ["a completed run", { status: "completed", workflow_id: JOB_UUID_2, trigger_type: "manual" }, false],
+  ])("resumeHint on %s: %s", async (_name, over, hinted) => {
+    const execution = { id: JOB_UUID, error_message: "boom", user_id: "u1", node_states: {}, ...over }
+    // The workflow is in the caller's "mcp" project, where run_workflow reaches it.
+    const rows: Record<string, unknown> = { workflow_executions: execution, projects: { id: "mcp-project" }, workflows: { id: JOB_UUID_2, nodes: [] } }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => makeChainableSingle(rows[table] ?? null))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    const hint = (result.structuredContent as { resumeHint?: string }).resumeHint
+    if (hinted) {
+      expect(hint).toContain(`continue_from_execution_id: "${JOB_UUID}", from_failed: true`)
+      expect(hint).toContain(`workflow_id: "${JOB_UUID_2}"`)
+      expect(result.content[0]?.text).toContain("resumeHint")
+    } else {
+      expect(hint).toBeUndefined()
+    }
+  })
+
+  it("no resumeHint for a failed run of a workflow run_workflow does not reach (outside the mcp project)", async () => {
+    const execution = { id: JOB_UUID, status: "failed", workflow_id: JOB_UUID_2, trigger_type: "manual", error_message: "boom", user_id: "u1", node_states: {} }
+    // The caller has an "mcp" project, but the project-scoped workflow read finds nothing.
+    const rows: Record<string, unknown> = { workflow_executions: execution, projects: { id: "mcp-project" } }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => makeChainableSingle(rows[table] ?? null))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as { resumeHint?: string }).resumeHint).toBeUndefined()
+  })
+
+  it("asking for the hint never creates the mcp project (a read tool writes nothing)", async () => {
+    const execution = { id: JOB_UUID, status: "failed", workflow_id: JOB_UUID_2, trigger_type: "manual", error_message: "boom", user_id: "u1", node_states: {} }
+    // The caller has no "mcp" project yet.
+    const projectInsert = vi.fn()
+    const projectReads: string[] = []
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+      if (table === "projects") {
+        projectReads.push(table)
+        const q: Record<string, unknown> = { insert: projectInsert }
+        for (const m of ["select", "eq", "order", "limit"]) q[m] = () => q
+        q.maybeSingle = () => Promise.resolve({ data: null, error: null })
+        return q
+      }
+      return makeChainableSingle(table === "workflow_executions" ? execution : null)
+    })
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as { resumeHint?: string }).resumeHint).toBeUndefined()
+    // Looked up, found missing, and nothing more.
+    expect(projectReads).toHaveLength(1)
+    expect(projectInsert).not.toHaveBeenCalled()
+  })
 })
 
 describe("favorite_asset tool", () => {

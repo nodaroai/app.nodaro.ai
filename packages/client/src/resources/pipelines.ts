@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { PipelineInput, PipelineStageName, PipelineStatus, PipelineMode, SubGateName, AnimateSubGate, ChatEnabledStage, ProposedChange } from "@nodaro/shared/pipeline"
 
 export type {
@@ -117,7 +117,7 @@ export type ApplyChatProposalResult =
   | { applied: false; error: { code: string; detail?: unknown } }
 
 export class PipelinesResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Start a new pipeline (headless film generation) — the programmatic

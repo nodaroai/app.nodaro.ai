@@ -169,6 +169,7 @@ import {
   CombineVideosConfig,
   ApplyEdlConfig,
   TightenEpisodeConfig,
+  EpisodeChaptersConfig,
   EditPlanConfig,
   CameraSwitchConfig,
   SpeakerViewConfig,
@@ -191,7 +192,6 @@ import {
   TrimAudioConfig,
   SplitMediaConfig,
   ExtractAudioConfig,
-  RemoveAudioConfig,
   MixAudioConfig,
   CombineAudioConfig,
   AdjustVolumeConfig,
@@ -329,6 +329,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   // Polls at 5 s intervals while the panel is open (same cadence as the
   // pipeline-panel's script-stage query). Stops polling once the stage reaches
   // "approved" (verdicts are immutable after that).
+  const localizeUnitNodeLabel = useLocalizeNodeLabel()
+  const unitConfigKit = useMemo(() => ({ localizeNodeLabel: localizeUnitNodeLabel }), [localizeUnitNodeLabel])
   const scenePipelineId = nodeType === "scene" ? (nodeData.pipeline_id as string | undefined) : undefined
   const { data: sceneImagesStage } = useQuery({
     queryKey: ["pipeline-stage", scenePipelineId, "scene_images"],
@@ -338,9 +340,10 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     retry: false,
   })
 
-  // A node unit's own panel (frontend/src/nodes/<type>/config.tsx) — never a legacy type below.
+  // A node unit's own panel (frontend/src/nodes/<type>/config.tsx) — never a
+  // legacy type below — with the services a unit may not import (UnitConfigKit).
   const UnitConfig = UNIT_CONFIGS[nodeType]
-  if (UnitConfig) return <UnitConfig {...configProps} />
+  if (UnitConfig) return <UnitConfig {...configProps} kit={unitConfigKit} />
 
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} nodeId={selectedNodeId} />
@@ -495,6 +498,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
     case "tighten-episode": return <TightenEpisodeConfig {...configProps} nodeId={selectedNodeId} />
+    case "episode-chapters": return <EpisodeChaptersConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />
@@ -521,7 +525,6 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "extract-audio": return <ExtractAudioConfig {...configProps} />
     case "silence-detect": return <SilenceDetectConfig {...configProps} />
     case "audio-sync": return <AudioSyncConfig {...configProps} />
-    case "remove-audio": return <RemoveAudioConfig {...configProps} />
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "combine-audio": return <CombineAudioConfig {...configProps} />
     case "adjust-volume": return <AdjustVolumeConfig {...configProps} />

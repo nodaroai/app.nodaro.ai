@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { editCommand } from "../edit.js"
 import { warn, emit } from "../../output.js"
-import { ContinuationRefusedError } from "@nodaro/sdk"
+import { ContinuationRefusedError } from "@nodaro/sdk/errors"
 
 const mocks = {
   silenceDetect: vi.fn(),
@@ -13,6 +13,7 @@ const mocks = {
   applyEdl: vi.fn(),
   editPlan: vi.fn(),
   tightenEpisode: vi.fn(),
+  episodeChapters: vi.fn(),
   continueUseCase: vi.fn(),
   jobsGetStatus: vi.fn(),
 }
@@ -25,6 +26,7 @@ vi.mock("../../client.js", () => ({
       applyEdl: mocks.applyEdl,
       editPlan: mocks.editPlan,
       tightenEpisode: mocks.tightenEpisode,
+      episodeChapters: mocks.episodeChapters,
       continueUseCase: mocks.continueUseCase,
     },
     jobs: { getStatus: mocks.jobsGetStatus },
@@ -338,6 +340,50 @@ describe("edit tighten-episode", () => {
   })
 })
 
+describe("edit episode-chapters", () => {
+  it("maps flags to client.edit.episodeChapters", async () => {
+    mocks.episodeChapters.mockResolvedValueOnce({ jobId: "job-c" })
+    await runCmd(
+      "edit", "episode-chapters",
+      "--media", "https://r2/ep.mp4",
+      "--plan-tier", "standard",
+      "--instructions", "5 to 8 chapters",
+      "--style-guide", "Short titles",
+      "--idempotency-key", "key-12345",
+      "--json",
+    )
+    expect(mocks.episodeChapters).toHaveBeenCalledWith(
+      { mediaUrl: "https://r2/ep.mp4", planTier: "standard", instructions: "5 to 8 chapters", styleGuide: "Short titles" },
+      { idempotencyKey: "key-12345" },
+    )
+    expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "job-c" }, expect.anything())
+  })
+
+  it("sends only the recording when nothing else is given", async () => {
+    mocks.episodeChapters.mockResolvedValueOnce({ jobId: "job-c" })
+    await runCmd("edit", "episode-chapters", "--media", "https://r2/ep.mp4", "--json")
+    expect(mocks.episodeChapters).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4" }, undefined)
+  })
+
+  it("with --watch, prints the show notes once the run completes", async () => {
+    mocks.episodeChapters.mockResolvedValueOnce({ jobId: "job-c" })
+    mocks.jobsGetStatus.mockResolvedValueOnce({ data: { id: "job-c", status: "completed", output_data: { text: "0:00 Intro\n4:05 The interview" } } })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "episode-chapters", "--media", "https://r2/ep.mp4", "--watch", "--poll-interval", "1")
+      expect(log).toHaveBeenCalledWith("0:00 Intro\n4:05 The interview")
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("refuses an unknown --plan-tier before any request", async () => {
+    await expect(runCmd("edit", "episode-chapters", "--media", "https://r2/ep.mp4", "--plan-tier", "gold")).rejects.toThrow("process.exit(1)")
+    expect(mocks.episodeChapters).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls[0]?.[0]).toMatch(/^--plan-tier must be/)
+  })
+})
+
 describe("edit continue-use-case", () => {
   it("continues a failed run with only the job and the mode", async () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2", executionId: "exec-2" })
@@ -366,12 +412,18 @@ describe("edit continue-use-case", () => {
     expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "from-failed", nodeType: "tighten-episode" }, undefined)
   })
 
+  it("--type episode-chapters continues a Chapters run", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
+    await runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--type", "episode-chapters", "--json")
+    expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "from-failed", nodeType: "episode-chapters" }, undefined)
+  })
+
   it("refuses a --type that is no use-case node before any request", async () => {
     await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--type", "apply-edl")).rejects.toThrow(
       "process.exit(1)",
     )
     expect(mocks.continueUseCase).not.toHaveBeenCalled()
-    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/^--type must be tighten-episode \(got "apply-edl"\)/)])
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/^--type must be tighten-episode, episode-chapters \(got "apply-edl"\)/)])
   })
 
   it("refuses an unknown --mode, or --edit without render-final, before any request", async () => {

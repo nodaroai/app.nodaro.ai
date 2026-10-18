@@ -27,10 +27,21 @@ function unitProducers(kind: "audio" | "video" | "image" | "dynamic"): readonly 
 }
 
 /**
+ * A hand-written set ∪ its node units, refusing a type that is in both — a
+ * type lives in one place (G1; the editor's and the server's composeSet keep
+ * the same rule). Throws at module load, so any import of the set fails.
+ */
+function composeUnits(what: string, legacy: readonly string[], units: readonly string[]): ReadonlySet<string> {
+  const clash = units.filter((t) => legacy.includes(t))
+  if (clash.length > 0) throw new Error(`${what}: ${clash.join(", ")} is both hand-written and a node unit — a type lives in one place (tools/units/README.md)`)
+  return new Set([...legacy, ...units])
+}
+
+/**
  * Source node types whose primary output is a video URL.
  * Mirrors the backend execution-graph VIDEO_SOURCE_TYPES verbatim.
  */
-export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("VIDEO_PRODUCER_TYPES", [
   "image-to-video",
   "video-to-video",
   "switchx", // Beeble SwitchX relight/composite
@@ -89,8 +100,6 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "mask-composite",
   "transcode-video",
   "manual-edit",
-  // Remove Audio: strips the audio track, emits a silent video.
-  "remove-audio",
   // AI Avatar (HeyGen): avatar + voice/audio → video.
   "ai-avatar",
   // Cinematic Avatar (HeyGen cinematic_avatar): prompt + 1–3 avatar looks → video.
@@ -121,8 +130,7 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // UGC Finish: the video's clips, finished, as one ordered list — a registered producer, so a
   // Bundle edge into Combine Videos routes each one as a video, in order.
   "ugc-finish-clips",
-  ...unitProducers("video"),
-])
+], unitProducers("video"))
 
 /**
  * Source node types whose output media-type cannot be classified
@@ -150,7 +158,7 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  *    that fail at execution. Users wanting trigger → media flows
  *    should wire through an upload node.
  */
-export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("DYNAMIC_PRODUCER_TYPES", [
   "list",
   "sub-workflow",
   "adjust-volume",
@@ -198,14 +206,13 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // Tighten Episode (podcast use-case node): the episode is video OR audio by
   // its `output` setting (an audio recording forces audio) — runtime-decided.
   "tighten-episode",
-  ...unitProducers("dynamic"),
-])
+], unitProducers("dynamic"))
 
 /**
  * Source node types whose primary output is an audio URL.
  * Mirrors the backend execution-graph AUDIO_SOURCE_TYPES verbatim.
  */
-export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("AUDIO_PRODUCER_TYPES", [
   "text-to-speech",
   "text-to-audio",
   "generate-music",
@@ -239,8 +246,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "voice-design",
   // Extract Audio: demuxes a video's audio track to a standalone MP3.
   "extract-audio",
-  ...unitProducers("audio"),
-])
+], unitProducers("audio"))
 
 /**
  * Source node types whose output is an IMAGE URL — what feeds a References
@@ -249,7 +255,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  * handle migration and the MCP edge normalizer (`llm-chat`'s legacy `in`):
  * they used to keep separate copies, and the backend's lagged by eight types.
  */
-export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = composeUnits("IMAGE_PRODUCER_TYPES", [
   "upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background",
   // extract-frame produces a single still image extracted from a video source.
   "extract-frame",
@@ -278,8 +284,7 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // in IMAGE_SOURCE_TYPES on either engine: that set types the node's PRIMARY
   // asset, and 3D Render Pro's is the MP4.
   "pro-3d-render",
-  ...unitProducers("image"),
-])
+], unitProducers("image"))
 
 /**
  * Source node types whose primary output is a LIST that, by default, fans out

@@ -179,6 +179,7 @@ export const MODEL_MAKERS = {
   openai: { name: "OpenAI" },
   recraft: { name: "Recraft" },
   runway: { name: "Runway" },
+  shengshu: { name: "ShengShu" },
   suno: { name: "Suno" },
   "sync-labs": { name: "Sync Labs" },
   "topaz-labs": { name: "Topaz Labs" },
@@ -263,8 +264,27 @@ export interface ModelCatalogEntry {
    * auto-determined duration and flat per-generation pricing (see
    * `runGeminiOmni` in `backend/src/providers/kie/video.ts`) — a different
    * transport, not a continuation reference.
+    *
+   * `"reference-to-video"` (video models only) means the model's provider
+   * endpoint RUNS FROM REFERENCE IMAGES ALONE — no start frame. Declared only
+   * where the provider's own contract accepts a call with reference images and
+   * no frame (KIE spec evidence per model). It is what lets a references-only
+   * run reach a model on every surface (editor gate, browser DAG, orchestrator,
+   * API): `resolveVideoModeForInputs` routes such a run to the image-to-video
+   * lane for a model with no text-to-video mode, instead of the text-to-video
+   * lane, whose "image required" gate would refuse it. Requires
+   * `"reference-image"` (guarded by `video-reference-only.test.ts`).
    */
   features?: readonly string[]
+  /**
+   * How this video model's provider addresses its images in the prompt, by
+   * array order — the syntax its frame / identity binding sentences are written
+   * in (`videoProviderReferenceSyntax`). Absent ⇒ the platform's `@image_N`.
+   * Declared only where the provider documents its own form: Grok Imagine's
+   * `@image(n)` (docs.kie.ai/market/grok-imagine/image-to-video) and
+   * HappyHorse's `[Image N]` (docs.kie.ai/market/happyhorse-1-1/reference-to-video).
+   */
+  referenceSyntax?: "@image(n)" | "[Image N]"
   aspectRatios?: readonly string[]
   resolutions?: readonly string[]
   /**
@@ -435,6 +455,10 @@ const VIDEO_RATIOS_HAPPYHORSE_11 = ["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", 
 // so VIDEO_RATIOS_SEEDANCE_2 must NOT be reused here
 // (docs.kie.ai/market/wan/3-0-video and /3-0-video-prime — identical schemas).
 const VIDEO_RATIOS_WAN_3 = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"] as const
+// Vidu Q4 — the reference-to-video enum (docs.kie.ai/market/vidu-q4/reference-to-video,
+// default 16:9). The image-to-video endpoint takes NO aspect ratio: its output
+// inherits the start frame's shape, so these apply to reference runs only.
+const VIDEO_RATIOS_VIDU_Q4 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1420,7 +1444,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Hailuo",
     description: "MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing.",
     useCases: ["premium", "narrative"],
-    features: ["end-frame", "audio", "reference-image", "video-reference"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 6,
@@ -1541,7 +1565,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "VEO",
     description: "VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations.",
     useCases: ["cinematic", "fast", "general"],
-    features: ["end-frame", "audio", "reference-image"],
+    features: ["end-frame", "audio", "reference-image", "reference-to-video"],
     durations: [4, 6, 8],
     defaultDuration: 8,
     aspectRatios: VIDEO_RATIOS_HV,
@@ -1563,7 +1587,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "VEO",
     description: "VEO 3.1 Lite — most cost-effective VEO tier for high-volume generation. 4/6/8s with audio, supports first+last frame.",
     useCases: ["cinematic", "cheap", "high-volume"],
-    features: ["end-frame", "audio", "reference-image"],
+    features: ["end-frame", "audio", "reference-image", "reference-to-video"],
     durations: [4, 6, 8],
     defaultDuration: 8,
     aspectRatios: VIDEO_RATIOS_HV,
@@ -1585,7 +1609,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Gemini",
     description: "Google multimodal video with native audio; text/image-to-video + video-edit.",
     useCases: ["cinematic", "narrative"],
-    features: ["audio", "reference-image"],
+    features: ["audio", "reference-image", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p", "4k"],
     durations: [4, 6, 8, 10],
@@ -1622,7 +1646,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Gemini",
     description: "Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit.",
     useCases: ["cinematic", "fast"],
-    features: ["audio", "reference-image"],
+    features: ["audio", "reference-image", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p", "4k"],
     durations: [4, 6, 8, 10],
@@ -1755,7 +1779,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     id: "grok-i2v",
     kind: "video",
     modes: ["i2v"] as const,
-    features: ["reference-image"],
+    features: ["reference-image", "reference-to-video"],
+    referenceSyntax: "@image(n)",
     family: "xAI",
     maker: "xai",
     label: "Grok Imagine (I2V)",
@@ -1837,7 +1862,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Seedance",
     description: "Seedance 2 — premium tier with native audio. Per-second pricing by resolution.",
     useCases: ["premium", "narrative"],
-    features: ["end-frame", "audio", "reference-image", "video-reference"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
@@ -1865,7 +1890,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Seedance",
     description: "Cheaper / quicker Seedance 2 tier.",
     useCases: ["fast", "motion"],
-    features: ["end-frame", "audio", "reference-image", "video-reference"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
@@ -1889,7 +1914,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Seedance",
     description: "Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution.",
     useCases: ["fast", "motion"],
-    features: ["end-frame", "audio", "reference-image", "video-reference"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
@@ -1919,7 +1944,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Seedance",
     description: "Seedance 2.5 — up to 30s in one shot, native audio, wide multimodal references. 480p/720p/1080p.",
     useCases: ["premium", "narrative", "long-form"],
-    features: ["end-frame", "audio", "reference-image", "video-reference"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 8,
@@ -1965,7 +1990,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Wan",
     description: "Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p.",
     useCases: ["motion", "narrative", "long-form"],
-    features: ["end-frame", "audio", "reference-image"],
+    features: ["end-frame", "audio", "reference-image", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_WAN_3,
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 5,
@@ -1992,7 +2017,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Wan",
     description: "Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate.",
     useCases: ["fast", "motion", "narrative"],
-    features: ["end-frame", "audio", "reference-image"],
+    features: ["end-frame", "audio", "reference-image", "reference-to-video"],
     aspectRatios: VIDEO_RATIOS_WAN_3,
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 5,
@@ -2295,7 +2320,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 5,
     resolutions: ["720p", "1080p"],
-    features: ["reference-image"],
+    features: ["reference-image", "reference-to-video"],
+    referenceSyntax: "[Image N]",
     noSeed: true,  // HappyHorse 1.1 dropped `seed` from its schema
     pricing: [
       { identifier: "happyhorse-ref2v", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
@@ -2314,6 +2340,45 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "happyhorse-edit", credits: 350, note: "720p default (5s-equivalent flat rate)" },
+    ],
+  },
+  // ── Vidu (ShengShu Technology) ──
+  // Vidu Q4 — ONE id over two KIE endpoints, chosen by what is wired:
+  // image-to-video (a start frame, no references; the output inherits the
+  // frame's shape) and reference-to-video (1-15 reference images + up to 3
+  // MP3 reference audio clips; a wired start frame joins the reference images).
+  // KIE has NO text-to-video and NO start/end mode for Q4, so `modes` is i2v
+  // only — VIDEO_PROVIDERS_REQUIRING_IMAGE derives the friendly "image
+  // required" 400 from that — and there is no "end-frame" feature. Native audio
+  // behind a boolean `audio` lever, 3-16s, 540p-4k. `resolutions` is ascending
+  // (repo convention); the DEFAULT tier (720p) is declared explicitly in
+  // PRICING_DEFAULT_RESOLUTION, never by array position.
+  "vidu-q4": {
+    id: "vidu-q4",
+    unlistedResolutionRendersAs: "720p",
+    kind: "video",
+    modes: ["i2v"] as const,
+    family: "Vidu",
+    maker: "shengshu",
+    label: "Vidu Q4",
+    series: "Vidu",
+    description: "Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K.",
+    useCases: ["motion", "reference"],
+    features: ["audio", "reference-image", "reference-to-video"],
+    aspectRatios: VIDEO_RATIOS_VIDU_Q4,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    defaultDuration: 5,
+    resolutions: ["540p", "720p", "1080p", "2k", "4k"],
+    noSeed: true,  // neither Q4 schema has a `seed` (additionalProperties: false)
+    pricing: [
+      { identifier: "vidu-q4", credits: 190, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "vidu-q4:5s:720p", credits: 190, note: "5s 720p (the default tier)" },
+      { identifier: "vidu-q4:5s:540p", credits: 90, note: "5s 540p" },
+      { identifier: "vidu-q4:5s:1080p", credits: 240, note: "5s 1080p" },
+      { identifier: "vidu-q4:5s:2k", credits: 380, note: "5s 2K" },
+      { identifier: "vidu-q4:5s:4k", credits: 780, note: "5s 4K" },
+      { identifier: "vidu-q4:3s:540p", credits: 60, note: "3s 540p (min)" },
+      { identifier: "vidu-q4:16s:4k", credits: 2500, note: "16s 4K (max)" },
     ],
   },
   // ── Bytedance video lite/pro ──

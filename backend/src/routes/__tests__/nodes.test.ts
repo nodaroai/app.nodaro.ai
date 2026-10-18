@@ -8,7 +8,7 @@ import type { FastifyInstance } from "fastify"
 // real client would sit on the network until the test times out. Prices are
 // pinned in nodes-charged-prices.test.ts and mcp/tools/__tests__/models.test.ts.
 vi.mock("../../lib/pricing/charged-prices.js", () => ({
-  loadChargedPrices: async () => ({ credits: () => undefined }),
+  loadChargedPrices: async () => ({ credits: () => undefined, rate: () => undefined }),
 }))
 
 let app: FastifyInstance

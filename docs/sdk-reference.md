@@ -5,6 +5,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
 
 ## Table of contents
 
+- [Subpath entries](#subpath-entries)
 - [`createClient(options)`](#createclientoptions)
 - [Auth providers](#auth-providers)
 - [Errors](#errors)
@@ -57,6 +58,63 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
 - [Type re-exports](#type-re-exports)
 
 ---
+
+## Subpath entries
+
+The root `@nodaro/sdk` exports everything on this page. Each resource is also
+published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
+resource's module and the types it takes and returns:
+
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+
+`/client` holds `createClient`, `NodaroClient` and the auth providers;
+`/core` holds `NodaroClientCore` (see below) and the same auth providers;
+`/errors` holds the error classes and `throwFromResponse`; every other entry is
+named after its resource module (`/node-presets` is `client.presets`,
+`/webhooks` also holds `verifyWebhookSignature`). A type the SDK re-exports from
+`@nodaro/shared` lives in the entry of the resource that uses it.
+
+```ts
+import { NotFoundError } from "@nodaro/sdk/errors"
+import type { Job, JobStatus } from "@nodaro/sdk/jobs"
+```
+
+The root is the union of the entries, and a value imported from an entry is the
+same instance as the one imported from the root, so `instanceof NotFoundError`
+holds whichever path each side used. `createClient` builds every resource, so
+`@nodaro/sdk/client` loads all of them; the narrower entries pay off in code that
+needs only errors, types or one resource class. The two older subpaths,
+`@nodaro/sdk/supabase` and `@nodaro/sdk/signup-signals`, are unchanged and stay
+outside the root.
+
+### A client with only the resources you use
+
+`NodaroClientCore` (`@nodaro/sdk/core`) is the client without its resources:
+the options `createClient` takes, the request transport (`request`,
+`requestText`, `requestBytes`) and `me()`, `connectedApps()`,
+`revokeConnectedApp()`. `NodaroClient` extends it with every resource. Extend
+it yourself with only the resources you call, and the other resource modules
+are never loaded:
+
+```ts
+import { NodaroClientCore, StaticTokenAuth } from "@nodaro/sdk/core"
+import { JobsResource } from "@nodaro/sdk/jobs"
+import { NodesResource } from "@nodaro/sdk/nodes"
+
+class AppClient extends NodaroClientCore {
+  readonly jobs = new JobsResource(this)
+  readonly nodes = new NodesResource(this) // polls through `jobs`
+}
+
+const client = new AppClient({ baseUrl: "https://nodaro.example.com", auth: new StaticTokenAuth(token) })
+await client.nodes.runAndWait("generate-image", { prompt: "a lighthouse at dusk" })
+```
+
+Every resource class takes a `NodaroClientCore`. Two need another resource on
+the same client, and their constructor type says so, so leaving it out fails to
+compile: `NodesResource` needs `jobs` and `Scene3DResource` needs `nodes`.
+`withWorkspace` is a `NodaroClient` method; to work in a workspace, pass
+`workspaceId` to the constructor.
 
 ## `createClient(options)`
 
@@ -421,7 +479,7 @@ try {
 ### `class ContinuationRefusedError extends NodaroError`
 
 HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode
-run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+or Chapters run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
 `already_running` (a continuation is under way, or one that already
 completed — follow `jobId`), `continuation_superseded` (a later continuation
 of that run failed too —
@@ -675,13 +733,17 @@ isn't yours — the delete is never a silent no-op.
 await client.workflows.delete(id)
 ```
 
-#### `run(id, params?)`
+#### `run(id, params?, options?)`
 
 ```ts
-run(id: string, params?: RunWorkflowParams): Promise<RunWorkflowResult>
+run(id: string, params?: RunWorkflowParams, options?: { idempotencyKey?: string }): Promise<RunWorkflowResult>
 ```
 
 Starts an execution and returns immediately with `{ executionId, status }`.
+`options.idempotencyKey` is sent as the `Idempotency-Key` header (at least 8
+characters; a shorter one is ignored): retry a request with the same key and it
+answers the run it already started (`deduped: true`) instead of starting a
+second one.
 Optionally restrict to a subset of node IDs, and pass `inputOverrides` —
 nested `{ nodeId: { field: value } }` node data for THIS run, shallow-merged
 over each node's saved data (the overridden node's saved results are not
@@ -738,6 +800,52 @@ A refused continuation throws before any execution exists: `NotFoundError`
 `continuation_subset_required`, `continuation_workflow_mismatch`,
 `continuation_version_mismatch` or `continuation_not_completed`
 ([details](./api-integration.md#continuing-a-run)).
+
+`continueMode: "from-failed"` continues a run that FAILED from where it stopped
+(`continueFromExecutionId` is your own failed run of the workflow): `nodeIds` is
+optional (every node when left out), and the run executes only the nodes that
+run did not complete — what it completed is handed on, never run or charged
+again. That is per node: a node that failed runs again in full, every list item
+included (a few nodes reuse an identical item they already made). Not combinable
+with `renderFinal`.
+
+```ts
+await client.workflows.run(id, {
+  continueFromExecutionId: failedRunId,
+  continueMode: "from-failed",
+})
+```
+
+A run a later continuation supersedes throws a `NodaroError` with `code`
+`continuation_superseded`, its message naming that continuation: one that failed
+is the one to continue instead; one that completed everything the run left means
+the work is done, and its results are on that execution. When the newest later
+continuation stopped at a Preview review (of a render, or of a Tighten Episode
+with Review before render on), the run throws a
+`ContinuationPreviewPendingError` (`code` `continuation_preview_pending`, 409,
+exported from `@nodaro/sdk/errors`). It names that continuation in
+`executionId`, its renders in `renderNodeIds` and its Tighten Episode nodes in
+`reviewNodeIds`. `next` (a `HeldFinalRun`: `continueFromExecutionId`,
+`nodeIds`, `inputOverrides`) is the run that finishes them: send it first with
+`client.workflows.run(workflowId, error.next)`, then continue. For a single held
+render, `next` is that continuation's `renderFinal`. When the newest later continuation completed only part of
+what was left otherwise (a narrower `nodeIds`), the run is built on it instead:
+seeded from that continuation, running only what it left, and the result's
+`continuedFrom` names it (the run you sent otherwise). A Render final, or a run
+of named nodes, that continues the newest later continuation counts as one of
+them. A run that did not fail throws `continuation_not_failed`, and one with
+nothing left `continuation_subset_required` (409)
+([details](./api-integration.md#continuing-a-failed-run)). Send an
+`idempotencyKey` with each continuation, so a retry of the same request starts
+nothing new:
+
+```ts
+await client.workflows.run(
+  id,
+  { continueFromExecutionId: failedRunId, continueMode: "from-failed" },
+  { idempotencyKey: crypto.randomUUID() }, // reuse the same key when retrying this call
+)
+```
 
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.
 Requires `workflows:execute` scope when called via OAuth.
@@ -995,9 +1103,9 @@ const { data: items } = await client.sessions.items(session.id)
 | Method | Signature | Notes |
 |--------|-----------|-------|
 | `create` | `create(input: CreateSessionInput): Promise<{ data: GenerationSession }>` | `tool` required (`create-image`, …); `projectId?`, `title?`. |
-| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId`, `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount` and up to four `previewUrls`. |
+| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId`, `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount`, `coverJobId` and up to four `previewUrls` (the cover's image first when one is set). |
 | `get` | `get(id: string): Promise<{ data: GenerationSession }>` | |
-| `update` | `update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }>` | `title` (`null` = untitled), `archived`. The project cannot change. |
+| `update` | `update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }>` | `title` (`null` = untitled), `archived`, `coverJobId` (one of the session's items, 404 otherwise; `null` = automatic). The project cannot change. |
 | `delete` | `delete(id: string): Promise<{ success: true }>` | Its jobs are kept, and stay in every other session holding them. |
 | `items` | `items(id: string, params?: ListSessionItemsParams): Promise<SessionPage<SessionItem>>` | The feed, newest first: `jobId`, `addedAt`, `imported`, `importedFrom`, `job`. |
 | `importItems` | `importItems(id: string, input: { jobIds: string[] }): Promise<{ data: { imported: number; requested: number } }>` | A link, not a copy; up to 100 of **your** jobs, all-or-nothing (404 if any is not yours). |
@@ -1890,6 +1998,19 @@ const { data } = await client.nodes.get("generate-image")
 console.log(data.providers, data.creditCost) // creditCost: the charged price, Cloud only
 ```
 
+A node charged per unit of its own measure also carries `creditRate`
+(`NodeCreditRate`) — Speaker Frames, whose `creditCost` is the word
+`"per-1000-frames"`. `creditsPerUnit` is the exact charged credits of one unit,
+and a run of N units is charged `Math.ceil(N * creditsPerUnit)`, rounded up
+once (`rounding: "ceil-run-total"`), so never multiply the one-unit price from
+`/v1/credits/model-cost`. See [Node discovery](./api-integration.md#11-node-discovery).
+
+```ts
+const { data: frames } = await client.nodes.get("speaker-frames")
+const rate = frames.creditRate // { identifier: "speaker-frames", unit: "1000-frames", creditsPerUnit, minUnits: 1, rounding: "ceil-run-total", note }
+const runCredits = rate && Math.ceil(Math.max(rate.minUnits, blocks) * rate.creditsPerUnit)
+```
+
 #### `run(type, params?)`
 
 ```ts
@@ -2031,6 +2152,16 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > Reference videos bill output seconds only here, and input + output duration
 > must stay ≤ 30 s. `wan-3-prime` is the high-speed, higher-priced SKU on the
 > same schema.
+> **Vidu Q4** (`vidu-q4`) has no text-to-video mode — use
+> `run("generate-video", …)` with an `imageUrl` (start frame) or
+> `referenceImageUrls`; `run("text-to-video", …)` answers `image_required`. A start frame alone animates that frame
+> (`prompt` optional, `aspectRatio` ignored); any `referenceImageUrls` (≤ 15) or
+> `referenceAudioUrls` (≤ 3) switches to reference mode, where `prompt` is
+> required and a sent `imageUrl` joins the reference images. Reference audio is
+> MP3 only, 3–12 s per clip (refused before the job otherwise). No reference
+> videos, end frame or seed. `duration` 3–16 (default 5); `resolution`
+> `540p` / `720p` / `1080p` / `2k` / `4k` (omitted or unsupported → 720p);
+> one per-second price ladder for both modes and audio on or off.
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
@@ -6950,10 +7081,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Seven
+Editorial primitives for podcast / long-form video editing. Eight
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus one quote
-(`estimateTightenEpisode`) and one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus two quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -6964,7 +7095,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in, the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (today `/v1/tighten-episode/continue`) | Continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review. The route is the run's own type. |
+| `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`) | Continue a Tighten Episode or Chapters run as a new job: from where it failed, or (Tighten Episode) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7117,6 +7250,45 @@ nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
 or `503 use_case_unavailable`. `tightenEpisode` also throws
 `InsufficientCreditsError` when the balance does not cover the estimate.
 
+#### `episodeChapters(input, options?)` / `estimateEpisodeChapters(input)`
+
+```ts
+episodeChapters(input: EpisodeChaptersInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
+estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEstimate }>
+```
+
+List a podcast recording's chapters in one call: the run transcribes it, then
+plans its chapters, each with a title and a start time. Nothing is rendered.
+Only `mediaUrl` is required; a field left out takes the node's default.
+**Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-chapters.md)).
+
+**`EpisodeChaptersInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` (default) \| `"standard"` \| `"premium"`. |
+| `instructions` | `string` | no | Instructions for the chapters, e.g. "5 to 8 chapters" (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the chapter titles (up to 4 000 characters). |
+
+`options.idempotencyKey` works as on `tightenEpisode`.
+
+`episodeChapters` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data.text` is the chapter list as
+show notes — one `M:SS Title` line per chapter (once a chapter starts at
+1:00:00 or later, every line is `H:MM:SS`), the first at 0:00, the times
+strictly increasing (two chapters in the same second keep the first) — and
+`output_data.json` the list itself, `[{ startMs, title }]`, the same rows; the
+first starts at 0. A run that finds no
+chapters fails ("The plan found no chapters in this recording."), and its fee
+is refunded.
+
+`estimateEpisodeChapters` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-chapters --> per run.
+A recording whose length cannot be read is estimated at the 180-minute
+ceiling. Both refuse before anything is created or charged, with the codes
+`tightenEpisode` lists (less the music ones).
+
 #### `continueUseCase(input, options?)`
 
 ```ts
@@ -7125,10 +7297,10 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` (or an earlier continuation) answered. |
-| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on preview, with the preview's settings and no fee. |
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` or `episodeChapters` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on Tighten Episode preview, with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
 | `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
-| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
 
 **Which route.** With `nodeType`, the continuation goes straight to that
 type's route. Without it, `continueUseCase` first reads the job
@@ -7139,7 +7311,10 @@ insufficient_scope` naming `jobs:read`; any other refusal of the read is
 thrown) falls back to the Tighten Episode route — what every continuation used before
 there was a choice — so a token that could continue a run before still can.
 Pass `nodeType` to skip the read. A job that names no use-case type is sent
-to the Tighten Episode route too, which answers `not_found` for it.
+to the Tighten Episode route too, which answers `not_found` for it. A version
+of the SDK from before Chapters knows only `"tighten-episode"`, so it continues
+a Chapters run on the Tighten Episode route, which answers `not_found`:
+upgrade to continue Chapters runs.
 
 Answers a new job to poll, like `tightenEpisode`. A completed Render final does
 not block another Render final of the same preview with a changed edit (the

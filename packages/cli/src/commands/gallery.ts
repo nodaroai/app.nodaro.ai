@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { GalleryMediaType } from "@nodaro/sdk"
+import type { GalleryMediaType } from "@nodaro/sdk/gallery"
 import { buildClient, handleError } from "../client.js"
 import { dim, emit, info, success, table, type OutputOpts } from "../output.js"
 

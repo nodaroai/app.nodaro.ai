@@ -8,7 +8,7 @@ import { supabase } from "./supabase.js"
 import { redactPrivateJobData } from "./public-job-data.js"
 
 export const SESSION_COLS =
-  "id, user_id, project_id, workspace_id, title, tool, created_at, updated_at, archived_at"
+  "id, user_id, project_id, workspace_id, title, tool, created_at, updated_at, archived_at, cover_job_id"
 
 /** The job columns a session feed returns, before `sanitizeJobForPublic`
  *  narrows them to the public allowlist. */
@@ -27,6 +27,8 @@ export interface SessionRow {
   created_at: string
   updated_at: string
   archived_at: string | null
+  /** The item a person picked to lead the previews (migration 532); null = automatic. */
+  cover_job_id?: string | null
 }
 
 export interface SessionPreview {
@@ -43,6 +45,7 @@ export function toSessionResponse(row: SessionRow, preview: SessionPreview) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     archivedAt: row.archived_at,
+    coverJobId: row.cover_job_id ?? null,
     itemCount: preview.itemCount,
     previewUrls: preview.previewUrls,
   }
@@ -148,20 +151,77 @@ interface PreviewRow {
   recent: Array<{ job_id: string; output_data: unknown }> | null
 }
 
-/** Item counts and up to four preview links for a page of sessions, in ONE
- *  database call (migration 518's `generation_session_previews`). */
+/** One automatic preview: the job it came from and its image link. */
+export interface PreviewEntry {
+  readonly jobId: string
+  readonly url: string
+}
+
+export const MAX_PREVIEWS = 4
+
+/** A session's preview links: its cover's image first (when it has one), then
+ *  the automatic ones without the cover, at most MAX_PREVIEWS. Pure. */
+export function withCover(
+  coverUrl: string | null,
+  coverJobId: string | null,
+  auto: readonly PreviewEntry[],
+): string[] {
+  if (!coverUrl) return auto.map((e) => e.url).slice(0, MAX_PREVIEWS)
+  const rest = auto.filter((e) => e.jobId !== coverJobId).map((e) => e.url)
+  return [coverUrl, ...rest].slice(0, MAX_PREVIEWS)
+}
+
+/** The cover images of a page of sessions — the caller's own jobs only. */
+async function loadCoverUrls(
+  userId: string,
+  jobIds: readonly string[],
+): Promise<{ data: Map<string, string>; error: unknown }> {
+  const map = new Map<string, string>()
+  if (jobIds.length === 0) return { data: map, error: null }
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, output_data")
+    .in("id", [...new Set(jobIds)])
+    .eq("user_id", userId)
+    // Completed only, like the automatic previews: an unfinished cover just
+    // leaves the automatic order in place until it has its image.
+    .eq("status", "completed")
+  if (error) return { data: map, error }
+  for (const row of (data ?? []) as Array<{ id: string; output_data: unknown }>) {
+    const url = previewUrlOf(row.output_data)
+    if (url) map.set(row.id, url)
+  }
+  return { data: map, error: null }
+}
+
+/** Item counts and up to four preview links for a page of sessions: ONE call
+ *  for the automatic previews (migration 518's `generation_session_previews`),
+ *  plus one read of the covers when any session has one (migration 532). */
 export async function loadPreviews(
-  sessionIds: readonly string[],
+  sessions: readonly Pick<SessionRow, "id" | "cover_job_id">[],
+  userId: string,
 ): Promise<{ data: Map<string, SessionPreview>; error: unknown }> {
   const map = new Map<string, SessionPreview>()
-  if (sessionIds.length === 0) return { data: map, error: null }
-  const { data, error } = await supabase.rpc("generation_session_previews", { p_session_ids: sessionIds })
+  if (sessions.length === 0) return { data: map, error: null }
+  // The two reads are independent: run them together.
+  const [{ data, error }, covers] = await Promise.all([
+    supabase.rpc("generation_session_previews", { p_session_ids: sessions.map((s) => s.id) }),
+    loadCoverUrls(userId, sessions.flatMap((s) => (s.cover_job_id ? [s.cover_job_id] : []))),
+  ])
   if (error) return { data: map, error }
+  if (covers.error) return { data: map, error: covers.error }
+  const coverOf = new Map(sessions.map((s) => [s.id, s.cover_job_id ?? null]))
   for (const row of (data ?? []) as PreviewRow[]) {
-    const previewUrls = (row.recent ?? [])
-      .map((r) => previewUrlOf(r.output_data))
-      .filter((u): u is string => u !== null)
-    map.set(row.session_id, { itemCount: Number(row.item_count) || 0, previewUrls })
+    const auto = (row.recent ?? []).flatMap((r) => {
+      const url = previewUrlOf(r.output_data)
+      return url ? [{ jobId: r.job_id, url }] : []
+    })
+    const coverJobId = coverOf.get(row.session_id) ?? null
+    const coverUrl = coverJobId ? (covers.data.get(coverJobId) ?? null) : null
+    map.set(row.session_id, {
+      itemCount: Number(row.item_count) || 0,
+      previewUrls: withCover(coverUrl, coverJobId, auto),
+    })
   }
   return { data: map, error: null }
 }

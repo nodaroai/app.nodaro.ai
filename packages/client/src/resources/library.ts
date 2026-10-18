@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * A media asset in the caller's library (`GET /v1/library`). Mirrors the route's
@@ -95,7 +95,7 @@ export interface ListLibraryResult {
  * here until a consumer needs them.
  */
 export class LibraryResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * `GET /v1/library` → a page of the caller's media assets (newest first) plus

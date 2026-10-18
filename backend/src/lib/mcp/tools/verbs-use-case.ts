@@ -1,6 +1,7 @@
 /**
  * Podcast use-case verbs: one call per use-case over the editing primitives
- * (`tighten_episode` → POST /v1/tighten-episode, `continue_use_case` → POST
+ * (`tighten_episode` → POST /v1/tighten-episode, `make_chapters` → POST
+ * /v1/episode-chapters, `continue_use_case` → POST
  * /v1/<the run's type>/continue, the type read from the run's own job row). CORE and ungated like `apply_edl`: the route
  * answers an install that cannot run it (unconnected, keyless) with its own
  * honest 503 before any charge. Its own module (the video verbs file is past
@@ -19,6 +20,8 @@ import { z } from "zod"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import {
+  EPISODE_CHAPTERS,
+  EPISODE_CHAPTERS_DEFAULTS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   TIGHTEN_EPISODE,
   TIGHTEN_EPISODE_DEFAULTS,
@@ -26,6 +29,7 @@ import {
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseFeeCreditId,
+  usecaseResultIsText,
   usecaseRunType,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -43,6 +47,7 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
 const D = TIGHTEN_EPISODE_DEFAULTS
 const TIGHTEN = usecaseDescriptor(TIGHTEN_EPISODE)
+const CHAPTERS = usecaseDescriptor(EPISODE_CHAPTERS)
 
 /** A type's run price, as a description states it — the fee read from the static table, never typed. */
 function priceSentence(type: UseCaseNodeType): string {
@@ -54,6 +59,15 @@ function priceSentence(type: UseCaseNodeType): string {
 function labelList(types: readonly UseCaseNodeType[]): string {
   const labels = types.map((t) => usecaseDescriptor(t).label)
   return labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`
+}
+
+/** Render final is for a run made with a review; names the offered nodes that have none (Chapters). */
+function reviewSentence(offered: readonly UseCaseNodeType[]): string {
+  const noReview = offered.filter((t) => !usecaseDescriptor(t).reviewable)
+  return (
+    "Render final applies only to a run made with a review (`review_before_render`)" +
+    (noReview.length > 0 ? `; ${labelList(noReview)} has none. ` : ". ")
+  )
 }
 
 /**
@@ -131,6 +145,7 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
   if (offered.length === 0) return
 
   if (offered.includes(TIGHTEN_EPISODE)) registerTightenEpisode({ server, session, fastify })
+  if (offered.includes(EPISODE_CHAPTERS)) registerMakeChapters({ server, session, fastify })
 
   server.registerTool(
     "continue_use_case",
@@ -138,7 +153,9 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
       title: "Continue a use-case run",
       description:
         `Continue a ${labelList(offered)} run as a NEW job (see \`mode\`): a failed run, or the final of a review preview, ` +
-        "optionally with `edited_edl` (the reviewed edit). Pass `job_id` " +
+        "optionally with `edited_edl` (the reviewed edit). " +
+        reviewSentence(offered) +
+        "Pass `job_id` " +
         "(the earlier run's job). Returns the new job id. A refusal that names another job says what to do: follow a run " +
         "already under way, continue the newer failed run instead, or ask again in a moment while a failed run settles.",
       inputSchema: {
@@ -174,7 +191,8 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
           mcp_client: session.clientName,
           userId: session.userId,
         },
-        widgetKind: "video",
+        // Chapters renders nothing: its continuation is text, like transcribe's.
+        widgetKind: usecaseResultIsText(resolved.type) ? "generic" : "video",
         widgetData: { prompt: `(continue · ${args.mode})` },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
       })
@@ -254,6 +272,53 @@ function registerTightenEpisode({ server, session, fastify }: RegisterOpts): voi
         },
         widgetKind: args.output === "audio" ? "audio" : "video",
         widgetData: { prompt: "(tighten episode)" },
+        ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
+      }),
+  )
+}
+
+function registerMakeChapters({ server, session, fastify }: RegisterOpts): void {
+  server.registerTool(
+    "make_chapters",
+    {
+      title: "Chapters",
+      description:
+        "List a podcast or interview recording's chapters in one call: transcribes it and finds its chapters, each with a title and a start time. " +
+        "Nothing is rendered. Pass `media_url` (a video or audio recording, up to 3 hours). Returns a job id: the chapter list as show notes is " +
+        "`output_data.text` (one line per chapter, `0:00 Title`; once a chapter starts at 1:00:00 or later, every line is `H:MM:SS`), " +
+        "the list itself is `output_data.json` (`[{ startMs, title }]`, the same rows; the first starts at 0). A run that finds no chapters fails, and its fee is refunded. " +
+        "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish." +
+        priceSentence(EPISODE_CHAPTERS),
+      inputSchema: {
+        media_url: z.string().url().describe("The recording (video or audio URL)."),
+        plan_tier: z
+          .enum(tuple(EDIT_PLAN_TIERS))
+          .optional()
+          .describe(`Planning quality (default ${EPISODE_CHAPTERS_DEFAULTS.planTier}).`),
+        instructions: z.string().max(4000).optional().describe("Instructions for the chapters (\"5 to 8 chapters\", \"short titles\")."),
+        style_guide: z.string().max(4000).optional().describe("Style guide for the chapter titles."),
+        client_request_id: clientRequestIdSchema.optional(),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
+    },
+    async (args) =>
+      dispatchJob(fastify, session, {
+        // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
+        url: "/v1/episode-chapters",
+        label: CHAPTERS.label,
+        formatRefusal: refusalText,
+        payload: {
+          mediaUrls: [args.media_url],
+          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+          ...(args.instructions ? { instructions: args.instructions } : {}),
+          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+          mcp_client: session.clientName,
+          userId: session.userId,
+        },
+        widgetKind: "generic",
+        widgetData: { prompt: "(chapters)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
       }),
   )

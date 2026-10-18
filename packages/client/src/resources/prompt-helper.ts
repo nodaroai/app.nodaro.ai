@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { WizardQuestion, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts/doctrine"
 export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts/doctrine"
 
@@ -68,7 +68,7 @@ export interface PromptResult {
  * on 4xx/5xx (e.g. `validation_error`, `malformed_response`).
  */
 export class PromptHelperResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   analyze(input: AnalyzeInput): Promise<AnalyzeResult> {
     return this.client.request("POST", "/v1/prompt-helper/wizard", { body: { action: "analyze", ...input } })

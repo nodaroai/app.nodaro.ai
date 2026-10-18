@@ -9,6 +9,8 @@ import { docsPricing, loadDocsPriceSettings, type ChargeOf, type RateOf } from "
 export interface StatedPrices {
   /** The credits charged for `units` of `identifier` (1 by default), or undefined when it is priced nowhere. */
   credits(identifier: string, units?: number): number | undefined
+  /** The exact credits one unit of a per-unit rate adds to a run's total (`rateOf`). */
+  rate: RateOf
   chargeOf: ChargeOf
   rateOf: RateOf
 }
@@ -20,6 +22,6 @@ export function statedPrices(): StatedPrices {
   if (stated) return stated
   const settings = loadDocsPriceSettings()
   const { chargeOf, rateOf } = docsPricing(chargedPriceTableFrom(new Map(), settings), chargedCredits, settings.charged)
-  stated = { chargeOf, rateOf, credits: (identifier, units = 1) => chargeOf([{ id: identifier, units }]) }
+  stated = { chargeOf, rateOf, rate: rateOf, credits: (identifier, units = 1) => chargeOf([{ id: identifier, units }]) }
   return stated
 }

@@ -1,0 +1,101 @@
+[
+  {
+    "id": "names.mjs#0",
+    "file": "names.mjs",
+    "operator": "array",
+    "start": 113,
+    "end": 115,
+    "original": "[]",
+    "replacement": "[\"__mutant__\"]",
+    "line": 3,
+    "column": 15
+  },
+  {
+    "id": "names.mjs#1",
+    "file": "names.mjs",
+    "operator": "block",
+    "start": 143,
+    "end": 186,
+    "original": "{\n  if (name.length > 0) names.push(name)\n}",
+    "replacement": "{}",
+    "line": 5,
+    "column": 27
+  },
+  {
+    "id": "names.mjs#2",
+    "file": "names.mjs",
+    "operator": "negate",
+    "start": 151,
+    "end": 166,
+    "original": "name.length > 0",
+    "replacement": "!(name.length > 0)",
+    "line": 6,
+    "column": 7
+  },
+  {
+    "id": "names.mjs#3",
+    "file": "names.mjs",
+    "operator": "compare",
+    "start": 163,
+    "end": 164,
+    "original": ">",
+    "replacement": "<=",
+    "line": 6,
+    "column": 19
+  },
+  {
+    "id": "names.mjs#4",
+    "file": "names.mjs",
+    "operator": "literal",
+    "start": 165,
+    "end": 166,
+    "original": "0",
+    "replacement": "1",
+    "line": 6,
+    "column": 21
+  },
+  {
+    "id": "names.mjs#5",
+    "file": "names.mjs",
+    "operator": "call",
+    "start": 168,
+    "end": 184,
+    "original": "names.push(name)",
+    "replacement": ";",
+    "line": 6,
+    "column": 24
+  },
+  {
+    "id": "names.mjs#6",
+    "file": "names.mjs",
+    "operator": "block",
+    "start": 211,
+    "end": 234,
+    "original": "{\n  return [...names]\n}",
+    "replacement": "{}",
+    "line": 9,
+    "column": 24
+  },
+  {
+    "id": "names.mjs#7",
+    "file": "names.mjs",
+    "operator": "array",
+    "start": 222,
+    "end": 232,
+    "original": "[...names]",
+    "replacement": "[]",
+    "line": 10,
+    "column": 10
+  },
+  {
+    "id": "names.mjs#8",
+    "file": "names.mjs",
+    "operator": "return",
+    "start": 222,
+    "end": 232,
+    "original": "[...names]",
+    "replacement": "undefined",
+    "line": 10,
+    "column": 10
+  }
+]

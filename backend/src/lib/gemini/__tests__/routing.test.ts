@@ -15,7 +15,7 @@ const configMock = {
   NODE_ENV: "test",
 }
 
-vi.mock("../../config.js", () => ({ config: configMock }))
+vi.mock("../../config.js", () => ({ config: configMock, hasCredits: () => false }))
 
 const callGeminiDirect = vi.fn()
 const streamGeminiDirect = vi.fn()
@@ -106,6 +106,109 @@ describe("gemini-3.1-pro is KIE-first since 2026-10-08 (direct is Advanced mode)
     await llmComplete({ modelId: "gemini-3.1-pro", ...baseReq, maxTokens: 1234 })
 
     expect(callGeminiDirect.mock.calls[0]![2]).toMatchObject({ maxTokens: 16_384 })
+  })
+})
+
+describe("gemini-4-argon is directOnly: no KIE request is ever built for it", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.resetModules()
+    callGeminiDirect.mockReset()
+    streamGeminiDirect.mockReset()
+    // BOTH keys set: every KIE leg below would be live for any other Gemini.
+    configMock.KIE_API_KEY = "test-kie-key"
+    configMock.GEMINI_API_KEY = "test-gemini-key"
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("an unpinned call is served direct", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    callGeminiDirect.mockResolvedValue(directOk())
+
+    const res = await llmComplete({ modelId: "gemini-4-argon", ...baseReq })
+
+    expect(res.text).toBe("from-direct")
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("a direct failure surfaces — KIE is no fallback", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    callGeminiDirect.mockRejectedValue(new Error("google 503"))
+
+    await expect(llmComplete({ modelId: "gemini-4-argon", ...baseReq })).rejects.toThrow("google 503")
+    await expect(llmComplete({ modelId: "gemini-4-argon", ...baseReq, requireLane: "direct" })).rejects.toThrow("google 503")
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("a refused platform account is not retried on KIE, pinned or not", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    const { LlmPlatformExhaustedError } = await import("../../llm-errors.js")
+    callGeminiDirect.mockRejectedValue(new LlmPlatformExhaustedError("google: billing", { lane: "direct", provider: "google", exhaustion: "billing" }))
+
+    await expect(llmComplete({ modelId: "gemini-4-argon", ...baseReq, requireLane: "direct" })).rejects.toThrow()
+    await expect(llmComplete({ modelId: "gemini-4-argon", ...baseReq })).rejects.toThrow()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("a stream is served direct and never falls back to KIE", async () => {
+    const { llmStream } = await import("../../llm-client.js")
+    streamGeminiDirect.mockResolvedValueOnce(directOk())
+    await llmStream({ modelId: "gemini-4-argon", ...baseReq }, () => {})
+    streamGeminiDirect.mockRejectedValueOnce(new Error("google 503"))
+    await expect(llmStream({ modelId: "gemini-4-argon", ...baseReq }, () => {})).rejects.toThrow("google 503")
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("a KIE pin is refused before any request", async () => {
+    const { llmComplete, llmStream } = await import("../../llm-client.js")
+    await expect(llmComplete({ modelId: "gemini-4-argon", ...baseReq, requireLane: "kie" })).rejects.toThrow(/cannot be pinned to KIE/)
+    await expect(llmStream({ modelId: "gemini-4-argon", ...baseReq, requireLane: "kie" }, () => {})).rejects.toThrow(/cannot be pinned to KIE/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("the KIE entry points themselves refuse it — the backstop for any future path", async () => {
+    const { callKie, streamKie } = await import("../../llm/kie-lane.js")
+    const { getLlmModel } = await import("@nodaro/shared/llm-models")
+    const model = getLlmModel("gemini-4-argon")!
+    const req = { modelId: model.id, ...baseReq }
+    expect(() => callKie(model, req)).toThrow(/directOnly/)
+    expect(() => streamKie(model, req, () => {})).toThrow(/directOnly/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("with no Gemini key it fails as provider-unavailable, never reaching KIE, and names only the key that helps", async () => {
+    const { llmComplete, llmStream } = await import("../../llm-client.js")
+    const { isLlmProviderUnavailable } = await import("../../llm/provider-unavailable.js")
+    configMock.GEMINI_API_KEY = ""
+
+    for (const call of [
+      () => llmComplete({ modelId: "gemini-4-argon", ...baseReq }),
+      () => llmStream({ modelId: "gemini-4-argon", ...baseReq }, () => {}),
+    ]) {
+      const err = await call().then(() => undefined, (e: unknown) => e)
+      expect(isLlmProviderUnavailable(err)).toBe(true)
+      expect((err as Error).message).toContain("GEMINI_API_KEY")
+      expect((err as Error).message).not.toContain("KIE_API_KEY")
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+  })
+
+  it("clamps efforts to the direct ladder: `none` is Auto (Google 400s MINIMAL), `max` lands on high", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    callGeminiDirect.mockResolvedValue(directOk())
+
+    for (const reasoningEffort of ["none", "medium", "max"] as const) {
+      await llmComplete({ modelId: "gemini-4-argon", ...baseReq, reasoningEffort, maxTokens: 2048 })
+    }
+
+    // It reasons by default, so a small cap is floored to the default 32768.
+    expect(callGeminiDirect.mock.calls[0]![2]).toMatchObject({ eff: undefined, maxTokens: 32_768 })
+    expect(callGeminiDirect.mock.calls[1]![2]).toMatchObject({ eff: "medium" })
+    expect(callGeminiDirect.mock.calls[2]![2]).toMatchObject({ eff: "high" })
   })
 })
 

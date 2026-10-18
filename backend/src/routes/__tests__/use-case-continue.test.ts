@@ -8,9 +8,17 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
-  ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, nothingWritten, p1StoredRun, post, previewSource, src,
+  ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, makeApp, nothingWritten, p1StoredRun, post, previewSource, src,
 } from "./helpers/use-case-continue-harness.js"
-import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, isStoredInlineGraph, toStoredInlineGraph, usecaseGraphHash } from "@nodaro/render-rules"
+import {
+  EPISODE_CHAPTERS_DEFAULTS,
+  TIGHTEN_EPISODE_DEFAULTS,
+  buildEpisodeChaptersGraph,
+  buildTightenEpisodeGraph,
+  isStoredInlineGraph,
+  toStoredInlineGraph,
+  usecaseGraphHash,
+} from "@nodaro/render-rules"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
 
 describe("from-failed", () => {
@@ -373,5 +381,58 @@ describe("a key already used for another use-case type", () => {
     expect(m.reserve).not.toHaveBeenCalled()
     expect(m.execute).not.toHaveBeenCalled()
     expect(src.writes[ID]).not.toHaveProperty("_continuedBy")
+  })
+})
+
+describe("Chapters on its own continue route", () => {
+  const chaptersStored = toStoredInlineGraph(
+    buildEpisodeChaptersGraph(EPISODE_CHAPTERS_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }),
+    EPISODE_CHAPTERS_DEFAULTS,
+  )
+  const chaptersWrapper = { ...failedWrapper, job_type: "episode-chapters", input_data: { ...failedWrapper.input_data, type: "episode-chapters" } }
+  const chaptersFailed = {
+    ...failedSource,
+    inlineGraphHash: chaptersStored.hash,
+    nodeStates: { "uc-source": { status: "completed" }, "uc-transcribe": { status: "completed" }, "uc-plan": { status: "failed" } },
+  }
+  const postTo = async (type: string, payload: Record<string, unknown>) =>
+    (await makeApp()).inject({ method: "POST", url: `/v1/${type}/continue`, payload })
+  const asChapters = (status: "failed" | "completed") => {
+    src.wrapper = { ...chaptersWrapper, status }
+    src.graph = chaptersStored
+    src.source = { ...chaptersFailed, status, ...(status === "completed" ? { nodeStates: { ...chaptersFailed.nodeStates, "uc-plan": { status: "completed" } } } : {}) }
+  }
+
+  it("from-failed: a new Chapters wrapper, its own fee held again, what did not finish runs", async () => {
+    asChapters("failed")
+    const res = await postTo("episode-chapters", { jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(202)
+    expect(m.reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "use-case-fee:episode-chapters")
+    expect(m.insertJob.mock.calls[0]![1]).toMatchObject({ job_type: "episode-chapters", input_data: expect.objectContaining({ type: "episode-chapters", mode: "from-failed" }) })
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ nodeIds: ["uc-plan"], reviewerPresent: false, continueMode: "from-failed" })
+  })
+
+  it("a Tighten run on Chapters' door is not found, and nothing is written", async () => {
+    const res = await postTo("episode-chapters", { jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    nothingWritten()
+  })
+
+  it("a Chapters run on Tighten's door is not found, and nothing is written", async () => {
+    asChapters("failed")
+    const res = await post({ jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    nothingWritten()
+  })
+
+  it("Render final of a run that renders nothing: 409 render_final_not_preview, no row, no hold", async () => {
+    asChapters("completed")
+    const res = await postTo("episode-chapters", { jobId: ID, mode: "render-final" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("render_final_not_preview")
+    nothingWritten()
+    expect(src.writes).toEqual({})
   })
 })

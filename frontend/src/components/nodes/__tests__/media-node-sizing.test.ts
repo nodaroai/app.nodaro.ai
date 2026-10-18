@@ -1,7 +1,7 @@
 // @vitest-environment node
 // @test-always scans every components/nodes/*-node.tsx source, and checks every node unit's too
 import { describe, it, expect } from "vitest"
-import { readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -13,7 +13,15 @@ import {
 } from "../video-node-defaults"
 
 const NODE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..")
-const nodeFiles = readdirSync(NODE_DIR).filter((f) => f.endsWith("-node.tsx"))
+// The node components here, plus every node unit's canvas component
+// (frontend/src/nodes/<type>/node.tsx, tools/units/README.md), relative to NODE_DIR.
+const UNITS_DIR = join(NODE_DIR, "../../nodes")
+const nodeFiles = [
+  ...readdirSync(NODE_DIR).filter((f) => f.endsWith("-node.tsx")),
+  ...readdirSync(UNITS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && existsSync(join(UNITS_DIR, d.name, "node.tsx")))
+    .map((d) => `../../nodes/${d.name}/node.tsx`),
+]
 
 const usesHelper = (src: string) => /(videoNodeSizing|imageNodeSizing)\(/.test(src)
 

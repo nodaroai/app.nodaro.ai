@@ -281,7 +281,42 @@ export function billedContentRefusal(err: unknown): LlmContentRefusalError | und
   return undefined
 }
 
-/** Throw {@link LlmContentRefusalError} when a Claude reply ended with `stop_reason: "refusal"`. */
+/**
+ * Every dialect's spelling of "the provider withheld the answer on content
+ * grounds". Matched on the provider's own raw stop value, like
+ * {@link OUTPUT_CAP_STOP_REASONS}:
+ *  - `refusal` — Claude's `stop_reason`, KIE and the direct SDK alike;
+ *  - the content-policy members of Google's `FinishReason` (the direct Gemini
+ *    lane, @google/genai 2.13): a safety, blocklist, prohibited-content,
+ *    personal-data (SPII) or recitation filter stopped the candidate.
+ * Google's other non-STOP reasons (LANGUAGE, OTHER, MALFORMED_FUNCTION_CALL,
+ * UNEXPECTED_TOOL_CALL, NO_IMAGE, IMAGE_OTHER) are not a content verdict; the
+ * Gemini lane fails those separately.
+ */
+const CONTENT_REFUSAL_STOP_REASONS: ReadonlySet<string> = new Set([
+  "refusal",
+  "SAFETY",
+  "RECITATION",
+  "BLOCKLIST",
+  "PROHIBITED_CONTENT",
+  "SPII",
+  "IMAGE_SAFETY",
+  "IMAGE_PROHIBITED_CONTENT",
+  "IMAGE_RECITATION",
+])
+
+export function isContentRefusalStop(reason: unknown): boolean {
+  return typeof reason === "string" && CONTENT_REFUSAL_STOP_REASONS.has(reason)
+}
+
+/**
+ * Throw {@link LlmContentRefusalError} when a reply ended on a content-refusal
+ * stop ({@link isContentRefusalStop}). The Claude builders call it only for a
+ * structured call (`ReplyEnd.refusalFails` — a plain call keeps Claude's
+ * refusal prose as its answer); the direct Gemini lane calls it on every
+ * reply, because a Google content stop withholds the answer itself — there is
+ * no prose to keep, only an empty or filter-cut fragment.
+ */
 export function assertNotContentRefusal(opts: {
   modelId: string
   lane: string
@@ -290,8 +325,8 @@ export function assertNotContentRefusal(opts: {
   providerCost: number | undefined
 }): void {
   const { modelId, lane, stopReason, usage, providerCost } = opts
-  if (stopReason !== "refusal") return
-  const detail = `${lane} ${modelId} stopped with refusal (in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
+  if (!isContentRefusalStop(stopReason)) return
+  const detail = `${lane} ${modelId} stopped with ${String(stopReason)} (in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
   console.warn(`[llm-content-refusal] ${detail}`)
   throw new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (${detail})`, {
     inputTokens: usage?.inputTokens ?? 0,

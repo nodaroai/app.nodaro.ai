@@ -23,6 +23,7 @@ import {
 import { RENDER_FINAL_ALREADY_RUNNING } from "../../lib/render-final-run.js"
 import { usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
 import { loopbackFetch } from "./loopback-fetch.js"
+import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import { syncLaneHeaders } from "./sync-lane-headers.js"
 import { NODE_TIMEOUT_MS, type NodeOutput, type OrchestratorContext, type ResolvedInputs, type SimpleNode } from "./types.js"
 
@@ -82,8 +83,37 @@ export function failedAttemptOf(
   scope: readonly string[],
 ): string | null {
   if (iterationIndex !== undefined || scope.length > 0) return null
-  const state = ctx.continuedFromStates?.[node.id]
-  return state?.status === "failed" && typeof state.jobId === "string" && state.jobId ? state.jobId : null
+  // Its own failed state, or — the run was seeded from a later generation
+  // that left the node out — the failed attempt that generation's seed carries.
+  return failedAttemptJobIdOf(ctx.continuedFromStates?.[node.id])
+}
+
+/**
+ * What a fresh run of the node sends its type's route, without the lane: its
+ * wired recording (and music, intro card where the type takes them) and its
+ * settings — the node's data as this run holds it, its input overrides merged.
+ * Throws when no recording is wired. Also what a failed attempt's inputs are
+ * held to before it is resumed (failed-attempt.ts `attemptRanWithInputs`).
+ */
+export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs): Record<string, unknown> {
+  const type = node.type as UseCaseNodeType
+  const d = usecaseDescriptor(type)
+  const data = (node.data ?? {}) as Record<string, unknown>
+  const media = resolvedInputs.useCaseMedia?.[0]
+  if (!media) throw new Error(`${d.label} needs a recording wired into Media`)
+  // The type's own settings (its request body, lib/use-case/bodies.ts). An
+  // unset one is not sent; one set to None (null) is, where the body takes a
+  // null — a None is not the setting's default (decided 2026-10-16). Any
+  // other null is left out, and the route takes its default.
+  const settings = Object.fromEntries(
+    d.settingKeys.filter((k) => data[k] !== undefined && (data[k] !== null || usecaseBodyTakesNull(type, k))).map((k) => [k, data[k]]),
+  )
+  return {
+    mediaUrls: [media.url],
+    ...(resolvedInputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: resolvedInputs.useCaseMusic } : {}),
+    ...(resolvedInputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: resolvedInputs.useCaseIntroCard } : {}),
+    ...settings,
+  }
 }
 
 /** The call this node makes: a run, or the continuation its override (or the run being continued) names. */
@@ -114,28 +144,7 @@ export function requestOf(
     const edit = cont.mode === "render-final" && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
     return { path: continuePath, label: d.label, body: { jobId: cont.jobId, mode: cont.mode, ...edit, ...lane } }
   }
-  const fresh = (): UseCaseRequest => {
-    const media = resolvedInputs.useCaseMedia?.[0]
-    if (!media) throw new Error(`${d.label} needs a recording wired into Media`)
-    // The type's own settings (its request body, lib/use-case/bodies.ts). An
-    // unset one is not sent; one set to None (null) is, where the body takes a
-    // null — a None is not the setting's default (decided 2026-10-16). Any
-    // other null is left out, and the route takes its default.
-    const settings = Object.fromEntries(
-      d.settingKeys.filter((k) => data[k] !== undefined && (data[k] !== null || usecaseBodyTakesNull(type, k))).map((k) => [k, data[k]]),
-    )
-    return {
-      path: d.route,
-      label: d.label,
-      body: {
-        mediaUrls: [media.url],
-        ...(resolvedInputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: resolvedInputs.useCaseMusic } : {}),
-        ...(resolvedInputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: resolvedInputs.useCaseIntroCard } : {}),
-        ...settings,
-        ...lane,
-      },
-    }
-  }
+  const fresh = (): UseCaseRequest => ({ path: d.route, label: d.label, body: { ...freshRunInputs(node, resolvedInputs), ...lane } })
   if (failedAttempt) return { path: continuePath, label: d.label, body: { jobId: failedAttempt, mode: "from-failed", ...lane }, fallback: fresh }
   return fresh()
 }

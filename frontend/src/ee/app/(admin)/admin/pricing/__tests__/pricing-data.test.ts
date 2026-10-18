@@ -94,6 +94,8 @@ describe("detectCategory", () => {
     expect(detectCategory("gemini-omni-video")).toBe("video")
     expect(detectCategory("gemini-omni-flash:4k:vref")).toBe("video")
     expect(detectCategory("happyhorse:5s:720p")).toBe("video")
+    expect(detectCategory("vidu-q4:5s:720p")).toBe("video")
+    expect(detectCategory("vidu-q4")).toBe("video")
   })
 
   it("does NOT sweep the Gemini LLM ids into the video bucket", () => {

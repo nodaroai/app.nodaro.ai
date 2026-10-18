@@ -4,8 +4,7 @@
 // of the two. Pure and aggregate-free — each composer passes its legacy table
 // and the unit collection in — so frontend/src/lib/__tests__/unit-compose.test.ts
 // proves every seam on an in-memory fixture unit, and an EMPTY unit
-// collection returns every legacy table unchanged (the composed-baseline test
-// proves that on the real registries).
+// collection returns every legacy table unchanged.
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { NodeTypeDefinition, SceneNodeData, SceneNodeType } from "@/types/nodes"
 import type { UnitDefinition, UnitHandleKind, UnitLabels } from "@/nodes/kit"
@@ -56,6 +55,51 @@ export function composeRecord<V>(what: string, legacy: Record<string, V>, additi
   if (keys.length === 0) return legacy
   assertDisjoint(what, Object.keys(legacy), keys)
   return { ...legacy, ...additions }
+}
+
+/**
+ * An ORDERED record (one whose key order a user sees — the handle popover's
+ * candidates): `legacy` in its order with each unit's row placed right after
+ * the first of its `anchors` that is a key here — a legacy key or another
+ * unit of this composition, so a unit may follow a unit (anchors are tried in
+ * turn; none present = at the end). An anchor must name something: a key
+ * here, or one of `elsewhere` (a node type this record carries no row for).
+ * One that names nothing throws — a typo or a renamed anchor must never
+ * silently move a unit to the end. Units placed at the same key keep type
+ * order. A cycle among units throws. With nothing to add it returns `legacy`
+ * itself.
+ */
+export function composeRecordAfter<V>(
+  what: string,
+  legacy: Record<string, V>,
+  units: ReadonlyArray<{ readonly type: string; readonly anchors: ReadonlyArray<string | null | undefined>; readonly value: V }>,
+  elsewhere: ReadonlySet<string> = new Set(),
+): Record<string, V> {
+  if (units.length === 0) return legacy
+  assertDisjoint(what, Object.keys(legacy), units.map((u) => u.type))
+  const unitTypes = new Set(units.map((u) => u.type))
+  const nowhere = units.flatMap((u) => u.anchors
+    .filter((a): a is string => typeof a === "string" && !Object.hasOwn(legacy, a) && !unitTypes.has(a) && !elsewhere.has(a))
+    .map((a) => `${u.type}'s anchor "${a}"`))
+  if (nowhere.length) throw new Error(`${what}: ${nowhere.join(", ")} names nothing — not a key here, nor a known name outside it`)
+  const isKey = (k: string, self: string) => k !== self && (Object.hasOwn(legacy, k) || unitTypes.has(k))
+  const at = new Map<string, Array<{ type: string; value: V }>>()
+  const end: Array<{ type: string; value: V }> = []
+  for (const u of [...units].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0))) {
+    const anchor = u.anchors.find((a): a is string => typeof a === "string" && isKey(a, u.type))
+    if (anchor === undefined) end.push(u)
+    else at.set(anchor, [...(at.get(anchor) ?? []), u])
+  }
+  const out: Record<string, V> = {}
+  const place = (key: string, value: V) => {
+    out[key] = value
+    for (const u of at.get(key) ?? []) place(u.type, u.value)
+  }
+  for (const k of Object.keys(legacy)) place(k, legacy[k] as V)
+  for (const u of end) place(u.type, u.value)
+  const unplaced = units.map((u) => u.type).filter((t) => !Object.hasOwn(out, t))
+  if (unplaced.length) throw new Error(`${what}: the units' anchors form a cycle: ${unplaced.join(", ")}`)
+  return out
 }
 
 /** `legacy` plus `additions`, legacy order first. With nothing to add it returns `legacy` itself. */
@@ -156,10 +200,12 @@ export function unitOutputValue(u: UnitDefinition, data: Readonly<Record<string,
   if (!h?.from) return undefined
   const field = data[h.from]
   if (h.kind === "video" || h.kind === "image" || h.kind === "audio") {
-    const results = Array.isArray(data.generatedResults) ? (data.generatedResults as ReadonlyArray<{ url?: unknown }>) : []
-    const active = typeof data.activeResultIndex === "number" ? data.activeResultIndex : 0
-    const url = results[active]?.url
-    if (typeof url === "string" && url) return url
+    // Exactly the legacy media read (execution-graph.ts extractNodeOutput):
+    // `activeResultIndex ?? 0`, the active result's url when it is not nullish
+    // (an empty one included), else the field as stored.
+    const results = (data.generatedResults as ReadonlyArray<{ url?: string }> | undefined) ?? []
+    const active = (data.activeResultIndex as number | undefined) ?? 0
+    return results[active]?.url ?? (field as string | undefined)
   }
   return typeof field === "string" && field ? field : undefined
 }

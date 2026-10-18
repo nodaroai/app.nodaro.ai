@@ -163,8 +163,10 @@ const INSERTED_VALUES = extractInsertedValues()
 // of SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE in lib/speaker-view-plan.ts.
 // `speaker-frames`: its per-block row (migration 530), the value of
 // SPEAKER_FRAMES_CREDITS_PER_BLOCK in @nodaro/render-rules.
-const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames"] as const
-const VALUE_SYNCED_ROW_COUNT = 225 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames
+// `vidu-q4`: its 71 per-second rows (migration 533) — the bare id plus 3-16s ×
+// 540p/720p/1080p/2k/4k.
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4"] as const
+const VALUE_SYNCED_ROW_COUNT = 296 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4
 
 function familyOf(key: string): string | undefined {
   return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))

@@ -66,12 +66,14 @@ describe("extractAudio", () => {
 
 describe("removeAudio", () => {
   it("returns the silent video path", async () => {
-    const result = await removeAudio({ videoUrl: "https://x/v.mp4" })
+    const result = await removeAudio({ videoUrl: "https://x/v.mp4", workDirPrefix: "strip" })
     expect(result.videoPath).toBe("/tmp/work/silent.mp4")
+    // The work dir is named by the prefix its caller (the node unit's worker) passes in.
+    expect(mocks.createWorkDir).toHaveBeenCalledWith("strip")
   })
 
   it("stream-copies the video and drops audio (-c:v copy -an, no re-encode)", async () => {
-    await removeAudio({ videoUrl: "u" })
+    await removeAudio({ videoUrl: "u", workDirPrefix: "strip" })
     const args = ffargs()
     expect(args).toContain("-an")
     const ci = args.indexOf("-c:v")
@@ -80,13 +82,13 @@ describe("removeAudio", () => {
   })
 
   it("does not probe for an audio stream (works on silent clips too)", async () => {
-    await removeAudio({ videoUrl: "u" })
+    await removeAudio({ videoUrl: "u", workDirPrefix: "strip" })
     expect(mocks.hasAudioStream).not.toHaveBeenCalled()
   })
 
   it("cleans up the work dir on ffmpeg failure", async () => {
     mocks.runFfmpeg.mockRejectedValueOnce(new Error("boom"))
-    await expect(removeAudio({ videoUrl: "u" })).rejects.toThrow("boom")
+    await expect(removeAudio({ videoUrl: "u", workDirPrefix: "strip" })).rejects.toThrow("boom")
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/work")
   })
 })

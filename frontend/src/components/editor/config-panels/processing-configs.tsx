@@ -70,7 +70,6 @@ import type {
   SocialMediaFormatData,
   SplitMediaData,
   ExtractAudioData,
-  RemoveAudioData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import { ConnectedMediaList, applyMediaOrder, getSourceThumbnail } from "./connected-media-list"
@@ -1348,18 +1347,6 @@ export function ExtractAudioConfig(_props: ConfigProps<ExtractAudioData>) {
     <div className="flex flex-col gap-2 text-sm text-muted-foreground">
       <p>{t("proccfg.extractsTheAudioTrackFromThe")}</p>
       <p className="text-xs">{t("proccfg.noSettingsConnectAVideoTo", { node: localizeNode("Remove Audio") })}</p>
-    </div>
-  )
-}
-
-// Remove Audio has no settings — connect a video and run.
-export function RemoveAudioConfig(_props: ConfigProps<RemoveAudioData>) {
-  const localizeNode = useLocalizeNodeLabel()
-  const t = useT()
-  return (
-    <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-      <p>{t("proccfg.stripsTheAudioTrackFromThe")}</p>
-      <p className="text-xs">{t("proccfg.noSettingsConnectAVideoTo2", { node: localizeNode("Extract Audio") })}</p>
     </div>
   )
 }

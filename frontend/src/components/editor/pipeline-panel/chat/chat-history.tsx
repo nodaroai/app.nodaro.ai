@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import type { ChatTurn as ChatTurnType } from "@nodaro/sdk"
+import type { ChatTurn as ChatTurnType } from "@nodaro/sdk/pipelines"
 import { ChatTurnBubble } from "./chat-turn"
 import { useT } from "@/lib/i18n"
 

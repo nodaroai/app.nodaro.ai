@@ -229,6 +229,20 @@ describe("getHandleConnectionLimit — Seedance 2 imageReferences shared budget"
     ).toBe(5)
   })
 
+  it("vidu-q4: a 15-image pool the start frame shares, 3 audio refs, no video refs, no end frame", () => {
+    // Vidu Q4 runs resolveSeedance2Inputs too: a wired start frame is demoted
+    // into reference_image_urls on a reference run, so it consumes one of the
+    // 15 slots. No reference-video lane exists on either endpoint, and the
+    // catalog declares no end-frame, so both handles are capped at 0.
+    const vidu = { id: "n", type: "generate-video", data: { provider: "vidu-q4" } } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(vidu, "imageReferences", { seedance2ImagePoolConsumed: 1 })?.limit).toBe(14)
+    expect(getHandleConnectionLimit(vidu, "imageReferences", { seedance2ImagePoolConsumed: 0 })?.limit).toBe(15)
+    expect(getHandleConnectionLimit(vidu, "audioReferences")?.limit).toBe(3)
+    expect(getHandleConnectionLimit(vidu, "videoReferences")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(vidu, "endFrame")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(vidu, "startFrame")?.limit).toBe(1)
+  })
+
   it("wan-3 / wan-3-prime: flat 10 images / 5 videos / 5 audio, budget ignored", () => {
     // Wan 3.0 declares its own reference caps in VIDEO_REF_LIMITS_BY_PROVIDER
     // (10 images) AND runs the same resolveSeedance2Inputs resolver as
@@ -260,15 +274,18 @@ describe("getHandleConnectionLimit — Seedance 2 imageReferences shared budget"
     }
   })
 
-  it("gemini-omni-flash inherits the sibling's flat 7-image / 1-video caps", () => {
+  it("gemini-omni-flash inherits the sibling's 7-image pool (frame-shared) and 1-video cap", () => {
     const flash = {
       id: "n",
       type: "generate-video",
       data: { provider: "gemini-omni-flash" },
     } as unknown as WorkflowNode
     expect(
-      getHandleConnectionLimit(flash, "imageReferences", { seedance2ImagePoolConsumed: 3 })?.limit,
+      getHandleConnectionLimit(flash, "imageReferences", { seedance2ImagePoolConsumed: 0 })?.limit,
     ).toBe(7)
+    expect(
+      getHandleConnectionLimit(flash, "imageReferences", { seedance2ImagePoolConsumed: 3 })?.limit,
+    ).toBe(4)
     expect(getHandleConnectionLimit(flash, "videoReferences")?.limit).toBe(1)
     // No audio-reference capability row and no `end-frame` catalog feature —
     // exact parity with gemini-omni-video (its frame path is unwired too).
@@ -276,10 +293,10 @@ describe("getHandleConnectionLimit — Seedance 2 imageReferences shared budget"
     expect(getHandleConnectionLimit(flash, "endFrame")?.limit).toBe(0)
   })
 
-  it("does NOT apply the budget to non-Seedance-2 ref providers (flat cap)", () => {
-    // gemini-omni-video is in PROVIDERS_WITH_REFERENCES (cap 7) but is NOT a
-    // Seedance 2 provider — it has no frame/asset reference_image_urls pool
-    // sharing, so the consumed count MUST be ignored and the cap stays 7.
+  it("applies the shared budget to every frames-after-refs model — gemini-omni-video included", () => {
+    // Since the frame-slot convention (2026-10-18) Gemini Omni appends the
+    // start frame into the same image_urls list, so the frame + wired assets
+    // consume slots from its 7-image cap like Seedance's pool.
     const gemini = {
       id: "n",
       type: "generate-video",
@@ -287,6 +304,19 @@ describe("getHandleConnectionLimit — Seedance 2 imageReferences shared budget"
     } as unknown as WorkflowNode
     expect(
       getHandleConnectionLimit(gemini, "imageReferences", { seedance2ImagePoolConsumed: 3 })?.limit,
+    ).toBe(4)
+  })
+
+  it("does NOT apply the budget where the frames ride a separate channel (flat cap)", () => {
+    // kling-3-omni sends its frames as their own start/end params, so a frame
+    // never takes one of its 7 reference seats.
+    const kling = {
+      id: "n",
+      type: "generate-video",
+      data: { provider: "kling-3-omni" },
+    } as unknown as WorkflowNode
+    expect(
+      getHandleConnectionLimit(kling, "imageReferences", { seedance2ImagePoolConsumed: 3 })?.limit,
     ).toBe(7)
   })
 })

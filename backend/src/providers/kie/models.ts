@@ -17,6 +17,12 @@
 /** 1 KIE credit = $0.005 USD */
 export const KIE_CREDIT_USD = 0.005
 
+/** Vidu Q4's second KIE endpoint — `runViduQ4` swaps to it whenever a reference
+ *  image or reference audio is wired (the `vidu-q4` config's own model is the
+ *  image-to-video endpoint). Exported so every reverse map of KIE ids (the
+ *  admin credit audit) resolves it back to `vidu-q4`. */
+export const VIDU_Q4_REFERENCE_MODEL = "vidu-q4/reference-to-video"
+
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
   cost: number            // Cost in USD per generation
@@ -1062,6 +1068,32 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     endFrameParam: "last_frame_url",
     extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Vidu Q4 — ONE Nodaro id over two KIE endpoints, picked by the inputs: this
+  // image-to-video id for a start frame alone, VIDU_Q4_REFERENCE_MODEL as soon
+  // as a reference image or reference audio is wired. No text-to-video and no
+  // start/end mode exist for Q4 (both 404), so there is no t2v entry and no
+  // end frame. 3-16s, 540p/720p/1080p/2k/4k (lowercase on the wire), boolean
+  // native-audio lever, no seed.
+  //
+  // Dispatched through the bespoke `runViduQ4` in video.ts — both schemas are
+  // `additionalProperties: false` and want an INTEGER duration, so the generic
+  // builder (which spreads extraParams and stringifies duration) never runs.
+  // `extraParams` is therefore DECLARATIVE ONLY (the `audio` cross-check in
+  // video-audio-capability.test.ts); runViduQ4's 720p/5s defaults are the real
+  // mechanism. `credits`/`cost` are the KIE-side DEFAULT tier (5s @720p) for
+  // audit logging only; the per-tier cost is reported by runViduQ4.
+  // See: docs.kie.ai/market/vidu-q4/image-to-video.md + reference-to-video.md
+  "vidu-q4": {
+    model: "vidu-q4/image-to-video",
+    credits: 76,
+    cost: 0.38,
+    imageParam: "image_url",
+    supportsEndFrame: false,
+    omitSeed: true,
+    extraParams: { resolution: "720p", duration: 5, audio: true },
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
   },
 
   // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher

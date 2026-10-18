@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
+import { UNIT_NODE_DESCRIPTORS } from "../unit-descriptors.js"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { isSourceNode, isSkipNode, migrateLegacyNodeType } from "@/services/workflow-engine/execution-graph.js"
 
@@ -63,7 +64,9 @@ function extractFrontendExecutableTypes(): Set<string> {
   }
   const body = match[1] ?? ""
   const types = [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1])
-  return new Set(types)
+  // ∪ every node unit that runs something — the frontend composes the same
+  // rule from the same manifest (execution.kind ≠ "source").
+  return new Set([...types, ...UNIT_NODE_DESCRIPTORS.filter((u) => u.execution.kind !== "source").map((u) => u.type)])
 }
 
 const FRONTEND_EXECUTABLE_TYPES = extractFrontendExecutableTypes()
@@ -99,7 +102,8 @@ function extractFrontendNodeTypes(): Set<string> {
   const keys = [...body.matchAll(/^\s*(?:"([^"]+)"|([A-Za-z_$][\w-]*))\s*:/gm)]
     .map((m) => m[1] ?? m[2])
     .filter((k): k is string => !!k)
-  return new Set(keys)
+  // ∪ every node unit: each has a node.tsx (the unit validator requires one), which nodeTypes composes in.
+  return new Set([...keys, ...UNIT_NODE_DESCRIPTORS.map((u) => u.type)])
 }
 
 const FRONTEND_NODE_TYPES = extractFrontendNodeTypes()

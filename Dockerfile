@@ -212,8 +212,18 @@ ARG VITE_APP_VERSION
 # Organizations (Cloud): "true" enables the organization surfaces. Empty =
 # off, which is every self-host build and every build before the launch.
 ARG VITE_ORGS_ENABLED
+# Shared site header (Cloud): "true" installs it (below) and puts it above the
+# app. Empty = off: every self-host build, and production until the cut-over.
+ARG VITE_SHARED_HEADER
+# Where the shared header's links go (frontend/src/ee/shell/site.ts). Empty =
+# the header's own canonical targets; a preview points them at its hosts.
+ARG VITE_HOME_URL
+ARG VITE_TOOLS_URL
 
 ENV VITE_ORGS_ENABLED=$VITE_ORGS_ENABLED
+ENV VITE_SHARED_HEADER=$VITE_SHARED_HEADER
+ENV VITE_HOME_URL=$VITE_HOME_URL
+ENV VITE_TOOLS_URL=$VITE_TOOLS_URL
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_URL=$VITE_API_URL
@@ -255,6 +265,19 @@ RUN set -eu; \
       "") echo "ERROR: VITE_EDITION is empty. Vite inlines it, and an empty value silently becomes 'community' — a cloud/business image would ship without billing or admin. Pass --build-arg VITE_EDITION=community|business|cloud." >&2; exit 1 ;; \
       *) echo "ERROR: VITE_EDITION='${VITE_EDITION}' is not one of community|business|cloud." >&2; exit 1 ;; \
     esac
+
+# The shared site header — a private package, installed ONLY on a cloud build
+# with VITE_SHARED_HEADER=true; every other build skips this step untouched
+# (the script exits before touching anything). NPM_TOKEN is the same
+# read:packages token the cloud plugin install below uses (one classic PAT on
+# the org's private packages, on Railway staging + production and as the repo
+# secret). The script reads it from its environment and removes the temporary
+# .npmrc on exit, so no RUN line names it. Without the package the frontend
+# builds against a stub (frontend/src/ee/shell/header-module-plugin.ts), and a
+# cloud build with the flag on but no package is refused there.
+ARG NPM_TOKEN
+ARG SHARED_HEADER_PKG_VERSION
+RUN sh frontend/src/ee/shell/install-package.sh /app
 
 WORKDIR /app/frontend
 # Skip the `prebuild` lifecycle hook (would re-run tsup for shared+client

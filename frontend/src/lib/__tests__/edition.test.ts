@@ -108,4 +108,18 @@ describe("edition helpers", () => {
       expect(mod.isFeatureEnabled("billing")).toBe(false)
     })
   })
+
+  describe("hasSharedHeader (VITE_SHARED_HEADER)", () => {
+    it.each([
+      ["cloud", "true", true],
+      ["cloud", "", false],
+      ["cloud", "false", false],
+      ["business", "true", false],
+      ["community", "true", false],
+    ])("%s with the flag %j → %s", async (edition, flag, expected) => {
+      vi.stubEnv("VITE_SHARED_HEADER", flag)
+      const mod = await loadEdition(edition)
+      expect(mod.hasSharedHeader()).toBe(expected)
+    })
+  })
 })

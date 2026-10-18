@@ -15,7 +15,8 @@
  * billing default differs from `resolutions[0]`; three surfaces then had to
  * agree, so they live here.
  *
- * The resolution fill is per-family ON PURPOSE. Wan 3.0 reads its DECLARED
+ * The resolution fill is per-family ON PURPOSE. Wan 3.0 (and Vidu Q4, whose
+ * ascending list starts at 540p) reads its DECLARED
  * billing default (PRICING_DEFAULT_RESOLUTION = 720p) because its catalog list
  * is ascending, so an index-0 fill would write 480p — a tier both `runWan3`
  * (which renders 720P) and the credit identifier (which bills the 720p row)
@@ -32,6 +33,7 @@ import {
   isSeedance2Provider,
   isMinimaxH3Provider,
   isWan3Provider,
+  isViduQ4Provider,
   isGeminiOmniProvider,
 } from "./model-constants.js"
 import { MODEL_CATALOG } from "./model-catalog.js"
@@ -46,7 +48,7 @@ export function uiAspectRatioFill(provider: string): string | undefined {
 /** See the file docstring — per-family on purpose; never a generic
  *  PRICING_DEFAULT_RESOLUTION read (that would reprice seedance-2-5). */
 export function uiResolutionFill(provider: string): string | undefined {
-  if (isWan3Provider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
+  if (isWan3Provider(provider) || isViduQ4Provider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
   if (isSeedance2Provider(provider)) return MODEL_CATALOG[provider]?.resolutions?.[0]
   return undefined
 }
@@ -55,12 +57,12 @@ export function uiResolutionFill(provider: string): string | undefined {
  * Duration the node RENDERS and BILLS when `data.duration` is unset, for the
  * families whose credit identifier declares a duration fallback that is NOT
  * `durations[0]`. Wan 3.0's bare identifier is the 5s tier while its ladder
- * starts at 2s; the Gemini Omni family's is the 8s tier while its ladder starts
- * at 4s. Everyone else falls back to the first listed duration, so this returns
+ * starts at 2s; Vidu Q4's is the 5s tier while its ladder starts at 3s; the
+ * Gemini Omni family's is the 8s tier while its ladder starts at 4s. Everyone else falls back to the first listed duration, so this returns
  * undefined and the caller keeps `durations[0]`.
  */
 export function uiDurationFill(provider: string): number | undefined {
-  if (isWan3Provider(provider)) return 5
+  if (isWan3Provider(provider) || isViduQ4Provider(provider)) return 5
   if (isGeminiOmniProvider(provider)) return 8
   return undefined
 }

@@ -83,33 +83,43 @@
           return;
         }
 
-        var clarityId = "%VITE_CLARITY_ID%";
-        var gaId = "%VITE_GA_ID%";
-        // Treat empty or unsubstituted ("%VITE_…%") values as disabled.
-        var unset = function (v) { return !v || v.charAt(0) === "%"; };
-
-        // PRODUCTION HOST ONLY, mirroring studio.nodaro.ai/index.html. The env
-        // guard above is not enough on its own: a VITE_* value that reaches a
-        // local build sends dev traffic to the live GA4 property and into the
-        // Clarity recordings. A hostname check cannot regress via env config.
-        var isProdHost = window.location.hostname === "app.nodaro.ai";
-
-        // Microsoft Clarity
-        if (!unset(clarityId) && isProdHost) {
-          (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script",clarityId);
+        // A page another Nodaro surface prerendered may never be shown:
+        // start analytics only once it is (src/lib/prerender.ts, same rule).
+        if (document.prerendering) {
+          document.addEventListener("prerenderingchange", startAnalytics, { once: true });
+        } else {
+          startAnalytics();
         }
 
-        // Google tag (gtag.js)
-        if (!unset(gaId) && isProdHost) {
-          var ga = document.createElement("script");
-          ga.async = true;
-          ga.src = "https://www.googletagmanager.com/gtag/js?id=" + gaId;
-          document.head.appendChild(ga);
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          window.gtag = gtag;
-          gtag('js', new Date());
-          gtag('config', gaId);
+        function startAnalytics() {
+          var clarityId = "%VITE_CLARITY_ID%";
+          var gaId = "%VITE_GA_ID%";
+          // Treat empty or unsubstituted ("%VITE_…%") values as disabled.
+          var unset = function (v) { return !v || v.charAt(0) === "%"; };
+
+          // PRODUCTION HOST ONLY, mirroring studio.nodaro.ai/index.html. The env
+          // guard above is not enough on its own: a VITE_* value that reaches a
+          // local build sends dev traffic to the live GA4 property and into the
+          // Clarity recordings. A hostname check cannot regress via env config.
+          var isProdHost = window.location.hostname === "app.nodaro.ai";
+
+          // Microsoft Clarity
+          if (!unset(clarityId) && isProdHost) {
+            (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script",clarityId);
+          }
+
+          // Google tag (gtag.js)
+          if (!unset(gaId) && isProdHost) {
+            var ga = document.createElement("script");
+            ga.async = true;
+            ga.src = "https://www.googletagmanager.com/gtag/js?id=" + gaId;
+            document.head.appendChild(ga);
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            window.gtag = gtag;
+            gtag('js', new Date());
+            gtag('config', gaId);
+          }
         }
       })();
     </script>

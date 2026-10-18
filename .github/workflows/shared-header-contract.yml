@@ -1,0 +1,86 @@
+# The shared site header is a private, cloud-only package (installed by
+# frontend/src/ee/shell/install-package.sh in the Dockerfile's frontend stage).
+# The app types it with its own prop subset so every build typechecks without
+# the package — which means the Docker build (it skips tsc) would only find a
+# prop the pinned package no longer accepts at run time, in staging.
+#
+# This job closes that gap: it installs the pinned version with the same
+# script and compiles frontend/src/ee/shell/contract/ against it. It also re-runs
+# the real-Vite resolver proof when Vite (the lockfile), the configs, the
+# edition helpers or the Caddyfile change.
+#
+# Internal repo only: the public mirror has no token and no package; the job
+# is skipped there (the `if` below), like cloud-image.yml.
+name: Shared header contract
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/ee/shell/**"
+      - "Dockerfile"
+      - ".github/workflows/shared-header-contract.yml"
+      - "tools/__tests__/shared-header-*.test.mjs"
+      - "package-lock.json"
+      - "frontend/vite.config.ts"
+      - "frontend/vitest.config.ts"
+      - "frontend/src/lib/edition.ts"
+      - "frontend/Caddyfile"
+  push:
+    branches: [dev, main]
+    paths:
+      - "frontend/src/ee/shell/**"
+      - "Dockerfile"
+      - ".github/workflows/shared-header-contract.yml"
+      - "tools/__tests__/shared-header-*.test.mjs"
+      - "package-lock.json"
+      - "frontend/vite.config.ts"
+      - "frontend/vitest.config.ts"
+      - "frontend/src/lib/edition.ts"
+      - "frontend/Caddyfile"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same install settings as ci.yml: nothing here executes the youtube-dl binary,
+# and the face detector needs only onnxruntime-node's CPU binaries, so `npm ci`
+# skips both downloads.
+env:
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  contract:
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Build shared packages
+        run: npm run build:packages
+      # The resolver in a real vite build. The tool self-tests job runs it too,
+      # but without `npm ci` it skips there; here vite IS installed, and the
+      # variable turns a missing vite into a failure instead of a skip.
+      - name: Resolver build tests (dependencies required)
+        env:
+          SHARED_HEADER_TESTS_REQUIRE_VITE: "1"
+        run: node --test tools/__tests__/shared-header-resolver-build.test.mjs
+      - name: Install the pinned header (same script as the Dockerfile)
+        env:
+          VITE_EDITION: cloud
+          VITE_SHARED_HEADER: "true"
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: sh frontend/src/ee/shell/install-package.sh "$GITHUB_WORKSPACE"
+      - name: The app's header props fit the package
+        run: npx tsc -p frontend/src/ee/shell/contract/tsconfig.json

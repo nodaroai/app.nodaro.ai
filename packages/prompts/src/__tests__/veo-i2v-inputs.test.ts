@@ -6,9 +6,10 @@ import { resolveVeoI2vInputs } from "../veo-i2v-inputs.js"
  * VEO 3.x i2v input resolution. VEO's API makes frame conditioning and
  * reference ingredients mutually exclusive (one imageUrls array, ≤3, whose
  * meaning flips with generationType) — so an anchored call that must carry
- * identity references moves to REFERENCE_2_VIDEO with the anchor in seat 1.
- * References win the seats (the 2026-08-14 standing rule: refs are a must,
- * frames additional): the end anchor is dropped in reference mode.
+ * identity references moves to REFERENCE_2_VIDEO. The platform frame-slot
+ * convention (2026-10-18): the caller's references take the first seats, the
+ * frames follow them, and at the 3-seat cap the frames are kept while
+ * trailing references drop.
  */
 describe("resolveVeoI2vInputs", () => {
   const FIRST = "https://r2/anchor.png"
@@ -24,26 +25,30 @@ describe("resolveVeoI2vInputs", () => {
     })
   })
 
-  it("references flip the call to REFERENCE_2_VIDEO with the anchor in seat 1, capped at 3", () => {
+  it("references flip the call to REFERENCE_2_VIDEO, references first and the anchor after them, capped at 3", () => {
     const r = resolveVeoI2vInputs({ prompt: "p", firstFrameUrl: FIRST, refImageUrls: refs(4) })
     expect(r.generationType).toBe("REFERENCE_2_VIDEO")
-    expect(r.imageUrls).toEqual([FIRST, "https://r2/ref-1.png", "https://r2/ref-2.png"])
+    expect(r.imageUrls).toEqual(["https://r2/ref-1.png", "https://r2/ref-2.png", FIRST])
     expect(r.droppedRefImages).toBe(2)
     expect(r.promptSuffix).toBe(
-      "Use @image_1 as the opening (first) frame of the video. " +
-        "@image_2 through @image_3 are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.",
+      "Use @image_3 as the opening (first) frame of the video. " +
+        "@image_1 through @image_2 are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.",
     )
   })
 
-  it("the end anchor is DROPPED in reference mode — references win the seats", () => {
+  it("the end frame is KEPT in reference mode — frames win the seats, a trailing reference drops", () => {
     const r = resolveVeoI2vInputs({ firstFrameUrl: FIRST, endFrameUrl: "https://r2/end.png", refImageUrls: refs(2) })
-    expect(r.imageUrls).toEqual([FIRST, "https://r2/ref-1.png", "https://r2/ref-2.png"])
-    expect(r.droppedEndFrame).toBe(true)
+    expect(r.imageUrls).toEqual(["https://r2/ref-1.png", FIRST, "https://r2/end.png"])
+    expect(r.droppedRefImages).toBe(1)
+    expect(r.droppedEndFrame).toBe(false)
+    expect(r.promptSuffix).toContain("Use @image_2 as the opening (first) frame and @image_3 as the closing (last) frame of the video.")
+    expect(r.promptSuffix).toContain("@image_1 is an identity reference")
   })
 
   it("a single kept reference gets the singular sentence", () => {
     const r = resolveVeoI2vInputs({ firstFrameUrl: FIRST, refImageUrls: refs(1) })
-    expect(r.promptSuffix).toContain("@image_2 is an identity reference")
+    expect(r.promptSuffix).toContain("@image_1 is an identity reference")
+    expect(r.promptSuffix).toContain("Use @image_2 as the opening (first) frame")
   })
 
   it("suppresses the opening-frame sentence when the prompt already binds it", () => {

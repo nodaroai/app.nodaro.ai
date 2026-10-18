@@ -11,7 +11,7 @@ import type {
   WorkspaceSummary,
   WorkspaceView,
 } from "@nodaro/shared/organizations"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Workspaces — the inner tenancy axis, where work actually lives.
@@ -30,7 +30,7 @@ export interface CreateWorkspaceInput {
 }
 
 export class WorkspacesResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Every workspace this account belongs to, across all its organizations.

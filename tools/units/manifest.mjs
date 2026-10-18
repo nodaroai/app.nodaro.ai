@@ -3,7 +3,7 @@
 // and gen:skills (backend/scripts/lib/gen-skills/parse-node-definitions.ts)
 // both read units through it, so they can never disagree about what a unit
 // is. Built-ins only: the tools self-test job runs it without npm install.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
 //
 // A unit is one node type, named by its type id. Its manifest,
 // frontend/src/nodes/<type>/unit.json, is the source of truth; the backend
@@ -12,7 +12,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
-import { AGGREGATES, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
+import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
 import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
@@ -110,16 +110,96 @@ export function familyIdsFrom(source) {
   return [...body.matchAll(/(?:^[ \t]+|\{[ \t]*)id: "([^"]+)"/gm)].map((m) => m[1])
 }
 
+/** The node index whose rows gen:units writes (tools/units/seams.mjs docs-index). */
+export const DOCS_INDEX = "docs/nodes/README.md"
+
+/**
+ * The docs pages (repo paths) the hand-written rows of the node index link to:
+ * every `](./<path>.md)` link outside the `<!-- gen:units … -->` region.
+ */
+export function handWrittenIndexLinks(source) {
+  const out = new Set()
+  let inRegion = false
+  for (const line of source.split(/\r?\n/)) {
+    const t = line.trim()
+    if (t === "<!-- gen:units start -->") inRegion = true
+    else if (t === "<!-- gen:units end -->") inRegion = false
+    else if (!inRegion) for (const m of line.matchAll(/\]\(\.\/([^)#\s]+\.md)\)/g)) out.add(path.posix.join("docs/nodes", m[1]))
+  }
+  return out
+}
+
+/**
+ * Each hand-written family's member types (string literals of its `types`
+ * array; an identifier such as REFRAME_ENTRY_TYPE is not a node type a unit
+ * can follow), by family id — textual, like familyIdsFrom.
+ */
+export function familyTypesFrom(source) {
+  const ids = [...source.matchAll(/(?:^[ \t]+|\{[ \t]*)id: "([^"]+)"/gm)]
+  const legacy = source.search(/^(?:export )?const LEGACY_NODE_FAMILIES\b/m)
+  const out = new Map()
+  ids.filter((m) => legacy < 0 || m.index > legacy).forEach((m, i, all) => {
+    const body = source.slice(m.index, i + 1 < all.length ? all[i + 1].index : undefined)
+    const list = body.match(/types: \[([^\]]*)\]/)?.[1] ?? ""
+    out.set(m[1], [...list.matchAll(/"([^"]+)"/g)].map((t) => t[1]))
+  })
+  return out
+}
+
+/**
+ * Names a unit type may not take though no legacy node has them, each with
+ * why: a composer keys a wider table by type and throws at module load on a
+ * collision (assertDisjoint), and a plain object answers some names by itself.
+ *   - Object.prototype names ("constructor") — every keyed table would "have" it;
+ *   - the add-node options that are not node types (a canvas macro: "reframe");
+ *   - the credit ids of STATIC_CREDIT_COSTS / CREDIT_COSTS ("ai-writer") — a
+ *     unit's price.ee.ts row is keyed by its type, and credits.ts would throw.
+ * Read from source text (the two credit literals of credits.ts, node-options.tsx
+ * and the *MACRO_ID constants), so the validator stays built-ins only. Credit
+ * ids credits.ts builds in code (spreads, loops) cannot be read as text: they
+ * are listed in tools/units/reserved-credit-ids.json, and
+ * backend/src/__tests__/units-reserved-ids.test.ts holds text ∪ that list to
+ * the runtime tables, naming any id that is missing or listed for nothing.
+ */
+export function reservedIdsFrom({ credits = "", options = "", macros = [], codeBuiltCreditIds = [] } = {}) {
+  const out = new Map()
+  const add = (id, why) => { if (TYPE_ID.test(id) && !out.has(id)) out.set(id, why) }
+  for (const n of Object.getOwnPropertyNames(Object.prototype)) add(n, "an Object.prototype name: every keyed registry would already answer it")
+  for (const src of macros) {
+    for (const m of src.matchAll(/^export const \w*MACRO_ID\s*=\s*"([^"]+)"/gm)) add(m[1], "a canvas macro's add-node entry (CANVAS_MACROS) — NODE_OPTIONS already holds it")
+  }
+  const optionsStart = options.search(/^const LEGACY_NODE_OPTIONS\b/m)
+  if (optionsStart >= 0) for (const m of options.slice(optionsStart).matchAll(/^ {4}type: "([^"]+)",/gm)) add(m[1], "an add-node option (LEGACY_NODE_OPTIONS)")
+  const credit = "a credit id in backend/src/ee/billing/credits.ts — the unit's price.ee.ts row would collide with it"
+  // Only the top-level keys (two-space indent) of the two composed literals.
+  for (const lit of credits.matchAll(/composeRecord(?:<[^\n]*?>)?\("(?:STATIC_CREDIT_COSTS|CREDIT_COSTS)", \{\n([\s\S]*?)\n\}, /g)) {
+    for (const m of lit[1].matchAll(/^ {2}(?:"([a-z][a-z0-9-]*)"|([a-z][a-z0-9]*))\s*:/gm)) add(m[1] ?? m[2], credit)
+  }
+  for (const id of codeBuiltCreditIds) add(id, `${credit} (built in code: tools/units/reserved-credit-ids.json)`)
+  return out
+}
+
 /** The validation context of the real repo. Tests build their own. */
 export function repoContext(root) {
   const legacy = JSON.parse(readFileSync(path.join(root, "tools/units/legacy-nodes.json"), "utf8"))
-  const familiesFile = path.join(root, "frontend/src/lib/node-families.ts")
+  const text = (p) => (existsSync(path.join(root, p)) ? readFileSync(path.join(root, p), "utf8") : "")
+  const familiesSource = text("frontend/src/lib/node-families.ts")
+  const libDir = path.join(root, "frontend/src/lib")
+  const macroFiles = existsSync(libDir) ? readdirSync(libDir).filter((f) => /macros?\.ts$/.test(f)).map((f) => `frontend/src/lib/${f}`) : []
   return {
     legacyTypes: new Set(legacy.types),
-    families: new Set(existsSync(familiesFile) ? familyIdsFrom(readFileSync(familiesFile, "utf8")) : []),
+    families: new Set(familyIdsFrom(familiesSource)),
+    familyTypes: familyTypesFrom(familiesSource),
+    reserved: reservedIdsFrom({
+      credits: text("backend/src/ee/billing/credits.ts"),
+      options: text("frontend/src/lib/node-options.tsx"),
+      macros: macroFiles.map(text),
+      codeBuiltCreditIds: JSON.parse(text("tools/units/reserved-credit-ids.json") || '{"ids":[]}').ids,
+    }),
     live: liveSeams(),
     capabilities: CAPABILITIES,
     exists: (p) => existsSync(path.join(root, p)),
+    readText: (p) => (existsSync(path.join(root, p)) ? readFileSync(path.join(root, p), "utf8") : null),
   }
 }
 
@@ -213,6 +293,10 @@ function checkFiles(unit, m, errors) {
   // getModelCreditBaseCost hard-fails on an unknown id, so a route without a price breaks the node.
   if (routes.length > 0 && !has("backend", "price.ee.ts")) errors.push(`a unit with a route needs ${unit.dirs.backend}/price.ee.ts (a zero-cost one too)`)
   if (routes.length === 0 && has("backend", "price.ee.ts")) errors.push("price.ee.ts without a route prices nothing — remove it")
+  // The characterization harness renders ffmpeg-backed operations through their real provider.
+  if (has("backend", "characterize.char.ts") && (kind !== "worker" || !(Array.isArray(m.capabilities) && m.capabilities.includes("ffmpeg-media")))) {
+    errors.push(`characterize.char.ts characterizes an ffmpeg worker: it needs execution.kind "worker" and the "ffmpeg-media" capability`)
+  }
   if (unit.typesSource !== null && !new RegExp(`export\\s+(?:interface|type)\\s+${dataInterfaceName(unit.type)}\\b`).test(unit.typesSource)) {
     errors.push(`${unit.dirs.frontend}/types.ts must export ${dataInterfaceName(unit.type)} (the name gen:skills reads)`)
   }
@@ -241,6 +325,8 @@ function checkSeams(unit, m, ctx, errors) {
   }
   missing("definitions", "every unit")
   missing("registry", "every unit")
+  const run = EXECUTION_SEAMS.find((x) => x.kind === m.execution?.kind)
+  if (run) missing(run.id, `execution.kind "${run.kind}" (a server-run workflow cannot run it: ${run.gap})`)
   for (const a of AGGREGATES) {
     if (a.member.endsWith(".generated.ts")) continue
     if (unit.files[a.tree].includes(a.member)) missing(a.id, a.member)
@@ -255,8 +341,15 @@ function checkSeams(unit, m, ctx, errors) {
   }
 }
 
-/** Every problem with one unit, as `<type>: <message>` lines. `knownTypes` = legacy ∪ every unit. */
-export function validateUnit(unit, ctx, knownTypes) {
+// Always reserved, whatever context a test builds: a plain object already answers these.
+const PROTOTYPE_NAMES = reservedIdsFrom()
+
+/**
+ * Every problem with one unit, as `<type>: <message>` lines. `knownTypes` =
+ * legacy ∪ every unit; `unitFamilies` = each unit's picker.family (so
+ * picker.after may name a unit of the same family).
+ */
+export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   const errors = []
   const m = unit.manifest
   if (!m) return [`${unit.type}: ${unit.manifestError}`]
@@ -268,6 +361,10 @@ export function validateUnit(unit, ctx, knownTypes) {
   if (m.type !== unit.type) errors.push(`type "${m.type}" must equal its folder name "${unit.type}"`)
   if (!TYPE_ID.test(unit.type)) errors.push(`"${unit.type}" is not a kebab-case type id`)
   if (ctx.legacyTypes.has(unit.type)) errors.push("is also a legacy node (tools/units/legacy-nodes.json) — a type lives in exactly one place")
+  else {
+    const reserved = ctx.reserved?.get(unit.type) ?? PROTOTYPE_NAMES.get(unit.type)
+    if (reserved) errors.push(`"${unit.type}" is reserved: ${reserved} — choose another type id`)
+  }
   if (!isNonEmptyString(m.label)) errors.push("label must be a non-empty string")
   if (!CATEGORIES.includes(m.category)) errors.push(`category "${m.category}" is not one of ${CATEGORIES.join(", ")}`)
   else if (!REGISTRY_CATEGORIES.includes(m.category)) errors.push(`category "${m.category}" has no /v1/nodes category yet (${REGISTRY_CATEGORIES.join(", ")}) — a unit in it adds that seam in its own PR`)
@@ -287,7 +384,15 @@ export function validateUnit(unit, ctx, knownTypes) {
     else {
       if (!ctx.families.has(m.picker.family)) errors.push(`picker.family "${m.picker.family}" is not a family id in frontend/src/lib/node-families.ts`)
       if (!("after" in m.picker)) errors.push("picker.after is required (a node type, or null for first in its family)")
-      else after(m.picker.after, "picker.after")
+      else {
+        after(m.picker.after, "picker.after")
+        // The family header lists its types in this order: the place is IN the family.
+        const members = ctx.familyTypes?.get(m.picker.family)
+        const a = m.picker.after
+        if (members && typeof a === "string" && a !== unit.type && knownTypes.has(a) && !members.includes(a) && unitFamilies.get(a) !== m.picker.family) {
+          errors.push(`picker.after: "${a}" is not in family "${m.picker.family}" — a unit follows a type of its own family (${members.length ? members.join(", ") : "none yet"}), or null for first`)
+        }
+      }
       if (m.picker.keywords !== undefined && !(Array.isArray(m.picker.keywords) && m.picker.keywords.every(isNonEmptyString))) errors.push("picker.keywords must be a list of strings")
     }
   }
@@ -311,9 +416,18 @@ export function validateUnit(unit, ctx, knownTypes) {
     }
   }
   if (!Array.isArray(m.capabilities)) errors.push("capabilities must be an array (empty is fine)")
-  else for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
+  else {
+    for (const c of m.capabilities) if (!Object.hasOwn(ctx.capabilities, c)) errors.push(`capability "${c}" is not in tools/units/capabilities.mjs — a new capability needs a reviewed seam first`)
+    if (m.capabilities.includes("length:pass-video") && m.capabilities.includes("length:exact-video")) errors.push("capabilities: \"length:exact-video\" already keeps the length — drop \"length:pass-video\"")
+  }
   if (!isObject(m.registry) || !isNonEmptyString(m.registry.description) || !OUTPUT_TYPES.includes(m.registry.outputType)) {
     errors.push(`registry needs a description and an outputType (${OUTPUT_TYPES.join(", ")}) — /v1/nodes lists every node`)
+  }
+  if (isObject(m.registry)) {
+    for (const k of Object.keys(m.registry)) if (!["description", "outputType", "after"].includes(k)) errors.push(`registry.${k}: unknown (description, outputType, after)`)
+    // /v1/nodes keeps its own hand-curated order: a node whose place there
+    // differs from position.after states it (a migrated node keeps its place).
+    if ("after" in m.registry) after(m.registry.after, "registry.after")
   }
   checkProducer(m, errors)
   const docs = m.docs
@@ -323,8 +437,18 @@ export function validateUnit(unit, ctx, knownTypes) {
     else if (!ctx.exists(docs.page)) errors.push(`docs.page ${docs.page} does not exist`)
   } else if (!isNonEmptyString(docs.awaiting)) errors.push("docs.awaiting must give the reason")
   if (isObject(docs)) {
-    for (const k of Object.keys(docs)) if (!["page", "awaiting", "useCase"].includes(k)) errors.push(`docs.${k}: unknown (page, awaiting, useCase)`)
+    for (const k of Object.keys(docs)) if (!["page", "awaiting", "useCase", "index"].includes(k)) errors.push(`docs.${k}: unknown (page, awaiting, useCase, index)`)
     if (docs.useCase !== undefined && !isNonEmptyString(docs.useCase)) errors.push("docs.useCase must be a non-empty string (the node index's \"use it to\" column)")
+    // A migrated node keeps its hand-written docs/nodes/README.md row where it
+    // is (decided 2026-10-16: the public page does not change); gen:units then
+    // writes no row for it. The row must exist, outside the generated region.
+    if (docs.index !== undefined) {
+      if (docs.index !== "hand-written") errors.push(`docs.index: "${docs.index}" — the only value is "hand-written" (omit it for a generated row)`)
+      else if (typeof docs.page !== "string") errors.push("docs.index \"hand-written\" needs docs.page (the page its row links to)")
+      else if (ctx.readText && !handWrittenIndexLinks(ctx.readText(DOCS_INDEX) ?? "").has(docs.page)) {
+        errors.push(`docs.index is "hand-written" but ${DOCS_INDEX} has no hand-written row linking ${docs.page} (outside the gen:units region)`)
+      }
+    }
   }
   forbiddenContent(m, "unit", errors)
   checkFiles(unit, m, errors)
@@ -336,7 +460,8 @@ export function validateUnit(unit, ctx, knownTypes) {
 /** Validates every unit; returns the problems (empty = valid). */
 export function validateUnits(units, ctx) {
   const known = new Set([...ctx.legacyTypes, ...units.map((u) => u.type)])
-  const errors = units.flatMap((u) => validateUnit(u, ctx, known))
+  const unitFamilies = new Map(units.filter((u) => isObject(u.manifest?.picker)).map((u) => [u.type, u.manifest.picker.family]))
+  const errors = units.flatMap((u) => validateUnit(u, ctx, known, unitFamilies))
   try {
     insertAtPositions([...ctx.legacyTypes], units.filter((u) => u.manifest?.position).map((u) => ({ type: u.type, after: u.manifest.position.after })))
   } catch (err) {

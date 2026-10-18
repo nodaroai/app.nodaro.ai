@@ -9,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { hasCredits } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
+import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { TIER_STORAGE_BYTES } from "@/lib/pricing-data"
 
 export function useSubscription(userId: string | undefined) {
@@ -76,7 +77,7 @@ export function useChangePlanMutation() {
       changePlan(userId, priceId),
     onSuccess: (_data, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.billing.subscription(userId) })
-      qc.invalidateQueries({ queryKey: queryKeys.credits.balance(userId) })
+      void invalidateBalance(qc, userId)
       qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })
       qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })
     },

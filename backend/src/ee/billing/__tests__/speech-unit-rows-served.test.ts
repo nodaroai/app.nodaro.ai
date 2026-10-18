@@ -87,7 +87,7 @@ describe("flag OFF — unit rows are priced nowhere on the public reads", () => 
 
   it("list_models / GET /v1/models drop the unit row instead of showing the catalog figure", async () => {
     const table = await getChargedPriceTable()
-    const prices = { credits: (id: string, units?: number) => chargedCredits(table, id, units) }
+    const prices = { credits: (id: string, units?: number) => chargedCredits(table, id, units), rate: () => undefined }
     // Whatever rows the catalog carries, a unit row is dropped; a flat row that
     // the table does not price keeps its catalog figure, as today.
     const rows = chargedPricing(
@@ -113,7 +113,7 @@ describe("flag ON — unit rows are served at the charged price", () => {
 
   it("list_models serves both rows, the flat one first", async () => {
     const table = await getChargedPriceTable()
-    const prices = { credits: (id: string, units?: number) => chargedCredits(table, id, units) }
+    const prices = { credits: (id: string, units?: number) => chargedCredits(table, id, units), rate: () => undefined }
     expect(chargedPricing(MODEL_CATALOG["elevenlabs-v4"]!.pricing, prices).map((r) => r.identifier)).toEqual(["elevenlabs-v4", UNIT])
   })
 })

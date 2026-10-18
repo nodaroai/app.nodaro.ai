@@ -20,11 +20,16 @@
  *    settling is asked again.
  *  - a continued outer run (`ctx.continuedFromStates`) whose earlier run of
  *    this node failed continues that node's inner run from where it failed
- *    (its fee once overall). When the route says there is nothing to
- *    continue, the recorded wrapper decides: done → its result (paid in the
- *    run being continued), still running → waited on; a run that started
- *    and stopped → the node fails, nothing charged (a fresh run would pay
- *    again for steps already paid for); never started, or gone → a fresh run.
+ *    (its fee once overall) — but only when the node's inputs and settings
+ *    are still the ones that attempt ran with (failed-attempt.ts
+ *    `attemptRanWithInputs`, asked first, before the route is called): a
+ *    changed recording, music or setting runs the node fresh instead, charged
+ *    once for that run, and so does an attempt whose wrapper or graph is gone
+ *    (or never started). When the route says there is nothing to continue,
+ *    the recorded wrapper decides: done → its result (paid in the run being
+ *    continued), still running → waited on; a run that started and stopped →
+ *    the node fails, nothing charged (a fresh run would pay again for steps
+ *    already paid for); never started, or gone → a fresh run.
  */
 import { CONTINUATION_NOT_FAILED, CONTINUATION_NOT_FOUND, CONTINUATION_SUBSET_REQUIRED, CONTINUATION_SUPERSEDED } from "@nodaro/shared/nodes"
 import { supabase } from "../../lib/supabase.js"
@@ -38,7 +43,10 @@ import { syncHttpIdempotencyKey } from "./idempotency-key.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
 import { usecaseJobOutput } from "./use-case-output.js"
 import { executionCancelledNow } from "./execution-cancel-check.js"
-import { askRoute, coded, continuingGeneration, failedAttemptOf, requestOf, type CodedError, type UseCaseRequest } from "./use-case-request.js"
+import { askRoute, coded, continuingGeneration, failedAttemptOf, freshRunInputs, requestOf, type CodedError, type UseCaseRequest } from "./use-case-request.js"
+import { attemptMediaKind, attemptRanWithInputs } from "./failed-attempt.js"
+import { loadExecutionForWrapper } from "../../lib/execution-inline-graph.js"
+import type { UseCaseNodeType } from "@nodaro/render-rules"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS, type NodeOutput, type OrchestratorContext, type ResolvedInputs, type SimpleNode } from "./types.js"
 
 /** How long a continue answered "still settling" (or a wrapper not written yet) waits before it asks again. */
@@ -81,12 +89,59 @@ async function readWrapper(jobId: string, userId: string): Promise<WrapperRow | 
 
 /** Whether a wrapper's run ever started: its run stamped on its input or its output (the continue route's own rule). */
 function runStarted(row: WrapperRow): boolean {
-  const stamped = (v: unknown) => typeof (v as Record<string, unknown> | null | undefined)?._executionId === "string"
-  return stamped(row.input_data) || stamped(row.output_data)
+  return runOf(row) !== null
 }
 
 /** What a node continuing a run that can't be resumed says when the run left no message. */
 export const CANNOT_CONTINUE_MESSAGE = "This run can't be continued — run the workflow again to start it fresh"
+
+/** The run a wrapper started, as its input (the start's stamp) or its output (the finaliser's) names it. */
+function runOf(row: WrapperRow): string | null {
+  for (const v of [row.input_data, row.output_data]) {
+    const id = (v as Record<string, unknown> | null | undefined)?._executionId
+    if (typeof id === "string" && id.length > 0) return id
+  }
+  return null
+}
+
+/**
+ * May the failed attempt `jobId` be resumed: did it run with what the node
+ * would run with now (failed-attempt.ts)? `undefined` when its wrapper or its
+ * run could not be read (asked again — a read error is never a fresh run,
+ * which would pay again for steps already paid for). `false` for a wrapper
+ * that is gone or whose run never started (nothing to resume), a run whose
+ * graph is gone, a node with no recording wired, or any input or setting that
+ * differs.
+ */
+async function attemptStillApplies(
+  jobId: string,
+  node: SimpleNode,
+  resolvedInputs: ResolvedInputs,
+  userId: string,
+): Promise<boolean | undefined> {
+  const row = await readWrapper(jobId, userId)
+  if (row === undefined) return undefined
+  const run = row ? runOf(row) : null
+  if (!row || !run) return false
+  const type = node.type as UseCaseNodeType
+  let execution: Awaited<ReturnType<typeof loadExecutionForWrapper>>
+  try {
+    execution = await loadExecutionForWrapper(run)
+  } catch {
+    return undefined
+  }
+  const graph = execution && execution.userId === userId ? execution.inlineGraph : null
+  const kind = graph ? attemptMediaKind(type, graph) : null
+  if (!kind) return false
+  let now: Record<string, unknown>
+  try {
+    now = freshRunInputs(node, resolvedInputs)
+  } catch {
+    return false
+  }
+  const ranWith = (row.input_data && typeof row.input_data === "object" ? row.input_data : {}) as Record<string, unknown>
+  return attemptRanWithInputs(type, ranWith, kind, now)
+}
 
 /** The run a wrapper job started — stamped on its `input_data._executionId` by the route. */
 async function innerExecutionIdOf(jobId: string): Promise<string | null> {
@@ -107,7 +162,10 @@ export async function executeUseCaseNode(
     throw new Error(`Component nesting depth exceeded (max ${USE_CASE_MAX_DEPTH}). Current depth: ${depth}`)
   }
   const key = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
-  let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttemptOf(node, ctx, iterationIndex, idempotencyScope))
+  const failedAttempt = failedAttemptOf(node, ctx, iterationIndex, idempotencyScope)
+  let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttempt)
+  /** A failed attempt this call would resume, not yet held to the node's current inputs. */
+  let attemptToCheck = failedAttempt !== null && request.fallback ? failedAttempt : null
   let target: Target | undefined
   /** The recorded wrapper to read, and the route's answer, after the route found nothing to continue. */
   let recorded: { readonly jobId: string; readonly code: string } | undefined
@@ -167,6 +225,14 @@ export async function executeUseCaseNode(
         // Never started, or gone: a fresh run.
         request = request.fallback!()
         recorded = undefined
+        continue
+      }
+    } else if (attemptToCheck) {
+      // The attempt is resumed only on the inputs it ran with; else a fresh run.
+      const applies = await attemptStillApplies(attemptToCheck, node, resolvedInputs, ctx.userId)
+      if (applies !== undefined) {
+        attemptToCheck = null
+        if (!applies) request = request.fallback!()
         continue
       }
     } else if (!target) {

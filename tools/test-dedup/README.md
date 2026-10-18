@@ -26,7 +26,7 @@ node tools/test-dedup/report.mjs --project backend \
   read. Without logs the report gives no saving estimate.
 
 Its pure parts (`executions.mjs`, `clusters.mjs`, `bodies.mjs`,
-`cross-tree.mjs`) use Node built-ins only and are tested by
+`cross-tree.mjs`, `parity-filter.mjs`) use Node built-ins only and are tested by
 `tools/__tests__/test-dedup-report.test.mjs`, which runs with no npm install.
 `report.mjs` loads Vitest (through `graph.mjs`) and `typescript` lazily.
 
@@ -73,8 +73,45 @@ per-locale or per-engine twins. Parameterized forms (`it.each`, `.for`,
 grep discovers, by what ties it to the frontend tree: it reads files and
 declares `@test-watches` naming `frontend/` (`watch-frontend`) or not
 (`watch-other`), declares `@test-always`, reads files and declares nothing
-(`undeclared-scanner`), imports frontend modules (`imports-frontend`), or none
-of these (`neither`: the grep matched a string only).
+(`undeclared-scanner`), imports a module that reads files which may be
+frontend's (`module-reads`: an `@reads` glob that can reach `frontend/`, or
+no `@reads` at all), loads a computed path itself or through a module it
+reaches (`computed-import`), starts a child process other than git
+(`runs-command`), imports
+frontend modules (`imports-frontend`), or none of these (`neither`: the grep
+matched a string only).
+
+## The parity filter
+
+Type Check's parity run (`ci.yml` → `cross_tree_parity()`) re-runs the
+discovered tests for frontend-only PRs, which skip Backend Tests. It skips the
+`neither` ones: they read no file and load nothing under `frontend/`, so no
+frontend change can alter their result, and Backend Tests runs them on every
+change that can. `parity-filter.mjs` decides that on every run, never from a
+list: it builds each test's graph-shaped entry statically (a walk of relative
+and `@/` imports, type-only ones dropped, with each module's annotations; a
+bare specifier naming the frontend workspace package, read from
+`frontend/package.json`, is the frontend tree, since `npm ci` links
+`node_modules/frontend` to it) and
+classifies it with `cross-tree.mjs`, the classifier of section (d). Vitest's
+own graph would cost Type Check more than the run it saves. Two checks hold
+the static walk to the truth:
+
+- the report builds Vitest's graph and fails when the two disagree about
+  `neither` for any discovered file;
+- `backend/src/__tests__/cross-tree-selection-guard.test.ts` re-derives every
+  skip from the TypeScript AST and fails a skipped test that reads files,
+  loads a module of the frontend tree (relative or by its workspace name),
+  loads a computed path or starts a non-git child process; and fails a
+  backend, tools or workspace-package module that loads the frontend tree
+  (the walk does not enter packages).
+
+If the filter crashes or keeps nothing, the parity run runs the whole
+discovered set and emits a `::warning`: a tool bug never skips everything and
+never fails a PR.
+
+Section (a) applies the filter, so the parity run counts only the files it
+runs.
 
 ## Against the plan's figures (2026-10-16)
 
@@ -107,3 +144,145 @@ they are not copies. Dropping the scope from the key (one file, any describe)
 gives 15 in frontend + backend; the 10 extra ones sit in sibling describe
 blocks, where the same text usually reads a different binding, so each needs
 a look before it counts. The phase-2 hygiene PR starts from these 9.
+
+## The equivalence harness (`equivalence.mjs`)
+
+Before a de-duplication PR removes a test, merges files or drops a guard, the
+harness checks that what the removed test asserts is still asserted
+somewhere else (plan §2). Each mode prints a markdown table to paste into the
+PR, and exits 0 when the proof holds, 1 when it fails, and 2 when it is
+inconclusive. Only a removal heading says `PROVEN`. The other headings are
+`REFUTED`, `UNRESOLVED` and `VACUOUS`.
+
+```sh
+node tools/test-dedup/equivalence.mjs remove --project backend \
+  --candidate 'backend/src/x/__tests__/a.test.ts#suite > title' \
+  --keepers backend/src/x/__tests__/a.test.ts,backend/src/x/__tests__/b.test.ts \
+  --subject backend/src/x/a.ts:120-260
+node tools/test-dedup/equivalence.mjs merge --project backend \
+  --before a.test.ts,b.test.ts --after ab.test.ts --subject backend/src/x/a.ts
+node tools/test-dedup/equivalence.mjs guard --project backend \
+  --candidate g.test.ts --keepers h.test.ts --seeds seeds/
+```
+
+### `remove`: kill-set subsumption
+
+The gate is the dependency-free mutator, `mutate.mjs` (decided 2026-10-16).
+
+- It mutates the subjects one site at a time with a fixed operator set. The
+  set is StrykerJS's, minus regex and string-method arguments; see the
+  header of `mutate.mjs`.
+- Every mutant is served from memory to one long-lived Vitest instance. No
+  product file is written, and no snapshot is either (`update: "none"`).
+- The candidate may go only if `killed(keepers) ⊇ killed(candidate)`.
+
+What counts as a kill:
+
+- **A failed test, or a test under a hook that threw.** A `beforeAll` that
+  throws leaves its tests skipped, and an `afterAll` that throws leaves
+  them passed. Either way the file is red. A module that fails to load
+  takes all its tests.
+- **The candidate's kills** come from a run of its own file.
+- **The keepers' kills** come only from runs *without* the candidate. It is
+  left out of its own file by exact full name. A same-file keeper may fail
+  a mutant only because the candidate ran first and left state behind, and
+  that is no evidence once the candidate is gone.
+  - The keepers must pass on their own before any mutant runs. Keepers that
+    need the candidate are refused with exit 2.
+  - Each narrowed run is checked to have run exactly what it names.
+- **A mutant can rename tests.** Names built from data (catalog ids,
+  `it.each` rows) change when the mutant changes that data, so a test can
+  appear under a name no baseline test had.
+  - A mutant can also rename a test onto a name a sibling already has.
+    `it.each([0, 1])` under `0` → `1` collects two "n=1" tests. The
+    collection changed either way: one name now on more tests than at
+    baseline.
+  - Candidate run: when the collection changed, any failing test in the
+    file counts as the candidate's kill. Over-counting can only refute.
+  - Keeper run: a test with a new name, one name on more tests than at
+    baseline, or a keeper test that vanished makes the run unreadable, so
+    the mutant is unresolved. A renamed candidate is
+    not left out by its old name, and a renamed keeper must not pass or kill
+    silently.
+  - Guard and merge modes are unaffected. Guard judges a side by any failing
+    test in its files, as CI does, so a renamed test that fails is a catch.
+    Merge compares the name census, so a rename shows as missing plus new.
+- **A keeper's kill must repeat** in a second run, and must be more than a
+  timeout. Otherwise the mutant is unresolved. A timeout, an unhandled
+  error, or a mutant that never loaded is unresolved too.
+- **The coverage pre-filter** drops a site only when the candidate's
+  **whole file** never executes it: that is the order in which the
+  candidate's kills are measured. Every test in the coverage run must pass.
+  - `--prefilter-candidate-only` narrows the coverage run to the candidate's
+    own tests. The candidate must still run and pass. This drops more
+    mutants, so it is faster, but run alone the candidate can take a
+    different branch than in file order. Example: a sibling switched a
+    module flag first. The candidate kills a mutant on that branch only in
+    file order. The narrow filter drops the mutant as "never executed", and
+    if no keeper kills it the result is a false `PROVEN`. The regression
+    test `state.cases.mjs` shows the default refuting what the opt-in
+    proves. Use the opt-in only for a file whose tests share no module
+    state.
+  - `--no-prefilter` evaluates every site.
+  - Statement ends that Vitest reports as a null column mean "to the end of
+    the line". The filter reads them that way, and a statement that starts
+    later on the same line counts as the inner one.
+
+`--stryker-report <mutation.json>` reads a StrykerJS kill matrix instead.
+Treat it as an optional cross-check, never as the gate. Run Stryker from a
+scratch install; it is not a dependency.
+
+- The report must say `disableBail: true` and `coverageAnalysis: "perTest"`.
+- A mutant whose `killedBy` or `coveredBy` is missing or names an unknown
+  test is unresolved.
+- Stryker runs a file's tests together, so its same-file kills have the
+  ordering problem described above. Confirm a Stryker `PROVEN` with the
+  fallback.
+
+### `merge`: census, coverage and statics
+
+- **Census:** the same test names and the same number of passes. A test
+  under a throwing hook counts as a failure.
+- **Coverage:** `--subject` is required. The covered statements, branch arms
+  and functions must be the same, not just the covered lines. A subject that
+  coverage cannot instrument, because it lies outside the project root, is
+  refused.
+- **Statics** (`census.mjs`):
+  - the same `@vitest-environment`;
+  - the same `vi.mock` set and factories in every file;
+  - no shared-worker file (`no-isolate-files.json`);
+  - every hook kept;
+  - the union of the `@test-watches` / `@test-always` annotations kept;
+  - at most 800 lines per merged file;
+  - the same multiset of assertion chains and of test bodies, printed
+    without comments. A dropped `expect` fails here, even though names,
+    passes and coverage cannot see it.
+- A run that timed out or had unhandled errors is unresolved.
+
+### `guard`: seeded violations
+
+- Each seed patch is applied in a scratch worktree of HEAD. Wherever the
+  candidate fails, the keepers must fail too.
+- A timeout on either side is never a catch; it is unresolved.
+- If the candidate catches no seed, the result is vacuous (exit 2).
+- **The worktree uses its own workspace packages.** Its `node_modules` links
+  third-party packages into the checkout, but `@nodaro/*` resolves to the
+  worktree's own `packages/`. The `dist/` directories are copies, and a
+  package that a seed touches is rebuilt in the worktree.
+- SIGINT and SIGTERM remove the worktree and the scratch directories.
+
+### Self-tests
+
+- **`tools/__tests__/test-dedup-equivalence.test.mjs`** runs with no
+  `npm ci`. It has the verdict core and node:test fixtures with precomputed
+  sites. Its mutator checks skip without `typescript`.
+- **`tools/__tests__/test-dedup-equivalence-vitest.test.mjs`** drives the
+  real Vitest runner, coverage and the CLI on a small Vitest fixture project.
+  It holds the review probes of #2302 (the hook, ordering and operator
+  probes), each of which once produced a false `PROVEN`. It takes about a minute.
+  CI runs both files in the **Test De-dup Harness** job (`ci.yml`), which has
+  `npm ci`. There `TEST_DEDUP_REQUIRE_VITEST=1` makes a missing install fail
+  instead of skip. The Diff Gate starts the job when a file matching the
+  Vitest file's `@test-watches` changes, and always on push. A guard test
+  holds `ci.yml`'s case list equal to those globs. The no-`npm ci` tools job
+  skips these cases.

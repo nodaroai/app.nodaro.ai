@@ -21,7 +21,9 @@ failing test file the selector would have skipped is a **selector miss**: a
 summary, and an entry in the `shadow-frontend-<shard>` / `shadow-backend-<shard>`
 artifacts. Each suite runs in four shards (`SHARD=i/4` in `run-suite.sh`, decided
 2026-10-14); `shadow-report.mjs` merges a run's shards per project, and a shard
-that finished without shadow data counts against a clean record.
+that finished without shadow data counts against a clean record — unless its
+`Run tests` step was skipped (the job failed in setup, e.g. a download), when
+no test ran and there is nothing to miss.
 A run that failed with no failing test file (a crash before the report), or
 that logged a Vitest unhandled error (the JSON report does not record those),
 cannot be fully checked against the selection: it is recorded as
@@ -58,7 +60,18 @@ diff even if the PR moves while they start.
 Two refinements of the "run everything" rules (decided 2026-10-15): a
 `package.json` or `package-lock.json` change that only bumps versions (a
 release) is no global trigger — a package's own bumped manifest still selects
-that package's consumers, since its build may inline the version; and the test
+that package's consumers, since its build may inline the version. A moved
+range on one of our own packages counts as a version bump too (decided
+2026-10-18 — changeset releases move `@nodaro/shared` & co. inside each
+other's manifests): the members are read from the root `workspaces` and each
+member's `name`, and the range must be a plain semver range that the member's
+own version satisfies at both revisions, so npm links the local package either
+way. Only the workspace's own files count — the root manifest and lockfile
+and the members' manifests; a standalone project in the tree (the Apify
+actor) keeps its ranges as written. A third-party range, an added, removed or
+moved dependency, an `npm:` or `file:` spec, and a lockfile change to any
+installed entry still run everything, and the reason then says
+"more than versions and workspace ranges changed" (a checked manifest). And the test
 data listed in `declared-test-data.json` (generated goldens) selects its
 readers instead of every test — `test-data-readers-guard.test.mjs` fails when
 any file names such a golden without importing it or declaring it.
@@ -100,16 +113,32 @@ the dict readers that could build it. Replayed over the last 232 dict commits:
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
 included, stays in shadow mode). No code change flips it.
-`node tools/test-select/shadow-report.mjs --since <ISO date>` (a local tool,
+`node tools/test-select/shadow-report.mjs --since <ISO date> [--run <id>]…` (a local tool,
 `gh` authenticated) lists the misses across the shadow runs since then and the
 median share of each suite the selector would have run — the evidence for
-flipping the variable. It reports "Clean" only when no run has a miss, an
+flipping the variable. Beside it: the median share among the runs that did
+not go full, and the runs that did, by cause (each global trigger — the glob
+the named file matches today, or "no global trigger any more" — a removal,
+test data…) with example PRs. The selector names only the first trigger it
+finds, so a run is attributed to that one. A manifest not marked as checked
+for a version-only change (judged before 2026-10-18) gets its own row, since
+it may be a release bump these rules now narrow. It reports "Clean" only when no run has a miss, an
 unattributed failure, a crashed selector, an unreadable check, or a test job
 that ran without leaving shadow data. A run counts whether its PR is open or
 already merged (the base of a merged PR is found through its commit, since
 GitHub lists a run's PR only while it is open); a run whose base cannot be
 determined counts as missing data. Pick a `--since` no earlier than shadow
 mode reaching `dev`: an older PR run into `dev` counts as missing data too.
+A miss is checked against the commit the PR was tested on (the merge commit's
+first parent — `base` in `selection-<project>.json`, or, for older runs, the
+actions/checkout log line): when that commit's own post-merge run on `dev`
+failed the same file and it failed again alone (`failed-<project>.txt`), the
+failure is **inherited** — dev was already broken there, so it says nothing
+about the selector (run 38902459956: #2288 broke `library-render-label` on
+dev; #2290 was tested on top of it). Inherited failures are listed apart and do
+not block "Clean". Anything short of that — the base unknown, its dev run
+missing, unfinished or unreadable, the file only flaky there — leaves the miss
+a miss, with a note saying why.
 
 ## Post-merge failures are never re-run green
 
@@ -146,8 +175,14 @@ A test file runs when, compared with the base:
 
 The whole suite runs instead when a global file changed (package manifests,
 lockfile, vitest/vite/tsconfig configs, test setup, `ci.yml`, this
-directory, the `Dockerfile` and `tools/install-pinned-ffmpeg.sh` that pin the
-ffmpeg the backend's e2e tests run against), any file other than a test file
+directory's code — `.mjs`/`.js`/`.ts`, `run-suite.sh` and the data its code
+reads, not this README, its `.d.mts` types or the guards' burn-down lists
+(decided 2026-10-18; `test-select-triggers.test.mjs` classifies every file
+here; the test also derives every file the engine imports or names at run
+time, `tools/units/registry-composers.json` included) — the `Dockerfile` and
+`tools/install-pinned-ffmpeg.sh` that pin the ffmpeg the backend's e2e tests
+run against; a vitest/vite config under `tools/__tests__/fixtures/` is a
+fixture of the tool tests, not a global file), any file other than a test file
 was removed or renamed under `frontend/`, `backend/` or `packages/` (tests
 import across projects by path), a manual mock changed, test
 data changed (a non-JS/TS file under `__tests__/`, `__goldens__/`,
@@ -243,6 +278,16 @@ helper's requests would be declared by no one, and a change to those files
 would select none of those tests. So such a helper names what it has the
 module read (`@test-watches`), or passes the declaration on to its own
 callers (`@test-reads-for-caller`).
+
+A helper that reads a FIXED set of files declares them itself, and every test
+importing it inherits the declaration. `backend/src/lib/__tests__/source-scan.ts`,
+the structural guards' walker, declares `backend/src/**/*.ts` and takes no
+directory or path from its caller, so no caller can make it read outside that;
+`source-scan-reads.test.ts` holds its exports, their parameters, its read
+sites (one walk from `backend/src`, `typescript` as a type only, so no
+`ts.sys`) and every path it reads at run time to that declaration. Its parse-only half, `source-ast.ts`,
+reads nothing: a guard that reads its own files and only parses them imports
+that, and declares its own reads.
 
 **Cross-tree tests.** A backend test that names a frontend path is found by
 Type Check's parity grep (`cross_tree_parity()` in `ci.yml`) and also runs

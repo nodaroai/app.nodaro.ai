@@ -1,3 +1,4 @@
+// @test-watches backend/src/routes/apply-edl.ts backend/src/lib/apply-edl-plan.ts backend/src/services/workflow-engine/payload-builder.ts backend/src/ee/billing/credits.ts packages/shared/src/render-nodes.ts
 /**
  * Apply EDL's credit id is chosen in ONE place: `applyEdlCreditId(quality)`
  * (@nodaro/shared) — `apply-edl` for a final render, `apply-edl:proxy` for a

@@ -116,7 +116,7 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -131,7 +131,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
@@ -753,7 +753,7 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -1157,7 +1157,7 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -1641,7 +1641,7 @@ Needs `workflows:execute`.
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `detail_level` | string |  | How much detail to include. Default detailed. One of `brief`, `detailed`, `comprehensive`. |
 | `custom_prompt` | string |  | Override the default system prompt with a specific question (e.g. 'List all text visible in the image'). At most 2000 characters. |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
 | `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
@@ -1916,6 +1916,18 @@ Needs `workflows:execute`.
 | `target_duration` | number |  | Target output duration in seconds (1–300). Required when mode = duration. From 1 to 300. |
 | `smart_cut_before_repeat` | boolean |  | Smart loop cut preprocess. Trims source to its cleanest loop boundary before concatenating. Recommended for stochastic-tail sources. |
 | `smart_cut_lookback` | integer |  | Smart-cut lookback window in frames. Default 16, max 64. From 2 to 64. |
+
+## `make_chapters`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) | yes | The recording (video or audio URL). |
+| `plan_tier` | string |  | Planning quality (default economy). One of `economy`, `standard`, `premium`. |
+| `instructions` | string |  | Instructions for the chapters ("5 to 8 chapters", "short titles"). At most 4000 characters. |
+| `style_guide` | string |  | Style guide for the chapter titles. At most 4000 characters. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `mark_card_done`
 
@@ -2429,6 +2441,8 @@ Needs `workflows:execute`.
 | `workflow_id` | string | yes |  |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 | `inputs` | object (map of any) |  | Optional per-node input overrides, keyed by node id. The value may be a bare scalar/array (e.g. "blue car" or ["a","b"]) — it's written to that node's main input field — OR an object mapping specific fields to values (e.g. { "prompt": "..." }). |
+| `continue_from_execution_id` | string |  | Your own FAILED run of this workflow (its execution id), to continue from where it stopped. Requires from_failed: true. |
+| `from_failed` | boolean |  | With continue_from_execution_id: run only the nodes that run did not complete. |
 
 ## `save_image_defaults`
 
@@ -3031,6 +3045,7 @@ Needs `assets:write`.
 | `session_id` | string | yes | The session's id (from list_sessions). |
 | `title` | string |  | From 1 to 200 characters. |
 | `archived` | boolean |  |  |
+| `cover_job_id` | string or null |  | One of the session's items to lead its previews; null = automatic. |
 | `import_job_ids` | string[] |  | From 1 to 100 items. |
 | `remove_job_ids` | string[] |  | From 1 to 100 items. |
 

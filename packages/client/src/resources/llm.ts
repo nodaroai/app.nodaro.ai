@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Structured LLM output — `POST /v1/llm/structured` and its asynchronous
@@ -67,7 +67,7 @@ export interface LlmStructuredJobOutput<T = unknown> {
 }
 
 export class LlmResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Synchronous forced-schema completion (`POST /v1/llm/structured`). A call

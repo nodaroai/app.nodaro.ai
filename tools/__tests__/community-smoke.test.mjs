@@ -14,8 +14,8 @@
  * it, a Pro run served by another lane, a capabilities document that claims an
  * engine) and assert the matching contract goes FAIL.
  *
- * Scope on purpose: this file asserts the Scene3D, Video Overlay, Site Capture
- * and Tighten Episode contracts only. The stub is faithful enough for the
+ * Scope on purpose: this file asserts the Scene3D, Video Overlay, Site Capture,
+ * Tighten Episode and Chapters contracts only. The stub is faithful enough for the
  * probe to reach them, not a second implementation of the platform — the
  * other contracts are asserted against the real image by
  * `.github/workflows/community-e2e.yml`.
@@ -45,6 +45,9 @@ const CAPTURE = "a keyless Site Capture answers with a job id, then fails honest
 
 /** The Tighten Episode contract name, spelled exactly as the probe records it. */
 const TIGHTEN = "Tighten Episode on an unconnected install: hidden from discovery, refused 503 before any job"
+
+/** The Chapters contract name, spelled exactly as the probe records it. */
+const CHAPTERS = "Chapters on an unconnected install: hidden from discovery, refused 503 before any job"
 
 /** The entity search contract name, spelled exactly as the probe records it. */
 const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
@@ -126,6 +129,17 @@ function communityShape() {
     // Tighten Episode, unconnected: refused before any job. `createsJob` puts a
     // row in the job list (what a wrapper inserted before the refusal leaves).
     tighten: {
+      status: 503,
+      body: {
+        error: {
+          code: "nodaro_connection_required",
+          message: "This node runs on nodaro.ai. Connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API) and run again.",
+        },
+      },
+      createsJob: false,
+    },
+    // Chapters, unconnected: the same refusal, before any job.
+    chapters: {
       status: 503,
       body: {
         error: {
@@ -286,6 +300,12 @@ function stubServer(shape) {
           state.jobs = [{ id: "job_tighten", status: "processing", input_data: { type: "tighten-episode" } }, ...state.jobs]
         }
         return send(shape.tighten.status, shape.tighten.body)
+      }
+      if (path === "/v1/episode-chapters" && req.method === "POST") {
+        if (shape.chapters.createsJob) {
+          state.jobs = [{ id: "job_chapters", status: "processing", input_data: { type: "episode-chapters" } }, ...state.jobs]
+        }
+        return send(shape.chapters.status, shape.chapters.body)
       }
 
       // ── the Scene3D slice ─────────────────────────────────────────────────
@@ -542,6 +562,33 @@ test("a refusal that left a job row behind fails the Tighten Episode contract", 
     shape.tighten = { ...shape.tighten, createsJob: true }
   })
   assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("the keyless community shape passes the Chapters contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, CHAPTERS, "PASS")
+})
+
+test("advertising episode-chapters on an unconnected install fails the Chapters contract (and only it)", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.nodes.push({ type: "episode-chapters", label: "Chapters", category: "processing", description: "d", outputType: "text" })
+  })
+  assertContract(out, CHAPTERS, "FAIL")
+  assertContract(out, TIGHTEN, "PASS")
+})
+
+test("a Chapters run accepted with a job handle fails the Chapters contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.chapters = { status: 202, body: { jobId: "job_chapters", executionId: "exec_1" }, createsJob: true }
+  })
+  assertContract(out, CHAPTERS, "FAIL")
+})
+
+test("a Chapters refusal that left a job row behind fails the Chapters contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.chapters = { ...shape.chapters, createsJob: true }
+  })
+  assertContract(out, CHAPTERS, "FAIL")
 })
 
 test("a refusal with another code fails the Tighten Episode contract", async () => {

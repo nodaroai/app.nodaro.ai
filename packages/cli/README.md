@@ -101,6 +101,8 @@ nodaro workflows import <file> --project <projectId>
 nodaro workflows run <id>                # prints execution id, returns immediately
 nodaro workflows run <id> --watch        # follow until completed/failed/cancelled
 nodaro workflows run <id> --node n1 n2   # run only specific nodes
+nodaro workflows run <id> --continue-from <executionId> --from-failed   # resume a failed run where it stopped
+nodaro workflows run <id> ... --idempotency-key <key>   # 8+ chars; retrying with the same key starts one run
 
 # Apps — workflows wrapped in a curated UI (the things at app.nodaro.ai/app/<slug>)
 nodaro apps list [--search <query>] [--limit 20] [--cursor <token>] [--category <slug>]

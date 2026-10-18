@@ -45,6 +45,7 @@ describe("generate-video-pro node registry", () => {
       "wan-3",
       "wan-3-prime",
       "happyhorse-ref2v",
+      "vidu-q4",
     ])
     // kling-3-omni is deliberately absent: it passes every capability check
     // but has no working dispatch path (VIDEO_PROVIDERS_WITHOUT_DISPATCH).

@@ -1,5 +1,4 @@
-import { promptBindsFirstFrame } from "./seedance-2-inputs.js"
-import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js"
+import { placeFramesAfterReferences } from "./frame-reference-slots.js"
 
 /**
  * VEO 3.x i2v input resolution — the mutually-exclusive sibling of
@@ -8,13 +7,15 @@ import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js
  * [first(, last)] frames; REFERENCE_2_VIDEO reads every entry as a
  * reference ingredient. Frames and identities cannot ride separate
  * channels, so an anchored call that must carry identity references moves
- * to REFERENCE_2_VIDEO with the anchor in seat 1, bound in prose as the
- * opening frame (requested, not pixel-guaranteed — the accepted trade,
- * same as seedance-2's reference mode).
+ * to REFERENCE_2_VIDEO with the frames bound in prose (requested, not
+ * pixel-guaranteed — the accepted trade, same as seedance-2's reference mode).
  *
- * REFERENCES WIN THE SEATS (the 2026-08-14 standing rule: refs are a must,
- * frames additional): the end anchor is dropped in reference mode rather
- * than spending one of three seats on a closing guess. The caller logs it.
+ * THE PLATFORM CONVENTION (2026-10-18, `placeFramesAfterReferences`): the
+ * caller's references take the first seats, so their image token N is their
+ * Nth reference; the start frame — and the end frame, VEO takes one — follow
+ * them, bound as the opening / closing frame. At the 3-ingredient cap the
+ * frames are kept (explicit intent) and trailing references drop, reported.
+ * (Until then the anchor took seat 1 and an end frame was surrendered.)
  *
  * BYTE-IDENTICAL with no references: plain frame mode, frames kept, no
  * generationType, no suffix — exactly what every veo i2v call has always
@@ -30,14 +31,15 @@ export interface VeoI2vInputsArgs {
 }
 
 export interface VeoI2vInputsResult {
-  /** The `imageUrls` payload: frames in plain mode, [anchor, ...refs] in
+  /** The `imageUrls` payload: frames in plain mode, [...refs, start, end?] in
    *  reference mode — never more than VEO's 3-ingredient cap. */
   imageUrls: string[]
   /** Present (REFERENCE_2_VIDEO) exactly when references ride. */
   generationType?: "REFERENCE_2_VIDEO"
   promptSuffix: string
   droppedRefImages: number
-  /** True when an end anchor was surrendered to reference mode. */
+  /** Always false since the frames-after-references convention: an end frame
+   *  is kept in reference mode. Kept for callers that log it. */
   droppedEndFrame: boolean
 }
 
@@ -55,14 +57,19 @@ export function resolveVeoI2vInputs(args: VeoI2vInputsArgs): VeoI2vInputsResult 
       droppedEndFrame: false,
     }
   }
-  const kept = refs.slice(0, VEO_INGREDIENT_SLOTS - 1)
-  const droppedRefImages = refs.length - kept.length
-  const frameSentence = promptBindsFirstFrame(args.prompt) ? "" : REF_BINDING.frame(1, "opening")
+  const placed = placeFramesAfterReferences({
+    prompt: args.prompt,
+    firstFrameUrl: args.firstFrameUrl,
+    lastFrameUrl: args.endFrameUrl,
+    refImageUrls: refs,
+    imageCap: VEO_INGREDIENT_SLOTS,
+    bindIdentities: true,
+  })
   return {
-    imageUrls: [args.firstFrameUrl, ...kept],
+    imageUrls: placed.imageUrls,
     generationType: "REFERENCE_2_VIDEO",
-    promptSuffix: [frameSentence, identityRefsSentence(2, kept.length + 1)].filter(Boolean).join(" "),
-    droppedRefImages,
-    droppedEndFrame: Boolean(args.endFrameUrl),
+    promptSuffix: placed.promptSuffix,
+    droppedRefImages: placed.droppedRefImages,
+    droppedEndFrame: false,
   }
 }

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
+import type { RunWorkflowParams } from "@nodaro/sdk/workflows"
 import type { WorkflowExport } from "@nodaro/shared/workflow"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
@@ -206,16 +207,49 @@ export function workflowsCommand(): Command {
     .option("--json")
     .option("--watch", "poll execution status until completion")
     .option("--node <ids...>", "execute only these node ids (space-separated)")
-    .action(async (id: string, opts: GlobalOpts & { watch?: boolean; node?: string[] }) => {
+    .option(
+      "--continue-from <executionId>",
+      "continue an earlier execution of this workflow: nodes not run hand on its outputs (needs --node, unless --from-failed)",
+    )
+    .option(
+      "--from-failed",
+      "with --continue-from: resume that FAILED run from where it stopped — runs only what it did not complete (of --node, default every node)",
+    )
+    .option(
+      "--idempotency-key <key>",
+      "sent as Idempotency-Key (8+ characters): a retry with the same key answers the run already started",
+    )
+    .action(
+      async (
+        id: string,
+        opts: GlobalOpts & { watch?: boolean; node?: string[]; continueFrom?: string; fromFailed?: boolean; idempotencyKey?: string },
+      ) => {
       try {
+        if (opts.fromFailed && !opts.continueFrom) {
+          throw new Error("--from-failed needs --continue-from <executionId> (the run that failed)")
+        }
+        // The server ignores a shorter key, so a retry would start a second run.
+        if (opts.idempotencyKey !== undefined && opts.idempotencyKey.trim().length < 8) {
+          throw new Error("--idempotency-key must be at least 8 characters (the server ignores a shorter one)")
+        }
         const client = buildClient(opts.profile)
-        const params = opts.node ? { nodeIds: opts.node } : {}
-        const result = await client.workflows.run(id, params)
+        const params: RunWorkflowParams = {
+          ...(opts.node ? { nodeIds: opts.node } : {}),
+          ...(opts.continueFrom ? { continueFromExecutionId: opts.continueFrom } : {}),
+          ...(opts.fromFailed ? { continueMode: "from-failed" as const } : {}),
+        }
+        const result = opts.idempotencyKey
+          ? await client.workflows.run(id, params, { idempotencyKey: opts.idempotencyKey })
+          : await client.workflows.run(id, params)
         if (opts.json && !opts.watch) {
           emit(result, opts)
           return
         }
-        success(`execution ${result.executionId} (${result.status})`)
+        success(`execution ${result.executionId} (${result.status})${result.deduped ? " — already started by an earlier request with this key" : ""}`)
+        // Built on a later continuation of the run asked for: say where its states came from.
+        if (result.continuedFrom && result.continuedFrom !== opts.continueFrom) {
+          dim(`continued from ${result.continuedFrom}, a later continuation of ${opts.continueFrom} — only what it left runs`)
+        }
         if (!opts.watch) {
           dim(`follow: nodaro executions get ${result.executionId} --watch`)
           return
@@ -224,7 +258,8 @@ export function workflowsCommand(): Command {
       } catch (err) {
         handleError(err)
       }
-    })
+      },
+    )
 
   cmd
     .command("share <id>")

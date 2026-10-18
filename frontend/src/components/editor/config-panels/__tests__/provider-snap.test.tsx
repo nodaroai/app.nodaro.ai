@@ -872,15 +872,6 @@ describe("LipSyncConfig — provider-snap useEffect", () => {
       expect.objectContaining({ resolution: "720p" }),
     )
   })
-
-  it("keeps 1080p for the full seedance-2 (real 1080p SKU)", () => {
-    const onUpdate = vi.fn()
-    const data = baseLipSyncData({ provider: "seedance-2", resolution: "1080p" })
-    render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
-    expect(onUpdate).not.toHaveBeenCalledWith(
-      expect.objectContaining({ resolution: expect.anything() }),
-    )
-  })
 })
 
 // =============================================================================

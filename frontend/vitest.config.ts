@@ -17,7 +17,12 @@ const exclude = [...configDefaults.exclude, "playwright/**"]
 // worker is actually reused (shared-worker-sequencer.ts) — unless the command
 // line asks for a shuffled order.
 const projects = testProjects(readNoIsolateFiles(__dirname), exclude)
-const sequence = projects && !shuffleRequested(process.argv) ? { sequencer: SharedWorkerSequencer } : undefined
+const sequencer = projects && !shuffleRequested(process.argv) ? { sequencer: SharedWorkerSequencer } : {}
+// `afterEach` hooks run in reverse order of registration. Vitest's default,
+// spelled out because the teardown drain depends on it: setup.ts registers the
+// drain before Testing Library registers its cleanup, so cleanup runs first
+// (src/test/teardown-drain.ts).
+const sequence = { hooks: "stack" as const, ...sequencer }
 
 export default defineConfig({
   test: {
@@ -35,7 +40,7 @@ export default defineConfig({
     server: { deps: { inline: [/@nodaro[\\/]picker-ui/, /picker-ui[\\/]dist/] } },
     exclude,
     ...(projects ? { projects } : {}),
-    ...(sequence ? { sequence } : {}),
+    sequence,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
@@ -61,6 +66,10 @@ export default defineConfig({
       // `@remotion-pkg/scene3d` (the render-runtime-free three.js entry), so
       // the alias has to exist here too or its module graph can't resolve.
       "@remotion-pkg": path.resolve(__dirname, "../packages/remotion/src"),
+      // The shared site header is a cloud-only package; tests always get the
+      // stub (vite.config's resolver plugin is not loaded here). A test that
+      // needs the header mocks "virtual:site-header".
+      "virtual:site-header": path.resolve(__dirname, "./src/ee/shell/stub.tsx"),
     },
     // The picker-ui package is consumed via a workspace symlink; without
     // dedupe its own node_modules/react loads as a SECOND React copy and every

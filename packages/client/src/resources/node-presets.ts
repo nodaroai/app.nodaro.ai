@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { FactoryPreset } from "@nodaro/prompts/presets"
 
 /**
@@ -144,7 +144,7 @@ export interface UpdateNodePresetGroupInput {
  * anyone can).
  */
 export class PresetsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * `GET /v1/node-presets` → your custom presets, newest first. Pass `nodeType`

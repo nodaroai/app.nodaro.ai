@@ -7,7 +7,9 @@ import {
   NodaroError,
   WorkflowConflictError,
   InsufficientCreditsError,
+  ContinuationPreviewPendingError,
   type RunWorkflowParams,
+  type RunWorkflowOptions,
   type RenderFinalParams,
   type RenderFinalQuote,
 } from "../../index.js"
@@ -107,6 +109,72 @@ describe("workflows resource", () => {
     } satisfies RunWorkflowParams
     await c.workflows.run("wf-1", params)
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(params)
+  })
+
+  it("continue-from-failed: sends the failed run and the mode; nodeIds may be left out", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ executionId: "ex-4", status: "pending", continuedFrom: "ex-later" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params = { continueFromExecutionId: "ex-failed", continueMode: "from-failed" } satisfies RunWorkflowParams
+    const result = await c.workflows.run("wf-1", params)
+    expect(result.executionId).toBe("ex-4")
+    // The execution it continued from (a later continuation it was built on).
+    expect(result.continuedFrom).toBe("ex-later")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/run")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ continueFromExecutionId: "ex-failed", continueMode: "from-failed" })
+  })
+
+  it("run sends an Idempotency-Key only when asked, never in the body; a retry's deduped answer comes back", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ executionId: "ex-5", status: "pending" }))
+      .mockReturnValueOnce(mockOk({ executionId: "ex-5", status: "pending", deduped: true }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params = { continueFromExecutionId: "ex-failed", continueMode: "from-failed" } satisfies RunWorkflowParams
+    await c.workflows.run("wf-1", params)
+    expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBeUndefined()
+    const retry = await c.workflows.run("wf-1", params, { idempotencyKey: "retry-key-1" } satisfies RunWorkflowOptions)
+    expect(fetchMock.mock.calls[1][1].headers["Idempotency-Key"]).toBe("retry-key-1")
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ continueFromExecutionId: "ex-failed", continueMode: "from-failed" })
+    expect(retry).toEqual({ executionId: "ex-5", status: "pending", deduped: true })
+  })
+
+  it("a superseded continue-from-failed carries its stable code", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, {
+        error: { code: "continuation_superseded", message: "A later continuation of this run failed: continue that one." },
+        executionId: "ex-later",
+      }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const refused = await c.workflows
+      .run("wf-1", { continueFromExecutionId: "ex-failed", continueMode: "from-failed" })
+      .catch((e: unknown) => e)
+    expect(refused).toBeInstanceOf(NodaroError)
+    expect((refused as NodaroError).code).toBe("continuation_superseded")
+  })
+
+  it("a continuation held at a Preview review: a ContinuationPreviewPendingError carrying the run that finishes it, sent as is", async () => {
+    const next = { continueFromExecutionId: "ex-held", nodeIds: ["t", "cap"], inputOverrides: { t: { useCaseContinue: { mode: "render-final", jobId: "w" } } } }
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(
+        mockErr(409, {
+          error: { code: "continuation_preview_pending", message: "A later continuation of this run (ex-held) stopped at its Preview review" },
+          executionId: "ex-held",
+          renderNodeIds: [],
+          reviewNodeIds: ["t"],
+          next,
+        }),
+      )
+      .mockReturnValueOnce(mockOk({ executionId: "ex-final", status: "pending" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const refused = await c.workflows.run("wf-1", { continueFromExecutionId: "ex-failed", continueMode: "from-failed" }).catch((e: unknown) => e)
+    expect(refused).toBeInstanceOf(ContinuationPreviewPendingError)
+    expect(refused).toBeInstanceOf(NodaroError)
+    const held = refused as ContinuationPreviewPendingError
+    expect(held).toMatchObject({ code: "continuation_preview_pending", status: 409, executionId: "ex-held", renderNodeIds: [], reviewNodeIds: ["t"], next })
+    await c.workflows.run("wf-1", held.next!)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual(next)
   })
 
   it("a refused continuation: not found is a NotFoundError, the rest carry their stable code", async () => {

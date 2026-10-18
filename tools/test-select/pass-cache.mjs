@@ -14,7 +14,7 @@
 // epoch). Anything we cannot name makes the file uncacheable: it always runs.
 import { createHash } from "node:crypto"
 import { matchesAny } from "./glob.mjs"
-import { GLOBAL_TRIGGERS } from "./select.mjs"
+import { isGlobalTrigger } from "./select.mjs"
 
 // Bump to throw every recorded pass away (a fixed bug in the key, a runner
 // image change the key cannot see).
@@ -32,7 +32,7 @@ const sha = (text) => createHash("sha256").update(text).digest("hex")
 // and the disposable runner's image definition.
 const ENVIRONMENT_EXTRA = ["**/__mocks__/**", "tools/ci-runner/runner.Dockerfile"]
 export function environmentFiles(trackedFiles) {
-  return trackedFiles.filter((f) => matchesAny(f, GLOBAL_TRIGGERS) || matchesAny(f, ENVIRONMENT_EXTRA)
+  return trackedFiles.filter((f) => isGlobalTrigger(f) || matchesAny(f, ENVIRONMENT_EXTRA)
     || (TEST_DATA_DIR.test(f) && !JS_TS_MODULE.test(f))).sort()
 }
 

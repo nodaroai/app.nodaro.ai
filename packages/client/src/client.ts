@@ -1,6 +1,3 @@
-import { readBinaryResponse } from "./binary-response.js"
-import { throwFromResponse } from "./errors.js"
-import type { Auth } from "./auth.js"
 import { WorkflowsResource } from "./resources/workflows.js"
 import { ProjectsResource } from "./resources/projects.js"
 import { SessionsResource } from "./resources/sessions.js"
@@ -9,7 +6,7 @@ import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
 import { NodesResource } from "./resources/nodes.js"
 import { Scene3DResource } from "./resources/scene3d.js"
-import { DeveloperAppsResource, type DeveloperAppKind, type DeveloperAppScope } from "./resources/developer-apps.js"
+import { DeveloperAppsResource } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
 import { WebhooksResource } from "./resources/webhooks.js"
 import { AppsResource } from "./resources/apps.js"
@@ -48,151 +45,16 @@ import { TutorialsResource } from "./resources/tutorials.js"
 import { OrganizationsResource } from "./resources/organizations.js"
 import { WorkspacesResource } from "./resources/workspaces.js"
 import { EditResource } from "./resources/edit.js"
-import { WORKSPACE_HEADER, type MeOrganizations } from "@nodaro/shared/organizations"
+import { NodaroClientCore, type ClientOptions } from "./core.js"
 
-/** Replaced at build time by tsup `define` from package.json. The fallback
- *  keeps `tsx`/vitest runs of the source working, where no define applies. */
-declare const __SDK_VERSION__: string | undefined
-const SDK_VERSION = typeof __SDK_VERSION__ === "string" ? __SDK_VERSION__ : "0.0.0-dev"
+export { CLIENT_HEADER } from "./core.js"
+export type { ClientOptions, UserIdentity, ConnectedApp } from "./core.js"
 
 /**
- * Identifies the calling package to the backend, which records it as the job's
- * provenance (`jobs.source` / `source_detail`) so an operator can tell a CLI
- * run from an SDK integration from a browser session.
- *
- * Only `sdk/…` and `cli/…` are honoured server-side; anything else is ignored
- * rather than trusted, since this is an unauthenticated header.
+ * The full client: the core (`./core.ts` — config, transport, identity) and
+ * every resource.
  */
-export const CLIENT_HEADER = "X-Nodaro-Client"
-
-/**
- * In a browser the header is redundant AND a liability, so it is not sent.
- *
- * Redundant: the browser already sends `Origin`, which names the actual product
- * (`studio.nodaro.ai`) rather than merely the library it used — and the backend
- * deliberately prefers Origin over this header, so a browser-sent value is
- * discarded on arrival.
- *
- * A liability: `X-Nodaro-Client` is not a CORS-safelisted request header, so a
- * browser sending it requires an exact match in the server's
- * `Access-Control-Allow-Headers`. Any deployment whose backend predates that
- * allowlist entry would fail the PREFLIGHT — breaking every API call from the
- * app, not just its provenance. Self-hosted and lagging deployments make that a
- * real risk, and nothing in a browser app would reveal the cause.
- *
- * An EXPLICIT `clientLabel` is always sent regardless: a caller that names
- * itself has opted in deliberately, and that intent outranks this default.
- */
-const isBrowser = (): boolean => typeof window !== "undefined" && typeof window.document !== "undefined"
-
-export interface ClientOptions {
-  /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
-  baseUrl: string
-  /** Auth provider. Use StaticTokenAuth, supabaseAuth, or CallbackAuth. */
-  auth: Auth
-  /** Optional fetch override (for tests or custom transports). */
-  fetch?: typeof fetch
-  /** Default request timeout in ms. Default 60s. */
-  timeoutMs?: number
-  /**
-   * Overrides the `X-Nodaro-Client` label. Defaults to `sdk/<version>`.
-   *
-   * Exists for `@nodaro/cli`, which is a wrapper AROUND this SDK: without an
-   * override every CLI invocation would be recorded as an SDK call and the two
-   * surfaces could never be told apart.
-   */
-  clientLabel?: string
-  /**
-   * The workspace every request acts in — sent as `X-Nodaro-Workspace`.
-   *
-   * It selects which workspace a LIST reads from and where a CREATE lands.
-   * It never authorizes: reading, updating, deleting or running an
-   * identified object is decided by that object's own workspace, so a
-   * forgotten header cannot hide work and a forged one cannot reach anyone
-   * else's. Omit it to work in the caller's personal space.
-   *
-   * Prefer {@link NodaroClient.withWorkspace} for anything short-lived — one
-   * client per workspace, no shared mutable selection to get wrong.
-   */
-  workspaceId?: string
-}
-
-interface RequestOptions {
-  body?: unknown
-  query?: Record<string, string | number | boolean | undefined>
-  headers?: Record<string, string>
-  signal?: AbortSignal
-}
-
-/**
- * The authenticated user's canonical identity (`GET /v1/me`). A token-
- * introspection primitive: any valid bearer token (first-party Supabase JWT or
- * a developer-app OAuth token) resolves to its owner's identity. Mirrors the
- * `profiles` identity columns server-side — the route is the source of truth.
- */
-export interface UserIdentity {
-  /** Nodaro user id (= the Supabase auth user id). */
-  readonly id: string
-  readonly email: string
-  /** Human-readable display name (from `profiles.full_name`); `null` if unset. */
-  readonly displayName: string | null
-  /** Avatar URL; `null` if unset. */
-  readonly avatarUrl: string | null
-  /** Subscription tier (e.g. "free", "pro"). */
-  readonly tier: string
-  /**
-   * Whether the user holds an admin role. DESCRIPTIVE only — use it to decide
-   * whether to render admin surfaces without capability-probing an admin
-   * endpoint; every admin API stays enforced server-side regardless.
-   */
-  readonly isAdmin: boolean
-}
-
-/**
- * An app the user let into their account through OAuth (`GET
- * /v1/me/connected-apps`): a developer app, an AI assistant's MCP connector, or
- * a self-hosted install. One entry per grant still in force.
- */
-export interface ConnectedApp {
-  /** The grant's id — what {@link NodaroClient.revokeConnectedApp} takes. */
-  readonly authorizationId: string
-  /** The app's name; `null` if it has none. A `dynamic_mcp` client chose its own. */
-  readonly name: string | null
-  /**
-   * How the app came to exist: `user` (a developer app someone registered),
-   * `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself) or
-   * `community_instance` (a self-hosted install).
-   */
-  readonly kind: DeveloperAppKind | (string & {})
-  readonly homepageUrl: string | null
-  /** The scopes this grant holds. */
-  readonly scopes: readonly DeveloperAppScope[]
-  /** When the user granted access (ISO 8601). */
-  readonly connectedAt: string
-  /** The latest use of any token issued under the grant; `null` if never used. */
-  readonly lastUsedAt: string | null
-}
-
-export class NodaroClient {
-  readonly baseUrl: string
-  readonly auth: Auth
-  readonly timeoutMs: number
-  /** Value sent as `X-Nodaro-Client`; recorded by the backend as job provenance. */
-  readonly clientLabel: string
-  /** Whether to actually send it — see the note on {@link CLIENT_HEADER}. */
-  private readonly sendClientHeader: boolean
-  private readonly fetchOverride: typeof fetch | undefined
-
-  /**
-   * Resolved lazily so consumers can swap `globalThis.fetch` after the
-   * client has been constructed (e.g. test mocks). Always rebound to the
-   * global object — native fetch throws "Illegal invocation" when its
-   * `this` is anything else.
-   */
-  get fetch(): typeof fetch {
-    return this.fetchOverride ?? globalThis.fetch.bind(globalThis)
-  }
-
+export class NodaroClient extends NodaroClientCore {
   readonly workflows: WorkflowsResource
   readonly projects: ProjectsResource
   /** Generation sessions inside projects (Create Image / Video / Music). */
@@ -246,19 +108,9 @@ export class NodaroClient {
   readonly organizations: OrganizationsResource
   readonly workspaces: WorkspacesResource
   readonly edit: EditResource
-  /** The workspace this client acts in; undefined = the personal space. */
-  readonly workspaceId: string | undefined
 
   constructor(opts: ClientOptions) {
-    this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
-    this.auth = opts.auth
-    this.fetchOverride = opts.fetch
-    this.timeoutMs = opts.timeoutMs ?? 60_000
-    this.clientLabel = opts.clientLabel ?? `sdk/${SDK_VERSION}`
-    this.workspaceId = opts.workspaceId
-    // Explicit label = deliberate opt-in, always sent. The default is suppressed
-    // in browsers — see the note on CLIENT_HEADER.
-    this.sendClientHeader = opts.clientLabel !== undefined || !isBrowser()
+    super(opts)
 
     this.workflows = new WorkflowsResource(this)
     this.projects = new ProjectsResource(this)
@@ -321,166 +173,20 @@ export class NodaroClient {
    * Pass `null` for the personal space.
    */
   withWorkspace(workspaceId: string | null): NodaroClient {
+    // The two private settings are read by bracket access, which TypeScript
+    // allows on a subclass and which adds no member to the declarations. Read
+    // through `this` (not a side table keyed by the instance), so a client
+    // wrapped in a Proxy (Vue/Pinia `reactive()`) or reached through
+    // `Object.create(client)` still works.
+    const fetchOverride = this["fetchOverride"]
     return new NodaroClient({
       baseUrl: this.baseUrl,
       auth: this.auth,
       timeoutMs: this.timeoutMs,
-      ...(this.fetchOverride ? { fetch: this.fetchOverride } : {}),
-      ...(this.sendClientHeader ? { clientLabel: this.clientLabel } : {}),
+      ...(fetchOverride ? { fetch: fetchOverride } : {}),
+      ...(this["sendClientHeader"] ? { clientLabel: this.clientLabel } : {}),
       ...(workspaceId ? { workspaceId } : {}),
     })
-  }
-
-  /**
-   * The transport: build the request, send it, throw the typed error on a
-   * non-2xx via {@link throwFromResponse}, then read the body via `read` — all
-   * inside the abort timer, so `timeoutMs` bounds the body download too (a
-   * stalled CSV stream aborts, it does not hang forever). Both the JSON path
-   * ({@link request}) and the text path ({@link requestText}) go through here.
-   */
-  private async send<T>(
-    method: string,
-    path: string,
-    options: RequestOptions,
-    read: (res: Response) => Promise<T>,
-  ): Promise<T> {
-    const url = this.buildUrl(path, options.query)
-
-    const token = await this.auth.getToken()
-    // A `FormData` body is a multipart upload: let the runtime set
-    // `Content-Type: multipart/form-data; boundary=…` itself (a manual JSON
-    // content-type corrupts the boundary), and send the body as-is rather than
-    // JSON-stringifying it. Every other body stays JSON, exactly as before.
-    const isFormData =
-      typeof FormData !== "undefined" && options.body instanceof FormData
-    const headers: Record<string, string> = {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(this.sendClientHeader ? { [CLIENT_HEADER]: this.clientLabel } : {}),
-      // Before per-request headers: a resource that needs to reach outside
-      // this client's workspace says so explicitly and wins.
-      ...(this.workspaceId ? { [WORKSPACE_HEADER]: this.workspaceId } : {}),
-      ...(options.headers ?? {}),
-    }
-    if (token) headers["Authorization"] = `Bearer ${token}`
-
-    const ac = new AbortController()
-    const timeoutId = setTimeout(() => ac.abort(), this.timeoutMs)
-    const abort = () => ac.abort(options.signal?.reason)
-    options.signal?.addEventListener("abort", abort, { once: true })
-    if (options.signal?.aborted) abort()
-
-    try {
-      ac.signal.throwIfAborted()
-      const res = await this.fetch(url, {
-        method,
-        headers,
-        body:
-          options.body === undefined
-            ? undefined
-            : isFormData
-              ? (options.body as FormData)
-              : JSON.stringify(options.body),
-        signal: ac.signal,
-      })
-
-      if (!res.ok) {
-        let errBody: Record<string, unknown> = {}
-        try {
-          errBody = await res.json() as Record<string, unknown>
-        } catch {
-          // Empty/non-JSON body — fall through with empty errBody
-        }
-        throwFromResponse(res.status, errBody)
-      }
-
-      return await read(res)
-    } finally {
-      clearTimeout(timeoutId)
-      options.signal?.removeEventListener("abort", abort)
-    }
-  }
-
-  /** Authenticated, bounded binary reads through the normal timeout/error transport. */
-  async requestBytes(method: string, path: string, options: RequestOptions & { maxBytes: number }): Promise<ArrayBuffer> {
-    if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1) throw new Error("maxBytes must be a positive integer")
-    return this.send(method, path, options, (response) => readBinaryResponse(response, options.maxBytes))
-  }
-
-  async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
-    return this.send(method, path, options, async (res) =>
-      // 204 No Content
-      res.status === 204 ? (undefined as T) : ((await res.json()) as T),
-    )
-  }
-
-  /**
-   * Like {@link request}, for endpoints that answer text (CSV exports). Errors
-   * are still the JSON envelope and throw the same typed errors, and the read is
-   * bounded by the same timeout as the request.
-   */
-  async requestText(method: string, path: string, options: RequestOptions = {}): Promise<string> {
-    return this.send(method, path, options, (res) => res.text())
-  }
-
-  /**
-   * `GET /v1/me` → the authenticated user's identity (see {@link UserIdentity}).
-   * Unwraps the `{ data }` envelope. Throws `UnauthorizedError` (401) when the
-   * token is missing/invalid, and the SDK's other typed errors as usual.
-   *
-   * On an instance with organizations it also carries what the caller belongs
-   * to. THREE states, and collapsing them is wrong in a way users feel: the
-   * organization fields ABSENT means this instance has no organizations at
-   * all; present and empty means the account belongs to none; and
-   * `organizationsUnavailable` means the lookup failed — keep whatever
-   * selection you already had rather than concluding the person was removed
-   * from everything.
-   */
-  async me(): Promise<UserIdentity & MeOrganizations> {
-    const res = await this.request<{ data: UserIdentity & MeOrganizations }>("GET", "/v1/me")
-    return res.data
-  }
-
-  /**
-   * `GET /v1/me/connected-apps` → every app with access to the signed-in
-   * user's account (see {@link ConnectedApp}), newest grant first.
-   *
-   * **A signed-in browser session only.** The route answers a Supabase
-   * session token (`supabaseAuth(…)`, `createSharedSupabaseClient`, or a
-   * `StaticTokenAuth` holding one) and refuses every other credential with
-   * `UnauthorizedError` ("Sign in required"): an app token or an API key must
-   * not list the grants it lives under. Build your "Connected apps" settings
-   * screen on this; a server-side integration cannot call it.
-   */
-  async connectedApps(): Promise<ConnectedApp[]> {
-    const res = await this.request<{ apps: ConnectedApp[] }>("GET", "/v1/me/connected-apps")
-    return res.apps
-  }
-
-  /**
-   * `POST /v1/me/connected-apps/:authorizationId/revoke` — ends an app's
-   * access: the grant and every token issued under it, at once (the app's next
-   * call is a 401). Resolves when done.
-   *
-   * A signed-in browser session only, like {@link connectedApps}. Throws
-   * `NotFoundError` when the grant is not the user's or is already revoked.
-   */
-  async revokeConnectedApp(authorizationId: string): Promise<void> {
-    await this.request("POST", `/v1/me/connected-apps/${encodeURIComponent(authorizationId)}/revoke`)
-  }
-
-  private buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {
-    const base = this.baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://placeholder")
-    const url = new URL(path, base)
-    // If baseUrl was empty, strip the placeholder origin
-    const fullUrl = this.baseUrl ? url.toString() : url.pathname + url.search
-    if (query) {
-      const u = new URL(this.baseUrl ? fullUrl : fullUrl, base)
-      for (const [k, v] of Object.entries(query)) {
-        if (v !== undefined) u.searchParams.set(k, String(v))
-      }
-      return this.baseUrl ? u.toString() : u.pathname + u.search
-    }
-    return fullUrl
   }
 }
 

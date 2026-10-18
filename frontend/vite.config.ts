@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import path from "path"
+import { siteHeaderModule } from "./src/ee/shell/header-module-plugin"
 
 /**
  * Injects `import React from 'react'` into react-filerobot-image-editor files
@@ -22,7 +23,15 @@ function filerobotReactShim(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), filerobotReactShim()],
+  // `virtual:site-header`: the shared site header on a cloud build with
+  // VITE_SHARED_HEADER on, a stub everywhere else. A build-config edge into
+  // ee/, like the backend's route registration: the plugin itself is inert
+  // unless the cloud image installed the header.
+  plugins: [
+    react(),
+    filerobotReactShim(),
+    siteHeaderModule({ root: __dirname, stubPath: path.resolve(__dirname, "src/ee/shell/stub.tsx") }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

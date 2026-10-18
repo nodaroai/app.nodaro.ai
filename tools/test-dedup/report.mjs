@@ -17,7 +17,8 @@ import { parseArgs } from "node:util"
 import { copies, duplicateBodies, extractTests } from "./bodies.mjs"
 import { MAX_LINES, MIN_DEPS, MIN_JACCARD, clusterSaving, mergeClusters, parseDurations, perDependency } from "./clusters.mjs"
 import { CATEGORIES, classifyCrossTree } from "./cross-tree.mjs"
-import { duplicateExecutions, expand, invocationsOf, splitJobs, splitSteps } from "./executions.mjs"
+import { discovered as discoveredBy, duplicateExecutions, invocationsOf, splitJobs, splitSteps } from "./executions.mjs"
+import { parityRun } from "./parity-filter.mjs"
 
 const fmt = (s) => (s === null ? "—" : `${s.toFixed(1)} s`)
 const list = (xs, max = 8) => (xs.length <= max ? xs.join(", ") : `${xs.slice(0, max).join(", ")} … (+${xs.length - max})`)
@@ -65,7 +66,7 @@ export function renderReport({ project, executions, clusters, perDep, bodies, cr
   if (!crossTree) out.push("Only for `--project backend` (the parity run discovers backend tests).", "")
   else {
     const count = (c) => crossTree.filter((x) => x.category === c).length
-    out.push(`The parity run in Type Check discovers **${crossTree.length} files** with its grep; each also runs in Backend Tests.`, "",
+    out.push(`The parity run in Type Check discovers **${crossTree.length} files** with its grep; each also runs in Backend Tests. It re-runs all but the ${count("neither")} \`neither\` files (\`tools/test-dedup/parity-filter.mjs\`, checked against this graph).`, "",
       "| Category | Files |", "|---|---|", ...CATEGORIES.map((c) => `| ${c} | ${count(c)} |`), "",
       ...CATEGORIES.flatMap((c) => {
         const xs = crossTree.filter((x) => x.category === c)
@@ -75,6 +76,14 @@ export function renderReport({ project, executions, clusters, perDep, bodies, cr
     if (stray.length) out.push(`Not in the graph: ${stray.map((x) => `\`${x.file}\``).join(", ")}`, "")
   }
   return out.join("\n")
+}
+
+// Files the parity run's static filter and Vitest's graph classify on opposite
+// sides of `neither` (the only category the run skips). → ["<file>: graph X, static Y"]
+export function staticGraphDisagreement(byGraph, byStatic) {
+  const statics = new Map(byStatic.map((c) => [c.file, c.category]))
+  return byGraph.filter((c) => (c.category === "neither") !== (statics.get(c.file) === "neither"))
+    .map((c) => `${c.file}: graph ${c.category}, static ${statics.get(c.file) ?? "missing"}`)
 }
 
 // The Vitest projects one --project names: frontend, backend, every package
@@ -124,7 +133,7 @@ async function main() {
   if (o.project === "backend") {
     const parity = splitJobs(yml).flatMap((j) => splitSteps(j.text)).flatMap((s) => invocationsOf(s, packageDirs)).find((i) => i.kind === "discover")
     if (!parity) throw new Error("ci.yml has no cross-tree parity discovery — the report cannot classify it")
-    const discovered = expand(parity, { tracked, read })
+    const discovered = discoveredBy(parity, { tracked, read })
     // The emulated grep must agree with the real one, or the report is wrong.
     if (existsSync(path.join(repoRoot, parity.discovery.cwd))) {
       const args = ["-rl", ...parity.discovery.patterns.flatMap((p) => ["-e", p]), parity.discovery.dir, `--include=${parity.discovery.include}`]
@@ -135,6 +144,10 @@ async function main() {
       if (real.join("\n") !== discovered.join("\n")) throw new Error(`the emulated parity grep found ${discovered.length} files, the real grep ${real.length}`)
     }
     crossTree = classifyCrossTree(discovered, tests)
+    // The parity run skips what parity-filter.mjs, statically, calls
+    // `neither`; Vitest's graph must agree, or the filter is wrong.
+    const disagreement = staticGraphDisagreement(crossTree, parityRun(discovered, read).classified)
+    if (disagreement.length) throw new Error(`parity-filter.mjs and Vitest's graph disagree on what the parity run may skip:\n${disagreement.join("\n")}`)
   }
 
   const report = renderReport({ project: o.project, executions, clusters, perDep, bodies, crossTree })

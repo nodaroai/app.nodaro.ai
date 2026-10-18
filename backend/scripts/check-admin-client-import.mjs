@@ -25,7 +25,7 @@
  * When refactoring an existing baseline entry off the admin client:
  * re-run with --update-baseline to remove the entry.
  */
-// @reads backend/src/routes/** backend/scripts/admin-client-import-baseline.json
+// @reads backend/src/routes/** backend/src/nodes/*/route*.ts backend/scripts/admin-client-import-baseline.json
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -178,12 +178,11 @@ const ALLOWED_PATHS = [
   // credits-balance + user-settings).
   /^src\/routes\/me\.ts$/,
 
-  // Extract Audio / Remove Audio / Audio Separation: job-creation routes that
+  // Extract Audio / Audio Separation: job-creation routes that
   // derive `userId = req.userId` (401 if absent) and INSERT the job with
   // `user_id: userId`. Service-role mirrors the other media-generation routes
   // (audio-isolation is baselined; audio-separation is the same shape).
   /^src\/routes\/extract-audio\.ts$/,
-  /^src\/routes\/remove-audio\.ts$/,
   /^src\/routes\/audio-separation\.ts$/,
   /^src\/routes\/audio-fx\.ts$/,
 
@@ -446,12 +445,11 @@ const ALLOWED_PATHS = [
   // routes (ai-writer, qa-check, web-scrape) which are baselined as legacy.
   /^src\/routes\/reduce\.ts$/,
 
-  // Extract Audio / Remove Audio (FFmpeg audio-demux): each creates a jobs row
+  // Extract Audio (FFmpeg audio-demux): creates a jobs row
   // tagged `user_id: req.userId`, then reserveCreditsForJob runs under the same
   // service-role client and the worker reads by `job.id` out-of-band. No cross-
   // user access. Same pattern as video-sfx / video-retake / split-media.
   /^src\/routes\/extract-audio\.ts$/,
-  /^src\/routes\/remove-audio\.ts$/,
 
   // Onboarding demo seed: writes ONLY the caller's own profiles row via an
   // atomic claim (.eq("id", req.userId).is("demo_seeded_at", null)) and
@@ -531,6 +529,17 @@ function scan(filePath) {
   return findings
 }
 
+// Node units' routes (backend/src/nodes/<type>/route.ts | route.ee.ts,
+// tools/units/README.md) are routes too: they are checked like src/routes.
+function unitRouteFiles() {
+  const dir = join(BACKEND_ROOT, "src", "nodes")
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((n) => !n.startsWith("_") && statSync(join(dir, n)).isDirectory())
+    .flatMap((n) => ["route.ts", "route.ee.ts"].map((f) => join(dir, n, f)))
+    .filter((f) => existsSync(f))
+}
+
 function hashImport(importPath) {
   return createHash("sha256").update(importPath).digest("hex").slice(0, 12)
 }
@@ -550,7 +559,7 @@ function loadBaseline() {
 // ---------------------------------------------------------------------------
 
 const updateBaseline = process.argv.includes("--update-baseline")
-const files = walkTs(ROUTES_DIR).sort()
+const files = [...walkTs(ROUTES_DIR), ...unitRouteFiles()].sort()
 const { entries: baselineEntries } = loadBaseline()
 const consumed = new Set()
 

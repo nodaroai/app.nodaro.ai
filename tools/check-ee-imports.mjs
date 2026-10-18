@@ -14,6 +14,10 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join, extname, sep } from "node:path"
 
 const ROOTS = ["backend/src", "frontend/src", "packages"]
+// The frontend's root-level build/test configs (vite, vitest, playwright, …)
+// are core too, and sit outside frontend/src: scanned file by file.
+const CONFIG_DIRS = ["frontend"]
+const CONFIG_FILE = /.config.[cm]?[jt]sx?$/
 const EXTS = new Set([".ts", ".tsx"])
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".next", "__tests__"])
 
@@ -29,6 +33,12 @@ const ALLOWLIST = new Set([
   // PERMANENT — boot orchestrators
   "backend/src/app.ts",                                    // route registration
   "backend/src/server.ts",                                 // cleanup cron + worker startup
+  // PERMANENT — build-config edge: the resolver decides stub vs package at
+  // build time; nothing from ee/ reaches a community bundle. vite.config.ts
+  // imports the plugin; vitest.config.ts points its alias at the stub (a path
+  // string, not an import — listed so the edge is documented in one place).
+  "frontend/vite.config.ts",
+  "frontend/vitest.config.ts",
 
   // TODO Phase 3.5 — convert to dynamic-require shims (mirror workers/shared.ts).
   // These 26 files predate the migration and import CreditsService / pricing
@@ -123,6 +133,9 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/workflow-editor/types.ts",
   "frontend/src/components/editor/workflow-editor/workflow-editor-main.tsx",
   "frontend/src/components/layout/app-sidebar.tsx",
+  // The sidebar's credit card, split out of app-sidebar.tsx with its existing
+  // useUserCredits import (same pre-existing coupling, moved, not new).
+  "frontend/src/components/layout/sidebar-credit-card.tsx",
   "frontend/src/components/nodes/ai-avatar-node.tsx",
   "frontend/src/components/nodes/cinematic-avatar-node.tsx",
   "frontend/src/components/nodes/add-captions-node.tsx",
@@ -179,7 +192,6 @@ const ALLOWLIST = new Set([
   // reference-board mirrors generate-image-node — same deferred ee/ credit-hook coupling (Phase 3.5/4.5)
   "frontend/src/components/nodes/reference-board-node.tsx",
   "frontend/src/components/nodes/reference-sheet-node.tsx",
-  "frontend/src/components/nodes/remove-audio-node.tsx",
   "frontend/src/components/nodes/remove-background-node.tsx",
   "frontend/src/components/nodes/silence-detect-node.tsx",
   // The scrapers' Run-button price: the charged figure via useModelCredits, the
@@ -236,6 +248,10 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/voice-remix-node.tsx",
   "frontend/src/components/presentation/presentation-view.tsx",
   "frontend/src/hooks/use-workflow-persistence.ts",
+  // Node units' canvas components read the Run-button price through
+  // useModelCredits, the same deferred ee/ credit-hook coupling as the legacy
+  // node cards above (Remove Audio moved here from components/nodes/).
+  "frontend/src/nodes/remove-audio/node.tsx",
 ])
 
 function listFiles(dir) {
@@ -289,8 +305,21 @@ const importRe = /^\s*(?:import|export)\s+(?:[^'"]+from\s+)?['"]([^'"]+)['"]/gm
 const violations = []
 let scanned = 0
 
-for (const root of ROOTS) {
-  const files = listFiles(root)
+function configFiles() {
+  const out = []
+  for (const dir of CONFIG_DIRS) {
+    let names = []
+    try {
+      names = readdirSync(dir)
+    } catch {
+      continue
+    }
+    for (const name of names) if (CONFIG_FILE.test(name)) out.push(join(dir, name))
+  }
+  return out
+}
+
+for (const files of [...ROOTS.map(listFiles), configFiles()]) {
   for (const file of files) {
     scanned++
     // Normalize Windows backslash paths to forward-slash so the ALLOWLIST

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
 import { hasCredits } from "@/lib/edition"
+import { whenActivated } from "@/lib/prerender"
 import { hydrateWorkspaces, resetWorkspaceState } from "@/lib/workspace-context"
 
 export type UserRole = "user" | "admin" | "super_admin"
@@ -94,15 +95,18 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
  */
 function maybeClaimSignupGrant(userId: string): void {
   if (!hasCredits()) return
-  const supabase = createClient()
-  void Promise.resolve(
-    supabase.from("profiles").select("free_grant_state").eq("id", userId).single(),
-  )
-    .then(({ data }) => {
-      if (data?.free_grant_state !== "unclaimed") return
-      return import("@/ee/lib/ensure-signup-grant").then((m) => m.ensureSignupGrant())
-    })
-    .catch(() => {})
+  // A prerendered page may never be shown: claim only once it is (see lib/prerender).
+  whenActivated(() => {
+    const supabase = createClient()
+    void Promise.resolve(
+      supabase.from("profiles").select("free_grant_state").eq("id", userId).single(),
+    )
+      .then(({ data }) => {
+        if (data?.free_grant_state !== "unclaimed") return
+        return import("@/ee/lib/ensure-signup-grant").then((m) => m.ensureSignupGrant())
+      })
+      .catch(() => {})
+  })
 }
 
 function initAuth() {

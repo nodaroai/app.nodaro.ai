@@ -69,8 +69,8 @@ const LABELLED: Record<string, readonly RegExp[]> = {
 }
 
 /** Files that show media through the fullscreen preview and say why they do not
- *  label it. Every `components/nodes/*-node.tsx` not named here falls under
- *  NODE_OWN_RESULTS below. */
+ *  label it. Every `components/nodes/*-node.tsx` and node unit canvas component
+ *  (`nodes/<type>/node.tsx`) not named here falls under NODE_OWN_RESULTS below. */
 const EXEMPT: Record<string, string> = {
   "components/editor/scene-editor-modal.tsx": "previews a scene's own stills and takes; never an Apply EDL render",
   "components/editor/workflow-canvas.tsx": "Alt+F shows the focused node's media; Apply EDL declares no exposable output, so it is never offered (asserted below)",
@@ -114,7 +114,7 @@ describe("Preview label census", () => {
       .map((f) => relative(SRC, f).replace(/\\/g, "/"))
     const unlisted = callers.filter((c) => {
       if (c in LABELLED || c in EXEMPT || c in BARE_URL) return false
-      return !(/^components\/nodes\/[^/]+-node\.tsx$/.test(c))
+      return !(/^components\/nodes\/[^/]+-node\.tsx$/.test(c) || /^nodes\/[^/]+\/node\.tsx$/.test(c))
     })
     expect(unlisted, "a surface opens the media preview without saying whether it labels a Preview").toEqual([])
     for (const where of [...Object.keys(EXEMPT), ...Object.keys(BARE_URL)]) {

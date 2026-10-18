@@ -6,8 +6,10 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
  *
  *  - "text-to-video"  — /v1/text-to-video and the orchestrator's t2v arm. They
  *    reject on `videoProviderRequiresImage(provider)` BEFORE looking at any
- *    reference, and `resolveVideoModeForInputs` sends a refs-only single-id
- *    model down this lane on purpose. References never help here.
+ *    reference. `resolveVideoModeForInputs` sends a refs-only single-id model
+ *    down this lane only when its catalog does NOT declare `reference-to-video`
+ *    (one that does takes the image-to-video lane instead). References never
+ *    help here.
  *  - "image-to-video" — /v1/generate-video, which is only reached with this
  *    error once its catalog-derived `hasMultimodalRef` check has already
  *    failed. For a provider that carries image refs, wiring references IS a

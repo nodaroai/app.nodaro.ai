@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import { queryKeys } from "@/lib/query-keys"
+import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { creditUnits } from "@/lib/credit-units"
 import { CONSENT_REQUIRED_EVENT } from "@/lib/consent-required-event"
 import type { UserBalance } from "@/lib/api"
@@ -63,7 +64,7 @@ export function useWelcomeOffer(): WelcomeOffer {
   const claim = useCallback(async () => {
     const keys = await collectKeys()
     const result = await claimWelcomeOffer(keys)
-    if (userId) await queryClient.invalidateQueries({ queryKey: queryKeys.credits.balance(userId) })
+    if (userId) await invalidateBalance(queryClient, userId)
     return result
   }, [queryClient, userId])
 

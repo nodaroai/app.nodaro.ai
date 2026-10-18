@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest"
-import { afterAll } from "vitest"
-import { installDomTrapsInNodeEnvironment, removeDomTraps } from "./node-env-dom-trap"
+import { afterAll, afterEach } from "vitest"
+import { domTrapsInstalled, installDomTrapsInNodeEnvironment, removeDomTraps } from "./node-env-dom-trap"
+import { settleAfterCleanup } from "./teardown-drain"
 
 // First, before anything below probes a global: without isolation the previous
 // file's DOM trap may still be installed (see node-env-dom-trap.ts).
@@ -107,3 +108,10 @@ if (typeof globalThis.ImageData === "undefined") {
 // Removed after the file, so a worker shared without isolation starts clean.
 installDomTrapsInNodeEnvironment()
 afterAll(removeDomTraps)
+
+// jsdom files: one real timer turn after each test's cleanup, so what an
+// unmount scheduled (Radix's focus restore) fires before jsdom is torn down.
+// Registered here, before the test file imports Testing Library, so it runs
+// after Testing Library's cleanup (teardown-drain.ts). Not in node-env files:
+// they mount nothing, and `typeof window` would trip the trap above.
+if (!domTrapsInstalled()) afterEach(settleAfterCleanup)

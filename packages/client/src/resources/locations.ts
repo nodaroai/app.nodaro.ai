@@ -1,7 +1,7 @@
 import type { CharacterAspectRatio, SurroundDirection, LocationAssetType, LocationAttachColumn } from "@nodaro/shared/entities"
 export type { LocationAssetType, LocationAttachColumn, CharacterAspectRatio, SurroundDirection } from "@nodaro/shared/entities"
 export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, SURROUND_DIRECTIONS } from "@nodaro/shared/entities"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { GenerationSessionParams } from "./nodes.js"
 
 /**
@@ -405,7 +405,7 @@ export interface RecaptionLocationResult {
 }
 
 export class LocationsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * List the caller's locations. By default returns active locations only;

@@ -13,7 +13,8 @@ import path from "node:path"
  * picker-logical-direction.test.ts pins a curated list of editor chrome;
  * this scan covers everything a signed-in user sees, so a NEW component is
  * covered the day it is added. Out of scope, deliberately:
- *   - components/nodes/ and the canvas edge renderers — the canvas is pinned
+ *   - components/nodes/, a node unit's canvas component (nodes/<type>/node.tsx;
+ *     its config.tsx IS scanned) and the canvas edge renderers — the canvas is pinned
  *     LTR (globals.css `.react-flow { direction: ltr }`, rtl-direction-guards)
  *     and node internals keep their authored physical classes;
  *   - the operator-only admin pages (English-only surface).
@@ -23,6 +24,8 @@ const SRC = path.resolve(__dirname, "../..")
 const TIMEOUT = 60_000
 
 const EXCLUDE_PREFIXES = ["components/nodes/", "ee/app/(admin)/", "ee/components/admin/"]
+// A node unit's canvas component (tools/units/README.md) — canvas, like components/nodes/.
+const UNIT_CANVAS_COMPONENT = /^nodes\/[^/]+\/node\.tsx$/
 const EXCLUDE_FILES = new Set([
   "components/editor/animated-flow-edge.tsx",
   "components/editor/deletable-edge.tsx",
@@ -62,7 +65,7 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 function inScope(rel: string): boolean {
-  return !EXCLUDE_FILES.has(rel) && !EXCLUDE_PREFIXES.some((p) => rel.startsWith(p))
+  return !EXCLUDE_FILES.has(rel) && !UNIT_CANVAS_COMPONENT.test(rel) && !EXCLUDE_PREFIXES.some((p) => rel.startsWith(p))
 }
 
 describe("logical direction classes outside the canvas", () => {

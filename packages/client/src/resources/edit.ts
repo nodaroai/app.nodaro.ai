@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import { ForbiddenError, NodaroError } from "../errors.js"
 import {
   remapTranscriptThroughEdl,
@@ -328,7 +328,7 @@ export interface TightenEpisodeInput {
  * The podcast use-case node types, each one a route (`POST /v1/<type>`, and
  * `POST /v1/<type>/continue` to continue one of its runs).
  */
-export const USE_CASE_NODE_TYPES = ["tighten-episode"] as const
+export const USE_CASE_NODE_TYPES = ["tighten-episode", "episode-chapters"] as const
 /** A podcast use-case node type (see {@link USE_CASE_NODE_TYPES}). */
 export type UseCaseNodeType = (typeof USE_CASE_NODE_TYPES)[number]
 
@@ -339,9 +339,10 @@ function isUseCaseNodeType(value: unknown): value is UseCaseNodeType {
 /** The route that continues a run of each type (`/v1/<type>/continue`), as a table the type picks from. */
 const USE_CASE_CONTINUE_PATHS: { readonly [K in UseCaseNodeType]: `/v1/${K}/continue` } = {
   "tighten-episode": "/v1/tighten-episode/continue",
+  "episode-chapters": "/v1/episode-chapters/continue",
 }
 
-/** What a use-case run (`tightenEpisode`) and `continueUseCase` answer: the run's job to poll. */
+/** What a use-case run (`tightenEpisode`, `episodeChapters`) and `continueUseCase` answer: the run's job to poll. */
 export interface UseCaseJobResult extends EditJobResult {
   /** The run's execution (absent on a deduplicated retry). */
   executionId?: string
@@ -371,13 +372,31 @@ export interface UseCaseEstimate {
 /** What a Tighten Episode run is estimated at (a {@link UseCaseEstimate}). */
 export type TightenEpisodeEstimate = UseCaseEstimate
 
+/**
+ * Input for {@link EditResource.episodeChapters} and
+ * {@link EditResource.estimateEpisodeChapters}: one recording in, its chapters
+ * out. Only `mediaUrl` is required; every other field left out takes the
+ * node's default.
+ */
+export interface EpisodeChaptersInput {
+  /** The recording — a video or audio URL, up to 3 hours. */
+  mediaUrl: string
+  /** The planner's tier (default `"economy"`). */
+  planTier?: EditPlanTier
+  /** Instructions for the chapters, e.g. "5 to 8 chapters" (up to 4 000 characters). */
+  instructions?: string
+  /** A style guide for the chapter titles (up to 4 000 characters). */
+  styleGuide?: string
+}
+
 /** Input for {@link EditResource.continueUseCase}. */
 export interface UseCaseContinueInput {
-  /** The run to continue: the job `tightenEpisode` (or an earlier continuation) answered. */
+  /** The run to continue: the job `tightenEpisode` or `episodeChapters` (or an earlier continuation) answered. */
   jobId: string
   /**
    * `"from-failed"` re-runs what did not finish of a failed run;
-   * `"render-final"` renders the full-quality episode after a review-on preview.
+   * `"render-final"` renders the full-quality episode after a review-on preview
+   * (a Chapters run has no preview: it is refused `render_final_not_preview`).
    */
   mode: "from-failed" | "render-final"
   /** Render final only: the reviewer's edit of the plan (an EDL). */
@@ -391,7 +410,7 @@ export interface UseCaseContinueInput {
   nodeType?: UseCaseNodeType
 }
 
-/** Per-call options for the Tighten Episode requests. */
+/** Per-call options for the use-case requests (Tighten Episode, Chapters, and their continuations). */
 export interface UseCaseRequestOptions {
   /**
    * Sent as the `Idempotency-Key` header. Reuse the same value when retrying
@@ -404,6 +423,15 @@ export interface UseCaseRequestOptions {
 function tightenBody(input: TightenEpisodeInput): Record<string, unknown> {
   const { mediaUrl, ...rest } = input
   return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) }
+}
+
+function chaptersBody(input: EpisodeChaptersInput): Record<string, unknown> {
+  return {
+    mediaUrls: [input.mediaUrl],
+    ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
+    ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
+    ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
+  }
 }
 
 function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record<string, string> } {
@@ -427,16 +455,20 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  *   self-hosted install needs a nodaro.ai connection for the steps that run
  *   there (a 503 `code: "nodaro_connection_required"` otherwise).
  *   {@link continueUseCase} continues one of its runs.
+ * - {@link episodeChapters} lists a recording's chapters (transcribe, then the
+ *   plan in chapters mode) in one call; nothing renders. Like
+ *   {@link tightenEpisode}, a self-hosted install needs a nodaro.ai connection.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
  *
- * Every request method except {@link estimateTightenEpisode} (a quote,
- * `{ data }`) returns {@link EditJobResult}; poll the `jobId` with
- * `client.jobs.getStatus(jobId)`.
+ * Every request method except the estimates ({@link estimateTightenEpisode},
+ * {@link estimateEpisodeChapters}: a quote, `{ data }`) returns
+ * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}); poll the
+ * `jobId` with `client.jobs.getStatus(jobId)`.
  */
 export class EditResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * Detect silence ranges in an audio/video source (`POST /v1/silence-detect`).
@@ -515,6 +547,30 @@ export class EditResource {
    */
   estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpisodeEstimate }> {
     return this.client.request("POST", "/v1/tighten-episode/estimate", { body: tightenBody(input) })
+  }
+
+  /**
+   * Chapters (`POST /v1/episode-chapters`): transcribe a recording and list its
+   * chapters in one call. Answers the run's job to poll; the finished job's
+   * `output_data.text` is the list as show notes (one `0:00 Title` line per
+   * chapter; once a chapter starts at 1:00:00 or later, every line is
+   * `H:MM:SS`), `output_data.json` the list itself (`{ startMs, title }[]`, the
+   * same rows; the first starts at 0). A run that finds no chapters fails,
+   * and its fee is refunded. Priced as its steps at their own rates plus the
+   * listed per-run fee; quote it first with {@link estimateEpisodeChapters}.
+   */
+  episodeChapters(input: EpisodeChaptersInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
+    return this.client.request("POST", "/v1/episode-chapters", { body: chaptersBody(input), ...idempotencyHeaders(options) })
+  }
+
+  /**
+   * What a Chapters run is estimated at (`POST /v1/episode-chapters/estimate`):
+   * its steps at their own rates plus its per-run fee. Nothing is created or
+   * charged. A recording whose length cannot be read is estimated at the
+   * 180-minute ceiling.
+   */
+  estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEstimate }> {
+    return this.client.request("POST", "/v1/episode-chapters/estimate", { body: chaptersBody(input) })
   }
 
   /**

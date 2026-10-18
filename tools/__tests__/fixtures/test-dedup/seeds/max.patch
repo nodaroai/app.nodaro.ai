@@ -1,0 +1,9 @@
+diff --git a/rules.json b/rules.json
+--- a/rules.json
++++ b/rules.json
+@@ -1,4 +1,4 @@
+ {
+-  "max": 10,
++  "max": 11,
+   "names": ["a", "b"]
+ }

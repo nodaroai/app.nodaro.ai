@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /** One image of a moodboard — a link, never a copy. */
 export interface MoodboardImage {
@@ -71,7 +71,7 @@ export function moodboardDirectionId(id: string): `moodboard:${string}` {
  * `assets:read` for reads and `assets:write` for writes.
  */
 export class MoodboardsResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Your moodboards, newest first. Page with `nextCursor`. */
   list(params: ListMoodboardsParams = {}): Promise<MoodboardPage> {

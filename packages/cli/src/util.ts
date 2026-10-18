@@ -1,4 +1,6 @@
-import { NodaroError, type ExecutionStatus, type JobStatus } from "@nodaro/sdk"
+import { NodaroError } from "@nodaro/sdk/errors"
+import type { ExecutionStatus } from "@nodaro/sdk/executions"
+import type { JobStatus } from "@nodaro/sdk/jobs"
 import { dim, emit, info, success, type OutputOpts } from "./output.js"
 
 /**

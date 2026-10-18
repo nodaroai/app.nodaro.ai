@@ -3,7 +3,7 @@ import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle } from "@
 import type { TtsProvider } from "@nodaro/shared/models"
 export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared/entities"
 export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 import type { GenerationSessionParams } from "./nodes.js"
 
 /**
@@ -542,7 +542,7 @@ export type TrainCharacterRefusalCode =
   | "dedup_race_winner_unresolvable"
 
 export class CharactersResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /**
    * List the caller's characters. By default returns active characters only;

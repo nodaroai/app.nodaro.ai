@@ -1305,7 +1305,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   return (
     <NavigateWithGuardContext.Provider value={navigateWithGuard}>
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-[calc(100vh_-_var(--ns-header-h,0px))]">
       <EditorToolbar
         projectId={projectId}
         workflowId={workflowId}

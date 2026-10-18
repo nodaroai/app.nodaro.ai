@@ -199,6 +199,9 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // uppercase KIE wire form is produced only by normalizeWan3Resolution).
   "wan-3":               { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
   "wan-3-prime":         { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
+  // Vidu Q4 — five tiers; the quality rungs stop at 1080p so "high" never
+  // lands on the 2k/4k ladder (4k is closed to the free tier).
+  "vidu-q4":             { field: "resolution", values: { low: "540p", mid: "720p", high: "1080p" } },
   "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

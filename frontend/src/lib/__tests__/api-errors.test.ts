@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { NotFoundError } from "@nodaro/sdk"
+import { NotFoundError } from "@nodaro/sdk/errors"
 import { isNotFound } from "../api-errors"
 
 describe("isNotFound", () => {

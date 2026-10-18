@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Generate Video Pro control surface (Cloud edition) — the checkpointed
@@ -45,7 +45,7 @@ export interface ContinueVideoProResult {
 }
 
 export class VideoProResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Gracefully stop a running generate-video-pro job (keep + deliver the
    *  completed segments; refund the rest). */

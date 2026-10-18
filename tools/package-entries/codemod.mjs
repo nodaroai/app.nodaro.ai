@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Moves imports of the @nodaro/shared and @nodaro/prompts ROOTS onto the
-// narrowest subpath entries (`@nodaro/shared/<entry>`, `@nodaro/prompts/<entry>`).
+// Moves imports of the @nodaro/shared, @nodaro/prompts and @nodaro/sdk ROOTS
+// onto the narrowest subpath entries (`@nodaro/shared/<entry>`,
+// `@nodaro/prompts/<entry>`, `@nodaro/sdk/<entry>`).
 //
 // Why: a root import loads the whole package (~110 ms of CPU per test file for
 // shared, ~165 ms for prompts, measured 2026-10-13) and makes every change to
@@ -17,7 +18,7 @@
 //
 // Without --write it is a dry run (prints what it would change). Paths default
 // to every tracked .ts/.tsx/.mts/.mjs file under frontend, backend, packages,
-// scripts and tools, minus the two packages' own index.ts and src/entries/
+// scripts and tools, minus the packages' own index.ts and src/entries/
 // (those ARE the entries).
 //
 // What it rewrites (each per statement, by text range — formatting, comments
@@ -73,7 +74,7 @@ import { runtimeClosure } from "./entries-lib.mjs"
 const ts = createRequire(import.meta.url)("typescript")
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 
-const PKG_DIRS = { "@nodaro/shared": "packages/shared", "@nodaro/prompts": "packages/prompts" }
+const PKG_DIRS = { "@nodaro/shared": "packages/shared", "@nodaro/prompts": "packages/prompts", "@nodaro/sdk": "packages/client" }
 const ROOTS = new Set(Object.keys(PKG_DIRS))
 // The root-import guard's scope (frontend/src/__tests__/package-root-imports.test.ts).
 const DEFAULT_GLOBS = ["frontend", "backend", "packages", "scripts", "tools"]
@@ -180,7 +181,7 @@ export function transformFile(file, text, maps) {
   const note = (k, node, detail) => notes.push({ kind: k, line: lineOf(node), detail })
 
   // Which entries the file already needs (for the duplicate-name tie-break).
-  const fileEntries = { "@nodaro/shared": new Set(), "@nodaro/prompts": new Set() }
+  const fileEntries = Object.fromEntries(Object.keys(PKG_DIRS).map((pkg) => [pkg, new Set()]))
   const pending = [] // resolve after the first pass so tie-breaks see the whole file
 
   const entryOf = (pkg, name) => {
@@ -891,7 +892,7 @@ function applyEdits(file, text, edits) {
   return out
 }
 
-const SUBPATH_RE = /^@nodaro\/(?:shared|prompts)\/[a-z0-9][a-z0-9-]*$/
+const SUBPATH_RE = new RegExp(`^(?:${Object.keys(PKG_DIRS).map((p) => p.replace("/", "\\/")).join("|")})\\/[a-z0-9][a-z0-9-]*$`)
 const commentsOf = (t) => (t.match(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g) ?? []).sort().join("\u0000")
 
 /**
@@ -1003,7 +1004,7 @@ function defaultFiles() {
 }
 
 export function isPackageEntrySource(f) {
-  return /^packages\/(shared|prompts)\/src\/(index\.ts$|entries\/)/.test(f)
+  return Object.values(PKG_DIRS).some((dir) => f === `${dir}/src/index.ts` || f.startsWith(`${dir}/src/entries/`))
 }
 
 function main(argv) {
@@ -1017,7 +1018,7 @@ function main(argv) {
   for (const f of files) {
     const abs = path.join(repo, f)
     const text = fs.readFileSync(abs, "utf8")
-    if (!text.includes("@nodaro/shared") && !text.includes("@nodaro/prompts")) continue
+    if (![...ROOTS].some((pkg) => text.includes(pkg))) continue
     const r = transformFile(f, text, maps)
     for (const n of r.notes) report.notes.push({ file: f, ...n })
     if (!r.changed) continue

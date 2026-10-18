@@ -720,6 +720,12 @@ const LLM_LANE_PRICING_WORDING_BYTES = 704
 // nothing else moved. No tool was added, so the fixture does NOT move. measured by this suite:
 // 408_142 total − 408_066 budget = 76 B.
 const CLAUDE_HAIKU_5_5_ID_BYTES = 76
+// RAISED 2026-10-17 by one LLM id added to the registry (gemini-4-argon): every tool whose
+// `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists it, and nothing else moved. No tool
+// was added, so the fixture does NOT move. Re-measured by this suite after merging dev on
+// 2026-10-18 (dev's newer tools list the LLM ids too): 444_982 total with the id − 444_914
+// without it = 68 B.
+const GEMINI_4_ARGON_ID_BYTES = 68
 // RAISED 2026-10-08 by the `build_ugc_creator` description and nothing else: the image
 // generations it hands back are now one per candidate (a sampled creator is drawn by every
 // image candidate and the user picks one). `build_ugc_clips`' `spent_job_ids` cap moving from
@@ -804,6 +810,19 @@ const MIX_AUDIO_END_AT_BYTES = 183
 // tree: 427_935 total − 421_587 before = 6_348 B (3_856 + 2_492), both far under the per-tool
 // budget; the list had no headroom before and has none after.
 const USE_CASE_TOOLS_BYTES = 6_348
+// RAISED 2026-10-17 by one NEW tool and nothing else: `make_chapters` (the Chapters node's verb —
+// a recording's chapter list in one run: transcribe, then Edit Plan in chapters mode, nothing
+// rendered), registered in verbs-use-case.ts beside `tighten_episode` and gated the same way
+// (workflows:execute, every edition), so the fixture moves by exactly that name in cloud/all AND
+// community/all. Measured by this suite on the same tree: 444_361 total − 441_883 before =
+// 2_478 B, far under the per-tool budget; the 6 B of headroom carry across.
+const MAKE_CHAPTERS_TOOL_BYTES = 2_478
+// RAISED 2026-10-17 by wording only: `make_chapters` states when its lines switch to H:MM:SS
+// (once a chapter starts at 1:00:00 or later) and that the list's first row starts at 0, and
+// `continue_use_case` says Render final applies only to a run made with a review, naming the
+// offered nodes that have none. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 444_522 total − 444_361 before = 161 B; the 6 B of headroom carry across.
+const CHAPTERS_WORDING_BYTES = 161
 // RAISED 2026-10-13 by the settled charge on a job: `creditsCharged` joins the
 // one job envelope (get_job and wait_for_job declare it as their outputSchema),
 // and get_job / list_jobs say that `credits` is the hold and the charge is the
@@ -838,6 +857,17 @@ const PRESET_PARITY_BYTES = 255
 // create_session, update_session): the MCP face of /v1/sessions. Measured by this suite
 // with and without registerSessionTools: 432_466 − 428_527 = 3_939 B.
 const SESSION_TOOLS_BYTES = 3_939
+
+// RAISED 2026-10-18 by update_session's `cover_job_id` (a session's cover image,
+// migration 532). Measured by this suite with and without the change:
+// 444_914 − 444_522 = 392 B.
+const SESSION_COVER_BYTES = 392
+// RAISED 2026-10-18 by one catalog model and nothing else: `vidu-q4` (Vidu Q4)
+// joins the video model enums the tools carry. No tool and no description text
+// was added, so the fixture does NOT move. Measured by this suite: origin/dev
+// alone 444_914 B, the same tree with vidu-q4 444_923 B = 9 B; the list keeps
+// the headroom it had.
+const VIDU_Q4_MODEL_ENUM_BYTES = 9
 
 // RAISED 2026-10-15 by the shared word search (lib/text-search.ts, the `?q=` of
 // `GET /v1/characters` and its siblings and of `GET /v1/library`) and nothing
@@ -922,6 +952,18 @@ const GENERATE_IMAGE_BATCH_BYTES = 33
 // Draft above; the route's subject rules live in docs/api-integration.md.
 const GENERATE_IMAGE_SUBJECT_BYTES = 324
 const GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES = 309
+
+// RAISED 2026-10-17 by continue-from-failed for a saved workflow's run, and nothing
+// else. No tool was added, so the fixture does NOT move. run_workflow takes
+// `continue_from_execution_id` + `from_failed` (one short description each, and one
+// sentence in the tool's description), and get_app_run's outputSchema gains the
+// optional `resumeHint` a failed saved-workflow run carries. Measured by this suite
+// on the same tree with and without the change: 442_647 total − 441_871 = 776 B
+// (752 B, then 24 B more when the tool's sentence said a failed node runs again in
+// full); the 18 B of headroom the list had before is carried across. The rules (a
+// later failed continuation supersedes the run, nothing left → 409) live in
+// docs/api-integration.md.
+const RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES = 776
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
@@ -1016,6 +1058,8 @@ export const TOOL_WIRE_BUDGET = {
     SPLIT_MEDIA_TOOL_BYTES +
     MIX_AUDIO_END_AT_BYTES +
     USE_CASE_TOOLS_BYTES +
+    MAKE_CHAPTERS_TOOL_BYTES +
+    CHAPTERS_WORDING_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +
@@ -1029,7 +1073,11 @@ export const TOOL_WIRE_BUDGET = {
     PALETTE_MOODBOARD_TOOLS_BYTES +
     PRESET_WRITE_TOOLS_BYTES +
     GENERATE_IMAGE_BATCH_BYTES +
-    GENERATE_IMAGE_SUBJECT_BYTES,
+    GENERATE_IMAGE_SUBJECT_BYTES +
+    SESSION_COVER_BYTES +
+    VIDU_Q4_MODEL_ENUM_BYTES +
+    GEMINI_4_ARGON_ID_BYTES +
+    RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

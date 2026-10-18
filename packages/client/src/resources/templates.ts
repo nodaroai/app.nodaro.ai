@@ -1,4 +1,4 @@
-import type { NodaroClient } from "../client.js"
+import type { NodaroClientCore } from "../core.js"
 
 /**
  * Workflow-template marketplace — the PUBLIC-BY-DESIGN surfaces only:
@@ -103,7 +103,7 @@ export interface CloneTemplateResult {
 }
 
 export class TemplatesResource {
-  constructor(private client: NodaroClient) {}
+  constructor(private client: NodaroClientCore) {}
 
   /** Browse the public template marketplace (cursor-paginated, no auth required). */
   browse(params: BrowseTemplatesParams = {}): Promise<BrowseTemplatesResult> {

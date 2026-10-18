@@ -502,27 +502,99 @@ describe("GET /v1/admin/users/:id/balance", () => {
 })
 
 describe("GET /v1/admin/models", () => {
-  it("returns model pricing list", async () => {
-    const models = [
-      { model_identifier: "nano-banana", credit_cost: 4, is_enabled: true, tier_restriction: null },
-      { model_identifier: "flux", credit_cost: 10, is_enabled: true, tier_restriction: null },
-    ]
+  type Row = { model_identifier: string; credit_cost: number; is_enabled: boolean; tier_restriction: null }
 
-    const chain = supabaseChain({ data: models, error: null })
-    mockFrom.mockReturnValue(chain)
-
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/admin/models",
-      headers: { "x-user-id": ADMIN_UUID },
+  /**
+   * `model_pricing` behind PostgREST: applies the requested orders, then answers
+   * `.range(from, to)` with at most `maxRows` rows — the server's silent cap —
+   * whatever range was asked for. `failAtFrom` makes the page starting there fail.
+   */
+  function pagedTable(rows: Row[], maxRows: number, failAtFrom?: number) {
+    const ranges: Array<[number, number]> = []
+    const lastOrders: Array<{ col: keyof Row; asc: boolean }> = []
+    mockFrom.mockImplementation(() => {
+      const orders: Array<{ col: keyof Row; asc: boolean }> = []
+      lastOrders.length = 0
+      const chain = {
+        select: vi.fn(() => chain),
+        order: vi.fn((col: keyof Row, opts?: { ascending?: boolean }) => {
+          orders.push({ col, asc: opts?.ascending !== false })
+          lastOrders.push({ col, asc: opts?.ascending !== false })
+          return chain
+        }),
+        range: vi.fn((from: number, to: number) => {
+          ranges.push([from, to])
+          if (from === failAtFrom) return Promise.resolve({ data: null, error: { message: "page failed" } })
+          const sorted = [...rows].sort((a, b) => {
+            for (const { col, asc } of orders) {
+              if (a[col] === b[col]) continue
+              return (a[col]! < b[col]! ? -1 : 1) * (asc ? 1 : -1)
+            }
+            return 0
+          })
+          return Promise.resolve({ data: sorted.slice(from, Math.min(to + 1, from + maxRows)), error: null })
+        }),
+      }
+      return chain
     })
+    return Object.assign(ranges, { orders: lastOrders })
+  }
+
+  const row = (model_identifier: string, credit_cost: number): Row => ({
+    model_identifier,
+    credit_cost,
+    is_enabled: true,
+    tier_restriction: null,
+  })
+
+  const getModels = () =>
+    app.inject({ method: "GET", url: "/v1/admin/models", headers: { "x-user-id": ADMIN_UUID } })
+
+  it("returns model pricing list, priciest first", async () => {
+    pagedTable([row("nano-banana", 4), row("flux", 10)], 1000)
+
+    const res = await getModels()
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body).toHaveLength(2)
-    expect(body[0].model_identifier).toBe("nano-banana")
-    expect(body[1].model_identifier).toBe("flux")
+    expect(body.map((r: Row) => r.model_identifier)).toEqual(["flux", "nano-banana"])
     expect(mockFrom).toHaveBeenCalledWith("model_pricing")
+  })
+
+  it("returns EVERY row past PostgREST's silent row cap — the cheapest included", async () => {
+    // 2,500 rows, many tied on price, behind a server that answers at most 400
+    // a page: a single select (or a loop stopping on a short page) would return
+    // 400 and never the 2-credit speaker-frames row priced last.
+    const rows = Array.from({ length: 2499 }, (_, i) => row(`model-${String(i).padStart(4, "0")}`, 10 + (i % 7) * 10))
+    rows.push(row("speaker-frames", 2))
+    const ranges = pagedTable(rows, 400)
+
+    const res = await getModels()
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as Row[]
+    expect(body).toHaveLength(2500)
+    expect(new Set(body.map((r) => r.model_identifier)).size).toBe(2500)
+    expect(body[body.length - 1]).toMatchObject({ model_identifier: "speaker-frames", credit_cost: 2 })
+    for (let i = 1; i < body.length; i++) {
+      expect(body[i - 1]!.credit_cost).toBeGreaterThanOrEqual(body[i]!.credit_cost)
+    }
+    // Each page starts after the rows actually received, and the read ends on an empty page.
+    expect(ranges.map(([from]) => from)).toEqual([0, 400, 800, 1200, 1600, 2000, 2400, 2500])
+    // Priciest first, and a TOTAL order (price ties broken by the unique id), so no page seam repeats or drops a row.
+    expect(ranges.orders).toEqual([
+      { col: "credit_cost", asc: false },
+      { col: "model_identifier", asc: true },
+    ])
+  })
+
+  it("fails the request rather than return a partial list when a page fails", async () => {
+    pagedTable(Array.from({ length: 1500 }, (_, i) => row(`m-${i}`, i)), 1000, 1000)
+
+    const res = await getModels()
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: "page failed" })
   })
 })
 

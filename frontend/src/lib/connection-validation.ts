@@ -713,6 +713,10 @@ function connectionTypesAccepted(
     if (connection.targetHandle === "music") return ACCEPTS_AUDIO(imageSourceType)
     return false
   }
+  // episode-chapters — `media` takes the recording (video or audio).
+  if (targetType === "episode-chapters" && connection.targetHandle) {
+    return connection.targetHandle === "media" ? ACCEPTS_MEDIA(imageSourceType) : false
+  }
   // edit-plan — the json inputs (transcript, silence ranges, audio-sync
   // offsets) take a data producer; `sources` takes the recordings.
   if (targetType === "edit-plan" && connection.targetHandle) {

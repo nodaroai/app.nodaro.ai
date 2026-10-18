@@ -13,19 +13,20 @@ describe("resolveGeminiOmniI2vInputs", () => {
   const FIRST = "https://r2/anchor.png"
   const refs = (n: number) => Array.from({ length: n }, (_, i) => `https://r2/ref-${i + 1}.png`)
 
-  it("binds the roles: image 1 is the opening frame, the rest are identities — not frames", () => {
+  it("binds the roles: the references first (identities, not frames), the start frame appended after them", () => {
     const r = resolveGeminiOmniI2vInputs({ prompt: "a walk on the beach", firstFrameUrl: FIRST, refImageUrls: refs(3) })
-    expect(r.imageUrls).toEqual([FIRST, ...refs(3)])
+    expect(r.imageUrls).toEqual([...refs(3), FIRST])
     expect(r.promptSuffix).toBe(
-      "Use @image_1 as the opening (first) frame of the video. " +
-        "@image_2 through @image_4 are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.",
+      "Use @image_4 as the opening (first) frame of the video. " +
+        "@image_1 through @image_3 are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.",
     )
     expect(r.droppedRefImages).toBe(0)
   })
 
   it("a single reference gets the singular sentence", () => {
     const r = resolveGeminiOmniI2vInputs({ firstFrameUrl: FIRST, refImageUrls: refs(1) })
-    expect(r.promptSuffix).toContain("@image_2 is an identity reference")
+    expect(r.promptSuffix).toContain("@image_1 is an identity reference")
+    expect(r.promptSuffix).toContain("Use @image_2 as the opening (first) frame")
     expect(r.promptSuffix).not.toContain("through")
   })
 
@@ -37,11 +38,12 @@ describe("resolveGeminiOmniI2vInputs", () => {
   it("drops TRAILING references to fit the 7-input quota — the start frame is never the one that goes", () => {
     const r = resolveGeminiOmniI2vInputs({ firstFrameUrl: FIRST, refImageUrls: refs(9) })
     expect(r.imageUrls).toHaveLength(7)
-    expect(r.imageUrls[0]).toBe(FIRST)
-    expect(r.imageUrls.at(-1)).toBe("https://r2/ref-6.png")
+    expect(r.imageUrls.at(-1)).toBe(FIRST)
+    expect(r.imageUrls[5]).toBe("https://r2/ref-6.png")
     expect(r.droppedRefImages).toBe(3)
-    // The binding names exactly the kept span.
-    expect(r.promptSuffix).toContain("@image_2 through @image_7")
+    // The binding names exactly the kept span, and the frame's own seat.
+    expect(r.promptSuffix).toContain("@image_1 through @image_6")
+    expect(r.promptSuffix).toContain("Use @image_7 as the opening (first) frame")
   })
 
   it("a connected source video eats two slots (images + 2×videos ≤ 7)", () => {
@@ -62,7 +64,7 @@ describe("resolveGeminiOmniI2vInputs", () => {
 
   it("skips empty/undefined reference entries without burning slots", () => {
     const r = resolveGeminiOmniI2vInputs({ firstFrameUrl: FIRST, refImageUrls: [undefined, "", ...refs(2)] })
-    expect(r.imageUrls).toEqual([FIRST, ...refs(2)])
+    expect(r.imageUrls).toEqual([...refs(2), FIRST])
     expect(r.droppedRefImages).toBe(0)
   })
 })

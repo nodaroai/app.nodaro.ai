@@ -3,6 +3,7 @@ import { MODEL_CATALOG, normalizeVideoRequestParams } from "../index.js"
 import {
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
+  normalizeViduQ4Resolution,
   VIDEO_GEN_PROVIDERS,
 } from "../model-constants.js"
 
@@ -46,6 +47,15 @@ describe("unlistedResolutionRendersAs matches the provider's own collapse rule",
         expect(normalizeWan3Resolution(off).toLowerCase(), `${id} renders ${off} as`).toBe(declared)
         expect(normalizeVideoRequestParams(id, { resolution: off }).resolution).toBe(declared)
       }
+    }
+  })
+
+  it("vidu-q4 declares what normalizeViduQ4Resolution collapses to", () => {
+    const declared = MODEL_CATALOG["vidu-q4"]!.unlistedResolutionRendersAs
+    expect(declared).toBeDefined()
+    for (const off of ["480p", "8k", "nonsense"]) {
+      expect(normalizeViduQ4Resolution(off), `vidu-q4 renders ${off} as`).toBe(declared)
+      expect(normalizeVideoRequestParams("vidu-q4", { resolution: off }).resolution).toBe(declared)
     }
   })
 

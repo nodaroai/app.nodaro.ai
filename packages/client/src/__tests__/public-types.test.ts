@@ -1,7 +1,7 @@
 /**
  * Every type a resource module exports is part of the SDK's public surface —
- * it appears in a method's parameters or result — so the package entry point
- * must export it too. Twenty were missing (Pro3DRender*, AssembleNarratedVideoParams,
+ * it appears in a method's parameters or result — so the package root (the
+ * union of the subpath entries in src/entries/) must export it too. Twenty were missing (Pro3DRender*, AssembleNarratedVideoParams,
  * …): a caller could receive a value it could not name. A type a module
  * re-exports from @nodaro/shared counts the same: six pipeline types were
  * documented as exported and were not.
@@ -29,15 +29,19 @@ function exportedTypeNames(file: string): string[] {
   return names
 }
 
+/** The names the subpath entries export — the root (`src/index.ts`) is their union. */
 function entryPointExports(): Set<string> {
-  const file = join(SRC, "index.ts")
-  const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true)
+  const dir = join(SRC, "entries")
   const names = new Set<string>()
-  source.forEachChild((node) => {
-    if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
-      for (const element of node.exportClause.elements) names.add(element.name.text)
-    }
-  })
+  for (const f of readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
+    const file = join(dir, f)
+    const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true)
+    source.forEachChild((node) => {
+      if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+        for (const element of node.exportClause.elements) names.add(element.name.text)
+      }
+    })
+  }
   return names
 }
 

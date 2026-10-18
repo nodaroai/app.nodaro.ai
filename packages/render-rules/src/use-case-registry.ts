@@ -2,7 +2,9 @@
  * One descriptor per use-case node (decided 2026-10-14): everything a route,
  * an estimator, the review and the editor need to know about a type, so none
  * of them names a type. Adding a use-case node = a builder + one entry here
- * (and its registrations outside this package). Pure.
+ * (and its registrations outside this package). The boot smoke's route probe
+ * follows from the entry (backend/scripts/use-case-probe-paths.mjs): no list
+ * to edit in ci.yml. Pure.
  */
 import {
   isUseCaseNodeType,
@@ -20,6 +22,13 @@ import {
   resolveTightenEpisodeSettings,
   type TightenEpisodeSettings,
 } from "./tighten-episode-graph"
+import {
+  CHAPTERS_NODE_IDS,
+  EPISODE_CHAPTERS,
+  buildEpisodeChaptersGraph,
+  resolveEpisodeChaptersSettings,
+  type EpisodeChaptersSettings,
+} from "./episode-chapters-graph"
 
 export type UseCaseInputHandle = "media" | "music" | "introCard"
 export interface UseCaseSources {
@@ -83,8 +92,24 @@ const tighten = defineUseCase<TightenEpisodeSettings>({
     buildTightenEpisodeGraph(settings, { media: sources.media, ...(sources.music ? { music: sources.music } : {}) }),
 })
 
+const chapters = defineUseCase<EpisodeChaptersSettings>({
+  type: EPISODE_CHAPTERS,
+  label: "Chapters",
+  route: `/v1/${EPISODE_CHAPTERS}`,
+  maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+  needsVideo: false,
+  inputs: ["media"],
+  inputNodeIds: { media: CHAPTERS_NODE_IDS.source },
+  settingKeys: ["planTier", "instructions", "styleGuide"],
+  reviewable: false,
+  resultKind: "chapters",
+  resolveSettings: (raw, kind) => resolveEpisodeChaptersSettings(raw, kind),
+  build: (settings, sources) => buildEpisodeChaptersGraph(settings, { media: sources.media }),
+})
+
 export const USE_CASE_DESCRIPTORS: { readonly [K in UseCaseNodeType]: UseCaseDescriptor } = Object.freeze({
   [TIGHTEN_EPISODE]: tighten,
+  [EPISODE_CHAPTERS]: chapters,
 })
 
 export function usecaseDescriptor(type: UseCaseNodeType): UseCaseDescriptor {
@@ -100,4 +125,13 @@ export function usecaseListsItsResult(type: string | null | undefined): boolean 
   if (!isUseCaseNodeType(type)) return false
   const kind = USE_CASE_DESCRIPTORS[type].resultKind
   return kind === "clips" || kind === "formats"
+}
+
+/**
+ * Is a node of `type` a use-case node whose own result is text (Chapters' show
+ * notes on `text`, its list on `json`), with no episode? Its `text` pip is also
+ * what an edge naming no pip reads.
+ */
+export function usecaseResultIsText(type: string | null | undefined): boolean {
+  return isUseCaseNodeType(type) && USE_CASE_DESCRIPTORS[type].resultKind === "chapters"
 }

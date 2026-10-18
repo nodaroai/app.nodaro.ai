@@ -180,7 +180,7 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
           className={cn(
             // start-16 clears the canvas toolbar rail, which anchors to the
             // same inline-start edge (canvas-toolbar.tsx) — the two move together.
-            "absolute top-4 start-16 z-10 hidden md:flex flex-col gap-2 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border border-[var(--npk-border)] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in duration-200",
+            "absolute top-4 start-16 z-10 hidden md:flex flex-col gap-2 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border border-[var(--npk-border)] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh_-_6rem_-_var(--ns-header-h,0px))] overflow-y-auto shadow-lg animate-in duration-200",
             isRtl ? "slide-in-from-right-2" : "slide-in-from-left-2",
           )}
         >

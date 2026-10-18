@@ -1,22 +1,31 @@
 // @test-units-by-name composes only the in-memory fixture unit it declares, and looks the aggregates up by prototype keys only
+// @test-watches frontend/src/nodes/_generated/*.ts
 import { describe, expect, it, vi } from "vitest"
 import { insertAtPositions as manifestInsert } from "../../../../tools/units/manifest.mjs"
 import type { UnitDefinition } from "@/nodes/kit"
 import type { NodeTypeDefinition } from "@/types/nodes"
 import type { NodeOption } from "@/lib/node-compatibility"
 import {
-  composeFamilyTypes, composeNodeDefinitions, composeNodeOptions, composeRecord, composeSet, insertAtPositions,
+  composeFamilyTypes, composeNodeDefinitions, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
   toNodeTypeDefinition, unitNodeLabels, unitOutputTypes, unitOutputValue, unitRecord, unitsWith,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
+// The aggregates' own source (Vite ?raw — a module edge, no file read): their
+// unit imports are stubbed below, so the check loads the aggregates alone and
+// never a unit's canvas component (BaseNode, the ee hooks …), which made it
+// seconds slow and flaky under the parallel suite.
+import componentsSrc from "@/nodes/_generated/components?raw"
+import configsSrc from "@/nodes/_generated/configs?raw"
+import optionsSrc from "@/nodes/_generated/options?raw"
+import executorsSrc from "@/nodes/_generated/executors?raw"
+import labelsSrc from "@/nodes/_generated/labels?raw"
 
 /**
  * Every editor seam the node units compose through (§5.8 B PR1b,
  * tools/units/README.md), on an in-memory fixture unit: it lands where its
  * manifest says, with its handles, price and executor kit — and with no unit,
- * each seam hands its legacy table back unchanged (the real registries are
- * held to their pre-composition snapshot by units-composed-baseline.test.ts).
+ * each seam hands its legacy table back unchanged.
  */
 const FIXTURE: UnitDefinition = {
   type: "fixture-echo",
@@ -103,6 +112,29 @@ describe("tables and sets", () => {
     expect([...composeSet("S", legacy, ["x"])]).toEqual(["a", "b", "x"])
     expect(() => composeSet("S", legacy, ["a"])).toThrow(/exactly one place/)
   })
+  it("composeRecordAfter: an ordered record keeps the legacy order and places each unit after its first present anchor", () => {
+    const legacy = { a: 1, b: 2, c: 3 }
+    expect(composeRecordAfter("T", legacy, [])).toBe(legacy)
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: ["b", "c"], value: 9 }]))).toEqual(["a", "b", "x", "c"])
+    // The first anchor is a node with no row here: the next one is used; none present (or null) → last.
+    const noRow = new Set(["missing"])
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: [null, "missing", "a"], value: 9 }], noRow))).toEqual(["a", "x", "b", "c"])
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: [undefined, "missing"], value: 9 }], noRow))).toEqual(["a", "b", "c", "x"])
+    // An anchor that names nothing (no row here, not a known name outside) throws instead of appending.
+    expect(() => composeRecordAfter("T", legacy, [{ type: "x", anchors: ["nowhere", "a"], value: 9 }], noRow)).toThrow(/T: x's anchor "nowhere" names nothing/)
+    expect(() => composeRecordAfter("T", legacy, [{ type: "x", anchors: ["missing"], value: 9 }])).toThrow(/names nothing/)
+    // Two units at one key keep type order.
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "z", anchors: ["a"], value: 0 }, { type: "y", anchors: ["a"], value: 0 }]))).toEqual(["a", "y", "z", "b", "c"])
+    expect(composeRecordAfter("T", legacy, [{ type: "x", anchors: ["a"], value: 9 }]).x).toBe(9)
+    expect(legacy).toEqual({ a: 1, b: 2, c: 3 })
+    // A unit may follow another unit (a chain), whichever order they are listed in; the anchor
+    // of a unit at the end carries its followers there too; a cycle (or a self-anchor) throws.
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "y", anchors: ["x"], value: 0 }, { type: "x", anchors: ["a"], value: 0 }]))).toEqual(["a", "x", "y", "b", "c"])
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "y", anchors: ["missing", "x"], value: 0 }, { type: "x", anchors: ["missing"], value: 0 }], noRow))).toEqual(["a", "b", "c", "x", "y"])
+    expect(() => composeRecordAfter("T", legacy, [{ type: "x", anchors: ["y"], value: 0 }, { type: "y", anchors: ["x"], value: 0 }])).toThrow(/cycle: x, y/)
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: ["x", "b"], value: 0 }]))).toEqual(["a", "b", "x", "c"])
+    expect(() => composeRecordAfter("T", legacy, [{ type: "a", anchors: [], value: 0 }])).toThrow(/exactly one place/)
+  })
   it("the derived rows: price mirror, executable, capabilities, output handles", () => {
     expect(unitRecord([FIXTURE], (u) => u.priceFallback ?? undefined)).toEqual({ "fixture-echo": 3 })
     expect(unitRecord([{ ...FIXTURE, priceFallback: null }], (u) => u.priceFallback ?? undefined)).toEqual({})
@@ -158,8 +190,17 @@ describe("the executor kit", () => {
   })
 })
 
+
+/** `import { X as y } from "../<unit>/<module>"` lines of an aggregate → [module path, export name]. */
+const unitMembers = (src: string): Array<[string, string]> =>
+  [...src.matchAll(/^import \{ (\w+) as \w+ \} from "\.\.\/([a-z][a-z0-9-]*\/[\w.-]+)"/gm)].map((m) => [`@/nodes/${m[2]}`, m[1]!])
+
 describe("a node type that is an Object.prototype member never reaches a unit lookup", () => {
   it("every keyed editor aggregate is null-prototype", async () => {
+    const members = [componentsSrc, configsSrc, optionsSrc, executorsSrc, labelsSrc].flatMap(unitMembers)
+    expect(members.length, "the aggregates import their units (the regex still reads them)").toBeGreaterThan(0)
+    vi.resetModules()
+    for (const [path, name] of members) vi.doMock(path, () => ({ [name]: { stub: path } }))
     const aggregates = {
       ...(await import("@/nodes/_generated/components")),
       ...(await import("@/nodes/_generated/configs")),
@@ -167,8 +208,11 @@ describe("a node type that is an Object.prototype member never reaches a unit lo
       ...(await import("@/nodes/_generated/executors")),
       ...(await import("@/nodes/_generated/labels")),
     } as Record<string, Readonly<Record<string, unknown>>>
+    for (const [path] of members) vi.doUnmock(path)
     expect(Object.keys(aggregates).sort()).toEqual(["UNIT_COMPONENTS", "UNIT_CONFIGS", "UNIT_EXECUTORS", "UNIT_LABELS", "UNIT_OPTIONS"])
     for (const [name, agg] of Object.entries(aggregates)) {
+      expect(Object.values(agg).length, `${name} holds its units`).toBeGreaterThan(0)
+      expect(Object.values(agg).every((v) => typeof v === "object" && v !== null && "stub" in v), `${name}: only stubbed unit modules were loaded`).toBe(true)
       for (const k of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) expect(agg[k], `${name}[${k}]`).toBeUndefined()
     }
   })

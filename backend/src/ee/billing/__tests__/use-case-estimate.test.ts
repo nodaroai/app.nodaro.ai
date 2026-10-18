@@ -5,8 +5,8 @@
  * Speaker View at its complex rate before the edit is known.
  *
  * The engine is tested at its static rows. The public docs state the CHARGED
- * price (docs/nodes/processing-video/tighten-episode.md, "What the estimate
- * shows"), so each worked example there is pinned at the end of this file:
+ * price (docs/nodes/processing-video/tighten-episode.md and episode-chapters.md,
+ * "What the estimate shows"), so each worked example there is pinned in this file:
  * its steps, as price ids, sum to the engine's figure at the static rows, and
  * the same steps priced by `statedPrices()` (the rule the docs census holds
  * every figure to) sum to the figure the page states.
@@ -26,6 +26,14 @@ const node = (data: Record<string, unknown>) => ({ id: "t1", type: "tighten-epis
 const wire = (srcHandle: "video" | "audio") => ({ source: "rec", target: "t1", sourceHandle: srcHandle, targetHandle: "media" })
 const music = { source: "bed", target: "t1", sourceHandle: "audio", targetHandle: "music" }
 const framed = { framing: { aspect: "9:16", layout: "stacked" } }
+const chapters = (data: Record<string, unknown>) => ({ id: "c1", type: "episode-chapters", data: { label: "Chapters", ...data } })
+const chaptersWire = (srcHandle: "video" | "audio") => ({ source: "rec", target: "c1", sourceHandle: srcHandle, targetHandle: "media" })
+
+/** One step of a worked example: a price id and its units (minutes for a per-minute row; Edit Plan's
+ *  stepped ids are not static rows, so its per-minute row stands in at the step's minutes). */
+type Step = readonly [id: string, units?: number]
+const listOf = (steps: readonly Step[]) => steps.reduce((t, [id, units = 1]) => t + STATIC_CREDIT_COSTS[id]! * units, 0)
+const chargedOf = (steps: readonly Step[]) => steps.reduce((t, [id, units = 1]) => t + statedPrices().credits(id, units)!, 0)
 
 describe("Tighten Episode estimate = its chain + 10 (static prices)", () => {
   it("(i) video 60 min, captions off: 882", async () => {
@@ -161,12 +169,6 @@ describe("a step priced by its input's length, after the node, is priced at the 
   })
 })
 
-/** One step of a worked example: a price id and its units (minutes for a per-minute row; Edit Plan's
- *  stepped ids are not static rows, so its per-minute row stands in at the step's minutes). */
-type Step = readonly [id: string, units?: number]
-const listOf = (steps: readonly Step[]) => steps.reduce((t, [id, units = 1]) => t + STATIC_CREDIT_COSTS[id]! * units, 0)
-const chargedOf = (steps: readonly Step[]) => steps.reduce((t, [id, units = 1]) => t + statedPrices().credits(id, units)!, 0)
-
 describe("the docs' worked examples, at the charged price (tighten-episode.md, What the estimate shows)", () => {
   const head: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 60]]
   const fee: Step = ["use-case-fee:tighten-episode"]
@@ -214,4 +216,42 @@ describe("the docs' worked examples, at the charged price (tighten-episode.md, W
     expect(3 * listOf(one)).toBe(await estimateWorkflowCredits([list, node({ captions: false })], [{ source: "L", target: "t1", sourceHandle: "text", targetHandle: "media" }]))
     expect(3 * chargedOf(one)).toBe(8457)
   })
+})
+
+describe("Chapters estimate = transcribe + Edit Plan (chapters) + 10", () => {
+  it("45-min video, economy (the default tier): Edit Plan at its 60-minute step — 22 + 120 + 10", async () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["edit-plan:chapters:economy:per-minute", 60], ["use-case-fee:episode-chapters"]]
+    expect(listOf(steps)).toBe(152)
+    expect(await estimateWorkflowCredits([video(2700), chapters({})], [chaptersWire("video")])).toBe(listOf(steps))
+  })
+  it("unknown length: the 180-minute ceiling", async () => {
+    expect(await estimateWorkflowCredits([chapters({})], [])).toBe(
+      listOf([["elevenlabs-stt"], ["edit-plan:chapters:economy:per-minute", 180], ["use-case-fee:episode-chapters"]]),
+    )
+  })
+  it("its own charge is its fee", () => expect(CREDIT_COSTS["episode-chapters"]!({})).toBe("use-case-fee:episode-chapters"))
+})
+
+describe("the docs' worked examples, at the charged price (episode-chapters.md, What the estimate shows)", () => {
+  const fee: Step = ["use-case-fee:episode-chapters"]
+  const chaptersCases: ReadonlyArray<{ name: string; steps: Step[]; engine: () => Promise<number>; docs: number }> = [
+    {
+      name: "45-min video, economy (Edit Plan at its 60-minute step)",
+      steps: [["elevenlabs-stt"], ["edit-plan:chapters:economy:per-minute", 60], fee],
+      engine: () => estimateWorkflowCredits([video(2700), chapters({})], [chaptersWire("video")]),
+      docs: 168,
+    },
+    {
+      name: "unknown length, economy (the 180-minute ceiling)",
+      steps: [["elevenlabs-stt"], ["edit-plan:chapters:economy:per-minute", 180], fee],
+      engine: () => estimateWorkflowCredits([chapters({})], []),
+      docs: 432,
+    },
+  ]
+  for (const c of chaptersCases) {
+    it(`${c.name}: the engine's steps, charged = ${c.docs}`, async () => {
+      expect(listOf(c.steps)).toBe(await c.engine())
+      expect(chargedOf(c.steps)).toBe(c.docs)
+    })
+  }
 })

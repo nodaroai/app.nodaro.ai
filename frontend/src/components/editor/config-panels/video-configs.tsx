@@ -54,7 +54,7 @@ import {
   isAutoVideoDuration,
   MODEL_CATALOG
 } from "@nodaro/shared/model-catalog"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -585,7 +585,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           frame into the reference pool exactly like Seedance 2 / MiniMax H3
           and needs the same preview; `limits` keeps the drop count on the
           provider's own image cap (wan-3 = 10, not Seedance's 9). */}
-      {(isSeedance2Provider(currentI2VProvider) || isMinimaxH3Provider(currentI2VProvider) || isWan3Provider(currentI2VProvider)) && (() => {
+      {(isSeedance2Provider(currentI2VProvider) || isMinimaxH3Provider(currentI2VProvider) || isWan3Provider(currentI2VProvider) || isViduQ4Provider(currentI2VProvider)) && (() => {
         const modeLimits = { ...SEEDANCE_2_REF_LIMITS, ...(VIDEO_REF_LIMITS_BY_PROVIDER[currentI2VProvider] ?? {}) }
         const s2 = resolveSeedance2Inputs({
           firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
@@ -1268,6 +1268,49 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             <label htmlFor="i2v-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
           <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+        </>
+      )}
+
+      {/* Vidu Q4 — the same levers the unified Generate Video panel exposes;
+          resolution defaults to `uiResolutionFill` (720p), never opts[0]. */}
+      {isViduQ4Provider(currentI2VProvider) && (
+        <>
+          {(() => {
+            const opts = getVideoResolutionOptions(currentI2VProvider)
+            return opts && opts.length > 0 ? (
+              <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+                <Select
+                  value={(data.resolution as string) || uiResolutionFill(currentI2VProvider) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </MappableField>
+            ) : null
+          })()}
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={getAspectRatiosForVideoModel(currentI2VProvider)}
+              value={data.aspectRatio || defaultVideoAspectRatio(currentI2VProvider)}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="i2v-viduQ4Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="i2v-viduQ4Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
         </>
       )}
 
@@ -2944,6 +2987,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // denominators and the handle popover can no longer disagree.
   const isGeminiOmni = isGeminiOmniProvider(currentProvider)
   const isWan3 = isWan3Provider(currentProvider)
+  const isViduQ4 = isViduQ4Provider(currentProvider)
   const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[currentProvider]
 
   // Fail-safe: snap stale resolution / duration / fps / aspect / frame / draft
@@ -3099,7 +3143,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           so the drop count uses the PROVIDER's image cap (wan-3 = 10) instead
           of the Seedance default (9). Mirror of the indicator in
           ImageToVideoConfigImpl. */}
-      {(isSeedance2 || isMinimaxH3 || isWan3) && (() => {
+      {(isSeedance2 || isMinimaxH3 || isWan3 || isViduQ4) && (() => {
         const modeLimits = { ...SEEDANCE_2_REF_LIMITS, ...(refCaps ?? {}) }
         const s2 = resolveSeedance2Inputs({
           firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
@@ -3213,6 +3257,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           </div>
           {isWan3 && (
             <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3AudioRefLimits")}</p>
+          )}
+          {isViduQ4 && (
+            <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.viduQ4AudioRefLimits")}</p>
           )}
         </div>
       )}
@@ -3826,6 +3873,53 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             <label htmlFor="gv-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
           <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+        </>
+      )}
+
+      {isViduQ4 && (
+        <>
+          {/* Resolution — catalog-driven (540p…4k, ascending). The displayed
+              default is 720p (uiResolutionFill), NOT opts[0]: 720p is the tier
+              the bare credit identifier, the fail-safe persist above and
+              `runViduQ4` all default to, so panel, badge and render agree. */}
+          {(() => {
+            const opts = getVideoResolutionOptions(currentProvider)
+            return opts && opts.length > 0 ? (
+              <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+                <Select
+                  value={(data.resolution as string) || uiResolutionFill(currentProvider) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </MappableField>
+            ) : null
+          })()}
+          {/* Aspect ratio reaches the provider on reference runs only — a
+              start-frame run keeps the frame's own shape (the note says so). */}
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={getAspectRatiosForVideoModel(currentProvider)}
+              value={(data.aspectRatio as string) || defaultVideoAspectRatio(currentProvider)}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-viduQ4Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-viduQ4Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
         </>
       )}
 

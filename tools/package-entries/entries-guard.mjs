@@ -57,8 +57,13 @@ export function indexShapeErrors(pkgDir) {
   return errors
 }
 
-/** package.json "exports" = the unchanged root + one subpath per entry, nothing else. */
-export function exportsMapErrors(pkgDir) {
+/**
+ * package.json "exports" = the unchanged root + one subpath per entry, nothing
+ * else — except `legacySubpaths`: standalone subpaths a package published
+ * before it had entries (not part of the root, built outside dist/entries/),
+ * each pinned to its exact published target so it cannot drift either.
+ */
+export function exportsMapErrors(pkgDir, legacySubpaths = {}) {
   const pkg = readJson(path.join(pkgDir, 'package.json'))
   const errors = []
   const root = { types: './dist/index.d.ts', import: './dist/index.js', require: './dist/index.cjs' }
@@ -77,7 +82,13 @@ export function exportsMapErrors(pkgDir) {
     if (!got) errors.push(`package.json exports is missing "./${e}" for src/entries/${e}.ts — add ${JSON.stringify({ [`./${e}`]: want })}`)
     else if (JSON.stringify(got) !== JSON.stringify(want)) errors.push(`exports["./${e}"] must be ${JSON.stringify(want)}`)
   }
-  for (const k of keys) if (!entries.includes(k.slice(2))) errors.push(`exports["${k}"] has no src/entries/${k.slice(2)}.ts`)
+  for (const [k, want] of Object.entries(legacySubpaths)) {
+    if (entries.includes(k.slice(2))) errors.push(`src/entries/${k.slice(2)}.ts collides with the legacy subpath "${k}" — rename the entry`)
+    else if (JSON.stringify(pkg.exports?.[k]) !== JSON.stringify(want)) errors.push(`legacy exports["${k}"] must stay ${JSON.stringify(want)}`)
+  }
+  for (const k of keys) {
+    if (!entries.includes(k.slice(2)) && !Object.hasOwn(legacySubpaths, k)) errors.push(`exports["${k}"] has no src/entries/${k.slice(2)}.ts`)
+  }
   return errors
 }
 
