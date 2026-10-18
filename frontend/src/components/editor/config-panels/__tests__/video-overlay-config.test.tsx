@@ -33,6 +33,25 @@ function renderPanel(data: Partial<VideoOverlayData>) {
   )
 }
 
+/**
+ * Every card's remove button, in card order. Not `getAllByRole("button", { name })`:
+ * that computes the accessible name of EVERY button on the page (~125 with 24
+ * cards), and a button without an aria-label walks the whole document for its
+ * `<label>`s — quadratic in the card count, ~90% of a 24-card test (~0.4 s on a
+ * laptop, ~2 s alone on the CI runner, past the 5 s test timeout under the full
+ * suite: a synchronous test is failed once its wall time exceeds it). Found by
+ * title, the same string, then held to the same contract — a button named
+ * "Remove layer" — one button at a time.
+ */
+function removeButtons(): HTMLElement[] {
+  const removes = screen.getAllByTitle("Remove layer")
+  for (const b of removes) {
+    expect(b).toHaveRole("button")
+    expect(b).toHaveAccessibleName("Remove layer")
+  }
+  return removes
+}
+
 beforeEach(() => useVideoOverlaySelectionStore.setState({ selected: {} }))
 
 describe("VideoOverlayConfig", () => {
@@ -91,7 +110,7 @@ describe("VideoOverlayConfig", () => {
   it("lists every stored layer past 20, so removing the extras clears the too_many_layers refusal", () => {
     const layers = Array.from({ length: 24 }, (_, i) => ({ imageUrl: `https://x/${i}.png`, start: 0 }))
     renderPanel({ layers })
-    const removes = screen.getAllByRole("button", { name: "Remove layer" })
+    const removes = removeButtons()
     expect(removes).toHaveLength(24)
     const verdict = () => {
       const data = useWorkflowStore.getState().nodes[0]!.data as VideoOverlayData
@@ -109,14 +128,19 @@ describe("VideoOverlayConfig", () => {
   it("removing layers 1–4 of a 24-layer node keeps the rest at slots 5–24, and the node runs", () => {
     const layers = Array.from({ length: 24 }, (_, i) => ({ imageUrl: `https://x/${i}.png`, start: 0 }))
     renderPanel({ layers })
-    const removes = screen.getAllByRole("button", { name: "Remove layer" })
+    const removes = removeButtons()
+    expect(removes).toHaveLength(24)
     for (const i of [0, 1, 2, 3]) fireEvent.click(removes[i]!)
     const data = useWorkflowStore.getState().nodes[0]!.data as VideoOverlayData
     expect(data.layers).toHaveLength(24)
     expect(data.layers!.slice(0, 4)).toEqual([null, null, null, null])
     // Layer 24 is past the 20-slot mark but still has its image: the card's
     // source tag is the source-OK one (green), not the muted "no image" one.
-    const layer24Tag = screen.getByRole("button", { name: /^Layer 24/ }).querySelector("span")
+    // By its own text, not by role + name (see removeButtons).
+    const layer24 = screen.getByText("Layer 24")
+    expect(layer24).toHaveRole("button")
+    expect(layer24).toHaveAccessibleName(/^Layer 24/)
+    const layer24Tag = layer24.querySelector("span")
     expect(layer24Tag).toHaveTextContent("image URL — no handle (layers 13 and up)")
     expect(layer24Tag).toHaveClass("text-emerald-500")
     const request = assembleVideoOverlayRequest({ videoUrl: BASE, data, wiredImageUrls: [] })
