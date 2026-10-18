@@ -133,6 +133,9 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/workflow-editor/types.ts",
   "frontend/src/components/editor/workflow-editor/workflow-editor-main.tsx",
   "frontend/src/components/layout/app-sidebar.tsx",
+  // The sidebar's credit card, split out of app-sidebar.tsx with its existing
+  // useUserCredits import (same pre-existing coupling, moved, not new).
+  "frontend/src/components/layout/sidebar-credit-card.tsx",
   "frontend/src/components/nodes/ai-avatar-node.tsx",
   "frontend/src/components/nodes/cinematic-avatar-node.tsx",
   "frontend/src/components/nodes/add-captions-node.tsx",

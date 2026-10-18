@@ -286,7 +286,6 @@
  "frontend/src/components/editor/workflow-editor/__tests__/workflow-switch-sites.test.ts",
  "frontend/src/components/inspector/__tests__/no-private-result-modal.test.ts",
  "frontend/src/components/layout/__tests__/sidebar-payer-entry.test.ts",
- "frontend/src/components/layout/__tests__/whats-new-click-only.test.ts",
  "frontend/src/components/nodes/__tests__/add-captions-credit-id.test.ts",
  "frontend/src/components/nodes/__tests__/handle-color-guard.test.ts",
  "frontend/src/components/nodes/__tests__/node-price-ids.test.ts",

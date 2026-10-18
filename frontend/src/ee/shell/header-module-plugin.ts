@@ -79,7 +79,7 @@ async function viteEnv(mode: string, envDir: string): Promise<Record<string, str
 
 const ADAPTER = [
   `import "${PACKAGE}/shell.css"`,
-  `export { NodaroShell } from "${PACKAGE}"`,
+  `export { NodaroShell, shellTranslator } from "${PACKAGE}"`,
   "export const headerAvailable = true",
   "",
 ].join("\n")

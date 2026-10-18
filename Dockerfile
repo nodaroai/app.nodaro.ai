@@ -215,9 +215,15 @@ ARG VITE_ORGS_ENABLED
 # Shared site header (Cloud): "true" installs it (below) and puts it above the
 # app. Empty = off: every self-host build, and production until the cut-over.
 ARG VITE_SHARED_HEADER
+# Where the shared header's links go (frontend/src/ee/shell/site.ts). Empty =
+# the header's own canonical targets; a preview points them at its hosts.
+ARG VITE_HOME_URL
+ARG VITE_TOOLS_URL
 
 ENV VITE_ORGS_ENABLED=$VITE_ORGS_ENABLED
 ENV VITE_SHARED_HEADER=$VITE_SHARED_HEADER
+ENV VITE_HOME_URL=$VITE_HOME_URL
+ENV VITE_TOOLS_URL=$VITE_TOOLS_URL
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_URL=$VITE_API_URL

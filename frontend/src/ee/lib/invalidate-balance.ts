@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query"
 
+import { HEADER_QUERY_KEYS } from "@/ee/shell/query-keys"
 import { queryKeys } from "@/lib/query-keys"
 
 /**
@@ -9,7 +10,7 @@ import { queryKeys } from "@/lib/query-keys"
  * refresh both, or the header's figure waits for its next poll. `exact` keeps
  * the model prices under the same `["credits", …]` prefix untouched.
  */
-export const HEADER_BALANCE_KEY = ["credits"] as const
+export const HEADER_BALANCE_KEY = HEADER_QUERY_KEYS.credits
 
 export async function invalidateBalance(queryClient: QueryClient, userId: string): Promise<void> {
   await Promise.all([

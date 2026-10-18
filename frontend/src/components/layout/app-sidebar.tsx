@@ -1,15 +1,10 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
+import { useCallback, useEffect, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
 import {
   FolderOpen,
   Settings,
   Shield,
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  X,
   CreditCard,
   Images,
   Archive,
@@ -27,62 +22,23 @@ import {
   Flag,
   Clapperboard,
   GraduationCap,
-  ExternalLink,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useT, type MessageKey } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { isFeatureEnabled, hasCredits, isCloud, isMultiUser } from "@/lib/edition"
-import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { isFeatureEnabled, isMultiUser } from "@/lib/edition"
 import { useDeploymentPayerViewer } from "@/ee/hooks/queries/use-deployment-billing"
-import { PRICING_TIERS } from "@/lib/pricing-data"
-import { APP_VERSION } from "@/lib/version"
-import { useUpdateCheck } from "@/hooks/use-update-check"
-import { UpdateDialog } from "@/components/layout/update-dialog"
-import { NodaroLogo } from "@/components/nodaro-logo"
-import { hasOrganizations } from "@/lib/edition"
-
-/**
- * The workspace switcher, lazily loaded and only on a build that has
- * organizations — the same shape `router.tsx` uses to reach its enterprise
- * pages, and the only way core code reaches ee UI without a static import.
- * On every other build the chunk is never requested and the menu is exactly
- * what it was.
- */
-const OrgSwitcherSection = hasOrganizations()
-  ? lazy(() => import("@/ee/components/org/org-switcher-section").then((m) => ({ default: m.OrgSwitcherSection })))
-  : null
-import { otherNodaroApps } from "@/lib/nodaro-apps"
-import { surfaceNavHidden, surfaceTabs, surfaceBillingSelfServe, surfaceSidebarCreditCardHidden, surfaceBrandName, surfacePlatformLinks } from "@/lib/surface-selectors"
-import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
-import { spendableCredits, type BalanceWithAllowance, type CreditAllowance } from "@/lib/spendable-credits"
-import { useBillingSurface } from "@/hooks/use-billing-surface"
+import { surfaceNavHidden, surfaceTabs, surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import type { DashboardTabKey, NavKey } from "@/lib/surface-profile"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
-import { formatDate, formatNumber } from "@/lib/i18n/format"
+import { useSharedHeaderActive } from "@/lib/shared-header"
+import { SidebarBrandStrip, SidebarHeaderModeStrip } from "./sidebar-brand-strip"
+import { SidebarCreditCard } from "./sidebar-credit-card"
+import { SidebarFooter } from "./sidebar-footer"
 
 const STORAGE_KEY = "nodaro-sidebar-collapsed"
-
-/** Mono stack for the credit block, from the designer's Pricing mock. */
-const MONO_FONT = "'JetBrains Mono Variable','JetBrains Mono',monospace"
 
 interface NavItem {
   readonly href: string
@@ -183,120 +139,12 @@ export function isNavItemSurfaceHidden(item: NavItem): boolean {
   return item.dashboardKey !== undefined && surfaceTabs([item.dashboardKey]).length === 0
 }
 
-function formatRenewalTime(periodEnd: string): string | null {
-  const msLeft = new Date(periodEnd).getTime() - Date.now()
-  if (msLeft <= 0) return null  // stale date — don't show misleading text
-  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
-  if (daysLeft < 1) {
-    const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
-    if (hoursLeft >= 1) return tx(hoursLeft !== 1 ? "nav.renewal.hours" : "nav.renewal.hour", { n: hoursLeft })
-    const minutesLeft = Math.floor(msLeft / (1000 * 60))
-    if (minutesLeft >= 1) return tx(minutesLeft !== 1 ? "nav.renewal.minutes" : "nav.renewal.minute", { n: minutesLeft })
-    return tx("nav.renewal.lessThanMinute")
-  }
-  if (daysLeft <= 14) return tx(daysLeft !== 1 ? "nav.renewal.days" : "nav.renewal.day", { n: daysLeft })
-  return formatDate(periodEnd, { month: "short", day: "numeric", year: "numeric" })
-}
-
 interface AppSidebarProps {
   /** If true, sidebar starts collapsed but can still be expanded by user */
   readonly defaultCollapsed?: boolean
   readonly onMobileClose?: () => void
   readonly isMobileOpen?: boolean
   readonly className?: string
-}
-
-/**
- * One pool inside the sidebar credit card: label and amount on a line, a thin
- * bar under them, and the expiry note below.
- *
- * The label and the amount sit on the SAME line on purpose — that is what frees
- * the full card width for the note underneath, which is what was being clipped
- * when the two pools were side-by-side columns.
- */
-/**
- * Track A (D12, ruling R-A) — which figures the sidebar credit card renders.
- *
- * Extracted and exported so the decision is testable on its own: rendering
- * the whole sidebar needs a router, an auth session and four query hooks, and
- * a money figure should not be guarded only by a test that heavy.
- *
- * Under a deployment payer the requester's `total` is a FROZEN signup grant —
- * nothing debits it and nothing tops it up — so un-hiding the card as-is would
- * put a lie on screen permanently. The allowance is the number that WILL fall
- * as they generate once enforcement is on, and the one the billing account's
- * top-up lever actually moves, so it wins whenever the server sent one.
- *
- * THIS IS A DISPLAY, NOT A GATE, and that is why it takes `displayFigure`
- * rather than the `figure` the canvas precheck compares against. Under R-A the
- * allowance is VISIBLE from the moment a payer exists and only BINDS after the
- * `billing.allowances` flip; the card shows it through both windows, because
- * showing the frozen grant instead would be the lie this card was un-hidden to
- * stop telling. Only a refusal needs the enforcement bit — and in the window
- * where it is off, no client refuses at all (`gateApplies`), which is why every
- * other screen quotes this same figure.
- *
- * `null` and absent behave identically and mean "no allowance applies": the
- * caller IS the payer (D13 — it holds the real credits, not an allocation), or
- * the figure was unavailable. Both fall back to `total`, which for the payer is
- * a live wallet — reading null as "remaining 0" would render a zero balance for
- * the account that owns the pool.
- *
- * Everything here is RAW credits; `creditUnits` converts at render.
- */
-export interface SidebarCreditFigures {
-  readonly external?: boolean
-  readonly unavailable?: boolean
-  /** The headline figure, raw credits. */
-  readonly headline: number
-  /** Non-null only when a per-user allowance applies. */
-  readonly allowance: CreditAllowance | null
-}
-
-export function sidebarCreditFigures(
-  balance: BalanceWithAllowance,
-  deploymentPayer: boolean,
-): SidebarCreditFigures {
-  // `deploymentPayer` reaches `spendableCredits` because that helper requires
-  // every caller to have ASKED whether this is a payer instance — it is the
-  // fact that separates the two meanings of `allowance: null`. It moves
-  // `gateApplies` alone, which this card does not read: a display never
-  // refuses, and passing the flag is what keeps that a decision rather than an
-  // omission.
-  const { displayFigure, allowance } = spendableCredits(balance, deploymentPayer)
-  return { headline: displayFigure, allowance,
-    ...(balance.externalWallet ? { external: true, unavailable: balance.externalWallet.available === null } : {}) }
-}
-
-function CreditRow({
-  label,
-  value,
-  pct,
-  fill,
-  subline,
-}: {
-  readonly label: string
-  readonly value: number
-  readonly pct: number
-  readonly fill: string
-  readonly subline: string | null
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "var(--blg-t2-label)", whiteSpace: "nowrap" }}>
-          {label}
-        </span>
-        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--blg-t1)", fontVariantNumeric: "tabular-nums" }}>
-          {formatNumber(creditUnits(value))}
-        </span>
-      </div>
-      <div style={{ height: 3, borderRadius: 2, background: "var(--blg-track)", overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: 3, borderRadius: 2, background: fill }} />
-      </div>
-      {subline && <span style={{ fontSize: 11, color: "var(--blg-t3-head)" }}>{subline}</span>}
-    </div>
-  )
 }
 
 export function AppSidebar({
@@ -307,7 +155,6 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const t = useT()
   const { pathname, search } = useLocation()
-  const navigate = useNavigate()
 
   // The top-level Admin item points at /admin and would greedily match every
   // /admin/* subpath; treat it as active only when no more-specific nav item
@@ -326,7 +173,7 @@ export function AppSidebar({
     if (item.search) return search === item.search
     return !NAV_ITEMS.some((i) => i.search && i.href === item.href && search === i.search)
   }
-  const { user, isAdmin, signOut } = useAuth()
+  const { isAdmin } = useAuth()
   // Track A — is THIS viewer the deployment's billing account? Fail-closed:
   // false while the probe is pending, and false on every deployment without a
   // payer, so the stock sidebar is byte-identical. Shares its query key with
@@ -336,80 +183,11 @@ export function AppSidebar({
   // RTL: the sidebar sits on the RIGHT — the drawer slides from the right,
   // the border faces the content, and every chevron points the other way.
   const isRtl = useAppDir() === "rtl"
-  const { data: creditBalance } = useUserCredits(user?.id)
-  // Track A — resolved once for both card layouts (see sidebarCreditFigures).
-  // Deployment grain ("does this instance have a payer"), not "is that me" —
-  // `useDeploymentPayerViewer` above answers the second. Same query key as the
-  // probe's own surface read, so this costs no extra request.
-  const { surface: billingSurface } = useBillingSurface()
-  const creditFigures = creditBalance
-    ? sidebarCreditFigures(creditBalance, billingSurface.deploymentPayer === true)
-    : null
-  // Self-serve purchase off (a prepaid instance): the credit card is a plain
-  // readout — no hop to /billing — and the Pricing/Billing entries are withheld.
+  // Self-serve purchase off (a prepaid instance): the Pricing/Billing entries
+  // are withheld (and the credit card is a plain readout — sidebar-credit-card).
   const selfServe = surfaceBillingSelfServe()
-  const brandName = surfaceBrandName()
-  const siblingApps = otherNodaroApps("flow")
+  const sharedHeader = useSharedHeaderActive()
   const [mounted, setMounted] = useState(false)
-  const updateInfo = useUpdateCheck()
-  const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
-  // The version label opens the release dialog on click — in EVERY edition.
-  // It NEVER opens on its own — interrupting someone who just came to work
-  // with a changelog they did not ask for is an annoyance, not a feature
-  // (founder, 2026-08-20). A new release only lights the label.
-  //
-  // It used to be clickable on self-host only while an update was pending
-  // (#869): run the newest release and the affordance vanished, so "what is
-  // in the version I am running" had no answer in the UI — while /v1/version
-  // had already fetched the notes. The gate was hasCredits(), which answers
-  // "do we bill", never "should this install see its release notes" (the
-  // #752 lesson). The mode is the install's real state instead:
-  //   updateAvailable → "upgrade"   (self-host, behind: backup + commands)
-  //   cloud           → "whats-new" (just shipped, already live)
-  //   otherwise       → "current"   (self-host, on the newest release)
-  const updateAvailable = Boolean(updateInfo?.updateAvailable)
-  const dialogMode: "upgrade" | "whats-new" | "current" = updateAvailable
-    ? "upgrade"
-    : isCloud()
-      ? "whats-new"
-      : "current"
-  // The label prefers the SERVER-resolved version: on cloud the frontend
-  // build bakes no version (Railway passes none) and the baked fallback sat
-  // at 1.23.0 beside "What's new in v1.27.0" (founder report 2026-08-19).
-  // /v1/version resolves the deployed SHA to its release tag server-side.
-  const displayVersion = updateInfo?.current?.replace(/^v/, "") || APP_VERSION
-  const latestVersion = updateInfo?.latest?.version
-  // Has this browser already SEEN this release's notes? Drives the quiet dot
-  // next to the version label — never an auto-open. A browser whose very
-  // first visit lands on a release starts "seen": a brand-new user has no
-  // catching up to do. (A pending update shows its own red dot regardless.)
-  const [whatsNewSeen, setWhatsNewSeen] = useState(true)
-  useEffect(() => {
-    if (!latestVersion) return
-    const KEY = "nodaro-whatsnew-seen"
-    try {
-      const seen = localStorage.getItem(KEY)
-      if (seen === null) {
-        localStorage.setItem(KEY, latestVersion)
-        return
-      }
-      setWhatsNewSeen(seen === latestVersion)
-    } catch {
-      // storage blocked — no dot; the label itself still opens the dialog
-    }
-  }, [latestVersion])
-  const markWhatsNewSeen = useCallback(() => {
-    if (!latestVersion) return
-    try {
-      localStorage.setItem("nodaro-whatsnew-seen", latestVersion)
-    } catch {
-      // storage blocked — the dot simply returns next load
-    }
-    setWhatsNewSeen(true)
-  }, [latestVersion])
-  // Clickable whenever a release is known; plain text only while the check
-  // has not answered or is off (NODARO_UPDATE_CHECK=off — air-gapped installs).
-  const showVersionIndicator = surfacePlatformLinks() && Boolean(updateInfo?.latest)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
 
@@ -466,266 +244,17 @@ export function AppSidebar({
           className,
         )}
       >
-        {/* Logo strip. Collapsed: h-[41px] — MUST match the editor toolbar height
-            (they sit side-by-side on the editor page, borders aligned). Expanded:
-            taller brand strip, 40px lockup with even margins. */}
-        <div
-          className={cn(
-            "flex items-center justify-between px-3 border-b border-zinc-200 dark:border-zinc-800",
-            isCollapsed ? "h-[41px]" : "h-[68px]",
-          )}
-        >
-          {/* The logo opens the fleet quick-switch menu (fleet pattern — see
-              the client apps' AppShell mark). Home stays one click away via
-              the Projects nav item right below, so no navigation is lost. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label={brandName === "Nodaro" ? t("nav.openNodaroApp") : t("nav.openMenu")}
-              title={brandName === "Nodaro" ? t("nav.nodaroApps") : brandName}
-              className={cn(
-                "flex items-center gap-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded",
-                isCollapsed ? "justify-center w-full" : "ms-1",
-              )}
-            >
-              {isCollapsed ? (
-                <NodaroLogo variant="icon" size="md" />
-              ) : (
-                <NodaroLogo size="lg" />
-              )}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-56">
-              <DropdownMenuLabel>{brandName}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {siblingApps.map((surface) => (
-                <DropdownMenuItem key={surface.url} asChild className="px-3">
-                  <a href={surface.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="size-4" />
-                    <span className="flex flex-col">
-                      <span>{surface.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new URL(surface.url).host}
-                      </span>
-                    </span>
-                  </a>
-                </DropdownMenuItem>
-              ))}
-              {OrgSwitcherSection && (
-                <Suspense fallback={null}>
-                  <OrgSwitcherSection />
-                </Suspense>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* Mobile close button */}
-          {!isCollapsed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={t("nav.closeSidebar")}
-              className="h-8 w-8 p-0 md:hidden text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-              onClick={onMobileClose}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-
-        {/* Credit card. A deployment surface can suppress it wholesale
-            (billing.sidebarCard "hidden") — a prepaid instance whose users
-            read their balance on /usage instead. */}
-        {hasCredits() && creditBalance && creditFigures && !surfaceSidebarCreditCardHidden() && (
-          isCollapsed ? (
-            <div className="px-2 pt-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={selfServe ? () => navigate("/billing") : undefined}
-                    className={cn(
-                      "w-full flex flex-col items-center gap-1.5",
-                      selfServe && "hover:opacity-90 transition-opacity",
-                    )}
-                    style={{
-                      padding: "10px 6px",
-                      borderRadius: 12,
-                      border: "1px solid var(--blg-border-3)",
-                      background: "var(--blg-card)",
-                      cursor: selfServe ? undefined : "default",
-                    }}
-                  >
-                    <span className="font-mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--blg-t1)" }}>
-                      {creditFigures.unavailable ? "—" : creditUnits(creditFigures.headline) >= 1000
-                        ? `${(creditUnits(creditFigures.headline) / 1000).toFixed(1).replace(/\.0$/, "")}K`
-                        : creditUnits(creditFigures.headline)}
-                    </span>
-                    <span className="flex flex-col gap-[3px] w-full px-1">
-                      {creditFigures.external ? null : creditFigures.allowance ? (
-                        // One pot, one bar: the subscription/top-up split is a
-                        // personal-wallet shape and has no meaning against an
-                        // allocation the operator granted.
-                        <span
-                          style={{
-                            display: "block",
-                            height: 4,
-                            borderRadius: 99,
-                            background: "var(--blg-pink)",
-                            width: `${creditFigures.allowance.granted > 0 ? Math.max(12, (creditFigures.allowance.remaining / creditFigures.allowance.granted) * 100) : 12}%`,
-                          }}
-                        />
-                      ) : (
-                        <>
-                          <span
-                            style={{
-                              display: "block",
-                              height: 4,
-                              borderRadius: 99,
-                              background: "var(--blg-pink)",
-                              width: `${creditBalance.total > 0 ? Math.max(12, (creditBalance.subscription / creditBalance.total) * 100) : 12}%`,
-                            }}
-                          />
-                          <span
-                            style={{
-                              display: "block",
-                              height: 4,
-                              borderRadius: 99,
-                              background: "var(--blg-cyan)",
-                              width: `${creditBalance.total > 0 ? Math.max(12, (creditBalance.topup / creditBalance.total) * 100) : 12}%`,
-                            }}
-                          />
-                        </>
-                      )}
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side={isRtl ? "left" : "right"}
-                  className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
-                >
-                  <p>{creditFigures.unavailable ? "—" : t("nav.creditsLeft", { n: creditUnits(creditFigures.headline) })}</p>
-                  {creditFigures.external ? null : creditFigures.allowance ? (
-                    // The pair is one interpolated key, never a bare "X / Y":
-                    // the operands invert under RTL and the line then lies.
-                    <p className="text-zinc-500 dark:text-zinc-400">
-                      {t("credits.allowanceOfGranted", { granted: formatNumber(creditUnits(creditFigures.allowance.granted)) })}
-                    </p>
-                  ) : creditBalance.effectiveTier === "free" ? (
-                    creditBalance.dailyLimit != null && (
-                      <p className="text-zinc-500 dark:text-zinc-400">{t("nav.dailyLimitCreditsLeft", { n: creditUnits(Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)) })}</p>
-                    )
-                  ) : creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) ? (
-                    <p className="text-zinc-500 dark:text-zinc-400">
-                      {t("nav.renewsAt", { time: formatRenewalTime(creditBalance.periodEnd) ?? "" })}
-                    </p>
-                  ) : null}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          ) : (() => {
-            const tierName = PRICING_TIERS.find((t) => t.id === creditBalance.effectiveTier)?.name
-            const planLabel = (tierName ?? creditBalance.effectiveTier).toUpperCase()
-            const subPct = creditBalance.total > 0 ? (creditBalance.subscription / creditBalance.total) * 100 : 0
-            const topupPct = creditBalance.total > 0 ? (creditBalance.topup / creditBalance.total) * 100 : 0
-            const dailyLeft = creditBalance.dailyLimit != null
-              ? Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)
-              : null
-            const isDailyTier = creditBalance.effectiveTier === "free" || creditBalance.effectiveTier === "payg"
-            const renewal = creditBalance.periodEnd ? formatRenewalTime(creditBalance.periodEnd) : null
-            // "renews" is a PAID-tier fact only — free/payg credits are a
-            // one-time signup grant, nothing refreshes (verified 2026-08-12).
-            const subscriptionSubline = isDailyTier
-              ? dailyLeft != null
-                ? t("nav.dailyLeft", { n: creditUnits(dailyLeft) })
-                : t("nav.oneTimeGrant")
-              : renewal
-                ? t("nav.renewsLower", { time: renewal })
-                : null
-
-            // Credit block from the designer's Pricing mocks (2026-08-12):
-            // gradient card themed via the --blg-* tokens in globals.css
-            // (light values from the lite mock, dark = original constants).
-            return (
-              <div
-                className={cn("mx-2 mt-2 text-start", selfServe ? "cursor-pointer" : "cursor-default")}
-                style={{
-                  border: "1px solid var(--blg-border-3)",
-                  borderRadius: 14,
-                  background: "var(--blg-card)",
-                  overflow: "hidden",
-                  // The sidebar is a flex column, so this card was a shrinkable
-                  // item: when vertical space got tight it compressed and the
-                  // `overflow: hidden` above silently cut the bottom row off —
-                  // TOP-UP's bar and expiry note simply vanished. The nav below
-                  // scrolls instead (see its min-h-0 + overflow-y-auto).
-                  flexShrink: 0,
-                }}
-                onClick={selfServe ? () => navigate("/billing") : undefined}
-              >
-                <div style={{ padding: "14px 16px 14px" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--blg-t2-dim)", fontWeight: 600 }}>
-                      {creditFigures.allowance ? t("credits.allowanceTitle") : t("nav.totalCredits")}
-                    </span>
-                    <span style={{ fontSize: 10, color: "var(--blg-t3-dim)", fontFamily: MONO_FONT }}>
-                      {planLabel}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 6 }}>
-                    <span
-                      style={{
-                        fontSize: 32,
-                        fontWeight: 700,
-                        letterSpacing: "-0.03em",
-                        fontVariantNumeric: "tabular-nums",
-                        color: "var(--blg-t1)",
-                      }}
-                    >
-                      {creditFigures.unavailable ? "—" : formatNumber(creditUnits(creditFigures.headline))}
-                    </span>
-                    <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{creditUnitLabel(t("nav.credits"))}</span>
-                  </div>
-                  {/* Two stacked rows, each with its own bar — replaces the
-                      side-by-side columns from the first pass. Splitting the
-                      sidebar's width in two left each subline ~70px and clipped
-                      "renews Mar 8, 2027"; full-width rows give it the whole
-                      card. Colours stay on the --blg-* tokens rather than the
-                      mock's literals so both themes follow. */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-                    {creditFigures.external ? null : creditFigures.allowance ? (
-                      // One row, because there is one pot. The bar tracks what
-                      // is LEFT of the grant; the headline above already shows
-                      // the remaining figure, so this row names the total it
-                      // came out of and nothing repeats.
-                      <CreditRow
-                        label={t("credits.allowanceGranted")}
-                        value={creditFigures.allowance.granted}
-                        pct={creditFigures.allowance.granted > 0 ? (creditFigures.allowance.remaining / creditFigures.allowance.granted) * 100 : 0}
-                        fill="var(--blg-pink)"
-                        subline={null}
-                      />
-                    ) : (
-                      <>
-                        <CreditRow
-                          label={t("nav.subscription")}
-                          value={creditBalance.subscription}
-                          pct={subPct}
-                          fill="var(--blg-pink)"
-                          subline={subscriptionSubline}
-                        />
-                        <CreditRow
-                          label={t("nav.topup")}
-                          value={creditBalance.topup}
-                          pct={topupPct}
-                          fill="var(--blg-cyan)"
-                          subline={t("nav.validTwelveMonths")}
-                        />
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })()
+        {/* Under the shared site header the logo, the credit card, the user
+            row and the language/theme switches are the header's (one gate:
+            lib/shared-header.ts); otherwise this is the sidebar as it was. */}
+        {sharedHeader ? (
+          <SidebarHeaderModeStrip isCollapsed={isCollapsed} onMobileClose={onMobileClose} />
+        ) : (
+          <SidebarBrandStrip isCollapsed={isCollapsed} onMobileClose={onMobileClose} />
         )}
+
+        {/* Credit card (sidebar-credit-card.tsx). */}
+        {!sharedHeader && <SidebarCreditCard isCollapsed={isCollapsed} isRtl={isRtl} />}
 
         {/* Navigation */}
         {/* min-h-0 is what lets this actually shrink — a flex item defaults to
@@ -832,206 +361,15 @@ export function AppSidebar({
         </nav>
 
         {/* Bottom section */}
-        <div className="px-2 py-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
-          {/* User info */}
-          {user && (
-            <div
-              className={cn(
-                "flex items-center gap-2",
-                isCollapsed ? "justify-center" : "justify-between",
-              )}
-            >
-              {isCollapsed ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={t("nav.signOut")}
-                      className="h-9 w-9 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-                      onClick={signOut}
-                    >
-                      <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 text-xs font-medium">
-                        {user.email?.[0]?.toUpperCase() || "U"}
-                      </div>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side={isRtl ? "left" : "right"}
-                    className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
-                  >
-                    <div className="text-xs">{user.email}</div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{t("nav.clickToSignOut")}</div>
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 text-xs font-medium flex-shrink-0">
-                      {user.email?.[0]?.toUpperCase() || "U"}
-                    </div>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{user.email}</span>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={t("nav.signOut")}
-                        className="h-7 w-7 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 flex-shrink-0"
-                        onClick={signOut}
-                      >
-                        <LogOut className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side={isRtl ? "left" : "right"}
-                      className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
-                    >
-                      {t("nav.signOut")}
-                    </TooltipContent>
-                  </Tooltip>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Collapse toggle + Theme toggle */}
-          <div className={cn("flex items-center", isCollapsed ? "justify-center" : "justify-between")}>
-            <div className="hidden md:block">
-              {isCollapsed ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={t("nav.expandSidebar")}
-                      className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-                      onClick={toggleCollapsed}
-                    >
-                      {isRtl ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side={isRtl ? "left" : "right"}
-                    className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
-                  >
-                    {t("nav.expandSidebar")}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-2 px-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-                  onClick={toggleCollapsed}
-                >
-                  {isRtl ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                  <span className="text-sm">{t("nav.collapse")}</span>
-                </Button>
-              )}
-            </div>
-            {!isCollapsed && (
-              <div className="flex items-center gap-0.5">
-                <LanguageSwitcher />
-                <ThemeToggle />
-              </div>
-            )}
-          </div>
-
-          {/* Version row. Clickable whenever a release is known, every
-              edition. A RED dot when a newer release exists — action needed
-              (self-host only: the endpoint owns the policy, updateAvailable
-              is never true on cloud). Otherwise an unread release gets a
-              quiet accent dot. Never a dialog that opens itself. */}
-          <div className="text-center">
-            {showVersionIndicator ? (
-              <button
-                type="button"
-                onClick={() => {
-                  markWhatsNewSeen()
-                  setUpdateDialogOpen(true)
-                }}
-                className="group relative inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                title={
-                  updateAvailable
-                    ? t("nav.updateAvailable", { version: updateInfo?.latest?.version ?? "" })
-                    : dialogMode === "current"
-                      ? t("nav.whatsIn", { version: updateInfo?.latest?.version ?? "" })
-                      : t("nav.whatsNewIn", { version: updateInfo?.latest?.version ?? "" })
-                }
-              >
-                {(updateAvailable || !whatsNewSeen) && (
-                  <span
-                    aria-hidden
-                    className={
-                      updateAvailable
-                        ? "absolute -start-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red-500"
-                        : "absolute -start-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#ff0073]"
-                    }
-                  />
-                )}
-                <span className="underline decoration-dotted underline-offset-2">
-                  {isCollapsed ? `v${displayVersion.split(".").slice(0, 2).join(".")}` : `v${displayVersion}`}
-                </span>
-              </button>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {isCollapsed ? `v${displayVersion.split(".").slice(0, 2).join(".")}` : `v${displayVersion}`}
-              </span>
-            )}
-          </div>
-          {updateInfo?.latest && showVersionIndicator && (
-            <UpdateDialog
-              open={updateDialogOpen}
-              onOpenChange={setUpdateDialogOpen}
-              info={updateInfo}
-              mode={dialogMode}
-            />
-          )}
-        </div>
+        <SidebarFooter isCollapsed={isCollapsed} isRtl={isRtl} onToggleCollapsed={toggleCollapsed} accountControls={!sharedHeader} />
       </aside>
     </TooltipProvider>
   )
 }
 
-interface MobileHeaderProps {
-  readonly onMenuClick: () => void
-}
-
-export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
-  const t = useT()
-  const location = useLocation()
-  const isDashboard = location.pathname === "/projects"
-  const isRtl = useAppDir() === "rtl"
-
-  return (
-    <header className="flex items-center gap-3 px-4 py-3 border-b bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 md:hidden">
-      {!isDashboard && (
-        <Link
-          to="/projects"
-          className="h-8 w-8 p-0 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800 touch-manipulation"
-          aria-label={t("nav.backToProjects")}
-        >
-          {isRtl ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
-        </Link>
-      )}
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label={t("nav.openMenu")}
-        className="h-8 w-8 p-0 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800"
-        onClick={onMenuClick}
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
-      <NodaroLogo size="sm" />
-      <div className="ms-auto">
-        <ThemeToggle />
-      </div>
-    </header>
-  )
-}
+// The pieces split out of this file, re-exported for their existing importers.
+export { sidebarCreditFigures, type SidebarCreditFigures } from "./sidebar-credit-card"
+export { MobileHeader } from "./mobile-header"
 
 // Re-export width constants for backward compatibility
 export { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH }

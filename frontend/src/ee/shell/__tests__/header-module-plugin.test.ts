@@ -75,7 +75,7 @@ describe("siteHeaderModule", () => {
     const source = load(p, RESOLVED) ?? ""
     expect(source).toMatch(/export const headerAvailable = true/)
     expect(source).toMatch(/^import ".+\/shell\.css"$/m)
-    expect(source).toMatch(/^export \{ NodaroShell \} from ".+"$/m)
+    expect(source).toMatch(/^export \{ NodaroShell, shellTranslator \} from ".+"$/m)
   })
 
   it("another edition with the flag on: the stub, and the flag is forced off", async () => {

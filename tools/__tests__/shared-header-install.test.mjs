@@ -176,7 +176,18 @@ test("a relative workspace root still gets its .npmrc removed", { skip: !availab
 })
 
 test("only an exact version installs: a dist-tag or a range is refused", { skip: !available }, () => {
-  for (const [version, ok] of [["0.2.1", true], ["1.0.0-beta.2", true], ["latest", false], ["^0.2.1", false], ["0.2", false], ["next", false]]) {
+  for (const [version, ok] of [
+    ["0.2.1", true],
+    ["1.0.0-beta.2", true],
+    ["latest", false],
+    ["^0.2.1", false],
+    ["0.2", false],
+    ["next", false],
+    ["0.2.1\nlatest", false], // a line-based check would pass the first line
+    ["1a.2.3", false],
+    ["1..2.3", false],
+    ["1.2.3.4", false],
+  ]) {
     const ws = workspace()
     try {
       const r = run(ws, { ...ON, NPM_TOKEN: TOKEN, SHARED_HEADER_PKG_VERSION: version })
@@ -210,6 +221,12 @@ test("a nested react, react-dom or react-query copy under the private scope fail
       rmSync(ws.root, { recursive: true, force: true })
     }
   }
+})
+
+test("the pinned version is exact (no range) and checked with `case`, not a line-based grep", () => {
+  const script = readFileSync(SCRIPT, "utf8")
+  assert.match(script, /^PIN="\d+\.\d+\.\d+"\s*$/m)
+  assert.doesNotMatch(script, /grep -E?q? *'\^\[0-9\]/)
 })
 
 test("the token file is private to the build user, and removed on an interrupt too", () => {

@@ -18,6 +18,7 @@ import { TopupSection } from "./topup-section"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { creditUnits } from "@/lib/credit-units"
 import { formatNumber } from "@/lib/i18n/format"
+import { whenActivated } from "@/lib/prerender"
 
 /**
  * Theme-aware pricing page, ported 1:1 from the designer's Pricing mocks
@@ -134,8 +135,13 @@ export default function PricingPage() {
     const priceId = getTierPriceId(tier, billingCycle)
     if (!priceId) return
 
-    autoCheckoutTriggered.current = true
-    handleSubscribe(tier.id, priceId)
+    // Never from a prerendered page nobody has seen yet (lib/prerender.ts):
+    // checkout must open only for a visitor who is looking at it.
+    return whenActivated(() => {
+      if (autoCheckoutTriggered.current) return
+      autoCheckoutTriggered.current = true
+      handleSubscribe(tier.id, priceId)
+    })
   }, [authLoading, subLoading, user, isActiveSub, searchParams, billingCycle])
 
   // Whether any paid tier has annual savings (for the toggle badge)

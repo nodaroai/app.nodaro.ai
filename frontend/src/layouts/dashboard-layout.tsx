@@ -6,6 +6,8 @@ import { AppSidebar, MobileHeader } from "@/components/layout/app-sidebar"
 import { FreeGrantBannerSlot } from "@/components/layout/free-grant-banner-slot"
 import { ConsentGateSlot } from "@/components/layout/consent-gate-slot"
 import { WelcomeOfferPopupSlot } from "@/components/layout/welcome-offer-popup-slot"
+import { SiteHeaderSlot } from "@/components/layout/site-header-slot"
+import { useSharedHeaderActive } from "@/lib/shared-header"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
@@ -50,7 +52,10 @@ export default function DashboardLayout() {
   }, [user])
   useEffect(() => {
     if (!authLoading && !user && !awaitingHandoff) {
-      navigate(loginPathFor(location.pathname + location.search, wasSignedIn.current), { replace: true })
+      // Once the page is shown (lib/prerender.ts): a prerendered page must not move.
+      return whenActivated(() =>
+        navigate(loginPathFor(location.pathname + location.search, wasSignedIn.current), { replace: true }),
+      )
     }
   }, [authLoading, user, awaitingHandoff, navigate, location.pathname, location.search])
 
@@ -104,6 +109,10 @@ export default function DashboardLayout() {
     setMobileMenuOpen(false)
   }, [location.pathname])
 
+  // The shared site header replaces the sidebar's own chrome (one gate for the
+  // layout, the sidebar and the editor toolbar).
+  const sharedHeader = useSharedHeaderActive()
+
   // Show loading state while checking auth
   if (authLoading || !user) {
     return (
@@ -113,33 +122,57 @@ export default function DashboardLayout() {
     )
   }
 
+  const sidebar = !embedded && (
+    <AppSidebar
+      defaultCollapsed={isEditor}
+      isMobileOpen={mobileMenuOpen}
+      onMobileClose={() => setMobileMenuOpen(false)}
+    />
+  )
+  const column = (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Only show mobile header on non-editor pages (and never when embedded,
+          or under the shared site header, which has its own phone rows) */}
+      {!isEditor && !embedded && !sharedHeader && <MobileHeader onMenuClick={() => setMobileMenuOpen(true)} />}
+      {/* Withheld free grant → activation path. Self-hiding; cloud only. */}
+      {!embedded && <FreeGrantBannerSlot />}
+      {/* The editor paints its own canvas ground; every other page gets the
+          ambient wash (globals.css .page-ambient) under its content. */}
+      <main className={isEditor ? "flex-1 overflow-auto" : "flex-1 overflow-auto page-ambient"}>
+        <Outlet />
+      </main>
+    </div>
+  )
+
   return (
     <SidebarProvider defaultCollapsed={isEditor}>
-      <div className="flex h-screen bg-background">
-        {!embedded && (
-          <AppSidebar
-            defaultCollapsed={isEditor}
-            isMobileOpen={mobileMenuOpen}
-            onMobileClose={() => setMobileMenuOpen(false)}
+      {sharedHeader ? (
+        // The shared site header (Cloud, lib/shared-header.ts) above the
+        // sidebar row; the row takes the rest of the screen.
+        <div className="flex h-screen flex-col bg-background">
+          <SiteHeaderSlot
+            compact={isEditor}
+            onOpenMenu={() => setMobileMenuOpen(true)}
+            onHeaderOverlay={() => setMobileMenuOpen(false)}
           />
-        )}
-
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Only show mobile header on non-editor pages (and never when embedded) */}
-          {!isEditor && !embedded && <MobileHeader onMenuClick={() => setMobileMenuOpen(true)} />}
-          {/* Withheld free grant → activation path. Self-hiding; cloud only. */}
-          {!embedded && <FreeGrantBannerSlot />}
-          {/* The editor paints its own canvas ground; every other page gets the
-              ambient wash (globals.css .page-ambient) under its content. */}
-          <main className={isEditor ? "flex-1 overflow-auto" : "flex-1 overflow-auto page-ambient"}>
-            <Outlet />
-          </main>
+          <div className="flex min-h-0 flex-1">
+            {sidebar}
+            {column}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex h-screen bg-background">
+          {sidebar}
+
+          {column}
+        </div>
+      )}
       {/* Marketing-email consent nag (Cloud-only, self-hiding, never in an embed). */}
       <ConsentGateSlot />
-      {/* Welcome credits popup: once on first visit, and on a refused create (Cloud-only, self-hiding). */}
-      <WelcomeOfferPopupSlot />
+      {/* Welcome credits popup: once on first visit, and on a refused create (Cloud-only, self-hiding).
+          Under the shared site header its own dialog owns both (one listener
+          for the consent ask, never two dialogs), so the app's stays out. */}
+      {!sharedHeader && <WelcomeOfferPopupSlot />}
     </SidebarProvider>
   )
 }

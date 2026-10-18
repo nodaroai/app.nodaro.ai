@@ -18,7 +18,7 @@
 # cannot print it.
 set -eu
 
-PIN="0.2.0"
+PIN="0.2.1"
 VERSION="${SHARED_HEADER_PKG_VERSION:-$PIN}"
 
 if [ "${VITE_EDITION:-}" != "cloud" ] || [ "${VITE_SHARED_HEADER:-}" != "true" ]; then
@@ -27,11 +27,22 @@ if [ "${VITE_EDITION:-}" != "cloud" ] || [ "${VITE_SHARED_HEADER:-}" != "true" ]
 fi
 
 # An exact version only: a dist-tag (latest, next) or a range would install
-# whatever is newest at build time.
-if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-  echo "[site-header] refusing: SHARED_HEADER_PKG_VERSION must be an exact version (x.y.z)" >&2
+# whatever is newest at build time. `case` sees the whole value (a line-based
+# grep would pass "1.2.3<newline>latest"): only [0-9A-Za-z.-], and the part
+# before any "-prerelease" is exactly three dot-separated numbers.
+not_a_version() {
+  echo "[site-header] refusing: SHARED_HEADER_PKG_VERSION must be an exact version (x.y.z[-pre])" >&2
   exit 1
-fi
+}
+case "$VERSION" in
+  "" | *[!0-9A-Za-z.-]*) not_a_version ;;
+esac
+CORE="${VERSION%%-*}"
+case "$CORE" in
+  *[!0-9.]* | .* | *. | *..* | *.*.*.*) not_a_version ;;
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) not_a_version ;;
+esac
 
 if [ -z "$(printenv NPM_TOKEN || true)" ]; then
   echo "[site-header] VITE_SHARED_HEADER=true on a cloud build needs NPM_TOKEN (unset)" >&2

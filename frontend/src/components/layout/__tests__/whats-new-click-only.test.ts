@@ -1,4 +1,5 @@
 // @vitest-environment node
+// @test-watches frontend/src/components/layout/sidebar-footer.tsx
 /**
  * The what's-new dialog must never open by itself.
  *
@@ -18,7 +19,8 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-const source = readFileSync(join(__dirname, "..", "app-sidebar.tsx"), "utf8")
+// The version row and its dialog live in the sidebar's footer (split out of app-sidebar.tsx).
+const source = readFileSync(join(__dirname, "..", "sidebar-footer.tsx"), "utf8")
 
 /** Body of every useEffect(...) in the file, crudely but sufficiently sliced. */
 function effectBodies(text: string): string[] {

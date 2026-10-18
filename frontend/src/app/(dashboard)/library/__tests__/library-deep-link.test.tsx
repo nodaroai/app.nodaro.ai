@@ -150,8 +150,11 @@ describe("My Files deep link — ?job=", () => {
     await waitFor(() => expect(previewImage()?.getAttribute("src")).toContain("file-5.png"))
     expect(cardOf("file-5.png").getAttribute("aria-current")).toBe("true")
     expect(cardOf("file-1.png").getAttribute("aria-current")).toBeNull()
-    // Item 5 is index 4: row 1 at 3 columns.
-    expect(scrollToRow).toHaveBeenCalledWith(1)
+    // Item 5 is index 4: row 1 at 3 columns. The page scrolls from an effect
+    // AFTER the commit that opens the preview (page.tsx: "Scrolled in an
+    // effect, not in the handler"), so wait for the scroll itself — under load
+    // that effect can flush after the preview check passed.
+    await waitFor(() => expect(scrollToRow).toHaveBeenCalledWith(1))
     expect(api.getJobStatus).toHaveBeenCalledWith(JOB_ID)
     expect(toast.error).not.toHaveBeenCalled()
     // Marking is not selecting: nothing is armed for a bulk delete.
@@ -279,7 +282,8 @@ describe("My Files deep link — ?asset=", () => {
 
     await waitFor(() => expect(previewImage()?.getAttribute("src")).toContain("file-2.png"))
     expect(cardOf("file-2.png").getAttribute("aria-current")).toBe("true")
-    expect(scrollToRow).toHaveBeenCalledWith(0)
+    // The scroll runs in its own effect after the preview's commit (see above).
+    await waitFor(() => expect(scrollToRow).toHaveBeenCalledWith(0))
     expect(api.getJobStatus).not.toHaveBeenCalled()
   })
 

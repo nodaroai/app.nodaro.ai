@@ -149,7 +149,7 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
       <button
         type="button"
         onClick={toggleCollapsed}
-        className="fixed top-0 h-full z-40 w-8 border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] hover:bg-zinc-100 dark:hover:bg-[#1E1E1E] flex flex-col items-center justify-start pt-4 text-xs text-zinc-700 dark:text-zinc-200"
+        className="fixed top-[var(--ns-header-h,0px)] h-[calc(100%_-_var(--ns-header-h,0px))] z-40 w-8 border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] hover:bg-zinc-100 dark:hover:bg-[#1E1E1E] flex flex-col items-center justify-start pt-4 text-xs text-zinc-700 dark:text-zinc-200"
         style={{ insetInlineEnd: 420 }}
         data-testid="chat-panel-collapsed"
         title={t("pipe.openChat")}
@@ -162,7 +162,7 @@ export function ChatPanel({ pipelineId, stage, onApplied }: Props) {
 
   return (
     <aside
-      className="fixed top-0 h-full z-40 border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] flex flex-col"
+      className="fixed top-[var(--ns-header-h,0px)] h-[calc(100%_-_var(--ns-header-h,0px))] z-40 border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] flex flex-col"
       style={{ insetInlineEnd: 420, width }}
       data-testid="chat-panel"
     >

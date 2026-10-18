@@ -6,9 +6,11 @@
  */
 declare module "virtual:site-header" {
   import type { ComponentType } from "react"
-  import type { SiteHeaderProps } from "@/ee/shell/types"
+  import type { SiteHeaderProps, SiteHeaderTranslate } from "@/ee/shell/types"
 
   /** True only when the build resolved the real header. */
   export const headerAvailable: boolean
   export const NodaroShell: ComponentType<SiteHeaderProps>
+  /** The header's own translations for a locale tag (he, ja, ko, pt-BR); misses fall back to English. */
+  export function shellTranslator(locale: string | undefined): SiteHeaderTranslate
 }

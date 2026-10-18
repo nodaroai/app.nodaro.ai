@@ -572,7 +572,9 @@ build time):
 
 | Var | Description |
 |---|---|
-| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
+| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. On Nodaro Cloud with `VITE_SHARED_HEADER=true` it is also the shared header's Studio link; unset, the header keeps its own. |
+| `VITE_HOME_URL` | Nodaro Cloud with `VITE_SHARED_HEADER=true` only: where the shared header's logo links (the home page). Unset = the header's own default; a preview points it at its preview home. Ignored by every other build. |
+| `VITE_TOOLS_URL` | Nodaro Cloud with `VITE_SHARED_HEADER=true` only: the origin serving the header's Image, Video, Music and Ads links (`<origin>/image`, …). Unset = the header's own defaults; a preview points it at its preview host. Ignored by every other build. |
 | `VITE_PERSON_URL` | Base URL of the external Person app (person.nodaro.ai) for the home screen "Open Person" card. Default `https://person.nodaro.ai`. |
 
 ### Template seeder claim (Cloud)

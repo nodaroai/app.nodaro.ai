@@ -3,10 +3,8 @@
 import { memo, useState } from "react"
 import { Languages, Check } from "lucide-react"
 import { LANGUAGES, type LocaleId } from "@nodaro/shared/i18n"
-import { useLocaleStore } from "@/lib/locale-store"
-import { useAuth } from "@/hooks/use-auth"
-import { useUpdatePreferredLocaleMutation } from "@/hooks/queries/use-user-settings-queries"
-import { languageMenuRows, useT } from "@/lib/i18n"
+import { useUiLanguage } from "@/hooks/use-ui-language"
+import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -24,18 +22,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  */
 function LanguageSwitcherComponent() {
   const t = useT()
-  const locale = useLocaleStore((s) => s.locale)
-  const setLocale = useLocaleStore((s) => s.setLocale)
-  const { user } = useAuth()
-  const userId = user?.id
-  const update = useUpdatePreferredLocaleMutation()
+  const { locale, rows, pick } = useUiLanguage()
   const [open, setOpen] = useState(false)
 
   const current = LANGUAGES.find((l) => l.id === locale) ?? LANGUAGES[0]
 
   function handlePick(next: LocaleId) {
-    setLocale(next)
-    if (userId) update.mutate({ userId, preferredLocale: next })
+    pick(next)
     setOpen(false)
   }
 
@@ -61,7 +54,7 @@ function LanguageSwitcherComponent() {
           {t("lang.label")}
         </div>
         <div className="flex flex-col gap-0.5">
-          {languageMenuRows(locale).map((lang) => {
+          {rows.map((lang) => {
             const selected = lang.id === locale
             return (
               <button
