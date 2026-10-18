@@ -1,3 +1,4 @@
+// @registry-enumerates prices a continuation's steps by estimateRunSetCredits over whatever node types the graph holds
 /**
  * Can the payer cover a continue-from-failed of a use-case run (decided
  * 2026-10-13)? The steps it still runs, priced by the run-set estimate every
@@ -13,6 +14,29 @@ import type { BillingContext } from "../billing-context.js"
 
 export type ContinueCover = { readonly ok: true; readonly totalCredits: number } | { readonly ok: false; readonly message: string }
 
+/**
+ * What the steps a continue-from-failed still runs are priced at: the run-set
+ * estimate on the graph it executes (the earlier run's pin applied), without
+ * the fee. The one figure the continue route's check and the outer run's
+ * up-front check of a resumed node (resume-credits.ts) both read.
+ */
+export async function fromFailedStepCredits(input: {
+  readonly graph: StoredInlineGraph
+  readonly nodeIds: readonly string[]
+  readonly overrides: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined
+}): Promise<number> {
+  const { estimateRunSetCredits } = await import("../../ee/billing/credits.js")
+  const nodes = withRunOverrides(
+    input.graph.nodes.map((n) => ({ ...n, data: { ...n.data } })),
+    input.overrides,
+  )
+  return estimateRunSetCredits(
+    nodes as unknown as Parameters<typeof estimateRunSetCredits>[0],
+    input.graph.edges.map((e) => ({ ...e })),
+    new Set(input.nodeIds),
+  )
+}
+
 export async function fromFailedCover(input: {
   readonly userId: string
   readonly graph: StoredInlineGraph
@@ -23,16 +47,8 @@ export async function fromFailedCover(input: {
   readonly webFreeMode: boolean
 }): Promise<ContinueCover | null> {
   if (!hasCredits()) return null
-  const { CreditsService, DEPLOYMENT_OUT_OF_CREDITS, estimateRunSetCredits } = await import("../../ee/billing/credits.js")
-  const nodes = withRunOverrides(
-    input.graph.nodes.map((n) => ({ ...n, data: { ...n.data } })),
-    input.overrides,
-  )
-  const steps = await estimateRunSetCredits(
-    nodes as unknown as Parameters<typeof estimateRunSetCredits>[0],
-    input.graph.edges.map((e) => ({ ...e })),
-    new Set(input.nodeIds),
-  )
+  const { CreditsService, DEPLOYMENT_OUT_OF_CREDITS } = await import("../../ee/billing/credits.js")
+  const steps = await fromFailedStepCredits(input)
   const totalCredits = steps + input.feeCredits
   const cover = await CreditsService.checkBalanceCovers(input.userId, totalCredits, input.billingContext, input.webFreeMode)
   if (cover.ok) return { ok: true, totalCredits }

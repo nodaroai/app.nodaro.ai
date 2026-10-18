@@ -14,17 +14,13 @@
  * the one override (the render at Final, for this run only).
  */
 import { z } from "zod"
-import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
 import { PREVIEW_RENDER_NODE_TYPES, RENDER_FINAL_NODE_NOT_FOUND, RENDER_FINAL_NOT_A_RENDER, withRunOverrides } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType, renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
 import { hasCredits } from "./config.js"
 import type { BillingContext } from "./billing-context.js"
+import type { ContinuationSource } from "../services/workflow-engine/run-continuation.js"
 
 /** The request field: which render to finalize. */
-/** A Render final of a render whose take is not a Preview (every Render final lane answers it). */
-export const RENDER_FINAL_NOT_PREVIEW = "render_final_not_preview"
-/** A Render final asked while one of the same run is under way (or, for a use-case run, done). */
-export const RENDER_FINAL_ALREADY_RUNNING = "already_running"
-
 export const renderFinalRequestSchema = z.object({ renderNodeId: z.string().min(1) }).strict()
 
 /** What the run executes and the override it runs with. */
@@ -106,15 +102,27 @@ export interface RenderFinalCredits {
   readonly message?: string
 }
 
+/** A continued run's seeding, for pricing a use-case node that resumes a failed attempt (lib/use-case/resume-credits.ts). */
+export interface ContinuationPricing {
+  /** The execution the run is seeded from, with its states (loaded on demand: only a run with such a node needs them). */
+  readonly source: () => Promise<ContinuationSource | null>
+  /** The overrides SENT with the run (the orchestrator seeds from them). */
+  readonly sentOverrides: Readonly<Record<string, Record<string, unknown>>> | undefined
+}
+
 /**
- * The price of a Render final and the payer's verdict on it — ONE funnel for
- * the quote and the run, so the run is refused (402, before any execution row
- * exists) on exactly the figure the quote showed. Priced on the graph the run
- * executes: `overrides` is the merged map the orchestrator applies (the
- * earlier run's pin with the render's Final over it), and only the nodes the
- * run executes count. The verdict is balance-only (`checkRunSetCredits`);
- * model availability, daily caps and allowances stay with each node's own
- * preflight. `null` in an edition without credits.
+ * The price of a continuation of a saved workflow — a Render final, a run of
+ * named nodes, a continue-from-failed — and the payer's verdict on it: ONE
+ * funnel for the quote and the run, so the run is refused (402, before any
+ * execution row exists) on exactly the figure the quote showed. Priced on the
+ * graph the run executes: `overrides` is the merged map the orchestrator
+ * applies (the earlier run's pin with the sent overrides over it), and only
+ * the nodes the run executes count. With `continuation`, a use-case node that
+ * will resume a failed attempt is priced at what that resume charges, the
+ * engine's own rule (resume-credits.ts); every other one as a fresh run. The
+ * verdict is balance-only (`checkRunSetCredits`); model availability, daily
+ * caps and allowances stay with each node's own preflight. `null` in an
+ * edition without credits.
  */
 export async function renderFinalCredits(input: {
   readonly userId: string
@@ -123,23 +131,65 @@ export async function renderFinalCredits(input: {
   readonly runNodeIds: readonly string[]
   readonly overrides: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined
   readonly surface: { readonly billingContext?: BillingContext; readonly webFreeMode?: boolean }
+  readonly continuation?: ContinuationPricing
 }): Promise<RenderFinalCredits | null> {
   if (!hasCredits()) return null
   const { estimateRunSetCredits, checkRunSetCredits } = await import("../ee/billing/credits.js")
   const priced = withRunOverrides(input.nodes as Array<GraphNode & { type?: string }>, input.overrides)
-  const estimatedCredits = await estimateRunSetCredits(
-    priced as unknown as Parameters<typeof estimateRunSetCredits>[0],
-    input.edges as unknown as Parameters<typeof estimateRunSetCredits>[1],
-    new Set(input.runNodeIds),
-  )
+  const resumed = await resumedCredits(input)
+  const estimatedCredits =
+    (await estimateRunSetCredits(
+      priced as unknown as Parameters<typeof estimateRunSetCredits>[0],
+      input.edges as unknown as Parameters<typeof estimateRunSetCredits>[1],
+      new Set(input.runNodeIds),
+      new Set(resumed.keys()),
+    )) + [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
   const check = await checkRunSetCredits(input.userId, estimatedCredits, {
     billingContext: input.surface.billingContext,
     webFreeMode: input.surface.webFreeMode ?? false,
   })
+  // A run that costs nothing is never refused for credits, whatever the
+  // balance reads (an overdrawn pool, a deployment's empty one).
+  const sufficient = check.sufficient || estimatedCredits <= 0
   return {
     estimatedCredits,
-    sufficient: check.sufficient,
+    sufficient,
     available: check.available,
-    ...(check.message !== undefined ? { message: check.message } : {}),
+    ...(!sufficient && check.message !== undefined ? { message: check.message } : {}),
+  }
+}
+
+/**
+ * The use-case nodes of the run that resume a failed attempt, with what each
+ * resume charges; none without a continuation, without such a node, or when
+ * the source cannot be read (each is then priced as a fresh run). The
+ * module is loaded only then: it reaches the engine, which imports this file.
+ */
+async function resumedCredits(input: {
+  readonly userId: string
+  readonly nodes: readonly GraphNode[]
+  readonly edges: readonly GraphEdge[]
+  readonly runNodeIds: readonly string[]
+  readonly overrides: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined
+  readonly continuation?: ContinuationPricing
+}): Promise<ReadonlyMap<string, number>> {
+  const run = new Set(input.runNodeIds)
+  if (!input.continuation || !input.nodes.some((n) => run.has(n.id) && isUseCaseNodeType(n.type))) return new Map()
+  // A read that fails prices every node as a fresh run (the upper bound), never a 500.
+  try {
+    const source = await input.continuation.source()
+    if (!source?.nodeStates) return new Map()
+    const { resumedUseCaseCredits } = await import("./use-case/resume-credits.js")
+    return await resumedUseCaseCredits({
+      userId: input.userId,
+      nodes: input.nodes,
+      edges: input.edges,
+      runNodeIds: input.runNodeIds,
+      overrides: input.overrides,
+      sentOverrides: input.continuation.sentOverrides,
+      source,
+    })
+  } catch {
+    return new Map()
   }
 }

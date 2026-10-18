@@ -799,7 +799,10 @@ A refused continuation throws before any execution exists: `NotFoundError`
 (`continuation_not_found`), or a `NodaroError` whose `code` is
 `continuation_subset_required`, `continuation_workflow_mismatch`,
 `continuation_version_mismatch` or `continuation_not_completed`
-([details](./api-integration.md#continuing-a-run)).
+([details](./api-integration.md#continuing-a-run)). A continuation whose payer
+cannot cover the nodes it runs — with or without `continueMode` — throws
+`InsufficientCreditsError` (`402`) before any execution exists, checked as a
+`renderFinal` is.
 
 `continueMode: "from-failed"` continues a run that FAILED from where it stopped
 (`continueFromExecutionId` is your own failed run of the workflow): `nodeIds` is
@@ -828,7 +831,8 @@ exported from `@nodaro/sdk/errors`). It names that continuation in
 `reviewNodeIds`. `next` (a `HeldFinalRun`: `continueFromExecutionId`,
 `nodeIds`, `inputOverrides`) is the run that finishes them: send it first with
 `client.workflows.run(workflowId, error.next)`, then continue. For a single held
-render, `next` is that continuation's `renderFinal`. When the newest later continuation completed only part of
+render, `next` is that continuation's `renderFinal`: the same run, with the same
+credit check before it starts. When the newest later continuation completed only part of
 what was left otherwise (a narrower `nodeIds`), the run is built on it instead:
 seeded from that continuation, running only what it left, and the result's
 `continuedFrom` names it (the run you sent otherwise). A Render final, or a run

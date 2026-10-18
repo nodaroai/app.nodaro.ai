@@ -136,6 +136,15 @@ nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
 nodaro workflows run <id> --continue-from <executionId> --from-failed [--node n1 n2 ...] [--idempotency-key <key>] [--watch]
 #   --idempotency-key (8+ characters) is sent as Idempotency-Key: the same key twice starts one run
+nodaro workflows run <id> --continue-from <executionId> --node n1 n2 ... [--override n1.quality=final ...] [--watch]
+#   a run of named nodes continuing a completed run; --override (nodeId.field=value, repeat) is a per-node override for this run only
+nodaro workflows run <id> --next <json|file|-> [--idempotency-key <key>] [--watch]
+#   sends the `next` of a continuation_preview_pending answer exactly as given (alone: no --node, --continue-from, --from-failed or --override;
+#   a body with continueMode or renderFinal is refused: a `next` carries neither)
+#   a --from-failed refused with continuation_preview_pending prints the exact command that finishes the held run (render-final, or run --next)
+nodaro workflows render-final <id> --from <executionId> [--render <nodeId>] [--estimate] [--watch] [--json]
+#   the Render final of a run that stopped at a Preview render: the render at Final and every node after it, continuing that run;
+#   --render defaults to the workflow's only render; --estimate quotes it (nodes, credits) and runs nothing
 
 # Sharing (workspace features)
 nodaro workflows share <id> [--visibility workspace|private] [--json]

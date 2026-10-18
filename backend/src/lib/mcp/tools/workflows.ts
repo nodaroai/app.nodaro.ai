@@ -969,7 +969,8 @@ export function registerWorkflows({
         title: "Run Workflow",
         description:
           "Run a saved workflow from the mcp project. Returns an execution_id. Retrying after a timeout? Reuse the same client_request_id so the run is not started or charged twice. " +
-          "A run that FAILED can be continued from where it stopped: pass continue_from_execution_id with from_failed: true — only the nodes it did not complete run (a failed node in full); what it completed is handed on, never re-run or re-charged.",
+          "A run that FAILED can be continued from where it stopped: pass continue_from_execution_id with from_failed: true — only the nodes it did not complete run (a failed node in full); what it completed is handed on, never re-run or re-charged. " +
+          "With node_ids instead of from_failed, it continues a completed run: only node_ids run, the rest hand on that run's outputs (the call a continuation_preview_pending names).",
         inputSchema: {
           workflow_id: z.string().uuid(),
           client_request_id: clientRequestIdSchema.optional(),
@@ -983,11 +984,17 @@ export function registerWorkflows({
             .string()
             .uuid()
             .optional()
-            .describe("Your own FAILED run of this workflow (its execution id), to continue from where it stopped. Requires from_failed: true."),
+            .describe("Your own run of this workflow to continue (its execution id): a FAILED one with from_failed: true, or a completed one with node_ids."),
           from_failed: z
             .boolean()
             .optional()
             .describe("With continue_from_execution_id: run only the nodes that run did not complete."),
+          node_ids: z
+            .array(z.string())
+            .optional()
+            .describe(
+              "Run only these nodes. With from_failed, the nodes to consider (default every node). With continue_from_execution_id alone, the nodes the continuation runs (required then).",
+            ),
         },
         outputSchema: {
           executionId: z.string(),
@@ -1015,14 +1022,21 @@ export function registerWorkflows({
         // refused by the route with a reason, not a generic "not found". In
         // the no-workspace case `loadMcpWorkflow` keeps the mcp-project floor,
         // byte-identical to the pre-check this replaces.
-        // A continuation of a failed run names both; this tool has no node list,
-        // so a plain continuation (a Render final) is render_final's.
+        // A continuation of a failed run names both. A plain continuation of a
+        // completed run names the nodes it runs (node_ids): the run a
+        // continuation_preview_pending names in `next`, sent as is.
+        // An empty list never stands for "every node": a list that names
+        // nothing is a mistake, refused in every mode (decided 2026-10-18).
+        if (args.node_ids && args.node_ids.length === 0) {
+          return err("node_ids names no node: list the nodes to run, or leave node_ids out to run the whole workflow (with from_failed, every node it did not complete).")
+        }
         if (args.from_failed === true && !args.continue_from_execution_id) {
           return err("from_failed needs continue_from_execution_id: the execution id of the run that failed.")
         }
-        if (args.continue_from_execution_id && args.from_failed !== true) {
+        if (args.continue_from_execution_id && args.from_failed !== true && !(args.node_ids && args.node_ids.length > 0)) {
           return err(
-            "continue_from_execution_id continues a run that failed: set from_failed: true. (To render a preview at Final, use render_final.)",
+            "continue_from_execution_id needs from_failed: true (continue a run that failed) or node_ids (the nodes to run, continuing a completed run). " +
+              "To render a preview at Final, use render_final.",
           )
         }
         const loaded = await loadMcpWorkflow(session, args.workflow_id, "view", "name")
@@ -1033,9 +1047,9 @@ export function registerWorkflows({
           mcp_client: session.clientName,
           userId: session.userId,
           ...(args.inputs ? { inputOverrides: args.inputs } : {}),
-          ...(args.continue_from_execution_id
-            ? { continueFromExecutionId: args.continue_from_execution_id, continueMode: "from-failed" as const }
-            : {}),
+          ...(args.node_ids && args.node_ids.length > 0 ? { nodeIds: args.node_ids } : {}),
+          ...(args.continue_from_execution_id ? { continueFromExecutionId: args.continue_from_execution_id } : {}),
+          ...(args.continue_from_execution_id && args.from_failed === true ? { continueMode: "from-failed" as const } : {}),
         }
         const res = await mcpInject(fastify, session, {
           method: "POST",

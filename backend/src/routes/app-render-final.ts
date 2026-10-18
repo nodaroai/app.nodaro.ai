@@ -80,7 +80,7 @@ import {
   loadContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { executeAppRenderFinal } from "../services/app-render-final.js"
-import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-run.js"
+import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-codes.js"
 
 /** Stable refusal codes of this route (clients branch on the code). */
 export const APP_RENDER_FINAL_NOT_A_RENDER = "not_a_render"

@@ -43,7 +43,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
-import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { findIdempotentRow, insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { resolvePrimaryInputField } from "../lib/mcp/extract-app-inputs.js"
@@ -52,7 +52,7 @@ import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-nod
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { limitedKeyWorkflows, refuseLimitedKey } from "../middleware/token-workflow-scope.js"
-import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits } from "../lib/render-final-run.js"
+import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits, type ContinuationPricing } from "../lib/render-final-run.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
   CONTINUATION_REFUSAL_STATUS,
@@ -106,7 +106,8 @@ openApiRegistry.registerPath({
                   description:
                     "Continue from an earlier execution: your own run of this workflow (not of a published app version) — completed, " +
                     "or failed with continueMode \"from-failed\". Requires nodeIds (except with continueMode); every node not run hands on " +
-                    "that execution's output instead of the workflow's saved results.",
+                    "that execution's output instead of the workflow's saved results. A continuation its payer cannot cover (priced on the " +
+                    "nodes it runs) is refused with 402 insufficient_credits before any execution exists.",
                 }),
               continueMode: z
                 .enum(["from-failed"])
@@ -115,7 +116,9 @@ openApiRegistry.registerPath({
                   description:
                     "\"from-failed\": continue a FAILED run from where it stopped. Requires continueFromExecutionId (the run that failed); " +
                     "not combinable with renderFinal. Runs every node that run did not complete (of nodeIds, default every node) and hands " +
-                    "on what it did complete, never dispatched or billed again (a node that failed runs again in full). When a later " +
+                    "on what it did complete, never dispatched or billed again (a node that failed runs again in full; a use-case node resumes " +
+                    "its failed attempt). A run its payer cannot cover, priced on what is left, answers 402 insufficient_credits before " +
+                    "any execution exists. When a later " +
                     "continuation of it completed only part of what it left, the run builds on the newest such one: it is seeded from that " +
                     "execution and runs only what is still left (continuedFrom in the answer names it). A run a later " +
                     "continuation supersedes answers 409 continuation_superseded naming it (supersededBy.status \"failed\": continue that one; " +
@@ -167,7 +170,7 @@ openApiRegistry.registerPath({
     },
     401: { description: "Unauthorized" },
     402: {
-      description: "A Render final its payer cannot cover (insufficient_credits): nothing was created",
+      description: "A continuation (a Render final, a run of nodeIds, or a continue-from-failed) its payer cannot cover (insufficient_credits): nothing was created",
       content: {
         "application/json": {
           schema: z.object({
@@ -555,6 +558,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     let coversAllLeft = false
     let effectiveOverrides = inputOverrides
     let continuationRenders: ((nodes: readonly SimpleNode[]) => SavedRenderStampReader) | undefined
+    let continuationPricing: ContinuationPricing | undefined
     if (body.continueFromExecutionId !== undefined && body.continueFromExecutionId !== null) {
       const parsedContinue = z.string().uuid().safeParse(body.continueFromExecutionId)
       if (!parsedContinue.success) {
@@ -707,6 +711,14 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       }
       continueFromExecutionId = parsedContinue.data
       effectiveOverrides = continuationInputOverrides(source, inputOverrides)
+      // What the credit check below prices a resumed use-case node by: the
+      // states the orchestrator seeds from (read again only where this read
+      // skipped them) and the overrides it seeds with.
+      const pricedSource = source
+      continuationPricing = {
+        sentOverrides: inputOverrides,
+        source: async () => (pricedSource.nodeStates ? pricedSource : await loadContinuationSource(pricedSource.id, withStates)),
+      }
       // Seeded from the SENT overrides, as the orchestrator seeds (`job.data.inputOverrides`).
       // A continue-from-failed always holds the states (the stop below reads them too).
       const runNodeIds = new Set(nodeIds)
@@ -867,15 +879,36 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
     const webFreeMode = await resolveWebSurfaceFlag(req)
 
-    // An agent's Render final is checked against its payer BEFORE the row
-    // exists, on the figure its quote showed (`renderFinalCredits` is the
-    // quote's funnel): the graph the orchestrator executes (`effectiveOverrides`,
-    // the earlier run's pin with the render's Final over it) and only the nodes
-    // it runs. Without this a run its payer cannot cover would start, charge
-    // its first node (Camera Switch, in multicam) and fail at the render's own
-    // reservation, with no final. Balance only: model availability, daily caps
-    // and allowances stay with each node's preflight.
-    if (renderFinalNodeId !== undefined && nodeIds) {
+    // A continuation — an agent's Render final, the run a held continuation's
+    // `continuation_preview_pending` names in `next`, any other run of named
+    // nodes, and a continue-from-failed (decided 2026-10-18) — is checked
+    // against its payer BEFORE the row exists, on the figure a Render final's
+    // quote shows (`renderFinalCredits` is the quote's funnel): the graph the
+    // orchestrator executes (`effectiveOverrides`, the earlier run's pin with
+    // the sent overrides over it) and only the nodes it runs — for a
+    // continue-from-failed, what is left after the seeds (`nodeIds`, narrowed
+    // above): a completed node is seeded, never charged. A use-case node that
+    // will resume a failed attempt is priced at that resume, by the engine's
+    // own rule (`continuationPricing`). Without this a run its payer cannot
+    // cover would start, charge its first nodes and fail at a later
+    // reservation. Balance only: model availability, daily caps and
+    // allowances stay with each node's preflight.
+    if (continueFromExecutionId !== undefined && nodeIds) {
+      // A retry of a request that already started its run (the same
+      // Idempotency-Key) is answered with that run, as the insert below would
+      // answer it — never refused for the balance that run has since spent.
+      if (idempotencyKey) {
+        let earlier: { id: string } | null
+        try {
+          earlier = await findIdempotentRow<{ id: string }>("workflow_executions", req.userId, idempotencyKey)
+        } catch (err) {
+          return sendInternalError(reply, req, err, "Failed to start workflow execution")
+        }
+        if (earlier) {
+          reply.header("X-Dedup-Hit", "1")
+          return reply.status(200).send({ executionId: earlier.id, status: "pending", deduped: true })
+        }
+      }
       let credits: Awaited<ReturnType<typeof renderFinalCredits>>
       try {
         credits = await renderFinalCredits({
@@ -885,9 +918,10 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           runNodeIds: nodeIds,
           overrides: effectiveOverrides,
           surface: { billingContext, webFreeMode },
+          ...(continuationPricing ? { continuation: continuationPricing } : {}),
         })
       } catch (err) {
-        return sendInternalError(reply, req, err, "Failed to check credits for the Render final")
+        return sendInternalError(reply, req, err, "Failed to check credits for the continuation")
       }
       if (credits && !credits.sufficient) {
         return reply.status(402).send({

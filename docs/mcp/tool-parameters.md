@@ -2441,8 +2441,9 @@ Needs `workflows:execute`.
 | `workflow_id` | string | yes |  |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 | `inputs` | object (map of any) |  | Optional per-node input overrides, keyed by node id. The value may be a bare scalar/array (e.g. "blue car" or ["a","b"]) — it's written to that node's main input field — OR an object mapping specific fields to values (e.g. { "prompt": "..." }). |
-| `continue_from_execution_id` | string |  | Your own FAILED run of this workflow (its execution id), to continue from where it stopped. Requires from_failed: true. |
+| `continue_from_execution_id` | string |  | Your own run of this workflow to continue (its execution id): a FAILED one with from_failed: true, or a completed one with node_ids. |
 | `from_failed` | boolean |  | With continue_from_execution_id: run only the nodes that run did not complete. |
+| `node_ids` | string[] |  | Run only these nodes. With from_failed, the nodes to consider (default every node). With continue_from_execution_id alone, the nodes the continuation runs (required then). |
 
 ## `save_image_defaults`
 

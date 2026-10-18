@@ -112,7 +112,10 @@ export interface RunWorkflowParams {
    * with `continueMode`), not of a published app version. Refused with
    * `continuation_subset_required`, `continuation_not_found` (404),
    * `continuation_workflow_mismatch`, `continuation_version_mismatch` or
-   * `continuation_not_completed` (409).
+   * `continuation_not_completed` (409). A continuation its payer cannot cover
+   * (with or without `continueMode`, priced on the nodes it runs) throws
+   * `InsufficientCreditsError` before any execution exists, checked as a
+   * {@link WorkflowsResource.renderFinal} is.
    */
   continueFromExecutionId?: string
   /**

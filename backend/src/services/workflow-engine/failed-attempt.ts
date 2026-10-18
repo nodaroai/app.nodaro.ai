@@ -65,9 +65,10 @@ const urlOf = (value: unknown): string | null => (typeof value === "string" && v
  *    the settings were resolved for;
  *  - `now`: what a fresh run of the node would send (`freshRunInputs`).
  * The current settings are resolved for the same recording kind and compared
- * whole, with the inputs the type takes, key order ignored. Everything else on
- * the wrapper (its mode, its lineage and claim keys, its fee, the recording's
- * probed length) says nothing about the inputs and is not compared. Pure.
+ * setting by setting (`settingsUnchanged`), with the inputs the type takes,
+ * key order ignored. Everything else on the wrapper (its mode, its lineage and
+ * claim keys, its fee, the recording's probed length) says nothing about the
+ * inputs and is not compared. Pure.
  */
 export function attemptRanWithInputs(
   type: UseCaseNodeType,
@@ -82,16 +83,57 @@ export function attemptRanWithInputs(
     media: urlOf(ranWith.mediaUrl),
     music: takes("music", ranWith.musicUrl),
     introCard: takes("introCard", ranWith.introCardUrl),
-    settings: ranWith.settings ?? null,
   }
   if (ran.media === null || mediaNow === null) return false
   const current = {
     media: mediaNow,
     music: takes("music", now.musicUrl),
     introCard: takes("introCard", now.introCardUrl),
-    settings: d.resolveSettings(now, mediaKind),
   }
-  return canonical(ran) === canonical(current)
+  if (canonical(ran) !== canonical(current)) return false
+  const stored = ranWith.settings
+  if (!isPlainRecord(stored)) return false
+  // A setting the attempt has no value for (one added since it ran) holds
+  // what the current resolver makes of the attempt's own settings: its
+  // default. Read with the recording, music and intro card the node has now
+  // (proven the attempt's own just above), so a default a resolver derives
+  // from one of them is the attempt's too.
+  const inputsNow = Object.fromEntries((["mediaUrls", "musicUrl", "introCardUrl"] as const).flatMap((k) => (now[k] !== undefined ? [[k, now[k]] as const] : [])))
+  return settingsUnchanged(stored, d.resolveSettings(now, mediaKind), d.resolveSettings({ ...inputsNow, ...stored }, mediaKind))
+}
+
+const isPlainRecord = (v: unknown): v is Readonly<Record<string, unknown>> => typeof v === "object" && v !== null && !Array.isArray(v)
+
+/**
+ * Are the settings an attempt stored (`ran`, its resolver's output when it
+ * ran) the ones the node resolves to now (`current`)? Compared on the union of
+ * their keys, so a deploy that changes the resolver's key set does not make
+ * every older attempt differ:
+ *  - a setting the attempt stored must hold the same value now;
+ *  - a setting only `current` has (added since the attempt ran) must hold its
+ *    default for that attempt (`defaults`: the current resolver's reading of
+ *    the attempt's settings, so the default a resolver derives from another
+ *    setting is the attempt's). A new setting's default is the behaviour the
+ *    code had before it existed, so it is what the attempt ran with;
+ *  - a setting the attempt stored that `current` no longer has (one removed
+ *    since) differs: what the attempt made with it cannot be told.
+ * `undefined` reads as absent, as in the stored jsonb. Pure.
+ */
+export function settingsUnchanged(
+  ran: Readonly<Record<string, unknown>>,
+  current: Readonly<Record<string, unknown>>,
+  defaults: Readonly<Record<string, unknown>>,
+): boolean {
+  const has = (r: Readonly<Record<string, unknown>>, k: string) => Object.prototype.hasOwnProperty.call(r, k) && r[k] !== undefined
+  const keys = new Set([...Object.keys(ran), ...Object.keys(current)])
+  for (const k of keys) {
+    if (has(ran, k)) {
+      if (!has(current, k) || canonical(ran[k]) !== canonical(current[k])) return false
+    } else if (has(current, k) && canonical(current[k]) !== canonical(defaults[k])) {
+      return false
+    }
+  }
+  return true
 }
 
 /**

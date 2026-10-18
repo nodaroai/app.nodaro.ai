@@ -103,6 +103,9 @@ nodaro workflows run <id> --watch        # follow until completed/failed/cancell
 nodaro workflows run <id> --node n1 n2   # run only specific nodes
 nodaro workflows run <id> --continue-from <executionId> --from-failed   # resume a failed run where it stopped
 nodaro workflows run <id> ... --idempotency-key <key>   # 8+ chars; retrying with the same key starts one run
+nodaro workflows run <id> --continue-from <executionId> --node n1 --override n1.quality=final   # continue a completed run, named nodes only
+nodaro workflows run <id> --next '<json>'   # send the `next` a continuation_preview_pending answer names, as is
+nodaro workflows render-final <id> --from <executionId> [--render <nodeId>] [--estimate]   # Render final of a run held at its Preview
 
 # Apps — workflows wrapped in a curated UI (the things at app.nodaro.ai/app/<slug>)
 nodaro apps list [--search <query>] [--limit 20] [--cursor <token>] [--category <slug>]

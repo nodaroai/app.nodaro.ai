@@ -83,3 +83,26 @@ export async function insertWithIdempotencyKey<T>(
   }
   return { row: existing as unknown as T, created: false }
 }
+
+/**
+ * The row an earlier request already wrote under `(user_id, idempotency_key)`,
+ * or `null` — the row `insertWithIdempotencyKey` would answer a retry with,
+ * read before a check that would otherwise refuse that retry (a balance its
+ * own run has since spent). A read, so racy on its own: the insert stays the
+ * race-proof backstop. Throws on a read error.
+ */
+export async function findIdempotentRow<T>(
+  table: string,
+  userId: string,
+  idempotencyKey: string,
+  selectColumns: string = "id",
+): Promise<T | null> {
+  const { data, error } = await supabase
+    .from(table)
+    .select(selectColumns)
+    .eq("user_id", userId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle()
+  if (error) throw new Error(`idempotency lookup failed (${table}): ${error.message}`, { cause: error })
+  return (data as unknown as T | null) ?? null
+}

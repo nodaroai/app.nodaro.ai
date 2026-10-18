@@ -628,7 +628,85 @@ describe("run_workflow tool", () => {
     const noMode = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1" })
     expect(noMode.isError).toBe(true)
     expect(noMode.content[0]?.text).toContain("from_failed: true")
+    expect(noMode.content[0]?.text).toContain("node_ids")
+    // An empty node list names no node: refused the same way.
+    const empty = await callTool(server, "run_workflow", {
+      workflow_id: WORKFLOW_ID,
+      continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1",
+      node_ids: [],
+    })
+    expect(empty.isError).toBe(true)
     expect(hit).toBe(false)
+  })
+
+  it("an empty node_ids is refused in every mode: never read as the whole workflow", async () => {
+    const fastify = Fastify()
+    let hit = false
+    fastify.post("/v1/workflows/:id/run", async () => {
+      hit = true
+      return { executionId: "e-1" }
+    })
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    for (const args of [
+      { node_ids: [] },
+      { node_ids: [], continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1", from_failed: true },
+    ]) {
+      const result = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, ...args })
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.text).toContain("node_ids names no node")
+    }
+    expect(hit).toBe(false)
+  })
+
+  it("the `next` of a held continuation, sent as run_workflow names it, reaches the route exactly: its execution, nodes and overrides, no mode", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/workflows/:id/run", async (req) => {
+      received = req.body as Record<string, unknown>
+      return { executionId: "e-4", status: "pending" }
+    })
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const next = {
+      continueFromExecutionId: "00000000-0000-4000-8000-0000000000f4",
+      nodeIds: ["cut1", "cut2", "t", "mix"],
+      inputOverrides: {
+        cut1: { quality: "final" },
+        cut2: { quality: "final" },
+        t: { useCaseContinue: { mode: "render-final", jobId: "w", settings: { instructions: "keep the host's intro" } } },
+      },
+    }
+    const result = await callTool(server, "run_workflow", {
+      workflow_id: WORKFLOW_ID,
+      continue_from_execution_id: next.continueFromExecutionId,
+      node_ids: next.nodeIds,
+      inputs: next.inputOverrides,
+    })
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.executionId).toBe("e-4")
+    expect(received).toMatchObject(next)
+    expect(received?.continueMode).toBeUndefined()
+  })
+
+  it("node_ids alone runs those nodes; with from_failed they are the nodes to consider", async () => {
+    const fastify = Fastify()
+    const bodies: Array<Record<string, unknown>> = []
+    fastify.post("/v1/workflows/:id/run", async (req) => {
+      bodies.push(req.body as Record<string, unknown>)
+      return { executionId: "e-5", status: "pending" }
+    })
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const FAILED = "00000000-0000-4000-8000-0000000000f1"
+    await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, node_ids: ["a"] })
+    await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, continue_from_execution_id: FAILED, from_failed: true, node_ids: ["a", "b"] })
+    expect(bodies[0]).toMatchObject({ nodeIds: ["a"] })
+    expect(bodies[0]?.continueFromExecutionId).toBeUndefined()
+    expect(bodies[1]).toMatchObject({ nodeIds: ["a", "b"], continueFromExecutionId: FAILED, continueMode: "from-failed" })
   })
 
   it("a superseded continuation names the later run to continue", async () => {
@@ -701,7 +779,7 @@ describe("run_workflow tool", () => {
     expect(result.content[0]?.text).not.toContain(`continue_from_execution_id: "${LATER}"`)
   })
 
-  it("a newest continuation held by a Tighten Episode review: the one run in `next` (run_workflow cannot send it), never render_final", async () => {
+  it("a newest continuation held by a Tighten Episode review: the one run in `next`, as the run_workflow call that sends it, never render_final", async () => {
     const fastify = Fastify()
     const LATER = "00000000-0000-4000-8000-0000000000f4"
     const next = { continueFromExecutionId: LATER, nodeIds: ["t", "cap"], inputOverrides: { t: { useCaseContinue: { mode: "render-final", jobId: "w" } } } }
@@ -724,7 +802,10 @@ describe("run_workflow tool", () => {
     })
     const text = result.content[0]?.text ?? ""
     expect(text).toContain('the review of "t"')
-    expect(text).toContain(`POST /v1/workflows/${WORKFLOW_ID}/run with ${JSON.stringify(next)}`)
+    expect(text).toContain(
+      `run_workflow({ workflow_id: "${WORKFLOW_ID}", continue_from_execution_id: "${LATER}", node_ids: ${JSON.stringify(next.nodeIds)}, inputs: ${JSON.stringify(next.inputOverrides)} })`,
+    )
+    expect(text).not.toContain("POST /v1/workflows/")
     expect(text).not.toContain("render_final({")
   })
 

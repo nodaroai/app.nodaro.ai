@@ -537,8 +537,9 @@ registers an async task for progress tracking.
 | `workflow_id` | UUID string | Must be in the mcp project |
 | `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
-| `continue_from_execution_id` | UUID string | Optional; your own **failed** run of this workflow, to continue from where it stopped. Requires `from_failed: true` |
+| `continue_from_execution_id` | UUID string | Optional; your own run of this workflow to continue: a **failed** one with `from_failed: true` (from where it stopped), or a **completed** one with `node_ids` (only those nodes run; every other node hands on that run's outputs). One of the two is required |
 | `from_failed` | boolean | With `continue_from_execution_id`: run only the nodes that run did not complete |
+| `node_ids` | string[] | Optional; run only these nodes. With `from_failed`, the nodes to consider (default every node); with `continue_from_execution_id` alone, the nodes the continuation runs. An empty list is refused in every mode: leave it out instead. A continuation its payer cannot cover (of a completed run, or `from_failed`, priced on what it still runs) is refused (`insufficient_credits`) before it starts |
 
 **Response:** `{ executionId: "...", name: "..." }` — read the run with
 [`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
@@ -568,8 +569,9 @@ holds it. Once the user has reviewed the preview, the next step for a single
 held render is
 `render_final({ workflow_id, render_node_id, execution_id: "<that continuation>" })`.
 For two or more renders, or a Tighten Episode review, the error carries the one
-run that finishes them, as a body for `POST /v1/workflows/:id/run`.
-`run_workflow` cannot send it, because it takes no node list.
+run that finishes them as the call to make:
+`run_workflow({ workflow_id, continue_from_execution_id: "<that continuation>", node_ids: [...], inputs: {...} })`
+— the `next` of the REST answer, sent as is (no `from_failed`).
 When the newest later continuation completed only part of what the run left
 otherwise, the run is built on it: seeded from that continuation and running
 only what it left, and the answer says which run it continued from (a
