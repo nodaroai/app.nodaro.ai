@@ -8689,7 +8689,7 @@ export async function deleteApiToken(id: string): Promise<{ success: boolean }> 
 // Developer Apps (OAuth) — delegates to @nodaro/sdk SDK
 // ---------------------------------------------------------------------------
 
-import type { DeveloperAppKind } from "@nodaro/sdk"
+import type { DeveloperAppKind } from "@nodaro/sdk/developer-apps"
 
 export type {
   DeveloperApp,
@@ -8699,7 +8699,7 @@ export type {
   CreateDeveloperAppInput,
   UpdateDeveloperAppInput,
   CreateDeveloperAppResult,
-} from "@nodaro/sdk"
+} from "@nodaro/sdk/developer-apps"
 
 export function listDeveloperApps() {
   return nodaroClient.developerApps.list()
@@ -8710,14 +8710,14 @@ export function getDeveloperApp(id: string) {
 }
 
 export function createDeveloperApp(
-  input: import("@nodaro/sdk").CreateDeveloperAppInput,
+  input: import("@nodaro/sdk/developer-apps").CreateDeveloperAppInput,
 ) {
   return nodaroClient.developerApps.create(input)
 }
 
 export function updateDeveloperApp(
   id: string,
-  input: import("@nodaro/sdk").UpdateDeveloperAppInput,
+  input: import("@nodaro/sdk/developer-apps").UpdateDeveloperAppInput,
 ) {
   return nodaroClient.developerApps.update(id, input)
 }

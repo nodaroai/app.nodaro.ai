@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { warn, type OutputOpts } from "../output.js"
 import { collectVariadic, reportQueuedJob } from "../util.js"
-import type { AudioFxPreset } from "@nodaro/sdk"
+import type { AudioFxPreset } from "@nodaro/sdk/voices"
 import {
   TRANSCRIBE_PROVIDERS,
   DEFAULT_TRANSCRIBE_PROVIDER,

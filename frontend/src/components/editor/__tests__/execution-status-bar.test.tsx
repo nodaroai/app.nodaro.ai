@@ -34,7 +34,7 @@ vi.mock("sonner", () => ({
 // ---------------------------------------------------------------------------
 
 import { ExecutionStatusBar, executionStatusRefetchInterval } from "../execution-status-bar"
-import { NotFoundError } from "@nodaro/sdk"
+import { NotFoundError } from "@nodaro/sdk/errors"
 
 // ---------------------------------------------------------------------------
 // Helpers

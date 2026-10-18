@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { WebhookDelivery, WebhookDeliveryStatus, WebhookJobEvent } from "@nodaro/sdk"
+import type { WebhookDelivery, WebhookDeliveryStatus, WebhookJobEvent } from "@nodaro/sdk/webhooks"
 import { buildClient, handleError } from "../client.js"
 import { detail, dim, emit, info, success, table, terminalSafe, warn, type OutputOpts } from "../output.js"
 

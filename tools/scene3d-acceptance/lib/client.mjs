@@ -47,7 +47,7 @@ export async function makeClient({ baseUrl } = {}) {
       hint: "export NODARO_BASE_URL=https://next.nodaro.ai for staging",
     })
   }
-  const { createClient, StaticTokenAuth } = await import("@nodaro/sdk")
+  const { createClient, StaticTokenAuth } = await import("@nodaro/sdk/client")
   const client = createClient({
     baseUrl: resolvedBase.replace(/\/$/, ""),
     auth: new StaticTokenAuth(apiKey),

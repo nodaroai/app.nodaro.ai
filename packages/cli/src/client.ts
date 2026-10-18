@@ -1,4 +1,5 @@
-import { CallbackAuth, createClient, StaticTokenAuth, NodaroError, UnauthorizedError } from "@nodaro/sdk"
+import { CallbackAuth, createClient, StaticTokenAuth } from "@nodaro/sdk/client"
+import { NodaroError, UnauthorizedError } from "@nodaro/sdk/errors"
 import pc from "picocolors"
 import { DEFAULT_BASE_URL, getProfile } from "./config.js"
 import { resolveWorkspace } from "./workspace.js"

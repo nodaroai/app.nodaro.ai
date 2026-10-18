@@ -1,5 +1,5 @@
 import type { FC } from "react"
-import type { DeveloperAppKind } from "@nodaro/sdk"
+import type { DeveloperAppKind } from "@nodaro/sdk/developer-apps"
 import { useT } from "@/lib/i18n"
 import { nodeDocsLinksShown, useDocsPageUrl } from "@/lib/node-docs/node-docs"
 

@@ -5,6 +5,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
 
 ## Table of contents
 
+- [Subpath entries](#subpath-entries)
 - [`createClient(options)`](#createclientoptions)
 - [Auth providers](#auth-providers)
 - [Errors](#errors)
@@ -57,6 +58,33 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
 - [Type re-exports](#type-re-exports)
 
 ---
+
+## Subpath entries
+
+The root `@nodaro/sdk` exports everything on this page. Each resource is also
+published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
+resource's module and the types it takes and returns:
+
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+
+`/client` holds `createClient`, `NodaroClient` and the auth providers;
+`/errors` holds the error classes and `throwFromResponse`; every other entry is
+named after its resource module (`/node-presets` is `client.presets`,
+`/webhooks` also holds `verifyWebhookSignature`). A type the SDK re-exports from
+`@nodaro/shared` lives in the entry of the resource that uses it.
+
+```ts
+import { NotFoundError } from "@nodaro/sdk/errors"
+import type { Job, JobStatus } from "@nodaro/sdk/jobs"
+```
+
+The root is the union of the entries, and a value imported from an entry is the
+same instance as the one imported from the root, so `instanceof NotFoundError`
+holds whichever path each side used. `createClient` builds every resource, so
+`@nodaro/sdk/client` loads all of them; the narrower entries pay off in code that
+needs only errors, types or one resource class. The two older subpaths,
+`@nodaro/sdk/supabase` and `@nodaro/sdk/signup-signals`, are unchanged and stay
+outside the root.
 
 ## `createClient(options)`
 

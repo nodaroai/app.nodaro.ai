@@ -3,7 +3,7 @@ import type {
   ChatTurn,
   ChatStageResult,
   ApplyChatProposalResult,
-} from "@nodaro/sdk"
+} from "@nodaro/sdk/pipelines"
 import { getAuthHeaders } from "@/lib/api"
 import type { PipelineTimelineInput } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
 

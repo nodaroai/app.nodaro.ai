@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { editCommand } from "../edit.js"
 import { warn, emit } from "../../output.js"
-import { ContinuationRefusedError } from "@nodaro/sdk"
+import { ContinuationRefusedError } from "@nodaro/sdk/errors"
 
 const mocks = {
   silenceDetect: vi.fn(),

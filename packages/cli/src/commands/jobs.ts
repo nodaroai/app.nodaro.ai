@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { JobRating, JobRatingFilter, JobStatus } from "@nodaro/sdk"
+import type { JobRating, JobRatingFilter, JobStatus } from "@nodaro/sdk/jobs"
 import { buildClient, handleError } from "../client.js"
 import { detail, dim, emit, success, table, type OutputOpts } from "../output.js"
 

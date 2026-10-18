@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
 import { parseNodePresetExport } from "@nodaro/shared/nodes"
-import type { ImportNodePresetInput, UpdateNodePresetInput } from "@nodaro/sdk"
+import type { ImportNodePresetInput, UpdateNodePresetInput } from "@nodaro/sdk/node-presets"
 import { buildClient, buildPublicClient, handleError } from "../client.js"
 import { emit, success, table, type OutputOpts } from "../output.js"
 

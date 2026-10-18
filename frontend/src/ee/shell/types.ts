@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import type { QueryClient } from "@tanstack/react-query"
-import type { NodaroClient } from "@nodaro/sdk"
+import type { NodaroClient } from "@nodaro/sdk/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 /**

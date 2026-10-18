@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { NodaroError, NotFoundError, RateLimitedError } from "@nodaro/sdk"
+import { NodaroError, NotFoundError, RateLimitedError } from "@nodaro/sdk/errors"
 import { collectVariadic, parseCount, watchTraining, watchUntilTerminal } from "../util.js"
 
 /**

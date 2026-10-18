@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { Command } from "commander"
-import type { CreateShotInput, UpdateShotInput } from "@nodaro/sdk"
+import type { CreateShotInput, UpdateShotInput } from "@nodaro/sdk/shots"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, type OutputOpts } from "../output.js"
 

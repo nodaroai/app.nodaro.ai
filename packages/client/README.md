@@ -310,6 +310,23 @@ try {
 | `client.developerApps` | Manage your own OAuth apps |
 | `client.oauth` | Code exchange, revoke, app-info |
 
+## Subpath entries
+
+The root `@nodaro/sdk` exports everything. Each resource is also published as
+its own entry point, which loads only that resource's module:
+
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+
+```ts
+import { NotFoundError } from "@nodaro/sdk/errors"
+import type { Job } from "@nodaro/sdk/jobs"
+```
+
+The root is the union of the entries, and a value imported from an entry is the
+same instance as the one imported from the root. `@nodaro/sdk/client`
+(`createClient`) builds every resource, so it loads all of them. See the
+[SDK Reference](https://nodaro.ai/docs/developers/sdk/client).
+
 ## Auth modes
 
 | Class | Use when |
