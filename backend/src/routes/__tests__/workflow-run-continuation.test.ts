@@ -373,6 +373,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       ["eq", "user_id", USER],
       ["eq", "workflow_id", WORKFLOW],
       ["eq", "trigger_data->continueFromFailed->>root", PRIOR],
+      // Only among the runs a stamp-writing lane started (lib/server-started-runs.ts).
+      ["in", "trigger_type", ["manual", "mcp", "app_run"]],
       ["in", "status", ["failed", "completed"]],
       ["not", "started_at", "is", null],
       ["order", "created_at", { ascending: false }],
@@ -522,6 +524,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
         status: "completed",
         started_at: "2026-10-17T11:00:00.000Z",
         created_at: "2026-10-17T11:00:00.000Z",
+        trigger_type: "manual",
         trigger_data: { continueFromFailed: { from: PRIOR, root: PRIOR, seededFrom: PRIOR, all: false } },
       })
       mocks.loadSource.mockImplementation(async (id: string) =>
@@ -612,8 +615,28 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       status: "failed",
       started_at: "2026-10-17T11:00:00.000Z",
       created_at: "2026-10-17T11:00:00.000Z",
+      trigger_type: "manual",
       trigger_data: { continueFromFailed: { from: root, root, all: true } },
       ...over,
+    })
+
+    it("a webhook run whose posted body forged a later generation is no generation: no false done, no narrowing", async () => {
+      // "Completed all": would answer the owner's resume continuation_superseded (done).
+      mocks.executions.push(generation(LATER, { status: "completed", trigger_type: "webhook" }))
+      // "Completed part": would build the resume on the forged run instead.
+      mocks.executions.push(
+        generation(NEWER, {
+          status: "completed",
+          created_at: "2026-10-17T12:00:00.000Z",
+          trigger_type: "webhook",
+          trigger_data: { message: "hi", continueFromFailed: { from: PRIOR, root: PRIOR, seededFrom: PRIOR, all: false } },
+        }),
+      )
+      const res = await fromFailed()
+      expect(res.statusCode).toBe(202)
+      expect(res.json().supersededBy).toBeUndefined()
+      expect((mocks.queueAdd.mock.calls[0]![1] as Record<string, unknown>).seedFromExecutionId).toBeUndefined()
+      expect(mocks.inserts[0]!.trigger_data).toEqual({ continueFromFailed: { from: PRIOR, root: PRIOR, seededFrom: PRIOR, all: true } })
     })
 
     it("a later continuation that failed: 409 naming it, its id and status in the body and the message", async () => {

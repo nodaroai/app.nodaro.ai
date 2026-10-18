@@ -253,7 +253,7 @@ describe("loadAppRunFinals — only the runner's own executions", () => {
   it("a failed read further down the chain is incomplete too", async () => {
     const stamp = appRenderFinalStamp({ appRunId: "run-1", appVersionId: "app-1", continuedFrom: "f1" })
     db.selectResults.push(
-      { data: [{ id: "f2", status: "failed", node_states: {}, trigger_data: stamp }], error: null },
+      { data: [{ id: "f2", status: "failed", node_states: {}, trigger_type: "app_run", trigger_data: stamp }], error: null },
       { data: null, error: { message: "down" } },
     )
     const read = await readAppRunFinals(["f2"], "u", ["exec-run"])
@@ -275,8 +275,8 @@ describe("a chain of finals (decided 2026-10-06): each continues from the run's 
 
   it("loads the newest final's earlier finals by their stamps, stopping at the run's own execution", async () => {
     db.selectResults.push(
-      { data: [{ id: "f2", status: "pending", node_states: {}, trigger_data: stamp("f1") }], error: null },
-      { data: [{ id: "f1", status: "completed", node_states: {}, trigger_data: stamp("exec-run") }], error: null },
+      { data: [{ id: "f2", status: "pending", node_states: {}, trigger_type: "app_run", trigger_data: stamp("f1") }], error: null },
+      { data: [{ id: "f1", status: "completed", node_states: {}, trigger_type: "app_run", trigger_data: stamp("exec-run") }], error: null },
     )
     const finals = await loadAppRunFinals(["f2"], "user-1", ["exec-run"])
     expect(db.selects).toHaveLength(2)
@@ -291,8 +291,8 @@ describe("a chain of finals (decided 2026-10-06): each continues from the run's 
 
   it("an execution with no stamp is never taken for an earlier final", async () => {
     db.selectResults.push(
-      { data: [{ id: "f2", status: "completed", node_states: {}, trigger_data: stamp("x") }], error: null },
-      { data: [{ id: "x", status: "completed", node_states: {}, trigger_data: {} }], error: null },
+      { data: [{ id: "f2", status: "completed", node_states: {}, trigger_type: "app_run", trigger_data: stamp("x") }], error: null },
+      { data: [{ id: "x", status: "completed", node_states: {}, trigger_type: "app_run", trigger_data: {} }], error: null },
     )
     const finals = await loadAppRunFinals(["f2"], "user-1")
     expect(appRunFinalChain("f2", finals).map((f) => f.id)).toEqual(["f2"])
@@ -300,8 +300,8 @@ describe("a chain of finals (decided 2026-10-06): each continues from the run's 
 
   it("a cycle in forged stamps ends the walk", async () => {
     db.selectResults.push(
-      { data: [{ id: "a", status: "completed", node_states: {}, trigger_data: stamp("b") }], error: null },
-      { data: [{ id: "b", status: "completed", node_states: {}, trigger_data: stamp("a") }], error: null },
+      { data: [{ id: "a", status: "completed", node_states: {}, trigger_type: "app_run", trigger_data: stamp("b") }], error: null },
+      { data: [{ id: "b", status: "completed", node_states: {}, trigger_type: "app_run", trigger_data: stamp("a") }], error: null },
     )
     const finals = await loadAppRunFinals(["a"], "user-1")
     expect(appRunFinalChain("a", finals).map((f) => f.id)).toEqual(["b", "a"])

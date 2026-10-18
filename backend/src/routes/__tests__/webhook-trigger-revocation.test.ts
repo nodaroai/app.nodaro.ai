@@ -170,6 +170,24 @@ describe("POST /v1/webhooks/:token — a trigger must not outlive its access", (
     })
   })
 
+  it("a body posting a platform stamp (an app run's, a continuation's lineage) lands without it", async () => {
+    plugin(true)
+    const { execInsert } = fireTables()
+    const payload = {
+      message: "hi",
+      appRun: { appRunId: "run-x" },
+      appRenderFinal: { appRunId: "r", appVersionId: "v", continuedFrom: "e" },
+      continueFromFailed: { from: "e", root: "e", seededFrom: "e", all: false },
+      runRoot: { executionId: "exec-x" },
+    }
+    const res = await app.inject({ method: "POST", url: `/v1/webhooks/${TOKEN}`, payload })
+    expect(res.statusCode).toBe(202)
+    const stored = (execInsert.mock.calls[0]![0] as { trigger_data: Record<string, unknown> }).trigger_data
+    expect(stored).toEqual({ message: "hi", last_triggered_at: null })
+    const enqueued = vi.mocked(orchestrationQueue.add).mock.calls[0]?.[1] as { triggerData?: unknown }
+    expect(enqueued.triggerData).toEqual({ message: "hi", last_triggered_at: null })
+  })
+
   it("fires normally while the owner still may", async () => {
     plugin(true)
     const { execInsert } = fireTables()

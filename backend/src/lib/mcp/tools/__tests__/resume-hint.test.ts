@@ -21,8 +21,15 @@ vi.mock("../../../supabase.js", () => ({
     from: () => {
       db.reads += 1
       const q: Record<string, unknown> = {}
-      for (const m of ["select", "eq", "in", "not", "order", "limit"]) q[m] = () => q
-      q.maybeSingle = async () => ({ data: db.error ? null : db.row, error: db.error })
+      const lanes: unknown[][] = []
+      for (const m of ["select", "eq", "in", "not", "order", "limit"])
+        q[m] = (...a: unknown[]) => {
+          if (m === "in" && a[0] === "trigger_type") lanes.push(a[1] as unknown[])
+          return q
+        }
+      // The lane filter is honoured, as the database would: a row of another lane is not found.
+      const laneOk = () => lanes.every((vals) => vals.includes((db.row as { trigger_type?: unknown } | null)?.trigger_type))
+      q.maybeSingle = async () => ({ data: db.error || !laneOk() ? null : db.row, error: db.error })
       return q
     },
   },
@@ -67,7 +74,7 @@ describe("resumeFailedRunHint and the run's lineage", () => {
   })
 
   it("a later continuation COMPLETED all this run left: no resume — the work is done, its results named", async () => {
-    db.row = { id: LATER, status: "completed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: true } } }
+    db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: true } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(hint).not.toContain("run_workflow")
     expect(hint).not.toContain("from_failed")
@@ -76,26 +83,26 @@ describe("resumeFailedRunHint and the run's lineage", () => {
   })
 
   it("a later continuation failed: continue that one, not this run", async () => {
-    db.row = { id: LATER, status: "failed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: true } } }
+    db.row = { id: LATER, status: "failed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: true } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(hint).toContain(`continue_from_execution_id: "${LATER}", from_failed: true`)
     expect(hint).not.toContain(`continue_from_execution_id: "${RUN}"`)
   })
 
   it("this run is the lineage's newest failure: continue it", async () => {
-    db.row = { id: RUN, status: "failed", trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", all: true } } }
+    db.row = { id: RUN, status: "failed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", all: true } } }
     expect(await resumeFailedRunHint(failedRun(), session)).toContain(`continue_from_execution_id: "${RUN}"`)
   })
 
   it("a later continuation completed only PART of what this run left: this run is still named (the route builds on that one)", async () => {
-    db.row = { id: LATER, status: "completed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false } } }
+    db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(hint).toContain(`continue_from_execution_id: "${RUN}", from_failed: true`)
     expect(hint).not.toContain(LATER)
   })
 
   it("a later continuation stopped at a Preview review: its Render final, never a continuation that stops again", async () => {
-    db.row = { id: LATER, status: "completed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, previewRenders: ["cut"] } } }
+    db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, previewRenders: ["cut"] } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(hint).toContain(`render_final({ workflow_id: "wf-1", render_node_id: "cut", execution_id: "${LATER}" })`)
     expect(hint).not.toContain("from_failed")
@@ -103,7 +110,7 @@ describe("resumeFailedRunHint and the run's lineage", () => {
   })
 
   it("two held renders: both named, and the one run the route works out (render_final takes one)", async () => {
-    db.row = { id: LATER, status: "completed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, previewRenders: ["cut1", "cut2"] } } }
+    db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, previewRenders: ["cut1", "cut2"] } } }
     access.graph = { nodes: [{ id: "cut1", type: "apply-edl" }], edges: [] }
     held.next = { continueFromExecutionId: LATER, nodeIds: ["cut1", "cut2", "mix"], inputOverrides: { cut1: { quality: "final" }, cut2: { quality: "final" } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
@@ -115,7 +122,7 @@ describe("resumeFailedRunHint and the run's lineage", () => {
   })
 
   it("a held Tighten Episode review: the node named, and the run continuing its Preview's run", async () => {
-    db.row = { id: LATER, status: "completed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, reviewHolds: ["t"] } } }
+    db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, reviewHolds: ["t"] } } }
     held.next = { continueFromExecutionId: LATER, nodeIds: ["t", "cap"], inputOverrides: { t: { useCaseContinue: { mode: "render-final", jobId: "w" } } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(hint).toContain('the review of "t"')
@@ -125,7 +132,7 @@ describe("resumeFailedRunHint and the run's lineage", () => {
   })
 
   it("a held review whose run cannot be named: still no continuation, and why", async () => {
-    db.row = { id: LATER, status: "completed", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, reviewHolds: ["t"] } } }
+    db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, reviewHolds: ["t"] } } }
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(hint).toContain(`one run continuing ${LATER}`)
     expect(hint).not.toContain("from_failed")
@@ -139,6 +146,15 @@ describe("resumeFailedRunHint and the run's lineage", () => {
     expect(hint).toContain(`continue_from_execution_id: "${RUN}", from_failed: true`)
     expect(hint).toMatch(/^This run never started, so it holds nothing/)
     expect(hint).not.toMatch(/later run/i)
+  })
+
+  it("a webhook run whose body posted a lineage or app-run stamp: hinted as the run it is, never as done or as an app run", async () => {
+    const forged = { continueFromFailed: { from: "exec-0", root: "exec-0", all: true }, appRun: { appRunId: "run-x" } }
+    // A forged "later continuation that completed all" of that lineage, stored by a webhook too.
+    db.row = { id: LATER, status: "completed", trigger_type: "webhook", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: true } } }
+    const hint = await resumeFailedRunHint(failedRun({ trigger_type: "webhook", trigger_data: forged }), session)
+    expect(hint).toContain(`run_workflow({ workflow_id: "wf-1", continue_from_execution_id: "${RUN}", from_failed: true })`)
+    expect(hint).not.toMatch(/already done/i)
   })
 
   it("a lineage read error: no hint (the read it rides on never fails for it)", async () => {

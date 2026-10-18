@@ -43,6 +43,7 @@ import { refusePreviewFire } from "./preview-fire-refusal.js"
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
 import { billingPairColumns } from "./insert-job.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
+import { withoutReservedStamps } from "./trigger-data-stamps.js"
 
 /** Each plugin lane and the node type its rows are projected from. */
 const NODE_TYPE_BY_LANE: Readonly<Record<PluginTriggerLane, string>> = {
@@ -235,6 +236,8 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
   const billingContext = await resolveBillingContext({ userId, workflowId })
   if (await shouldRefuseDegradedRunFor(billingContext, workflowId)) return { fired: false, reason: "degraded" }
 
+  // The event's payload is the plugin's (its source's) to shape: it never carries a platform stamp.
+  const triggerData = withoutReservedStamps(input.triggerData)
   const { data: execution, error: insertError } = await supabase
     .from("workflow_executions")
     .insert({
@@ -242,7 +245,7 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
       user_id: userId,
       status: "pending",
       trigger_type: lane,
-      trigger_data: input.triggerData,
+      trigger_data: triggerData,
       // Namespaced by lane so no other lane's key can ever collide with it.
       idempotency_key: `${lane}:${input.idempotencyKey}`,
       ...billingPairColumns(billingContext),
@@ -261,7 +264,7 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
     userId,
     triggerType: lane,
     triggerNodeId,
-    triggerData: input.triggerData,
+    triggerData,
     billingContext,
     // An account event cannot review a Preview render.
     reviewerPresent: false,

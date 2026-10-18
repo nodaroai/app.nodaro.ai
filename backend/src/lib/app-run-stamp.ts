@@ -25,6 +25,9 @@
 
 const STAMP_KEY = "appRun"
 
+/** The `trigger_data` key an app run's execution is stamped under (reserved: never caller data, lib/trigger-data-stamps.ts). */
+export const APP_RUN_STAMP_KEY = STAMP_KEY
+
 /** The `trigger_data` an app run's execution is created with. */
 export function appRunStamp(appRunId: string): { appRun: { appRunId: string } } {
   return { [STAMP_KEY]: { appRunId } } as { appRun: { appRunId: string } }

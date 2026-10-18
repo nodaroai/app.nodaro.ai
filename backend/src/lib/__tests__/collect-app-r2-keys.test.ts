@@ -63,6 +63,7 @@ beforeEach(() => {
         id: "f-alice",
         user_id: "alice",
         node_states: { a: { output: { url: url("nodes/alice-final-job.png") } } },
+        trigger_type: "app_run",
         trigger_data: { appRenderFinal: { appRunId: "r1", appVersionId: "app", continuedFrom: "f0-alice" } },
       },
       // Alice's first final of a chain (decided 2026-10-06): the run links only the newest.
@@ -70,6 +71,7 @@ beforeEach(() => {
         id: "f0-alice",
         user_id: "alice",
         node_states: { a: { output: { url: url("nodes/alice-first-final-job.png") } } },
+        trigger_type: "app_run",
         trigger_data: { appRenderFinal: { appRunId: "r1", appVersionId: "app", continuedFrom: "e-alice" } },
       },
       { id: "e-bob", user_id: "bob", node_states: { b: { output: { url: url("bob-run") } } } },
@@ -79,6 +81,7 @@ beforeEach(() => {
         id: "f-mallory",
         user_id: "mallory",
         node_states: {},
+        trigger_type: "app_run",
         trigger_data: { appRenderFinal: { appRunId: "r3", appVersionId: "app", continuedFrom: "e-bob" } },
       },
     ],

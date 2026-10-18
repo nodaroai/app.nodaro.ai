@@ -34,6 +34,7 @@ import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { isMissingColumnError } from "../lib/postgrest-errors.js"
 import { applyTriggerConfigPatch } from "../lib/workflow-trigger-sync.js"
+import { withoutReservedStamps } from "../lib/trigger-data-stamps.js"
 
 // ---------------------------------------------------------------------------
 // Rate limiter for webhook endpoint (in-memory, per-token)
@@ -266,8 +267,11 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
     // Extract trigger data from request body. Inject system fields LAST so a
     // user-posted body can't shadow `last_triggered_at` (webhook tokens are
     // public auth — without this, an attacker could POST a future timestamp
-    // to bypass any `{{trigger.last_triggered_at}}` filter).
-    const userBody = (req.body as Record<string, unknown>) ?? {}
+    // to bypass any `{{trigger.last_triggered_at}}` filter). The platform's
+    // own stamps (an app run's, a continuation's lineage, …) are dropped from
+    // the body: a run is found and continued by them, so none may be posted
+    // (lib/trigger-data-stamps.ts).
+    const userBody = withoutReservedStamps((req.body as Record<string, unknown>) ?? {})
     const previousLastTriggeredAt = trigger.last_triggered_at as string | null
     const triggerData: Record<string, unknown> = {
       ...userBody,

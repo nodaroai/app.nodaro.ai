@@ -161,6 +161,7 @@ const execution = (id: string, user: string, workflow = WORKFLOW, status = "comp
   status,
   started_at: ago(HOUR),
   created_at: ago(HOUR),
+  trigger_type: "app_run",
   trigger_data: {},
   ...extra,
 })
@@ -316,6 +317,21 @@ describe("collectAppExpungeTargets — every execution of a run", () => {
     expect(targets.skippedRunIds).toEqual([RUN])
     expect(targets.runIds).toEqual([])
     expect(targetExecutionIds(targets)).toEqual([])
+  })
+  it("a webhook execution whose posted body carried the run's stamp is not the run's: never erased, never holding the erase back", async () => {
+    const WEBHOOK = uuid(0x407)
+    const t = tables()
+    t.workflow_executions.push(
+      execution(WEBHOOK, RUNNER, WORKFLOW, "running", { trigger_type: "webhook", trigger_data: { message: "hi", ...appRunStamp(RUN) } }),
+    )
+    t.jobs.push(job(uuid(0x507), WEBHOOK, RUNNER, "processing"))
+    vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: t }))
+
+    const targets = await collectAppExpungeTargets(APP_ID, WORKFLOW, NOW)
+
+    expect(targets.skippedRunIds).toEqual([])
+    expect(targets.runIds).toEqual([RUN])
+    expect(sorted(targetExecutionIds(targets))).toEqual(sorted([FIRST, RERUN, FINAL, EARLIER_FINAL]))
   })
 })
 

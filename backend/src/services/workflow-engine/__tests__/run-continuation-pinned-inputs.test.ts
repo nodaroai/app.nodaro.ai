@@ -69,7 +69,7 @@ beforeEach(() => {
   db.columnMissing = false
   db.executionSelects.length = 0
   db.appRunFilters.length = 0
-  db.execution = { id: "exec-0", user_id: "u1", workflow_id: "wf-1", status: "completed", node_states: {}, input_overrides: null }
+  db.execution = { id: "exec-0", user_id: "u1", workflow_id: "wf-1", status: "completed", trigger_type: "manual", node_states: {}, input_overrides: null }
   db.appRun = null
   db.appRunById = null
 })
@@ -159,6 +159,7 @@ describe("the overrides a continuation re-applies: the earlier execution's pin",
 describe("a Render final's execution as the source: the version its stamp names", () => {
   const stamped = (over: Record<string, unknown> = {}) => ({
     ...db.execution!,
+    trigger_type: "app_run",
     trigger_data: { appRenderFinal: { appRunId: "run-1", appVersionId: "app-1", continuedFrom: "exec-run" } },
     ...over,
   })
@@ -252,5 +253,37 @@ describe("an app run's earlier execution, found by its stamp", () => {
     expect(continuationRefusal(source, { userId: "u1", workflowId: source!.workflowId, nodeIds: ["x"], mode: "from-failed" })).toBe(
       CONTINUATION_VERSION_MISMATCH,
     )
+  })
+})
+
+// A stamp is the platform's only on a run a stamp-writing lane started
+// (lib/server-started-runs.ts): a webhook's row holds the body its caller posted.
+describe("a webhook execution whose body posted the platform's stamps", () => {
+  const forged = {
+    message: "hi",
+    continueFromFailed: { from: "exec-b", root: "exec-a", seededFrom: "exec-b", all: true },
+    appRun: { appRunId: "run-1" },
+    appRenderFinal: { appRunId: "run-1", appVersionId: "app-1", continuedFrom: "exec-run" },
+  }
+
+  it("reads as carrying none: no lineage, the live workflow's — so its continue-from-failed is not refused as another version", async () => {
+    db.execution = { ...db.execution!, status: "failed", trigger_type: "webhook", trigger_data: forged }
+    db.appRunById = { app_id: "app-1", input_values: null }
+    for (const source of [await load(), await loadContinuationSource("exec-0", { withStates: false })]) {
+      expect(source!.continueFromFailed).toBeNull()
+      expect(source!.appVersionId).toBeNull()
+      expect(continuationRefusal(source, { userId: "u1", workflowId: source!.workflowId, nodeIds: ["x"], mode: "from-failed" })).toBeNull()
+    }
+    // The stamped run is never looked up.
+    expect(db.appRunFilters).not.toContainEqual(["id", "run-1"])
+    expect(db.executionSelects.every((c) => c.includes("trigger_type"))).toBe(true)
+  })
+
+  it("the same stamps on the platform's own row still read", async () => {
+    db.execution = { ...db.execution!, trigger_type: "mcp", trigger_data: { continueFromFailed: forged.continueFromFailed } }
+    expect((await load())!.continueFromFailed).toEqual(forged.continueFromFailed)
+    db.execution = { ...db.execution!, trigger_type: "app_run", trigger_data: { appRun: forged.appRun } }
+    db.appRunById = { app_id: "app-1", input_values: null }
+    expect((await load())!.appVersionId).toBe("app-1")
   })
 })

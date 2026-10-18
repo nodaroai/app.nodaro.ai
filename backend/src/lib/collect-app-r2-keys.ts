@@ -3,7 +3,8 @@ import { ownedJobOutputKeys, r2KeyFromUrl } from "./job-output-keys.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
 import { familyJobOwners, judgeKeyEntries, keyNamespaceOwner, keysHeldByOtherLibraryRows } from "./key-ownership.js"
 import { APP_RUN_USER_CONTENT_COLUMNS } from "./app-run-content.js"
-import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
+import { finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
+import { serverStamps } from "./trigger-data-stamps.js"
 
 /**
  * Walk every R2 key referenced by an app: the app row's own media (icon,
@@ -217,14 +218,14 @@ export async function collectAppR2KeyReport(appId: string, scope: AppR2KeyScope 
       let batch = [...namedBy.keys()]
       for (let step = 0; batch.length > 0 && step < 32; step++) {
         for (const id of batch) read.add(id)
-        const execsRes = await supabase.from("workflow_executions").select("id, user_id, node_states, trigger_data").in("id", batch)
+        const execsRes = await supabase.from("workflow_executions").select("id, user_id, node_states, trigger_type, trigger_data").in("id", batch)
         if (execsRes.error) throw new Error(`collectAppR2Keys failed at executions: ${execsRes.error.message}`)
         const next = new Set<string>()
-        for (const e of (execsRes.data ?? []) as Array<{ id: string; user_id: string | null; node_states: unknown; trigger_data?: unknown }>) {
+        for (const e of (execsRes.data ?? []) as Array<{ id: string; user_id: string | null; node_states: unknown; trigger_type?: unknown; trigger_data?: unknown }>) {
           const runners = namedBy.get(e.id)
           if (typeof e.user_id !== "string" || !runners?.has(e.user_id)) continue
           owned.push({ id: e.id, user_id: e.user_id, node_states: e.node_states })
-          const earlier = appRenderFinalStampOf(e.trigger_data)?.continuedFrom
+          const earlier = serverStamps(e).appRenderFinal?.continuedFrom
           if (!earlier || read.has(earlier) || runExecutions.has(earlier)) continue
           namedBy.set(earlier, new Set([...(namedBy.get(earlier) ?? []), e.user_id]))
           next.add(earlier)
