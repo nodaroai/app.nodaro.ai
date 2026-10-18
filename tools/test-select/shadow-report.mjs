@@ -2,8 +2,10 @@
 // tools/test-select/shadow-report.mjs
 // The evidence for flipping TEST_SELECT_ENFORCE=true: across the shadow-mode
 // CI runs of PRs into dev since a date, every selector miss (a failing test
-// file the selection would have skipped) and the median share of each suite
-// the selector would have run. A local, owner-run tool — not run in CI.
+// file the selection would have skipped), the median share of each suite
+// the selector would have run (over every run, and over the runs it narrowed
+// only), and which cause sent the other runs full — each global trigger, a
+// removal, test data… with example PRs. A local, owner-run tool — not run in CI.
 //   node tools/test-select/shadow-report.mjs --since 2026-10-13 [--repo owner/name] [--run <id>]…
 // --run limits the report to those runs (still listed from --since) — to re-check one run.
 // Needs an authenticated `gh` (GH_TOKEN works too).
@@ -13,8 +15,40 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
+import { matchesAny } from "./glob.mjs"
+import { GLOBAL_TRIGGERS, NOT_VERSION_ONLY, isGlobalTrigger } from "./select.mjs"
 
 const PROJECTS = ["frontend", "backend"]
+
+// Why a selection ran everything, from its `reason` (select.mjs, engine.mjs):
+// the global-trigger glob the named file matches ON THIS BRANCH — or that it
+// matches none any more (one cause per file), so these rules would not have
+// run everything for it
+// — or the other kind of full run. The selector names only the FIRST trigger
+// it finds, so this is first-trigger attribution.
+export function classifyFullReason(reason) {
+  if (typeof reason !== "string") return { cause: "reason unknown (the selection could not be read)" }
+  const trigger = /^(.+?) can affect every test(?: — (.+))?$/.exec(reason)
+  if (trigger) {
+    const file = trigger[1]
+    const glob = GLOBAL_TRIGGERS.find((g) => matchesAny(file, [g]))
+    // one row per such file: each is a narrowing of its own
+    if (!glob || !isGlobalTrigger(file)) return { cause: `no global trigger since 2026-10-18: ${file}`, file }
+    // A manifest the selector did not mark as checked was judged before the
+    // workspace-range rule (or never checked): it may be a release bump that
+    // these rules narrow, so it gets a row apart from a real manifest change.
+    const manifest = /(?:^|\/)package(?:-lock)?\.json$/.test(file)
+    if (manifest && trigger[2] !== NOT_VERSION_ONLY) return { cause: `global trigger ${glob} (not checked for a version-only change — may be a release bump)`, file }
+    return { cause: `global trigger ${glob}`, file }
+  }
+  const named = (re, cause) => { const m = re.exec(reason); return m && { cause, file: m[1] } }
+  return named(/^(.+) was removed or renamed/, "a removed or renamed file")
+    ?? named(/^(.+) is a manual mock/, "a manual mock")
+    ?? named(/^(.+) is test data read at run time/, "test data")
+    ?? (/^the diff lists \d+ files/.test(reason) ? { cause: "a diff too large to list" } : null)
+    ?? (/^selection engine could not decide/.test(reason) ? { cause: "the selection engine could not decide" } : null)
+    ?? { cause: `other: ${reason}` }
+}
 
 function median(xs) {
   if (!xs.length) return null
@@ -54,6 +88,9 @@ export function aggregateShadow(runs, registryChecks = []) {
   const errors = []
   const selectionErrors = []
   const shares = { frontend: [], backend: [] }
+  // runs that did not go full (affected or none) — what the rules narrow to
+  const narrowedShares = { frontend: [], backend: [] }
+  const fullBy = new Map() // cause → { runs: Set(url), projects, examples }
   // The registry rule's own shadow period (registry.mjs): its misses are
   // reported apart and never decide `clean` — that is the main selector's bar.
   const registryMisses = []
@@ -92,9 +129,24 @@ export function aggregateShadow(runs, registryChecks = []) {
         for (const file of shadow.registryMisses) registryMisses.push({ project, file, url: run.url })
       }
       const total = selection?.total
-      if (shadow.wouldRun === "full") shares[project].push(1)
-      else if (shadow.wouldRun === "none") shares[project].push(0)
-      else if (shadow.wouldRun === "affected" && Number.isFinite(total) && total > 0) shares[project].push(shadow.selected / total)
+      if (shadow.wouldRun === "full") {
+        shares[project].push(1)
+        const { cause, file } = classifyFullReason(selection?.reason)
+        if (!fullBy.has(cause)) fullBy.set(cause, { cause, runs: new Set(), projects: { frontend: 0, backend: 0 }, examples: [] })
+        const row = fullBy.get(cause)
+        row.projects[project]++
+        if (!row.runs.has(run.url)) {
+          row.runs.add(run.url)
+          // one example per PR (a PR's pushes each leave a run)
+          if (run.pr == null || !row.examples.some((e) => e.pr === run.pr)) row.examples.push({ pr: run.pr ?? null, url: run.url, ...(file && { file }) })
+        }
+      } else if (shadow.wouldRun === "none") {
+        shares[project].push(0)
+        narrowedShares[project].push(0)
+      } else if (shadow.wouldRun === "affected" && Number.isFinite(total) && total > 0) {
+        shares[project].push(shadow.selected / total)
+        narrowedShares[project].push(shadow.selected / total)
+      }
     }
   }
   // One per run and project, like shadow mode (each shard leaves its own check).
@@ -110,10 +162,20 @@ export function aggregateShadow(runs, registryChecks = []) {
     for (const file of [...files].sort()) registryMisses.push({ project, file, url })
   }
   const clean = runs.length > 0 && ![misses, unattributed, crashed, missing, errors].some((l) => l.length)
+  // One row per cause, each run once (whichever of its projects went full), most runs first.
+  const fullRuns = new Set([...fullBy.values()].flatMap((r) => [...r.runs]))
+  const fullByCause = [...fullBy.values()]
+    .map(({ cause, runs: urls, projects, examples }) => ({ cause, runs: urls.size, prs: examples.filter((e) => e.pr != null).length, projects, examples }))
+    .sort((a, b) => b.runs - a.runs || a.cause.localeCompare(b.cause))
   return {
     runsChecked: runs.length, misses, inherited, unattributed, crashed, missing, errors, selectionErrors, clean,
     registry: { checked: registryChecked, misses: registryMisses, clean: registryChecked > 0 && registryMisses.length === 0 },
     medianShare: { frontend: median(shares.frontend), backend: median(shares.backend) },
+    narrowed: {
+      medianShare: { frontend: median(narrowedShares.frontend), backend: median(narrowedShares.backend) },
+      runs: { frontend: narrowedShares.frontend.length, backend: narrowedShares.backend.length },
+    },
+    full: { runs: fullRuns.size, byCause: fullByCause },
   }
 }
 
@@ -308,7 +370,7 @@ function baseFromJobLog(repo, jobs, project) {
 function collectRuns({ repo, since, only = [] }) {
   const lines = gh("api", "--paginate",
     `repos/${repo}/actions/workflows/ci.yml/runs?event=pull_request&created=>=${since}&per_page=100`,
-    "--jq", '.workflow_runs[] | [.id, .html_url, .head_sha, .head_branch, (.head_repository.full_name == .repository.full_name), ([.pull_requests[].base.ref] | join(","))] | @tsv')
+    "--jq", '.workflow_runs[] | [.id, .html_url, .head_sha, .head_branch, (.head_repository.full_name == .repository.full_name), ([.pull_requests[].base.ref] | join(",")), ([.pull_requests[].number | tostring] | join(","))] | @tsv')
   const pullsBySha = new Map() // one lookup per head sha
   const pullsFor = (sha) => {
     if (!pullsBySha.has(sha)) {
@@ -354,7 +416,7 @@ function collectRuns({ repo, since, only = [] }) {
   const registryChecks = []
   const listed = lines.split("\n").filter(Boolean).filter((l) => !only.length || only.includes(l.split("\t")[0]))
   for (const line of listed) {
-    const [id, url, headSha, headBranch, sameRepo, bases = ""] = line.split("\t")
+    const [id, url, headSha, headBranch, sameRepo, bases = "", numbers = ""] = line.split("\t")
     const artifacts = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n")
     const names = artifacts.filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
     // An affected run (the main selector enforcing) checks the registry rule
@@ -418,7 +480,13 @@ function collectRuns({ repo, since, only = [] }) {
       const sha = entry.selection?.base ?? baseFromJobLog(repo, jobs, project)
       testedOn[project] = sha ? devFailures(sha, project) : { error: "the commit the PR was tested on could not be found" }
     }
-    runs.push({ url, expected, projects, ...(Object.keys(testedOn).length && { bases: testedOn }), ...(base === "unknown" && { baseUnknown: true }) })
+    // the PR, for the report's examples: listed while it is open, else through
+    // the commit's pulls — the PR whose head is this sha, else one into dev
+    // (an earlier push of a PR is no longer its head)
+    const pulls = numbers ? null : pullsFor(headSha)
+    const pr = Number(numbers.split(",").filter(Boolean)[0])
+      || pulls?.find((p) => p.head?.sha === headSha)?.number || pulls?.find((p) => p.base?.ref === "dev")?.number || null
+    runs.push({ url, expected, projects, ...(pr && { pr }), ...(Object.keys(testedOn).length && { bases: testedOn }), ...(base === "unknown" && { baseUnknown: true }) })
   }
   return { listed: listed.length, runs, registryChecks }
 }
@@ -433,6 +501,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { listed, runs, registryChecks } = collectRuns({ repo, since: o.since, only: o.run ?? [] })
   const report = aggregateShadow(runs, registryChecks)
   const pct = (x) => (x === null ? "n/a" : `${(x * 100).toFixed(1)}%`)
+  const example = (e) => `${e.pr ? `#${e.pr}` : e.url}${e.file ? ` ${e.file}` : ""}`
   const out = [
     // both counts, so "no shadow runs" cannot pass for a broken listing
     `PR runs listed since ${o.since}: ${listed}, shadow runs checked: ${report.runsChecked}`,
@@ -451,6 +520,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     `Selections that could not be read (share unknown, result kept): ${report.selectionErrors.length}`,
     ...report.selectionErrors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
     `Median share the selector would have run — frontend: ${pct(report.medianShare.frontend)}, backend: ${pct(report.medianShare.backend)}`,
+    `Median share among narrowed runs only (did not go full) — frontend: ${pct(report.narrowed.medianShare.frontend)} of ${report.narrowed.runs.frontend} run(s), backend: ${pct(report.narrowed.medianShare.backend)} of ${report.narrowed.runs.backend} run(s)`,
+    `Runs that went full: ${report.full.runs} of ${report.runsChecked} — by the first trigger the selector found (a run counts once per cause; frontend/backend count project runs):`,
+    ...report.full.byCause.map((row) => `  - ${row.cause}: ${row.runs} run(s) of ${row.prs} PR(s) (frontend ${row.projects.frontend}, backend ${row.projects.backend}), e.g. ${row.examples.slice(0, 3).map(example).join("; ")}`),
     report.clean ? "Clean: no miss, unattributed failure, selector crash, missing shadow data or unreadable check." : "Not clean.",
     `Registry rule (TEST_SELECT_REGISTRY_RULE, its own shadow period — not part of Clean): ${report.registry.checked} project run(s) where its selection differed, ${report.registry.misses.length} miss(es)`,
     ...report.registry.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}`),

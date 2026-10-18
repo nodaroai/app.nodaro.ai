@@ -1,7 +1,7 @@
 // tools/__tests__/test-select-shadow-report.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected, baseFailures, baseFromCheckoutLog, withRetry } from "../test-select/shadow-report.mjs"
+import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected, baseFailures, baseFromCheckoutLog, withRetry, classifyFullReason } from "../test-select/shadow-report.mjs"
 
 const run = (url, frontend, backend) => ({ url, projects: { ...(frontend && { frontend }), ...(backend && { backend }) } })
 
@@ -89,7 +89,8 @@ test("shadow report: an unreadable selection costs the share, not the shadow res
 })
 
 test("shadow report: no runs → nothing checked", () => {
-  assert.deepEqual(aggregateShadow([]), { runsChecked: 0, misses: [], inherited: [], unattributed: [], crashed: [], missing: [], errors: [], selectionErrors: [], clean: false, registry: { checked: 0, misses: [], clean: false }, medianShare: { frontend: null, backend: null } })
+  assert.deepEqual(aggregateShadow([]), { runsChecked: 0, misses: [], inherited: [], unattributed: [], crashed: [], missing: [], errors: [], selectionErrors: [], clean: false, registry: { checked: 0, misses: [], clean: false }, medianShare: { frontend: null, backend: null },
+    narrowed: { medianShare: { frontend: null, backend: null }, runs: { frontend: 0, backend: 0 } }, full: { runs: 0, byCause: [] } })
 })
 
 test("shadow report: registry-rule misses are reported apart and never decide clean", () => {
@@ -336,4 +337,65 @@ test("gh calls: a transient GitHub 5xx is retried, anything else throws at once"
   n = 0
   assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "HTTP 503" }) }, { pause, tries: 3 }))
   assert.equal(n, 3)
+})
+
+// decided 2026-10-18: what sent the full runs full, and the share among the runs that narrowed
+test("full-run causes: the global trigger glob the named file matches on this branch, or the other kinds of full run", () => {
+  // a manifest the selector checked for a version-only change, and one it did not (judged before 2026-10-18, or a local run)
+  assert.deepEqual(classifyFullReason("packages/cli/package.json can affect every test — more than versions and workspace ranges changed"), { cause: "global trigger **/package.json", file: "packages/cli/package.json" })
+  assert.deepEqual(classifyFullReason("packages/cli/package.json can affect every test"),
+    { cause: "global trigger **/package.json (not checked for a version-only change — may be a release bump)", file: "packages/cli/package.json" })
+  assert.equal(classifyFullReason("package-lock.json can affect every test").cause, "global trigger package-lock.json (not checked for a version-only change — may be a release bump)")
+  // a non-manifest trigger never carries the mark
+  assert.equal(classifyFullReason(".github/workflows/ci.yml can affect every test").cause, "global trigger .github/workflows/ci.yml")
+  assert.deepEqual(classifyFullReason("tools/test-select/select.mjs can affect every test"), { cause: "global trigger tools/test-select/**/*.{mjs,js,ts}", file: "tools/test-select/select.mjs" })
+  // narrowed since: the file names no trigger any more
+  assert.deepEqual(classifyFullReason("tools/test-select/README.md can affect every test"), { cause: "no global trigger since 2026-10-18: tools/test-select/README.md", file: "tools/test-select/README.md" })
+  assert.deepEqual(classifyFullReason("tools/__tests__/fixtures/test-dedup/vitest/vitest.config.mjs can affect every test").cause,
+    "no global trigger since 2026-10-18: tools/__tests__/fixtures/test-dedup/vitest/vitest.config.mjs")
+  assert.deepEqual(classifyFullReason("frontend/src/x.ts was removed or renamed — a test may still import it"), { cause: "a removed or renamed file", file: "frontend/src/x.ts" })
+  assert.equal(classifyFullReason("frontend/src/__mocks__/x.ts is a manual mock — vi.mock() loads it without an import").cause, "a manual mock")
+  assert.equal(classifyFullReason("frontend/src/__tests__/fixtures/a.json is test data read at run time — running everything").cause, "test data")
+  assert.equal(classifyFullReason("the diff lists 2950 files — too many to see them all").cause, "a diff too large to list")
+  assert.equal(classifyFullReason("selection engine could not decide (boom) — running everything").cause, "the selection engine could not decide")
+  assert.equal(classifyFullReason(undefined).cause, "reason unknown (the selection could not be read)")
+  assert.equal(classifyFullReason("something new").cause, "other: something new")
+})
+
+test("full-run breakdown: each run counted once per cause, project runs apart, example PRs; narrowed median leaves full runs out", () => {
+  const full = (reason) => ({ shadow: { wouldRun: "full", selected: 0, misses: [] }, selection: { total: 100, reason } })
+  const affected = (n) => ({ shadow: { wouldRun: "affected", selected: n, misses: [] }, selection: { total: 100, reason: `${n} of 100` } })
+  const pkg = "packages/cli/package.json can affect every test — more than versions and workspace ranges changed"
+  const out = aggregateShadow([
+    { ...run("u1", full(pkg), full(pkg)), pr: 2283 },
+    { ...run("u2", full(pkg), affected(10)), pr: 2290 },
+    // another push of the same PR: a run, not another example
+    { ...run("u2b", full(pkg), full(pkg)), pr: 2290 },
+    { ...run("u3", full("tools/test-select/README.md can affect every test"), full("tools/test-select/README.md can affect every test")), pr: 2301 },
+    { ...run("u4", affected(20), affected(30)), pr: 2302 },
+    { ...run("u5", { shadow: { wouldRun: "none", selected: 0, misses: [] }, selection: { total: 100 } }, full("backend/src/x.ts was removed or renamed — a test may still import it")) },
+    // two different narrowed files: two rows
+    { ...run("u7", full("tools/__tests__/fixtures/test-dedup/vitest/vitest.config.mjs can affect every test"), null), pr: 2310 },
+    // no PR known, both projects full: still one run, one example
+    run("u6", full("frontend/src/y.ts was removed or renamed — a test may still import it"), full("frontend/src/y.ts was removed or renamed — a test may still import it")),
+  ])
+  assert.equal(out.full.runs, 7)
+  assert.deepEqual(out.full.byCause.map((r) => [r.cause, r.runs, r.prs, r.projects]), [
+    ["global trigger **/package.json", 3, 2, { frontend: 3, backend: 2 }],
+    ["a removed or renamed file", 2, 0, { frontend: 1, backend: 2 }],
+    ["no global trigger since 2026-10-18: tools/__tests__/fixtures/test-dedup/vitest/vitest.config.mjs", 1, 1, { frontend: 1, backend: 0 }],
+    ["no global trigger since 2026-10-18: tools/test-select/README.md", 1, 1, { frontend: 1, backend: 1 }],
+  ])
+  assert.deepEqual(out.full.byCause[0].examples, [
+    { pr: 2283, url: "u1", file: "packages/cli/package.json" },
+    { pr: 2290, url: "u2", file: "packages/cli/package.json" },
+  ])
+  assert.deepEqual(out.full.byCause[1].examples, [{ pr: null, url: "u5", file: "backend/src/x.ts" }, { pr: null, url: "u6", file: "frontend/src/y.ts" }])
+  // every run: frontend 1, 1, 1, 1, 0.2, 0, 1, 1 → 1; narrowed only: 0.2, 0 → 0.1
+  assert.equal(out.medianShare.frontend, 1)
+  assert.equal(out.narrowed.medianShare.frontend, 0.1)
+  assert.equal(out.narrowed.runs.frontend, 2)
+  // backend: narrowed 0.1, 0.3 → 0.2
+  assert.equal(out.narrowed.medianShare.backend, 0.2)
+  assert.equal(out.narrowed.runs.backend, 2)
 })

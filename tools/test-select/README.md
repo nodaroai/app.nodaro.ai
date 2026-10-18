@@ -60,7 +60,18 @@ diff even if the PR moves while they start.
 Two refinements of the "run everything" rules (decided 2026-10-15): a
 `package.json` or `package-lock.json` change that only bumps versions (a
 release) is no global trigger — a package's own bumped manifest still selects
-that package's consumers, since its build may inline the version; and the test
+that package's consumers, since its build may inline the version. A moved
+range on one of our own packages counts as a version bump too (decided
+2026-10-18 — changeset releases move `@nodaro/shared` & co. inside each
+other's manifests): the members are read from the root `workspaces` and each
+member's `name`, and the range must be a plain semver range that the member's
+own version satisfies at both revisions, so npm links the local package either
+way. Only the workspace's own files count — the root manifest and lockfile
+and the members' manifests; a standalone project in the tree (the Apify
+actor) keeps its ranges as written. A third-party range, an added, removed or
+moved dependency, an `npm:` or `file:` spec, and a lockfile change to any
+installed entry still run everything, and the reason then says
+"more than versions and workspace ranges changed" (a checked manifest). And the test
 data listed in `declared-test-data.json` (generated goldens) selects its
 readers instead of every test — `test-data-readers-guard.test.mjs` fails when
 any file names such a golden without importing it or declaring it.
@@ -105,7 +116,13 @@ included, stays in shadow mode). No code change flips it.
 `node tools/test-select/shadow-report.mjs --since <ISO date> [--run <id>]…` (a local tool,
 `gh` authenticated) lists the misses across the shadow runs since then and the
 median share of each suite the selector would have run — the evidence for
-flipping the variable. It reports "Clean" only when no run has a miss, an
+flipping the variable. Beside it: the median share among the runs that did
+not go full, and the runs that did, by cause (each global trigger — the glob
+the named file matches today, or "no global trigger any more" — a removal,
+test data…) with example PRs. The selector names only the first trigger it
+finds, so a run is attributed to that one. A manifest not marked as checked
+for a version-only change (judged before 2026-10-18) gets its own row, since
+it may be a release bump these rules now narrow. It reports "Clean" only when no run has a miss, an
 unattributed failure, a crashed selector, an unreadable check, or a test job
 that ran without leaving shadow data. A run counts whether its PR is open or
 already merged (the base of a merged PR is found through its commit, since
@@ -158,8 +175,14 @@ A test file runs when, compared with the base:
 
 The whole suite runs instead when a global file changed (package manifests,
 lockfile, vitest/vite/tsconfig configs, test setup, `ci.yml`, this
-directory, the `Dockerfile` and `tools/install-pinned-ffmpeg.sh` that pin the
-ffmpeg the backend's e2e tests run against), any file other than a test file
+directory's code — `.mjs`/`.js`/`.ts`, `run-suite.sh` and the data its code
+reads, not this README, its `.d.mts` types or the guards' burn-down lists
+(decided 2026-10-18; `test-select-triggers.test.mjs` classifies every file
+here; the test also derives every file the engine imports or names at run
+time, `tools/units/registry-composers.json` included) — the `Dockerfile` and
+`tools/install-pinned-ffmpeg.sh` that pin the ffmpeg the backend's e2e tests
+run against; a vitest/vite config under `tools/__tests__/fixtures/` is a
+fixture of the tool tests, not a global file), any file other than a test file
 was removed or renamed under `frontend/`, `backend/` or `packages/` (tests
 import across projects by path), a manual mock changed, test
 data changed (a non-JS/TS file under `__tests__/`, `__goldens__/`,
