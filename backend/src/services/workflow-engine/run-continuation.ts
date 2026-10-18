@@ -114,9 +114,10 @@ import {
 } from "../../lib/execution-input-overrides.js"
 import { inlineGraphOf, noteInlineGraphColumnError, withInlineGraphColumns } from "../../lib/execution-inline-graph.js"
 import { serverStamps } from "../../lib/trigger-data-stamps.js"
-import { ancestorsOf, bypassTeleports, type WalkEdge } from "@nodaro/render-rules"
-import { lineageRootOf, type ContinueFromFailedStamp } from "../../lib/continue-from-failed-lineage.js"
+import { serverTriggerData } from "../../lib/server-started-runs.js"
+import { lineageRootOf, nodeSelectionOf, type ContinueFromFailedStamp } from "../../lib/continue-from-failed-lineage.js"
 import { isSkipNode, isSourceNode } from "./execution-graph.js"
+import { isUnfinished } from "@nodaro/render-rules"
 import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 
@@ -147,6 +148,16 @@ export interface ContinuationSource {
   /** A continue-from-failed of a saved workflow's run: what it continues, and
    *  its lineage's first run (lib/continue-from-failed-lineage.ts). */
   readonly continueFromFailed?: ContinueFromFailedStamp | null
+  /** The nodes it was started on, when it was started on named nodes and is
+   *  no generation of a lineage (`trigger_data.nodeSelection`); null: none
+   *  recorded, or a run no stamp-writing lane started (`serverTriggerData`). */
+  readonly nodeSelection?: readonly string[] | null
+  /** The root of the continuation chain it belongs to, as written on it at its pickup
+   *  (lib/continuation-run-root.ts); null: none written (a chain's first run, or one
+   *  that is no app run's). Absent on a literal. */
+  readonly runRoot?: string | null
+  /** An app run's Retry: the execution it continued (lib/app-run-stamp.ts); null for any other. Absent on a literal. */
+  readonly resumedFrom?: string | null
 }
 
 /** What the run asks to continue with. */
@@ -265,6 +276,9 @@ export async function loadContinuationSource(
   // ran — so the check holds at the worker too, after the run's link has
   // moved on to the new final.
   const finalVersion = appRow ? null : (stamps.appRenderFinal?.appVersionId ?? null)
+  // A chain's root is an app run's alone (lib/continuation-run-root.ts): read only on an execution
+  // that ran a published version, never on one a caller's data could have shaped.
+  const ranAppVersion = !!appRow || !!finalVersion || !!stampedRun
   return {
     id: execution.id,
     userId: execution.user_id,
@@ -275,7 +289,14 @@ export async function loadContinuationSource(
     appVersionId: (appRow?.app_id ?? null) || finalVersion || (stampedRun ? STAMPED_APP_RUN_UNKNOWN_VERSION : null),
     inlineGraphHash: inlineGraphOf(row as unknown as Record<string, unknown>)?.hash ?? null,
     startedAt: execution.started_at ?? null,
+    // A node scope (the stamp's `scope`, the selection) is read only from a
+    // run a stamp-writing lane started (lib/server-started-runs.ts): a
+    // webhook's or a schedule's `trigger_data` is its caller's payload, and a
+    // scope forged there would narrow — or end as "done" — a continuation.
     continueFromFailed: stamps.continueFromFailed,
+    nodeSelection: nodeSelectionOf(serverTriggerData(execution)),
+    runRoot: ranAppVersion ? stamps.runRoot : null,
+    resumedFrom: stamps.resumedFrom,
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),
@@ -334,18 +355,27 @@ export function continuationRefusal(source: ContinuationSource | null, run: Cont
  * own run of this workflow and this version of its graph (the ordinary checks,
  * `completed` included), have started, and be a continue-from-failed of
  * `source`'s lineage that did not run all it was left. `source` has passed
- * `continuationRefusal` in the from-failed mode. Pure.
+ * `continuationRefusal` in the from-failed mode. A run sent explicit
+ * `nodeIds` builds on the lineage's newest generation whatever it holds
+ * (explicit `nodeIds` always win), and the route says which it found
+ * (`reopen`, carried to the worker on the job): `"done"` — `head` completed
+ * and ran all it was left (`all`); `"failed"` — `head` ENDED `failed` (its
+ * `all` then says nothing: it did not finish). Never re-derived: only the
+ * route knows the `nodeIds` were sent rather than defaulted. Pure.
  */
 export function continuationHeadRefusal(
   head: ContinuationSource | null,
   source: ContinuationSource,
   run: ContinuationRun,
+  opts: { readonly reopen?: "done" | "failed" } = {},
 ): RunContinuationCode | null {
-  const refusal = continuationRefusal(head, { ...run, mode: "subset" })
+  const refusal = continuationRefusal(head, { ...run, mode: opts.reopen === "failed" ? "from-failed" : "subset" })
   if (refusal) return refusal
   const stamp = head!.continueFromFailed
   // Anything else is no generation the run could build on: it reads as missing.
-  if (!head!.startedAt || !stamp || stamp.all || stamp.root !== lineageRootOf(source)) return CONTINUATION_NOT_FOUND
+  if (!head!.startedAt || !stamp || (stamp.all && opts.reopen === undefined) || stamp.root !== lineageRootOf(source)) {
+    return CONTINUATION_NOT_FOUND
+  }
   return null
 }
 
@@ -364,41 +394,10 @@ function sameGraphIdentity(source: ContinuationSource, run: ContinuationRun): bo
   return sourceHash !== null && sourceHash === runHash
 }
 
-/**
- * The nodes a continue-from-failed run executes: every one the failed run did
- * not complete, in the order given (graph order kept). Pure.
- */
-export function fromFailedRunSet(nodeIds: readonly string[], source: Pick<ContinuationSource, "nodeStates">): string[] {
-  return nodeIds.filter((id) => source.nodeStates?.[id]?.status !== "completed")
-}
-
-/**
- * A saved workflow's continue-from-failed run set (decided 2026-10-17): the
- * nodes of `nodeIds` the failed run did not complete (`fromFailedRunSet`),
- * closed over what they need — every node upstream of one of them that the
- * run did not complete either, reached through such nodes only (a completed
- * node hands on its seed, so nothing above it is needed). Without the closure
- * a narrow `nodeIds` would run a node on an upstream that never produced
- * anything, and complete without redoing the failure. Wires as the
- * orchestrator reads them (a Teleport pair bypassed). In `order`. Pure.
- */
-export function fromFailedClosedRunSet(
-  order: readonly string[],
-  nodeIds: readonly string[],
-  graph: {
-    readonly nodes: ReadonlyArray<{ readonly id?: string; readonly type?: string | null; readonly data?: unknown }>
-    readonly edges: ReadonlyArray<WalkEdge>
-  },
-  source: Pick<ContinuationSource, "nodeStates">,
-): string[] {
-  const remaining = fromFailedRunSet(nodeIds, source)
-  const completed = (id: string) => source.nodeStates?.[id]?.status === "completed"
-  // Only wires out of a node that did not complete lead further up.
-  const open = bypassTeleports(graph.nodes, graph.edges).filter((e) => !completed(e.source))
-  const run = new Set(remaining)
-  for (const id of remaining) for (const up of ancestorsOf(id, open)) if (!completed(up)) run.add(up)
-  return order.filter((id) => run.has(id))
-}
+// The run set of a continue-from-failed (the nodes of `nodeIds` the run it is
+// seeded from did not complete, closed over the incomplete nodes they need
+// upstream): one rule the editor's Continue from failed predicts by too.
+export { fromFailedClosedRunSet, fromFailedRunSet } from "@nodaro/render-rules"
 
 /** An Edit Plan's seed: the plan the earlier run made (as planned), with the review applied. */
 function editPlanSeedOutput(output: NodeOutput | undefined, data: Readonly<Record<string, unknown>>): NodeOutput | undefined {
@@ -494,6 +493,11 @@ export function continuationSeeds(
       completedAt,
       seededFromExecution: source.id,
       ...(failedAttempt ? { failedAttemptJobId: failedAttempt } : {}),
+      // A node that run left unfinished (failed, held back, or itself handed
+      // on so) stays unfinished on this seed: a later continue-from-failed
+      // built on this execution still retries it (`leftUnfinishedBy`). One a
+      // router or an empty input skipped, or one with no state, does not.
+      ...(isUnfinished(state) ? { carriedUnfinished: true as const } : {}),
     })
   }
   return seeds

@@ -139,7 +139,8 @@ function stoppedAppRun(): Record<string, unknown> {
     cut: { status: "completed", nodeType: "apply-edl", jobId: "job-cut", startedAt: at, completedAt: at, output: { videoUrl: "https://r2/preview.mp4", quality: "proxy" } },
     cap: { status: "skipped", nodeType: "add-captions", completedAt: at },
   }
-  return { id: "exec-run", user_id: RUNNER, workflow_id: "wf-1", status: "completed", node_states: states }
+  // An app run's execution (lib/server-started-runs.ts: its stamps are the platform's).
+  return { id: "exec-run", user_id: RUNNER, workflow_id: "wf-1", status: "completed", trigger_type: "app_run", node_states: states }
 }
 
 function job(data: Partial<WorkflowExecutionJob>): Job<WorkflowExecutionJob> {
@@ -238,5 +239,35 @@ describe("the runner's edits of what a final replaced go once it ENDS (decided 2
   it("an app run's own execution is not a final: nothing to settle", async () => {
     await processWorkflowExecution(job({ executionId: "exec-final", inputOverrides: { cut: { quality: "final" } } }))
     expect(mocks.settleAppRunFinalEdits).not.toHaveBeenCalled()
+  })
+})
+
+describe("an app run's continuation names its chain's root (UGC Clip's runKey)", () => {
+  const ctxOf = () => (mocks.executeNode.mock.calls[0] as unknown[])[5] as { runRootExecutionId?: string } | undefined
+  const rootWrites = () => mocks.directUpdates.filter((u) => u.trigger_data !== undefined)
+
+  it("a Render final of the run's first execution: the root is that execution, written on the final", async () => {
+    await processWorkflowExecution(
+      job({ continueFromExecutionId: "exec-run", nodeIds: ["cut", "cap"], inputOverrides: { cut: { quality: "final" } } }),
+    )
+    expect(failed()).toBeUndefined()
+    expect(ctxOf()?.runRootExecutionId).toBe("exec-run")
+    expect(rootWrites()).toEqual([{ trigger_data: { runRoot: { executionId: "exec-run" } } }])
+  })
+
+  it("a final continuing an earlier final: still the chain's first run, read off the earlier final", async () => {
+    mocks.executions.set("exec-final-1", { ...stoppedAppRun(), id: "exec-final-1", trigger_data: { appRenderFinal: { appRunId: "run-of-exec-run", appVersionId: "app-1" }, runRoot: { executionId: "exec-run" } } })
+    mocks.appRuns.set("exec-final-1", "app-1")
+    await processWorkflowExecution(
+      job({ executionId: "exec-final-2", continueFromExecutionId: "exec-final-1", nodeIds: ["cut", "cap"], inputOverrides: { cut: { quality: "final" } } }),
+    )
+    expect(failed()).toBeUndefined()
+    expect(ctxOf()?.runRootExecutionId).toBe("exec-run")
+  })
+
+  it("an app run's own execution continues nothing: no root, nothing written", async () => {
+    await processWorkflowExecution(job({ executionId: "exec-final", inputOverrides: { cut: { quality: "final" } } }))
+    expect(ctxOf()?.runRootExecutionId).toBeUndefined()
+    expect(rootWrites()).toEqual([])
   })
 })

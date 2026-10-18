@@ -43,7 +43,6 @@
  "backend/src/lib/mcp/tools/models.ts",
  "backend/src/lib/meter-sync-llm.ts",
  "backend/src/lib/private-plugins/toolkit.ts",
- "backend/src/lib/use-case/continue-credits.ts",
  "backend/src/routes/after-effects-ai.ts",
  "backend/src/routes/ai-writer.ts",
  "backend/src/routes/api-tokens.ts",

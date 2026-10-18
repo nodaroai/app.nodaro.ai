@@ -965,6 +965,16 @@ const GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES = 309
 // docs/api-integration.md.
 const RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES = 776
 
+// RAISED 2026-10-18 by run_workflow's node list, and nothing else. No tool was
+// added, so the fixture does NOT move. run_workflow takes `node_ids` (one short
+// description), its description gains one sentence (with node_ids it continues a
+// completed run), and continue_from_execution_id's description names node_ids as
+// the other way to use it — so an agent can send the `next` a held continuation
+// names as is. Measured by this suite on the same tree with and without the
+// change: 446_194 total − 445_767 = 427 B; the 6 B of headroom the list had
+// before is carried across. The rules live in docs/api-integration.md.
+const RUN_WORKFLOW_NODE_IDS_BYTES = 427
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1077,7 +1087,8 @@ export const TOOL_WIRE_BUDGET = {
     SESSION_COVER_BYTES +
     VIDU_Q4_MODEL_ENUM_BYTES +
     GEMINI_4_ARGON_ID_BYTES +
-    RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES,
+    RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES +
+    RUN_WORKFLOW_NODE_IDS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

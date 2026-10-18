@@ -112,11 +112,16 @@ describe("resumeFailedRunHint and the run's lineage", () => {
   it("two held renders: both named, and the one run the route works out (render_final takes one)", async () => {
     db.row = { id: LATER, status: "completed", trigger_type: "mcp", trigger_data: { continueFromFailed: { from: RUN, root: RUN, all: false, previewRenders: ["cut1", "cut2"] } } }
     access.graph = { nodes: [{ id: "cut1", type: "apply-edl" }], edges: [] }
-    held.next = { continueFromExecutionId: LATER, nodeIds: ["cut1", "cut2", "mix"], inputOverrides: { cut1: { quality: "final" }, cut2: { quality: "final" } } }
+    const next = { continueFromExecutionId: LATER, nodeIds: ["cut1", "cut2", "mix"], inputOverrides: { cut1: { quality: "final" }, cut2: { quality: "final" } } }
+    held.next = next
     const hint = await resumeFailedRunHint(failedRun(), session)
     expect(held.calls[0]).toMatchObject({ at: LATER, renderNodeIds: ["cut1", "cut2"], reviewNodeIds: [], nodes: access.graph.nodes, userId: "u1" })
     expect(hint).toContain('the renders "cut1", "cut2"')
-    expect(hint).toContain(`POST /v1/workflows/wf-1/run with ${JSON.stringify(held.next)}`)
+    expect(hint).toContain(
+      `run_workflow({ workflow_id: "wf-1", continue_from_execution_id: "${LATER}", node_ids: ${JSON.stringify(next.nodeIds)}, ` +
+        `inputs: ${JSON.stringify(next.inputOverrides)} })`,
+    )
+    expect(hint).not.toContain("POST /v1/workflows/")
     expect(hint).not.toContain("render_final({")
     expect(hint).not.toContain("from_failed")
   })

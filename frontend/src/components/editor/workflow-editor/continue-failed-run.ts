@@ -3,9 +3,13 @@
  * continued from where it stopped (`POST /v1/workflows/:id/run` with
  * `continueFromExecutionId` + `continueMode: "from-failed"`). The server keeps
  * every node that run completed (handed on, never run or charged again) and
- * runs the rest of the workflow; it decides that set. The editor reads the
- * failed run's states only to price the confirm and to mark what is expected
- * to run.
+ * runs what is left of the nodes it considers: the nodes the first run of its
+ * chain was started on (`nodeScope`; every node when it was started on every
+ * node), plus what the run left failed or held back, and what those need
+ * upstream. The editor predicts that set by the server's own rule
+ * (`@nodaro/render-rules` `fromFailedConsidered` / `fromFailedClosedRunSet`),
+ * from the failed run's states and scope, to price the confirm, to mark what
+ * is expected to run, and to clear only what the server will refill.
  *
  * Every answer has its own next step:
  *  - 202: the run is followed like every other server run;
@@ -28,6 +32,7 @@
  * once the server has started it, and only on the nodes it runs: the expected
  * refusals start nothing and must leave the canvas as it was.
  */
+import { fromFailedClosedRunSet, fromFailedConsidered, type FromFailedNodeState } from "@nodaro/render-rules"
 import { CONTINUATION_SUBSET_REQUIRED, withRunOverrides } from "@nodaro/shared/nodes"
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -41,7 +46,7 @@ import {
   ContinuationSupersededError,
   type HeldFinalRun,
 } from "@/lib/run-workflow-errors"
-import type { WorkflowNode } from "@/types/nodes"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
 import { collapseExpandedClones } from "./execution-graph"
 import { rejectAllManualEdits } from "./execute-node"
@@ -82,7 +87,7 @@ interface ContinuationPlan {
   /** The node states of the run it continues (empty when it names its nodes). */
   readonly states: StatesOf
   /** The executable nodes it is expected to run, on the graph it runs (`nodes`, overrides applied), building on `states`. */
-  readonly expected: (nodes: WorkflowNode[], states: StatesOf) => WorkflowNode[]
+  readonly expected: (nodes: WorkflowNode[], edges: readonly WorkflowEdge[], states: StatesOf) => WorkflowNode[]
   readonly trigger: "continue-failed" | "finish-review"
   readonly startedToast: MessageKey
 }
@@ -91,17 +96,37 @@ interface ContinuationPlan {
 let continuing = false
 
 /** The node states of a run, as `getWorkflowExecution` returns them. */
-type StatesOf = Readonly<Record<string, { readonly status?: unknown } | undefined>>
+type StatesOf = Readonly<Record<string, FromFailedNodeState | undefined>>
 
 const completedIn = (states: StatesOf) => (id: string) => states[id]?.status === "completed"
 
+/** The run a continue-from-failed is asked of, as the prediction reads it. */
+export interface FromFailedRequest {
+  /** The nodes its chain's first run was started on (`nodeScope`); `null`: every node. */
+  readonly scope: readonly string[] | null
+  /** Its node states. */
+  readonly states: StatesOf
+}
+
 /**
- * The nodes a continue-from-failed of a run with `states` is expected to run:
- * every executable node it did not complete. The server's set is the
- * authority (it may build on a newer continuation and run less). Pure.
+ * The executable nodes a continue-from-failed of `request` is expected to run,
+ * built on `base` (the request's own states, or those of the newer
+ * continuation the server built on, `continuedFrom`): the server's rule — of
+ * the nodes the chain's first run was started on plus what either run left
+ * unfinished, every one `base` did not complete, with the incomplete nodes
+ * they need upstream. No scope: every executable node `base` did not
+ * complete. Pure.
  */
-export function expectedFromFailed(nodes: WorkflowNode[], states: StatesOf): WorkflowNode[] {
-  return liveExecutable(nodes).filter((n) => states[n.id]?.status !== "completed")
+export function expectedFromFailed(
+  nodes: WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+  request: FromFailedRequest,
+  base: StatesOf = request.states,
+): WorkflowNode[] {
+  const order = nodes.map((n) => n.id)
+  const considered = fromFailedConsidered(order, request.scope, [{ nodeStates: request.states }, { nodeStates: base }])
+  const runs = new Set(fromFailedClosedRunSet(order, considered, { nodes, edges }, { nodeStates: base }))
+  return liveExecutable(nodes).filter((n) => runs.has(n.id))
 }
 
 /**
@@ -147,12 +172,13 @@ export function handleContinueFailedRun(executionId: string, d: ContinueRunDeps)
       toast.error(tx("run.saveBeforeRunning"))
       return
     }
-    let states: StatesOf
+    let request: FromFailedRequest
     try {
       const exec = await getWorkflowExecution(executionId)
       // A toast from another workflow's run, or a canvas that moved on: nothing to do here.
       if (!alive() || exec.workflowId !== workflowId) return
-      states = (exec.nodeStates ?? {}) as StatesOf
+      // A server from before the scope was handed on sends none: every node, as it then ran.
+      request = { scope: exec.nodeScope ?? null, states: (exec.nodeStates ?? {}) as StatesOf }
     } catch (err) {
       if (!alive()) return
       toast.error(tx("run.failedToStartExecution"), { description: err instanceof Error ? err.message : tx("run.unknownError") })
@@ -161,8 +187,8 @@ export function handleContinueFailedRun(executionId: string, d: ContinueRunDeps)
     await runContinuation(d, workflowId, alive, {
       continueFrom: executionId,
       continueMode: "from-failed",
-      states,
-      expected: expectedFromFailed,
+      states: request.states,
+      expected: (nodes, edges, base) => expectedFromFailed(nodes, edges, request, base),
       trigger: "continue-failed",
       startedToast: "continueFailed.started",
     })
@@ -211,7 +237,7 @@ async function runContinuation(d: ContinueRunDeps, workflowId: string, alive: ()
     const st = useWorkflowStore.getState()
     const graph = plan.inputOverrides ? withRunOverrides(st.nodes, plan.inputOverrides) : st.nodes
     // What it runs, the stop rule's closure left out: the confirm names these, with their price.
-    const exec = previewRunnable(plan.expected(graph, plan.states), graph, st.edges)
+    const exec = previewRunnable(plan.expected(graph, st.edges, plan.states), graph, st.edges)
     const keptIds = liveExecutable(graph).map((n) => n.id).filter(completedIn(plan.states))
     let confirmed = null as UgcRunPriced | null
     const onPriced = (priced: UgcRunPriced) => { confirmed = priced }
@@ -225,7 +251,7 @@ async function runContinuation(d: ContinueRunDeps, workflowId: string, alive: ()
   const { nodes, edges } = collapseExpandedClones()
   // The stop rule's closure never runs (the server skips it too): never reset, flipped or counted.
   const runGraph = plan.inputOverrides ? withRunOverrides(nodes, plan.inputOverrides) : nodes
-  const runnable = (states: StatesOf) => new Set(previewRunnable(plan.expected(runGraph, states), runGraph, edges).map((n) => n.id))
+  const runnable = (states: StatesOf) => new Set(previewRunnable(plan.expected(runGraph, edges, states), runGraph, edges).map((n) => n.id))
   const expectedIds = runnable(plan.states)
   const markedIds = nodes.filter((n) => expectedIds.has(n.id)).map((n) => n.id)
 

@@ -14,6 +14,7 @@
  */
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { isPreviewHoldingType } from "@nodaro/shared/nodes"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
@@ -134,6 +135,16 @@ export async function workflowRenderFinalRoutes(app: FastifyInstance) {
         edges,
         runNodeIds: derived.nodeIds,
         overrides: continuationInputOverrides(source!, derived.inputOverrides),
+        // A use-case node the run would resume is priced as the run prices it,
+        // on the states the run seeds from (read only for such a node).
+        continuation: {
+          sentOverrides: derived.inputOverrides,
+          source: () =>
+            loadContinuationSource(b.data.continueFromExecutionId, {
+              withStates: true,
+              isRenderNode: (id) => isPreviewHoldingType(nodes.find((n) => n.id === id)?.type),
+            }),
+        },
         surface: {
           billingContext: await resolveBillingContext({
             userId: req.userId,

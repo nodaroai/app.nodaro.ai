@@ -115,7 +115,7 @@ describe("the Execute-workflow badge is the run's own estimate", () => {
     const src = readFileSync(join(__dirname, "../workflow-editor-main.tsx"), "utf8")
     expect(src).toContain("wholeRunExecutable(storeNodes)")
     expect(src).toContain("useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges)")
-    expect(src).toContain("ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf)")
+    expect(src).toContain("ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf, ugcAnswers.ticketAnswerOf)")
     expect(src).toContain("setUgcPriceState(figure ? runSetPriceState(figure, ugcAnswers) : undefined)")
     expect(src).toMatch(/ugcPriceState\s*\?\s*t\("node\.creditsSuffixEstimate"/)
     expect(src).toContain("title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}")

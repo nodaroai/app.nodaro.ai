@@ -429,14 +429,15 @@ describe("a plain subset continuation of the newest generation joins too (M2)", 
     mocks.executions.push(row(NEWER, { from: PRIOR, root: PRIOR, seededFrom: LATER, all: false }, { created_at: "2026-10-17T12:00:00.000Z" }))
     const res = await run({ nodeIds: ["hook"], continueFromExecutionId: LATER })
     expect(res.statusCode).toBe(202)
-    expect(mocks.inserts[0]!.trigger_data).toBeUndefined()
+    // Outside the lineage, it is a run of its own: it records only the nodes it was started on.
+    expect(mocks.inserts[0]!.trigger_data).toEqual({ nodeSelection: ["hook"] })
   })
 
   it("of a run of no lineage: not stamped, and no lineage read", async () => {
     mocks.loadSource.mockResolvedValue(source({ nodeStates: {} }))
     const res = await run({ nodeIds: ["hook"], continueFromExecutionId: PRIOR })
     expect(res.statusCode).toBe(202)
-    expect(mocks.inserts[0]!.trigger_data).toBeUndefined()
+    expect(mocks.inserts[0]!.trigger_data).toEqual({ nodeSelection: ["hook"] })
     expect(mocks.lineageCalls).toEqual([])
   })
 })

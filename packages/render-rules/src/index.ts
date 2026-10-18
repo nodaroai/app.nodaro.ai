@@ -301,6 +301,7 @@ export {
   type UgcRunPricedNode,
   type UgcVideoPlaces,
 } from "./ugc-estimate-input"
+export { ugcClipTicketQuote, ugcReusedClips, type UgcClipTicketQuote, type UgcReuseClaim } from "./ugc-clip-reuse"
 export { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS, isRunResultKey } from "./run-result-keys"
 export { ugcFinishNodeIds } from "./ugc-finish-nodes"
 export {
@@ -471,6 +472,16 @@ export {
 } from "./ugc-template-keep"
 
 export { ancestorsOf, descendantsOf, type WalkEdge } from "./graph-walk"
+// What a continue-from-failed considers and runs: the server's set, and the editor's prediction of it.
+export {
+  fromFailedClosedRunSet,
+  fromFailedConsidered,
+  fromFailedRunSet,
+  isUnfinished,
+  leftUnfinishedBy,
+  type FromFailedNodeState,
+  type FromFailedRun,
+} from "./continue-from-failed"
 export {
   USE_CASE_FEE_STATIC_CREDITS,
   USE_CASE_NODE_TYPES,

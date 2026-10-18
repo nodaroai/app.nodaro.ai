@@ -109,10 +109,21 @@ export function ugcJobIsThisRuns(
 const asString = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined)
 
 /**
+ * What a UGC Clip names its run by (`runKey`): nothing off an app run (a clip of the same ticket is
+ * handed back to any of the user's runs); on an app run, its continuation chain's root
+ * (`ctx.runRootExecutionId`: a continuation hands back the clips its earlier attempts finished),
+ * else the run's own execution — so two app runs never share a clip. Pure.
+ */
+export function ugcClipRunKey(ctx: Pick<OrchestratorContext, "isAppRun" | "executionId" | "runRootExecutionId">): string | undefined {
+  if (!ctx.isAppRun) return undefined
+  return ctx.runRootExecutionId ?? ctx.executionId
+}
+
+/**
  * The request body of UGC Script, UGC Clips or UGC Clip, from the node's data and its inputs by
  * handle (`inputs.ugc`). Throws the wires' sentence — a missing input, a wire from a newer
  * version — before any call. The user is always the run's (`ctx.userId`); a UGC Clip on an app
- * run names the run (`runKey`), so each app run renders its own clip.
+ * run names its run (`ugcClipRunKey`), so each app run renders its own clip.
  */
 export function buildUgcSyncBody(node: SimpleNode, inputs: ResolvedInputs, ctx: OrchestratorContext): Record<string, unknown> {
   const ugc = inputs.ugc ?? {}
@@ -133,7 +144,7 @@ export function buildUgcSyncBody(node: SimpleNode, inputs: ResolvedInputs, ctx: 
         return ugcClipBody({
           ticketWire: ugc.clip,
           rerender: data.rerender as Readonly<Record<string, number>> | undefined,
-          runKey: ctx.isAppRun ? ctx.executionId : undefined,
+          runKey: ugcClipRunKey(ctx),
         })
       default:
         throw new Error(`No UGC request body for node type ${node.type}`)

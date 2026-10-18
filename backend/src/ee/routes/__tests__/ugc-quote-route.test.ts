@@ -1,7 +1,9 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const h = vi.hoisted(() => ({ quote: vi.fn(), estimate: vi.fn(), hold: vi.fn(), services: {} as Record<string, unknown> }))
+const h = vi.hoisted(() => ({ quote: vi.fn(), estimate: vi.fn(), hold: vi.fn(), verify: vi.fn(), services: {} as Record<string, unknown> }))
+// The check of every claimed clip against the caller's own jobs (ugc-clip-reuse-check.test.ts covers it).
+vi.mock("../../lib/ugc-clip-reuse-check.js", () => ({ verifiedReusedClips: h.verify }))
 vi.mock("../../lib/ugc-estimate.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/ugc-estimate.js")>()),
   quoteUgcTickets: h.quote,
@@ -74,6 +76,37 @@ describe("POST /v1/ugc/quote", () => {
     expect((await post({ tickets: [ticket], hasCards: true, finishes: true })).statusCode).toBe(200)
     expect(h.quote).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], true, true)
     expect((await post({ tickets: [ticket], hasCards: true, finishes: "yes" })).statusCode).toBe(400)
+  })
+  it("reusedClips: each claim is checked against the caller's own jobs, and only the clips that hold are priced at nothing", async () => {
+    h.quote.mockResolvedValue(result)
+    h.verify.mockResolvedValue(new Set([2]))
+    const tickets = [ticket, { ...ticket, index: 1 }]
+    const claims = [
+      { clip: 1, jobId: "00000000-0000-4000-8000-000000000001", nonce: 0 },
+      { clip: 2, jobId: "00000000-0000-4000-8000-000000000002", nonce: 1 },
+    ]
+    expect((await post({ tickets, hasCards: false, reusedClips: claims })).statusCode).toBe(200)
+    expect(h.verify).toHaveBeenLastCalledWith("u1", tickets, claims)
+    // Clip 1 did not hold: it is priced in full.
+    expect(h.quote).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "u1" }), tickets, false, false, new Set([2]))
+  })
+  it("reusedClips that do not read: a 400, nothing checked or priced", async () => {
+    const tickets = [ticket, { ...ticket, index: 1 }]
+    const job = "00000000-0000-4000-8000-000000000001"
+    for (const bad of [
+      [2],
+      [{ clip: 3, jobId: job, nonce: 0 }],
+      [{ clip: 0, jobId: job, nonce: 0 }],
+      [{ clip: 1, jobId: "iter-run-0", nonce: 0 }],
+      [{ clip: 1, jobId: job, nonce: -1 }],
+      [{ clip: 1, jobId: job }],
+      [{ clip: 1, jobId: job, nonce: 0, extra: true }],
+      [{ clip: 1, jobId: job, nonce: 0 }, { clip: 1, jobId: job, nonce: 0 }],
+    ]) {
+      expect((await post({ tickets, hasCards: false, reusedClips: bad })).statusCode).toBe(400)
+    }
+    expect(h.verify).not.toHaveBeenCalled()
+    expect(h.quote).not.toHaveBeenCalled()
   })
   it("runEstimate (the hold check before a run renders the clips of a video cut from one recorded speech): the quote also answers runHold, for the same clips", async () => {
     h.quote.mockResolvedValue(result)

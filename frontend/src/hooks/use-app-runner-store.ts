@@ -10,6 +10,7 @@ import {
   getPublishedApp,
   runPublishedApp,
   renderAppRunFinal,
+  resumeAppRun,
   updateAppRunInputs,
   WorkflowAlreadyRunningError,
   getAppRuns,
@@ -147,6 +148,12 @@ interface AppRunnerState {
   seedRunEdits: (runId: string, edits: Record<string, unknown> | null | undefined) => void
   /** Merge `patch` into the run's edits and write the merged whole. */
   saveRunEdits: (runId: string, patch: Record<string, unknown>) => Promise<void>
+  /**
+   * Retry of a FAILED run: it continues where the run stopped — what it completed stays and is
+   * reused, only what it did not complete runs and is charged (`resumeAppRun`). Starting over is
+   * `run(runId)` after the slot is reset.
+   */
+  resumeRun: (runId: string, version?: number) => Promise<void>
   /** Render final of a run whose render made a Preview (a continuation outside the run). */
   renderFinal: (runId: string, renderNodeId: string) => Promise<void>
   /** Follow a final already asked for (a reload, or another tab). */
@@ -247,6 +254,31 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     const merged = mergeRunEdits(get().runEdits[runId], patch)
     set({ runEdits: { ...get().runEdits, [runId]: merged } })
     await updateAppRunInputs(slug, runId, undefined, undefined, undefined, merged)
+  },
+
+  resumeRun: async (runId, version) => {
+    const { slug } = get()
+    if (!slug) return
+    // The run's own states stay on show: what it completed is handed on, never made again.
+    const seeded = seedRuntime(get(), runId)
+    clearPoller(get().runtimes[runId]?.executionId)
+    set({ activeRunId: runId })
+    patchRuntime(set, get, runId, { ...seeded, status: "running", errorMessage: null, insufficientCredits: false })
+    let executionId: string
+    try {
+      executionId = (await resumeAppRun(slug, runId, version)).executionId
+    } catch (err) {
+      if (err instanceof WorkflowAlreadyRunningError) {
+        executionId = err.executionId
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to retry the run"
+        patchRuntime(set, get, runId, { status: "failed", errorMessage: message, insufficientCredits: err instanceof InsufficientCreditsError })
+        return
+      }
+    }
+    patchRuntime(set, get, runId, { executionId, status: "running" })
+    startPolling(set, get, runId)
+    computeProgressSegments(set, get, runId).catch(() => {})
   },
 
   renderFinal: async (runId, renderNodeId) => {

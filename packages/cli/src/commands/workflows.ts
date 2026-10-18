@@ -1,10 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
 import type { RunWorkflowParams } from "@nodaro/sdk/workflows"
+import { ContinuationPreviewPendingError } from "@nodaro/sdk/errors"
 import type { WorkflowExport } from "@nodaro/shared/workflow"
+import { PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import { buildClient, handleError } from "../client.js"
-import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
-import { watchUntilTerminal } from "../util.js"
+import { detail, emit, success, table, dim, warn, type OutputOpts } from "../output.js"
+import { collectVariadic, parseOverridePairs, watchUntilTerminal } from "../util.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -28,6 +30,76 @@ function readJsonObject(path: string, flag: string): Record<string, unknown> {
     throw new Error(`${flag} ${path} must contain a JSON object at the top level`)
   }
   return parsed as Record<string, unknown>
+}
+
+/**
+ * A word as one POSIX shell argument: as is when it is plain, else
+ * single-quoted, each `'` closed, escaped and reopened. A word that starts
+ * with `=` is quoted too: zsh expands `=cmd` to the command's path.
+ */
+export function shellQuote(word: string): string {
+  if (!word.startsWith("=") && /^[A-Za-z0-9_.:/=@%+-]+$/.test(word)) return word
+  return `'${word.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * The `next` a held continuation names (`continuation_preview_pending`), read
+ * from `--next`: inline JSON, a file, or `-` for stdin. Sent exactly as read —
+ * every field it carries — once it has the run's shape: the execution it
+ * continues and the nodes it runs (`inputOverrides`, when present, an object).
+ */
+function readNextBody(value: string): Record<string, unknown> {
+  const raw = value === "-" ? readFileSync(0, "utf8") : value.trim().startsWith("{") ? value : null
+  let parsed: unknown
+  if (raw === null) {
+    parsed = readJsonObject(value, "--next")
+  } else {
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      throw new Error(`--next is not valid JSON: ${(err as Error).message}`)
+    }
+  }
+  const next = parsed as Record<string, unknown> | null
+  const shape =
+    "--next takes the `next` of a continuation_preview_pending answer: { continueFromExecutionId, nodeIds, inputOverrides }"
+  if (typeof next !== "object" || next === null || Array.isArray(next)) throw new Error(shape)
+  if (typeof next.continueFromExecutionId !== "string" || next.continueFromExecutionId.length === 0) throw new Error(shape)
+  if (!Array.isArray(next.nodeIds) || next.nodeIds.length === 0 || !next.nodeIds.every((id) => typeof id === "string")) {
+    throw new Error(shape)
+  }
+  if (next.inputOverrides !== undefined && (typeof next.inputOverrides !== "object" || next.inputOverrides === null || Array.isArray(next.inputOverrides))) {
+    throw new Error(shape)
+  }
+  // A `next` is a run of named nodes: one that names a mode is another run.
+  for (const key of ["continueMode", "renderFinal"] as const) {
+    if (next[key] !== undefined && next[key] !== null) {
+      throw new Error(`--next is the run a held continuation names, which never carries ${key}: use --from-failed or workflows render-final for that run`)
+    }
+  }
+  return next
+}
+
+/**
+ * What a `workflows run` refused with `continuation_preview_pending` prints
+ * next: the command that finishes the held continuation, exactly. One held
+ * render and nothing else → its `render-final`; otherwise the run the server
+ * named in `next`, sent as is with `--next`.
+ */
+export function previewPendingCommand(workflowId: string, err: ContinuationPreviewPendingError): string | null {
+  if (err.renderNodeIds.length === 1 && err.reviewNodeIds.length === 0) {
+    return `nodaro workflows render-final ${shellQuote(workflowId)} --from ${shellQuote(err.executionId)} --render ${shellQuote(err.renderNodeIds[0]!)}`
+  }
+  if (!err.next) return null
+  return `nodaro workflows run ${shellQuote(workflowId)} --next ${shellQuote(JSON.stringify(err.next))}`
+}
+
+/** The render a `render-final` without `--render` finalizes: the workflow's only render, else a refusal naming them. */
+function soleRenderOf(nodes: ReadonlyArray<{ id: string; type?: string }> | undefined): string {
+  const renders = (nodes ?? []).filter((n) => PREVIEW_RENDER_NODE_TYPES.has(n.type ?? ""))
+  if (renders.length === 1) return renders[0]!.id
+  if (renders.length === 0) throw new Error("this workflow has no render node to finalize")
+  throw new Error(`this workflow has ${renders.length} renders — name one with --render: ${renders.map((n) => n.id).join(", ")}`)
 }
 
 export function workflowsCommand(): Command {
@@ -213,7 +285,16 @@ export function workflowsCommand(): Command {
     )
     .option(
       "--from-failed",
-      "with --continue-from: resume that FAILED run from where it stopped — runs only what it did not complete (of --node, default every node)",
+      "with --continue-from: resume that FAILED run from where it stopped — runs only what it did not complete (of --node; default: the nodes its chain was first started on, every node for a full run, plus what it left failed)",
+    )
+    .option(
+      "--override <pairs...>",
+      "per-node override for this run only, nodeId.field=value (repeat); values that parse as JSON are sent as JSON, e.g. --override cut.quality=final",
+      collectVariadic,
+    )
+    .option(
+      "--next <json|file|->",
+      "send the `next` a continuation_preview_pending answer names, exactly as given (inline JSON, a file, or - for stdin); not combinable with --node, --continue-from, --from-failed or --override",
     )
     .option(
       "--idempotency-key <key>",
@@ -222,22 +303,38 @@ export function workflowsCommand(): Command {
     .action(
       async (
         id: string,
-        opts: GlobalOpts & { watch?: boolean; node?: string[]; continueFrom?: string; fromFailed?: boolean; idempotencyKey?: string },
+        opts: GlobalOpts & {
+          watch?: boolean
+          node?: string[]
+          continueFrom?: string
+          fromFailed?: boolean
+          override?: string[]
+          next?: string
+          idempotencyKey?: string
+        },
       ) => {
       try {
         if (opts.fromFailed && !opts.continueFrom) {
           throw new Error("--from-failed needs --continue-from <executionId> (the run that failed)")
         }
+        // `next` is a whole run: mixing in another flag would send a different one.
+        if (opts.next !== undefined && (opts.node || opts.continueFrom || opts.fromFailed || opts.override)) {
+          throw new Error("--next is the whole run: do not combine it with --node, --continue-from, --from-failed or --override")
+        }
         // The server ignores a shorter key, so a retry would start a second run.
         if (opts.idempotencyKey !== undefined && opts.idempotencyKey.trim().length < 8) {
           throw new Error("--idempotency-key must be at least 8 characters (the server ignores a shorter one)")
         }
+        const params: RunWorkflowParams =
+          opts.next !== undefined
+            ? (readNextBody(opts.next) as unknown as RunWorkflowParams)
+            : {
+                ...(opts.node ? { nodeIds: opts.node } : {}),
+                ...(opts.override ? { inputOverrides: parseOverridePairs(opts.override) } : {}),
+                ...(opts.continueFrom ? { continueFromExecutionId: opts.continueFrom } : {}),
+                ...(opts.fromFailed ? { continueMode: "from-failed" as const } : {}),
+              }
         const client = buildClient(opts.profile)
-        const params: RunWorkflowParams = {
-          ...(opts.node ? { nodeIds: opts.node } : {}),
-          ...(opts.continueFrom ? { continueFromExecutionId: opts.continueFrom } : {}),
-          ...(opts.fromFailed ? { continueMode: "from-failed" as const } : {}),
-        }
         const result = opts.idempotencyKey
           ? await client.workflows.run(id, params, { idempotencyKey: opts.idempotencyKey })
           : await client.workflows.run(id, params)
@@ -256,10 +353,65 @@ export function workflowsCommand(): Command {
         }
         await watchExecution(client, result.executionId, opts)
       } catch (err) {
+        // A held continuation: print the command that finishes it, exactly (stderr, so --json stdout stays clean).
+        if (err instanceof ContinuationPreviewPendingError) {
+          const next = previewPendingCommand(id, err)
+          if (next) {
+            warn("once the preview is reviewed, finish it first, then continue again:")
+            warn(`  ${next}`)
+          }
+        }
         handleError(err)
       }
       },
     )
+
+  cmd
+    .command("render-final <workflowId>")
+    .description(
+      "render the final of a run that stopped at a Preview render: the render at Final and every node after it, continuing that run (the server works out which nodes run)",
+    )
+    .requiredOption("--from <executionId>", "the run that stopped at the preview (your own completed run of this workflow)")
+    .option("--render <nodeId>", "the render node to finalize (default: the workflow's only render)")
+    .option("--estimate", "quote it only: the nodes it runs and its estimated credits; nothing is created or charged")
+    .option("--watch", "poll execution status until completion")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (workflowId: string, opts: GlobalOpts & { from: string; render?: string; estimate?: boolean; watch?: boolean }) => {
+      try {
+        const client = buildClient(opts.profile)
+        const renderNodeId = opts.render ?? soleRenderOf((await client.workflows.get(workflowId)).data.nodes)
+        const params = { renderNodeId, continueFromExecutionId: opts.from }
+        if (opts.estimate) {
+          const { data: quote } = await client.workflows.estimateRenderFinal(workflowId, params)
+          if (opts.json) {
+            emit(quote, opts)
+            return
+          }
+          success(`Render final of ${renderNodeId} runs ${quote.nodeIds.join(", ")}`)
+          if (quote.estimatedCredits !== null) {
+            dim(
+              `estimated ${quote.estimatedCredits} credits` +
+                (quote.sufficient === false ? ` — not covered${quote.available !== null ? ` (${quote.available} available)` : ""}` : ""),
+            )
+          }
+          return
+        }
+        const result = await client.workflows.renderFinal(workflowId, params)
+        if (opts.json && !opts.watch) {
+          emit(result, opts)
+          return
+        }
+        success(`execution ${result.executionId} (${result.status}) — Render final of ${renderNodeId}`)
+        if (!opts.watch) {
+          dim(`follow: nodaro executions get ${result.executionId} --watch`)
+          return
+        }
+        await watchExecution(client, result.executionId, opts)
+      } catch (err) {
+        handleError(err)
+      }
+    })
 
   cmd
     .command("share <id>")

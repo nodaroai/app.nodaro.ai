@@ -653,6 +653,10 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           execution_id: execution.id,
           status: "running",
           input_values: inputOverrides ?? undefined,
+          // The version this execution runs: the run names the version its
+          // current execution ran, so what continues it (a Retry, a Render
+          // final) reads the same snapshot (run-continuation.ts appVersionId).
+          app_id: appRow.id,
         })
         .eq("id", runId)
         .eq("runner_id", req.userId)

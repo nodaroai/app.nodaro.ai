@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
-import { collectVariadic } from "../util.js"
+import { collectVariadic, parseOverridePairs } from "../util.js"
 import { watchExecution } from "./workflows.js"
 import { pickFromList, isInteractive } from "../interactive.js"
 
@@ -45,23 +45,7 @@ function rejectPositionalInputs(extras: string[], slug: string): void {
   process.exit(1)
 }
 
-/** `nodeId.field=value` pairs → nested inputOverrides. Values that parse as JSON are used as JSON. */
-export function parseOverridePairs(pairs: string[] | undefined): Record<string, Record<string, unknown>> | undefined {
-  if (!pairs?.length) return undefined
-  const out: Record<string, Record<string, unknown>> = {}
-  for (const pair of pairs) {
-    const eq = pair.indexOf("=")
-    const dot = pair.indexOf(".")
-    if (eq === -1 || dot === -1 || dot > eq) throw new Error(`--override expects nodeId.field=value, got "${pair}"`)
-    const nodeId = pair.slice(0, dot)
-    const field = pair.slice(dot + 1, eq)
-    const raw = pair.slice(eq + 1)
-    let value: unknown = raw
-    try { value = JSON.parse(raw) } catch { /* plain string */ }
-    out[nodeId] = { ...(out[nodeId] ?? {}), [field]: value }
-  }
-  return out
-}
+export { parseOverridePairs }
 
 export function appsCommand(): Command {
   const cmd = new Command("apps").description("browse and run published apps (workflows wrapped in a curated UI)")

@@ -85,3 +85,59 @@ export function withChargedCredits(reason: unknown, credits: number): unknown {
   if (reason.stack !== undefined) copy.stack = reason.stack
   return copy
 }
+
+/**
+ * What an ALL-OR-NOTHING fan-out (`FAN_OUT_ALL_OR_NOTHING_TYPES`, UGC Clip) still finished when one
+ * of its items failed and the node failed as a whole: how many items it had, how many finished, and
+ * the finished items' jobs (in settle order, never by position) and, beside each, the row it ran
+ * (from 0: a UGC Clip's row is its clip). Rides the failed node state as `iterationTotal` /
+ * `iterationCompleted` / `jobIds` / `jobRows`, so a reader can see what was made and paid for —
+ * never `output.listResults`: a failed node hands no list on, so no reader takes a partial list
+ * for the node's output.
+ */
+export interface FanOutProgress {
+  readonly iterationTotal: number
+  readonly iterationCompleted: number
+  readonly jobIds: readonly string[]
+  /** The row each of `jobIds` ran (from 0), index-aligned with it. */
+  readonly jobRows: readonly number[]
+}
+
+/**
+ * A rejection that carries what its fan-out finished (`fanOutProgress`): a COPY, keeping its message
+ * and every field the orchestrator reads off it (`errorCode`, `errorHint`, `output`, `creditsUsed`);
+ * the original is left as it was. A deploy drain goes on as it came (the run is requeued).
+ */
+export function withFanOutProgress(reason: unknown, progress: FanOutProgress): unknown {
+  if (reason instanceof DrainAbortError) return reason
+  const fanOutProgress: FanOutProgress = {
+    iterationTotal: progress.iterationTotal,
+    iterationCompleted: progress.iterationCompleted,
+    jobIds: [...progress.jobIds],
+    jobRows: [...progress.jobRows],
+  }
+  if (!(reason instanceof Error)) return Object.assign(new Error(String(reason)), { fanOutProgress })
+  const copy = Object.assign(new Error(reason.message), reason, { fanOutProgress })
+  copy.name = reason.name
+  if (reason.stack !== undefined) copy.stack = reason.stack
+  return copy
+}
+
+/** What a failed fan-out finished, read off its rejection (`withFanOutProgress`); undefined when it carries none. */
+export function fanOutProgressOfRejection(reason: unknown): FanOutProgress | undefined {
+  const raw = reason && typeof reason === "object" ? (reason as { fanOutProgress?: unknown }).fanOutProgress : undefined
+  if (!raw || typeof raw !== "object") return undefined
+  const { iterationTotal, iterationCompleted, jobIds, jobRows } = raw as Record<string, unknown>
+  const count = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0
+  if (!count(iterationTotal) || !count(iterationCompleted) || !Array.isArray(jobIds)) return undefined
+  // Each job with its row; a row that cannot be read leaves every row out (the jobs still count).
+  const rows = Array.isArray(jobRows) && jobRows.length === jobIds.length && jobRows.every(count) ? (jobRows as number[]) : undefined
+  const kept = jobIds.flatMap((id, i) => (typeof id === "string" && id.length > 0 ? [{ id, row: rows?.[i] }] : []))
+  const keptRows = kept.map((k) => k.row).filter(count)
+  return {
+    iterationTotal,
+    iterationCompleted,
+    jobIds: kept.map((k) => k.id),
+    jobRows: keptRows.length === kept.length ? keptRows : [],
+  }
+}

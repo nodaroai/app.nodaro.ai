@@ -16,24 +16,22 @@
  * `__tests__/server-stamp-readers-totality.test.ts`, every stamp read) fail a new site that does
  * neither.
  */
-import { APP_RUN_STAMP_KEY, appRunStampOf } from "./app-run-stamp.js"
+import { APP_RUN_STAMP_KEY, appRunResumedFromOf, appRunStampOf } from "./app-run-stamp.js"
 import { APP_RENDER_FINAL_STAMP_KEY, appRenderFinalStampOf, type AppRenderFinalStamp } from "./app-run-final-column.js"
 import {
   CONTINUE_FROM_FAILED_STAMP_KEY,
   continueFromFailedStampOf,
   type ContinueFromFailedStamp,
 } from "./continue-from-failed-lineage.js"
+import { RUN_ROOT_STAMP_KEY, runRootOf } from "./continuation-run-root.js"
 import { serverTriggerData } from "./server-started-runs.js"
 
-/**
- * Every `trigger_data` key only the platform writes. `runRoot` is a continuation chain's root,
- * written by the continuation lane (it is reserved here ahead of its module).
- */
+/** Every `trigger_data` key only the platform writes. */
 export const RESERVED_TRIGGER_DATA_KEYS: readonly string[] = [
   APP_RUN_STAMP_KEY,
   APP_RENDER_FINAL_STAMP_KEY,
   CONTINUE_FROM_FAILED_STAMP_KEY,
-  "runRoot",
+  RUN_ROOT_STAMP_KEY,
 ]
 
 /** Caller-controlled `trigger_data` without any reserved stamp key (a copy; the input is left as it is). */
@@ -47,6 +45,10 @@ export interface ServerStamps {
   /** The app run it was started for (`appRun.appRunId`). */
   readonly appRun: string | null
   readonly appRenderFinal: AppRenderFinalStamp | null
+  /** The root of the continuation chain it belongs to (`runRoot.executionId`, lib/continuation-run-root.ts). */
+  readonly runRoot: string | null
+  /** The execution an app run's Retry continued (`appRun.resumedFrom`, lib/app-run-stamp.ts). */
+  readonly resumedFrom: string | null
 }
 
 /**
@@ -59,5 +61,7 @@ export function serverStamps(row: { readonly trigger_type?: unknown; readonly tr
     continueFromFailed: continueFromFailedStampOf(serverTriggerData(row)),
     appRun: appRunStampOf(serverTriggerData(row)),
     appRenderFinal: appRenderFinalStampOf(serverTriggerData(row)),
+    runRoot: runRootOf(serverTriggerData(row)),
+    resumedFrom: appRunResumedFromOf(serverTriggerData(row)),
   }
 }

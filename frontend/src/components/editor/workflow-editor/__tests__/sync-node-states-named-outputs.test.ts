@@ -527,3 +527,31 @@ describe("syncNodeStatesToStore — Video Audit's report", () => {
     expect(getJobStatusLean).toHaveBeenCalledWith("job-audit-live")
   })
 })
+
+describe("syncNodeStatesToStore — a UGC Clip that failed with some clips finished", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("paints it failed and writes no list: its finished clips' jobs are never read as its output", () => {
+    const earlier = [{ url: "https://cdn.test/old-clip.mp4", jobId: "job-old", timestamp: "2026-10-01T10:00:00.000Z" }]
+    mockNodes = [{ id: "clip", type: "ugc-clip", data: { executionStatus: "running", generatedResults: earlier, __listResults: ["https://cdn.test/old-clip.mp4"] } }]
+    streamBackendExecution("exec-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      clip: { status: "failed", nodeType: "ugc-clip", error: "Clip 2 failed", iterationTotal: 3, iterationCompleted: 2, jobIds: ["job-0", "job-2"], creditsUsed: 800 },
+    })
+    expect(byId.clip.executionStatus).toBe("failed")
+    // What the canvas held stays as it was: no list, no result from the failed run's clips.
+    expect(byId.clip.__listResults).toEqual(["https://cdn.test/old-clip.mp4"])
+    expect(byId.clip.generatedResults).toEqual(earlier)
+    expect(byId.clip).not.toHaveProperty("__listTotal")
+  })
+})

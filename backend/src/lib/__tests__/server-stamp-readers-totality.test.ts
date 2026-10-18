@@ -12,7 +12,7 @@
  * to a webhook as fact. So:
  *
  * 1. a stamp parser (`continueFromFailedStampOf`, `appRunStampOf`,
- *    `appRenderFinalStampOf`, `runRootOf`) is only ever called on
+ *    `appRenderFinalStampOf`, `runRootOf`, `appRunResumedFromOf`) is only ever called on
  *    `serverTriggerData(row)` — `serverStamps(row)` (lib/trigger-data-stamps.ts)
  *    does exactly that;
  * 2. a query that FINDS rows by a stamp (a `trigger_data->…` path) is narrowed
@@ -27,8 +27,10 @@ import { describe, expect, it } from "vitest"
 import ts from "typescript"
 import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, parseText, walk } from "./source-scan.js"
 
-const PARSERS = new Set(["continueFromFailedStampOf", "appRunStampOf", "appRenderFinalStampOf", "runRootOf"])
-const STAMP_KEYS = new Set(["continueFromFailed", "appRun", "appRenderFinal", "runRoot"])
+// A run's node selection (`nodeSelection`, the scope a continue-from-failed of it considers) is
+// read as fact the same way: only off a run a stamp-writing lane started.
+const PARSERS = new Set(["continueFromFailedStampOf", "appRunStampOf", "appRenderFinalStampOf", "runRootOf", "appRunResumedFromOf", "nodeSelectionOf"])
+const STAMP_KEYS = new Set(["continueFromFailed", "appRun", "appRenderFinal", "runRoot", "nodeSelection"])
 /** The modules that define a stamp: their parser reads the key off the value it is handed. */
 const STAMP_MODULES = new Set([
   "lib/continue-from-failed-lineage.ts",
@@ -132,9 +134,11 @@ describe("every stamp reader goes through lib/server-started-runs.ts", { timeout
       const e = (row.trigger_data as any).continueFromFailed
       const f = job.data.triggerData?.appRun
       const g = triggerData["runRoot"]
+      const h = runRootOf(current)
+      const i = appRunResumedFromOf(execution.trigger_data)
     `,
     )
-    expect(findings(bad, "x.ts")).toHaveLength(7)
+    expect(findings(bad, "x.ts")).toHaveLength(9)
     const good = parseText(
       "y.ts",
       `

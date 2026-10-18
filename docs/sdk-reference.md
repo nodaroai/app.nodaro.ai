@@ -799,13 +799,24 @@ A refused continuation throws before any execution exists: `NotFoundError`
 (`continuation_not_found`), or a `NodaroError` whose `code` is
 `continuation_subset_required`, `continuation_workflow_mismatch`,
 `continuation_version_mismatch` or `continuation_not_completed`
-([details](./api-integration.md#continuing-a-run)).
+([details](./api-integration.md#continuing-a-run)). A continuation whose payer
+cannot cover the nodes it runs — with or without `continueMode` — throws
+`InsufficientCreditsError` (`402`) before any execution exists, checked as a
+`renderFinal` is.
 
 `continueMode: "from-failed"` continues a run that FAILED from where it stopped
 (`continueFromExecutionId` is your own failed run of the workflow): `nodeIds` is
-optional (every node when left out), and the run executes only the nodes that
-run did not complete — what it completed is handed on, never run or charged
-again. That is per node: a node that failed runs again in full, every list item
+optional — left out, the nodes the run was started on (a run started on named
+`nodeIds` is continued on those, a run of every node on every node, and a
+continuation of a continuation keeps those of the first run of its chain),
+plus every node left failed or held back (by the run, by a newer continuation it
+is built on, or by an earlier run of its chain). `nodeIds` you send replace
+those nodes, and the run is built on the chain's newest continuation when it
+failed or is done (one held at a Preview review still throws
+`continuation_preview_pending`, below). `client.executions.get(id)` names the nodes the chain's first run was
+started on in `nodeScope` (`null`: every node). The run executes only the nodes
+that run did not complete — what it completed is handed on, never run or
+charged again. That is per node: a node that failed runs again in full, every list item
 included (a few nodes reuse an identical item they already made). Not combinable
 with `renderFinal`.
 
@@ -828,7 +839,8 @@ exported from `@nodaro/sdk/errors`). It names that continuation in
 `reviewNodeIds`. `next` (a `HeldFinalRun`: `continueFromExecutionId`,
 `nodeIds`, `inputOverrides`) is the run that finishes them: send it first with
 `client.workflows.run(workflowId, error.next)`, then continue. For a single held
-render, `next` is that continuation's `renderFinal`. When the newest later continuation completed only part of
+render, `next` is that continuation's `renderFinal`: the same run, with the same
+credit check before it starts. When the newest later continuation completed only part of
 what was left otherwise (a narrower `nodeIds`), the run is built on it instead:
 seeded from that continuation, running only what it left, and the result's
 `continuedFrom` names it (the run you sent otherwise). A Render final, or a run

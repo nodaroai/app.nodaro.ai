@@ -24,9 +24,9 @@
  * again (the route answers `continuation_preview_pending`): the hint then
  * names the run that finishes it instead (`previewPendingHint`) — that run's
  * Render final (`render_final`) for a single held render, otherwise the one
- * run the route works out (lib/continuation-held-final.ts), which
- * `run_workflow` cannot send. A failed lookup reads as no hint: the read it
- * rides on never fails for it.
+ * run the route works out (lib/continuation-held-final.ts), as the
+ * `run_workflow` call that sends it (`node_ids` and `inputs`). A failed lookup
+ * reads as no hint: the read it rides on never fails for it.
  */
 import type { McpSession } from "../session.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
@@ -42,7 +42,8 @@ import { heldFinalRun, type HeldFinalRun } from "../../continuation-held-final.j
  * one render, and with two Previews feeding the same node either one alone is
  * held again; a use-case node has no `render_final`, and its own continue
  * (`continue_use_case`) renders the episode without the nodes after it.
- * `run_workflow` sends no node list, so that run goes over the REST API.
+ * That run is named as the `run_workflow` call that sends it as is
+ * (`runWorkflowCallFor`).
  */
 export function previewPendingHint(
   workflowId: string,
@@ -65,9 +66,7 @@ export function previewPendingHint(
     ...(reviewNodeIds.length > 0 ? [`the review of ${quoted(reviewNodeIds)}`] : []),
   ].join(" and ")
   const head = `A later continuation of this run (${at}) stopped at its Preview review of ${held}: continuing would stop there again. `
-  const why =
-    `render_final takes one render (and two Previews feeding one node cannot be finished one at a time), a use-case node has none, ` +
-    `and run_workflow sends no node list.`
+  const why = `render_final takes one render (and two Previews feeding one node cannot be finished one at a time), and a use-case node has none.`
   // A held use-case node: that run calls its continue route at Final; the
   // agent's own continue_use_case first would leave the chain held.
   const alone =
@@ -78,9 +77,21 @@ export function previewPendingHint(
   if (!next) return head + `Once the user has reviewed it, it is finished by one run continuing ${at} — ${why}${alone}`
   return (
     head +
-    `Once the user has reviewed it, finish it in one run continuing that execution: POST /v1/workflows/${workflowId}/run with ` +
-    `${JSON.stringify(next)} (each render at Final, each use-case node continuing the run that made its Preview, then every node after them; ` +
+    `Once the user has reviewed it, finish it in one run continuing that execution: ${runWorkflowCallFor(workflowId, next)} ` +
+    `(each render at Final, each use-case node continuing the run that made its Preview, then every node after them; ` +
     `${why})${alone} A continuation after that builds on it.`
+  )
+}
+
+/**
+ * The `run_workflow` call that sends `next` exactly as the run route named it:
+ * its execution, its nodes and its overrides (`inputs` takes the nested
+ * `{ nodeId: { field: value } }` map as is), with no `from_failed`.
+ */
+export function runWorkflowCallFor(workflowId: string, next: HeldFinalRun): string {
+  return (
+    `run_workflow({ workflow_id: ${JSON.stringify(workflowId)}, continue_from_execution_id: ${JSON.stringify(next.continueFromExecutionId)}, ` +
+    `node_ids: ${JSON.stringify(next.nodeIds)}, inputs: ${JSON.stringify(next.inputOverrides)} })`
   )
 }
 

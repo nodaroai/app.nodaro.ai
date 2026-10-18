@@ -64,6 +64,15 @@ export interface WorkflowExecution {
   triggerType: ExecutionTriggerType
   triggerData?: unknown
   nodeStates: Record<string, NodeExecutionState>
+  /**
+   * What a continue-from-failed of this run (`continueMode: "from-failed"`)
+   * sent no `nodeIds` considers, besides every node the run left failed or
+   * held back: the nodes the first run of its chain was started on (`nodeIds`
+   * on `/run` — Run selected, an API subset, a Render final). `null`: every
+   * node — a run of every node, one started before the nodes were recorded,
+   * or one a trigger started. Absent on an older server (= every node).
+   */
+  nodeScope?: string[] | null
   totalNodes: number
   completedNodes: number
   failedNodes: number

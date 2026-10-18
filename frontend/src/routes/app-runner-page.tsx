@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ORIGINAL_SLOT_ID } from "@/components/app-runner"
+import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ResumeRunDialog, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 import { updateAppRunInputs } from "@/lib/api"
 import { AppRenderReviewProvider } from "@/components/render/app-render-review"
 import { resolveViewMode } from "@/components/presentation/resolve-view-mode"
@@ -169,6 +169,16 @@ export default function AppRunnerPage() {
     </Dialog>
   )
 
+  // Retry of a failed run: always confirmed, naming the steps that run again and their price.
+  const resumeDialog = (
+    <ResumeRunDialog
+      state={runSlots.resumeDialog}
+      onConfirm={() => void runSlots.confirmResume()}
+      onStartOver={runSlots.handleStartOver}
+      onCancel={runSlots.closeResumeDialog}
+    />
+  )
+
   // Render final in the app runner: the run on show's render cards carry it,
   // and the cards of the nodes that waited for it say so.
   const reviewRunId = runSlots.activeSlotId && runSlots.activeSlotId !== ORIGINAL_SLOT_ID ? runSlots.activeSlotId : null
@@ -195,6 +205,7 @@ export default function AppRunnerPage() {
           />,
         )}
         {deleteDialog}
+        {resumeDialog}
       </>
     )
   }
@@ -297,6 +308,7 @@ export default function AppRunnerPage() {
         />,
       )}
       {deleteDialog}
+      {resumeDialog}
     </AppRunnerLayout>
   )
 }

@@ -260,7 +260,12 @@ export function ugcJobResultPatch(
   type: string | null | undefined,
   outputData: Out | null | undefined,
   job: { readonly id: string; readonly endedAt: string },
-  opts: { readonly priorResults?: unknown; readonly batchRow?: boolean } = {},
+  opts: {
+    readonly priorResults?: unknown
+    readonly batchRow?: boolean
+    /** UGC Clip: the Re-render count its job was sent (`nonce`), recorded on the take (`ugcClipNonce`). */
+    readonly clipNonce?: number
+  } = {},
 ): Record<string, unknown> | null {
   const output = ugcJobRunOutput(type, outputData ?? {})
   if (!output) return null
@@ -277,7 +282,16 @@ export function ugcJobResultPatch(
   return {
     executionStatus: "completed",
     generatedVideoUrl: videoUrl,
-    generatedResults: [{ url: videoUrl, timestamp: job.endedAt, jobId: job.id, ...(thumbnailUrl ? { thumbnailUrl } : {}) }, ...prior],
+    generatedResults: [
+      {
+        url: videoUrl,
+        timestamp: job.endedAt,
+        jobId: job.id,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
+        ...(type === "ugc-clip" && typeof opts.clipNonce === "number" ? { ugcClipNonce: opts.clipNonce } : {}),
+      },
+      ...prior,
+    ],
     activeResultIndex: 0,
     ...clipFields,
     // A batch row is one clip of the batch: the batch's notes and Re-render marks stay the run's.

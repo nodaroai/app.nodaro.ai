@@ -106,14 +106,16 @@ function runOf(row: WrapperRow): string | null {
 
 /**
  * May the failed attempt `jobId` be resumed: did it run with what the node
- * would run with now (failed-attempt.ts)? `undefined` when its wrapper or its
+ * would run with now (failed-attempt.ts)? Also what a continued run's
+ * up-front credit check asks of the node (lib/use-case/resume-credits.ts), so
+ * the run is priced on the decision it will make. `undefined` when its wrapper or its
  * run could not be read (asked again — a read error is never a fresh run,
  * which would pay again for steps already paid for). `false` for a wrapper
  * that is gone or whose run never started (nothing to resume), a run whose
  * graph is gone, a node with no recording wired, or any input or setting that
  * differs.
  */
-async function attemptStillApplies(
+export async function attemptStillApplies(
   jobId: string,
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,

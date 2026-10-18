@@ -233,6 +233,8 @@ export interface NodeExecutionState {
   jobId?: string
   /** All job IDs from fan-out iterations (when node runs multiple times via list/loop). */
   jobIds?: string[]
+  /** A failed all-or-nothing fan-out (UGC Clip): the row each of `jobIds` ran (from 0), index-aligned with it. */
+  jobRows?: number[]
   usageLogId?: string
   creditsUsed?: number
   output?: NodeOutput
@@ -292,6 +294,13 @@ export interface NodeExecutionState {
    *  Never `jobId`: this execution ran no job for the node, and the state hands
    *  on no output (it stays `skipped`). Not on the wire contract. */
   failedAttemptJobId?: string
+  /** A seed (`seededFromExecution`, status `skipped`) of a node the earlier
+   *  execution left UNFINISHED — failed there, still `pending`/`running` when
+   *  it stopped, or itself seeded so — never one a router or an empty input
+   *  skipped. Carried seed to seed, so a continue-from-failed built on this
+   *  execution still counts the node as left (`leftUnfinishedBy`) and retries
+   *  it, however many narrower hops lie between. Not on the wire contract. */
+  carriedUnfinished?: true
   /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
   skipReason?: NodeSkipReason
 }
@@ -326,6 +335,13 @@ export interface WorkflowExecutionJob {
   wrapperJobId?: string
   /** A continuation that re-runs what a FAILED inline run did not finish. */
   continueMode?: "from-failed"
+  /**
+   * An app run's Retry that continues its failed execution (routes/app-run-resume.ts): the app
+   * run going on, not a continuation outside it (a Render final). The run's pointer names this
+   * execution, so it settles the creator's markup on what it runs, as the run would have — the
+   * failed execution settled none.
+   */
+  appRunResume?: true
   /**
    * An inline run started for a node inside an APP run (the route's
    * `X-App-Run`): its steps reserve under the app-run rules (the free-tier app
@@ -364,6 +380,16 @@ export interface WorkflowExecutionJob {
    * the lineage again, it checks this one (`continuationHeadRefusal`).
    */
   seedFromExecutionId?: string
+  /**
+   * With `seedFromExecutionId`: the caller sent explicit `nodeIds`, and that
+   * newest generation is one a default continue-from-failed is never built
+   * on — `"done"`: it completed all it was left; `"failed"`: it ended failed
+   * (explicit `nodeIds` always win: the run builds on it rather than
+   * redirecting the caller). Decided by the route, which alone knows the
+   * `nodeIds` were sent; the worker passes it to `continuationHeadRefusal`
+   * and never re-derives it. Absent: such a head is refused.
+   */
+  reopenHead?: "done" | "failed"
   /**
    * For a triggered run: the trigger node that fired (the trigger row's
    * `config.nodeId`). The worker runs the branch behind it — see
@@ -780,6 +806,14 @@ export interface OrchestratorContext {
   }>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
+  /**
+   * An app run's continuation (`continueFromExecutionId`): the root of its
+   * chain — the chain's first run, the same for every generation
+   * (lib/continuation-run-root.ts). Set at pickup. Absent: not an app run's
+   * continuation. Its UGC Clip names it (`ugcClipRunKey`), so a continuation
+   * hands back the clips its earlier attempts finished.
+   */
+  runRootExecutionId?: string
   /** Pool-aware spend-surface mode (D1 v2): true when the run was triggered
    *  from a first-party consumer surface while the flag is on. Payg-ness
    *  resolves downstream (credits layer / RPC self-gate); free users and

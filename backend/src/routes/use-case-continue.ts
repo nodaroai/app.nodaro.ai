@@ -39,7 +39,8 @@ import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
-import { RENDER_FINAL_ALREADY_RUNNING, renderFinalCredits } from "../lib/render-final-run.js"
+import { RENDER_FINAL_ALREADY_RUNNING } from "../lib/render-final-codes.js"
+import { renderFinalCredits } from "../lib/render-final-run.js"
 import { claimContinuation, releaseContinuation, type ContinueClaim } from "../lib/use-case/continue-claim.js"
 import {
   IDEMPOTENCY_KEY_REUSED,

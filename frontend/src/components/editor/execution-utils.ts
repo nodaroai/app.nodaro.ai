@@ -155,6 +155,8 @@ export interface NodeState {
   jobId?: string
   /** All job IDs from fan-out iterations (list/loop). */
   jobIds?: string[]
+  /** A failed all-or-nothing fan-out (UGC Clip): the row each of `jobIds` ran (from 0), index-aligned with it. */
+  jobRows?: number[]
   creditsUsed?: number
   /** Node output (videoUrl, imageUrl, audioUrl, text, etc.) */
   output?: Record<string, unknown>
@@ -165,6 +167,39 @@ export interface NodeState {
   skipReason?: string
   startedAt?: string
   completedAt?: string
+}
+
+/** One fan-out iteration's sub-row under its node: its key, its label and the state it opens. */
+export interface FanOutSubRow {
+  readonly key: string
+  readonly label: { readonly key: MessageKey; readonly n: number }
+  readonly state: NodeState
+}
+
+/**
+ * How a node's row in a run's history lays out its fan-out: whether it has sub-rows, whether its
+ * own row opens (its job), and each sub-row. A node that ran more than once has a sub-row per job,
+ * and its own row is only their total. A FAILED all-or-nothing node (UGC Clip) keeps its own row,
+ * which opens the failure, with a sub-row for each item it finished: each opens that item's job
+ * as completed (never the node's error), labelled by the row it ran — a UGC Clip's row is its clip
+ * — in row order. Pure.
+ */
+export function fanOutSubRows(nodeId: string, state: NodeState): { readonly hasFanOut: boolean; readonly ownRowOpens: boolean; readonly rows: readonly FanOutSubRow[] } {
+  const jobs = state.jobIds ?? []
+  const failed = state.status === "failed"
+  const hasFanOut = jobs.length > 1 || (failed && jobs.length > 0)
+  if (!hasFanOut) return { hasFanOut: false, ownRowOpens: true, rows: [] }
+  const rowsKnown = Array.isArray(state.jobRows) && state.jobRows.length === jobs.length && state.jobRows.every((r) => Number.isInteger(r) && r >= 0)
+  const labelKey: MessageKey = rowsKnown && state.nodeType === "ugc-clip" ? "exec.clipRow" : "exec.iteration"
+  const entries = jobs.map((jobId, idx) => ({ jobId, idx, n: (rowsKnown ? state.jobRows![idx]! : idx) + 1 }))
+  if (rowsKnown) entries.sort((a, b) => a.n - b.n)
+  const rows = entries.map(({ jobId, idx, n }) => {
+    const { jobIds: _jobs, jobRows: _rows, ...own } = state
+    // A finished item of a failed node is a finished job: it opens as one, without the node's error.
+    const opened: NodeState = failed ? { ...own, status: "completed", error: undefined, jobId } : { ...own, jobId }
+    return { key: `${nodeId}-iter-${idx}`, label: { key: labelKey, n }, state: opened }
+  })
+  return { hasFanOut: true, ownRowOpens: failed, rows }
 }
 
 /**

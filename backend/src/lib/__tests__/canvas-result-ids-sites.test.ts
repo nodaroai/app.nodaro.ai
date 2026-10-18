@@ -75,6 +75,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["lib/mcp/tools/components.ts::published_apps", "list_components' card columns, no snapshot (the column list is built at run time, lib/listing-per-minute-columns.ts)"],
   ["routes/app-runner.ts::published_apps", "an immutable published snapshot (resolved when published)"],
   ["routes/app-render-final.ts::published_apps", "an immutable published snapshot (resolved when published); reads its graph to compute a final's run set"],
+  ["routes/app-run-resume.ts::published_apps", "an immutable published snapshot (resolved when published); reads its graph to compute a Retry's run set"],
   ["routes/component-execute.ts::published_apps", "an immutable published snapshot (resolved when published)"],
   ["routes/og-tags.ts::published_apps", "an immutable published snapshot (resolved when published)"],
   ["routes/published-apps.ts::published_apps", "the catalog's card columns, and the creator's own app rows: immutable published snapshots (resolved when published)"],

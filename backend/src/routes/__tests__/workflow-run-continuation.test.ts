@@ -65,8 +65,15 @@ vi.mock("@/services/workflow-engine/run-continuation.js", async (importOriginal)
   return { ...actual, loadContinuationSource: mocks.loadSource, continuationInputOverrides: mocks.merge, continuationSeeds: mocks.seeds }
 })
 
+// A continuation of named nodes checks its payer's balance first (render-final-run-set-parity.test.ts); here it is covered.
+vi.mock("@/lib/render-final-run.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/render-final-run.js")>()
+  return { ...actual, renderFinalCredits: vi.fn(async () => null) }
+})
+
 import { workflowExecutionRoutes } from "../workflow-execution.js"
 import { supabase } from "../../lib/supabase.js"
+import { renderFinalCredits } from "../../lib/render-final-run.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const WORKFLOW = "00000000-0000-4000-8000-000000000020"
@@ -129,6 +136,8 @@ function mockTables() {
         const out = mocks.executions.filter((r) => preds.every((p) => p(r)))
         return descending ? [...out].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))) : out
       }
+      // The idempotency lookup before the credit check: `(user_id, idempotency_key)`, one row.
+      q.maybeSingle = async () => ({ data: rows()[0] ?? null, error: null })
       q.limit = (n: number) => ({
         then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: rows().slice(0, n), error: null }).then(resolve),
         maybeSingle: async () => {
@@ -183,8 +192,8 @@ afterEach(async () => {
   await app.close()
 })
 
-const run = (payload: Record<string, unknown>) =>
-  app.inject({ method: "POST", url: `/v1/workflows/${WORKFLOW}/run`, payload })
+const run = (payload: Record<string, unknown>, headers: Record<string, string> = {}) =>
+  app.inject({ method: "POST", url: `/v1/workflows/${WORKFLOW}/run`, payload, headers })
 
 const renderFinal = { nodeIds: ["cut", "cap"], inputOverrides: { cut: { quality: "final" } } }
 
@@ -347,8 +356,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       },
       ...over,
     })
-  const fromFailed = (payload: Record<string, unknown> = {}) =>
-    run({ continueFromExecutionId: PRIOR, continueMode: "from-failed", ...payload })
+  const fromFailed = (payload: Record<string, unknown> = {}, headers: Record<string, string> = {}) =>
+    run({ continueFromExecutionId: PRIOR, continueMode: "from-failed", ...payload }, headers)
 
   beforeEach(() => {
     mocks.loadSource.mockResolvedValue(failed())
@@ -469,6 +478,64 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
   // A run that stops at a Preview review completes with its Final render (and
   // all after it) not run: it is never stamped `all`, so it never supersedes
   // its source as "done" (decided 2026-10-18).
+  describe("is checked against its payer before it starts, priced on what is left", () => {
+    const short = { estimatedCredits: 90, sufficient: false, available: 40, message: "Insufficient credits: 90 needed, 40 available" }
+
+    it("a resume whose remaining steps the payer cannot cover: 402, and no execution is created", async () => {
+      vi.mocked(renderFinalCredits).mockResolvedValueOnce(short)
+      const res = await fromFailed()
+      expect(res.statusCode).toBe(402)
+      expect(res.json().error).toEqual({ code: "insufficient_credits", message: short.message, required: 90, available: 40 })
+      expect(mocks.inserts).toHaveLength(0)
+      expect(mocks.queueAdd).not.toHaveBeenCalled()
+    })
+
+    it("priced on the nodes it runs — what the failed run did not complete — with the states it is seeded from", async () => {
+      vi.mocked(renderFinalCredits).mockResolvedValueOnce({ estimatedCredits: 30, sufficient: true, available: 40 })
+      const res = await fromFailed()
+      expect(res.statusCode).toBe(202)
+      const asked = vi.mocked(renderFinalCredits).mock.calls[0]![0]
+      // The plan and the render completed: seeded, never priced.
+      expect(asked.runNodeIds).toEqual(["cap", "hook"])
+      // A use-case node is priced by the resume the run will make, on these states.
+      expect(asked.continuation).toBeDefined()
+      expect((await asked.continuation!.source())?.nodeStates).toEqual((failed() as { nodeStates?: unknown }).nodeStates)
+      expect(mocks.inserts).toHaveLength(1)
+    })
+
+    it("a resume of nothing but nodes that cost nothing is never refused for credits", async () => {
+      // The captions completed too: only the hook is left, priced at 0, which any balance covers.
+      mocks.loadSource.mockResolvedValue(
+        failed({
+          nodeStates: {
+            plan: { status: "completed", output: { json: {} } },
+            cut: { status: "completed", output: { video: "https://r2.example/cut.mp4", quality: "final" } },
+            cap: { status: "completed", output: { video: "https://r2.example/cap.mp4" } },
+            hook: { status: "failed", error: "timeout" },
+          },
+        }),
+      )
+      vi.mocked(renderFinalCredits).mockResolvedValueOnce({ estimatedCredits: 0, sufficient: true, available: 0 })
+      const res = await fromFailed()
+      expect(res.statusCode).toBe(202)
+      expect(vi.mocked(renderFinalCredits).mock.calls[0]![0].runNodeIds).toEqual(["hook"])
+    })
+
+    it("a retry of a request that already started its run answers that run (200 deduped), never the 402", async () => {
+      mocks.executions.push({ id: "00000000-0000-4000-8000-000000000077", user_id: USER, idempotency_key: "retry-key-0000001" })
+      const res = await fromFailed({}, { "idempotency-key": "retry-key-0000001" })
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ executionId: "00000000-0000-4000-8000-000000000077", status: "pending", deduped: true })
+      expect(res.headers["x-dedup-hit"]).toBe("1")
+      expect(renderFinalCredits).not.toHaveBeenCalled()
+      expect(mocks.inserts).toHaveLength(0)
+      // A key no earlier request used is checked as any request is.
+      vi.mocked(renderFinalCredits).mockResolvedValueOnce(short)
+      const fresh = await fromFailed({}, { "idempotency-key": "another-key-000001" })
+      expect(fresh.statusCode).toBe(402)
+    })
+  })
+
   describe("a run that will stop at a Preview review is not all", () => {
     const editor = (payload: Record<string, unknown> = {}) => {
       mocks.authKind = "jwt"
@@ -887,7 +954,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
     mocks.loadSource.mockResolvedValue(source({ nodeStates: {} }))
     const res = await run({ ...renderFinal, continueFromExecutionId: PRIOR })
     expect(res.statusCode).toBe(202)
-    expect(mocks.inserts[0]!.trigger_data).toBeUndefined()
+    // No lineage stamp: only the nodes it was started on.
+    expect(mocks.inserts[0]!.trigger_data).toEqual({ nodeSelection: ["cut", "cap"] })
     expect((mocks.queueAdd.mock.calls[0]![1] as Record<string, unknown>).continueMode).toBeUndefined()
   })
 })

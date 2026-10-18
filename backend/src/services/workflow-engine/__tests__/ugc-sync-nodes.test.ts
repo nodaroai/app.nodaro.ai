@@ -26,6 +26,14 @@ describe("UGC sync bodies", () => {
     expect(buildUgcSyncBody(node, inputs, ctx())).toEqual({ ticket: T(0), nonce: 2, userId: "user-1" })
     expect(buildUgcSyncBody(node, inputs, ctx(true))).toEqual({ ticket: T(0), nonce: 2, runKey: "exec-1", userId: "user-1" })
   })
+  it("clip: an app run's continuation names its chain's root, so the earlier attempt's clips are handed back", () => {
+    const node = n("ugc-clip", { rerender: {} })
+    const inputs = { ugc: { clip: JSON.stringify(T(0)) } } as never
+    const continued = { ...ctx(true), executionId: "exec-2", runRootExecutionId: "exec-1" } as OrchestratorContext
+    expect(buildUgcSyncBody(node, inputs, continued)).toEqual({ ticket: T(0), nonce: 0, runKey: "exec-1", userId: "user-1" })
+    // Off an app run the root is never sent.
+    expect(buildUgcSyncBody(node, inputs, { ...continued, isAppRun: false })).toEqual({ ticket: T(0), nonce: 0, userId: "user-1" })
+  })
   it("the wires' errors are thrown before any call", () => {
     expect(() => buildUgcSyncBody(n("ugc-script"), { ugc: {} } as never, ctx())).toThrow("Add the product name or website.")
     expect(() => buildUgcSyncBody(n("ugc-clip", { rerender: {} }), { ugc: { clip: JSON.stringify({ ...T(0), v: 2 }) } } as never, ctx())).toThrow(UGC_VERSION_MESSAGE)

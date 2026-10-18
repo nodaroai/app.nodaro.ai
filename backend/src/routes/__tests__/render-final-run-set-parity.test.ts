@@ -284,6 +284,66 @@ describe("renderFinal is checked against the payer's balance before the run star
   })
 })
 
+describe("a run of named nodes continuing an execution is checked the same way (the `next` of a held continuation)", () => {
+  const short = { sufficient: false, required: 530, available: 50, message: "Insufficient credits. Required: 530, Available: 50" }
+  // What `continuation_preview_pending` names in `next` for a held multicam render: one run, sent as is.
+  const next = { continueFromExecutionId: PRIOR, nodeIds: ["cam", "render", "c"], inputOverrides: { render: { quality: "final" } } }
+
+  it("a payer who cannot cover it gets a 402 before any execution exists", async () => {
+    useGraph(FIXTURE.cases["multicam"]!)
+    mocks.estimate.mockResolvedValueOnce(530)
+    mocks.afford.mockResolvedValue(short)
+    const res = await run(next)
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error).toMatchObject({ code: "insufficient_credits", required: 530, available: 50 })
+    expect(mocks.inserts).toEqual([])
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("it is priced as its Render final is: the same graph and run set, so the two are the same run", async () => {
+    useGraph(FIXTURE.cases["multicam"]!)
+    mocks.loadSource.mockResolvedValue(source({ inputOverrides: { c: { fontSize: 48 } } }))
+    expect((await run(next)).statusCode).toBe(202)
+    expect((await run(renderFinal)).statusCode).toBe(202)
+    const [viaNext, viaRenderFinal] = mocks.estimate.mock.calls as unknown as Array<
+      [Array<{ id: string; data: Record<string, unknown> }>, unknown, ReadonlySet<string>]
+    >
+    expect([...viaNext![2]].sort()).toEqual([...viaRenderFinal![2]].sort())
+    expect(viaNext![0]).toEqual(viaRenderFinal![0])
+  })
+
+  it("a held use-case node's continuation override is what gets priced", async () => {
+    useGraph({
+      nodes: [
+        { id: "u", type: "upload-video", data: { url: "https://r2/ep.mp4" } },
+        { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } },
+        { id: "c", type: "add-captions", data: {} },
+      ],
+      edges: [
+        { source: "u", target: "t1", targetHandle: "media" },
+        { source: "t1", target: "c" },
+      ],
+    })
+    const useCaseContinue = { mode: "render-final", jobId: "job-1" }
+    const res = await run({ continueFromExecutionId: PRIOR, nodeIds: ["t1", "c"], inputOverrides: { t1: { useCaseContinue } } })
+    expect(res.statusCode).toBe(202)
+    const [nodes, , runNodeIds] = mocks.estimate.mock.calls[0]! as unknown as [
+      Array<{ id: string; data: Record<string, unknown> }>,
+      unknown,
+      ReadonlySet<string>,
+    ]
+    expect(nodes.find((n) => n.id === "t1")!.data.useCaseContinue).toEqual(useCaseContinue)
+    expect([...runNodeIds].sort()).toEqual(["c", "t1"])
+  })
+
+  it("a run that continues nothing is not checked up front (its nodes reserve as they run)", async () => {
+    mocks.afford.mockResolvedValue(short)
+    const res = await run({ nodeIds: ["render"], inputOverrides: { render: { quality: "final" } } })
+    expect(res.statusCode).toBe(202)
+    expect(mocks.afford).not.toHaveBeenCalled()
+  })
+})
+
 describe("POST /v1/workflows/:id/render-final/estimate", () => {
   it("prices the run set on the graph the run executes: the render at Final, the earlier run's pin under it", async () => {
     useGraph(FIXTURE.cases["multicam"]!)

@@ -454,7 +454,12 @@ export async function executeUgcClip(node: WorkflowNode, inputs: FrontendResolve
     const fanOut = opts.listIterationIndex !== undefined
     const prior = (useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Data | undefined)?.generatedResults
     // The take lands as every lane lands it, stamped with the job and its end on the server's clock (lib/ugc-run-patch.ts).
-    const patch = ugcJobResultPatch("ugc-clip", row, { id: jobId, endedAt: completedAt ?? serverNowIso() }, { priorResults: prior, batchRow: fanOut })
+    // The take records the Re-render count it was made at: a later run's price expects it back only at that count.
+    const patch = ugcJobResultPatch("ugc-clip", row, { id: jobId, endedAt: completedAt ?? serverNowIso() }, {
+      priorResults: prior,
+      batchRow: fanOut,
+      clipNonce: built.body.nonce as number,
+    })
     if (!patch) throw new Error(ugcJobNoOutputMessage(jobId))
     if (fanOut) writeListResultMeta(node.id, opts.listIterationIndex!, fanOutItemMeta(row))
     // This run rendered one clip: its mark alone goes (the others' are their own runs').

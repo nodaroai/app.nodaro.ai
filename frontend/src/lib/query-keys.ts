@@ -184,6 +184,8 @@ export const queryKeys = {
     categories: () => ["ugc", "categories"] as const,
     /** A UGC video's estimate, keyed by the very request it is asked: every field the estimate reads is in the key. */
     runEstimate: <Request extends object>(request: Request) => ["ugc", "run-estimate", request] as const,
+    /** The quote of a run's saved clips (the ticket form), keyed by the very request it is asked. */
+    ticketQuote: <Request extends object>(request: Request) => ["ugc", "ticket-quote", request] as const,
   },
 
   // Jobs

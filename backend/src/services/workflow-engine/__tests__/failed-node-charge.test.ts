@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { DrainAbortError } from "../../../lib/worker-drain.js"
-import { chargedCreditsOfRejection, withChargedCredits } from "../failed-node-output.js"
+import { chargedCreditsOfRejection, fanOutProgressOfRejection, withChargedCredits, withFanOutProgress } from "../failed-node-output.js"
 
 describe("what a failed node already charged", () => {
   it("is read off the rejection: a positive number of credits, else nothing", () => {
@@ -26,5 +26,31 @@ describe("what a failed node already charged", () => {
   })
   it("a rejection that is not an Error becomes one that carries the charge", () => {
     expect(withChargedCredits("boom", 5)).toMatchObject({ message: "boom", creditsUsed: 5 })
+  })
+})
+
+describe("what a failed all-or-nothing fan-out finished", () => {
+  it("rides a copy of the rejection, every other field kept, the original left as it was", () => {
+    const original = Object.assign(new Error("clip 2 failed"), { errorCode: "provider_error", creditsUsed: 400 })
+    const carried = withFanOutProgress(original, { iterationTotal: 3, iterationCompleted: 1, jobIds: ["job-0"], jobRows: [2] }) as Error & Record<string, unknown>
+    expect(carried).not.toBe(original)
+    expect(carried).toBeInstanceOf(Error)
+    expect(carried).toMatchObject({ message: "clip 2 failed", errorCode: "provider_error", creditsUsed: 400 })
+    expect(fanOutProgressOfRejection(carried)).toEqual({ iterationTotal: 3, iterationCompleted: 1, jobIds: ["job-0"], jobRows: [2] })
+    expect(fanOutProgressOfRejection(original)).toBeUndefined()
+  })
+  it("a drain goes on as it came; a rejection that is not an Error becomes one", () => {
+    const drained = new DrainAbortError()
+    expect(withFanOutProgress(drained, { iterationTotal: 2, iterationCompleted: 1, jobIds: ["j"], jobRows: [0] })).toBe(drained)
+    expect(fanOutProgressOfRejection(withFanOutProgress("boom", { iterationTotal: 2, iterationCompleted: 0, jobIds: [], jobRows: [] }))).toEqual({ iterationTotal: 2, iterationCompleted: 0, jobIds: [], jobRows: [] })
+  })
+  it("reads nothing out of a malformed carrier", () => {
+    for (const bad of [undefined, null, "x", new Error("x"), { fanOutProgress: { iterationTotal: -1, iterationCompleted: 0, jobIds: [] } }, { fanOutProgress: { iterationTotal: 2, iterationCompleted: 1 } }]) {
+      expect(fanOutProgressOfRejection(bad)).toBeUndefined()
+    }
+    expect(fanOutProgressOfRejection({ fanOutProgress: { iterationTotal: 2, iterationCompleted: 1, jobIds: ["a", "", 3] } })).toEqual({ iterationTotal: 2, iterationCompleted: 1, jobIds: ["a"], jobRows: [] })
+    // Each job keeps its own row when a job id is dropped; rows that do not line up are left out.
+    expect(fanOutProgressOfRejection({ fanOutProgress: { iterationTotal: 3, iterationCompleted: 2, jobIds: ["a", "", "c"], jobRows: [0, 1, 2] } })).toMatchObject({ jobIds: ["a", "c"], jobRows: [0, 2] })
+    expect(fanOutProgressOfRejection({ fanOutProgress: { iterationTotal: 3, iterationCompleted: 2, jobIds: ["a", "c"], jobRows: [0] } })).toMatchObject({ jobIds: ["a", "c"], jobRows: [] })
   })
 })

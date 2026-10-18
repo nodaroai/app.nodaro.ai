@@ -1,5 +1,5 @@
 import { pollClipMeasure, type ClipMeasureAnswer, type MeasuredClipAnswer } from "./clip-measure-poll"
-import { usecaseContinuePath, usecaseDescriptor, type SpeakerViewWireSettings, type UgcEstimateInput, type UgcEstimatePart, type UseCaseNodeType } from "@nodaro/render-rules"
+import { usecaseContinuePath, usecaseDescriptor, type SpeakerViewWireSettings, type UgcEstimateInput, type UgcEstimatePart, type UgcReuseClaim, type UseCaseNodeType } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 import {
@@ -704,6 +704,38 @@ export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readon
   return ugcApi("/v1/ugc/quote", {
     body: { tickets: [...body.tickets], hasCards: body.hasCards, ...(body.finishes ? { finishes: true } : {}) },
     label: "apiErr.startVideoGeneration",
+    signal: opts.signal,
+  })
+}
+
+/**
+ * The ticket form of `POST /v1/ugc/quote` for a run's saved clips: the clips it expects handed back
+ * (each by place, from 1, with its take's job and the Re-render count the run sends), which the
+ * server checks against the caller's own jobs before it prices any at nothing.
+ */
+export interface UgcTicketQuoteRequest {
+  readonly tickets: readonly string[]
+  readonly hasCards: boolean
+  readonly finishes: boolean
+  readonly reusedClips: readonly UgcReuseClaim[]
+}
+
+/** That quote's answer, with the expected credits and the hold of each part. */
+export interface UgcTicketQuote extends UgcClipsQuote {
+  readonly parts: Readonly<Record<UgcEstimatePart, number>>
+  readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
+}
+
+/** POST /v1/ugc/quote, the ticket form for a run's saved clips: what rendering the ones it does not hand back costs. */
+export function ugcTicketQuoteApi(request: UgcTicketQuoteRequest, opts: { readonly signal?: AbortSignal } = {}): Promise<UgcTicketQuote> {
+  return ugcApi("/v1/ugc/quote", {
+    body: {
+      tickets: request.tickets.map((wire) => JSON.parse(wire) as unknown),
+      hasCards: request.hasCards,
+      ...(request.finishes ? { finishes: true } : {}),
+      ...(request.reusedClips.length > 0 ? { reusedClips: request.reusedClips.map(({ clip, jobId, nonce }) => ({ clip, jobId, nonce })) } : {}),
+    },
+    label: "apiErr.estimateVideoCredits",
     signal: opts.signal,
   })
 }
@@ -7971,6 +8003,12 @@ export interface WorkflowExecution {
   mcpClient?: string | null
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
+  /**
+   * What a continue-from-failed of this run sent no nodeIds considers, besides
+   * what it left failed or held back: the nodes the first run of its chain was
+   * started on. null: every node. Absent from an older server (= every node).
+   */
+  nodeScope?: string[] | null
   totalNodes: number
   completedNodes: number
   failedNodes: number
@@ -9536,6 +9574,66 @@ export async function renderAppRunFinal(
   // A final of this run already rendering: follow it.
   if (res.status === 409 && typeof json?.executionId === "string") throw new WorkflowAlreadyRunningError(json.executionId)
   if (!res.ok) throwApiError(json, "apiErr.renderFinal")
+  return json as { executionId: string; runId: string; status: string }
+}
+
+/** One step an app run's Retry runs again: a node the failed run did not complete. */
+export interface AppRunResumeStep {
+  readonly nodeId: string
+  readonly type: string
+  /** The node's own label in the app, when it has one. */
+  readonly label: string | null
+}
+
+/** What an app run's Retry would run and charge (`dryRun`); nothing is created. */
+export interface AppRunResumePlan {
+  readonly runId: string
+  readonly continuesExecutionId: string
+  /** The app version the run ran, which the Retry continues. */
+  readonly appVersion: number | null
+  readonly nodeIds: readonly string[]
+  readonly steps: readonly AppRunResumeStep[]
+  /** What it is expected to charge, the creator's markup included; null without credits. */
+  readonly estimatedCredits: number | null
+  /** Clips the failed run finished that the Retry hands back at no cost. */
+  readonly reusedClips: number
+  readonly sufficient: boolean | null
+  readonly available: number | null
+}
+
+/**
+ * POST /v1/app/:slug/runs/:runId/resume — Retry of a failed app run: what it did not complete
+ * runs again, everything it completed is reused. `dryRun` answers the plan and creates nothing.
+ * A refusal throws with its `code` (`app_run_version_changed`, `app_run_version_unavailable`,
+ * `continuation_not_failed`, …).
+ */
+export async function planAppRunResume(
+  slug: string,
+  runId: string,
+  /** The app version the runner is on (what starting over would run); absent: the app's latest. */
+  version?: number,
+): Promise<AppRunResumePlan> {
+  const res = await fetch(`${API_BASE_URL}/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/resume`, {
+    method: "POST",
+    headers: { ...(await getAuthHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ dryRun: true, reviewer: "app", ...(version ? { version } : {}) }),
+  })
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  if (!res.ok) throwApiError(json, "apiErr.retryRun")
+  return (json as { data: AppRunResumePlan }).data
+}
+
+/** Start the Retry `planAppRunResume` described: the run's execution moves to the new one. */
+export async function resumeAppRun(slug: string, runId: string, version?: number): Promise<{ executionId: string; runId: string; status: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/resume`, {
+    method: "POST",
+    headers: { ...(await getAuthHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ reviewer: "app", ...(version ? { version } : {}) }),
+  })
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  // Still running (a Retry another tab started): follow it.
+  if (res.status === 409 && typeof json?.executionId === "string") throw new WorkflowAlreadyRunningError(json.executionId)
+  if (!res.ok) throwApiError(json, "apiErr.retryRun")
   return json as { executionId: string; runId: string; status: string }
 }
 

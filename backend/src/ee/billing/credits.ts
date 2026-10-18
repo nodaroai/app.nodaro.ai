@@ -4165,6 +4165,11 @@ export type WorkflowEstimateOptions = {
    *  nodes. The rest of the graph is still the context a price reads (a
    *  wired setting, a caption source, the stop rule's closure). */
   runNodeIds?: ReadonlySet<string>
+  /** Use-case nodes of the run priced by the caller, not by their chain: one
+   *  that resumes a failed attempt (lib/use-case/resume-credits.ts). Their
+   *  chain and fee stay out of the sum; they still run, so every price that
+   *  reads the run set reads them as running. */
+  pricedElsewhereNodeIds?: ReadonlySet<string>
 }
 
 /**
@@ -4276,16 +4281,22 @@ function sumWorkflowEstimate(
   if (uc.expanded) {
     const runSet = options?.runNodeIds
     const opts = runSet ? { ...options, runNodeIds: withUseCaseMembers(runSet, uc.members) } : options
+    // A node the caller prices (a resumed attempt): its chain is read, still
+    // running, but never summed, and its fee is the caller's too.
+    const elsewhere = options?.pricedElsewhereNodeIds
+    const elsewhereMembers = new Set([...(elsewhere ?? [])].flatMap((id) => [...(uc.members.get(id) ?? [])]))
+    const innerSkip = elsewhereMembers.size > 0 ? (n: EstimateNode) => (!!n.id && elsewhereMembers.has(n.id)) || (skip?.(n) ?? false) : skip
     // Without the caller's wiring, nothing is known to feed a use-case node: the
     // rest of the graph keeps the no-wiring reading (the pricier answer) and
     // each chain is priced on its own wires.
     const inner = new Set([...uc.members.values()].flat())
     const steps = edges
-      ? sumWorkflowEstimate(uc.nodes, uc.edges, prices, opts, skip)
-      : sumWorkflowEstimate(uc.nodes.filter((n) => !(n.id && inner.has(n.id))), undefined, prices, opts, skip) +
-        sumWorkflowEstimate(uc.nodes.filter((n) => !!n.id && inner.has(n.id)), uc.edges, prices, opts, skip)
+      ? sumWorkflowEstimate(uc.nodes, uc.edges, prices, opts, innerSkip)
+      : sumWorkflowEstimate(uc.nodes.filter((n) => !(n.id && inner.has(n.id))), undefined, prices, opts, innerSkip) +
+        sumWorkflowEstimate(uc.nodes.filter((n) => !!n.id && inner.has(n.id)), uc.edges, prices, opts, innerSkip)
     const reruns = runSet ?? new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
-    return steps + usecaseFeesTotal(uc.fees.filter((f) => !runSet || runSet.has(f.nodeId)), (id) => usecaseFeeCredits(prices, id), nodes, edges, reruns)
+    const fees = uc.fees.filter((f) => (!runSet || runSet.has(f.nodeId)) && !elsewhere?.has(f.nodeId))
+    return steps + usecaseFeesTotal(fees, (id) => usecaseFeeCredits(prices, id), nodes, edges, reruns)
   }
   // A run stops at a Preview render: what it gates runs only after Render
   // final, so the estimate of this run leaves it out (the stop rule, through
@@ -5762,9 +5773,32 @@ export function estimateRunSetCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge>,
   runNodeIds: ReadonlySet<string>,
+  /** Use-case nodes of the run the caller prices itself (`WorkflowEstimateOptions.pricedElsewhereNodeIds`). */
+  pricedElsewhereNodeIds?: ReadonlySet<string>,
 ): Promise<number> {
   // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
-  return estimateRunGraphCredits(nodes, edges, { runNodeIds })
+  return estimateRunGraphCredits(nodes, edges, {
+    runNodeIds,
+    ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
+  })
+}
+
+/**
+ * A run set's estimate WITHOUT its UGC part: the UGC nodes, and the nodes a UGC video's estimate
+ * counts as its own (`ugcChains` members), are read as part of the graph and never summed. For a
+ * caller that prices the UGC part of the run set itself — an app run's Retry, whose UGC Clip is
+ * priced from the clips it will actually render (ee/lib/app-run-resume-price.ts). Everything else as
+ * `estimateRunSetCredits` prices it.
+ */
+export async function estimateRunSetCreditsWithoutUgc(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge>,
+  runNodeIds: ReadonlySet<string>,
+): Promise<number> {
+  const edges = bypassTeleports(nodes, rawEdges)
+  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
+  const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
+  return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
 }
 
 /**

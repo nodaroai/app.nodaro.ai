@@ -55,6 +55,16 @@ const ALLOWED_PATHS = [
   // ({ userId }) answer 404 for anything not the caller's.
   /^src\/routes\/workflow-render-final\.ts$/,
 
+  // App run Retry (continue a failed app run): reads the runner's own run
+  // (scoped by runner_id), the published version it ran (matched to the slug's
+  // workflow, the creator's block checked), and the failed execution's states
+  // through loadContinuationSource, then writes the runner's own continuation
+  // execution and moves the run's pointer — the same reads and writes as the
+  // app runner's draft lane and Render final (app-render-final.ts). Ownership
+  // is asked of every row: continuationRefusal({ userId }) answers 404 for an
+  // execution that is not the caller's.
+  /^src\/routes\/app-run-resume\.ts$/,
+
   // Use-case runs (Tighten Episode, Chapters, Trailer, Clip Pack) + Continue:
   // write the caller's own wrapper job, its fee hold and an inline execution
   // (workflow_id NULL, which the user-scoped policies do not cover), the same

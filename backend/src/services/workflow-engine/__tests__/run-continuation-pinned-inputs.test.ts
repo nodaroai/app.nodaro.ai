@@ -256,6 +256,29 @@ describe("an app run's earlier execution, found by its stamp", () => {
   })
 })
 
+describe("a chain's root (lib/continuation-run-root.ts) is read only on an app version's execution", () => {
+  const ROOT = { runRoot: { executionId: "exec-root" } }
+  it("an app run's execution: its written root", async () => {
+    db.execution!.trigger_data = ROOT
+    db.appRun = { app_id: "app-1", input_values: null }
+    expect((await load())!.runRoot).toBe("exec-root")
+  })
+  it("an earlier execution of an app run (found by its stamp): its written root", async () => {
+    db.execution!.trigger_data = { ...ROOT, appRun: { appRunId: "run-1" } }
+    db.appRunById = { app_id: "app-1", input_values: null }
+    expect((await load())!.runRoot).toBe("exec-root")
+  })
+  it("a live-workflow execution: none, whatever it holds", async () => {
+    db.execution!.trigger_data = ROOT
+    expect((await load())!.runRoot).toBeNull()
+  })
+  it("a webhook's execution (whose body a caller wrote), even one posting an app-run stamp: none", async () => {
+    db.execution = { ...db.execution!, trigger_type: "webhook", trigger_data: { ...ROOT, appRun: { appRunId: "run-1" } } }
+    db.appRunById = { app_id: "app-1", input_values: null }
+    expect((await load())!.runRoot).toBeNull()
+  })
+})
+
 // A stamp is the platform's only on a run a stamp-writing lane started
 // (lib/server-started-runs.ts): a webhook's row holds the body its caller posted.
 describe("a webhook execution whose body posted the platform's stamps", () => {
@@ -264,6 +287,7 @@ describe("a webhook execution whose body posted the platform's stamps", () => {
     continueFromFailed: { from: "exec-b", root: "exec-a", seededFrom: "exec-b", all: true },
     appRun: { appRunId: "run-1" },
     appRenderFinal: { appRunId: "run-1", appVersionId: "app-1", continuedFrom: "exec-run" },
+    runRoot: { executionId: "exec-a" },
   }
 
   it("reads as carrying none: no lineage, the live workflow's — so its continue-from-failed is not refused as another version", async () => {
@@ -271,6 +295,7 @@ describe("a webhook execution whose body posted the platform's stamps", () => {
     db.appRunById = { app_id: "app-1", input_values: null }
     for (const source of [await load(), await loadContinuationSource("exec-0", { withStates: false })]) {
       expect(source!.continueFromFailed).toBeNull()
+      expect(source!.runRoot).toBeNull()
       expect(source!.appVersionId).toBeNull()
       expect(continuationRefusal(source, { userId: "u1", workflowId: source!.workflowId, nodeIds: ["x"], mode: "from-failed" })).toBeNull()
     }
