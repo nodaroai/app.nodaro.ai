@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-17T19:22:52.043Z
-generated_from: c4aaf9ac8
+generated_at: 2026-10-17T21:51:14.626Z
+generated_from: e2fb75877
 ---
 
 # image-to-video
@@ -130,8 +130,9 @@ Two modes, auto-selected from the inputs you provide:
 - **`frames`** (default) — start/end-frame mode: `image_url` is the first frame and `end_frame_url` optionally the last. With a start AND end frame, pick a model whose `features` includes `end-frame` (VEO, MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance).
 - **`references`** — reference-media mode: reference images via `reference_image_urls`, reference videos via `reference_video_urls` (style/motion transfer), audio clips via `reference_audio_urls` (soundtrack-driven motion). `image_url` / `end_frame_url` are ignored in this mode, and reference videos/audio cannot be combined with `end_frame_url`.
 
-Every model takes references at its OWN caps: `seedance-2-5` 30 images / 10 videos / 10 audio clips; the `seedance-2` family and `minimax-h3` 9/3/3; `wan-3` / `wan-3-prime` 10/5/5 (each reference video and audio clip 1–15 s, ≤15 s combined; input video seconds + output duration ≤30 s); `gemini-omni-video` / `gemini-omni-flash` 7 images (the first image is the opening frame, the rest are identity refs; images + 2×videos ≤ 7); `kling-3-omni` / `grok-i2v` 7; `veo3.1` / `veo3_lite` 3 images (`veo3`, VEO 3.1 Quality, takes NO references — the provider serves reference-to-video on Fast and Lite only).
+Every model takes references at its OWN caps: `seedance-2-5` 30 images / 10 videos / 10 audio clips; the `seedance-2` family and `minimax-h3` 9/3/3; `wan-3` / `wan-3-prime` 10/5/5 (each reference video and audio clip 1–15 s, ≤15 s combined; input video seconds + output duration ≤30 s); `gemini-omni-video` / `gemini-omni-flash` 7 images (images + 2×videos ≤ 7); `kling-3-omni` / `grok-i2v` 7; `veo3.1` / `veo3_lite` 3 images (`veo3`, VEO 3.1 Quality, takes NO references — the provider serves reference-to-video on Fast and Lite only).
 
+- **A start frame goes after your references.** On every model whose frames share the reference list, your references are `@image_1..N` in your order and a start (end) frame is appended after them, bound in the prompt as the opening (closing) frame in the model's own syntax (Grok `@image(n)`, HappyHorse `[Image N]`). At the cap the frames are kept and trailing references drop.
 - **Reference order = priority.** Put the identity-critical image FIRST and refer by ordinal in the prompt (`@Image 1`, `Video 2`). Identity = ONE headshot + ONE full-body image — multi-view character sheets cause identity drift and twin duplicates. 4–5 assets total beats maxing the caps.
 - **Edit/extend phrasing.** Name clips directly (`Extend Video 1 backward`, `Remove X from Video 1`) — saying `reference Video 1` flips the model into reference mode and breaks the edit. Track completion: `Video 1 + [transition] + followed by Video 2` (≤3 clips, ≤15 s total).
 
@@ -335,7 +336,7 @@ subject → action → scene/environment → lighting → camera movement → st
 
 **Modes (picked from the wired inputs)**
 - Nothing visual → text-to-video. A concrete aspect ratio is REQUIRED — the API hard-rejects a missing one (Nodaro sends the node's ratio; there is no adaptive).
-- Image(s) wired → image-to-video: the first image anchors the scene; extra images are references — bind each in the prompt ("the woman from the first image", "the interior from the second image").
+- Image(s) wired → image-to-video. Your reference images come FIRST, in your order (`@image_1`, `@image_2`, …) — bind each in the prompt ("the woman from @image_1", "the interior from @image_2"); a wired start frame is appended after them and the platform names it as the opening frame.
 - Source video wired → video-edit (served through the same handle): describe the CHANGE ("replace the daylight with dusk, keep the motion and framing"), not a full re-description.
 
 **Audio (native)**
@@ -357,6 +358,7 @@ descriptions of static/unchanged parts — spend the words on what MOVES.
 **Image-to-video (the primary mode)**
 - The input image is the FIRST FRAME, not a loose reference: composition, subject identity, and visual style carry over. Describe motion and camera only ("she turns toward the window as the camera slowly pushes in"); re-describing the still wastes adherence.
 - grok-imagine-video-1.5 accepts up to 7 images (identity/scene references beyond the first frame); at 1080p only ONE image is allowed.
+- grok-i2v with reference images: images are addressed `@image(n)` in array order. Your references come first (`@image(1)` is your first reference); a wired start frame is appended after them and the platform names it as the opening frame.
 
 **Audio (video-1.5)**
 - Native audio generates with the clip — background music, SFX, and lip-synced dialogue. Quote the spoken line; describe the music/SFX plainly. There is no audio toggle on the KIE contract — cue (or exclude) sound in the prompt text.
@@ -463,7 +465,7 @@ subject → action → scene/environment → lighting → camera movement → st
 **Contract facts (KIE, per-mode pages)**
 - Prompts: any language, up to 5000 non-Chinese / 2500 Chinese characters — excess is TRUNCATED silently, so put the load-bearing content first.
 - Duration 3-15s (default 5), billed per second. Resolution 720p / 1080p (default). Aspect 16:9 (default) / 9:16 / 1:1 / 4:3 / 3:4.
-- Modes: text-to-video (happyhorse), image-to-video (happyhorse-i2v), reference-to-video (happyhorse-ref2v) — ref2v preserves wired identities; name each reference in the prompt so the binding is explicit.
+- Modes: text-to-video (happyhorse), image-to-video (happyhorse-i2v), reference-to-video (happyhorse-ref2v) — ref2v preserves wired identities; name each reference in the prompt so the binding is explicit, as `[Image N]` in array order: your references come first (`[Image 1]` is your first), and a wired start frame is appended after them and named as the opening frame.
 
 **Style guidance (platform-standard, honestly generic)**
 - One camera movement per shot; physical, quantified action ("slowly raises a hand") over abstract emotion words; state exclusions ("no on-screen text, no watermark") in the prompt.

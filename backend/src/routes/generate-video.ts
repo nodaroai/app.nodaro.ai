@@ -23,7 +23,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame } from "@nodaro/shared/models"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -443,6 +443,21 @@ export function assembleVideoConnectedReferences(args: {
 }
 
 /**
+ * The image cap a request's reference assembly may number up to: the
+ * provider's cap MINUS the seats its wired start / end frame will take in the
+ * same image list (`videoProviderRefModeFrameSeats` — the frames are appended
+ * after the caller's references and are kept at the cap). Without it a full
+ * assembly numbered an `@image_N` directive onto a reference the provider then
+ * drops to keep the frame, so the directive landed on the frame. `undefined`
+ * (the provider's own cap) when no frame shares the list.
+ */
+export function frameSeatImageCap(provider: string, hasStartFrame: boolean, hasEndFrame: boolean): number | undefined {
+  const seats = videoProviderRefModeFrameSeats(provider, { hasStartFrame, hasEndFrame })
+  if (seats === 0) return undefined
+  return Math.max(0, (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) - seats)
+}
+
+/**
  * True when the request carries ANY channel the server-side video assembly
  * renders — the structured references, the seat-less described references, or a
  * rail caption. The single gate the four "assemble only when there is something
@@ -801,6 +816,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
             const assembled = assembleVideoConnectedReferences({
               prompt: b.prompt as string | undefined,
               provider: b.provider as string,
+              imageCapOverride: frameSeatImageCap(b.provider as string, b.imageUrl !== undefined, b.endFrameUrl !== undefined),
               connectedReferences: (Array.isArray(b.connectedReferences) ? b.connectedReferences : []) as ConnectedReference[],
               baseReferenceImageUrls: (Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls : undefined) as string[] | undefined,
               referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
@@ -945,6 +961,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         ? assembleVideoConnectedReferences({
           prompt: body,
           provider,
+          imageCapOverride: frameSeatImageCap(provider, parsed.data.imageUrl !== undefined, parsed.data.endFrameUrl !== undefined),
           connectedReferences: parsed.data.connectedReferences ?? [],
           describedReferences: parsed.data.describedReferences,
           baseReferenceImageUrls: parsed.data.referenceImageUrls,
@@ -1019,6 +1036,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       const assembled = assembleVideoConnectedReferences({
         prompt,
         provider,
+        imageCapOverride: frameSeatImageCap(provider, imageUrl !== undefined, endFrameUrl !== undefined),
         connectedReferences: parsed.data.connectedReferences ?? [],
         describedReferences: parsed.data.describedReferences,
         baseReferenceImageUrls: referenceImageUrls,

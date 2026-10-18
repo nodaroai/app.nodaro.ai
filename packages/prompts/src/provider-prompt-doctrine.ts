@@ -245,7 +245,7 @@ const GEMINI_OMNI_DOCTRINE: ProviderPromptDoctrine = {
     "Multimodal Google video with native audio: text-to-video, image-to-video, and video-edit through the same prompt surface. 4/6/8/10s; 720p/1080p or 4K tier.",
     "Structure like the platform default: subject → action → scene → lighting → camera → style. Quote dialogue lines to have them spoken; describe SFX/ambience plainly in the prompt.",
     "Text-to-video REQUIRES a concrete aspect ratio (the API hard-rejects a missing one); image runs infer aspect from the input.",
-    "Reference images ride along as additional imageUrls — bind them in the prompt ('the woman from the first image'). Video-edit: wire a source clip and describe the change, not the whole scene.",
+    "Reference images ride in image_urls, your references first — bind them by ordinal ('the woman from @image_1'); a wired start frame is appended after them and bound as the opening frame. Video-edit: describe the change.",
   ],
   doctrine: `Prompt structure (no public Google prompt guide exists for the Omni video endpoint —
 the API contract is the doctrine source, like MiniMax H3; structure guidance mirrors the
@@ -254,7 +254,7 @@ subject → action → scene/environment → lighting → camera movement → st
 
 **Modes (picked from the wired inputs)**
 - Nothing visual → text-to-video. A concrete aspect ratio is REQUIRED — the API hard-rejects a missing one (Nodaro sends the node's ratio; there is no adaptive).
-- Image(s) wired → image-to-video: the first image anchors the scene; extra images are references — bind each in the prompt ("the woman from the first image", "the interior from the second image").
+- Image(s) wired → image-to-video. Your reference images come FIRST, in your order (\`@image_1\`, \`@image_2\`, …) — bind each in the prompt ("the woman from @image_1", "the interior from @image_2"); a wired start frame is appended after them and the platform names it as the opening frame.
 - Source video wired → video-edit (served through the same handle): describe the CHANGE ("replace the daylight with dusk, keep the motion and framing"), not a full re-description.
 
 **Audio (native)**
@@ -284,6 +284,7 @@ descriptions of static/unchanged parts — spend the words on what MOVES.
 **Image-to-video (the primary mode)**
 - The input image is the FIRST FRAME, not a loose reference: composition, subject identity, and visual style carry over. Describe motion and camera only ("she turns toward the window as the camera slowly pushes in"); re-describing the still wastes adherence.
 - grok-imagine-video-1.5 accepts up to 7 images (identity/scene references beyond the first frame); at 1080p only ONE image is allowed.
+- grok-i2v with reference images: images are addressed \`@image(n)\` in array order. Your references come first (\`@image(1)\` is your first reference); a wired start frame is appended after them and the platform names it as the opening frame.
 
 **Audio (video-1.5)**
 - Native audio generates with the clip — background music, SFX, and lip-synced dialogue. Quote the spoken line; describe the music/SFX plainly. There is no audio toggle on the KIE contract — cue (or exclude) sound in the prompt text.
@@ -438,7 +439,7 @@ subject → action → scene/environment → lighting → camera movement → st
 **Contract facts (KIE, per-mode pages)**
 - Prompts: any language, up to 5000 non-Chinese / 2500 Chinese characters — excess is TRUNCATED silently, so put the load-bearing content first.
 - Duration 3-15s (default 5), billed per second. Resolution 720p / 1080p (default). Aspect 16:9 (default) / 9:16 / 1:1 / 4:3 / 3:4.
-- Modes: text-to-video (happyhorse), image-to-video (happyhorse-i2v), reference-to-video (happyhorse-ref2v) — ref2v preserves wired identities; name each reference in the prompt so the binding is explicit.
+- Modes: text-to-video (happyhorse), image-to-video (happyhorse-i2v), reference-to-video (happyhorse-ref2v) — ref2v preserves wired identities; name each reference in the prompt so the binding is explicit, as \`[Image N]\` in array order: your references come first (\`[Image 1]\` is your first), and a wired start frame is appended after them and named as the opening frame.
 
 **Style guidance (platform-standard, honestly generic)**
 - One camera movement per shot; physical, quantified action ("slowly raises a hand") over abstract emotion words; state exclusions ("no on-screen text, no watermark") in the prompt.

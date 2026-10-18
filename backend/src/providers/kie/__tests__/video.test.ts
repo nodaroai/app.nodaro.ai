@@ -315,7 +315,7 @@ describe("KieVideoProvider.imageToVideo", () => {
     expect(imageUrls).toHaveLength(3)
   })
 
-  it("grok-i2v merges startFrame + referenceImageUrls into image_urls array (max 7)", async () => {
+  it("grok-i2v merges referenceImageUrls then the start frame into image_urls (max 7), bound in @image(n)", async () => {
     await provider.imageToVideo(
       "https://start.png",
       "animate",
@@ -327,12 +327,15 @@ describe("KieVideoProvider.imageToVideo", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        image_urls: ["https://start.png", "https://ref1.png", "https://ref2.png", "https://ref3.png"],
+        image_urls: ["https://ref1.png", "https://ref2.png", "https://ref3.png", "https://start.png"],
       }),
       expect.any(Number),
       undefined,
       expect.objectContaining({ modelKey: "grok-i2v" }),
     )
+    const prompt = mocks.mockRunKieTask.mock.calls[0][1].prompt as string
+    expect(prompt).toContain("Use @image(4) as the opening (first) frame of the video.")
+    expect(prompt).toContain("@image(1) through @image(3) are identity references")
   })
 
   it("grok-i2v caps merged image_urls at 7 total", async () => {
@@ -347,7 +350,9 @@ describe("KieVideoProvider.imageToVideo", () => {
     )
     const callArgs = mocks.mockRunKieTask.mock.calls[0][1]
     expect(callArgs.image_urls).toHaveLength(7)
-    expect(callArgs.image_urls[0]).toBe("https://start.png")
+    // The start frame is kept (explicit intent) after six references.
+    expect(callArgs.image_urls.at(-1)).toBe("https://start.png")
+    expect(callArgs.image_urls[0]).toBe("https://ref0.png")
   })
 
   it("returns correct cost for each model", async () => {
@@ -562,15 +567,16 @@ describe("KieVideoProvider.lipSyncVideo", () => {
 // ---------------------------------------------------------------------------
 
 describe("imageToVideo — veo3.1 identity references", () => {
-  it("refs flip the call to REFERENCE_2_VIDEO: [anchor, ...refs] capped at 3, binding in the prompt", async () => {
+  it("refs flip the call to REFERENCE_2_VIDEO: [...refs, anchor] capped at 3, binding in the prompt", async () => {
     await provider.imageToVideo("https://img/start.png", "cinematic", "veo3.1", 8, undefined, {
       referenceImageUrls: ["https://r2/r1.png", "https://r2/r2.png", "https://r2/r3.png"],
     })
     const [, prompt, imageUrls, opts] = mocks.mockRunVeoTask.mock.calls[0]!
-    expect(imageUrls).toEqual(["https://img/start.png", "https://r2/r1.png", "https://r2/r2.png"])
+    // Frames-after-references convention: the caller's refs keep @image_1/2.
+    expect(imageUrls).toEqual(["https://r2/r1.png", "https://r2/r2.png", "https://img/start.png"])
     expect((opts as { generationType?: string }).generationType).toBe("REFERENCE_2_VIDEO")
-    expect(prompt).toContain("Use @image_1 as the opening (first) frame")
-    expect(prompt).toContain("@image_2 through @image_3 are identity references")
+    expect(prompt).toContain("Use @image_3 as the opening (first) frame")
+    expect(prompt).toContain("@image_1 through @image_2 are identity references")
   })
 
   it("no refs ⇒ byte-identical plain frame mode: frames kept, no generationType, prompt untouched", async () => {
@@ -581,12 +587,13 @@ describe("imageToVideo — veo3.1 identity references", () => {
     expect(prompt).toBe("cinematic")
   })
 
-  it("refs + end anchor: the end frame is surrendered to reference mode — refs win the seats", async () => {
+  it("refs + end anchor: both frames are kept after the reference — frames win the seats", async () => {
     await provider.imageToVideo("https://img/start.png", "cinematic", "veo3.1", 8, "https://img/end.png", {
       referenceImageUrls: ["https://r2/r1.png"],
     })
-    const [, , imageUrls] = mocks.mockRunVeoTask.mock.calls[0]!
-    expect(imageUrls).toEqual(["https://img/start.png", "https://r2/r1.png"])
+    const [, prompt, imageUrls] = mocks.mockRunVeoTask.mock.calls[0]!
+    expect(imageUrls).toEqual(["https://r2/r1.png", "https://img/start.png", "https://img/end.png"])
+    expect(prompt).toContain("Use @image_2 as the opening (first) frame and @image_3 as the closing (last) frame of the video.")
   })
 
   // KIE refuses any non-8s reference-to-video run outright ("Invalid duration.
@@ -713,14 +720,24 @@ describe("imageToVideo / textToVideo — veo3 (Quality) never flips to reference
 // ---------------------------------------------------------------------------
 
 describe("imageToVideo — happyhorse-ref2v identity binding", () => {
-  it("binds [Image 1] as the opening frame and the rest as identities, in the model's own addressing", async () => {
+  it("puts the references first and the start frame after them, bound in the model's own [Image N] addressing", async () => {
     await provider.imageToVideo("https://img/start.png", "cinematic", "happyhorse-ref2v", 8, undefined, {
       referenceImageUrls: ["https://r2/r1.png", "https://r2/r2.png"],
     })
     const input = mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
-    expect(input.reference_image).toEqual(["https://img/start.png", "https://r2/r1.png", "https://r2/r2.png"])
-    expect(input.prompt).toContain("[Image 1] is the exact opening (first) frame")
-    expect(input.prompt).toContain("[Image 2] through [Image 3] are identity references")
+    // The caller's [Image 1] / [Image 2] are their own references.
+    expect(input.reference_image).toEqual(["https://r2/r1.png", "https://r2/r2.png", "https://img/start.png"])
+    expect(input.prompt).toContain("Use [Image 3] as the opening (first) frame of the video.")
+    expect(input.prompt).toContain("[Image 1] through [Image 2] are identity references")
+  })
+
+  it("keeps the start frame at the 9-image cap and drops the trailing reference", async () => {
+    const refs = Array.from({ length: 9 }, (_, i) => `https://r2/r${i + 1}.png`)
+    await provider.imageToVideo("https://img/start.png", "cinematic", "happyhorse-ref2v", 8, undefined, { referenceImageUrls: refs })
+    const input = mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
+    expect(input.reference_image).toHaveLength(9)
+    expect((input.reference_image as string[]).at(-1)).toBe("https://img/start.png")
+    expect(input.reference_image as string[]).not.toContain("https://r2/r9.png")
   })
 
   it("a single image (no refs) keeps the prompt untouched", async () => {

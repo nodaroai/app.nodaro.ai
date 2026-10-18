@@ -21,11 +21,11 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isVeoProvider, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
-import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs } from "@nodaro/prompts/assembly"
+import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 import {
   createSanitizedError,
   runKieTask,
@@ -1767,16 +1767,14 @@ export class KieVideoProvider
         // list is the caller's own — no anchor prepend, no binding.
         imageUrls = options.referenceImageUrls.slice(0, veoRefSlots)
       } else if (veoRefSlots > 0 && imageUrl && options?.referenceImageUrls?.length) {
-        // ANCHORED CALL WITH IDENTITY REFS (2026-08-15): VEO's single ≤3
-        // imageUrls array makes frames and reference ingredients mutually
-        // exclusive, so the resolver flips the call to REFERENCE_2_VIDEO
-        // with the anchor in seat 1, prose-bound as the opening frame —
-        // requested rather than pixel-guaranteed, the same accepted trade
-        // as seedance-2's reference mode. References win the seats: an end
-        // anchor is surrendered (logged) rather than spending a third of
-        // the identity budget on a closing guess. Pre-change these refs
-        // were silently dropped — the last keyframes model rendering
-        // identity-blind.
+        // ANCHORED CALL WITH IDENTITY REFS: VEO's single ≤3 imageUrls array
+        // makes frames and reference ingredients mutually exclusive, so the
+        // resolver flips the call to REFERENCE_2_VIDEO under the platform
+        // frame-slot convention — the caller's refs first (their @image_N),
+        // the start and end frame after them, prose-bound as the opening /
+        // closing frame (requested rather than pixel-guaranteed, the same
+        // accepted trade as seedance-2's reference mode). At the 3-seat cap
+        // the frames are kept and trailing refs drop.
         const resolved = resolveVeoI2vInputs({
           prompt: effectivePrompt,
           firstFrameUrl: imageUrl,
@@ -1786,11 +1784,8 @@ export class KieVideoProvider
         imageUrls = resolved.imageUrls
         veoGenerationType = resolved.generationType
         if (resolved.promptSuffix) veoPrompt = `${veoPrompt}\n\n${resolved.promptSuffix}`
-        if (resolved.droppedEndFrame) {
-          console.log(`[KIE.ai] VEO ${provider}: end frame surrendered to reference mode (refs win the seats)`)
-        }
         if (resolved.droppedRefImages > 0) {
-          console.log(`[KIE.ai] VEO ${provider}: dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the 3-ingredient cap`)
+          console.log(`[KIE.ai] VEO ${provider}: dropped ${resolved.droppedRefImages} trailing reference image(s) to keep the frames within the 3-ingredient cap`)
         }
       } else {
         imageUrls = endFrameUrl
@@ -1995,25 +1990,27 @@ export class KieVideoProvider
         : await Promise.all(
             options.referenceImageUrls.map((u) => ensureImageForProvider(u, provider, i2vConstraints)),
           )
-      const merged = effectiveImageUrl
-        ? [effectiveImageUrl, ...refs]
-        : [...refs]
-      const capped = merged.slice(0, modelConfig.maxRefImages)
-      input[imageParamName] = capped
-      // HAPPYHORSE REF2V BINDING (2026-08-15): its schema has no first-frame
-      // param — the start anchor is just media-array entry 1 — and its docs
-      // define prompt addressing as "[Image 1]"…"[Image 9]" in array order.
-      // An unbound list is loose context (the gemini-omni lesson), so name
-      // the roles in the model's OWN convention. Only when a start frame
-      // leads the array and something rides behind it; a bare list (refs
-      // without an anchor) is the caller's to describe.
-      if (provider === "happyhorse-ref2v" && effectiveImageUrl && capped.length > 1) {
-        const identityPart = capped.length === 2
-          ? "[Image 2] is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame."
-          : `[Image 2] through [Image ${capped.length}] are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
-        const binding = `[Image 1] is the exact opening (first) frame of the video. ${identityPart}`
+      // Platform frame-slot convention (a maxRefImages model carries frame and
+      // references in ONE list): the caller's refs first (their image token N
+      // is their Nth reference), the start frame after them, bound in the
+      // provider's OWN syntax (Grok `@image(n)`, HappyHorse `[Image N]`); at
+      // the cap the frame is kept and trailing refs drop. A bare list (refs
+      // without a frame) is the caller's to describe and stays unbound.
+      const placed = placeFramesAfterReferences({
+        prompt: typeof input.prompt === "string" ? input.prompt : undefined,
+        firstFrameUrl: effectiveImageUrl,
+        refImageUrls: refs,
+        imageCap: modelConfig.maxRefImages,
+        syntax: videoProviderReferenceSyntax(provider),
+        bindIdentities: true,
+      })
+      input[imageParamName] = placed.imageUrls
+      if (placed.droppedRefImages > 0) {
+        console.log(`[KIE.ai] ${provider}: dropped ${placed.droppedRefImages} trailing reference image(s) to keep the start frame within the ${modelConfig.maxRefImages}-image cap`)
+      }
+      if (placed.promptSuffix) {
         const base = typeof input.prompt === "string" ? input.prompt : ""
-        input.prompt = base ? `${base}\n\n${binding}` : binding
+        input.prompt = base ? `${base}\n\n${placed.promptSuffix}` : placed.promptSuffix
       }
     }
 

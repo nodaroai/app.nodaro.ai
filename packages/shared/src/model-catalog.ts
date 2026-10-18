@@ -276,6 +276,15 @@ export interface ModelCatalogEntry {
    * `"reference-image"` (guarded by `video-reference-only.test.ts`).
    */
   features?: readonly string[]
+  /**
+   * How this video model's provider addresses its images in the prompt, by
+   * array order — the syntax its frame / identity binding sentences are written
+   * in (`videoProviderReferenceSyntax`). Absent ⇒ the platform's `@image_N`.
+   * Declared only where the provider documents its own form: Grok Imagine's
+   * `@image(n)` (docs.kie.ai/market/grok-imagine/image-to-video) and
+   * HappyHorse's `[Image N]` (docs.kie.ai/market/happyhorse-1-1/reference-to-video).
+   */
+  referenceSyntax?: "@image(n)" | "[Image N]"
   aspectRatios?: readonly string[]
   resolutions?: readonly string[]
   /**
@@ -1771,6 +1780,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     kind: "video",
     modes: ["i2v"] as const,
     features: ["reference-image", "reference-to-video"],
+    referenceSyntax: "@image(n)",
     family: "xAI",
     maker: "xai",
     label: "Grok Imagine (I2V)",
@@ -2311,6 +2321,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     features: ["reference-image", "reference-to-video"],
+    referenceSyntax: "[Image N]",
     noSeed: true,  // HappyHorse 1.1 dropped `seed` from its schema
     pricing: [
       { identifier: "happyhorse-ref2v", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },

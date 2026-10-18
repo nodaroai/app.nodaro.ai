@@ -20,6 +20,7 @@ export * from "../assemble-video-input.js"
 export * from "../seedance-2-inputs.js"
 export * from "../gemini-omni-inputs.js"
 export * from "../veo-i2v-inputs.js"
+export * from "../frame-reference-slots.js"
 export * from "../surround-fill.js"
 // --- Start/end frame delivery: one plan for the dispatch and the editor ---
 export * from "../frame-delivery.js"

@@ -28,10 +28,14 @@
  * says the two things a multimodal model needs to hear — match exactly, and
  * these are not frames. One spelling; both resolvers ride it.
  */
-export function identityRefsSentence(firstOrdinal: number, lastOrdinal: number): string {
+export function identityRefsSentence(
+  firstOrdinal: number,
+  lastOrdinal: number,
+  ordinal: (n: number) => string = REF_BINDING.ordinal,
+): string {
   return firstOrdinal === lastOrdinal
-    ? `${REF_BINDING.ordinal(firstOrdinal)} is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.`
-    : `${REF_BINDING.ordinal(firstOrdinal)} through ${REF_BINDING.ordinal(lastOrdinal)} are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
+    ? `${ordinal(firstOrdinal)} is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.`
+    : `${ordinal(firstOrdinal)} through ${ordinal(lastOrdinal)} are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
 }
 
 export const REF_BINDING = {
@@ -43,6 +47,27 @@ export const REF_BINDING = {
   frame: (n: number, role: "opening" | "closing") =>
     `Use @image_${n} as the ${role} (${role === "opening" ? "first" : "last"}) frame of the video.`,
 } as const
+
+/** A binding sentence's ordinal + frame directive in one provider syntax. */
+export interface ImageBinding {
+  ordinal: (n: number) => string
+  frame: (n: number, role: "opening" | "closing") => string
+}
+
+/**
+ * The image binding in a provider's OWN reference syntax
+ * (`videoProviderReferenceSyntax` in @nodaro/shared). `@image_N` IS
+ * {@link REF_BINDING} — the platform swap point, byte for byte; the other two
+ * spell the same sentence in the form the provider documents.
+ */
+export function imageBindingFor(syntax: "@image_N" | "@image(n)" | "[Image N]"): ImageBinding {
+  if (syntax === "@image_N") return { ordinal: REF_BINDING.ordinal, frame: REF_BINDING.frame }
+  const ordinal = syntax === "@image(n)" ? (n: number) => `@image(${n})` : (n: number) => `[Image ${n}]`
+  return {
+    ordinal,
+    frame: (n, role) => `Use ${ordinal(n)} as the ${role} (${role === "opening" ? "first" : "last"}) frame of the video.`,
+  }
+}
 
 /**
  * The instruction that makes Seedance EDIT a wired clip rather than use it as a

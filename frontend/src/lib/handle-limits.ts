@@ -1,4 +1,4 @@
-import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isWan3Provider, isViduQ4Provider } from "@nodaro/shared/models"
+import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoProviderAppendsFrames } from "@nodaro/shared/models"
 import { getModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
@@ -184,11 +184,10 @@ export function getHandleConnectionLimit(
           return { limit: 0, providerLabel, isMultiProviderMin: false }
         }
         const poolMax = caps?.images ?? 1
-        // Seedance 2 / MiniMax H3 / Wan 3.0 / Vidu Q4: `reference_image_urls`
-        // is ONE pool shared by user image refs (this handle) + start/end frame
-        // + wired identity assets — all four families run the same
-        // resolveSeedance2Inputs resolver, which folds frames into the
-        // reference pool. Subtract the slots those other inputs consume so the
+        // Every model that appends its frames after the user's refs
+        // (`videoProviderAppendsFrames` — one shared image list): that list is
+        // ONE pool shared by user image refs (this handle) + start/end frame +
+        // wired identity assets, because the frames are appended into it. Subtract the slots those other inputs consume so the
         // user-ref cap reflects the budget the runtime resolver will actually
         // honor — wiring more than this many user refs would push the overflow
         // off the tail (where the frames live), corrupting `Image N`. Other ref
@@ -197,7 +196,7 @@ export function getHandleConnectionLimit(
         // keep their flat capability cap straight off
         // VIDEO_REF_LIMITS_BY_PROVIDER. Floor at 0 so the popover shows
         // "N of 0 max" (handle full) rather than a negative max.
-        const limit = isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider) || isViduQ4Provider(provider)
+        const limit = videoProviderAppendsFrames(provider)
           ? Math.max(0, poolMax - (counts?.seedance2ImagePoolConsumed ?? 0))
           : poolMax
         return { limit, providerLabel, isMultiProviderMin: false }

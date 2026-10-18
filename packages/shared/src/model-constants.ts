@@ -1060,6 +1060,65 @@ export function resolveVideoModeForInputs(
   return carriesImageRefs(i2v) && !carriesImageRefs(t2v) ? "image-to-video" : "text-to-video"
 }
 
+/** The prompt syntax a video provider addresses its images in, by array order. */
+export type VideoReferenceSyntax = "@image_N" | "@image(n)" | "[Image N]"
+
+/**
+ * The syntax this video model's frame / identity binding sentences are written
+ * in — the catalog's `referenceSyntax`, else the platform's `@image_N`. One
+ * descriptor for the app's resolvers and for a client (the cloud plugins) that
+ * cites references by ordinal.
+ */
+export function videoProviderReferenceSyntax(provider: string | undefined): VideoReferenceSyntax {
+  return (provider ? MODEL_CATALOG[provider]?.referenceSyntax : undefined) ?? "@image_N"
+}
+
+/**
+ * Reference-capable video models whose start/end frames ride a channel of
+ * their OWN (separate frame parameters next to the reference list), so a frame
+ * never occupies a reference seat. `kling-3-omni` (Replicate `start_image` /
+ * `end_image`) is the only one — and it has no dispatch path today.
+ */
+export const VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL: ReadonlySet<string> = new Set([
+  "kling-3-omni",
+])
+
+/**
+ * True when this video model puts a start (and end) frame AFTER the caller's
+ * own reference images in ONE shared image list, bound in the prompt as the
+ * opening / closing frame in its own syntax — the platform convention, so the
+ * caller's image token N always means their Nth reference. At the image cap
+ * the frames are kept and trailing caller references are dropped.
+ *
+ * Every reference-capable video model, except one whose frames ride a separate
+ * channel ({@link VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL}).
+ */
+export function videoProviderAppendsFrames(provider: string | undefined): boolean {
+  if (!provider) return false
+  const entry = MODEL_CATALOG[provider]
+  return !!entry && entry.kind === "video" &&
+    entry.features?.includes("reference-image") === true &&
+    !VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL.has(provider)
+}
+
+/**
+ * How many of a reference run's image seats the wired frames take on this
+ * model: the start frame, plus the end frame where the model takes one (the
+ * catalog `end-frame` feature). 0 on a model whose frames do not share its
+ * reference list. A caller budgeting its own references subtracts this from
+ * the provider's image cap so no reference of its is dropped.
+ */
+export function videoProviderRefModeFrameSeats(
+  provider: string | undefined,
+  frames: { readonly hasStartFrame: boolean; readonly hasEndFrame: boolean },
+): number {
+  if (!provider) return 0
+  if (!videoProviderAppendsFrames(provider)) return 0
+  const start = frames.hasStartFrame ? 1 : 0
+  const end = frames.hasEndFrame && MODEL_CATALOG[provider]?.features?.includes("end-frame") === true ? 1 : 0
+  return start + end
+}
+
 /**
  * True when the model's provider endpoint runs from reference images ALONE —
  * no start frame (the catalog's `reference-to-video` feature, declared only on

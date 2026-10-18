@@ -132,6 +132,10 @@ export {
   resolveVideoProviderForMode,
   resolveVideoModeForInputs,
   videoProviderRunsFromReferences,
+  videoProviderReferenceSyntax,
+  videoProviderAppendsFrames,
+  videoProviderRefModeFrameSeats,
+  VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL,
   isSeedance2Provider,
   MINIMAX_H3_PROVIDERS,
   isMinimaxH3Provider,
@@ -234,6 +238,7 @@ export type {
   RefAudioRule,
   RefAudioProbe,
   RefAudioCheck,
+  VideoReferenceSyntax,
 } from "../model-constants.js"
 export { GEMINI_OMNI_VOICE_PRESETS, GEMINI_OMNI_VOICE_PRESET_IDS } from "../gemini-omni-voices.js"
 export type { GeminiOmniVoicePreset, GeminiOmniVoicePresetId } from "../gemini-omni-voices.js"
