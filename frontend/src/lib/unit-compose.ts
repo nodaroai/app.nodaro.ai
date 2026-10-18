@@ -7,7 +7,7 @@
 // collection returns every legacy table unchanged.
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { NodeTypeDefinition, SceneNodeData, SceneNodeType } from "@/types/nodes"
-import type { UnitDefinition, UnitHandleKind, UnitLabels } from "@/nodes/kit"
+import type { UnitDefinition, UnitHandleKind, UnitLabels, UnitProducerKind } from "@/nodes/kit"
 
 /**
  * `base` (the legacy order) with each unit inserted right after the type its
@@ -214,6 +214,10 @@ export const unitsWith = (units: ReadonlyArray<UnitDefinition>, capability: stri
 /** HANDLE_OUTPUT_TYPES rows: each output pip → what it carries; a runtime-typed pip (its medium decided per run) has none. */
 export const unitOutputTypes = (u: UnitDefinition): Partial<Record<string, UnitHandleKind>> =>
   Object.fromEntries(u.handles.outputs.filter((h) => !h.runtimeTyped).map((h) => [h.id, h.kind]))
+
+/** The units whose output is `kind` (`contract.producer` of unit.json); a "dynamic" unit is never one of a single medium. */
+export const unitProducers = (units: ReadonlyArray<UnitDefinition>, kind: UnitProducerKind): string[] =>
+  units.filter((u) => u.producer === kind).map((u) => u.type)
 
 /** Units whose primary output (the first — what an edge naming no pip reads) is text. */
 export const unitTextSources = (units: ReadonlyArray<UnitDefinition>): string[] =>

@@ -1,5 +1,6 @@
-import { unitDefinitionOf } from "@/lib/unit-definitions";
-import { unitOutputValue } from "@/lib/unit-compose";
+import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "@/lib/unit-definitions";
+import { composeSet, unitOutputValue, unitProducers } from "@/lib/unit-compose";
+// @registry-enumerates VIDEO_SOURCE_TYPES_FOR_RENDER carries every node unit whose contract.producer is "video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
@@ -1239,7 +1240,12 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "location",
   "scene",
 ]);
-export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
+/** The node types whose output a render / composition node collects as a
+ *  video (collectMediaAssets) and the preview types as one
+ *  (detectPreviewItemType). Legacy rows ∪ every node unit whose
+ *  `contract.producer` is "video" (unit-definitions.ts), so a migrated node is
+ *  never named here; a "dynamic" unit is not a member. */
+export const VIDEO_SOURCE_TYPES_FOR_RENDER: ReadonlySet<string> = composeSet("VIDEO_SOURCE_TYPES_FOR_RENDER", new Set<string>([
   "image-to-video",
   "video-to-video",
   "switchx",
@@ -1289,7 +1295,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "ugc-clip",
   "video-mask",
   "mask-composite",
-]);
+]), unitProducers(UNIT_NODE_DEFINITIONS, "video"));
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",
   "text-to-audio",

@@ -51,6 +51,7 @@ const FIXTURES = vi.hoisted((): UnitDefinition[] => {
         ],
       },
       capabilities: ["edition:nodaro-exclusive", "panel:generate-button"],
+      producer: "dynamic",
     },
     // A notes use-case: text first, a JSON list, no medium, also on the Audio tab.
     {
@@ -70,6 +71,7 @@ const FIXTURES = vi.hoisted((): UnitDefinition[] => {
         ],
       },
       capabilities: ["edition:nodaro-exclusive", "panel:generate-button"],
+      producer: null,
     },
   ]
 })

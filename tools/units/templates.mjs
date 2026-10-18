@@ -76,6 +76,9 @@ export function definitionSource(unit, priceRows) {
     handles: m.handles,
     execution: m.execution,
     capabilities: m.capabilities,
+    // What kind of media its output is (contract.producer; null when it outputs
+    // none) — the editor's video sets compose it (VIDEO_SOURCE_TYPES_FOR_RENDER).
+    producer: m.contract?.producer ?? null,
     docs: m.docs,
     // The editor's price mirror (estimates before the server answers): every
     // staticCosts row of price.ee.ts — never written by hand, never in unit.json.

@@ -70,6 +70,7 @@ export const definition = {
     "finalize:own-writer",
     "length:exact-video"
   ],
+  "producer": "video",
   "docs": {
     "page": "docs/nodes/processing-video/remove-audio.md",
     "index": "hand-written",

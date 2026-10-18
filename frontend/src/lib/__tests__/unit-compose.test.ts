@@ -8,7 +8,7 @@ import type { NodeOption } from "@/lib/node-compatibility"
 import {
   composeFamilyTypes, composeNodeDefinitions, composeTabSuperset, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
   toNodeTypeDefinition, unitJsonProducers, unitNoMediumResults, unitNodeLabels, unitOutputTypes, unitOutputValue, unitPriceRows, unitRecord,
-  unitsWith, unitTabSuperset, unitTextSources,
+  unitProducers, unitsWith, unitTabSuperset, unitTextSources,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
@@ -43,6 +43,7 @@ const FIXTURE: UnitDefinition = {
   },
   execution: { kind: "worker", queue: "video", requires: { anyOf: ["videoUrl"], kind: "video", noun: "a video" } },
   capabilities: ["ffmpeg-media", "panel:generate-button"],
+  producer: "video",
   docs: { page: "docs/nodes/processing-video/fixture-echo.md" },
   priceRows: { "fixture-echo": 3, "fixture-echo:hd": 6 },
 }
@@ -176,6 +177,14 @@ describe("the derived editor sets", () => {
   })
   it("JSON producers: units with any look output", () => {
     expect(unitJsonProducers([notes, plan, silent, textSecond])).toEqual(["notes", "plan", "silent"])
+  })
+  it("producers: the units whose contract.producer is the kind asked for", () => {
+    const of = (type: string, producer: UnitDefinition["producer"]): UnitDefinition => ({ ...FIXTURE, type, producer })
+    const units = [of("v", "video"), of("dyn", "dynamic"), of("a", "audio"), of("none", null), of("v2", "video")]
+    expect(unitProducers(units, "video")).toEqual(["v", "v2"])
+    expect(unitProducers(units, "audio")).toEqual(["a"])
+    expect(unitProducers(units, "image")).toEqual([])
+    expect(unitProducers([], "video")).toEqual([])
   })
   it("no-medium results: gallery units (Generate or Run button) with no video, audio or image output", () => {
     // plan's media pip is runtime-typed but still a medium; silent has no gallery; text-second carries video.

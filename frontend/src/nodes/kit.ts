@@ -46,6 +46,9 @@ export interface UnitOutputHandle {
   readonly runtimeTyped?: true
 }
 
+/** `contract.producer` (tools/units/vocabulary.mjs PRODUCER_KINDS). */
+export type UnitProducerKind = "audio" | "video" | "image" | "dynamic"
+
 export type UnitExecutionKind = "source" | "inline" | "sync" | "worker" | "use-case"
 
 export interface UnitRequiredMedia {
@@ -84,6 +87,8 @@ export interface UnitDefinition {
   }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
+  /** The medium of its output, `contract.producer` of unit.json (null: it outputs no media). Validated against its output handles by gen:units. */
+  readonly producer: UnitProducerKind | null
   readonly docs: { readonly page?: string; readonly awaiting?: string; readonly useCase?: string }
   /** The editor's price mirror before the server answers: every `staticCosts` row of price.ee.ts, projected by gen:units — never hand-written. */
   readonly priceRows: Readonly<Record<string, number>>

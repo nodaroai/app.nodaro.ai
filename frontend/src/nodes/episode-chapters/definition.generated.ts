@@ -72,6 +72,7 @@ export const definition = {
     "panel:generate-button",
     "edition:nodaro-exclusive"
   ],
+  "producer": null,
   "docs": {
     "page": "docs/nodes/processing-video/episode-chapters.md",
     "index": "hand-written"

@@ -1,4 +1,4 @@
-// @test-watches tools/units/** packages/render-rules/src/use-case-*.ts packages/shared/src/json-kinds.ts frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts frontend/src/lib/canvas-macros.ts frontend/src/lib/*macro*.ts frontend/src/lib/node-options.tsx backend/src/ee/billing/credits.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
+// @test-watches tools/units/** frontend/src/nodes/kit.ts packages/render-rules/src/use-case-*.ts packages/shared/src/json-kinds.ts frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts frontend/src/lib/canvas-macros.ts frontend/src/lib/*macro*.ts frontend/src/lib/node-options.tsx backend/src/ee/billing/credits.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -79,6 +79,10 @@ describe("the validator's vocabularies are the product's", () => {
     const src = read("packages/shared/src/producer-types.ts")
     const sets = [...src.matchAll(/export const ([A-Z]+)_PRODUCER_TYPES\b/g)].map((m) => m[1].toLowerCase())
     expect([...PRODUCER_KINDS].sort()).toEqual([...sets].sort())
+  })
+
+  it("producer kinds = UnitProducerKind of the editor kit (the projected `producer` of a unit definition)", () => {
+    expect([...(unionOf(read("frontend/src/nodes/kit.ts"), "UnitProducerKind") ?? [])].sort()).toEqual([...PRODUCER_KINDS].sort())
   })
 
   it("output types = OutputType | \"none\"", () => {

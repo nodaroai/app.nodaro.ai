@@ -87,6 +87,7 @@ export const definition = {
     "panel:generate-button",
     "edition:nodaro-exclusive"
   ],
+  "producer": "dynamic",
   "docs": {
     "page": "docs/nodes/processing-video/tighten-episode.md",
     "index": "hand-written"

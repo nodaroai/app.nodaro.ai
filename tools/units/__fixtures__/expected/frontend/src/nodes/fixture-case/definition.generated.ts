@@ -54,6 +54,7 @@ export const definition = {
     "builder": "fixture"
   },
   "capabilities": [],
+  "producer": null,
   "docs": {
     "awaiting": "the gen:units use-case fixture has no docs page"
   },

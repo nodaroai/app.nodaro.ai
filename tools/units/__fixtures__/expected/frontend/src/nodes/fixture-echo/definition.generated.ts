@@ -59,6 +59,7 @@ export const definition = {
     }
   },
   "capabilities": [],
+  "producer": "video",
   "docs": {
     "page": "docs/nodes/utility/fixture-echo.md",
     "useCase": "Prove every gen:units emitter"
