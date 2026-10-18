@@ -122,6 +122,18 @@ test("base: a merged PR is found through the commit's pulls — its head sha fir
   assert.equal(resolveBase({ listedBases: [], headSha: "h", pulls: [{ base: { ref: "dev" }, head: { sha: "x" } }] }), "dev")
 })
 
+// Run 39051029824 (PR #2303, dev → main, merged): the run lists no PR, and the
+// commit's pulls hold only #2297, the feature PR merged into dev at that sha.
+test("base: a run whose head is this repository's dev branch is the release PR, never a PR into dev", () => {
+  const pulls = [{ number: 2297, base: { ref: "dev" }, head: { sha: "feature-head" } }]
+  assert.equal(resolveBase({ listedBases: [], headSha: "48f05", pulls, headBranch: "dev", sameRepo: true }), "other")
+  assert.equal(resolveBase({ listedBases: [], headSha: "48f05", pulls: null, headBranch: "dev", sameRepo: true }), "other")
+  // a fork's branch named dev proves nothing; a listed base still decides first
+  assert.equal(resolveBase({ listedBases: [], headSha: "48f05", pulls, headBranch: "dev", sameRepo: false }), "dev")
+  assert.equal(resolveBase({ listedBases: ["dev"], headSha: "48f05", pulls, headBranch: "dev", sameRepo: true }), "dev")
+  assert.equal(resolveBase({ listedBases: [], headSha: "48f05", pulls, headBranch: "feat/x", sameRepo: true }), "dev")
+})
+
 test("base: no PR found, or the lookup failed → unknown", () => {
   assert.equal(resolveBase({ listedBases: [], headSha: "h", pulls: [] }), "unknown")
   assert.equal(resolveBase({ listedBases: [], headSha: "h", pulls: [{ base: { ref: "main" }, head: { sha: "x" } }] }), "unknown")
@@ -168,6 +180,30 @@ test("shards: a shard that finished without data, or an unreadable shard, is an 
   for (const e of [lost, bad, empty]) {
     assert.equal(aggregateShadow([{ url: "u", expected: ["backend"], projects: { backend: e } }]).clean, false)
   }
+})
+
+// Runs 39070714645, 39053728041, 39059853548: a shard cancelled by a newer push
+// still uploads its selection (the step is always()), without shadow JSON.
+test("shards: a selection-only artifact from a shard that did not finish is dropped, never an error", () => {
+  const sel = { mode: "full", files: [], total: 1450 }
+  const sh = { project: "frontend", wouldRun: "full", selected: 0, failed: [], misses: [] }
+  const e = mergeShardEntries([{ shard: 1, shadow: sh, selection: sel }, { shard: 2, shadow: sh, selection: sel }, { shard: 3, shadow: null, selection: sel }, { shard: 4, shadow: sh, selection: sel }], [1, 2, 4])
+  assert.equal(e.error, undefined)
+  const report = aggregateShadow([{ url: "u", expected: ["frontend"], projects: { frontend: e } }])
+  assert.equal(report.errors.length, 0)
+  assert.equal(report.clean, true)
+  assert.equal(report.medianShare.frontend, 1)
+  // every shard cancelled: no entry at all (the run's expected list decides "missing")
+  assert.equal(mergeShardEntries([{ shard: 1, shadow: null, selection: sel }, { shard: 2, shadow: null, selection: sel }], []), null)
+  // the dropped shard's selection still gives the share
+  const affected = { project: "frontend", wouldRun: "affected", selected: 10, failed: [], misses: [] }
+  assert.deepEqual(mergeShardEntries([{ shard: 1, shadow: null, selection: { total: 100 } }, { shard: 2, shadow: affected }], [2]).selection, { total: 100 })
+  // what stays an error: an unreadable artifact from any shard, and a shard that finished without data
+  assert.match(mergeShardEntries([{ shard: 1, error: "shadow-frontend-1: bad json" }], []).error, /bad json/)
+  assert.match(mergeShardEntries([{ shard: 1, shadow: sh }, { shard: 2, shadow: null }], [1, 2]).error, /shard 2: shadow JSON missing/)
+  // a cancelled shard that did write its shadow data still counts
+  const miss = mergeShardEntries([{ shard: 1, shadow: { ...affected, failed: ["a.test.ts"], misses: ["a.test.ts"] } }], [])
+  assert.deepEqual(miss.shadow.misses, ["a.test.ts"])
 })
 
 test("shards: a crashed selector in any shard is the project's crash; disagreeing shards are an error", () => {

@@ -106,8 +106,14 @@ export function aggregateShadow(runs, registryChecks = []) {
 // 38439712814 of PR #2168, merged into dev, lists none), so a merged PR is
 // found through the commit's pulls (`pulls`: that list, null when the lookup
 // failed): the PR whose head is this run's head sha, else any PR into dev.
-export function resolveBase({ listedBases, headSha, pulls }) {
+// A run whose head is this repository's dev branch is the dev → main release
+// PR, never a PR into dev: once merged its run lists no PR, and dev's tip
+// commit lists only the feature PR merged into dev, which the fallback would
+// take (run 39051029824 of PR #2303 resolved to #2297's base and was reported
+// as missing shadow data).
+export function resolveBase({ listedBases, headSha, pulls, headBranch = null, sameRepo = false }) {
   if (listedBases.length) return listedBases.includes("dev") ? "dev" : "other"
+  if (headBranch === "dev" && sameRepo) return "other"
   if (!pulls) return "unknown"
   const own = pulls.filter((pr) => pr.head?.sha === headSha)
   if (own.length) return own.some((pr) => pr.base?.ref === "dev") ? "dev" : "other"
@@ -163,7 +169,18 @@ export function expectedFromJobs(conclusions) {
   return { expected, expectedShards }
 }
 
-export function mergeShardEntries(parts, expectedShards = []) {
+// A shard job that did not finish (cancelled — superseded by a newer push — or
+// skipped) is not expected to leave shadow data, as expectedFromJobs says; its
+// always() upload step still uploads the selection alone. Such an artifact is
+// dropped, never read as an error: nothing ran there, so it hides no miss (runs
+// 39070714645, 39053728041, 39059853548). A download or parse error, or a
+// shard that FINISHED without shadow data, stays an error. Returns null when
+// nothing is left — the project then has no entry, and is "missing" only when
+// one of its shard jobs finished.
+export function mergeShardEntries(allParts, expectedShards = []) {
+  const unfinished = (p) => p.shard !== null && !expectedShards.includes(p.shard) && !p.error && !p.shadow
+  const parts = allParts.filter((p) => !unfinished(p))
+  if (!parts.length) return null
   const errors = []
   const have = new Set(parts.map((p) => p.shard))
   const lost = expectedShards.filter((n) => !have.has(n))
@@ -173,7 +190,7 @@ export function mergeShardEntries(parts, expectedShards = []) {
     else if (!p.shadow) errors.push(`shard ${p.shard ?? "?"}: shadow JSON missing from the artifact`)
   }
   const shadows = parts.map((p) => p.shadow).filter(Boolean)
-  const selectionPart = parts.find((p) => p.selection) ?? parts.find((p) => p.selectionError)
+  const selectionPart = allParts.find((p) => p.selection) ?? allParts.find((p) => p.selectionError)
   const out = { selection: selectionPart?.selection ?? null, ...(selectionPart?.selectionError && !selectionPart.selection && { selectionError: selectionPart.selectionError }) }
   const crashedShadow = shadows.find((x) => x.crashed)
   if (crashedShadow) return { ...out, shadow: crashedShadow }
@@ -200,7 +217,7 @@ export function mergeShardEntries(parts, expectedShards = []) {
 function collectRuns({ repo, since }) {
   const lines = gh("api", "--paginate",
     `repos/${repo}/actions/workflows/ci.yml/runs?event=pull_request&created=>=${since}&per_page=100`,
-    "--jq", '.workflow_runs[] | [.id, .html_url, .head_sha, ([.pull_requests[].base.ref] | join(","))] | @tsv')
+    "--jq", '.workflow_runs[] | [.id, .html_url, .head_sha, .head_branch, (.head_repository.full_name == .repository.full_name), ([.pull_requests[].base.ref] | join(","))] | @tsv')
   const pullsBySha = new Map() // one lookup per head sha
   const pullsFor = (sha) => {
     if (!pullsBySha.has(sha)) {
@@ -217,7 +234,7 @@ function collectRuns({ repo, since }) {
   const registryChecks = []
   const listed = lines.split("\n").filter(Boolean)
   for (const line of listed) {
-    const [id, url, headSha, bases = ""] = line.split("\t")
+    const [id, url, headSha, headBranch, sameRepo, bases = ""] = line.split("\t")
     const artifacts = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n")
     const names = artifacts.filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
     // An affected run (the main selector enforcing) checks the registry rule
@@ -239,7 +256,7 @@ function collectRuns({ repo, since }) {
     const { expected, expectedShards } = expectedFromJobs(conclusions)
     // The base matters only for a run without shadow artifacts.
     const base = names.length ? "dev"
-      : resolveBase({ listedBases: bases.split(",").filter(Boolean), headSha, pulls: expected.length ? pullsFor(headSha) : [] })
+      : resolveBase({ listedBases: bases.split(",").filter(Boolean), headSha, headBranch, sameRepo: sameRepo === "true", pulls: expected.length ? pullsFor(headSha) : [] })
     if (!shadowExpected({ base, hasArtifacts: names.length > 0, expected })) continue
     const parts = { frontend: [], backend: [] }
     for (const name of names) {
@@ -266,8 +283,11 @@ function collectRuns({ repo, since }) {
     }
     const projects = {}
     for (const [project, list] of Object.entries(parts)) {
-      if (list.length) projects[project] = mergeShardEntries(list, list.some((p) => p.shard !== null) ? expectedShards[project] : [])
+      const entry = list.length ? mergeShardEntries(list, list.some((p) => p.shard !== null) ? expectedShards[project] : []) : null
+      if (entry) projects[project] = entry
     }
+    // every artifact came from an unfinished shard and no shard job finished: nothing to check
+    if (!Object.keys(projects).length && !expected.length) continue
     runs.push({ url, expected, projects, ...(base === "unknown" && { baseUnknown: true }) })
   }
   return { listed: listed.length, runs, registryChecks }
