@@ -59,7 +59,7 @@ export async function runVideoCritic(
     userId: args.userId,
     role: "critic",
     task: "video_critic",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt: blocks,

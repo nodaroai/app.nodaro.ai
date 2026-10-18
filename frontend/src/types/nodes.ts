@@ -7334,7 +7334,7 @@ export interface GenerativePipelineNodeData {
   // User-pinned models (forwarded to `pipelines.config` at create time so the
   // backend resolver — `resolvePipelineModel` in @nodaro/shared — picks them
   // up). All optional — leaving any of these blank reverts to "auto" (LLM
-  // picks per shot for image/video, hardcoded sonnet-4-6 for script).
+  // picks per shot for image/video, hardcoded sonnet-5-5 for script).
   // Types come from the shared allowlists so a workflow JSON with an
   // unknown id fails to typecheck instead of reaching the API.
   image_model?: PipelinePinnableImageModel

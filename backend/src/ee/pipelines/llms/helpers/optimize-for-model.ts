@@ -43,7 +43,7 @@ Rewrite every shot's action + motion_prompt for the new style and respond as JSO
     userId: args.userId,
     role: "helper",
     task: "optimize_for_model",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.4,
     systemPrompt,
     userPrompt,

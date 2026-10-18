@@ -29,7 +29,7 @@ Validate cast coverage and respond as JSON.`
     userId: args.userId,
     role: "critic",
     task: "cast_coverage",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt,

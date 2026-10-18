@@ -40,7 +40,7 @@ export async function runChatRefineShowrunner(args: RunChatRefineShowrunnerArgs)
     userId: args.userId,
     role: "specialist",
     task: "chat_refine_showrunner",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.5,
     systemPrompt,
     userPrompt,

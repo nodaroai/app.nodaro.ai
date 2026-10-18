@@ -31,7 +31,7 @@ export class NotAMatchCutError extends Error {
   }
 }
 
-const MATCH_CUT_VERDICT_SCHEMA = z.object({
+export const MATCH_CUT_VERDICT_SCHEMA = z.object({
   match_strength: z.enum(["strong", "moderate", "weak", "break"]),
   verdict: ImageCriticVerdictSchema,
   suggested_adjustments: z.string().max(300),
@@ -101,7 +101,7 @@ export async function runValidateMatchCut(
     userId: args.userId,
     role: "helper",
     task: "validate_match_cut",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt,

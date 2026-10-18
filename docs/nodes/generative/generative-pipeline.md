@@ -45,13 +45,13 @@ mode-selection prompt.
 
 In `mode='guided'`, the Script stage pauses at `awaiting_approval` like manual mode, but an adjacent chat panel mounts next to the pipeline panel. You can refine the generated `ShowrunnerPlan` in natural language:
 
-- **Send a message** (max 8000 chars). The Showrunner Refinement Director (Sonnet 4.6) returns a one-sentence reply + optionally a **proposed change** card.
+- **Send a message** (max 8000 chars). The Showrunner Refinement Director (Sonnet 5.5) returns a one-sentence reply + optionally a **proposed change** card.
 - **Two proposal types:**
   - **Edit Artifact** — JSON Patch (RFC 6902) on the plan: title, logline, scene descriptions/duration, cast roster, locations, objects, etc. Click **Apply** to commit.
   - **Suggest Branch** — when the change is structural (genre swap, protagonist replacement, removing a scene with many dependent dialogue lines), the director recommends using the Branch flow instead of inline patching.
 - **Reference integrity is enforced**: a patch that removes a cast/location/object key while it's still referenced in a scene is rejected, and a follow-up assistant turn explains what to fix. The user can iterate.
 - **Cap**: 20 user turns per pipeline. Reached the cap? Approve, branch, or switch to Manual Mode.
-- **Cost**: ~20 credits per chat turn (cached Sonnet 4.6). `mode='guided'` reserves 20 credits<!-- credits: n/a --> upfront for every turn the chat-enabled stages allow — 560 credits<!-- credits: n/a --> over the manual baseline today (20 Script turns + 8 Post-merge turns). Unused credits refund automatically.
+- **Cost**: ~20 credits per chat turn (cached Sonnet 5.5). `mode='guided'` reserves 20 credits<!-- credits: n/a --> upfront for every turn the chat-enabled stages allow — 560 credits<!-- credits: n/a --> over the manual baseline today (20 Script turns + 8 Post-merge turns). Unused credits refund automatically.
 
 Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge chat ship in 1D.2d.
 
@@ -60,7 +60,7 @@ Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge 
 After Stage 8 (Post-merge) completes and the pipeline reaches its final `awaiting_approval` gate, Guided Mode mounts a chat panel where users can review the assembled video and request stage re-runs:
 
 - **Artifact**: the final video URL + Editor LLM's cut decisions + total duration + beat grid (if music was used)
-- **LLM**: Sonnet 4.6 (Post-merge Refinement Director), reviews artifact + chat history + user message
+- **LLM**: Sonnet 5.5 (Post-merge Refinement Director), reviews artifact + chat history + user message
 - **Output**: natural-language diagnosis + optional `suggest_branch` payload pointing to an earlier stage
 
 **Key constraint**: Post-merge chat does NOT support `edit_artifact` proposals — the final video isn't user-editable in place. The route validator rejects `edit_artifact` here with HTTP 400 `invalid_change_type_for_stage`. The only meaningful refinement at Stage 8 is to re-run from an earlier stage with adjusted inputs.
@@ -78,7 +78,7 @@ After Stage 8 (Post-merge) completes and the pipeline reaches its final `awaitin
 
 ### Image-level critics (Phase 1D.2c-a)
 
-Stages 2 (Characters) and 4 (Locations) each run a vision-LLM critic (Sonnet 4.6) against generated main images. The critic validates that the image matches the entity's `visual_description` from the ShowrunnerPlan:
+Stages 2 (Characters) and 4 (Locations) each run a vision-LLM critic (Sonnet 5.5) against generated main images. The critic validates that the image matches the entity's `visual_description` from the ShowrunnerPlan:
 
 - **Pass** → entity advances to `awaiting_approval` (Manual/Guided) or auto-approves (Auto). Any informational findings (warnings) are still surfaced under the image on the EntityCard.
 - **Fail** → image regenerates with critic feedback (the suggested_fix from each blocking issue is injected into the next prompt) up to 2 times.
@@ -90,7 +90,7 @@ Variants (angle/expression for characters, wide/ground/etc. for locations) are N
 
 ### Storyboard Cohesion (Phase 1D.2c-b-i)
 
-After Stage 6 generates all scene keyframes, a vision-LLM critic (Sonnet 4.6) reviews them as a sequence to validate cross-scene cohesion + plot-level continuity. **Warn-only** — findings surface to the user via a banner in the pipeline panel but never block the stage from advancing.
+After Stage 6 generates all scene keyframes, a vision-LLM critic (Sonnet 5.5) reviews them as a sequence to validate cross-scene cohesion + plot-level continuity. **Warn-only** — findings surface to the user via a banner in the pipeline panel but never block the stage from advancing.
 
 The critic catches issues that no per-image critic can see:
 - **character_inconsistency** — protagonist's appearance drifts between scenes
@@ -106,7 +106,7 @@ Adds 50 credits<!-- credits: n/a --> to the pipeline budget (1 Sonnet call with 
 
 ### Video Critic (Phase 1D.2c-b-ii)
 
-After each shot's clip is rendered at Stage 7, a vision-LLM critic (Sonnet 4.6) validates the generated video. **Blocking** with cap=1 retry-with-feedback per shot (cost-aware — a retry re-generates the full video clip).
+After each shot's clip is rendered at Stage 7, a vision-LLM critic (Sonnet 5.5) validates the generated video. **Blocking** with cap=1 retry-with-feedback per shot (cost-aware — a retry re-generates the full video clip).
 
 The critic checks:
 - **Prompt adherence** — does the action/motion match the shot prompt?

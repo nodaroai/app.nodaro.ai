@@ -123,7 +123,7 @@ Candidates:
 Reply with JSON: { "chosen_index": <1-based>, "reasoning": "<one sentence>" }
 ```
 
-Uses `llmComplete` from `backend/src/lib/llm-client.ts` with model id `claude-sonnet-4.6` (DOT form — canonical for the unified LLM client per `backend/CLAUDE.md` "Unified LLM Client" table). NOT to be confused with `claude-sonnet-4-6` (hyphen) used by `ee/pipelines/llms/call-llm.ts`, which is a separate code path for pipeline-specific critics.
+Uses `llmComplete` from `backend/src/lib/llm-client.ts` with model id `claude-sonnet-4.6` (DOT form — canonical for the unified LLM client per `backend/CLAUDE.md` "Unified LLM Client" table). NOT to be confused with the hyphen-form Anthropic ids (the pipeline critics use `claude-sonnet-5-5`) taken by `ee/pipelines/llms/call-llm.ts`, which is a separate code path for pipeline-specific critics.
 
 **Image content block handling — implementation decision required.** `llmComplete` tries KIE's messages proxy first and falls back to direct Anthropic SDK only when `directFallbackModel` is set. The direct-Anthropic path accepts `{ type: "image", source: { type: "url", url: item } }` content blocks natively (verified at `llm-client.ts:144` — the client converts the shape correctly). KIE's proxy behavior with image content blocks is NOT verified — it may strip image blocks, error, or work silently incorrectly.
 

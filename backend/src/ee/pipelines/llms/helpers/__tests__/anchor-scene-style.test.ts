@@ -72,7 +72,7 @@ describe("runAnchorSceneStyle", () => {
     const llmArgs = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(llmArgs.role).toBe("helper")
     expect(llmArgs.task).toBe("anchor_scene_style")
-    expect(llmArgs.modelId).toBe("claude-sonnet-4-6")
+    expect(llmArgs.modelId).toBe("claude-sonnet-5-5")
     expect(llmArgs.sceneId).toBe("scene-1")
     // Image gen passed through the planned anchor prompt + scene's image_model
     const imgArgs = (pipelineGenerateImage as ReturnType<typeof vi.fn>).mock.calls[0][0]

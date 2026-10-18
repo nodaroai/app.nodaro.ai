@@ -4,9 +4,16 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../../../lib/pricing/llm-cost.js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
-import { LlmPlatformExhaustedError, toPlatformExhausted } from "../../../lib/llm-errors.js"
+import {
+  LLM_CONTENT_REFUSAL_MESSAGE,
+  LlmContentRefusalError,
+  LlmPlatformExhaustedError,
+  toPlatformExhausted,
+} from "../../../lib/llm-errors.js"
 import { getPipelineSignal } from "../pipeline-context.js"
 import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
+import { anthropicStructuredTool } from "../../../lib/llm/message-builders.js"
+import { extractJsonFromAIResponse } from "../../../lib/json-utils.js"
 
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
@@ -118,8 +125,96 @@ export interface CallLLMResult<T> {
 }
 
 /**
- * Forced structured output via Anthropic tools API + Zod schema validation +
- * llm_calls audit insert + retry-on-invalid loop. Used by every pipeline LLM.
+ * Everything of one stage turn's request but its messages — the model, the
+ * output cap, the temperature (omitted for a model that refuses one), the
+ * system block and the `emit` tool with its tool_choice. `callLLM` adds the
+ * user turn per attempt; exported so a live probe sends exactly what a stage
+ * sends.
+ */
+export function buildStageRequest(opts: {
+  modelId: string
+  task: string
+  temperature?: number
+  systemPrompt: string
+  schema: z.ZodType<unknown, unknown>
+  cacheSystemPrompt?: boolean
+}): { request: Omit<Anthropic.Messages.MessageCreateParamsNonStreaming, "messages">; autoTool: boolean } {
+  const { modelId, task, temperature = 0.3, systemPrompt, schema, cacheSystemPrompt = true } = opts
+  // Use draft-7 (JSON Schema) not OpenAPI 3.0. Anthropic's Messages API
+  // requires tool input_schema to match JSON Schema draft 2020-12 strictly —
+  // it rejects OpenAPI-specific extensions like `nullable: true` (Zod's
+  // .nullable() / .nullish() emit that under target=openApi3, breaking every
+  // tool call). Draft 7 is a compatible subset of 2020-12 and uses
+  // `"type": [..., "null"]` for nullable fields, which Anthropic accepts.
+  // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
+  const jsonSchema = restrictObjectSchemas(
+    z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
+  )
+  delete jsonSchema.$schema
+
+  // A model that refuses a forced `tool_choice` (registry
+  // `supportsForcedToolChoice: false` — Sonnet 5.5 / Opus 5.5 answer one with a
+  // 400) is asked the way the unified client asks it: `tool_choice: auto`, the
+  // tool `strict` when the schema fits, and a line in the system prompt naming
+  // the tool (`anthropicStructuredTool`). Every other model keeps the forced
+  // shape byte-for-byte.
+  const registryModel = getLlmModel(normalizeModelId(modelId))
+  const autoTool =
+    registryModel?.supportsForcedToolChoice === false
+      ? anthropicStructuredTool(registryModel, systemPrompt, { name: "emit", schema: jsonSchema })
+      : null
+
+  const toolDef: Anthropic.Messages.Tool = {
+    // The auto shape's tool carries the strict-subset schema and `strict: true`.
+    ...(autoTool?.tools[0] as Partial<Anthropic.Messages.Tool> | undefined),
+    name: "emit",
+    description: `Emit a structured ${task} result.`,
+    input_schema: (autoTool?.tools[0]?.input_schema ?? jsonSchema) as Anthropic.Messages.Tool.InputSchema,
+  }
+  const toolChoice: Anthropic.Messages.ToolChoice = autoTool
+    ? { type: "auto" }
+    : { type: "tool", name: "emit" }
+
+  const systemBlock: Anthropic.Messages.TextBlockParam[] = [
+    {
+      type: "text",
+      text: autoTool ? autoTool.system : systemPrompt,
+      ...(cacheSystemPrompt ? { cache_control: { type: "ephemeral" } } : {}),
+    },
+  ]
+
+  // Anthropic's reasoning models (Opus 4.7+) reject the `temperature`
+  // parameter with a 400 — extended-thinking is incompatible with explicit
+  // temperature control. Omit it for those models; older Sonnet/Haiku still
+  // accept it.
+  const supportsTemperature = !TEMPERATURE_UNSUPPORTED_MODELS.has(modelId)
+  return {
+    request: {
+      model: modelId,
+      max_tokens: THINKING_DEFAULT_ON_MODELS.has(modelId) ? STAGE_MAX_TOKENS_THINKING : STAGE_MAX_TOKENS,
+      ...(supportsTemperature ? { temperature } : {}),
+      system: systemBlock,
+      tools: [toolDef],
+      tool_choice: toolChoice,
+    },
+    autoTool: autoTool !== null,
+  }
+}
+
+/**
+ * Structured output via the Anthropic tools API (direct SDK) + Zod schema
+ * validation + llm_calls audit insert + retry-on-invalid loop. Used by every
+ * pipeline LLM. The `emit` tool is FORCED (`tool_choice: tool`) for every model
+ * that accepts that; a model whose registry entry says
+ * `supportsForcedToolChoice: false` is asked with `tool_choice: auto`, a strict
+ * tool and a system-prompt line naming it, and a JSON answer it writes as text
+ * is read too.
+ *
+ * Two stop reasons end the loop early, on either path: `refusal` fails at once
+ * with {@link CallLLMRefusalError} (re-asking the same request is routing
+ * around a content decision), and `max_tokens` with no usable answer is
+ * retried once, then fails with {@link CallLLMTruncatedError}. Every failure
+ * still writes its llm_calls row with the tokens and cost spent.
  */
 export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>> {
   const {
@@ -144,31 +239,14 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
   const anthropic = getAnthropicClient()
   const retries = Math.max(0, maxRetries)
 
-  // Use draft-7 (JSON Schema) not OpenAPI 3.0. Anthropic's Messages API
-  // requires tool input_schema to match JSON Schema draft 2020-12 strictly —
-  // it rejects OpenAPI-specific extensions like `nullable: true` (Zod's
-  // .nullable() / .nullish() emit that under target=openApi3, breaking every
-  // tool call). Draft 7 is a compatible subset of 2020-12 and uses
-  // `"type": [..., "null"]` for nullable fields, which Anthropic accepts.
-  // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
-  const jsonSchema = restrictObjectSchemas(
-    z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
-  )
-  delete jsonSchema.$schema
-
-  const toolDef: Anthropic.Messages.Tool = {
-    name: "emit",
-    description: `Emit a structured ${task} result.`,
-    input_schema: jsonSchema as Anthropic.Messages.Tool.InputSchema,
-  }
-
-  const systemBlock: Anthropic.Messages.TextBlockParam[] = [
-    {
-      type: "text",
-      text: systemPrompt,
-      ...(cacheSystemPrompt ? { cache_control: { type: "ephemeral" } } : {}),
-    },
-  ]
+  const { request: stageRequest, autoTool } = buildStageRequest({
+    modelId,
+    task,
+    temperature,
+    systemPrompt,
+    schema,
+    cacheSystemPrompt,
+  })
 
   let lastError: string | null = null
   let totalIn = 0
@@ -176,6 +254,32 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
   let cacheCreate = 0
   let cacheRead = 0
   const t0 = Date.now()
+  let truncations = 0
+
+  // The llm_calls row of a call that ends without an answer — the tokens and
+  // cost were spent all the same.
+  const recordFailure = async (errorText: string): Promise<void> => {
+    const { error: auditError } = await supabase.from("llm_calls").insert({
+      pipeline_id: pipelineId,
+      stage_id: stageId,
+      user_id: userId,
+      role,
+      task,
+      model_id: modelId,
+      input_tokens: totalIn,
+      output_tokens: totalOut,
+      cache_creation_input_tokens: cacheCreate,
+      cache_read_input_tokens: cacheRead,
+      cost_usd: estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead),
+      duration_ms: Date.now() - t0,
+      success: false,
+      error: errorText,
+    })
+    if (auditError) {
+      // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
+      console.error("[callLLM] Failed to write llm_calls failure row:", auditError.message)
+    }
+  }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const userContent =
@@ -191,20 +295,8 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
           ]
         : userPrompt
 
-    // Anthropic's reasoning models (Opus 4.7+) reject the `temperature`
-    // parameter with a 400 — extended-thinking is incompatible with explicit
-    // temperature control. Omit it for those models; older Sonnet/Haiku still
-    // accept it.
-    const supportsTemperature = !TEMPERATURE_UNSUPPORTED_MODELS.has(modelId)
-    const createParams = {
-      model: modelId,
-      max_tokens: THINKING_DEFAULT_ON_MODELS.has(modelId)
-        ? STAGE_MAX_TOKENS_THINKING
-        : STAGE_MAX_TOKENS,
-      ...(supportsTemperature ? { temperature } : {}),
-      system: systemBlock,
-      tools: [toolDef],
-      tool_choice: { type: "tool", name: "emit" } as const,
+    const createParams: Anthropic.Messages.MessageCreateParamsNonStreaming = {
+      ...stageRequest,
       messages: [{ role: "user" as const, content: userContent }],
     }
     // Streaming path: only when the caller wants progress events. The non-
@@ -257,20 +349,47 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     cacheCreate += resp.usage.cache_creation_input_tokens ?? 0
     cacheRead += resp.usage.cache_read_input_tokens ?? 0
 
-    const toolUse = resp.content.find((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
-    if (!toolUse) {
-      lastError = "Model did not call the emit tool."
-      continue
+    // A content refusal is the model's answer about this request: asking the
+    // same request again is routing around it, so it ends the call at once.
+    if (resp.stop_reason === "refusal") {
+      const detail = `direct ${modelId} stopped with refusal on ${task} (in ${totalIn} / out ${totalOut} tokens)`
+      await recordFailure(`refusal: ${detail}`)
+      throw new CallLLMRefusalError(detail, {
+        inputTokens: totalIn,
+        outputTokens: totalOut,
+        providerCost: estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead),
+        complete: true,
+      })
     }
+    const truncated = resp.stop_reason === "max_tokens"
+
+    const toolUse = resp.content.find((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
+    // Under `tool_choice: auto` a model may answer with the JSON as plain text
+    // instead of a tool call — read it there before spending a retry.
+    const rawOutput = toolUse ? toolUse.input : autoTool ? jsonFromText(resp.content) : undefined
     // Optional preprocess (e.g., truncateCriticFields) runs before Zod so
     // recoverable overshoots don't trigger needless retries.
-    const emitInput = args.preprocess ? args.preprocess(toolUse.input) : toolUse.input
-    const parsed = schema.safeParse(emitInput)
-    if (!parsed.success) {
-      lastError = parsed.error.issues
-        .slice(0, 5)
-        .map((i) => `${i.path.join(".")}: ${i.message}`)
-        .join("; ")
+    const parsed =
+      rawOutput === undefined ? undefined : schema.safeParse(args.preprocess ? args.preprocess(rawOutput) : rawOutput)
+    if (!parsed?.success) {
+      // Cut off at the output cap with nothing usable: one more try (the
+      // reasoning differs run to run), then a failure that says so instead of
+      // a schema complaint about a fragment.
+      if (truncated) {
+        truncations++
+        if (truncations > 1 || attempt === retries) {
+          await recordFailure(`max_tokens: ${task} cut off at ${createParams.max_tokens} output tokens`)
+          throw new CallLLMTruncatedError(task, createParams.max_tokens)
+        }
+        lastError = "Your answer was cut off at the output token cap before the emit call finished. Be more concise."
+        continue
+      }
+      lastError = parsed
+        ? parsed.error.issues
+            .slice(0, 5)
+            .map((i) => `${i.path.join(".")}: ${i.message}`)
+            .join("; ")
+        : "Model did not call the emit tool."
       continue
     }
     // Success — write llm_calls row.
@@ -316,26 +435,7 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
   }
 
   // All retries exhausted — record failure + throw.
-  const { error: auditError } = await supabase.from("llm_calls").insert({
-    pipeline_id: pipelineId,
-    stage_id: stageId,
-    user_id: userId,
-    role,
-    task,
-    model_id: modelId,
-    input_tokens: totalIn,
-    output_tokens: totalOut,
-    cache_creation_input_tokens: cacheCreate,
-    cache_read_input_tokens: cacheRead,
-    cost_usd: estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead),
-    duration_ms: Date.now() - t0,
-    success: false,
-    error: lastError ?? "unknown",
-  })
-  if (auditError) {
-    // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
-    console.error("[callLLM] Failed to write llm_calls failure row:", auditError.message)
-  }
+  await recordFailure(lastError ?? "unknown")
   throw new CallLLMValidationError(`${task} validation failed after ${retries + 1} attempts: ${lastError}`)
 }
 
@@ -343,6 +443,35 @@ export class CallLLMValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "CallLLMValidationError"
+  }
+}
+
+/**
+ * The model refused the request on content grounds (`stop_reason: "refusal"`).
+ * `message` is the content-policy sentence every LLM path shows — a stage
+ * stores `err.message` as its failure reason, as it does for every throw here —
+ * and the shared {@link LlmContentRefusalError} rides `cause`, carrying the
+ * usage and the duck-typed `contentPolicyClass` the safety-block seam reads.
+ * The diagnostic (model, task, tokens) is `internalDetails`.
+ */
+export class CallLLMRefusalError extends Error {
+  readonly code = "content_refusal"
+  readonly internalDetails: string
+  constructor(detail: string, usage: ConstructorParameters<typeof LlmContentRefusalError>[1]) {
+    super(LLM_CONTENT_REFUSAL_MESSAGE, {
+      cause: new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (${detail})`, usage),
+    })
+    this.name = "CallLLMRefusalError"
+    this.internalDetails = detail
+  }
+}
+
+/** The answer was cut off at the output cap twice (or on the last attempt) — never a usable emit. */
+export class CallLLMTruncatedError extends Error {
+  readonly code = "output_truncated"
+  constructor(task: string, maxTokens: number) {
+    super(`${task}: the answer was cut off at the token cap (${maxTokens} output tokens) before the model finished.`)
+    this.name = "CallLLMTruncatedError"
   }
 }
 
@@ -370,6 +499,20 @@ function estimateCost(
     { inputTokens, outputTokens, cacheWriteTokens: cacheCreate, cacheReadTokens: cacheRead },
     "direct",
   )
+}
+
+/** The JSON a model wrote as text (no tool call), or undefined when there is none. */
+function jsonFromText(content: Anthropic.Messages.ContentBlock[]): unknown {
+  const text = content
+    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+  if (!text.trim()) return undefined
+  try {
+    return JSON.parse(extractJsonFromAIResponse(text))
+  } catch {
+    return undefined
+  }
 }
 
 // Anthropic accepts both alias ("claude-opus-4-7") and dated ("claude-opus-4-7-20251201").

@@ -69,7 +69,7 @@ describe("runChatRefinePostMerge", () => {
     expect(args.role).toBe("specialist")
     expect(args.task).toBe("chat_refine_postmerge")
     expect(args.maxRetries).toBe(2)
-    expect(args.modelId).toBe("claude-sonnet-4-6")
+    expect(args.modelId).toBe("claude-sonnet-5-5")
     expect(args.temperature).toBe(0.5)
   })
 

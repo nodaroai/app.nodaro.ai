@@ -56,7 +56,7 @@ describe("runBridgeToNextScene", () => {
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("helper")
     expect(call.task).toBe("bridge_to_next_scene")
-    expect(call.modelId).toBe("claude-sonnet-4-6")
+    expect(call.modelId).toBe("claude-sonnet-5-5")
     expect(call.sceneId).toBe("scene-1")
     // Both prior end_state + target start_state surface in the user prompt
     expect(call.userPrompt).toContain("hero in center, looking up")

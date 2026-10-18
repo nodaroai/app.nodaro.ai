@@ -96,6 +96,9 @@ export type PipelinePinnableVideoModel = (typeof PIPELINE_PINNABLE_VIDEO_MODELS)
 // through `lib/llm-client.ts` first; until then, keep this list tight.
 export const PIPELINE_PINNABLE_SCRIPT_LLMS = [
   "claude-haiku-5-5",
+  // The pipeline's own default (Auto) since 2026-10-16; callLLM asks it with
+  // tool_choice auto, as it refuses a forced tool choice.
+  "claude-sonnet-5-5",
   "claude-sonnet-4-6",
   "claude-opus-4-7",
   "claude-opus-5",

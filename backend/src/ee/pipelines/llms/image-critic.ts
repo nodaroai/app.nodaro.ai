@@ -117,7 +117,7 @@ export async function runImageCritic(
     userId: args.userId,
     role: "critic",
     task: "image_critic",
-    modelId: "claude-sonnet-4-6",
+    modelId: "claude-sonnet-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt,

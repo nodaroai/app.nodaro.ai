@@ -109,7 +109,9 @@ function SCRIPT_LLM_LABELS(): Record<string, string> {
     "claude-haiku-5-5": tx("cfgext.genLlmHaiku55"),
     // Shown only on a pipeline saved with this pin; a bare product name.
     "claude-haiku-4-5": "Claude Haiku 4.5",
-    "claude-sonnet-4-6": tx("cfgext.genLlmSonnet46"),
+    "claude-sonnet-5-5": tx("cfgext.genLlmSonnet55"),
+    // No longer the default (Auto runs Sonnet 5.5); a bare product name.
+    "claude-sonnet-4-6": "Claude Sonnet 4.6",
     "claude-opus-4-7": "Claude Opus 4.7",
     "claude-opus-5": tx("cfgext.genLlmOpus5"),
   }

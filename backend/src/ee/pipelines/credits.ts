@@ -30,7 +30,7 @@ import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 // every pipeline reserving a tenth of its intended budget — an under-reservation
 // silently shifts cost onto the commit step instead of failing the balance gate.
 // A reservation is a dollar amount; the credit count is just how it's denominated.
-const PER_TURN_ESTIMATE_USD = 0.04 // cached Sonnet 4.6 turn
+const PER_TURN_ESTIMATE_USD = 0.04 // one cached chat-refine turn
 const STORYBOARD_COHESION_USD = 0.1 // Sonnet vision call with N images × markup
 
 const PER_TURN_ESTIMATE_CREDITS = usdToCredits(PER_TURN_ESTIMATE_USD)
