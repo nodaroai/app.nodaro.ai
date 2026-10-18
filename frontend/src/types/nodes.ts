@@ -6218,6 +6218,10 @@ export type CameraSwitchNodeData = {
    *  NODE id. Unset speakers are pre-filled by order at run time; `""` = no
    *  camera of their own (the wide, else any camera with picture). */
   speakerMap?: Record<string, string>
+  /** Who is on which camera by ordinal — "1" the first voice heard → a camera
+   *  SOURCE id, "" none; what a use-case node's override writes (decided
+   *  2026-10-17). A label in `speakerMap` beats it. */
+  speakerMapByOrder?: Record<string, string>
   /** Speaker label → display name (segments + the renamed transcript). */
   speakerNames?: Record<string, string>
   /** The shortest shot, ms (default 2 500): a shorter turn holds the shot. */

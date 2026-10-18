@@ -5,6 +5,7 @@
  * and pre-fill the speaker table. Pure, no I/O.
  */
 import { normalizeTranscript } from "./edl.js"
+import { speakerMapByOrdinal, speakerMapResultOf } from "./speaker-map-contract.js"
 
 /** The settings and their decided defaults (the plugin holds its own copy, D13). */
 export const CAMERA_SWITCH_DEFAULTS = Object.freeze({
@@ -135,6 +136,10 @@ export function defaultSpeakerMap(
  *  settings and the same pre-filled speaker table. */
 export interface CameraSwitchNodeSettings {
   readonly speakerMap?: Readonly<Record<string, string>>
+  /** Who is on which camera by ordinal — "1" the first voice heard → a camera
+   *  SOURCE id, "" none; what a use-case node's override writes (decided
+   *  2026-10-17). A label in `speakerMap` beats it. */
+  readonly speakerMapByOrder?: Readonly<Record<string, string>>
   readonly speakerNames?: Readonly<Record<string, string>>
   readonly minShotMs?: number
   readonly leadMs?: number
@@ -142,10 +147,40 @@ export interface CameraSwitchNodeSettings {
   readonly wideEvery?: number
   readonly layoutHints?: boolean
 }
+/**
+ * Who is on which camera — the ONE merge of the speaker table's layers
+ * (decided 2026-10-17). Per speaker, the first that names them wins: an
+ * explicit label in `speakerMap`, the ordinal override `speakerMapByOrder`, a
+ * wired Speaker Map result, then the order default (`defaultSpeakerMap`).
+ * Each layer above the default is passed as `existing`, so its "" (no camera
+ * of their own) is SENT as "" and is never re-filled by the order default; an
+ * explicit entry that is not a string is ignored, so it never hides a layer
+ * below it. `cameraSwitchSettingsPayload` sends this; the config panel's
+ * "What the run will use" shows this — never a second copy of the order.
+ */
+export function cameraSwitchSpeakerMap(
+  data: Pick<CameraSwitchNodeSettings, "speakerMap" | "speakerMapByOrder">,
+  edl: unknown,
+  transcript: unknown,
+  wired?: { readonly speakerMap?: unknown },
+): Record<string, string> {
+  const labels = transcriptSpeakerLabels(transcript)
+  const explicit = data.speakerMap && typeof data.speakerMap === "object" && !Array.isArray(data.speakerMap)
+    ? Object.fromEntries(Object.entries(data.speakerMap).filter(([, camera]) => typeof camera === "string"))
+    : {}
+  const existing = {
+    ...(speakerMapResultOf(wired?.speakerMap)?.speakerMap ?? {}),
+    ...speakerMapByOrdinal(labels, data.speakerMapByOrder),
+    ...explicit,
+  }
+  return defaultSpeakerMap(labels, cameraSwitchCameras(edl).map((c) => c.id), existing)
+}
+
 export function cameraSwitchSettingsPayload(
   data: CameraSwitchNodeSettings,
   edl: unknown,
   transcript: unknown,
+  wired?: { readonly speakerMap?: unknown },
 ): {
   speakerMap: Record<string, string>
   speakerNames: Record<string, string>
@@ -155,9 +190,8 @@ export function cameraSwitchSettingsPayload(
   wideEvery?: number
   layoutHints: boolean
 } {
-  const existing = data.speakerMap && typeof data.speakerMap === "object" ? data.speakerMap : {}
   const out: ReturnType<typeof cameraSwitchSettingsPayload> = {
-    speakerMap: defaultSpeakerMap(transcriptSpeakerLabels(transcript), cameraSwitchCameras(edl).map((c) => c.id), existing),
+    speakerMap: cameraSwitchSpeakerMap(data, edl, transcript, wired),
     speakerNames: cleanSpeakerNames(data.speakerNames),
     layoutHints: data.layoutHints === true,
   }

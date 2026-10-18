@@ -35,6 +35,7 @@ const NOT_PER_WIRE: Record<string, string> = {
   exposedSettings: "an app's exposed settings, keyed by field",
   strategyConfig: "Reduce's strategy options, keyed by option",
   speakerMap: "speaker label → the EDL's camera id, minted by Edit Plan's run (already the run's id)",
+  speakerMapByOrder: "speaker ordinal (1st, 2nd heard) → the EDL's camera id, minted by the run, never a node id",
 }
 
 describe("every per-wire node-data field is translated through a Teleport pair", () => {

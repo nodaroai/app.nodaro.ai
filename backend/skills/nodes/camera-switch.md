@@ -1,7 +1,7 @@
 ---
 node_type: camera-switch
-generated_at: 2026-10-14T00:02:34.086Z
-generated_from: b83a9467d
+generated_at: 2026-10-18T16:26:18.591Z
+generated_from: f88cf5e2a
 ---
 
 # Camera Switch
@@ -19,6 +19,7 @@ generated_from: b83a9467d
 
 **Optional data fields:**
 - `speakerMap?: Record<string, string>`
+- `speakerMapByOrder?: Record<string, string>`
 - `speakerNames?: Record<string, string>`
 - `minShotMs?: number`
 - `leadMs?: number`
