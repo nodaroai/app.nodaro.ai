@@ -10,7 +10,11 @@
  * and a server run's results reach the canvas only through an open editor.
  * A seed carries no job id and no start time (it ran in the earlier
  * execution, not this one; the editor reads such a state as seeded), and
- * names the execution it came from (`seededFromExecution`).
+ * names the execution it came from (`seededFromExecution`). A seed of a node
+ * that execution did not complete keeps the id of the last attempt at it that
+ * FAILED — in that execution, or carried from an earlier one — as
+ * `failedAttemptJobId` (never `jobId`), so a use-case node resumes that attempt
+ * however many generations later the run is continued.
  *
  * The run RE-APPLIES the input overrides the earlier run used (round 2,
  * decided 2026-10-06), applied to the graph by the one merge every run uses
@@ -53,24 +57,36 @@
  * Refusals (stable codes, `@nodaro/shared` run-continuation): no subset, an
  * execution that does not exist or that the caller did not start, another
  * workflow, another version of the graph (a published app version, or the
- * live workflow), an execution that has not ended `completed`.
+ * live workflow), an execution that has not ended `completed` (`failed`, for
+ * continue-from-failed).
  *
  * An INLINE (use-case) run has no workflow and no app version: its identity
  * is the hash STORED with its snapshot (decided 2026-10-13). A continuation's
  * execution carries the source's snapshot verbatim, so the two match by
  * construction — never a hash of a freshly rebuilt graph, which covers node
  * positions and labels and would drift across a builder change. A saved
- * workflow's run and an inline run never continue each other. Inline runs
- * alone have the continue-from-failed mode: the source must have ended
- * `failed`, and the run executes every node it did not complete
- * (`fromFailedRunSet`); the completed ones are seeded, never dispatched, so
- * never billed again.
+ * workflow's run and an inline run never continue each other.
+ *
+ * The continue-from-failed mode: the source must have ended `failed`, and the
+ * run executes every node it did not complete (`fromFailedRunSet`); the
+ * completed ones are seeded, never dispatched, so never billed again. A saved
+ * workflow's run whose lineage has a newer generation that completed part of
+ * what was left is BUILT ON that one (decided 2026-10-18): seeded from its
+ * states and running only what it left (`continuationHeadRefusal`). Inline
+ * (use-case) runs had it first (decided 2026-10-13); a run of a SAVED workflow
+ * has it too (decided 2026-10-17) — under every other check above (the
+ * caller's own run, the same workflow, the same version: `POST
+ * /v1/workflows/:id/run` runs the live workflow, so an app run's execution
+ * stays refused). A failed server run's completed outputs live only in its
+ * `node_states` (a server run reaches the saved node data only through an
+ * open editor), so this is the one way to keep them.
  */
 import {
   isPreviewHoldingType,
   CONTINUATION_NOT_COMPLETED,
   CONTINUATION_NOT_FAILED,
   CONTINUATION_NOT_FOUND,
+  CONTINUATION_PREVIEW_PENDING,
   CONTINUATION_SUPERSEDED,
   CONTINUATION_SUBSET_REQUIRED,
   CONTINUATION_VERSION_MISMATCH,
@@ -98,7 +114,11 @@ import {
 } from "../../lib/execution-input-overrides.js"
 import { inlineGraphOf, noteInlineGraphColumnError, withInlineGraphColumns } from "../../lib/execution-inline-graph.js"
 import { appRenderFinalStampOf } from "../../lib/app-run-final-column.js"
+import { appRunStampOf } from "../../lib/app-run-stamp.js"
+import { ancestorsOf, bypassTeleports, type WalkEdge } from "@nodaro/render-rules"
+import { continueFromFailedStampOf, lineageRootOf, type ContinueFromFailedStamp } from "../../lib/continue-from-failed-lineage.js"
 import { isSkipNode, isSourceNode } from "./execution-graph.js"
+import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 
 /** The execution a run continues from, as the checks and the seeds read it. */
@@ -109,7 +129,8 @@ export interface ContinuationSource {
   /** Null for an inline (use-case) execution: it ran a stored snapshot, not a saved workflow. */
   readonly workflowId: string | null
   readonly status: string
-  /** The published app version it ran (`app_runs.app_id`); `null` = the live workflow. */
+  /** The published app version it ran (`app_runs.app_id`, found by the run's
+   *  pointer or by the execution's app-run stamp); `null` = the live workflow. */
   readonly appVersionId: string | null
   /** An inline (use-case) run's stored snapshot hash — its identity in place of
    *  a workflow and a version. Absent or null: a saved-workflow run, or an
@@ -122,6 +143,11 @@ export interface ContinuationSource {
   readonly inputOverrides?: Readonly<Record<string, Record<string, unknown>>> | null
   /** Its `node_states` — loaded only when the caller seeds from them. */
   readonly nodeStates?: Readonly<Record<string, NodeExecutionState>>
+  /** When it started running (`started_at`); null: it never did. Absent on a literal. */
+  readonly startedAt?: string | null
+  /** A continue-from-failed of a saved workflow's run: what it continues, and
+   *  its lineage's first run (lib/continue-from-failed-lineage.ts). */
+  readonly continueFromFailed?: ContinueFromFailedStamp | null
 }
 
 /** What the run asks to continue with. */
@@ -134,8 +160,9 @@ export interface ContinuationRun {
   readonly nodeIds?: readonly string[] | null
   /** The stored snapshot hash of the inline (use-case) graph this run executes. */
   readonly inlineGraphHash?: string | null
-  /** "from-failed": resume an inline run that failed, keeping what it
-   *  completed. Default "subset" (Render final after a preview). */
+  /** "from-failed": resume a run that failed (inline or of a saved
+   *  workflow), keeping what it completed. Default "subset" (Render final
+   *  after a preview). */
   readonly mode?: "subset" | "from-failed"
 }
 
@@ -168,8 +195,8 @@ export async function loadContinuationSource(
 ): Promise<ContinuationSource | null> {
   // `trigger_data`: a Render final's stamp names the version it ran (below).
   const base = opts.withStates
-    ? "id, user_id, workflow_id, status, trigger_data, node_states"
-    : "id, user_id, workflow_id, status, trigger_data"
+    ? "id, user_id, workflow_id, status, started_at, trigger_data, node_states"
+    : "id, user_id, workflow_id, status, started_at, trigger_data"
   const withOverrides = opts.withStates || opts.withPin === true
   // The seeding read (and a route's `withPin` check) also takes the overrides
   // the run pinned when it started (round 3) — through the column guard: until
@@ -194,6 +221,7 @@ export async function loadContinuationSource(
     user_id: string
     workflow_id: string | null
     status: string
+    started_at?: string | null
     trigger_data?: unknown
     node_states?: Record<string, NodeExecutionState> | null
   }
@@ -203,15 +231,31 @@ export async function loadContinuationSource(
   // workflow has no row.
   // Its stored inputs ride along when the caller reads the overrides and the
   // execution holds no pin (one made before the pin existed).
+  const appRunColumns = withOverrides && pinned === null ? "app_id, input_values" : "app_id"
   const { data: appRun, error: appRunError } = await supabase
     .from("app_runs")
-    .select(withOverrides && pinned === null ? "app_id, input_values" : "app_id")
+    .select(appRunColumns)
     .eq("execution_id", executionId)
     // The execution owner's run only (lib/app-run-ownership.ts).
     .eq("runner_id", execution.user_id)
     .maybeSingle()
   if (appRunError) throw new Error(`continuation: ${appRunError.message}`)
-  const appRow = appRun as { app_id?: string | null; input_values?: unknown } | null
+  let appRow = appRun as { app_id?: string | null; input_values?: unknown } | null
+  // `execution_id` names a run's CURRENT execution only: a Retry or re-run
+  // moves it to a new one. Every execution an app run starts is stamped with
+  // the run (lib/app-run-stamp.ts), so an earlier one is still the run's — an
+  // app version's execution, never the live workflow's.
+  const stampedRun = appRow ? null : appRunStampOf(execution.trigger_data)
+  if (stampedRun) {
+    const { data: stamped, error: stampedError } = await supabase
+      .from("app_runs")
+      .select(appRunColumns)
+      .eq("id", stampedRun)
+      .eq("runner_id", execution.user_id)
+      .maybeSingle()
+    if (stampedError) throw new Error(`continuation: ${stampedError.message}`)
+    appRow = stamped as { app_id?: string | null; input_values?: unknown } | null
+  }
   // An app run's Render final is an execution no app run names by
   // `execution_id`; a later final continues from it (a chain, decided
   // 2026-10-06). Its stamp, written when it was created, names the version it
@@ -223,8 +267,12 @@ export async function loadContinuationSource(
     userId: execution.user_id,
     workflowId: execution.workflow_id,
     status: execution.status,
-    appVersionId: (appRow?.app_id ?? null) || finalVersion,
+    // A stamped execution whose run is gone still ran a published version:
+    // it reads as one no run matches (`STAMPED_APP_RUN_UNKNOWN_VERSION`).
+    appVersionId: (appRow?.app_id ?? null) || finalVersion || (stampedRun ? STAMPED_APP_RUN_UNKNOWN_VERSION : null),
     inlineGraphHash: inlineGraphOf(row as unknown as Record<string, unknown>)?.hash ?? null,
+    startedAt: execution.started_at ?? null,
+    continueFromFailed: continueFromFailedStampOf(execution.trigger_data),
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),
@@ -233,6 +281,9 @@ export async function loadContinuationSource(
     ...(withOverrides ? { inputOverrides: storedOverrides(pinned !== null ? pinned : appRow?.input_values) } : {}),
   }
 }
+
+/** The version a stamped app-run execution reads as when its run row is gone: no run executes it. */
+export const STAMPED_APP_RUN_UNKNOWN_VERSION = "app-run-version-unknown"
 
 /** A pin or `app_runs.input_values` as an override map (`{ nodeId: fields }`), or `null` (none). */
 function storedOverrides(raw: unknown): Record<string, Record<string, unknown>> | null {
@@ -266,12 +317,32 @@ export function continuationRefusal(source: ContinuationSource | null, run: Cont
   if (!source || source.userId !== run.userId) return CONTINUATION_NOT_FOUND
   if (!sameGraphIdentity(source, run)) return CONTINUATION_WORKFLOW_MISMATCH
   if ((source.appVersionId ?? null) !== (run.appVersionId ?? null)) return CONTINUATION_VERSION_MISMATCH
-  if (run.mode === "from-failed") {
-    // Only an inline run resumes from a failure.
-    if (source.workflowId !== null) return CONTINUATION_WORKFLOW_MISMATCH
-    return source.status === "failed" ? null : CONTINUATION_NOT_FAILED
-  }
+  if (run.mode === "from-failed") return source.status === "failed" ? null : CONTINUATION_NOT_FAILED
   if (source.status !== "completed") return CONTINUATION_NOT_COMPLETED
+  return null
+}
+
+/**
+ * Why a continue-from-failed of `source` may not be seeded from `head`, or
+ * `null` when it may (decided 2026-10-18; lib/continue-from-failed-lineage.ts).
+ * `head` is the lineage's newest generation, which COMPLETED only part of what
+ * was left: the run builds on it — seeded from its states, which hold the
+ * earlier generations' too — instead of on `source`. It must be the caller's
+ * own run of this workflow and this version of its graph (the ordinary checks,
+ * `completed` included), have started, and be a continue-from-failed of
+ * `source`'s lineage that did not run all it was left. `source` has passed
+ * `continuationRefusal` in the from-failed mode. Pure.
+ */
+export function continuationHeadRefusal(
+  head: ContinuationSource | null,
+  source: ContinuationSource,
+  run: ContinuationRun,
+): RunContinuationCode | null {
+  const refusal = continuationRefusal(head, { ...run, mode: "subset" })
+  if (refusal) return refusal
+  const stamp = head!.continueFromFailed
+  // Anything else is no generation the run could build on: it reads as missing.
+  if (!head!.startedAt || !stamp || stamp.all || stamp.root !== lineageRootOf(source)) return CONTINUATION_NOT_FOUND
   return null
 }
 
@@ -296,6 +367,34 @@ function sameGraphIdentity(source: ContinuationSource, run: ContinuationRun): bo
  */
 export function fromFailedRunSet(nodeIds: readonly string[], source: Pick<ContinuationSource, "nodeStates">): string[] {
   return nodeIds.filter((id) => source.nodeStates?.[id]?.status !== "completed")
+}
+
+/**
+ * A saved workflow's continue-from-failed run set (decided 2026-10-17): the
+ * nodes of `nodeIds` the failed run did not complete (`fromFailedRunSet`),
+ * closed over what they need — every node upstream of one of them that the
+ * run did not complete either, reached through such nodes only (a completed
+ * node hands on its seed, so nothing above it is needed). Without the closure
+ * a narrow `nodeIds` would run a node on an upstream that never produced
+ * anything, and complete without redoing the failure. Wires as the
+ * orchestrator reads them (a Teleport pair bypassed). In `order`. Pure.
+ */
+export function fromFailedClosedRunSet(
+  order: readonly string[],
+  nodeIds: readonly string[],
+  graph: {
+    readonly nodes: ReadonlyArray<{ readonly id?: string; readonly type?: string | null; readonly data?: unknown }>
+    readonly edges: ReadonlyArray<WalkEdge>
+  },
+  source: Pick<ContinuationSource, "nodeStates">,
+): string[] {
+  const remaining = fromFailedRunSet(nodeIds, source)
+  const completed = (id: string) => source.nodeStates?.[id]?.status === "completed"
+  // Only wires out of a node that did not complete lead further up.
+  const open = bypassTeleports(graph.nodes, graph.edges).filter((e) => !completed(e.source))
+  const run = new Set(remaining)
+  for (const id of remaining) for (const up of ancestorsOf(id, open)) if (!completed(up)) run.add(up)
+  return order.filter((id) => run.has(id))
 }
 
 /** An Edit Plan's seed: the plan the earlier run made (as planned), with the review applied. */
@@ -382,7 +481,17 @@ export function continuationSeeds(
     // its members') — keeps the ordinary handling when the earlier run holds
     // none for it.
     if (!state && (isSourceNode(node.type) || PARAMETER_NODE_TYPES.has(node.type) || isSkipNode(node.type))) continue
-    seeds.set(node.id, { status: "skipped", nodeType: node.type, completedAt, seededFromExecution: source.id })
+    // The attempt that failed — in this execution, or carried on its own seed
+    // from an earlier generation — rides on: a continuation built on THIS
+    // seed's execution then resumes it, never starts it fresh.
+    const failedAttempt = failedAttemptJobIdOf(state)
+    seeds.set(node.id, {
+      status: "skipped",
+      nodeType: node.type,
+      completedAt,
+      seededFromExecution: source.id,
+      ...(failedAttempt ? { failedAttemptJobId: failedAttempt } : {}),
+    })
   }
   return seeds
 }
@@ -433,6 +542,7 @@ export const CONTINUATION_REFUSAL_STATUS: Readonly<Record<RunContinuationCode, n
   [CONTINUATION_NOT_COMPLETED]: 409,
   [CONTINUATION_NOT_FAILED]: 409,
   [CONTINUATION_SUPERSEDED]: 409,
+  [CONTINUATION_PREVIEW_PENDING]: 409,
 }
 
 /** Each refusal's message (en). Clients branch on the code. */
@@ -446,4 +556,6 @@ export const CONTINUATION_REFUSAL_MESSAGE: Readonly<Record<RunContinuationCode, 
   [CONTINUATION_NOT_COMPLETED]: "The execution to continue from has not completed.",
   [CONTINUATION_NOT_FAILED]: "Only a run that failed can be continued from where it stopped.",
   [CONTINUATION_SUPERSEDED]: "A later continuation of this run failed: continue that one.",
+  [CONTINUATION_PREVIEW_PENDING]:
+    "A later continuation of this run stopped at a Preview review: finish it first (the run named in next, continuing that execution).",
 }

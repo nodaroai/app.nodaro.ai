@@ -4,6 +4,7 @@ import {
   PREVIEW_REVIEW_REQUIRED,
   PREVIEW_RENDER_NESTED,
   PREVIEW_RENDER_NODE_TYPES,
+  CONTINUATION_NOT_FOUND,
   CONTINUATION_SUBSET_REQUIRED,
   type SavedRenderStampReader,
   withWiredSettings,
@@ -67,6 +68,7 @@ import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migrat
 import { extractSourceNodeOutput, extractSavedNodeOutput, fanOutIterationValue } from "../services/workflow-engine/output-extractor.js"
 import { runPreviewStops, runHoldsPreview } from "../lib/preview-review-gate.js"
 import {
+  continuationHeadRefusal,
   continuationInputOverrides,
   continuationRefusal,
   continuationRenderStamps,
@@ -75,6 +77,7 @@ import {
   loadContinuationSource,
   type ContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
+import { keptFailedAttempt } from "../services/workflow-engine/failed-attempt.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { loadInlineGraph } from "../lib/execution-inline-graph.js"
@@ -797,8 +800,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     }
 
     // A CONTINUED run (`continueFromExecutionId`: Render final after a run
-    // that stopped at its preview, an app's Render final, or a use-case run
-    // continued from its failure). Asked here, before the override merge and
+    // that stopped at its preview, an app's Render final, or a run — of a
+    // saved workflow or a use-case node — continued from its failure). Asked here, before the override merge and
     // before any node runs: the earlier execution must be the caller's own run
     // of this workflow (or, inline, of the same stored snapshot) and this
     // version of its graph — completed for a subset continuation, failed for a
@@ -833,20 +836,47 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         await failExecution(executionId, refusal ?? CONTINUATION_SUBSET_REQUIRED)
         return
       }
-      // Continue-from-failed runs only what the failed run did not complete,
-      // whatever the caller listed: a completed step is seeded, never
-      // dispatched (or billed) again.
+      // A continue-from-failed the route built on a newer generation of the
+      // failed run's lineage (one that completed part of what was left) is
+      // seeded from THAT execution: its states hold the failed run's
+      // completed work and its own (lib/continue-from-failed-lineage.ts).
+      // The route decided which; asked again here, never re-resolved.
+      let seedSource = source
+      if (job.data.continueMode === "from-failed" && job.data.seedFromExecutionId && job.data.seedFromExecutionId !== source.id) {
+        const head = await loadContinuationSource(job.data.seedFromExecutionId, {
+          withStates: true,
+          isRenderNode: (id) => isPreviewHoldingType(typeOf.get(id)),
+        })
+        const headRefusal = continuationHeadRefusal(head, source, {
+          userId,
+          workflowId,
+          appVersionId,
+          nodeIds: job.data.nodeIds,
+          inlineGraphHash,
+        })
+        if (headRefusal || !head) {
+          console.warn(
+            `[continuation] execution ${executionId} REFUSED — ${headRefusal} (seeded from ${job.data.seedFromExecutionId}, continuing ${source.id})`,
+          )
+          await failExecution(executionId, headRefusal ?? CONTINUATION_NOT_FOUND)
+          return
+        }
+        seedSource = head
+      }
+      // Continue-from-failed runs only what the run it is seeded from did not
+      // complete, whatever the caller listed: a completed step is seeded,
+      // never dispatched (or billed) again.
       if (job.data.continueMode === "from-failed") {
-        const remaining = fromFailedRunSet([...nodeSubset], source)
+        const remaining = fromFailedRunSet([...nodeSubset], seedSource)
         if (remaining.length === 0) {
           await failExecution(executionId, CONTINUATION_SUBSET_REQUIRED)
           return
         }
         nodeSubset = new Set(remaining)
       }
-      continuationSource = source
-      ctx.continuedFromStates = source.nodeStates
-      inputOverrides = continuationInputOverrides(source, job.data.inputOverrides)
+      continuationSource = seedSource
+      ctx.continuedFromStates = seedSource.nodeStates
+      inputOverrides = continuationInputOverrides(seedSource, job.data.inputOverrides)
     }
 
     // Apply presentation / published-app input overrides to source node data.
@@ -1395,6 +1425,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         nodeStates[node.id] = {
           status: "pending",
           nodeType: node.type,
+          // A continue-from-failed: the attempt that failed before rides on
+          // until this run's own job continues it (failed-attempt.ts).
+          ...keptFailedAttempt(ctx.continuedFromStates, node.id),
         }
       }
     }
@@ -1667,6 +1700,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             status: "running",
             nodeType: displayType,
             startedAt: new Date().toISOString(),
+            ...keptFailedAttempt(ctx.continuedFromStates, node.id),
           }
           await updateExecution(executionId, { node_states: nodeStates })
           emitExecutionEvent({
@@ -1882,6 +1916,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             ...(charged ? { creditsUsed: charged } : {}),
             inputs: nodeStates[node.id]?.inputs,
             jobId: nodeStates[node.id]?.jobId,
+            // Failed before a job of its own: the earlier failed attempt stays resumable.
+            ...keptFailedAttempt(ctx.continuedFromStates, node.id, nodeStates[node.id]?.jobId),
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),
           }

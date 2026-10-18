@@ -25,6 +25,7 @@ export type {
   CreateWorkflowInput,
   UpdateWorkflowInput,
   RunWorkflowParams,
+  RunWorkflowOptions,
   RunWorkflowResult,
   RenderFinalParams,
   RenderFinalQuote,

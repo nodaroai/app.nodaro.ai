@@ -10696,6 +10696,7 @@ export const ja: ChromeDict = {
   "runContinuation.notCompleted": "続きの元になる実行が完了していません。完了するまで待つか、完了した実行から続けてください。",
   "runContinuation.notFailed": "続きの元になる実行は失敗していません。停止した箇所から続けられるのは、失敗した実行だけです。",
   "runContinuation.superseded": "この実行の後の続きが失敗しました。代わりにその実行を続けてください。",
+  "runContinuation.previewPending": "この実行の後の続きがプレビューの確認で止まっています。先にその最終レンダリングを実行してから続けてください。",
   "runContinuation.alreadyRendered": "この編集ではすでにレンダリング済みです。",
   "runContinuation.finalInProgress": "このプレビューの最終レンダリングはすでに進行中です。",
   "runContinuation.settling": "その実行はまだ確定処理中のため、まだ続けられません。少し待ってからもう一度お試しください。",

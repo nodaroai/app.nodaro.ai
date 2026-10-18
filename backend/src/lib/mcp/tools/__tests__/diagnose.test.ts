@@ -27,20 +27,25 @@ function mockSupabase(opts: {
   execution?: unknown
   jobSingle?: unknown
   jobsBatch?: unknown[]
+  /** The workflow run_workflow's access read finds (in the caller's "mcp" project), or none. */
+  mcpWorkflow?: unknown
 }): void {
   ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation(
     (table: string) => {
+      if (table === "projects" || table === "workflows") {
+        const row = table === "projects" ? { id: "mcp-project" } : (opts.mcpWorkflow ?? null)
+        const q: Record<string, unknown> = {}
+        for (const m of ["select", "eq", "order", "limit"]) q[m] = () => q
+        q.maybeSingle = () => Promise.resolve({ data: row, error: null })
+        return q
+      }
       if (table === "workflow_executions") {
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                maybeSingle: () =>
-                  Promise.resolve({ data: opts.execution ?? null, error: null }),
-              }),
-            }),
-          }),
-        }
+        // The by-id read, and the resume hint's lineage read (which finds the
+        // run itself: no later continuation supersedes it).
+        const q: Record<string, unknown> = {}
+        for (const m of ["select", "eq", "in", "not", "order", "limit"]) q[m] = () => q
+        q.maybeSingle = () => Promise.resolve({ data: opts.execution ?? null, error: null })
+        return q
       }
       if (table === "jobs") {
         return {
@@ -210,6 +215,44 @@ describe("diagnose_run tool", () => {
     expect(byNode.n3.class).toBe("post_processing")
     expect(byNode.n3.creditsActual).toBe(2)
     expect(out.summary).toContain("2")
+    // Not a saved workflow's run (no workflow id): no resume hint.
+    expect(out.resumeHint).toBeUndefined()
+  })
+
+  it("a failed saved-workflow run says how to continue it from where it stopped (decided 2026-10-17)", async () => {
+    mockSupabase({
+      execution: {
+        id: "exec1",
+        status: "failed",
+        workflow_id: "wf-1",
+        trigger_type: "manual",
+        node_states: { n1: { status: "failed", nodeType: "generate-image", error: "boom" } },
+        error_message: "1 node failed",
+      },
+      mcpWorkflow: { id: "wf-1" },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
+    expect(out.resumeHint).toContain(`run_workflow({ workflow_id: "wf-1", continue_from_execution_id: "exec1", from_failed: true })`)
+  })
+
+  it("no resumeHint for a failed run of a workflow run_workflow does not reach (outside the mcp project)", async () => {
+    mockSupabase({
+      execution: {
+        id: "exec1",
+        status: "failed",
+        workflow_id: "wf-elsewhere",
+        trigger_type: "manual",
+        node_states: { n1: { status: "failed", nodeType: "generate-image", error: "boom" } },
+        error_message: "1 node failed",
+      },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
+    expect(out.status).toBe("failed")
+    expect(out.resumeHint).toBeUndefined()
   })
 
   it("attacker: a node_states jobId naming another user's job yields no facts of it", async () => {

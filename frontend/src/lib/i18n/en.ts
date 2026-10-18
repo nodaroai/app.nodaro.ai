@@ -10993,6 +10993,7 @@ export const en = {
   "runContinuation.notCompleted": "The run to continue from has not completed. Wait for it to finish, or continue from a run that completed.",
   "runContinuation.notFailed": "The run to continue from did not fail. Only a run that failed can be continued from where it stopped.",
   "runContinuation.superseded": "A later continuation of this run failed: continue that run instead.",
+  "runContinuation.previewPending": "A later continuation of this run stopped at its Preview review. Run its Render final first, then continue.",
   "runContinuation.alreadyRendered": "Already rendered with this edit.",
   "runContinuation.finalInProgress": "A Render final of this preview is already in progress.",
   "runContinuation.settling": "That run is still being settled, so it can't be continued yet. Try again in a moment.",

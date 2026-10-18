@@ -10696,6 +10696,7 @@ export const ko: ChromeDict = {
   "runContinuation.notCompleted": "이어서 실행할 원래 실행이 완료되지 않았습니다. 끝날 때까지 기다리거나, 완료된 실행에서 이어서 실행하세요.",
   "runContinuation.notFailed": "이어서 실행할 원래 실행은 실패하지 않았습니다. 멈춘 곳부터 이어서 실행할 수 있는 것은 실패한 실행뿐입니다.",
   "runContinuation.superseded": "이 실행의 이후 이어서 실행이 실패했습니다. 대신 그 실행을 이어서 실행하세요.",
+  "runContinuation.previewPending": "이 실행의 이후 이어서 실행이 미리보기 검토에서 멈췄습니다. 먼저 그 실행의 최종 렌더링을 실행한 다음 이어서 실행하세요.",
   "runContinuation.alreadyRendered": "이 편집으로 이미 렌더링되었습니다.",
   "runContinuation.finalInProgress": "이 미리보기의 최종 렌더링이 이미 진행 중입니다.",
   "runContinuation.settling": "그 실행은 아직 정산 중이라 지금은 이어서 실행할 수 없습니다. 잠시 후 다시 시도하세요.",

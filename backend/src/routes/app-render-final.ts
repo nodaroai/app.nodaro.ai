@@ -48,7 +48,8 @@ import {
   isPreviewHoldingType,
 } from "@nodaro/shared/nodes"
 import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
-import { isUseCaseNodeType, usecaseFinalRunSet, usecasePreviewTarget, usecaseRenderFinalOverrides, type UseCaseRenderFinalTarget } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseFinalRunSet, usecaseRenderFinalOverrides } from "@nodaro/render-rules"
+import { usecasePreviewTargetIn } from "../lib/use-case/preview-target.js"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
@@ -93,33 +94,6 @@ const body = z.object({
 })
 
 type SnapshotNode = { id: string; type?: string; data?: Record<string, unknown>; parentId?: string | null }
-type ContinuationSourceRow = NonNullable<Awaited<ReturnType<typeof loadContinuationSource>>>
-
-/** How many seeds a use-case take is followed back through to the run that made it. */
-const MAX_SEED_HOPS = 8
-
-/**
- * A use-case node's Preview in the execution a final continues. A final that
- * did not run the node hands its take on as a SEED, which names the execution
- * it came from but not the take's own wrapper: follow seeds back (the
- * runner's own executions only) to the state that ran it. `nodeType` is the
- * node's type on the app's snapshot (a list-result type's list is its result).
- */
-async function usecaseTargetIn(
-  source: ContinuationSourceRow,
-  nodeId: string,
-  nodeType: string | undefined,
-  userId: string,
-  isRenderNode: (id: string) => boolean,
-): Promise<UseCaseRenderFinalTarget | null> {
-  let state = source.nodeStates?.[nodeId] as { seededFromExecution?: unknown; jobId?: unknown } | undefined
-  for (let hop = 0; hop < MAX_SEED_HOPS && state && state.jobId === undefined && typeof state.seededFromExecution === "string"; hop++) {
-    const earlier = await loadContinuationSource(state.seededFromExecution, { withStates: true, isRenderNode })
-    if (!earlier || earlier.userId !== userId) return null
-    state = earlier.nodeStates?.[nodeId] as typeof state
-  }
-  return usecasePreviewTarget(state, nodeType)
-}
 type SnapshotEdge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
 export async function appRenderFinalRoutes(app: FastifyInstance) {
@@ -243,7 +217,7 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     // The stop rule on: only a Preview take waits for a final. A render the
     // newest final already finished there made a Final, and offers none. A
     // use-case node holds its own Preview whatever the flag: only that is finished.
-    const useCaseTarget = useCase ? await usecaseTargetIn(source, renderNodeId, render?.type, userId, isRenderNode) : null
+    const useCaseTarget = useCase ? await usecasePreviewTargetIn(source, renderNodeId, render?.type, userId, isRenderNode) : null
     if (useCase ? !useCaseTarget : stopRule && !stateHoldsPreview(source.nodeStates?.[renderNodeId])) {
       return reply.status(409).send({
         error: {

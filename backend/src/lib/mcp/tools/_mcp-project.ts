@@ -29,7 +29,12 @@ async function findOldestMcpProject(userId: string): Promise<string | null> {
   return (data?.id as string | undefined) ?? null
 }
 
-export async function ensureMcpProject(session: McpSession): Promise<string> {
+/**
+ * The project `ensureMcpProject` resolves, WITHOUT creating one: `null` when
+ * the caller has none yet. For a read that only asks whether a workflow is
+ * where the MCP tools reach it (a read tool must not create a project).
+ */
+export async function findMcpProject(session: McpSession): Promise<string | null> {
   // An in-app session is pinned to the open workflow's real project (see
   // `McpSession.scopedProjectId`) — no "mcp" side project is consulted or
   // created for it, and this pin wins over everything: the copilot works in
@@ -57,10 +62,13 @@ export async function ensureMcpProject(session: McpSession): Promise<string> {
   if (session.mcpProjectId) return session.mcpProjectId
 
   const existing = await findOldestMcpProject(session.userId)
-  if (existing) {
-    session.mcpProjectId = existing
-    return existing
-  }
+  if (existing) session.mcpProjectId = existing
+  return existing
+}
+
+export async function ensureMcpProject(session: McpSession): Promise<string> {
+  const found = await findMcpProject(session)
+  if (found) return found
 
   // Not found → create. There is NO unique constraint on projects(user_id,name)
   // (and a de-dup migration is unsafe due to ON DELETE CASCADE children), so a

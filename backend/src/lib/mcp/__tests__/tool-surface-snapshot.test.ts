@@ -953,6 +953,18 @@ const GENERATE_IMAGE_BATCH_BYTES = 33
 const GENERATE_IMAGE_SUBJECT_BYTES = 324
 const GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES = 309
 
+// RAISED 2026-10-17 by continue-from-failed for a saved workflow's run, and nothing
+// else. No tool was added, so the fixture does NOT move. run_workflow takes
+// `continue_from_execution_id` + `from_failed` (one short description each, and one
+// sentence in the tool's description), and get_app_run's outputSchema gains the
+// optional `resumeHint` a failed saved-workflow run carries. Measured by this suite
+// on the same tree with and without the change: 442_647 total − 441_871 = 776 B
+// (752 B, then 24 B more when the tool's sentence said a failed node runs again in
+// full); the 18 B of headroom the list had before is carried across. The rules (a
+// later failed continuation supersedes the run, nothing left → 409) live in
+// docs/api-integration.md.
+const RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES = 776
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1064,7 +1076,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_IMAGE_SUBJECT_BYTES +
     SESSION_COVER_BYTES +
     VIDU_Q4_MODEL_ENUM_BYTES +
-    GEMINI_4_ARGON_ID_BYTES,
+    GEMINI_4_ARGON_ID_BYTES +
+    RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

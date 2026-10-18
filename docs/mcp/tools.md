@@ -537,6 +537,8 @@ registers an async task for progress tracking.
 | `workflow_id` | UUID string | Must be in the mcp project |
 | `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
+| `continue_from_execution_id` | UUID string | Optional; your own **failed** run of this workflow, to continue from where it stopped. Requires `from_failed: true` |
+| `from_failed` | boolean | With `continue_from_execution_id`: run only the nodes that run did not complete |
 
 **Response:** `{ executionId: "...", name: "..." }` — read the run with
 [`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
@@ -545,6 +547,36 @@ text and media, why a node was skipped, and the run's `outcome` once it
 completes (`"nothing_new"` when the nodes had nothing to work on — a feed with
 no new posts — and nothing failed). MCP clients that support the `tasks/*` API
 and widget rendering will show live progress inline.
+
+**Continuing a failed run.** A run of a saved workflow that failed can be
+continued from where it stopped: `run_workflow({ workflow_id,
+continue_from_execution_id: "<the failed run>", from_failed: true })`. It runs
+every node that run did not complete; the ones it completed hand on their
+outputs and are never run or charged again. That is per node: a node that failed
+runs again in full, every list item included (a few nodes reuse an identical
+item they already made). `get_app_run` and `diagnose_run`
+carry this call as `resumeHint` on a failed run `run_workflow` can continue: of
+a workflow it reaches (in the mcp project), not an app run's — continue those in
+the app — and not a use-case node's, which is `continue_use_case`. A run whose
+later continuation failed is refused with `continuation_superseded`, and the
+error names that continuation to continue instead; one whose later continuation
+completed everything it left is refused the same way, the error naming where its
+results are (the work is done: nothing to continue). When the newest later
+continuation stopped at a Preview review, the run is refused with
+`continuation_preview_pending`, the error naming that continuation and what
+holds it. Once the user has reviewed the preview, the next step for a single
+held render is
+`render_final({ workflow_id, render_node_id, execution_id: "<that continuation>" })`.
+For two or more renders, or a Tighten Episode review, the error carries the one
+run that finishes them, as a body for `POST /v1/workflows/:id/run`.
+`run_workflow` cannot send it, because it takes no node list.
+When the newest later continuation completed only part of what the run left
+otherwise, the run is built on it: seeded from that continuation and running
+only what it left, and the answer says which run it continued from (a
+`render_final` of the newest continuation counts as one of them). `resumeHint`
+follows the same rule, naming the later run — or offering that `render_final` —
+instead of offering the resume. A run with nothing left is refused with `continuation_subset_required`. See
+[Continuing a failed run](../api-integration.md#continuing-a-failed-run).
 
 A workflow whose Apply EDL render is set to **Preview** (`quality: "proxy"`) stops at that preview for
 a person to review in the editor. An MCP run has nobody to review it, so it is
@@ -1574,7 +1606,10 @@ nothing reached its input in this run; absent on a router-gated node), `error`,
 `jobId`, `text` (the node's text output, cut at 1,500 characters —
 `textTruncated: true` when it was) and `media[]` (every image, video and audio
 URL the node produced, `{ kind, url }`) — and `outputs[]`, every media URL
-across the run with the source job's `prompt`, `model` and `createdAt`.
+across the run with the source job's `prompt`, `model` and `createdAt`. A failed
+run `run_workflow` can continue (a saved workflow it reaches, not an app run)
+also carries `resumeHint`: the `run_workflow` call that continues it from where
+it stopped (see [`run_workflow`](#run_workflow)).
 
 Once the run completes it also carries `outcome`: `"nothing_new"` when at least
 one node was skipped for want of input and nothing failed — a feed that found no
@@ -1736,7 +1771,9 @@ gets a best-effort **class** — `content_policy`, `validation`, `rate_limited`,
 remediation hint. Classes are heuristic (derived from the stored error string,
 not the error type), so treat them as guidance. Reserved credits are
 auto-refunded except for `post_processing` (post-delivery) failures; check
-`creditsActual` per node.
+`creditsActual` per node. A failed run `run_workflow` can continue (a saved
+workflow it reaches, not an app run) also carries `resumeHint`, the
+`run_workflow` call that continues it from where it stopped.
 
 A completed run also reports its `outcome` (`"succeeded"` or `"nothing_new"` —
 see [`get_app_run`](#get_app_run)), and a node in `nodes[]` that the run skipped

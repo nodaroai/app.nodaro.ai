@@ -123,6 +123,10 @@ vi.mock("@/services/execution-stats.js", () => ({
 }))
 
 import { processWorkflowExecution } from "../orchestrator-worker.js"
+import { continuationSeeds } from "../../services/workflow-engine/run-continuation.js"
+import { failedAttemptOf, freshRunInputs, requestOf } from "../../services/workflow-engine/use-case-request.js"
+import { attemptRanWithInputs } from "../../services/workflow-engine/failed-attempt.js"
+import { usecaseDescriptor } from "@nodaro/render-rules"
 
 const OWNER = "owner-1"
 const at = "2026-10-05T10:00:00.000Z"
@@ -288,6 +292,55 @@ describe("Render final as a continuation", () => {
     await processWorkflowExecution(job({ appVersionId: "app-1", triggerType: "manual" }))
     expect(failedWrite()).toBeUndefined()
     expect(ran()).toEqual(["cap", "cut", "out"])
+  })
+})
+
+// Fix round 5: the run a `continuation_preview_pending` names in `next` for a
+// generation held at a Tighten Episode review — sent by a caller with nobody to
+// review — runs T's Render final (its continue route at Final) and what follows.
+describe("the run that finishes a Tighten Episode review hold, from the API", () => {
+  const WRAP_H = "00000000-0000-4000-8000-0000000000a1"
+  const graphWithT = () => ({
+    nodes: [
+      { id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4" } },
+      { id: "t", type: "tighten-episode", data: { label: "Tighten Episode", reviewBeforeRender: true } },
+      { id: "cap", type: "add-captions", data: {} },
+    ],
+    edges: [
+      { id: "e0", source: "rec", target: "t", sourceHandle: null, targetHandle: "media" },
+      { id: "e1", source: "t", target: "cap", sourceHandle: null, targetHandle: null },
+    ],
+  })
+  beforeEach(() => {
+    mocks.workflows.set("wf-1", { ...graphWithT(), settings: {}, user_id: OWNER })
+    mocks.executions.set("exec-h", {
+      id: "exec-h", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at,
+      trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: false, reviewHolds: ["t"] } },
+      node_states: {
+        rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" }, completedAt: at, fromSavedData: true },
+        t: { status: "completed", nodeType: "tighten-episode", jobId: WRAP_H, startedAt: at, completedAt: at, output: { videoUrl: "https://r2/ep-preview.mp4", quality: "proxy" } },
+        cap: { status: "skipped", nodeType: "add-captions", completedAt: at },
+      },
+    })
+  })
+  const next = { t: { useCaseContinue: { mode: "render-final", jobId: WRAP_H } } }
+
+  it("is not refused: T runs as its Render final (the continue of H's wrapper at Final), then what follows", async () => {
+    await processWorkflowExecution(job({ triggerType: "api", reviewerPresent: false, continueFromExecutionId: "exec-h", nodeIds: ["t", "cap"], inputOverrides: next }))
+    expect(failedWrite()).toBeUndefined()
+    expect(ran()).toEqual(["cap", "t"])
+    const call = mocks.executeNode.mock.calls.find((c) => (c[0] as { id: string }).id === "t") as unknown as [never, unknown, unknown, unknown, unknown, never]
+    const [node, , , , , ctx] = call
+    const request = requestOf(node, inputsOf("t")!, ctx, failedAttemptOf(node, ctx, undefined, []))
+    expect(request.path).toBe("/v1/tighten-episode/continue")
+    expect(request.body).toMatchObject({ jobId: WRAP_H, mode: "render-final" })
+    expect(request.fallback).toBeUndefined()
+  })
+
+  it("without the override the same run is refused before anything runs (the override is what lifts the hold)", async () => {
+    await processWorkflowExecution(job({ triggerType: "api", reviewerPresent: false, continueFromExecutionId: "exec-h", nodeIds: ["t", "cap"], inputOverrides: undefined }))
+    expect(ran()).toEqual([])
+    expect(failedWrite()?.error_message).toMatch(/^preview_review_required/)
   })
 })
 
@@ -552,5 +605,275 @@ describe("refusals: before any node runs, with stable codes", () => {
   it("an execution that has not completed", async () => {
     mocks.executions.set("exec-0", stoppedRun({ status: "failed" }))
     await refused({}, CONTINUATION_NOT_COMPLETED)
+  })
+})
+
+// Continue-from-failed of a SAVED workflow's run (decided 2026-10-17): the
+// orchestrator runs only what the failed run did not complete, and seeds the rest.
+describe("continue-from-failed of a saved workflow's run", () => {
+  /** The run failed at the captions: the render (at Final) completed before it. */
+  function failedRun(): Record<string, unknown> {
+    const states = stoppedRun().node_states as Record<string, NodeExecutionState>
+    return {
+      ...stoppedRun(),
+      status: "failed",
+      node_states: {
+        ...states,
+        cut: { ...states.cut, output: { videoUrl: "https://r2/final.mp4", quality: "final" } },
+        cap: { status: "failed", nodeType: "add-captions", error: "boom", completedAt: at },
+      },
+    }
+  }
+
+  it("runs the nodes it did not complete; the completed render is seeded, never run again", async () => {
+    mocks.executions.set("exec-0", failedRun())
+    await processWorkflowExecution(job({ continueMode: "from-failed", nodeIds: ["rec", "plan", "cut", "cap", "out"], inputOverrides: undefined }))
+    expect(failedWrite()).toBeUndefined()
+    expect(ran()).toEqual(["cap", "out"])
+    const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+    expect(states.cut).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/final.mp4" }, seededFromExecution: "exec-0" })
+  })
+
+  // Built on the newest (decided 2026-10-18): the route found a newer
+  // generation of the failed run's lineage that completed only part of what
+  // was left, and names it in the job. The worker seeds from it.
+  describe("built on a newer generation that completed part of what was left", () => {
+    /** B: a narrow continuation of exec-0 that completed — its captions done, the retake left. */
+    function narrowB(over: Record<string, unknown> = {}): Record<string, unknown> {
+      const a = failedRun().node_states as Record<string, NodeExecutionState>
+      return {
+        id: "exec-b",
+        user_id: OWNER,
+        workflow_id: "wf-1",
+        status: "completed",
+        started_at: at,
+        trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: false } },
+        node_states: {
+          rec: { ...a.rec, seededFromExecution: "exec-0" },
+          plan: { ...a.plan, seededFromExecution: "exec-0" },
+          cut: { ...a.cut, seededFromExecution: "exec-0" },
+          cap: { status: "completed", nodeType: "add-captions", jobId: "job-cap", startedAt: at, completedAt: at, output: { videoUrl: "https://r2/cap-b.mp4" } },
+          out: { status: "skipped", nodeType: "video-retake", completedAt: at, seededFromExecution: "exec-0" },
+        },
+        ...over,
+      }
+    }
+    const fromB = (data: Partial<WorkflowExecutionJob> = {}) =>
+      job({ continueMode: "from-failed", seedFromExecutionId: "exec-b", nodeIds: ["rec", "plan", "cut", "cap", "out"], inputOverrides: undefined, ...data })
+
+    beforeEach(() => {
+      mocks.executions.set("exec-0", failedRun())
+      mocks.executions.set("exec-b", narrowB())
+    })
+
+    it("runs only what B left: B's completed captions are seeded from B, never run or billed again", async () => {
+      await processWorkflowExecution(fromB())
+      expect(failedWrite()).toBeUndefined()
+      expect(ran()).toEqual(["out"])
+      const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+      expect(states.cap).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/cap-b.mp4" }, seededFromExecution: "exec-b" })
+      expect(states.cut).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/final.mp4" }, seededFromExecution: "exec-b" })
+      // The retake reads B's captions.
+      expect(JSON.stringify(inputsOf("out"))).toContain("https://r2/cap-b.mp4")
+    })
+
+    it("without the job's seed id the same job would run the captions again (the failed run's states)", async () => {
+      await processWorkflowExecution(fromB({ seedFromExecutionId: undefined }))
+      expect(ran()).toEqual(["cap", "out"])
+    })
+
+    const refusedHeads: Array<[string, Record<string, unknown> | null, string]> = [
+      ["missing", null, "continuation_not_found"],
+      ["someone else's", { user_id: "someone-else" }, "continuation_not_found"],
+      ["not completed", { status: "failed" }, "continuation_not_completed"],
+      ["never started", { started_at: null }, "continuation_not_found"],
+      ["one that ran all it was left", { trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", all: true } } }, "continuation_not_found"],
+      ["of another lineage", { trigger_data: { continueFromFailed: { from: "exec-9", root: "exec-9", all: false } } }, "continuation_not_found"],
+      ["no continuation at all", { trigger_data: null }, "continuation_not_found"],
+    ]
+    it.each(refusedHeads)("refuses a seed execution that is %s, before anything runs", async (_name, over, code) => {
+      if (over === null) mocks.executions.delete("exec-b")
+      else mocks.executions.set("exec-b", narrowB(over))
+      await processWorkflowExecution(fromB())
+      expect(ran()).toEqual([])
+      expect(failedWrite()?.error_message).toBe(code)
+    })
+  })
+
+  // Review round 3, I1: A failed on two branches, a Tighten Episode (T, its
+  // inner steps already paid) and an image (G). A narrow continuation B
+  // (`nodeIds: ["g"]`) ran only G and completed, so B holds T as a seed. A
+  // continue-from-failed of A is built on B — and T must still resume A's
+  // failed inner run, never start (and charge) a fresh one.
+  describe("a use-case node a narrow later generation left out still resumes its failed attempt", () => {
+    const branches = () => ({
+      nodes: [
+        { id: "rec", type: "upload-video", data: { videoUrl: "https://r2/ep.mp4" } },
+        { id: "t", type: "tighten-episode", data: { label: "Tighten Episode", reviewBeforeRender: false } },
+        { id: "g", type: "generate-image", data: { prompt: "a cat" } },
+      ],
+      edges: [{ id: "e0", source: "rec", target: "t", sourceHandle: null, targetHandle: "media" }],
+    })
+    const statesOfA: Record<string, NodeExecutionState> = {
+      rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" }, completedAt: at, fromSavedData: true },
+      t: { status: "failed", nodeType: "tighten-episode", jobId: "wrap-a", startedAt: at, completedAt: at, error: "Apply Cut failed" },
+      g: { status: "failed", nodeType: "generate-image", jobId: "job-g-a", startedAt: at, completedAt: at, error: "boom" },
+    }
+    const seedNodes = () => branches().nodes.map((n) => ({ ...n, data: n.data as Record<string, unknown> }))
+    /** B's states, built by the real seeding over A's: G ran there; T and rec are A's seeds. */
+    function statesOfB(): Record<string, NodeExecutionState> {
+      const seeds = continuationSeeds(
+        seedNodes() as never,
+        { id: "exec-0", userId: OWNER, workflowId: "wf-1", status: "failed", appVersionId: null, nodeStates: statesOfA },
+        new Set(["g"]),
+      )
+      return {
+        ...Object.fromEntries(seeds),
+        g: { status: "completed", nodeType: "generate-image", jobId: "job-g-b", startedAt: at, completedAt: at, output: { imageUrl: "https://r2/g-b.png" } },
+      }
+    }
+    const stamp = { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: false } }
+    const tCall = () => mocks.executeNode.mock.calls.find((c) => (c[0] as { id: string }).id === "t") as unknown as unknown[]
+
+    beforeEach(() => {
+      mocks.workflows.set("wf-1", { ...branches(), settings: {}, user_id: OWNER })
+      mocks.executions.set("exec-0", { id: "exec-0", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, node_states: statesOfA })
+      mocks.executions.set("exec-b", {
+        id: "exec-b", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at, trigger_data: stamp, node_states: statesOfB(),
+      })
+    })
+
+    it("B's seed of T keeps A's failed attempt, and is no completed output", () => {
+      const t = statesOfB().t
+      expect(t).toMatchObject({ status: "skipped", seededFromExecution: "exec-0", failedAttemptJobId: "wrap-a" })
+      expect(t.jobId).toBeUndefined()
+      expect(t.output).toBeUndefined()
+    })
+
+    it("built on B, only T runs, and it continues A's failed inner run (no fresh run, no second fee)", async () => {
+      await processWorkflowExecution(
+        job({ continueMode: "from-failed", seedFromExecutionId: "exec-b", nodeIds: ["rec", "t", "g"], inputOverrides: undefined }),
+      )
+      expect(failedWrite()).toBeUndefined()
+      // G completed in B: seeded, never run (or billed) again.
+      expect(ran()).toEqual(["t"])
+      const [node, , , , , ctx] = tCall() as [never, unknown, unknown, unknown, unknown, never]
+      const attempt = failedAttemptOf(node, ctx, undefined, [])
+      expect(attempt).toBe("wrap-a")
+      const request = requestOf(node, { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as never, ctx, attempt)
+      expect(request.path).toMatch(/\/continue$/)
+      expect(request.body).toMatchObject({ jobId: "wrap-a", mode: "from-failed" })
+    })
+
+    it("two hops: a later seed of B's seed still carries A's attempt", () => {
+      const seedsOfC = continuationSeeds(
+        seedNodes() as never,
+        { id: "exec-b", userId: OWNER, workflowId: "wf-1", status: "completed", appVersionId: null, nodeStates: statesOfB() },
+        new Set(["g"]),
+      )
+      expect(seedsOfC.get("t")).toMatchObject({ status: "skipped", seededFromExecution: "exec-b", failedAttemptJobId: "wrap-a" })
+    })
+
+    it("a narrow B that itself FAILED, continued: T (outside B) still resumes A's attempt", async () => {
+      mocks.executions.set("exec-b", {
+        id: "exec-b", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, trigger_data: stamp,
+        node_states: { ...statesOfB(), g: { status: "failed", nodeType: "generate-image", jobId: "job-g-b", startedAt: at, completedAt: at, error: "again" } },
+      })
+      await processWorkflowExecution(job({ continueMode: "from-failed", continueFromExecutionId: "exec-b", nodeIds: ["rec", "t", "g"], inputOverrides: undefined }))
+      expect(ran()).toEqual(["g", "t"])
+      const [node, , , , , ctx] = tCall() as [never, unknown, unknown, unknown, unknown, never]
+      expect(failedAttemptOf(node, ctx, undefined, [])).toBe("wrap-a")
+    })
+
+    // Decided 2026-10-18: the attempt is resumed only on the inputs and
+    // settings it ran with (use-case-node.ts asks this before the route).
+    /** What A's T wrapper stored: the recording it ran on, and the settings it resolved for it (a video). */
+    const ranWithOfA = {
+      type: "tighten-episode",
+      mode: "run",
+      mediaUrl: "https://r2/ep.mp4",
+      settings: usecaseDescriptor("tighten-episode").resolveSettings(branches().nodes[1]!.data, "video"),
+      _executionId: "exec-a-inner",
+    }
+    /** Would T, as this run hands it its inputs, resume A's attempt? */
+    const tResumesA = () => {
+      const [node, , , , , ctx] = tCall() as [never, unknown, unknown, unknown, unknown, never]
+      expect(failedAttemptOf(node, ctx, undefined, [])).toBe("wrap-a")
+      return attemptRanWithInputs("tighten-episode", ranWithOfA, "video", freshRunInputs(node, inputsOf("t")!))
+    }
+    const fixedUrl = "https://r2/ep-fixed.mp4"
+
+    it("unchanged inputs: built on B, T hands the recording A ran on — the attempt is resumed (no second fee)", async () => {
+      await processWorkflowExecution(
+        job({ continueMode: "from-failed", seedFromExecutionId: "exec-b", nodeIds: ["rec", "t", "g"], inputOverrides: undefined }),
+      )
+      expect(inputsOf("t")?.useCaseMedia?.[0]?.url).toBe("https://r2/ep.mp4")
+      expect(tResumesA()).toBe(true)
+    })
+
+    it("scenario 1: a run of named nodes continuing B re-runs the recording, corrected — T runs fresh on it", async () => {
+      await processWorkflowExecution(
+        job({ continueFromExecutionId: "exec-b", nodeIds: ["rec", "t"], inputOverrides: { rec: { url: fixedUrl } } }),
+      )
+      expect(failedWrite()).toBeUndefined()
+      expect(inputsOf("t")?.useCaseMedia?.[0]?.url).toBe(fixedUrl)
+      expect(tResumesA()).toBe(false)
+    })
+
+    it("scenario 2: a run R of named nodes corrected the recording; a continue-from-failed of A built on R runs T fresh", async () => {
+      // R continued B and re-ran only the recording, on the corrected link; T is still the seed carrying A's attempt.
+      const seedsOfR = continuationSeeds(
+        seedNodes() as never,
+        { id: "exec-b", userId: OWNER, workflowId: "wf-1", status: "completed", appVersionId: null, nodeStates: statesOfB() },
+        new Set(["rec"]),
+      )
+      mocks.executions.set("exec-r", {
+        id: "exec-r", user_id: OWNER, workflow_id: "wf-1", status: "completed", started_at: at,
+        trigger_data: { continueFromFailed: { from: "exec-b", root: "exec-0", seededFrom: "exec-b", all: false, via: "subset" } },
+        node_states: { ...Object.fromEntries(seedsOfR), rec: { status: "completed", output: { videoUrl: fixedUrl }, completedAt: at, fromSavedData: true } },
+      })
+      expect(seedsOfR.get("t")).toMatchObject({ failedAttemptJobId: "wrap-a" })
+      await processWorkflowExecution(
+        job({ continueMode: "from-failed", seedFromExecutionId: "exec-r", nodeIds: ["rec", "t", "g"], inputOverrides: undefined }),
+      )
+      expect(ran()).toEqual(["t"])
+      expect(inputsOf("t")?.useCaseMedia?.[0]?.url).toBe(fixedUrl)
+      expect(tResumesA()).toBe(false)
+    })
+
+    it("a continue-from-failed whose overrides change T's settings runs T fresh", async () => {
+      await processWorkflowExecution(
+        job({ continueMode: "from-failed", seedFromExecutionId: "exec-b", nodeIds: ["rec", "t", "g"], inputOverrides: { t: { planTier: "premium" } } }),
+      )
+      expect(dataOf("t")?.planTier).toBe("premium")
+      expect(tResumesA()).toBe(false)
+    })
+
+    it("a run-set node that never got a job of its own keeps the carried attempt in this run's states", async () => {
+      // G fails first; T, a level later, never runs here — its pending state still names A's attempt.
+      mocks.workflows.set("wf-1", {
+        nodes: branches().nodes,
+        edges: [...branches().edges, { id: "e1", source: "g", target: "t", sourceHandle: null, targetHandle: "intro" }],
+        settings: {},
+        user_id: OWNER,
+      })
+      mocks.executeNode.mockImplementationOnce(async () => {
+        throw new Error("g failed again")
+      })
+      await processWorkflowExecution(job({ continueMode: "from-failed", nodeIds: ["rec", "t", "g"], inputOverrides: undefined }))
+      expect(ran()).toEqual([])
+      const write = mocks.updateExecutionWithRetry.mock.calls
+        .map(([, u]) => u as { node_states?: Record<string, NodeExecutionState> })
+        .filter((u) => u.node_states)
+        .at(-1)
+      expect(write!.node_states!.t).toMatchObject({ status: "pending", failedAttemptJobId: "wrap-a" })
+      expect(write!.node_states!.t.jobId).toBeUndefined()
+    })
+  })
+
+  it("a saved workflow's run that completed is not continued from a failure", async () => {
+    await processWorkflowExecution(job({ continueMode: "from-failed", inputOverrides: undefined }))
+    expect(ran()).toEqual([])
+    expect(failedWrite()?.error_message).toBe("continuation_not_failed")
   })
 })

@@ -284,6 +284,14 @@ export interface NodeExecutionState {
    *  an app run whose own overrides do not name it); otherwise no reader
    *  falls back to the node's saved results — see `run-continuation.ts`. */
   seededFromExecution?: string
+  /** A seed (`seededFromExecution`) of a node the earlier execution did NOT
+   *  complete, where an earlier generation's attempt at it FAILED: that
+   *  attempt's job id (a use-case node's wrapper), carried forward from seed to
+   *  seed so a continue-from-failed built on a later generation still resumes
+   *  it (`failedAttemptOf`) instead of starting it — and charging it — again.
+   *  Never `jobId`: this execution ran no job for the node, and the state hands
+   *  on no output (it stays `skipped`). Not on the wire contract. */
+  failedAttemptJobId?: string
   /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
   skipReason?: NodeSkipReason
 }
@@ -345,6 +353,17 @@ export interface WorkflowExecutionJob {
    * `services/workflow-engine/run-continuation.ts`.
    */
   continueFromExecutionId?: string
+  /**
+   * A continue-from-failed of a saved workflow's run (`continueMode`) that
+   * BUILDS ON a newer generation of its lineage (decided 2026-10-18): the one
+   * that completed only part of what `continueFromExecutionId` left. The run
+   * is seeded from THIS execution's states, takes its pinned overrides, and
+   * runs only what it did not complete; `continueFromExecutionId` is still
+   * the failed run asked for, and is checked as before. Decided once by the
+   * route (lib/continue-from-failed-lineage.ts) — the worker never resolves
+   * the lineage again, it checks this one (`continuationHeadRefusal`).
+   */
+  seedFromExecutionId?: string
   /**
    * For a triggered run: the trigger node that fired (the trigger row's
    * `config.nodeId`). The worker runs the branch behind it — see

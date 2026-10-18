@@ -10,7 +10,16 @@ import { executionOutcome } from "@nodaro/shared/workflow"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline"
-import { PREVIEW_RENDER_NODE_TYPES, type SavedRenderStampReader, isPreviewHoldingType } from "@nodaro/shared/nodes"
+import {
+  CONTINUATION_PREVIEW_PENDING,
+  CONTINUATION_SUBSET_REQUIRED,
+  CONTINUATION_SUPERSEDED,
+  PREVIEW_RENDER_NODE_TYPES,
+  REVIEW_HOLDING_USE_CASE_TYPES,
+  type SavedRenderStampReader,
+  isPreviewHoldingType,
+} from "@nodaro/shared/nodes"
+import { filterCloneNodes } from "@nodaro/shared/workflow"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
@@ -28,7 +37,7 @@ import { liveUseCaseWrappersOf } from "../lib/use-case/execution-wrappers.js"
 import { USE_CASE_WRAPPER_PROVIDER } from "../lib/wrapper-providers.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
-import { previewReviewRefusal } from "../lib/preview-review-gate.js"
+import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
@@ -47,12 +56,27 @@ import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, rende
 import {
   CONTINUATION_REFUSAL_MESSAGE,
   CONTINUATION_REFUSAL_STATUS,
+  continuationHeadRefusal,
   continuationRefusal,
   continuationInputOverrides,
   continuationRenderStamps,
   continuationSeeds,
+  fromFailedClosedRunSet,
   loadContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
+import { runsInALevel } from "../services/workflow-engine/execution-graph.js"
+import { isUseCaseNodeType, usecaseContinuePath } from "@nodaro/render-rules"
+import { heldFinalRun, type HeldFinalRun } from "../lib/continuation-held-final.js"
+import {
+  carriedHolds,
+  continuationPointOf,
+  continueFromFailedStamp,
+  lineageRootOf,
+  previewPendingMessage,
+  subsetJoinsLineage,
+  type ContinueFromFailedStamp,
+  type SupersedingRun,
+} from "../lib/continue-from-failed-lineage.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -71,7 +95,8 @@ openApiRegistry.registerPath({
                 .optional()
                 .openapi({
                   description:
-                    "Optional subset of node IDs to execute. If omitted, the full workflow is executed.",
+                    "Optional subset of node IDs to execute. If omitted, the full workflow is executed. " +
+                    "With continueMode \"from-failed\", the nodes to consider (default: every node); the run executes only those the failed run did not complete.",
                 }),
               continueFromExecutionId: z
                 .string()
@@ -79,8 +104,27 @@ openApiRegistry.registerPath({
                 .optional()
                 .openapi({
                   description:
-                    "Continue from an earlier execution: your own completed run of this workflow (not of a published app version). " +
-                    "Requires nodeIds; every node not named hands on that execution's output instead of the workflow's saved results.",
+                    "Continue from an earlier execution: your own run of this workflow (not of a published app version) — completed, " +
+                    "or failed with continueMode \"from-failed\". Requires nodeIds (except with continueMode); every node not run hands on " +
+                    "that execution's output instead of the workflow's saved results.",
+                }),
+              continueMode: z
+                .enum(["from-failed"])
+                .optional()
+                .openapi({
+                  description:
+                    "\"from-failed\": continue a FAILED run from where it stopped. Requires continueFromExecutionId (the run that failed); " +
+                    "not combinable with renderFinal. Runs every node that run did not complete (of nodeIds, default every node) and hands " +
+                    "on what it did complete, never dispatched or billed again (a node that failed runs again in full). When a later " +
+                    "continuation of it completed only part of what it left, the run builds on the newest such one: it is seeded from that " +
+                    "execution and runs only what is still left (continuedFrom in the answer names it). A run a later " +
+                    "continuation supersedes answers 409 continuation_superseded naming it (supersededBy.status \"failed\": continue that one; " +
+                    "\"completed\": it ran all this run left, so the work is done and its results are there). When the newest later " +
+                    "continuation completed by stopping at a Preview review, it answers 409 continuation_preview_pending naming it " +
+                    "(executionId), its renders (renderNodeIds) and its review-on use-case nodes (reviewNodeIds), with the run that " +
+                    "finishes them (next: continueFromExecutionId, nodeIds, inputOverrides — for one render, its renderFinal): run that " +
+                    "first. A Render final, or a run of nodeIds, continuing the newest later continuation joins the chain. A run " +
+                    "with nothing left answers 409 continuation_subset_required.",
                 }),
               renderFinal: z
                 .object({ renderNodeId: z.string() })
@@ -108,6 +152,15 @@ openApiRegistry.registerPath({
           schema: z.object({
             executionId: z.string().uuid(),
             status: z.enum(["pending", "running"]),
+            continuedFrom: z
+              .string()
+              .uuid()
+              .optional()
+              .openapi({
+                description:
+                  "With continueMode \"from-failed\": the execution this run continued from — its states seed the run. The run " +
+                  "asked for (continueFromExecutionId), or the newest later continuation of it that completed part of what it left.",
+              }),
           }),
         },
       },
@@ -251,6 +304,26 @@ function normalizeInputOverrides(
   return Object.keys(result).length > 0 ? result : undefined
 }
 
+/**
+ * The 409 for a continue-from-failed that goes to another run of its lineage
+ * instead (`continuationPointOf`, lib/continue-from-failed-lineage.ts): a
+ * later generation that FAILED (continue that one), or one that COMPLETED
+ * having run all that was left (the work is done — never continue a completed
+ * run); for a continuation that never started, the newest such generation or
+ * the run it continued. One that completed only part of what was left is
+ * built on instead; one under way is `already_running`.
+ */
+function supersededReply(later: SupersedingRun): { executionId: string; status: string; message: string } {
+  const { executionId, status } = later
+  const message =
+    status === "completed"
+      ? `The work this run left is already done: a later continuation (${executionId}) ran all of it and completed. Its results are on that execution.`
+      : later.neverStarted
+        ? `That continuation never started, so it holds nothing: continue ${executionId}, which holds its lineage's progress.`
+        : `A later continuation of this run failed: continue that one (${executionId}).`
+  return { executionId, status, message }
+}
+
 const workflowIdParams = z.object({
   id: z.string().uuid(),
 })
@@ -328,6 +401,23 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       renderFinalNodeId = asked.renderNodeId
     }
 
+    // Continue-from-failed (decided 2026-10-17): a FAILED run of this saved
+    // workflow, continued from where it stopped. Shape checked here, before
+    // any read: it names the run it continues, and it is not a Render final.
+    let continueFromFailed = false
+    if (body.continueMode !== undefined && body.continueMode !== null) {
+      const mode = z.enum(["from-failed"]).safeParse(body.continueMode)
+      const message = !mode.success
+        ? 'continueMode must be "from-failed"'
+        : body.continueFromExecutionId === undefined || body.continueFromExecutionId === null
+          ? 'continueMode "from-failed" continues an earlier execution: send continueFromExecutionId (the run that failed)'
+          : renderFinalNodeId !== undefined
+            ? 'continueMode "from-failed" cannot be combined with renderFinal: a Render final continues a completed run'
+            : null
+      if (message) return reply.status(400).send({ error: { code: "validation_error", message } })
+      continueFromFailed = true
+    }
+
     // Verify the workflow exists and that this caller may RUN it. We also load
     // `nodes` so we can resolve flat per-node overrides (MCP shape) to their
     // primary field (see normalizeInputOverrides below).
@@ -384,15 +474,30 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       nodeIds = derived.nodeIds
       rawInputOverrides = derived.inputOverrides
     }
-
-    try {
-      const candidates = (workflow.nodes ?? []) as Array<{ id: string; data?: unknown }>
-      assertCanvasExecutionAllowed(nodeIds ? candidates.filter((node) => nodeIds.includes(node.id)) : candidates)
-    } catch (error) {
-      if (error instanceof SequenceExecutionRequiredError) return reply.status(400).send({
-        error: { code: error.code, message: error.message, nodeIds: error.nodeIds },
-      })
-      throw error
+    // Continue-from-failed considers every node unless told otherwise (an
+    // expanded loop clone is no node of the graph the run executes); an empty
+    // list reads as none. A named id that is no node of the workflow is
+    // dropped: it would run nothing, and complete a run that redid nothing.
+    const graphOrder: string[] = filterCloneNodes(
+      ((workflow.nodes ?? []) as Array<{ id: string; type?: string; data?: Record<string, unknown> }>).map((n) => ({
+        ...n,
+        type: n.type ?? "",
+        data: n.data ?? {},
+      })),
+      [] as Array<{ source: string; target: string }>,
+    ).nodes.map((n) => n.id)
+    if (continueFromFailed) {
+      if (nodeIds === undefined || nodeIds.length === 0) {
+        nodeIds = graphOrder
+      } else {
+        const known = new Set(graphOrder)
+        nodeIds = nodeIds.filter((id) => known.has(id))
+        if (nodeIds.length === 0) {
+          return reply.status(400).send({
+            error: { code: "validation_error", message: "None of nodeIds is a node of this workflow." },
+          })
+        }
+      }
     }
 
     // Per-node input overrides (MCP run_workflow `inputs`, editor re-runs, SDK).
@@ -441,6 +546,13 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const mcpClient = extractMcpClient(req.body)
     const reviewerPresent = req.authKind === "jwt" && !mcpClient && body.reviewer === "editor"
     let continueFromExecutionId: string | undefined
+    let fromFailedStamp: ContinueFromFailedStamp | undefined
+    // A subset continuation (a Render final, or a run of named nodes) of the
+    // newest generation of a continue-from-failed lineage joins it (lib/continue-from-failed-lineage.ts).
+    let subsetStamp: ContinueFromFailedStamp | undefined
+    let subsetGenerationDone = false
+    let subsetCarried: ReturnType<typeof carriedHolds> = { previewRenders: [], reviewHolds: [] }
+    let coversAllLeft = false
     let effectiveOverrides = inputOverrides
     let continuationRenders: ((nodes: readonly SimpleNode[]) => SavedRenderStampReader) | undefined
     if (body.continueFromExecutionId !== undefined && body.continueFromExecutionId !== null) {
@@ -453,25 +565,168 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       const typeOf = new Map(
         ((workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? []).map((node) => [node.id, node.type ?? ""]),
       )
-      const source = await loadContinuationSource(
-        parsedContinue.data,
-        reviewerPresent
-          ? { withStates: false, withPin: true }
-          : { withStates: true, isRenderNode: (id) => isPreviewHoldingType(typeOf.get(id)) },
+      // Continue-from-failed always reads the states: they decide what runs.
+      const withStates = { withStates: true, isRenderNode: (id: string) => isPreviewHoldingType(typeOf.get(id)) } as const
+      const sourceOptions = reviewerPresent && !continueFromFailed ? ({ withStates: false, withPin: true } as const) : withStates
+      // The graph the run executes, and which of its nodes are work (only a
+      // node the engine dispatches through a level counts as work left: a
+      // source, a parameter picker or a container runs nothing of its own),
+      // read under its current type name.
+      const runGraph = {
+        nodes: (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: unknown }> | null) ?? [],
+        edges: (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+      }
+      const currentTypeOf = new Map(
+        ((workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null) ?? []).map(
+          (node) => [node.id, migrateLegacyNodeType(node).type ?? ""],
+        ),
       )
-      const refusal = continuationRefusal(source, { userId: req.userId, workflowId, nodeIds })
+      const isWork = (id: string) => runsInALevel(currentTypeOf.get(id) ?? "")
+      /** Every node of work `from` did not complete is in `runs`. */
+      const takesOnAllLeftBy = (from: Parameters<typeof fromFailedClosedRunSet>[3], runs: ReadonlySet<string>) =>
+        fromFailedClosedRunSet(graphOrder, graphOrder, runGraph, from).filter(isWork).every((id) => runs.has(id))
+      const requested = await loadContinuationSource(parsedContinue.data, sourceOptions)
+      // Asked of the set REQUESTED, before it is narrowed by the states: someone
+      // else's execution must read as missing whatever it holds.
+      const continuationRun = {
+        userId: req.userId,
+        workflowId,
+        nodeIds,
+        mode: continueFromFailed ? ("from-failed" as const) : ("subset" as const),
+      }
+      const refusal = continuationRefusal(requested, continuationRun)
       if (refusal) {
         return reply.status(CONTINUATION_REFUSAL_STATUS[refusal]).send({
           error: { code: refusal, message: CONTINUATION_REFUSAL_MESSAGE[refusal] },
         })
       }
-      continueFromExecutionId = parsedContinue.data
-      effectiveOverrides = continuationInputOverrides(source!, inputOverrides)
-      // Seeded from the SENT overrides, as the orchestrator seeds (`job.data.inputOverrides`).
-      const runNodeIds = new Set(nodeIds)
-      if (!reviewerPresent) {
-        continuationRenders = (nodes) => continuationRenderStamps(nodes, continuationSeeds(nodes, source!, runNodeIds, inputOverrides))
+      // The execution every check below judges and the orchestrator seeds
+      // from: the one asked for, or — continuing from a failure — the newer
+      // generation of its lineage it builds on.
+      let source = requested!
+      if (continueFromFailed) {
+        // The lineage's newest generation decides (lib/continue-from-failed-lineage.ts):
+        // a later one that failed, or completed all that was left, supersedes
+        // the run; one that completed only part of it is built on.
+        let point: Awaited<ReturnType<typeof continuationPointOf>>
+        try {
+          point = await continuationPointOf(requested!, { userId: req.userId, workflowId })
+        } catch (err) {
+          return sendInternalError(reply, req, err, "Failed to check the run's later continuations")
+        }
+        if (point.kind === "superseded") {
+          const superseded = supersededReply(point.by)
+          return reply.status(CONTINUATION_REFUSAL_STATUS[CONTINUATION_SUPERSEDED]).send({
+            error: { code: CONTINUATION_SUPERSEDED, message: superseded.message },
+            executionId: superseded.executionId,
+            supersededBy: { executionId: superseded.executionId, status: superseded.status },
+          })
+        }
+        // The newest generation stopped at a Preview review: continuing would
+        // stop at the same Preview again. The run that finishes what holds it
+        // is the next step, worked out here (`next`, lib/continuation-held-final.ts).
+        if (point.kind === "preview-pending") {
+          let next: HeldFinalRun | null = null
+          try {
+            next = await heldFinalRun({ ...point, ...runGraph, userId: req.userId })
+          } catch (err) {
+            req.log.warn({ err, executionId: point.at }, "continuation_preview_pending: the run that finishes it could not be worked out")
+          }
+          return reply.status(CONTINUATION_REFUSAL_STATUS[CONTINUATION_PREVIEW_PENDING]).send({
+            error: {
+              code: CONTINUATION_PREVIEW_PENDING,
+              message: previewPendingMessage(
+                point.at,
+                point.renderNodeIds,
+                point.reviewNodeIds,
+                point.reviewNodeIds.map((id) => currentTypeOf.get(id)).filter(isUseCaseNodeType).map(usecaseContinuePath),
+              ),
+            },
+            executionId: point.at,
+            renderNodeIds: point.renderNodeIds,
+            reviewNodeIds: point.reviewNodeIds,
+            ...(next ? { next } : {}),
+          })
+        }
+        if (point.seedFrom !== requested!.id) {
+          const head = await loadContinuationSource(point.seedFrom, sourceOptions)
+          const headRefusal = continuationHeadRefusal(head, requested!, continuationRun)
+          if (headRefusal || !head) {
+            return sendInternalError(
+              reply,
+              req,
+              new Error(`continue-from-failed: the lineage's newest generation ${point.seedFrom} is unusable (${headRefusal})`),
+              "Failed to read the run's later continuations",
+            )
+          }
+          source = head
+        }
+        // What that run did not complete, closed over the incomplete nodes
+        // it needs upstream — the set every check below judges and the
+        // orchestrator runs.
+        const remaining = fromFailedClosedRunSet(graphOrder, nodeIds!, runGraph, source)
+        if (!remaining.some(isWork)) {
+          return reply.status(409).send({
+            error: {
+              code: CONTINUATION_SUBSET_REQUIRED,
+              message: "Every node of that run completed: there is nothing left to continue.",
+            },
+          })
+        }
+        // Does this run take on ALL that run left — the remainder of every
+        // node, whatever `nodeIds` said? Judged on the work alone (a source or
+        // container left out runs nothing either way), from the set sent to
+        // the orchestrator. A run that stops at a Preview review is never
+        // all: it is decided below, once its overrides and seeds are known.
+        coversAllLeft = takesOnAllLeftBy(source, new Set(remaining))
+        nodeIds = remaining
+        fromFailedStamp = { from: requested!.id, root: lineageRootOf(requested!), seededFrom: source.id, all: false }
+      } else if (requested!.continueFromFailed) {
+        // A subset continuation of a generation of a lineage joins it when
+        // that generation is the newest. Its `all` (decided below, with its
+        // Preview stop): the generation ran all that was left, or this run
+        // takes on every node of work it did not complete.
+        let joins: boolean
+        try {
+          joins = await subsetJoinsLineage(requested!, { userId: req.userId, workflowId })
+        } catch (err) {
+          return sendInternalError(reply, req, err, "Failed to check the run's continuations")
+        }
+        if (joins) {
+          if (!source.nodeStates) {
+            const read = await loadContinuationSource(requested!.id, withStates)
+            if (!read) return sendInternalError(reply, req, new Error(`continuation: ${requested!.id} vanished`), "Failed to read the run to continue")
+            source = read
+          }
+          subsetGenerationDone = requested!.continueFromFailed.all
+          coversAllLeft = takesOnAllLeftBy(source, new Set(nodeIds))
+          // What still holds that generation and this run does not execute stays held.
+          subsetCarried = carriedHolds(requested!.continueFromFailed, new Set(nodeIds))
+          subsetStamp = { from: requested!.id, root: requested!.continueFromFailed.root, seededFrom: requested!.id, all: false, via: "subset" }
+        }
       }
+      continueFromExecutionId = parsedContinue.data
+      effectiveOverrides = continuationInputOverrides(source, inputOverrides)
+      // Seeded from the SENT overrides, as the orchestrator seeds (`job.data.inputOverrides`).
+      // A continue-from-failed always holds the states (the stop below reads them too).
+      const runNodeIds = new Set(nodeIds)
+      if (!reviewerPresent || continueFromFailed || subsetStamp) {
+        const seedSource = source
+        continuationRenders = (nodes) => continuationRenderStamps(nodes, continuationSeeds(nodes, seedSource, runNodeIds, inputOverrides))
+      }
+    }
+
+    // Asked of the nodes this run executes (a continue-from-failed's are
+    // narrowed above), as the orchestrator asks it.
+    try {
+      const candidates = (workflow.nodes ?? []) as Array<{ id: string; data?: unknown }>
+      const runIds = nodeIds
+      assertCanvasExecutionAllowed(runIds ? candidates.filter((node) => runIds.includes(node.id)) : candidates)
+    } catch (error) {
+      if (error instanceof SequenceExecutionRequiredError) return reply.status(400).send({
+        error: { code: error.code, message: error.message, nodeIds: error.nodeIds },
+      })
+      throw error
     }
 
     // A run request may not re-point an outbound node (issue #1555). The merge
@@ -487,6 +742,48 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
+    }
+
+    // A lineage's generation is stamped `all` only when it takes on all that
+    // was left AND does not stop at a Preview review (decided 2026-10-18): a
+    // run that stops there completes with its Final render (and all after it)
+    // not run, so it must never supersede its source as "done". It names what
+    // it stops at instead — the Apply EDL renders (`previewRenders`) and the
+    // review-on use-case nodes (`reviewHolds`): a later continue-from-failed
+    // of the lineage is sent to the run that finishes them. Asked by the stop
+    // rule the orchestrator asks, over the same graph (the merged overrides)
+    // and the same seeds; with nobody to review, such a run is refused just
+    // below instead. A subset continuation also keeps every hold of the
+    // generation it continues that it does not execute, and is `all` only
+    // when none is left — so one of a generation that ran all that was left
+    // keeps the lineage done unless it stops at a Preview itself.
+    let lineageStamp = fromFailedStamp ?? subsetStamp
+    if (lineageStamp) {
+      const stops = previewReviewStops(
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+        {
+          triggerType: "manual",
+          nodeIds,
+          inputOverrides: effectiveOverrides,
+          ...(continuationRenders ? { savedRenders: continuationRenders } : {}),
+        },
+      )
+      const typeOfNode = new Map(((workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? []).map((n) => [n.id, n.type ?? ""]))
+      const heldBy = stops?.heldBy ?? []
+      const subset = lineageStamp.via === "subset"
+      const union = (own: readonly string[], carried: readonly string[]) => [...new Set([...own, ...(subset ? carried : [])])]
+      const previewRenders = union(heldBy.filter((id) => PREVIEW_RENDER_NODE_TYPES.has(typeOfNode.get(id) ?? "")), subsetCarried.previewRenders)
+      const reviewHolds = union(heldBy.filter((id) => REVIEW_HOLDING_USE_CASE_TYPES.has(typeOfNode.get(id) ?? "")), subsetCarried.reviewHolds)
+      const generationDone = subset && subsetGenerationDone
+      const held = stops !== null || previewRenders.length > 0 || reviewHolds.length > 0
+      lineageStamp = {
+        ...lineageStamp,
+        all: !held && (generationDone || coversAllLeft),
+        ...(previewRenders.length > 0 ? { previewRenders } : {}),
+        ...(reviewHolds.length > 0 ? { reviewHolds } : {}),
+      }
+      if (fromFailedStamp) fromFailedStamp = lineageStamp
     }
 
     // The Preview review (who may review: see above).
@@ -616,6 +913,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           status: "pending",
           trigger_type: mcpClient ? "mcp" : "manual",
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
+          // A generation of a continue-from-failed lineage names the run it
+          // continues and its lineage.
+          ...(lineageStamp ? { trigger_data: continueFromFailedStamp(lineageStamp) } : {}),
           ...billingPairColumns(billingContext),
         },
         idempotencyKey,
@@ -663,6 +963,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       reviewerPresent,
       ...(inputOverrides ? { inputOverrides } : {}),
       ...(continueFromExecutionId ? { continueFromExecutionId } : {}),
+      ...(fromFailedStamp ? { continueMode: "from-failed" as const } : {}),
+      // Built on a newer generation of the failed run's lineage: seeded from it.
+      ...(fromFailedStamp?.seededFrom && fromFailedStamp.seededFrom !== fromFailedStamp.from
+        ? { seedFromExecutionId: fromFailedStamp.seededFrom }
+        : {}),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {
@@ -672,6 +977,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     return reply.status(202).send({
       executionId: execution.id,
       status: "pending",
+      // A continue-from-failed: the execution it continued from (its states seeded this run).
+      ...(fromFailedStamp?.seededFrom ? { continuedFrom: fromFailedStamp.seededFrom } : {}),
     })
   })
 

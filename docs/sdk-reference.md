@@ -733,13 +733,17 @@ isn't yours — the delete is never a silent no-op.
 await client.workflows.delete(id)
 ```
 
-#### `run(id, params?)`
+#### `run(id, params?, options?)`
 
 ```ts
-run(id: string, params?: RunWorkflowParams): Promise<RunWorkflowResult>
+run(id: string, params?: RunWorkflowParams, options?: { idempotencyKey?: string }): Promise<RunWorkflowResult>
 ```
 
 Starts an execution and returns immediately with `{ executionId, status }`.
+`options.idempotencyKey` is sent as the `Idempotency-Key` header (at least 8
+characters; a shorter one is ignored): retry a request with the same key and it
+answers the run it already started (`deduped: true`) instead of starting a
+second one.
 Optionally restrict to a subset of node IDs, and pass `inputOverrides` —
 nested `{ nodeId: { field: value } }` node data for THIS run, shallow-merged
 over each node's saved data (the overridden node's saved results are not
@@ -796,6 +800,52 @@ A refused continuation throws before any execution exists: `NotFoundError`
 `continuation_subset_required`, `continuation_workflow_mismatch`,
 `continuation_version_mismatch` or `continuation_not_completed`
 ([details](./api-integration.md#continuing-a-run)).
+
+`continueMode: "from-failed"` continues a run that FAILED from where it stopped
+(`continueFromExecutionId` is your own failed run of the workflow): `nodeIds` is
+optional (every node when left out), and the run executes only the nodes that
+run did not complete — what it completed is handed on, never run or charged
+again. That is per node: a node that failed runs again in full, every list item
+included (a few nodes reuse an identical item they already made). Not combinable
+with `renderFinal`.
+
+```ts
+await client.workflows.run(id, {
+  continueFromExecutionId: failedRunId,
+  continueMode: "from-failed",
+})
+```
+
+A run a later continuation supersedes throws a `NodaroError` with `code`
+`continuation_superseded`, its message naming that continuation: one that failed
+is the one to continue instead; one that completed everything the run left means
+the work is done, and its results are on that execution. When the newest later
+continuation stopped at a Preview review (of a render, or of a Tighten Episode
+with Review before render on), the run throws a
+`ContinuationPreviewPendingError` (`code` `continuation_preview_pending`, 409,
+exported from `@nodaro/sdk/errors`). It names that continuation in
+`executionId`, its renders in `renderNodeIds` and its Tighten Episode nodes in
+`reviewNodeIds`. `next` (a `HeldFinalRun`: `continueFromExecutionId`,
+`nodeIds`, `inputOverrides`) is the run that finishes them: send it first with
+`client.workflows.run(workflowId, error.next)`, then continue. For a single held
+render, `next` is that continuation's `renderFinal`. When the newest later continuation completed only part of
+what was left otherwise (a narrower `nodeIds`), the run is built on it instead:
+seeded from that continuation, running only what it left, and the result's
+`continuedFrom` names it (the run you sent otherwise). A Render final, or a run
+of named nodes, that continues the newest later continuation counts as one of
+them. A run that did not fail throws `continuation_not_failed`, and one with
+nothing left `continuation_subset_required` (409)
+([details](./api-integration.md#continuing-a-failed-run)). Send an
+`idempotencyKey` with each continuation, so a retry of the same request starts
+nothing new:
+
+```ts
+await client.workflows.run(
+  id,
+  { continueFromExecutionId: failedRunId, continueMode: "from-failed" },
+  { idempotencyKey: crypto.randomUUID() }, // reuse the same key when retrying this call
+)
+```
 
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.
 Requires `workflows:execute` scope when called via OAuth.

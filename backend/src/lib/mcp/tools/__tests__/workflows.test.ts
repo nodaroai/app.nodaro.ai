@@ -571,6 +571,163 @@ describe("run_workflow tool", () => {
     expect(c.eq).toHaveBeenCalledWith("project_id", MCP_PROJECT_ID)
   })
 
+  // Continue-from-failed of a saved workflow's run (decided 2026-10-17).
+  it("continue_from_execution_id + from_failed: the route continues that failed run from where it stopped", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/workflows/:id/run", async (req) => {
+      received = req.body as Record<string, unknown>
+      return { executionId: "e-2", status: "pending" }
+    })
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const FAILED = "00000000-0000-4000-8000-0000000000f1"
+    const result = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, continue_from_execution_id: FAILED, from_failed: true })
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.executionId).toBe("e-2")
+    expect(received?.continueFromExecutionId).toBe(FAILED)
+    expect(received?.continueMode).toBe("from-failed")
+    // No node list: the route considers every node.
+    expect(received?.nodeIds).toBeUndefined()
+  })
+
+  it("built on a later continuation (continuedFrom names another run): the answer says so", async () => {
+    const FAILED = "00000000-0000-4000-8000-0000000000f1"
+    const LATER = "00000000-0000-4000-8000-0000000000f2"
+    const fastify = Fastify()
+    fastify.post("/v1/workflows/:id/run", async () => ({ executionId: "e-2", status: "pending", continuedFrom: LATER }))
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const result = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, continue_from_execution_id: FAILED, from_failed: true })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0]?.text).toContain(`It continues from ${LATER}`)
+    // Continued from the run asked for: nothing extra said.
+    const plain = Fastify()
+    plain.post("/v1/workflows/:id/run", async () => ({ executionId: "e-3", status: "pending", continuedFrom: FAILED }))
+    const server2 = buildServer()
+    registerWorkflows({ server: server2, session: mcpSession(["workflows:execute"]), fastify: plain })
+    const again = await callTool(server2, "run_workflow", { workflow_id: WORKFLOW_ID, continue_from_execution_id: FAILED, from_failed: true })
+    expect(again.content[0]?.text).not.toContain("It continues from")
+  })
+
+  it("one of continue_from_execution_id / from_failed without the other is refused before any run", async () => {
+    const fastify = Fastify()
+    let hit = false
+    fastify.post("/v1/workflows/:id/run", async () => {
+      hit = true
+      return { executionId: "e-1" }
+    })
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const alone = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, from_failed: true })
+    expect(alone.isError).toBe(true)
+    expect(alone.content[0]?.text).toContain("continue_from_execution_id")
+    const noMode = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1" })
+    expect(noMode.isError).toBe(true)
+    expect(noMode.content[0]?.text).toContain("from_failed: true")
+    expect(hit).toBe(false)
+  })
+
+  it("a superseded continuation names the later run to continue", async () => {
+    const fastify = Fastify()
+    const LATER = "00000000-0000-4000-8000-0000000000f2"
+    fastify.post("/v1/workflows/:id/run", async (_req, reply) =>
+      reply.status(409).send({
+        error: { code: "continuation_superseded", message: "A later continuation of this run failed: continue that one." },
+        executionId: LATER,
+        supersededBy: { executionId: LATER, status: "failed" },
+      }),
+    )
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const result = await callTool(server, "run_workflow", {
+      workflow_id: WORKFLOW_ID,
+      continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1",
+      from_failed: true,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain(`continue_from_execution_id: "${LATER}", from_failed: true`)
+  })
+
+  it("a superseding run that did not fail is named for reading, never as a run to continue", async () => {
+    const fastify = Fastify()
+    const LATER = "00000000-0000-4000-8000-0000000000f3"
+    fastify.post("/v1/workflows/:id/run", async (_req, reply) =>
+      reply.status(409).send({
+        error: { code: "continuation_superseded", message: "superseded" },
+        executionId: LATER,
+        supersededBy: { executionId: LATER, status: "completed" },
+      }),
+    )
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const result = await callTool(server, "run_workflow", {
+      workflow_id: WORKFLOW_ID,
+      continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1",
+      from_failed: true,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain(`get_app_run({ execution_id: "${LATER}" })`)
+    expect(result.content[0]?.text).not.toContain(`continue_from_execution_id: "${LATER}"`)
+    // A completed one ran all the run left: the work is done, and the hint says so.
+    expect(result.content[0]?.text).toMatch(/work is done/)
+  })
+
+  it("a lineage whose newest continuation stopped at a Preview: the Render final of that run, never another continuation", async () => {
+    const fastify = Fastify()
+    const LATER = "00000000-0000-4000-8000-0000000000f4"
+    fastify.post("/v1/workflows/:id/run", async (_req, reply) =>
+      reply.status(409).send({
+        error: { code: "continuation_preview_pending", message: "stopped at its Preview review" },
+        executionId: LATER,
+        renderNodeIds: ["cut"],
+      }),
+    )
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const result = await callTool(server, "run_workflow", {
+      workflow_id: WORKFLOW_ID,
+      continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1",
+      from_failed: true,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain(`render_final({ workflow_id: "${WORKFLOW_ID}", render_node_id: "cut", execution_id: "${LATER}" })`)
+    expect(result.content[0]?.text).not.toContain(`continue_from_execution_id: "${LATER}"`)
+  })
+
+  it("a newest continuation held by a Tighten Episode review: the one run in `next` (run_workflow cannot send it), never render_final", async () => {
+    const fastify = Fastify()
+    const LATER = "00000000-0000-4000-8000-0000000000f4"
+    const next = { continueFromExecutionId: LATER, nodeIds: ["t", "cap"], inputOverrides: { t: { useCaseContinue: { mode: "render-final", jobId: "w" } } } }
+    fastify.post("/v1/workflows/:id/run", async (_req, reply) =>
+      reply.status(409).send({
+        error: { code: "continuation_preview_pending", message: "stopped at its Preview review" },
+        executionId: LATER,
+        renderNodeIds: [],
+        reviewNodeIds: ["t"],
+        next,
+      }),
+    )
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const result = await callTool(server, "run_workflow", {
+      workflow_id: WORKFLOW_ID,
+      continue_from_execution_id: "00000000-0000-4000-8000-0000000000f1",
+      from_failed: true,
+    })
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain('the review of "t"')
+    expect(text).toContain(`POST /v1/workflows/${WORKFLOW_ID}/run with ${JSON.stringify(next)}`)
+    expect(text).not.toContain("render_final({")
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })

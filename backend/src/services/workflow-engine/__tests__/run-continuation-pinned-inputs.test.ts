@@ -20,6 +20,8 @@ const db = vi.hoisted(() => ({
   executionSelects: [] as string[],
   /** The filters the app_runs lookup applied, as [column, value]. */
   appRunFilters: [] as Array<[string, unknown]>,
+  /** The run row an `app_runs` lookup BY ID finds (the execution's app-run stamp). */
+  appRunById: null as Record<string, unknown> | null,
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -27,9 +29,11 @@ vi.mock("@/lib/supabase.js", () => ({
     from: (table: string) => ({
       select: (columns: string) => {
         if (table === "workflow_executions") db.executionSelects.push(columns)
+        let byId = false
         const self = {
           eq: (column: string, value: unknown) => {
             if (table === "app_runs") db.appRunFilters.push([column, value])
+            if (column === "id" && table === "app_runs") byId = true
             return self
           },
           maybeSingle: async () => {
@@ -41,7 +45,7 @@ vi.mock("@/lib/supabase.js", () => ({
               const { input_overrides, ...rest } = db.execution
               return { data: columns.includes("input_overrides") ? { ...rest, input_overrides } : rest, error: null }
             }
-            if (table === "app_runs") return { data: db.appRun, error: null }
+            if (table === "app_runs") return { data: byId ? db.appRunById : db.appRun, error: null }
             return { data: null, error: null }
           },
         }
@@ -54,7 +58,8 @@ vi.mock("@/lib/canvas-result-ids.js", () => ({
   resolveRunStateStamps: async (states: unknown) => states,
 }))
 
-import { loadContinuationSource } from "../run-continuation.js"
+import { CONTINUATION_VERSION_MISMATCH } from "@nodaro/shared/nodes"
+import { STAMPED_APP_RUN_UNKNOWN_VERSION, continuationRefusal, loadContinuationSource } from "../run-continuation.js"
 import { resetInputOverridesColumnForTests } from "../../../lib/execution-input-overrides.js"
 
 const load = () => loadContinuationSource("exec-0", { withStates: true, isRenderNode: () => false })
@@ -66,6 +71,7 @@ beforeEach(() => {
   db.appRunFilters.length = 0
   db.execution = { id: "exec-0", user_id: "u1", workflow_id: "wf-1", status: "completed", node_states: {}, input_overrides: null }
   db.appRun = null
+  db.appRunById = null
 })
 
 describe("the overrides a continuation re-applies: the earlier execution's pin", () => {
@@ -188,5 +194,63 @@ describe("the app run behind an execution is the execution owner's (decided 2026
     await load()
     expect(db.appRunFilters).toContainEqual(["execution_id", "exec-0"])
     expect(db.appRunFilters).toContainEqual(["runner_id", "u1"])
+  })
+})
+
+// Continue-from-failed of a saved workflow's run (decided 2026-10-17): the
+// route reads when the source started and its lineage stamp
+// (lib/continue-from-failed-lineage.ts) to continue only the newest generation.
+describe("the source's start and its continue-from-failed lineage", () => {
+  it("reads started_at and the stamp, on both reads", async () => {
+    db.execution = {
+      ...db.execution!,
+      started_at: "2026-10-17T10:00:00.000Z",
+      trigger_data: { continueFromFailed: { from: "exec-b", root: "exec-a", all: true } },
+    }
+    for (const source of [await load(), await loadContinuationSource("exec-0", { withStates: false })]) {
+      expect(source!.startedAt).toBe("2026-10-17T10:00:00.000Z")
+      expect(source!.continueFromFailed).toEqual({ from: "exec-b", root: "exec-a", all: true })
+    }
+    expect(db.executionSelects.every((c) => c.includes("started_at"))).toBe(true)
+  })
+
+  it("a run that never started and carries no stamp reads as such", async () => {
+    db.execution = { ...db.execution!, started_at: null, trigger_data: null }
+    const source = await load()
+    expect(source!.startedAt).toBeNull()
+    expect(source!.continueFromFailed).toBeNull()
+  })
+})
+
+// A Retry moves `app_runs.execution_id` to a new execution; the earlier one
+// keeps its app-run stamp (lib/app-run-stamp.ts) and is still an app
+// version's execution, never the live workflow's.
+describe("an app run's earlier execution, found by its stamp", () => {
+  it("no run points at it any more: the stamped run's version is the source's", async () => {
+    db.execution = { ...db.execution!, trigger_data: { appRun: { appRunId: "run-1" } } }
+    db.appRun = null
+    db.appRunById = { app_id: "app-1", input_values: null }
+    const source = await load()
+    expect(source!.appVersionId).toBe("app-1")
+    // Looked up by the stamp, the execution owner's run only.
+    expect(db.appRunFilters).toContainEqual(["id", "run-1"])
+    expect(db.appRunFilters).toContainEqual(["runner_id", "u1"])
+  })
+
+  it("its run is gone: it still reads as a published version's, one no run matches", async () => {
+    db.execution = { ...db.execution!, trigger_data: { appRun: { appRunId: "run-gone" } } }
+    db.appRun = null
+    db.appRunById = null
+    expect((await load())!.appVersionId).toBe(STAMPED_APP_RUN_UNKNOWN_VERSION)
+  })
+
+  it("a /run continue-from-failed of it is refused as another version", async () => {
+    db.execution = { ...db.execution!, status: "failed", trigger_data: { appRun: { appRunId: "run-1" } } }
+    db.appRun = null
+    db.appRunById = { app_id: "app-1" }
+    const source = await load()
+    expect(continuationRefusal(source, { userId: "u1", workflowId: source!.workflowId, nodeIds: ["x"], mode: "from-failed" })).toBe(
+      CONTINUATION_VERSION_MISMATCH,
+    )
   })
 })

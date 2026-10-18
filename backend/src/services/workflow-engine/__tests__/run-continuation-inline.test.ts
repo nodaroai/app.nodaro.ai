@@ -5,6 +5,7 @@ import {
   CONTINUATION_NOT_FAILED,
   CONTINUATION_NOT_FOUND,
   CONTINUATION_SUBSET_REQUIRED,
+  CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_WORKFLOW_MISMATCH,
 } from "@nodaro/shared/nodes"
 
@@ -42,6 +43,7 @@ vi.mock("@/lib/canvas-result-ids.js", () => ({
 
 import {
   continuationRefusal,
+  fromFailedClosedRunSet,
   fromFailedRunSet,
   loadContinuationSource,
   type ContinuationSource,
@@ -66,7 +68,8 @@ describe("continuation of an inline (use-case) run", () => {
   })
   it("refuses a different snapshot, and a saved workflow posing as a snapshot", () => {
     expect(continuationRefusal(src(), { userId: "u1", workflowId: null, inlineGraphHash: "ffff", nodeIds: ["uc-render"], mode: "from-failed" })).toBe(CONTINUATION_WORKFLOW_MISMATCH)
-    expect(continuationRefusal(src({ inlineGraphHash: null, workflowId: "wf-1" }), { userId: "u1", workflowId: "wf-1", nodeIds: ["x"], mode: "from-failed" })).toBe(CONTINUATION_WORKFLOW_MISMATCH)
+    // A saved workflow's run claiming the inline run's snapshot.
+    expect(continuationRefusal(src(), { userId: "u1", workflowId: "wf-1", inlineGraphHash: "aaaa0000bbbb1111", nodeIds: ["x"], mode: "from-failed" })).toBe(CONTINUATION_WORKFLOW_MISMATCH)
   })
   it("two runs with no workflow match only on a stored snapshot hash: none on either side is a mismatch", () => {
     // An expunged snapshot (or the column not yet there) reads as no hash.
@@ -100,6 +103,22 @@ describe("continuation of an inline (use-case) run", () => {
     const saved = src({ inlineGraphHash: null, workflowId: "wf-1", status: "completed" })
     expect(continuationRefusal(saved, { userId: "u1", workflowId: "wf-1", nodeIds: ["cut"] })).toBeNull()
     expect(continuationRefusal(saved, { userId: "u1", workflowId: "wf-2", nodeIds: ["cut"] })).toBe(CONTINUATION_WORKFLOW_MISMATCH)
+  })
+  it("from-failed of a saved workflow's run (decided 2026-10-17): its own failed run of the same live workflow → allowed", () => {
+    const saved = src({ inlineGraphHash: null, workflowId: "wf-1" })
+    expect(continuationRefusal(saved, { userId: "u1", workflowId: "wf-1", nodeIds: ["x"], mode: "from-failed" })).toBeNull()
+  })
+  it("from-failed of a saved workflow's run keeps every other check", () => {
+    const saved = src({ inlineGraphHash: null, workflowId: "wf-1" })
+    const run = { userId: "u1", workflowId: "wf-1", nodeIds: ["x"], mode: "from-failed" as const }
+    expect(continuationRefusal(saved, { ...run, userId: "u2" })).toBe(CONTINUATION_NOT_FOUND)
+    expect(continuationRefusal(saved, { ...run, workflowId: "wf-2" })).toBe(CONTINUATION_WORKFLOW_MISMATCH)
+    // An app run's execution is another version of the graph than the live workflow.
+    expect(continuationRefusal(src({ inlineGraphHash: null, workflowId: "wf-1", appVersionId: "app-1" }), run)).toBe(CONTINUATION_VERSION_MISMATCH)
+    expect(continuationRefusal(src({ inlineGraphHash: null, workflowId: "wf-1", status: "completed" }), run)).toBe(CONTINUATION_NOT_FAILED)
+    expect(continuationRefusal(src({ inlineGraphHash: null, workflowId: "wf-1", status: "cancelled" }), run)).toBe(CONTINUATION_NOT_FAILED)
+    expect(continuationRefusal(saved, { ...run, nodeIds: [] })).toBe(CONTINUATION_SUBSET_REQUIRED)
+    expect(continuationRefusal(null, run)).toBe(CONTINUATION_NOT_FOUND)
   })
   it("fromFailedRunSet: every node the failed run did not complete, in graph order", () => {
     const states = { a: { status: "completed" }, b: { status: "completed" }, c: { status: "failed" }, d: { status: "skipped" } }
@@ -152,5 +171,52 @@ describe("loading an inline run to continue from: its STORED snapshot hash", () 
     expect(source!.inlineGraphHash).toBeNull()
     expect(db.executionSelects).toHaveLength(3)
     expect(db.executionSelects[2]).not.toMatch(/input_overrides|inline_graph/)
+  })
+})
+
+// A saved workflow's continue-from-failed run set is closed over the incomplete
+// nodes it needs upstream (decided 2026-10-17): a narrow nodeIds never runs a
+// node on an upstream that produced nothing.
+describe("fromFailedClosedRunSet", () => {
+  const nodes = [
+    { id: "a", type: "generate-image" },
+    { id: "b", type: "image-to-video" },
+    { id: "c", type: "add-captions" },
+    { id: "d", type: "generate-image" },
+  ]
+  const order = nodes.map((n) => n.id)
+  const chain = { nodes, edges: [{ source: "a", target: "b" }, { source: "b", target: "c" }, { source: "d", target: "c" }] }
+  const states = (s: Record<string, string>) => ({ nodeStates: Object.fromEntries(Object.entries(s).map(([id, status]) => [id, { status }])) as never })
+
+  it("adds every incomplete node upstream of one it runs, in graph order", () => {
+    // a failed; b, c never ran; d completed.
+    expect(fromFailedClosedRunSet(order, ["c"], chain, states({ a: "failed", d: "completed" }))).toEqual(["a", "b", "c"])
+  })
+
+  it("stops at a completed node: it hands on its seed, so nothing above it runs", () => {
+    expect(fromFailedClosedRunSet(order, ["c"], chain, states({ a: "failed", b: "completed", d: "completed" }))).toEqual(["c"])
+  })
+
+  it("is the plain remainder when nothing upstream is missing", () => {
+    expect(fromFailedClosedRunSet(order, order, chain, states({ a: "completed", b: "failed", d: "completed" }))).toEqual(["b", "c"])
+  })
+
+  it("reads a teleport pair as the orchestrator does: the wire runs from the node behind the Send", () => {
+    const teleported = {
+      nodes: [
+        { id: "a", type: "generate-image" },
+        { id: "send", type: "teleport-send", data: {} },
+        { id: "recv", type: "teleport-receive", data: { teleportFrom: "send" } },
+        { id: "c", type: "add-captions" },
+      ],
+      edges: [
+        { source: "a", target: "send" },
+        { source: "send", target: "recv", data: { teleporter: true } },
+        { source: "recv", target: "c" },
+      ],
+    }
+    const run = fromFailedClosedRunSet(["a", "send", "recv", "c"], ["c"], teleported, states({ a: "failed" }))
+    expect(run).toContain("a")
+    expect(run).toContain("c")
   })
 })

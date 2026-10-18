@@ -8,6 +8,7 @@ import { supabase } from "../../supabase.js"
 import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
+import { resumeFailedRunHint } from "./_resume-hint.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { ASSET_SEARCH_COLUMNS, textSearchFilters } from "../../text-search.js"
@@ -1103,6 +1104,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           // node was skipped for want of input and nothing failed; absent until it completes.
           outcome: z.enum(["succeeded", "nothing_new"]).optional(),
           errorMessage: z.string().nullable().optional(),
+          // A failed run of a saved workflow: how to continue it from where it stopped.
+          resumeHint: z.string().optional(),
           summary: z
             .object({ total: z.number(), completed: z.number(), failed: z.number(), skipped: z.number(), skippedForEmptyInput: z.number() })
             .optional(),
@@ -1153,7 +1156,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const { data, error } = await supabase
           .from("workflow_executions")
-          .select("id, status, node_states, created_at, completed_at, user_id, workflow_id, error_message")
+          .select("id, status, node_states, created_at, started_at, completed_at, user_id, workflow_id, trigger_type, trigger_data, error_message")
           .eq("id", args.execution_id)
           .eq("user_id", session.userId)
           .maybeSingle()
@@ -1248,11 +1251,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           skippedForEmptyInput: countEmptyInputSkips(ns),
         }
         const errorMessage = (data.error_message as string | null | undefined) ?? null
+        // A failed run of a saved workflow can be continued where it stopped.
+        const resumeHint = await resumeFailedRunHint(data, session)
         const run = {
           executionId: data.id,
           status: data.status,
           ...(outcome ? { outcome } : {}),
           errorMessage,
+          ...(resumeHint ? { resumeHint } : {}),
           summary,
           nodeStates,
           outputs,

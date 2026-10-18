@@ -21,9 +21,10 @@ export {
   JobHeldError,
   StudioOpError,
   ContinuationRefusedError,
+  ContinuationPreviewPendingError,
   StudioPreviewAppliedError,
   StudioPreviewUnavailable,
   throwFromResponse,
 } from "../errors.js"
 
-export type { WorkflowConflictCode } from "../errors.js"
+export type { HeldFinalRun, WorkflowConflictCode } from "../errors.js"

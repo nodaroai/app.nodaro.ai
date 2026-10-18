@@ -5,7 +5,7 @@ import {
   type AccessLevel,
 } from "../../workflow-access.js"
 import { toAccessRow } from "../../workflow-route-access.js"
-import { ensureMcpProject } from "./_mcp-project.js"
+import { ensureMcpProject, findMcpProject } from "./_mcp-project.js"
 import { withResolvedResultIds } from "../../canvas-result-ids.js"
 import type { McpSession } from "../session.js"
 
@@ -57,7 +57,11 @@ export async function loadMcpWorkflow(
   // True for the tools that live in that project (get/json/update/delete/run);
   // false for `export_workflow`, which has always been able to export ANY of
   // the caller's workflows, not just MCP-created ones.
-  opts: { personalProjectFloor?: boolean } = {},
+  opts: {
+    personalProjectFloor?: boolean
+    /** False: never create the "mcp" project to answer (a read tool's question) — none yet reads as not found. */
+    createProject?: boolean
+  } = {},
 ): Promise<McpWorkflowLoad> {
   const projectFloor = opts.personalProjectFloor !== false
   if (session.workspaceId) {
@@ -92,7 +96,9 @@ export async function loadMcpWorkflow(
     .eq("id", workflowId)
     .eq("user_id", session.userId)
   if (projectFloor) {
-    q = q.eq("project_id", await ensureMcpProject(session))
+    const projectId = opts.createProject === false ? await findMcpProject(session) : await ensureMcpProject(session)
+    if (!projectId) return { ok: false, message: NOT_FOUND }
+    q = q.eq("project_id", projectId)
   }
   const { data, error } = await q.maybeSingle()
   if (error) return { ok: false, message: `Error: ${error.message}` }

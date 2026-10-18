@@ -10696,6 +10696,7 @@ export const ptBR: ChromeDict = {
   "runContinuation.notCompleted": "A execução a partir da qual continuar não foi concluída. Aguarde até que termine, ou continue a partir de uma execução concluída.",
   "runContinuation.notFailed": "A execução a partir da qual continuar não falhou. Só uma execução que falhou pode ser continuada de onde parou.",
   "runContinuation.superseded": "Uma continuação posterior desta execução falhou: continue essa execução em vez desta.",
+  "runContinuation.previewPending": "Uma continuação posterior desta execução parou na revisão da prévia. Faça primeiro a renderização final dela e depois continue.",
   "runContinuation.alreadyRendered": "Já renderizado com esta edição.",
   "runContinuation.finalInProgress": "Uma renderização final desta prévia já está em andamento.",
   "runContinuation.settling": "Essa execução ainda está sendo finalizada, então ainda não pode ser continuada. Tente novamente em instantes.",

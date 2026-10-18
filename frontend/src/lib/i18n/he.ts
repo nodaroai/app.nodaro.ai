@@ -10906,6 +10906,7 @@ export const he: ChromeDict = {
   "runContinuation.notCompleted": "ההרצה שממנה ממשיכים לא הושלמה. חכו שתסתיים, או המשיכו מהרצה שהושלמה.",
   "runContinuation.notFailed": "ההרצה שממנה ממשיכים לא נכשלה. אפשר להמשיך מהמקום שבו נעצרה רק הרצה שנכשלה.",
   "runContinuation.superseded": "המשך מאוחר יותר של ההרצה הזו נכשל: יש להמשיך את ההרצה ההיא במקומה.",
+  "runContinuation.previewPending": "המשך מאוחר יותר של ההרצה הזו נעצר בבדיקת התצוגה המקדימה. יש להריץ קודם את הרינדור הסופי שלו, ואז להמשיך.",
   "runContinuation.alreadyRendered": "כבר רונדר עם העריכה הזו.",
   "runContinuation.finalInProgress": "רינדור סופי של התצוגה המקדימה הזו כבר מתבצע.",
   "runContinuation.settling": "ההרצה הזו עדיין בתהליך סגירה, ולכן אי אפשר להמשיך אותה עדיין. נסו שוב בעוד רגע.",

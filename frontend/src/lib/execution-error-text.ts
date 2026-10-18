@@ -12,6 +12,7 @@ import {
   CONTINUATION_SETTLING,
   CONTINUATION_NOT_FAILED,
   CONTINUATION_NOT_FOUND,
+  CONTINUATION_PREVIEW_PENDING,
   CONTINUATION_SUBSET_REQUIRED,
   CONTINUATION_SUPERSEDED,
   CONTINUATION_VERSION_MISMATCH,
@@ -43,6 +44,7 @@ const CODE_TEXT: Readonly<Record<string, MessageKey>> = {
   [CONTINUATION_NOT_COMPLETED]: "runContinuation.notCompleted",
   [CONTINUATION_NOT_FAILED]: "runContinuation.notFailed",
   [CONTINUATION_SUPERSEDED]: "runContinuation.superseded",
+  [CONTINUATION_PREVIEW_PENDING]: "runContinuation.previewPending",
   // A use-case continue (Tighten Episode) asked too soon after its run failed,
   // and a Render final of a run whose render made no Preview.
   [CONTINUATION_SETTLING]: "runContinuation.settling",

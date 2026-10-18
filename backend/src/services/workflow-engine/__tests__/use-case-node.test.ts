@@ -23,6 +23,10 @@ const m = vi.hoisted(() => ({
   readErrors: 0,
   /** Rows a wrapper read answers in turn, before `rows` (a wrapper whose status moves). */
   sequence: new Map<string, Row[]>(),
+  /** The graphs inner runs stored, by execution id (`loadExecutionForWrapper`). */
+  graphs: new Map<string, unknown>(),
+  /** How many inner-run reads fail before one answers. */
+  runReadErrors: 0,
 }))
 
 vi.mock("../loopback-fetch.js", () => ({ loopbackFetch: m.fetch }))
@@ -60,6 +64,15 @@ vi.mock("../../../lib/execution-budget.js", async (orig) => ({
   executionBudgetExcessMs: m.excess,
 }))
 vi.mock("../../../lib/cancel-job.js", () => ({ cancelOwnedJob: m.cancel }))
+vi.mock("../../../lib/execution-inline-graph.js", () => ({
+  loadExecutionForWrapper: async (id: string) => {
+    if (m.runReadErrors > 0) {
+      m.runReadErrors--
+      throw new Error("[execution-inline-graph] wrapper read failed: connection reset")
+    }
+    return m.graphs.has(id) ? { id, userId: "11111111-1111-4111-8111-111111111111", inlineGraph: m.graphs.get(id) } : null
+  },
+}))
 vi.mock("../../../lib/worker-drain.js", async (orig) => ({
   ...(await orig<typeof import("../../../lib/worker-drain.js")>()),
   isWorkerDraining: () => m.draining,
@@ -74,6 +87,7 @@ vi.mock("../types.js", async (orig) => ({ ...(await orig<typeof import("../types
 import { CANNOT_CONTINUE_MESSAGE, executeUseCaseNode, MAX_GENERATION_HOPS, USE_CASE_SETTLING_RETRY_MS } from "../use-case-node.js"
 import { DrainAbortError } from "../../../lib/worker-drain.js"
 import type { ResolvedInputs } from "../types.js"
+import { usecaseDescriptor } from "@nodaro/render-rules"
 
 /** The rejection a run ends with, typed as the orchestrator reads it. */
 const rejection = (p: Promise<unknown>) => p.then(() => { throw new Error("expected a rejection") }, (e: unknown) => e as Error & { errorCode?: string; output?: unknown })
@@ -123,6 +137,8 @@ beforeEach(() => {
   m.execStatus = "running"
   m.readErrors = 0
   m.sequence.clear()
+  m.graphs.clear()
+  m.runReadErrors = 0
 })
 
 describe("executeUseCaseNode — the run", () => {
@@ -435,6 +451,30 @@ describe("executeUseCaseNode — a continuation (an app's Render final, a contin
 describe("executeUseCaseNode — an outer run continued from its failure", () => {
   const failedBefore = (state: Record<string, unknown> = { status: "failed", jobId: "job-0", error: "Apply Cut: The render could not read the recording" }) =>
     ({ continuedFromStates: { t1: state } })
+  /** What the route stored on the attempt that failed: the recording it ran on and the settings it resolved for it. */
+  const ranWith = (over: Row = {}, opts: { data?: Row; kind?: "video" | "audio" } = {}): Row => ({
+    type: "tighten-episode",
+    mode: "run",
+    settings: usecaseDescriptor("tighten-episode").resolveSettings((tighten(opts.data) as { data: Row }).data, opts.kind ?? "video"),
+    mediaUrl: "https://r2/ep.mp4",
+    durationSec: 1800,
+    _feeCredits: 300,
+    _executionId: "exec-in",
+    ...over,
+  })
+  /** The graph the attempt's run stored: its recording, as a video (or audio) upload. */
+  const graphOf = (kind: "video" | "audio" = "video") => ({
+    nodeType: "tighten-episode",
+    nodes: [{ id: "uc-source", type: kind === "audio" ? "upload-audio" : "upload-video", data: {} }],
+  })
+  /** The wrapper of the attempt that failed, as the gate and the recorded-wrapper read see it. */
+  const attempt = (over: Row = {}): Row => wrapper({ status: "failed", output_data: { json: { v: 1 }, _executionId: "exec-in" }, input_data: ranWith(), ...over })
+
+  beforeEach(() => {
+    m.rows.set("job-0", attempt())
+    m.rows.set("job-1", attempt())
+    m.graphs.set("exec-in", graphOf())
+  })
 
   it("a Tighten node that failed there continues its own inner run from where it failed — no fresh run, no second fee", async () => {
     const out = await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
@@ -449,6 +489,133 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
     expect(out.jobId).toBe("job-w")
   })
 
+  // The outer run was built on a later generation that left the node out (a
+  // narrow continuation): its state there is a seed that carries the attempt
+  // that failed before (run-continuation.ts `continuationSeeds`).
+  it.each([
+    ["a skipped seed of a later generation", { status: "skipped", seededFromExecution: "exec-b", completedAt: "t", failedAttemptJobId: "job-0" }],
+    ["a later generation's own state that never got a job (pending)", { status: "pending", failedAttemptJobId: "job-0" }],
+    ["a later generation's own failure before any job of its own", { status: "failed", error: "aborted", failedAttemptJobId: "job-0" }],
+  ])("%s that carries the failed attempt: the node continues it — no fresh run, no second fee", async (_name, state) => {
+    await executeUseCaseNode(tighten(), wired(), ctx(failedBefore(state)), undefined)
+    expect(m.fetch).toHaveBeenCalledTimes(1)
+    const [url, init] = m.fetch.mock.calls[0]!
+    expect(url).toMatch(/\/v1\/tighten-episode\/continue$/)
+    expect(JSON.parse(init.body)).toMatchObject({ jobId: "job-0", mode: "from-failed" })
+  })
+
+  it("a later failure with a job of its own continues THAT attempt, not the older carried one", async () => {
+    await executeUseCaseNode(tighten(), wired(), ctx(failedBefore({ status: "failed", jobId: "job-1", failedAttemptJobId: "job-0" })), undefined)
+    expect(JSON.parse(m.fetch.mock.calls[0]![1].body)).toMatchObject({ jobId: "job-1", mode: "from-failed" })
+  })
+
+  it("a seed with no failed attempt (it never ran anywhere) runs the node afresh", async () => {
+    await executeUseCaseNode(tighten(), wired(), ctx(failedBefore({ status: "skipped", seededFromExecution: "exec-b", completedAt: "t" })), undefined)
+    expect(String(m.fetch.mock.calls[0]![0])).toMatch(/\/v1\/tighten-episode$/)
+  })
+
+  // Decided 2026-10-18: an attempt is resumed only on the inputs and settings
+  // it ran with; anything else runs the node fresh, charged once for that run.
+  describe("the attempt is held to the node's current inputs first", () => {
+    const carried = { status: "skipped", seededFromExecution: "exec-b", completedAt: "t", failedAttemptJobId: "job-0" }
+    const freshOnly = () => {
+      expect(paths()).toEqual(["/v1/tighten-episode"])
+      expect(m.fetch).toHaveBeenCalledTimes(1)
+    }
+
+    it("unchanged inputs and settings: the attempt is resumed — one continue, no fresh run, no second fee", async () => {
+      await executeUseCaseNode(tighten(), wired(), ctx(failedBefore(carried)), undefined)
+      expect(paths()).toEqual(["/v1/tighten-episode/continue"])
+    })
+
+    it("an audio recording, unchanged: its settings were resolved for audio, and still match — resumed", async () => {
+      m.rows.set("job-0", attempt({ input_data: ranWith({ mediaUrl: "https://r2/ep.mp3" }, { kind: "audio" }) }))
+      m.graphs.set("exec-in", graphOf("audio"))
+      await executeUseCaseNode(tighten(), wired("https://r2/ep.mp3"), ctx(failedBefore()), undefined)
+      expect(paths()).toEqual(["/v1/tighten-episode/continue"])
+    })
+
+    it("a corrected recording (an upstream node re-ran, or the generation built on did): the node runs fresh on it", async () => {
+      await executeUseCaseNode(tighten(), wired("https://r2/ep-fixed.mp4"), ctx(failedBefore(carried)), undefined)
+      freshOnly()
+      expect(JSON.parse(m.fetch.mock.calls[0]![1].body)).toMatchObject({ mediaUrls: ["https://r2/ep-fixed.mp4"] })
+    })
+
+    it("its own failed attempt is held to the same rule: a corrected recording runs fresh", async () => {
+      await executeUseCaseNode(tighten(), wired("https://r2/ep-fixed.mp4"), ctx(failedBefore()), undefined)
+      freshOnly()
+    })
+
+    it("a setting the run's overrides changed (the plan tier): the node runs fresh with it", async () => {
+      await executeUseCaseNode(tighten({ planTier: "standard" }), wired(), ctx(failedBefore()), undefined)
+      freshOnly()
+      expect(JSON.parse(m.fetch.mock.calls[0]![1].body)).toMatchObject({ planTier: "standard" })
+    })
+
+    it("music wired now that the attempt ran without: fresh", async () => {
+      await executeUseCaseNode(tighten(), { ...wired(), useCaseMusic: "https://r2/bed.mp3" }, ctx(failedBefore()), undefined)
+      freshOnly()
+    })
+
+    it("an unset setting equal to its default still matches (the route resolved the same default)", async () => {
+      m.rows.set("job-0", attempt({ input_data: ranWith({}, { data: { captionStyle: undefined } }) }))
+      await executeUseCaseNode(tighten({ captionStyle: undefined }), wired(), ctx(failedBefore()), undefined)
+      expect(paths()).toEqual(["/v1/tighten-episode/continue"])
+    })
+
+    it("a video recording the attempt rendered as audio, now asked for video: fresh (the kind is the recording's, not a guess)", async () => {
+      m.rows.set("job-0", attempt({ input_data: ranWith({}, { data: { output: "audio" } }) }))
+      await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
+      freshOnly()
+    })
+
+    it("the attempt's stored graph cannot be read: its inputs cannot be told, so fresh", async () => {
+      m.graphs.clear()
+      await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
+      freshOnly()
+    })
+
+    it("the attempt's run unreadable for a moment: read again, then resumed — never a fresh run on a read error", async () => {
+      vi.useFakeTimers()
+      try {
+        m.runReadErrors = 2
+        const run = executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
+        await vi.advanceTimersByTimeAsync(3 * USE_CASE_SETTLING_RETRY_MS)
+        await run
+        expect(paths()).toEqual(["/v1/tighten-episode/continue"])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("Chapters is held to the same rule (the descriptor drives it): unchanged resumes, a changed instruction runs fresh", async () => {
+      const chapters = (data: Row = {}) => ({ id: "t1", type: "episode-chapters", data: { label: "Chapters", planTier: "premium", ...data } }) as never
+      const stored = { type: "episode-chapters", mode: "run", mediaUrl: "https://r2/ep.mp4", _executionId: "exec-ch",
+        settings: usecaseDescriptor("episode-chapters" as never).resolveSettings({ planTier: "premium" }, "video") }
+      m.rows.set("job-0", attempt({ input_data: stored }))
+      m.graphs.set("exec-ch", { nodeType: "episode-chapters", nodes: [{ id: "uc-source", type: "upload-video", data: {} }] })
+      await executeUseCaseNode(chapters(), wired(), ctx(failedBefore()), undefined)
+      expect(paths()).toEqual(["/v1/episode-chapters/continue"])
+      m.fetch.mockClear()
+      await executeUseCaseNode(chapters({ instructions: "Shorter chapters" }), wired(), ctx(failedBefore()), undefined)
+      expect(paths()).toEqual(["/v1/episode-chapters"])
+    })
+
+    it("the attempt's wrapper is gone: fresh, without asking the continue route", async () => {
+      m.rows.delete("job-0")
+      await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
+      freshOnly()
+    })
+
+    it("a newer failed generation the route names is continued on the same check (it copied the attempt's inputs)", async () => {
+      m.fetch
+        .mockResolvedValueOnce(answer(409, { error: { code: "continuation_superseded", message: "A later continuation of this run failed: continue that one." }, jobId: "job-g2" }))
+        .mockResolvedValueOnce(answer(202, { jobId: "job-w", executionId: "exec-in" }))
+      await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
+      expect(paths()).toEqual(["/v1/tighten-episode/continue", "/v1/tighten-episode/continue"])
+    })
+  })
+
   const NOTHING = [
     ["not_found", "That run was not found."],
     ["continuation_not_found", "The execution to continue from was not found."],
@@ -461,6 +628,9 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
   const paths = () => m.fetch.mock.calls.map((c) => String(c[0]).replace(/^.*\/v1/, "/v1"))
 
   it.each(NOTHING)("nothing to continue (%s), the recorded wrapper gone: the node runs afresh", async (code, message) => {
+    // There when its inputs were checked; gone by the time the route was asked.
+    m.rows.delete("job-0")
+    m.sequence.set("job-0", [attempt()])
     m.fetch.mockResolvedValueOnce(nothing(code, message)).mockResolvedValueOnce(answer(202, { jobId: "job-w", executionId: "exec-in" }))
     const out = await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
     expect(paths()).toEqual(["/v1/tighten-episode/continue", "/v1/tighten-episode"])
@@ -470,7 +640,7 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
 
   it.each(NOTHING)("nothing to continue (%s), the recorded wrapper completed: its result, none of its credits, no second run", async (code, message) => {
     m.fetch.mockResolvedValueOnce(nothing(code, message))
-    m.rows.set("job-0", wrapper({ credits_actual: 942, idempotency_key: "wf-exec-0-t1" }))
+    m.rows.set("job-0", wrapper({ credits_actual: 942, idempotency_key: "wf-exec-0-t1", input_data: ranWith() }))
     const out = await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
     expect(paths()).toEqual(["/v1/tighten-episode/continue"])
     expect(out).toEqual({ output: { videoUrl: "https://r2/ep-tight.mp4", json: { v: 1 }, quality: "final" }, jobId: "job-0", creditsUsed: 0 })
@@ -479,10 +649,11 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
   it("nothing to continue, the recorded wrapper still running: waited on (not this run's: never cancelled, none of its credits)", async () => {
     m.fetch.mockResolvedValueOnce(nothing("continuation_not_failed", "Only a run that failed can be continued from where it stopped."))
     m.sequence.set("job-0", [
-      wrapper({ status: "processing", output_data: null, idempotency_key: "wf-exec-0-t1" }),
-      wrapper({ status: "processing", output_data: null, idempotency_key: "wf-exec-0-t1" }),
+      attempt(),
+      wrapper({ status: "processing", output_data: null, idempotency_key: "wf-exec-0-t1", input_data: ranWith() }),
+      wrapper({ status: "processing", output_data: null, idempotency_key: "wf-exec-0-t1", input_data: ranWith() }),
     ])
-    m.rows.set("job-0", wrapper({ credits_actual: 942, idempotency_key: "wf-exec-0-t1" }))
+    m.rows.set("job-0", wrapper({ credits_actual: 942, idempotency_key: "wf-exec-0-t1", input_data: ranWith() }))
     const c = ctx(failedBefore())
     const out = await executeUseCaseNode(tighten(), wired(), c, undefined)
     expect(paths()).toEqual(["/v1/tighten-episode/continue"])
@@ -500,7 +671,7 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
       status,
       error_message: "Apply Cut: The render could not read the recording",
       output_data: { json: { v: 1 }, quality: "final", _executionId: "exec-in" },
-      input_data: { _executionId: "exec-in" },
+      input_data: ranWith(),
     }))
     const err = await rejection(executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined))
     expect(paths()).toEqual(["/v1/tighten-episode/continue"])
@@ -511,19 +682,16 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
 
   it("a started run stamped only on its output (its input stamp failed) counts as started", async () => {
     m.fetch.mockResolvedValueOnce(nothing("continuation_not_failed", "Only a run that failed can be continued from where it stopped."))
-    m.rows.set("job-0", wrapper({ status: "cancelled", error_message: null, output_data: { _executionId: "exec-in", quality: "final" }, input_data: {} }))
+    m.rows.set("job-0", wrapper({ status: "cancelled", error_message: null, output_data: { _executionId: "exec-in", quality: "final" }, input_data: ranWith({ _executionId: undefined }) }))
     const err = await rejection(executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined))
     expect(err.message).toBe(CANNOT_CONTINUE_MESSAGE)
     expect(paths()).toEqual(["/v1/tighten-episode/continue"])
   })
 
-  it.each(["failed", "cancelled"])("nothing to continue, the recorded run never started (%s before its run began): the node runs afresh", async (status) => {
-    m.fetch
-      .mockResolvedValueOnce(nothing("not_found", "That run was not found."))
-      .mockResolvedValueOnce(answer(202, { jobId: "job-w", executionId: "exec-in" }))
-    m.rows.set("job-0", wrapper({ status, error_message: "The run could not start", output_data: null, input_data: { type: "tighten-episode", mode: "run" } }))
+  it.each(["failed", "cancelled"])("the attempt's run never started (%s before its run began): nothing to resume, the node runs afresh", async (status) => {
+    m.rows.set("job-0", wrapper({ status, error_message: "The run could not start", output_data: null, input_data: ranWith({ _executionId: undefined }) }))
     const out = await executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
-    expect(paths()).toEqual(["/v1/tighten-episode/continue", "/v1/tighten-episode"])
+    expect(paths()).toEqual(["/v1/tighten-episode"])
     expect(out.jobId).toBe("job-w")
   })
 
@@ -536,10 +704,11 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
     vi.useFakeTimers()
     try {
       m.fetch.mockResolvedValueOnce(nothing("continuation_not_failed", "Only a run that failed can be continued from where it stopped."))
-      m.rows.set("job-0", wrapper({ idempotency_key: "wf-exec-0-t1" }))
+      m.rows.set("job-0", wrapper({ idempotency_key: "wf-exec-0-t1", input_data: ranWith() }))
+      // The inputs check reads it first (and reads it again), then the recorded-wrapper read.
       m.readErrors = 2
       const run = executeUseCaseNode(tighten(), wired(), ctx(failedBefore()), undefined)
-      await vi.advanceTimersByTimeAsync(3 * USE_CASE_SETTLING_RETRY_MS)
+      await vi.advanceTimersByTimeAsync(4 * USE_CASE_SETTLING_RETRY_MS)
       await expect(run).resolves.toMatchObject({ jobId: "job-0", creditsUsed: 0 })
       expect(paths()).toEqual(["/v1/tighten-episode/continue"])
     } finally {

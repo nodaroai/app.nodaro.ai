@@ -134,6 +134,8 @@ nodaro workflows delete <id> [--json]
 nodaro workflows export <id> [--with-assets] [--output bundle.json]
 nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
+nodaro workflows run <id> --continue-from <executionId> --from-failed [--node n1 n2 ...] [--idempotency-key <key>] [--watch]
+#   --idempotency-key (8+ characters) is sent as Idempotency-Key: the same key twice starts one run
 
 # Sharing (workspace features)
 nodaro workflows share <id> [--visibility workspace|private] [--json]

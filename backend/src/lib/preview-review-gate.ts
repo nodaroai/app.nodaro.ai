@@ -99,6 +99,20 @@ export function previewReviewHold(
   rawEdges: readonly LooseEdge[],
   run: PreviewReviewRun,
 ): PreviewHoldKind | null {
+  return previewReviewStops(rawNodes, rawEdges, run)?.kind ?? null
+}
+
+/**
+ * What holds the run (`previewReviewHold`) and which nodes do: every render
+ * it would execute at Preview or hand a Preview of on, and every review-on
+ * use-case node — or `null` when nothing does (always, with the flag off).
+ * The same rule over the same nodes as `previewReviewHold`. Pure.
+ */
+export function previewReviewStops(
+  rawNodes: readonly LooseNode[],
+  rawEdges: readonly LooseEdge[],
+  run: PreviewReviewRun,
+): { readonly kind: PreviewHoldKind; readonly heldBy: readonly string[] } | null {
   if (!previewStopRuleEnabled()) return null
   const live = rawNodes.filter((node) => node && typeof node.id === "string" && !node.hidden)
   const nodes: SimpleNode[] = withRunOverrides(
@@ -118,7 +132,8 @@ export function previewReviewHold(
   const savedRenders = run.savedRenders?.(nodes)
   const stops = runPreviewStops(nodes, edges, { nodeSubset, ...(savedRenders ? { savedRenders } : {}) })
   if (!runHoldsPreview(stops)) return null
-  return previewHoldKindOf([...stops.previewRenderIds, ...stops.savedPreviewRenderIds], nodes)
+  const heldBy = [...stops.previewRenderIds, ...stops.savedPreviewRenderIds]
+  return { kind: previewHoldKindOf(heldBy, nodes), heldBy }
 }
 
 /**
