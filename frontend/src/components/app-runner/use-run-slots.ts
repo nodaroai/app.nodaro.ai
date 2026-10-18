@@ -3,7 +3,7 @@ import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-stor
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getInputNodes, getOutputNodes } from "@/lib/presentation-utils"
 import { useT } from "@/lib/i18n"
-import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/lib/api"
+import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun, planAppRunResume, type AppRunResumePlan } from "@/lib/api"
 import type { NewRunAction, RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
@@ -63,6 +63,15 @@ function extractSlotThumbnail(
     if (u) return u
   }
   return null
+}
+
+/** The Retry confirmation of one failed run: the server's plan once it lands, or why it cannot continue. */
+export interface ResumeDialogState {
+  readonly slotId: string
+  /** The app version the runner is on, which the run must have run to be continued. */
+  readonly version?: number
+  readonly plan: AppRunResumePlan | null
+  readonly error: { readonly code: string | null; readonly message: string } | null
 }
 
 interface UseRunSlotsOptions {
@@ -454,8 +463,14 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     persistSlot(activeSlotId, emptyInputs)
   }, [activeSlotId, inputNodes, newRun, persistSlot])
 
-  // Retry — reset failed slot to idle (keep inputs), so Run becomes available
-  const handleRetry = useCallback(() => {
+  // The Retry confirmation on show, and which ask it answers (a later ask, or a close, drops an earlier answer).
+  const [resumeDialog, setResumeDialog] = useState<ResumeDialogState | null>(null)
+  const resumeAsk = useRef(0)
+
+  // Start over — reset the failed slot to idle (keep inputs), so Run starts it again from the
+  // beginning: every step runs and is charged again, on the version the runner picks.
+  const handleStartOver = useCallback(() => {
+    setResumeDialog(null)
     if (!activeSlotId) return
     setSlots((prev) => prev.map((s) =>
       s.id === activeSlotId
@@ -465,6 +480,42 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     newRun()
     resetPresentationToIdle(activeSlot?.inputValues ?? {})
   }, [activeSlotId, activeSlot?.inputValues, newRun])
+
+  // Retry — continue the failed run from where it stopped: always confirmed first, naming the
+  // steps that will run and their price (the server's plan, `planAppRunResume`). A run that is
+  // not saved (an embed without a session) has nothing to continue: it starts over.
+  const handleRetry = useCallback(() => {
+    if (!activeSlotId || !slug || !persistRuns || !user) {
+      handleStartOver()
+      return
+    }
+    const slotId = activeSlotId
+    const ask = ++resumeAsk.current
+    // The version the runner is on: a run of another one is not continued (the app changed since).
+    const version = app ? (selectedVersion ?? latestVersion) : undefined
+    setResumeDialog({ slotId, version, plan: null, error: null })
+    planAppRunResume(slug, slotId, version).then(
+      (plan) => { if (resumeAsk.current === ask) setResumeDialog({ slotId, version, plan, error: null }) },
+      (err: unknown) => {
+        if (resumeAsk.current !== ask) return
+        const code = (err as { code?: unknown })?.code
+        setResumeDialog({ slotId, version, plan: null, error: { code: typeof code === "string" ? code : null, message: err instanceof Error ? err.message : String(err) } })
+      },
+    )
+  }, [activeSlotId, slug, persistRuns, user, handleStartOver, app, selectedVersion, latestVersion])
+
+  const closeResumeDialog = useCallback(() => {
+    resumeAsk.current++
+    setResumeDialog(null)
+  }, [])
+
+  const confirmResume = useCallback(async () => {
+    const dialog = resumeDialog
+    resumeAsk.current++
+    setResumeDialog(null)
+    if (!dialog?.plan) return
+    await useAppRunnerStore.getState().resumeRun(dialog.slotId, dialog.version)
+  }, [resumeDialog])
 
   // Duplicate — create a new draft with same inputs as given slot, made active.
   const handleDuplicateSlot = useCallback(async (slotId: string) => {
@@ -625,6 +676,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     handleCreateNew,
     handleClear,
     handleRetry,
+    handleStartOver,
     handleDuplicateSlot,
     launch,
     handleHeaderAction,
@@ -633,6 +685,11 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     handleConfirmDelete,
     handleRenameSlot,
     handleCloseSidebar,
+
+    // Retry's confirmation (continue the failed run, or start over)
+    resumeDialog,
+    confirmResume,
+    closeResumeDialog,
 
     // Derived
     newRunAction,

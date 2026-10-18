@@ -19,9 +19,10 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { RESERVED_TRIGGER_DATA_KEYS, serverStamps, withoutReservedStamps } from "../trigger-data-stamps.js"
 import { SERVER_STAMPED_TRIGGER_TYPES, isServerStartedRun, serverTriggerData } from "../server-started-runs.js"
-import { appRunStamp, appRunStampOf } from "../app-run-stamp.js"
+import { appRunResumeStamp, appRunResumedFromOf, appRunStamp, appRunStampOf } from "../app-run-stamp.js"
 import { appRenderFinalStamp, appRenderFinalStampOf } from "../app-run-final-column.js"
 import { continueFromFailedStamp, continueFromFailedStampOf } from "../continue-from-failed-lineage.js"
+import { RUN_ROOT_STAMP_KEY, runRootOf } from "../continuation-run-root.js"
 
 const FORGED = {
   appRun: { appRunId: "run-of-someone" },
@@ -29,6 +30,9 @@ const FORGED = {
   continueFromFailed: { from: "e", root: "root-of-someone", seededFrom: "e", all: true },
   runRoot: { executionId: "root-of-someone" },
 }
+
+/** What `serverStamps` reads on a row it cannot trust. */
+const NONE = { continueFromFailed: null, appRun: null, appRenderFinal: null, runRoot: null, resumedFrom: null }
 
 describe("caller data never carries a platform stamp", () => {
   it("every stamp is reserved", () => {
@@ -42,6 +46,7 @@ describe("caller data never carries a platform stamp", () => {
     expect(appRunStampOf(stored)).toBeNull()
     expect(appRenderFinalStampOf(stored)).toBeNull()
     expect(continueFromFailedStampOf(stored)).toBeNull()
+    expect(runRootOf(stored)).toBeNull()
     // The input is left as it was.
     expect(body.runRoot).toEqual(FORGED.runRoot)
   })
@@ -57,11 +62,11 @@ describe("a stamp is read only on a run a stamp-writing lane started", () => {
       const row = { trigger_type, trigger_data: FORGED }
       expect(isServerStartedRun(row)).toBe(false)
       expect(serverTriggerData(row)).toBeNull()
-      expect(serverStamps(row)).toEqual({ continueFromFailed: null, appRun: null, appRenderFinal: null })
+      expect(serverStamps(row)).toEqual(NONE)
     }
     // A row read without its trigger_type trusts nothing.
-    expect(serverStamps({ trigger_data: FORGED })).toEqual({ continueFromFailed: null, appRun: null, appRenderFinal: null })
-    expect(serverStamps(null)).toEqual({ continueFromFailed: null, appRun: null, appRenderFinal: null })
+    expect(serverStamps({ trigger_data: FORGED })).toEqual(NONE)
+    expect(serverStamps(null)).toEqual(NONE)
   })
 
   it("the platform's own stamps still read on its own rows", () => {
@@ -73,6 +78,12 @@ describe("a stamp is read only on a run a stamp-writing lane started", () => {
     for (const trigger_type of ["manual", "mcp"]) {
       expect(serverStamps({ trigger_type, trigger_data: lineage }).continueFromFailed).toEqual({ from: "exec-a", root: "exec-a", all: true })
     }
+    // A continuation chain's root (pinRunRoot) and an app run's Retry (routes/app-run-resume.ts).
+    const pinned = { ...appRunStamp("run-1"), [RUN_ROOT_STAMP_KEY]: { executionId: "exec-root" } }
+    expect(serverStamps({ trigger_type: "app_run", trigger_data: pinned }).runRoot).toBe("exec-root")
+    const retry = serverStamps({ trigger_type: "app_run", trigger_data: appRunResumeStamp("run-1", "exec-failed") })
+    expect([retry.appRun, retry.resumedFrom]).toEqual(["run-1", "exec-failed"])
+    expect(appRunResumedFromOf(appRunStamp("run-1"))).toBeNull()
   })
 })
 
@@ -95,6 +106,7 @@ const TRIGGER_TYPE = /trigger_type:\s*([^,\n]+)/g
  * controls and must pass it through `withoutReservedStamps`.
  */
 const WRITERS: Record<string, { readonly kind: "stamp" | "fixed" | "caller"; readonly values: readonly string[] }> = {
+  "lib/continuation-run-root.ts": { kind: "stamp", values: ["{ ...kept"] },
   "lib/plugin-triggers.ts": { kind: "caller", values: ["triggerData"] },
   "lib/schedule-cron.ts": { kind: "fixed", values: ["{"] },
   "lib/trigger-fire-refusal.ts": { kind: "fixed", values: ["{ triggerId: args.triggerId } } : {})"] },
@@ -102,6 +114,7 @@ const WRITERS: Record<string, { readonly kind: "stamp" | "fixed" | "caller"; rea
   "routes/telegram-webhook.ts": { kind: "fixed", values: ["triggerData"] },
   "routes/api-tokens.ts": { kind: "fixed", values: ["{ apiTokenId: resolved.id }"] },
   "routes/app-runner.ts": { kind: "stamp", values: ["appRunStamp(runId)"] },
+  "routes/app-run-resume.ts": { kind: "stamp", values: ["appRunResumeStamp(runId"] },
   "routes/workflow-execution.ts": { kind: "stamp", values: ["continueFromFailedStamp(lineageStamp) } : {})"] },
   "services/app-execution.ts": { kind: "stamp", values: ["appRunStamp(appRunId)"] },
   "services/app-render-final.ts": { kind: "stamp", values: ["appRenderFinalStamp({"] },

@@ -17,11 +17,11 @@ The node shows the clips it rendered, and how many warnings they carry.
 
 The settings list the last run's clips, each with its length and its warnings, and a **Re-render** button for each. A clip you press is marked "Will re-render on the next run". The next run of UGC Clip, or of the workflow, renders that clip again and reuses every other one at no cost.
 
-In the editor, a clip whose content has not changed is not rendered again: the next run hands back the take it already made, at no cost. A clip whose line, creator or voice changed renders again, and so does every clip of a new script or a new creator. A published app's run renders every clip of its own video.
+In the editor, a clip whose content has not changed is not rendered again: the next run hands back the take it already made, at no cost. A clip whose line, creator or voice changed renders again, and so does every clip of a new script or a new creator. A published app's run renders every clip of its own video: two app runs never share a clip, even of the same script. **Retry** of a failed run in the app runner continues that run: the clips it finished are handed back at no cost, and only the clips it did not finish render and are charged (see [Retry of a failed app run](../../api-integration.md#retry-of-a-failed-app-run)). **Start over** runs it from the beginning, so its clips render again.
 
 ### All or nothing
 
-If any clip fails, UGC Clip fails as a whole, so a **Bundle** edge after it never receives a partial list: the joined video is never made with a clip missing. The clips that finished are kept and charged; in the editor, the next run reuses them at no cost and renders only what failed.
+If any clip fails, UGC Clip fails as a whole, so a **Bundle** edge after it never receives a partial list: the joined video is never made with a clip missing. The clips that finished are kept and charged; in the editor, the next run reuses them at no cost and renders only what failed. In a server run (a workflow or app run, or one through the API), the failed node's state says what it finished: `iterationTotal` (its clips), `iterationCompleted` (how many finished), `jobIds` (the finished clips' jobs, in the order they finished) and `jobRows` (beside each of those jobs, the clip it made, counted from 0). The run's history lists each finished clip under the failed node by its clip number. It carries no `output`: the node still hands nothing on.
 
 ### Wiring
 
@@ -48,9 +48,20 @@ A re-render costs the video's price and its reading again; the voice is made onc
 
 Before a run that includes a UGC node, the editor prices the run's UGC part with the server's own figure, for exactly the nodes the run executes, every creator option included: the price it shows is what the run is expected to cost. Your balance is then checked against what the run holds while its clips render, about twice their price; the part not used comes back when they finish. On a Hebrew video the recorded speech decides how many clips there are, so the check holds the most clips any recording the video accepts can be cut into (a recording holds at most 1.2 times the target length, never more than 21 seconds), not the clips the target length usually needs. A balance below that refuses the run before anything starts, with the buy-credits dialog. This holds on every way to start a run: **Run**, **Run from here**, **Run up to here**, **Run selected**, a node's own ▶, **Render final** and **Update preview**. A run with no UGC part is checked as before.
 
-Until the server's figure arrives, the run buttons show the editor's own estimate. When the figure cannot be checked, the run asks before it starts, and says why, and **Render final** and **Update preview** mark their price "(estimate)". A kept creator or script costs nothing, and a kept script is priced at its own length and screenshot cards. Clips that have not changed are reused at no cost, so a run may cost less than its price.
+Until the server's figure arrives, the run buttons show the editor's own estimate. When the figure cannot be checked, the run asks before it starts, and says why, and **Render final** and **Update preview** mark their price "(estimate)". A kept creator or script costs nothing, and a kept script is priced at its own length and screenshot cards. Clips that have not changed are reused at no cost: a run whose clips are already made prices only the ones it renders (below); any other run counts every clip, so it may cost less than its price.
 
-A published app's run is checked the same way before it starts, against what its UGC video can hold while it renders: see [UGC video nodes](../../api-integration.md#13e-ugc-video-nodes-nodaro-cloud-only).
+### A run whose clips are already made
+
+A run of UGC Clip whose UGC Clips does not run (UGC Clip's own ▶ after pressing **Re-render**, or **Run from here** on it) renders the clips UGC Clips already made, so it is priced from those clips, not from the script's length:
+
+- **Price:** the sum of each clip that renders (its video, its voice when voiced, and its frame reading), plus the finish on a Hebrew video. A clip is not counted only when it is **your own** finished take of exactly that clip, made at the clip's current **Re-render** count, with no **Re-render** pressed on it since: the run hands that take back at no cost. The server checks this against your own clips before it prices the clip at nothing, so a workflow someone else ran (a shared workspace workflow, a copy, an import) prices their takes in full: your run renders those clips again.
+- **Hold:** each clip that renders at twice its price, plus the finish.
+
+For example, after a run of three clips in which clip 2 failed, the price is clip 2's alone; press **Re-render** on clip 3 as well, and it is clips 2 and 3.
+
+When the editor cannot tell which takes the run hands back, it counts every clip at full price, and the run may cost less than its price. That happens when a take does not record the job that made it and its Re-render count (a take a server run landed, or one from before this was recorded), when a take was made at another Re-render count than the clip has now, when the last run was of a single clip, when the saved clips cannot be read, or when their price cannot be had in time. A run that also runs UGC Clips makes new clips, so it is priced from the script's length as above.
+
+A published app's run is checked the same way before it starts, against what its UGC video can hold while it renders: see [UGC video nodes](../../api-integration.md#13e-ugc-video-nodes-nodaro-cloud-only). Its clips are not made yet when it starts, so it counts every clip.
 
 ## After a run that ended while the editor was closed
 

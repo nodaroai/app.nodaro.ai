@@ -110,6 +110,7 @@ const FREE: ReadonlyMap<string, string> = new Map([
   ["grokSegmentMap", "Grok region detection is priced at 0 credits (`grok-2-segment`)"],
   ["ugcCategoriesApi", "`/v1/ugc/categories` charges no credits: the product categories, read by UGC Cards' check that the route is served and by UGC Creator's panel"],
   ["ugcEstimateApi", "a price estimate (`/v1/ugc/quote`'s estimate form reserves nothing and charges no credits): a run's confirmation, its balance gate and the run buttons read it"],
+  ["ugcTicketQuoteApi", "a price quote (`/v1/ugc/quote`'s ticket form reserves nothing and charges no credits): the price of a run of UGC Clip over its saved clips, read by the same surfaces as the estimate"],
 ])
 
 /**

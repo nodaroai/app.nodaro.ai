@@ -5784,6 +5784,24 @@ export function estimateRunSetCredits(
 }
 
 /**
+ * A run set's estimate WITHOUT its UGC part: the UGC nodes, and the nodes a UGC video's estimate
+ * counts as its own (`ugcChains` members), are read as part of the graph and never summed. For a
+ * caller that prices the UGC part of the run set itself — an app run's Retry, whose UGC Clip is
+ * priced from the clips it will actually render (ee/lib/app-run-resume-price.ts). Everything else as
+ * `estimateRunSetCredits` prices it.
+ */
+export async function estimateRunSetCreditsWithoutUgc(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge>,
+  runNodeIds: ReadonlySet<string>,
+): Promise<number> {
+  const edges = bypassTeleports(nodes, rawEdges)
+  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
+  const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
+  return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
+}
+
+/**
  * What a run can spend from a payer's personal pools. In web-free mode the
  * topup pool is excluded — it never spends on a consumer surface. The ONE
  * derivation both the per-model check (`checkCreditsWithProfile`) and the

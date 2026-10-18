@@ -147,6 +147,12 @@ export interface ContinuationSource {
   /** A continue-from-failed of a saved workflow's run: what it continues, and
    *  its lineage's first run (lib/continue-from-failed-lineage.ts). */
   readonly continueFromFailed?: ContinueFromFailedStamp | null
+  /** The root of the continuation chain it belongs to, as written on it at its pickup
+   *  (lib/continuation-run-root.ts); null: none written (a chain's first run, or one
+   *  that is no app run's). Absent on a literal. */
+  readonly runRoot?: string | null
+  /** An app run's Retry: the execution it continued (lib/app-run-stamp.ts); null for any other. Absent on a literal. */
+  readonly resumedFrom?: string | null
 }
 
 /** What the run asks to continue with. */
@@ -265,6 +271,9 @@ export async function loadContinuationSource(
   // ran — so the check holds at the worker too, after the run's link has
   // moved on to the new final.
   const finalVersion = appRow ? null : (stamps.appRenderFinal?.appVersionId ?? null)
+  // A chain's root is an app run's alone (lib/continuation-run-root.ts): read only on an execution
+  // that ran a published version, never on one a caller's data could have shaped.
+  const ranAppVersion = !!appRow || !!finalVersion || !!stampedRun
   return {
     id: execution.id,
     userId: execution.user_id,
@@ -276,6 +285,8 @@ export async function loadContinuationSource(
     inlineGraphHash: inlineGraphOf(row as unknown as Record<string, unknown>)?.hash ?? null,
     startedAt: execution.started_at ?? null,
     continueFromFailed: stamps.continueFromFailed,
+    runRoot: ranAppVersion ? stamps.runRoot : null,
+    resumedFrom: stamps.resumedFrom,
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),

@@ -1252,6 +1252,19 @@ describe("the draft lane writes an execution only onto a run of this app", () =>
     expect(res.statusCode).toBe(202)
     expect(executionInserts).toHaveLength(1)
     expect(runs.get(TEST_RUN_ID)).toMatchObject({ execution_id: TEST_EXECUTION_ID, status: "running" })
+    // Start over runs the version asked for, and the run now names it: what continues the run
+    // (a Retry, a Render final) reads the snapshot its execution ran.
+    expect(runs.get(TEST_RUN_ID)).toMatchObject({ app_id: TEST_APP_ID })
+  })
+
+  it("Start over is a fresh run: no continuation of the failed execution, everything runs", async () => {
+    setupDraftLane(runRow({ status: "failed", execution_id: "00000000-0000-4000-8000-0000000000e5" }))
+    const res = await post()
+    expect(res.statusCode).toBe(202)
+    const jobData = vi.mocked(orchestrationQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(jobData).not.toHaveProperty("continueFromExecutionId")
+    expect(jobData).not.toHaveProperty("continueMode")
+    expect(jobData).not.toHaveProperty("appRunResume")
   })
 
   it("a re-run's execution is stamped with the run, so an expunge still finds the one it replaced", async () => {

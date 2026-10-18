@@ -443,6 +443,8 @@ Response shape:
 
 Show errors from `execution.errorMessage` on failure.
 
+**Retrying a failed run.** To retry a run that failed, continue it rather than starting it again: `POST /v1/app/<slug>/runs/<runId>/resume` runs only the steps it did not complete and reuses (and does not charge again) everything it did. Send `{ "dryRun": true }` first to get the steps that will run and the price (`steps`, `estimatedCredits`), show them, and send it again without `dryRun` once the user agrees; then poll the same run as above. Send `"version"` with the app version your UI runs (the one starting over would run); a run made on another version is not continued. A run that cannot be continued (the app changed since, its version was removed, it was stopped rather than failing) answers `409` with its code: offer to start it over, which is `POST /v1/app/<slug>/run` with `"runId": "<runId>"` and runs every step again. See [Retry of a failed app run](./api-integration.md#retry-of-a-failed-app-run).
+
 **What a run's owner can change.** Only `name`, `inputValues`, `hiddenNodes` and `nodeStates` (the user's edits shown over the results), through `PATCH /v1/app/:slug/runs/:runId`. Every other field — `executionId`, the app, `status`, `creditsUsed`, the archive state — belongs to the server: a `PATCH` ignores them, and a `PATCH` that names nothing else answers `400 bad_request`. A run only ever shows its own execution: if a run's execution is not the run owner's run of that app, `GET /v1/app/:slug/runs/:runId` answers `404 not_found`, and the run lists leave the run out.
 
 ---

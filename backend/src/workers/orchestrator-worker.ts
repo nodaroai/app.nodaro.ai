@@ -35,7 +35,7 @@ import { isUserBlocked } from "../lib/access-blocks.js"
 import { payloadBillingContext } from "../lib/billing-context.js"
 import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
-import { chargedCreditsOfRejection, retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
+import { chargedCreditsOfRejection, fanOutProgressOfRejection, retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
 import { usecaseFanOutRefusal } from "../services/workflow-engine/use-case-request.js"
 import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
@@ -80,6 +80,7 @@ import {
 import { keptFailedAttempt } from "../services/workflow-engine/failed-attempt.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
+import { continuationRootOf, pinRunRoot } from "../lib/continuation-run-root.js"
 import { loadInlineGraph } from "../lib/execution-inline-graph.js"
 import { finalizeUseCaseWrapper } from "../lib/use-case/finalize-wrapper.js"
 import { mirrorUseCaseProgress } from "../lib/use-case/progress.js"
@@ -876,6 +877,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
       continuationSource = seedSource
       ctx.continuedFromStates = seedSource.nodeStates
+      // An app run's chain root, the same for every generation (lib/continuation-run-root.ts):
+      // its UGC Clip names it, so a continuation hands back the clips its earlier attempts
+      // finished. Written on this execution for the next generation to read.
+      if (ctx.isAppRun) {
+        ctx.runRootExecutionId = continuationRootOf(source)
+        await pinRunRoot(executionId, ctx.runRootExecutionId)
+      }
       inputOverrides = continuationInputOverrides(seedSource, job.data.inputOverrides)
     }
 
@@ -1905,6 +1913,11 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           // …and what it already CHARGED (a node whose own child jobs were paid before it failed,
           // UGC Creator / UGC Cards): the failed state and the run's total show what was spent.
           const charged = chargedCreditsOfRejection(result.reason)
+          // …and, for an all-or-nothing fan-out (UGC Clip) failed by one item, what it finished:
+          // its item count, how many finished and their jobs — so the failed state shows what was
+          // made and paid for, and a later run can see it. Never a list in `output`: the node hands
+          // nothing on, and no reader takes a partial list for its output.
+          const fanOut = fanOutProgressOfRejection(result.reason)
 
           nodeStates[node.id] = {
             status: "failed",
@@ -1914,6 +1927,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             ...(errorHint ? { errorHint } : {}),
             ...(output ? { output } : {}),
             ...(charged ? { creditsUsed: charged } : {}),
+            ...(fanOut
+              ? {
+                  iterationTotal: fanOut.iterationTotal,
+                  iterationCompleted: fanOut.iterationCompleted,
+                  ...(fanOut.jobIds.length > 0 ? { jobIds: [...fanOut.jobIds] } : {}),
+                  // The row each finished job ran (a UGC Clip's row is its clip), beside `jobIds`.
+                  ...(fanOut.jobRows.length > 0 ? { jobRows: [...fanOut.jobRows] } : {}),
+                }
+              : {}),
             inputs: nodeStates[node.id]?.inputs,
             jobId: nodeStates[node.id]?.jobId,
             // Failed before a job of its own: the earlier failed attempt stays resumable.
@@ -2009,7 +2031,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // Settled once per app run, on the execution `app_runs.execution_id`
     // names. A CONTINUED run (an app's Render final) is outside the run and
     // earns no markup — the final nor the nodes after it (decided 2026-10-04).
-    if (ctx.isAppRun && appVersionId && hasCredits() && !job.data.continueFromExecutionId) {
+    // A Retry that continues the run's failed execution IS the run going on
+    // (`appRunResume`): it settles the markup on what it runs, as the run
+    // would have — a failed execution settles none.
+    if (ctx.isAppRun && appVersionId && hasCredits() && (!job.data.continueFromExecutionId || job.data.appRunResume === true)) {
       try {
         const { data: appVersion } = await supabase
           .from("published_apps")

@@ -72,6 +72,8 @@ export interface UgcQuoteLineOut {
   key: UgcQuoteLineKey
   n?: number
   seconds?: number
+  /** A clip line the run hands back from an earlier render (`reusedClips`): priced at nothing. */
+  reused?: true
 }
 /** Expected credits per part of the video, every part present (0 when the quote has none of it). */
 export type UgcEstimateParts = Readonly<Record<UgcEstimatePart, number>>
@@ -96,12 +98,13 @@ interface PartLine extends UgcQuoteLineOut {
   readonly part: UgcEstimatePart
 }
 
-const publicLine = ({ label, credits, key, n, seconds }: PartLine): UgcQuoteLineOut => ({
+const publicLine = ({ label, credits, key, n, seconds, reused }: PartLine): UgcQuoteLineOut => ({
   label,
   credits,
   key,
   ...(n !== undefined ? { n } : {}),
   ...(seconds !== undefined ? { seconds } : {}),
+  ...(reused ? { reused } : {}),
 })
 
 /** Each part's credits: the sum of its lines; with `holdFactor`, what each clip line holds (`heldAt`). */
@@ -203,19 +206,37 @@ function priced(label: string, value: number): number {
  * The canvas UGC Clips quote. `finishes`: the run's clips go through UGC Finish's job (a video cut from one
  * recorded speech — the answer's plan carries a finish call, `ugcClipsOutputs`), priced once after the clips,
  * from the row that job reserves (`ugc_finish_clips` → `ugc-finish`), never held at the clip hold factor.
+ * `reusedClips`: the clips (by place, from 1) the run hands back from an earlier render — each line at 0
+ * credits, marked `reused`, in neither the expected figure nor the ceiling; every other line as it was
+ * (the join still takes every clip). None given: every clip renders.
  */
-export async function quoteUgcTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCards: boolean, finishes = false): Promise<UgcQuoteResult> {
-  return quoteTickets(caller, rawTickets, hasCards, clipHoldFactor(), finishes)
+export async function quoteUgcTickets(
+  caller: UgcPriceCaller,
+  rawTickets: unknown[],
+  hasCards: boolean,
+  finishes = false,
+  reusedClips: ReadonlySet<number> = new Set(),
+): Promise<UgcQuoteResult> {
+  return quoteTickets(caller, rawTickets, hasCards, clipHoldFactor(), finishes, reusedClips)
 }
 
 /** UGC Finish's call, as the quote prices it: the job is a flat fee, its segments never change the price. */
 const UGC_FINISH_CALL: OpaqueCall = { tool: "ugc_finish_clips", args: {} }
 
 /** The ticket quote, each clip held at `holdFactor` times its price in both the ceiling and its hold. */
-async function quoteTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCards: boolean, holdFactor: number, finishes = false): Promise<UgcQuoteResult> {
+async function quoteTickets(
+  caller: UgcPriceCaller,
+  rawTickets: unknown[],
+  hasCards: boolean,
+  holdFactor: number,
+  finishes = false,
+  reusedClips: ReadonlySet<number> = new Set(),
+): Promise<UgcQuoteResult> {
   const tickets = rawTickets.map(asTicket)
+  const reused = (i: number) => reusedClips.has(i + 1)
   // Every clip's calls priced in one pass: the caller's gates are read once per quote, not once per clip.
-  const callsOf = tickets.map((t) => [t.video, ...(t.speech ? [t.speech] : []), READING])
+  // A clip handed back makes no call, so it prices none.
+  const callsOf = tickets.map((t, i) => (reused(i) ? [] : [t.video, ...(t.speech ? [t.speech] : []), READING]))
   // The clips, the finish and the steps after them are priced at once, and read back in run order.
   const pricing = started(priceUgcCalls(caller, callsOf.flat()))
   const finishing = started(finishes ? laneStepLines(caller, [UGC_FINISH_CALL]) : Promise.resolve([]))
@@ -229,7 +250,15 @@ async function quoteTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCa
     const prices = flat.slice(at, at + callsOf[i]!.length)
     at += callsOf[i]!.length
     const clip = sum(prices.map((p) => priced(`clip ${i + 1}`, p)))
-    lines.push({ label: `Clip ${i + 1} (${t.durationSec} s)`, key: "clip", n: i + 1, seconds: t.durationSec, credits: clip, part: "clip" })
+    lines.push({
+      label: `Clip ${i + 1} (${t.durationSec} s)${reused(i) ? ", reused" : ""}`,
+      key: "clip",
+      n: i + 1,
+      seconds: t.durationSec,
+      credits: clip,
+      part: "clip",
+      ...(reused(i) ? { reused: true as const } : {}),
+    })
     expected += clip
     ceiling += heldAt(holdFactor, clip)
   }

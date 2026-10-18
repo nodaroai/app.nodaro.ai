@@ -301,6 +301,7 @@ export {
   type UgcRunPricedNode,
   type UgcVideoPlaces,
 } from "./ugc-estimate-input"
+export { ugcClipTicketQuote, ugcReusedClips, type UgcClipTicketQuote, type UgcReuseClaim } from "./ugc-clip-reuse"
 export { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS, isRunResultKey } from "./run-result-keys"
 export { ugcFinishNodeIds } from "./ugc-finish-nodes"
 export {

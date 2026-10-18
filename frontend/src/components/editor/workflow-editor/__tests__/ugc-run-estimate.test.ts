@@ -10,8 +10,8 @@ import { QueryObserver, hashKey } from "@tanstack/react-query"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { UgcRunEstimate } from "@/lib/api"
 
-const h = vi.hoisted(() => ({ estimate: vi.fn(), runs: {} as Record<string, number> }))
-vi.mock("@/lib/api", () => ({ ugcEstimateApi: (...a: unknown[]) => h.estimate(...a) }))
+const h = vi.hoisted(() => ({ estimate: vi.fn(), tickets: vi.fn(), runs: {} as Record<string, number> }))
+vi.mock("@/lib/api", () => ({ ugcEstimateApi: (...a: unknown[]) => h.estimate(...a), ugcTicketQuoteApi: (...a: unknown[]) => h.tickets(...a) }))
 
 /** The editor's own figure, per node type: a stand-in for the price table, so each figure here is a sum by hand. */
 const PRICE: Readonly<Record<string, number>> = {
@@ -44,6 +44,7 @@ beforeEach(async () => {
   // A fresh module per test: its remembered failures, and the one cache, start empty.
   vi.resetModules()
   h.estimate.mockReset()
+  h.tickets.mockReset()
   h.runs = {}
   mod = await import("../ugc-run-estimate")
   ;({ queryClient } = await import("@/lib/query-client"))
@@ -383,5 +384,93 @@ describe("one query per video: keyed over exactly what the estimate reads", () =
     const query = mod.ugcRunEstimateQuery(INPUT)
     expect(query.retry).toBe(false)
     expect(query.staleTime).toBe(5 * 60_000)
+  })
+})
+
+describe("a run of UGC Clip whose clips are fixed (its UGC Clips does not run): priced from the saved clips", () => {
+  const T = (i: number) => JSON.stringify({ v: 1, index: i, durationSec: 8, video: { tool: "generate_video", args: {} } })
+  const TICKETS = [T(0), T(1), T(2)]
+  const JOB0 = "00000000-0000-4000-8000-000000000000"
+  const JOB2 = "00000000-0000-4000-8000-000000000002"
+  /** The takes the editor's run landed: each names its job and the Re-render count it was made at. */
+  const TAKES = [
+    { url: "https://cdn/c0.mp4", jobId: JOB0, timestamp: "t", ugcClipNonce: 0 },
+    { url: "https://cdn/c2.mp4", jobId: JOB2, timestamp: "t", ugcClipNonce: 0 },
+  ]
+  const CLAIMS = [{ clip: 1, jobId: JOB0, nonce: 0 }, { clip: 3, jobId: JOB2, nonce: 0 }]
+  const BATCH = { __listInputs: TICKETS, __listResults: ["https://cdn/c0.mp4", "", "https://cdn/c2.mp4"], generatedResults: TAKES }
+  /** The video after a run whose clip 2 failed: UGC Clips' saved clips, and UGC Clip's last batch. */
+  const saved = (clip: Record<string, unknown> = { rerender: {}, ...BATCH }) =>
+    NODES.map((x) =>
+      x.id === "clips" ? n("clips", "ugc-clips", { __listResults: TICKETS, ugcOutputs: { "plan-out": JSON.stringify({ v: 1, plan: {} }) } })
+      : x.id === "clip" ? n("clip", "ugc-clip", clip)
+      : x,
+    )
+  /** The ticket form's answer for the one clip that renders (603 here), held at twice that. */
+  const TICKET_ANSWER = { lines: [], expected: 603, ceiling: 1206, parts: { ...PARTS, clip: 603 }, holdParts: { ...HOLD, clip: 1206 } }
+  const clipOnly = (nodes: WorkflowNode[]) => nodes.filter((x) => x.id === "clip")
+
+  it("the clips it hands back are free: the figure is the quote's clip part for the one that renders", () => {
+    const nodes = saved()
+    const asked: unknown[] = []
+    const figure = mod.ugcRunCredits(clipOnly(nodes), nodes, EDGES, cost, always(ANSWER), (quote) => {
+      asked.push(quote)
+      return TICKET_ANSWER
+    })
+    expect(asked[0]).toEqual({ tickets: TICKETS, reusedClips: CLAIMS, finishes: false, reuseKnown: true })
+    expect(figure).toMatchObject({ credits: 603, hold: 1206, estimate: "server", rendersClips: true, mayReuseClips: false })
+  })
+
+  it("no quote yet, or one that cannot be had: every clip at the estimate's full price, and the run may cost less", () => {
+    const nodes = saved()
+    expect(mod.ugcRunCredits(clipOnly(nodes), nodes, EDGES, cost, always(ANSWER))).toMatchObject({ credits: PARTS.clip, hold: HOLD.clip, mayReuseClips: true })
+  })
+
+  it("a run that runs UGC Clips makes new clips: the estimate prices them, never the saved ones", () => {
+    const nodes = saved()
+    const ticketAnswerOf = vi.fn(() => TICKET_ANSWER)
+    const run = nodes.filter((x) => x.id === "clips" || x.id === "clip")
+    expect(mod.ugcRunCredits(run, nodes, EDGES, cost, always(ANSWER), ticketAnswerOf)).toMatchObject({ credits: PARTS.clip, hold: HOLD.clip })
+    expect(ticketAnswerOf).not.toHaveBeenCalled()
+  })
+
+  it("the balance check asks the quote with the clips it hands back, and holds what renders", async () => {
+    h.estimate.mockResolvedValue(ANSWER)
+    h.tickets.mockResolvedValue(TICKET_ANSWER)
+    const nodes = saved()
+    expect(await mod.runCreditsWithUgc(clipOnly(nodes), nodes, EDGES, cost)).toMatchObject({ credits: 603, hold: 1206, mayReuseClips: false })
+    expect(h.tickets).toHaveBeenCalledTimes(1)
+    // Each claim names its take's job and the count the run sends: the server checks them against the caller's own jobs.
+    expect(h.tickets.mock.calls[0]![0]).toEqual({ tickets: TICKETS, hasCards: false, finishes: false, reusedClips: CLAIMS })
+  })
+
+  it("a quote that fails: the balance check holds every clip at full price, and says the run may cost less", async () => {
+    h.estimate.mockResolvedValue(ANSWER)
+    h.tickets.mockRejectedValue(new Error("down"))
+    const nodes = saved()
+    expect(await mod.runCreditsWithUgc(clipOnly(nodes), nodes, EDGES, cost)).toMatchObject({ credits: PARTS.clip, hold: HOLD.clip, mayReuseClips: true })
+  })
+
+  it("a clip pressed for Re-render is priced: it renders", () => {
+    const nodes = saved({ rerender: { "1": 1 }, rerenderPending: { "1": true }, ...BATCH })
+    const asked: Array<{ reusedClips: readonly { clip: number }[] }> = []
+    mod.ugcRunCredits(clipOnly(nodes), nodes, EDGES, cost, always(ANSWER), (quote) => {
+      asked.push(quote)
+      return undefined
+    })
+    expect(asked[0]!.reusedClips.map((c) => c.clip)).toEqual([3])
+  })
+
+  it("a take made at another Re-render count than the run sends is not claimed, and the run may cost less", () => {
+    // Clip 1 now sends count 1 with no mark (an undo/redo, or a press a server run landed over).
+    const nodes = saved({ rerender: { "1": 1 }, ...BATCH })
+    const asked: Array<{ reusedClips: readonly { clip: number }[]; reuseKnown: boolean }> = []
+    const figure = mod.ugcRunCredits(clipOnly(nodes), nodes, EDGES, cost, always(ANSWER), (quote) => {
+      asked.push(quote)
+      return TICKET_ANSWER
+    })
+    expect(asked[0]!.reusedClips.map((c) => c.clip)).toEqual([3])
+    expect(asked[0]!.reuseKnown).toBe(false)
+    expect(figure.mayReuseClips).toBe(true)
   })
 })

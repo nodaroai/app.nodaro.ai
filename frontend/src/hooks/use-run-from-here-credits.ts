@@ -23,7 +23,16 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getCachedModelCredits, prefetchModelCreditCosts } from "@/hooks/use-model-credit-cost"
 import { runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { runFromHereExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
-import { ugcRunCredits, ugcRunEstimateQuery, ugcRunInputs, type UgcAnswerOf, type UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
+import {
+  ugcRunCredits,
+  ugcRunEstimateQuery,
+  ugcRunInputs,
+  ugcRunTicketQuery,
+  ugcRunTicketQuotes,
+  type UgcAnswerOf,
+  type UgcPriceState,
+  type UgcTicketAnswerOf,
+} from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -43,13 +52,15 @@ const NO_PRICE: RunSetPrice = { credits: 0, hold: 0, estimating: false }
 export interface UgcRunAnswers {
   /** A video's answer, undefined until it lands or when it cannot be had. */
   readonly answerOf: UgcAnswerOf
+  /** The quote of a UGC Clip's saved clips, undefined until it lands or when it cannot be had (the estimate prices them then). */
+  readonly ticketAnswerOf: UgcTicketAnswerOf
   /** An answer could not be had at all: the figure is the editor's own. */
   readonly failed: boolean
   /** A re-check of an older answer failed: the figure is that answer, no longer checked. */
   readonly held: boolean
 }
 
-const NO_ANSWERS: UgcRunAnswers = { answerOf: () => undefined, failed: false, held: false }
+const NO_ANSWERS: UgcRunAnswers = { answerOf: () => undefined, ticketAnswerOf: () => undefined, failed: false, held: false }
 
 /**
  * The server's answers for the UGC videos of a run set, one per video: the
@@ -59,20 +70,25 @@ const NO_ANSWERS: UgcRunAnswers = { answerOf: () => undefined, failed: false, he
  */
 export function useUgcRunAnswers(executable: WorkflowNode[], nodes: WorkflowNode[], edges: WorkflowEdge[]): UgcRunAnswers {
   const inputs = useMemo(() => (hasCredits() ? ugcRunInputs(executable, nodes, edges) : []), [executable, nodes, edges])
+  const tickets = useMemo(() => (hasCredits() ? ugcRunTicketQuotes(executable, nodes, edges) : []), [executable, nodes, edges])
   const results = useQueries({ queries: inputs.map((input) => ugcRunEstimateQuery(input)) }, queryClient)
+  const ticketResults = useQueries({ queries: tickets.map((quote) => ugcRunTicketQuery(quote)) }, queryClient)
   // Rebuilt only when an answer changes.
-  const signature = results.map((r) => `${r.status}:${r.dataUpdatedAt}`).join("|")
+  const signature = [...results, ...ticketResults].map((r) => `${r.status}:${r.dataUpdatedAt}`).join("|")
   return useMemo(() => {
     if (inputs.length === 0) return NO_ANSWERS
     const byKey = new Map(inputs.map((input, i) => [hashKey(ugcRunEstimateQuery(input).queryKey), results[i]?.data] as const))
+    const ticketsByKey = new Map(tickets.map((quote, i) => [hashKey(ugcRunTicketQuery(quote).queryKey), ticketResults[i]?.data] as const))
     return {
       answerOf: (input) => byKey.get(hashKey(ugcRunEstimateQuery(input).queryKey)),
+      // A quote that cannot be had is not flagged: those clips are then priced at the estimate's full price.
+      ticketAnswerOf: (quote) => ticketsByKey.get(hashKey(ugcRunTicketQuery(quote).queryKey)),
       failed: results.some((r) => r.isError && r.data === undefined),
       held: results.some((r) => r.isError && r.data !== undefined),
     }
-    // `signature` stands for `results`, a new array on every render.
+    // `signature` stands for `results` and `ticketResults`, new arrays on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputs, signature])
+  }, [inputs, tickets, signature])
 }
 
 /**
@@ -111,7 +127,7 @@ export function useRunSetPrice(
 
   return useMemo(() => {
     if (!hasCredits()) return NO_PRICE
-    const figure = ugcRunCredits(executable, nodes, edges, getCachedModelCredits, answers.answerOf)
+    const figure = ugcRunCredits(executable, nodes, edges, getCachedModelCredits, answers.answerOf, answers.ticketAnswerOf)
     const unchecked = runSetPriceState(figure, answers)
     return { credits: figure.credits, hold: figure.hold, estimating: unchecked !== undefined, ...(unchecked ? { unchecked } : {}) }
     // `pricesLoaded` re-reads the cache once fetched prices land.

@@ -35,6 +35,7 @@ import {
 import {
   VIDEO_OVERLAY_HANDLE_IDS,
 } from "@nodaro/shared/video"
+import { ugcClipTicketQuote, type UgcClipTicketQuote } from "./ugc-clip-reuse"
 
 /** A part of the UGC estimate: one step, or one group of steps, of the video. */
 export type UgcEstimatePart = "script" | "creator" | "clip" | "cards" | "join" | "overlay" | "captions"
@@ -377,6 +378,13 @@ export interface UgcRunPricedNode {
    * whose clips are all in its part already, so it runs as many times as its UGC Clips does.
    */
   readonly fanOutOf: string | null
+  /**
+   * A UGC Clip whose UGC Clips the run does not execute: its clips are the ones UGC Clips saved,
+   * so it is priced from them (the ticket form of the quote, each clip it hands back at nothing —
+   * `ugcClipTicketQuote`), not from the video's estimate. Absent: priced from the estimate (its
+   * UGC Clips runs, or the saved clips cannot be read).
+   */
+  readonly ticketQuote?: UgcClipTicketQuote
 }
 
 /** One video a run executes some of. */
@@ -422,7 +430,12 @@ export function ugcEstimateRunParts(
       // A script or creator that hands on what it keeps makes no call.
       if ((m.part === "script" && ugcKeptOutputs("ugc-script", data)) || (m.part === "creator" && ugcKeptOutputs("ugc-creator", data))) continue
       const fanOutOf = m.part === "clip" ? (chain.clipsId !== undefined && executes(chain.clipsId) ? chain.clipsId : null) : m.id
-      pricedHere.push({ id: m.id, part: m.part, fanOutOf })
+      // Clips already fixed (their UGC Clips does not run): priced from the saved clips themselves.
+      const ticketQuote =
+        m.part === "clip" && chain.clipsId !== undefined && !executes(chain.clipsId)
+          ? ugcClipTicketQuote(dataOf(byId.get(chain.clipsId)), data)
+          : null
+      pricedHere.push({ id: m.id, part: m.part, fanOutOf, ...(ticketQuote ? { ticketQuote } : {}) })
     }
     if (pricedHere.length === 0) continue
     const { input, lengthUnread, screenshotsUnread } = ugcChainInput(chain, allNodes, edges, { run: { executes } })

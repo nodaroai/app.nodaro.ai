@@ -434,7 +434,7 @@ component or in a sub-workflow it executes, that gives none, with the same
 | `409` | `continuation_subset_required` | with `"continueMode": "from-failed"`: every node that run was to run completed — nothing is left to continue |
 | `404` | `continuation_not_found` | no such execution, or it is not yours |
 | `400` | `continuation_workflow_mismatch` | it ran another workflow |
-| `400` | `continuation_version_mismatch` | it ran a published app version of the workflow |
+| `400` | `continuation_version_mismatch` | it ran a published app version of the workflow (continue a failed app run with the app's [Retry](#retry-of-a-failed-app-run)) |
 | `409` | `continuation_not_completed` | it is still running, or it failed or was cancelled |
 | `409` | `continuation_not_failed` | with `"continueMode": "from-failed"`, or when continuing a Tighten Episode or Chapters run from where it failed (`POST /v1/tighten-episode/continue` or `POST /v1/episode-chapters/continue`, `"mode": "from-failed"`): that run did not fail |
 | `409` | `continuation_superseded` | with `"continueMode": "from-failed"`, or on the Tighten Episode or Chapters continue route with `"mode": "from-failed"`: a later continuation of that run failed — continue that one instead. On `/run`, also a later continuation that completed everything the run left (`supersededBy.status: "completed"`): the work is done, and its results are on that execution. On `/run` only the newest later continuation counts: when it completed only part of what was left, the run is built on it instead (see below). `/run` names it in `executionId` and `supersededBy: { executionId, status }` (and in the message); the continue routes in `jobId` |
@@ -499,6 +499,23 @@ The run is the authority on every other refusal (`preview_review_required` when 
 | `400` | `preview_review_required` | with the flag on: without the app page's mark, a final that would stop at another Preview further on |
 | `402` | `insufficient_app_credits` | the runner's app credits cannot cover a run |
 | `503` | `run_finals_unavailable` | the run's earlier finals could not be read just now: try again (nothing was started) |
+
+<a id="retry-of-a-failed-app-run"></a>**Retry of a failed app run.** A run of a published app that failed is continued from where it stopped, not started over: `POST /v1/app/:slug/runs/:runId/resume` (the app page's **Retry**) runs only the steps the run did not complete, and every step it completed hands on its result, as a [continue-from-failed](#continuing-a-run) does. A step that completed runs nothing and is charged nothing again. A [UGC Clip](./nodes/ai-video/ugc-clip.md) that failed renders only the clips it did not finish: the clips it finished are handed back at no cost, because the Retry is the same run going on and names the same run to the clip route. The Retry runs the app version the run ran, with the inputs the run applied; it takes none of its own. That version must still be the one you are on: send `"version": <n>`, the version starting over would run (the app page sends the version picked, else the latest); without it, the app's latest. When the app has changed since the run (a newer version published, or another version picked), a Retry would continue a snapshot you no longer see, so it is refused with `409 app_run_version_changed`, naming `runVersion` and `appVersion`. To continue on the run's own version anyway, send that version. To run with other inputs or on the app's current version, start the run over instead: the ordinary `POST /v1/app/:slug/run` with the run's `runId` runs every step again, and charges for each. The run's execution moves to the Retry's (`GET /v1/app/:slug/runs/:runId` then shows it, with the completed steps from before), so a Retry of a Retry continues from what the latest one completed. A Retry refused before it started holds nothing, and the next Retry continues from what that one continued.
+
+Send `{ "dryRun": true }` (with the same `version`) to learn what a Retry would do without starting anything: `200 { "data": { "runId", "continuesExecutionId", "appVersion", "nodeIds", "steps": [{ "nodeId", "type", "label" }], "estimatedCredits", "reusedClips", "sufficient", "available" } }`. `steps` are the steps that run again, `estimatedCredits` is what the Retry is expected to charge, the creator's fee on the app included (`null` in an edition without credits), and `reusedClips` counts the clips handed back at no cost. A clip counts there only when it is your own finished clip of that very run, checked against your jobs; anything that cannot be checked is priced in full, so the figure may be above what the Retry charges, never below it. `sufficient` says whether your balance covers what the Retry holds while its clips render (each clip at twice its price). The app page always shows this before a Retry starts. Without `dryRun` it answers `202 { "executionId", "runId", "status": "pending", "nodeIds" }`; pressing it twice starts one Retry (the second answers `200` with `"deduped": true`). The Retry is the app run going on, not a run beside it: the creator's fee on the app is settled once, on what the Retry runs (a failed run settles none), and like an app run it draws on the runner's app credits. Refused before anything is written or billed:
+
+| Status | `error.code` | When |
+|---|---|---|
+| `404` | `not_found` | no such run of yours under this app |
+| `404` | `continuation_not_found` | the run's execution is not yours |
+| `409` | `app_run_version_unavailable` | the app version the run ran is no longer available: start the run over to run the app's current version |
+| `409` | `app_run_version_changed` | the app is on another version than the one the run ran (`version`, else the latest; both are in the answer as `appVersion` and `runVersion`): start the run over to run it |
+| `409` | `continuation_not_failed` | the run did not fail (it completed, or it was stopped): start it over to run it again |
+| `409` | `already_running` | the run is still running (its execution is in `executionId`), or it was started again elsewhere meanwhile |
+| `409` | `continuation_subset_required` | every step of the run completed: there is nothing left to retry |
+| `400` | `locked_field` | an input the run applied sets a field the app does not let a runner set |
+| `400` | `preview_review_required` | with the preview stop rule on: without the app page's mark, a Retry that would stop at a Preview |
+| `402` | `insufficient_app_credits` / `insufficient_credits` | the runner's app credits, or balance, cannot cover the Retry |
 
 Run views carry the runner's own edits of the run's results as `nodeStateEdits`: the one map `PATCH /v1/app/:slug/runs/:runId` sets with `nodeStates`. The PATCH **replaces** that map, so send the whole map — the edits already stored with yours merged in — or the ones you leave out are lost.
 
@@ -3592,7 +3609,7 @@ authenticated caller.
 | `GET /v1/ugc/categories` | The product categories UGC Creator offers; also UGC Cards' first call, free, so nothing is paid where the routes are not served. | JSON |
 | `POST /v1/ugc/script` | UGC Script: writes the script. | a job id |
 | `POST /v1/ugc/clips` | UGC Clips: with `surface: "canvas"` (and the node's `voiceId`), the answer carries one clip per take, the script with its clips marked, and the transcript. | JSON |
-| `POST /v1/ugc/clip` | UGC Clip: renders one clip. In the editor, a clip whose content has not changed hands back its earlier job. | a job id |
+| `POST /v1/ugc/clip` | UGC Clip: renders one clip. In the editor, a clip whose content has not changed hands back its earlier job. A published app's run never hands back a clip another app run made; its [Retry](#retry-of-a-failed-app-run) is the same run going on, so it hands back the clips that run finished. | a job id |
 | `POST /v1/ugc/cards` | UGC Cards: with `surface: "canvas"`, the screenshot cards, the captions and the Notes, from the word timings and the clips' notes. | JSON |
 | `POST /v1/ugc/quote` | What a UGC video costs (below). Free: nothing is reserved. | JSON |
 
@@ -3606,6 +3623,18 @@ authenticated caller.
   priced as the UGC template's Join clips node is charged: its settings, and each clip at its
   ticket's length. A run charges the join each finished clip's real length, which is at most its
   ticket's, so the join line is never below what the run charges for it.
+  `reusedClips` (optional): the clips the run expects handed back from an earlier render, each as
+  `{ "clip": <its place in tickets, from 1>, "jobId": "<the UGC Clip job of its take>", "nonce": <the
+  Re-render count the run sends> }`. The server checks every one: a clip is handed back only when
+  its job is the caller's own finished UGC Clip job, made from exactly that ticket at that count with
+  no run key (an editor run, or a run that is not an app run's), and an earlier attempt of the same
+  clip would not be admitted again first. Each clip that holds is a clip line at 0 credits marked
+  `"reused": true`, counted in neither `expected` nor `ceiling` (nor the clip part of `parts` and
+  `holdParts`); a clip that does not hold (another user's job, a deleted or failed one, another
+  count) is priced in full, as is every clip when the check cannot be made. The join line still
+  takes every clip. The editor sends it for a run of UGC Clip whose UGC Clips does not run, naming
+  the takes of its last run that record their job and count. A clip above the tickets' count, one
+  named twice, or a `jobId` that is not a job id is a `400`.
   `runEstimate` (optional): the estimate input of the video the clips belong to (the estimate
   form's `targetDurationSec`, `screenshotCount`, `source` and `language`); the answer then also has
   `runHold`, the most that video's estimate holds for its clips and the steps after them (its

@@ -41,6 +41,7 @@ const CANNOT_REACH: ReadonlyMap<string, string> = new Map([
   ["routes/characters.ts", "character LoRA training jobs only"],
   ["routes/character-training.ts", "character LoRA training jobs only"],
   ["routes/pipelines.ts", "pipeline rows and pipeline stage jobs"],
+  ["routes/app-run-resume.ts", "writes workflow_executions: an app run's Retry it just inserted, cancelled when the run moved on before it started"],
   ["scripts/cleanup-stuck-pipelines.ts", "pipeline rows (one-off script)"],
 ])
 

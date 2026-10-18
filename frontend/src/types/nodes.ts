@@ -190,6 +190,11 @@ export interface GeneratedResult {
   readonly clipKey?: string
   readonly planBasis?: string
   readonly renderBasis?: string
+  // A UGC Clip take the editor's run made: the Re-render count it was made at
+  // (the `nonce` its clip job was sent). With `jobId`, what the run price reads
+  // to expect the take handed back (`ugcReusedClips`, @nodaro/render-rules);
+  // the server checks it against the caller's own jobs before pricing it free.
+  readonly ugcClipNonce?: number
 }
 
 /**

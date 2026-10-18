@@ -35,12 +35,14 @@ describe("every enqueue producer answers reviewerPresent", () => {
   const producers = FILES.filter((f) => /orchestrationQueue\.add\(\s*"workflow-execution"/.test(f.text))
 
   // The spec's nine, since Render final in the app runner a tenth — the
-  // app's Render final (a continuation of an app run) — and an eleventh, a
-  // use-case node's hidden run (decided 2026-10-13).
+  // app's Render final (a continuation of an app run) — an eleventh, a
+  // use-case node's hidden run (decided 2026-10-13), and a twelfth, an app
+  // run's Retry that continues its failed execution (decided 2026-10-18).
   const PRODUCERS = [
     "lib/plugin-triggers.ts",
     "lib/schedule-cron.ts",
     "routes/api-tokens.ts",
+    "routes/app-run-resume.ts",
     "routes/app-runner.ts",
     "routes/presentation.ts",
     "routes/telegram-webhook.ts",
@@ -51,7 +53,7 @@ describe("every enqueue producer answers reviewerPresent", () => {
     "services/use-case-execution.ts",
   ]
 
-  it("there are eleven: the spec's nine, the app's Render final, and a use-case node's hidden run", () => {
+  it("there are twelve: the spec's nine, the app's Render final, a use-case node's hidden run, and an app run's Retry", () => {
     expect(producers.map((f) => f.rel).sort()).toEqual(PRODUCERS)
   })
 
@@ -61,7 +63,7 @@ describe("every enqueue producer answers reviewerPresent", () => {
   // (`reviewer: "editor"`) and the app runner (`reviewer: "app"`, decided
   // 2026-10-04 with Render final in the app runner). Every other lane is
   // nobody to review.
-  const APP_RUNNER_LANES = ["routes/app-runner.ts", "services/app-execution.ts", "services/app-render-final.ts"]
+  const APP_RUNNER_LANES = ["routes/app-runner.ts", "routes/app-run-resume.ts", "services/app-execution.ts", "services/app-render-final.ts"]
 
   // A use-case node's hidden run carries the answer of the run that started
   // the node — its caller's, never one of its own (decided 2026-10-13).
@@ -75,7 +77,7 @@ describe("every enqueue producer answers reviewerPresent", () => {
   })
 
   it("the app runner's routes answer it from the runner's mark alone (lib/app-reviewer.ts)", () => {
-    for (const rel of ["routes/app-runner.ts", "routes/app-render-final.ts"]) {
+    for (const rel of ["routes/app-runner.ts", "routes/app-render-final.ts", "routes/app-run-resume.ts"]) {
       expect(FILES.find((f) => f.rel === rel)!.text, rel).toMatch(/const reviewerPresent = appReviewerPresent\(req, /)
     }
     const mark = FILES.find((f) => f.rel === "lib/app-reviewer.ts")!.text

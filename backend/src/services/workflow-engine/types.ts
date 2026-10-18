@@ -233,6 +233,8 @@ export interface NodeExecutionState {
   jobId?: string
   /** All job IDs from fan-out iterations (when node runs multiple times via list/loop). */
   jobIds?: string[]
+  /** A failed all-or-nothing fan-out (UGC Clip): the row each of `jobIds` ran (from 0), index-aligned with it. */
+  jobRows?: number[]
   usageLogId?: string
   creditsUsed?: number
   output?: NodeOutput
@@ -326,6 +328,13 @@ export interface WorkflowExecutionJob {
   wrapperJobId?: string
   /** A continuation that re-runs what a FAILED inline run did not finish. */
   continueMode?: "from-failed"
+  /**
+   * An app run's Retry that continues its failed execution (routes/app-run-resume.ts): the app
+   * run going on, not a continuation outside it (a Render final). The run's pointer names this
+   * execution, so it settles the creator's markup on what it runs, as the run would have — the
+   * failed execution settled none.
+   */
+  appRunResume?: true
   /**
    * An inline run started for a node inside an APP run (the route's
    * `X-App-Run`): its steps reserve under the app-run rules (the free-tier app
@@ -780,6 +789,14 @@ export interface OrchestratorContext {
   }>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
+  /**
+   * An app run's continuation (`continueFromExecutionId`): the root of its
+   * chain — the chain's first run, the same for every generation
+   * (lib/continuation-run-root.ts). Set at pickup. Absent: not an app run's
+   * continuation. Its UGC Clip names it (`ugcClipRunKey`), so a continuation
+   * hands back the clips its earlier attempts finished.
+   */
+  runRootExecutionId?: string
   /** Pool-aware spend-surface mode (D1 v2): true when the run was triggered
    *  from a first-party consumer surface while the flag is on. Payg-ness
    *  resolves downstream (credits layer / RPC self-gate); free users and

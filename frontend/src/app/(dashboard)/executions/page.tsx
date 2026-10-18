@@ -44,6 +44,7 @@ import {
   formatNodeType,
   isExecutedNodeEntry,
   skipReasonLabel,
+  fanOutSubRows,
   type NodeState,
 } from "@/components/editor/execution-utils"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
@@ -504,14 +505,15 @@ function GlobalExecutionRow({
                 </thead>
                 <tbody className="divide-y divide-gray-100/50 dark:divide-[#2D2D2D]/50">
                   {nodeEntries.map(([nodeId, state]) => {
-                    const hasFanOut = state.jobIds && state.jobIds.length > 1
+                    const fanOut = fanOutSubRows(nodeId, state)
+                    const hasFanOut = fanOut.hasFanOut
                     const nodeName = state.nodeType ? formatNodeType(state.nodeType) : nodeId.slice(0, 12)
                     return (
                       <React.Fragment key={nodeId}>
                         {/* Main node row */}
                         <tr
-                          className={!hasFanOut ? "hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors" : ""}
-                          onClick={!hasFanOut ? () => onNodeClick(nodeId, state) : undefined}
+                          className={fanOut.ownRowOpens ? "hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors" : ""}
+                          onClick={fanOut.ownRowOpens ? () => onNodeClick(nodeId, state) : undefined}
                         >
                           <td className="px-8 py-1.5">
                             <div className="flex items-center gap-2">
@@ -521,7 +523,7 @@ function GlobalExecutionRow({
                               </span>
                               {hasFanOut && (
                                 <span className="inline-flex px-1.5 py-0.5 text-[9px] font-medium rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400">
-                                  &times;{state.jobIds!.length}
+                                  &times;{fanOut.rows.length}
                                 </span>
                               )}
                             </div>
@@ -568,20 +570,20 @@ function GlobalExecutionRow({
                             </td>
                           )}
                           <td className="px-3 py-1.5">
-                            {!hasFanOut && (
+                            {fanOut.ownRowOpens && (
                               <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 dark:text-[#64748B]" />
                             )}
                           </td>
                         </tr>
                         {/* Fan-out iteration sub-rows */}
-                        {hasFanOut && state.jobIds!.map((jid, idx) => (
+                        {fanOut.rows.map((row) => (
                           <tr
-                            key={`${nodeId}-iter-${idx}`}
+                            key={row.key}
                             className="hover:bg-gray-100/50 dark:hover:bg-[#1E1E1E] cursor-pointer transition-colors"
-                            onClick={() => onNodeClick(`${nodeId}-iter-${idx}`, { ...state, jobId: jid, jobIds: undefined })}
+                            onClick={() => onNodeClick(row.key, row.state)}
                           >
                             <td className="px-8 py-1 ps-14">
-                              <span className="text-[11px] text-gray-400">{t("exec.iteration", { n: idx + 1 })}</span>
+                              <span className="text-[11px] text-gray-400">{t(row.label.key, { n: row.label.n })}</span>
                             </td>
                             <td className="px-3 py-1">
                               <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">

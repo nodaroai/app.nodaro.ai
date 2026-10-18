@@ -3,6 +3,7 @@ import { z } from "zod"
 import { UGC_SCRIPT_LANGUAGES } from "@nodaro/shared/ugc"
 import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets, ugcRenderHold } from "../lib/ugc-estimate.js"
 import { UgcQuoteError } from "../lib/ugc-quote.js"
+import { verifiedReusedClips } from "../lib/ugc-clip-reuse-check.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
 import type { PluginUgcPlanLineLimits } from "../../lib/private-plugins/types.js"
 
@@ -43,7 +44,20 @@ const body = z.union([
     finishes: z.boolean().optional(),
     // The video these clips belong to: the answer adds `runHold`, the most its estimate holds for them and the steps after them.
     runEstimate: estimateInput.strict().optional(),
-  }).strict(),
+    // The clips the run expects back from an earlier render: each by place (from 1), the job of its
+    // take and the Re-render count the run sends. Checked against the caller's own jobs
+    // (ugc-clip-reuse-check.ts): only a claim that holds is priced at nothing.
+    reusedClips: z
+      .array(z.object({ clip: z.number().int().min(1).max(11), jobId: z.string().uuid(), nonce: z.number().int().min(0) }).strict())
+      .max(11)
+      .optional(),
+  }).strict().refine((b) => (b.reusedClips ?? []).every((c) => c.clip <= b.tickets.length), {
+    message: "reusedClips names a clip the tickets do not have",
+    path: ["reusedClips"],
+  }).refine((b) => new Set((b.reusedClips ?? []).map((c) => c.clip)).size === (b.reusedClips ?? []).length, {
+    message: "reusedClips names a clip twice",
+    path: ["reusedClips"],
+  }),
   z.object({
     estimate: estimateInput.extend({
       // The run draws every creator option for a person to pick (an editor run): price them all. Off: the primary alone.
@@ -64,8 +78,12 @@ export async function ugcQuoteRoutes(app: FastifyInstance) {
     const caller = { userId: req.userId, billingContext: req.billingContext }
     try {
       if ("tickets" in parsed.data) {
-        const { tickets, hasCards, finishes = false, runEstimate } = parsed.data
-        const quote = await quoteUgcTickets(caller, tickets, hasCards, finishes)
+        const { tickets, hasCards, finishes = false, runEstimate, reusedClips } = parsed.data
+        // A claimed clip is free only when it is the caller's own finished take of exactly that clip.
+        const handedBack = reusedClips && reusedClips.length > 0 ? await verifiedReusedClips(req.userId, tickets, reusedClips) : undefined
+        const quote = handedBack
+          ? await quoteUgcTickets(caller, tickets, hasCards, finishes, handedBack)
+          : await quoteUgcTickets(caller, tickets, hasCards, finishes)
         // Asked before a run renders the clips of a video cut from one recorded speech (UGC Clips, both engines).
         return runEstimate ? { ...quote, runHold: await ugcRenderHold(caller, runEstimate, hasCards, finishes) } : quote
       }

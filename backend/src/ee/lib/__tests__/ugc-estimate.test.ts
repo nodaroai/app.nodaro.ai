@@ -194,6 +194,30 @@ describe("the dry-run estimate (spec §6.7)", () => {
     for (const line of r.lines.slice(2)) expect(line).not.toHaveProperty("n")
     for (const line of r.lines) expect(UGC_QUOTE_LINE_KEYS).toContain(line.key)
   })
+  it("the ticket form with reusedClips: a clip handed back costs nothing and holds nothing; the join still takes every clip", async () => {
+    const all = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10), ticket(2, 8)], true)
+    const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10), ticket(2, 8)], true, false, new Set([1, 3]))
+    const join = joinOf(12, 10, 8)
+    expect(r.lines.slice(0, 3)).toEqual([
+      { label: "Clip 1 (12 s), reused", key: "clip", n: 1, seconds: 12, credits: 0, reused: true },
+      { label: "Clip 2 (10 s)", key: "clip", n: 2, seconds: 10, credits: 1003 },
+      { label: "Clip 3 (8 s), reused", key: "clip", n: 3, seconds: 8, credits: 0, reused: true },
+    ])
+    expect(r.parts.clip).toBe(1003)
+    expect(r.holdParts.clip).toBe(2 * 1003)
+    expect(r.expected).toBe(1003 + join + FIXED)
+    expect(r.ceiling).toBe(2 * 1003 + join + FIXED)
+    // Every other part is the one a quote with no clip reused gives.
+    expect({ ...r.parts, clip: 0 }).toEqual({ ...all.parts, clip: 0 })
+  })
+  it("every clip handed back: the clip part is nothing", async () => {
+    const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 6), ticket(1, 6)], false, false, new Set([1, 2]))
+    expect(r.parts.clip).toBe(0)
+    expect(r.holdParts.clip).toBe(0)
+    // No reuse given: every clip renders, as before.
+    const none = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 6), ticket(1, 6)], false)
+    expect(none.parts.clip).toBe(2 * 603)
+  })
   it("an unpriceable ticket call → UgcQuoteError, never 0", async () => {
     h.priceFails = true
     await expect(quoteUgcTickets({ userId: "u1" }, [ticket(0, 12)], true)).rejects.toBeInstanceOf(UgcQuoteError)

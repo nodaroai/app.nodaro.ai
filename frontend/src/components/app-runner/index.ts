@@ -1,6 +1,7 @@
 export type { RunSlot, RunSlotNodeState, NewRunAction } from "./types"
 export { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus, isMediaUrl } from "./types"
-export { useRunSlots } from "./use-run-slots"
+export { useRunSlots, type ResumeDialogState } from "./use-run-slots"
+export { ResumeRunDialog } from "./resume-run-dialog"
 export { AppRunnerLayout } from "./app-runner-layout"
 export { RunsSidebar } from "./runs-sidebar"
 export { RunSlotItem, CompactSlotItem, SlotStatusBadge } from "./run-slot-item"

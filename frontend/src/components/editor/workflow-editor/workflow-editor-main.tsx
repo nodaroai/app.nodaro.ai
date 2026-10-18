@@ -543,7 +543,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (!hasCredits()) return;
     const publish = (total: number) => {
       const figure = ugcRunParts(wholeRunNodes, storeNodes, storeEdges)
-        ? ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf)
+        ? ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf, ugcAnswers.ticketAnswerOf)
         : null;
       setWorkflowCreditEstimate(figure ? figure.credits : total);
       setWorkflowCreditHold(figure ? figure.hold : total);

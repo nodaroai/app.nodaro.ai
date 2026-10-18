@@ -33,13 +33,35 @@ export function appRunStamp(appRunId: string): { appRun: { appRunId: string } } 
   return { [STAMP_KEY]: { appRunId } } as { appRun: { appRunId: string } }
 }
 
-/** The run a `trigger_data` value names, or `null` when it carries no app-run stamp. */
-export function appRunStampOf(triggerData: unknown): string | null {
+/**
+ * The `trigger_data` of an app run's Retry that continues its failed execution
+ * (routes/app-run-resume.ts): the run's stamp, with the execution it continues
+ * (`resumedFrom`). A Retry refused before it started holds no states of its
+ * own, so the next Retry continues from what that one continued, never from
+ * nothing (`appRunResumedFromOf`).
+ */
+export function appRunResumeStamp(appRunId: string, resumedFrom: string): { appRun: { appRunId: string; resumedFrom: string } } {
+  return { [STAMP_KEY]: { appRunId, resumedFrom } } as { appRun: { appRunId: string; resumedFrom: string } }
+}
+
+/** The app-run stamp a `trigger_data` value carries (naming a run), or `null`. */
+function stampOf(triggerData: unknown): Record<string, unknown> | null {
   if (typeof triggerData !== "object" || triggerData === null || Array.isArray(triggerData)) return null
   const stamp = (triggerData as Record<string, unknown>)[STAMP_KEY]
   if (typeof stamp !== "object" || stamp === null || Array.isArray(stamp)) return null
   const id = (stamp as Record<string, unknown>).appRunId
-  return typeof id === "string" && id.length > 0 ? id : null
+  return typeof id === "string" && id.length > 0 ? (stamp as Record<string, unknown>) : null
+}
+
+/** The execution an app run's Retry continued, or `null` when it is no Retry's. */
+export function appRunResumedFromOf(triggerData: unknown): string | null {
+  const from = stampOf(triggerData)?.resumedFrom
+  return typeof from === "string" && from.length > 0 ? from : null
+}
+
+/** The run a `trigger_data` value names, or `null` when it carries no app-run stamp. */
+export function appRunStampOf(triggerData: unknown): string | null {
+  return (stampOf(triggerData)?.appRunId as string | undefined) ?? null
 }
 
 /** PostgREST filter path to the run an app run's execution is stamped with. */

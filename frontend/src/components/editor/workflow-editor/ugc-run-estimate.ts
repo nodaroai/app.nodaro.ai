@@ -15,6 +15,13 @@
  * server's multiple of its price while it renders, at the longest length the
  * estimate allows), which a run's balance check compares.
  *
+ * A UGC Clip whose UGC Clips the run does not execute renders clips that are
+ * already fixed (the ones UGC Clips saved), so its part is priced from them —
+ * the ticket form of the quote, each clip the node shows it will hand back at
+ * nothing (`ugcClipTicketQuote`, @nodaro/render-rules) — never from the
+ * video's estimate. Until that answer lands, or when it cannot be had, the
+ * clip's part is the estimate's: every clip at full price.
+ *
  * The confirmation and the balance check wait for the answers (5 s at most).
  * The buttons and the badge never wait: until the answers land they show the
  * editor's own figure, marked as an estimate. When one cannot be had, or is
@@ -26,10 +33,11 @@ import {
   UGC_ESTIMATE_PARTS,
   ugcEstimateRunParts,
   ugcFiguresPerNode,
+  type UgcClipTicketQuote,
   type UgcEstimateInput,
   type UgcEstimateRunParts,
 } from "@nodaro/render-rules"
-import { ugcEstimateApi, type UgcRunEstimate } from "@/lib/api"
+import { ugcEstimateApi, ugcTicketQuoteApi, type UgcRunEstimate, type UgcTicketQuote, type UgcTicketQuoteRequest } from "@/lib/api"
 import type { MessageKey } from "@/lib/i18n/en"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -52,6 +60,9 @@ export type UgcRunFigureSource = "server" | "client" | "none"
 /** The server's answer for one video's input, or undefined while it is not in. */
 export type UgcAnswerOf = (input: UgcEstimateInput) => UgcRunEstimate | undefined
 
+/** The server's quote of a UGC Clip's saved clips, or undefined while it is not in (or cannot be had). */
+export type UgcTicketAnswerOf = (quote: UgcClipTicketQuote) => UgcTicketQuote | undefined
+
 /** A run set's figure. */
 export interface UgcRunFigure {
   /** The price every surface quotes: each part's expected credits. */
@@ -61,7 +72,10 @@ export interface UgcRunFigure {
   readonly estimate: UgcRunFigureSource
   /** The run renders a video's clips. */
   readonly rendersClips: boolean
-  /** It renders the clips of a UGC Clip that has rendered before: unchanged clips are reused at no cost. */
+  /**
+   * It renders the clips of a UGC Clip that has rendered before, and the figure does not show
+   * which of them are handed back: unchanged clips are reused at no cost, so the run may cost less.
+   */
   readonly mayReuseClips: boolean
   /** A saved plan the run hands on carries no length the editor can read: the server's figure is for the length setting. */
   readonly lengthUnread: boolean
@@ -104,6 +118,43 @@ function readRunEstimate(raw: unknown): UgcRunEstimate {
   return raw as UgcRunEstimate
 }
 
+/** The UGC Clips' saved clips the run renders, each once: what the ticket form is asked for each UGC Clip it prices from them. */
+export function ugcRunTicketQuotes(executable: WorkflowNode[], allNodes: WorkflowNode[], edges: WorkflowEdge[]): UgcClipTicketQuote[] {
+  const byKey = new Map<string, UgcClipTicketQuote>()
+  for (const chain of ugcRunParts(executable, allNodes, edges)?.chains ?? []) {
+    for (const node of chain.nodes) {
+      if (node.ticketQuote) byKey.set(hashKey(ugcRunTicketQuery(node.ticketQuote).queryKey), node.ticketQuote)
+    }
+  }
+  return [...byKey.values()]
+}
+
+/** The ticket form a UGC Clip's saved clips are asked with: only the clip part is read, so no screenshot cards. */
+function ticketRequest(quote: UgcClipTicketQuote): UgcTicketQuoteRequest {
+  return { tickets: quote.tickets, hasCards: false, finishes: quote.finishes, reusedClips: quote.reusedClips }
+}
+
+/** An answer the clip's part can be priced with: its clip part, price and hold. Anything else is no answer at all. */
+function readTicketQuote(raw: unknown): UgcTicketQuote {
+  const answer = raw && typeof raw === "object" ? (raw as { parts?: unknown; holdParts?: unknown }) : undefined
+  if (!answer || !isPartFigures(answer.parts) || !isPartFigures(answer.holdParts)) throw new Error("The UGC quote answered without its parts")
+  return raw as UgcTicketQuote
+}
+
+/** One UGC Clip's saved-clips query, keyed by the very request it asks. */
+export function ugcRunTicketQuery(quote: UgcClipTicketQuote) {
+  const request = ticketRequest(quote)
+  return {
+    queryKey: queryKeys.ugc.ticketQuote(request),
+    queryFn: ({ signal }: { signal: AbortSignal }) => ugcTicketQuoteApi(request, { signal }).then(readTicketQuote),
+    staleTime: UGC_ESTIMATE_STALE_MS,
+    retry: false as const,
+  }
+}
+
+/** The ticket answers the cache holds now, never asking. */
+const cachedTicketAnswerOf: UgcTicketAnswerOf = (quote) => queryClient.getQueryData<UgcTicketQuote>(ugcRunTicketQuery(quote).queryKey)
+
 /** One video's query. Its key is the very request the estimate is asked, so no input it reads can change without changing the key. */
 export function ugcRunEstimateQuery(input: UgcEstimateInput) {
   // An editor run draws every creator option for the person to pick.
@@ -141,16 +192,20 @@ export function ugcRunCredits(
   edges: WorkflowEdge[],
   cachedCost: CachedCost,
   answerOf: UgcAnswerOf,
+  /** The quotes of UGC Clips' saved clips (`ugcRunTicketQuery`); absent or unanswered: the estimate prices those clips. */
+  ticketAnswerOf: UgcTicketAnswerOf = () => undefined,
 ): UgcRunFigure {
   const lines = estimateRunCreditLines(executable, allNodes, edges, cachedCost)
   const own = sumRunCreditLines(lines)
   const ugc = ugcRunParts(executable, allNodes, edges)
   if (!ugc) return { credits: own, hold: own, estimate: "none", rendersClips: false, mayReuseClips: false, lengthUnread: false, screenshotsUnread: false }
-  const clipIds = ugc.chains.flatMap((c) => c.nodes.filter((m) => m.part === "clip").map((m) => m.id))
+  const clipNodes = ugc.chains.flatMap((c) => c.nodes.filter((m) => m.part === "clip"))
   const byId = new Map(allNodes.map((n) => [n.id, n] as const))
+  // A UGC Clip priced from its saved clips, with what it hands back known: its figure already counts the reuse.
+  const reuseCounted = (m: (typeof clipNodes)[number]) => !!m.ticketQuote && m.ticketQuote.reuseKnown && ticketAnswerOf(m.ticketQuote) !== undefined
   const shape = {
-    rendersClips: clipIds.length > 0,
-    mayReuseClips: clipIds.some((id) => hasRendered(byId.get(id))),
+    rendersClips: clipNodes.length > 0,
+    mayReuseClips: clipNodes.some((m) => hasRendered(byId.get(m.id)) && !reuseCounted(m)),
     lengthUnread: ugc.chains.some((c) => c.lengthUnread),
     screenshotsUnread: ugc.chains.some((c) => c.screenshotsUnread),
   }
@@ -158,9 +213,15 @@ export function ugcRunCredits(
   if (answers.some((a) => a === undefined)) return { credits: own, hold: own, estimate: "client", ...shape }
   const runsOf = (id: string | null) => (id === null ? 1 : (lines.find((l) => l.nodeId === id)?.quantity.fanOut ?? 1))
   const rest = sumRunCreditLines(lines.filter((line) => !ugc.coveredIds.has(line.nodeId)))
-  const priced = ugc.chains.flatMap((c, i) => c.nodes.map((m) => ({ id: m.id, runs: runsOf(m.fanOutOf), part: m.part, answer: answers[i]! })))
-  const prices = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.answer.parts[p.part] * p.runs })))
-  const holds = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.answer.holdParts[p.part] * p.runs })))
+  // Each node's figures: a UGC Clip priced from its saved clips takes the clip part of their quote (its
+  // UGC Clips does not run, so it runs once); every other node its part of its video's estimate.
+  const figuresOf = (m: (typeof ugc.chains)[number]["nodes"][number], answer: UgcRunEstimate) => {
+    const tickets = m.ticketQuote ? ticketAnswerOf(m.ticketQuote) : undefined
+    return tickets ? { parts: tickets.parts, holdParts: tickets.holdParts } : { parts: answer.parts, holdParts: answer.holdParts }
+  }
+  const priced = ugc.chains.flatMap((c, i) => c.nodes.map((m) => ({ id: m.id, runs: runsOf(m.fanOutOf), part: m.part, figures: figuresOf(m, answers[i]!) })))
+  const prices = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.figures.parts[p.part] * p.runs })))
+  const holds = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.figures.holdParts[p.part] * p.runs })))
   const total = (figures: ReadonlyMap<string, number>) => [...figures.values()].reduce((sum, c) => sum + c, 0)
   return {
     credits: rest + total(prices),
@@ -207,7 +268,7 @@ export function ugcRunFigureNow(
       else held = true
     }
     return state?.data
-  })
+  }, cachedTicketAnswerOf)
   const unchecked: UgcPriceState | null =
     figure.estimate === "client" ? (failed ? "editor" : "checking")
       : figure.estimate === "server" ? (held ? "held" : figure.lengthUnread ? "length" : figure.screenshotsUnread ? "editor" : null)
@@ -216,7 +277,7 @@ export function ugcRunFigureNow(
 }
 
 /** An answer still current: it landed less than five minutes ago. An older one is the last answer a re-check has not confirmed. */
-function isCurrent(state: QueryState<UgcRunEstimate, Error> | undefined): boolean {
+function isCurrent(state: QueryState<unknown, Error> | undefined): boolean {
   return state?.data !== undefined && Date.now() - state.dataUpdatedAt < UGC_ESTIMATE_STALE_MS
 }
 
@@ -238,11 +299,11 @@ function within<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 /** Ask the server, until `deadline` at most. A failure is remembered; any answer that lands, a late one too, ends the memory. */
-async function askServer(query: ReturnType<typeof ugcRunEstimateQuery>, key: string, deadline: number): Promise<void> {
+async function askServer(fetchAnswer: () => Promise<unknown>, key: string, deadline: number): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     // Shared with a fetch already in flight for the same key (a button's). It goes on after the wait, and its
     // answer lands in the cache, where every surface reads it.
-    const fetching = queryClient.fetchQuery(query)
+    const fetching = fetchAnswer()
     void fetching.then(() => uncheckedAt.delete(key), () => undefined)
     try {
       await within(fetching, Math.max(0, deadline - Date.now()))
@@ -307,16 +368,23 @@ export async function runCreditsWithUgc(
     const credits = estimateRunCredits(executable, allNodes, edges, cachedCost)
     return { credits, hold: credits, rendersClips: false, mayReuseClips: false }
   }
-  // One wait for every video.
+  // One wait for every video, and for the quote of every UGC Clip's saved clips.
   const deadline = Date.now() + UGC_ESTIMATE_TIMEOUT_MS
-  await Promise.all(
-    inputs.map(async (input) => {
+  await Promise.all([
+    ...inputs.map(async (input) => {
       const query = ugcRunEstimateQuery(input)
       const key = hashKey(query.queryKey)
       if (isCurrent(queryClient.getQueryState<UgcRunEstimate, Error>(query.queryKey))) uncheckedAt.delete(key)
-      else if (!remembered(key)) await askServer(query, key, deadline)
+      else if (!remembered(key)) await askServer(() => queryClient.fetchQuery(query), key, deadline)
     }),
-  )
+    // A quote that cannot be had leaves those clips at the estimate's full price: nothing to flag.
+    ...ugcRunTicketQuotes(executable, allNodes, edges).map(async (quote) => {
+      const query = ugcRunTicketQuery(quote)
+      const key = hashKey(query.queryKey)
+      if (isCurrent(queryClient.getQueryState<UgcTicketQuote, Error>(query.queryKey))) uncheckedAt.delete(key)
+      else if (!remembered(key)) await askServer(() => queryClient.fetchQuery(query), key, deadline)
+    }),
+  ])
   // Whatever answers the cache holds now, these asks', late ones or a button's, are the figure on every surface.
   // An ask still in flight (the wait ended first) has not failed: only one that is not is "could not be checked".
   let missingFailed = false
@@ -332,7 +400,7 @@ export async function runCreditsWithUgc(
       else held = true
     }
     return state?.data
-  })
+  }, cachedTicketAnswerOf)
   const unchecked: UgcRunUnchecked | undefined =
     figure.estimate === "client" ? (missingFailed ? "editor" : "checking")
       : held ? "held" : checkingHeld ? "checkingHeld" : figure.lengthUnread ? "length" : figure.screenshotsUnread ? "editor" : undefined

@@ -2,7 +2,7 @@ import { FAN_OUT_ALL_OR_NOTHING_TYPES, fanOutItemMeta, type FanOutItemMeta, type
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
-import { chargedCreditsOfRejection, withChargedCredits } from "../services/workflow-engine/failed-node-output.js"
+import { chargedCreditsOfRejection, withChargedCredits, withFanOutProgress } from "../services/workflow-engine/failed-node-output.js"
 
 /** The fulfilled value of one fan-out iteration task. */
 export interface FanOutIterationValue {
@@ -75,7 +75,8 @@ function rowStampOf(result: ExecuteNodeResult): RunResultRowStamp {
  *     with ANY genuine failure                              -> THROW the first
  *     one; nothing partial reaches a Bundle edge (spec R17). Cancellation-only
  *     rejections are not failures. Already-started items finished and settled;
- *     their jobs are reused on the next run.
+ *     their jobs ride the rejection (`withFanOutProgress`) onto the failed
+ *     state, and are reused on the next run.
  *
  * `rowSent` (a render's fan-out, `applyEdlRowSentStamps`): what each row was
  * sent for — the run's quality and the clip — stamped on EVERY row, a failed
@@ -104,6 +105,8 @@ export function assembleFanOutResult(
   // paired with the rows by position.
   const allStamps: RunResultRowStamp[] = Array.from({ length: itemCount }, (_, i) => ({ ...rowSent?.[i] }))
   const allJobIds: string[] = []
+  // The row each of `allJobIds` ran (index-aligned with it): what a failed all-or-nothing node names its finished jobs by.
+  const allJobRows: number[] = []
   // Each row's notes (warnings + real length) — row-aligned with allResults.
   // Filled only for all-or-nothing types (UGC Clip); nothing else reads it.
   const allMeta: (FanOutItemMeta | null)[] = new Array(itemCount).fill(null)
@@ -133,6 +136,7 @@ export function assembleFanOutResult(
       if (result.jobId) {
         lastJobId = result.jobId
         allJobIds.push(result.jobId)
+        allJobRows.push(index)
       }
       if (result.usageLogId) lastUsageLogId = result.usageLogId
     } else if (entry.reason instanceof DrainAbortError) {
@@ -158,9 +162,11 @@ export function assembleFanOutResult(
 
   // All-or-nothing (spec R17): one genuine failure fails the node; nothing partial reaches a Bundle edge.
   // The node fails carrying every charge its rows made (the rows that finished and the ones that
-  // failed after paying), so the run's total still shows them.
+  // failed after paying), so the run's total still shows them, and what it finished — its item
+  // count, how many finished and their jobs (`withFanOutProgress`) — never a partial list.
   if (genuineFailure !== undefined && allOrNothing) {
-    throw withChargedCredits(genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure)), totalCreditsUsed)
+    const charged = withChargedCredits(genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure)), totalCreditsUsed)
+    throw withFanOutProgress(charged, { iterationTotal: itemCount, iterationCompleted: succeededCount, jobIds: allJobIds, jobRows: allJobRows })
   }
 
   if (succeededCount === 0 && genuineFailure !== undefined) {

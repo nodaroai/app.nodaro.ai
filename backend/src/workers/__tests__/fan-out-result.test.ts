@@ -282,3 +282,39 @@ describe("assembleFanOutResult — what failed iterations already charged", () =
     expect(thrown).toMatchObject({ message: "R", creditsUsed: 144 })
   })
 })
+
+describe("assembleFanOutResult — an all-or-nothing node keeps what it finished on its failure", () => {
+  const thrownBy = (fn: () => unknown): unknown => {
+    try {
+      fn()
+    } catch (err) {
+      return err
+    }
+    throw new Error("expected a throw")
+  }
+
+  it("the failure carries the item count, how many finished and the finished items' jobs — never a list", () => {
+    const thrown = thrownBy(() =>
+      assembleFanOutResult(
+        [ok(0, "https://cdn.example/c0.mp4", { jobId: "job-0", creditsUsed: 400 }), fail("clip 2 failed"), ok(2, "https://cdn.example/c2.mp4", { jobId: "job-2", creditsUsed: 400 })],
+        3,
+        "ugc-clip",
+      ),
+    ) as Record<string, unknown>
+    expect(thrown).toMatchObject({ message: "clip 2 failed", creditsUsed: 800, fanOutProgress: { iterationTotal: 3, iterationCompleted: 2, jobIds: ["job-0", "job-2"], jobRows: [0, 2] } })
+    // What it finished rides the rejection; nothing a list reader takes for the node's output.
+    expect(thrown).not.toHaveProperty("output")
+  })
+
+  it("a fail-fast tail (items cancelled after the failure) counts as not finished", () => {
+    const thrown = thrownBy(() =>
+      assembleFanOutResult([ok(0, "a", { jobId: "job-0" }), fail("provider 503"), fail("Execution cancelled")], 3, "ugc-clip"),
+    )
+    expect(thrown).toMatchObject({ fanOutProgress: { iterationTotal: 3, iterationCompleted: 1, jobIds: ["job-0"], jobRows: [0] } })
+  })
+
+  it("only an all-or-nothing node's failure carries it", () => {
+    const thrown = thrownBy(() => assembleFanOutResult([fail("boom"), fail("again")], 2, "generate-image"))
+    expect(thrown).not.toHaveProperty("fanOutProgress")
+  })
+})

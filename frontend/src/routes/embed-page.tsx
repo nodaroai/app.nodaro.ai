@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dialog"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { useRunSlots, AppRunnerLayout, RunsSidebar, ORIGINAL_SLOT_ID } from "@/components/app-runner"
+import { useRunSlots, AppRunnerLayout, RunsSidebar, ResumeRunDialog, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 import { useT } from "@/lib/i18n"
 
 export default function EmbedPage() {
@@ -320,6 +320,13 @@ export default function EmbedPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Retry of a failed run: always confirmed, naming the steps that run again and their price */}
+      <ResumeRunDialog
+        state={runSlots.resumeDialog}
+        onConfirm={() => void runSlots.confirmResume()}
+        onStartOver={runSlots.handleStartOver}
+        onCancel={runSlots.closeResumeDialog}
+      />
     </AppRunnerLayout>
   )
 }
