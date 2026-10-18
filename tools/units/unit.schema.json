@@ -132,24 +132,9 @@
                 "minItems": 1,
                 "items": {
                   "enum": [
-                    "text",
-                    "image",
-                    "imageRef",
-                    "endFrame",
                     "video",
                     "audio",
-                    "audioRef",
-                    "look",
-                    "pickerJson",
-                    "reference",
-                    "identity",
-                    "negative",
-                    "face",
-                    "mask",
-                    "approve",
-                    "list",
-                    "variables",
-                    "control"
+                    "image"
                   ]
                 }
               },

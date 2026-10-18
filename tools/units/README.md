@@ -120,6 +120,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | everything derived from a unit's manifest in the editor (`EXECUTABLE_TYPES`, the price mirror, `HANDLE_OUTPUT_TYPES`, `TARGET_HANDLE_ACCEPTS`, the ffmpeg rule, config-panel names and button sets, output extraction) | read through `frontend/src/lib/unit-definitions.ts` (the one door to the definitions aggregate, so modules a unit imports are never composers) |
 | `NODE_REGISTRY`, `STATIC_CREDIT_COSTS` / `CREDIT_COSTS`, routes (core + ee), payloads + required media, the ffmpeg worker map | `node-registry.ts`, `ee/billing/credits.ts`, `app.ts`, `payload-builder.ts`, `workers/handlers/ffmpeg.ts` |
 | everything derived from a unit's manifest on the server (saved output, `NOT_GENERIC_RECOVERABLE`, the MCP handle table `lib/node-handles.ts`, the `length:unknown` rows of `VIDEO_OUTPUT_LENGTH_RULES` / `UNBOUNDED_LENGTH_REASONS` in `lib/video-output-length.ts`) | read through `backend/src/lib/unit-descriptors.ts` |
+| the canvas connection rule of a unit's inputs (each `handles.inputs[].accepts`) | `frontend/src/lib/connection-validation.ts` asks `lib/unit-connections.ts` (below) |
 | the producer sets | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` |
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
@@ -134,6 +135,31 @@ table itself). The unit kits are type-only: `frontend/src/nodes/kit.ts`
 and `node.tsx` its store services from `useUnitNodeKit(id)`
 (`frontend/src/components/nodes/use-unit-node-kit.ts`, typed `UnitNodeKit`) —
 never the workflow store or a composer itself (G5).
+
+**A unit's connection rule.** A unit declares what each input takes in its
+manifest, `handles.inputs[].accepts` (kinds from `ACCEPTS_KINDS`: `video`,
+`audio`, `image`; several = any of them), and writes no predicate of its own.
+The canvas validator (`connectionTypesAccepted`) asks
+`frontend/src/lib/unit-connections.ts` for every wire into a unit, after the
+rules every node shares (JSON kinds, composition/lottie/picker-json pips, UGC)
+and before the legacy per-type rules, so the validator is legacy ∪ units: a
+declared input takes what its kinds' rule (`unitInputAccepts`,
+`ffmpeg-handles.ts`) accepts from the effective source, an undeclared handle
+nothing, and a wire with no target handle falls through as before. One
+function holds that rule (`unitInputConnectionAccepted`, built once per input),
+and every path that judges a unit input calls it: the canvas, the add-node
+popup (`node-compatibility.ts`, through `unitConnectionVerdict`) and
+`isValidFfmpegConnection`'s unit branch; the handle popover
+(`TARGET_HANDLE_ACCEPTS`) is built from the same `unitInputAccepts`. It is a
+lookup (`unitDefinitionOf`), so it folds nothing at load. The server has no
+copy to keep in step: the Copilot's edge check
+(`ee/copilot/tools/edge-validation.ts`) warns by handle name only — an unknown
+handle, through `lib/node-handles.ts` (which already holds units), and a
+media-class hint keyed by the target handle's NAME (`MEDIA_TARGET_HANDLES`:
+`video` / `audio`) — and makes no per-type acceptance judgement. A kind is
+added together with its rule there, `ACCEPTS_KINDS` and
+`unit.schema.json` (`units-manifest.test.mjs` holds the schema to the
+vocabulary). `unit-connections.test.ts` proves it on a fixture unit.
 
 **Ordered registries.** Where a user or an agent sees a registry's order, a
 unit is placed, never appended: NODE_DEFINITIONS after its `position.after`,

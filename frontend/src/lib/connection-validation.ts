@@ -111,6 +111,7 @@ import {
   UGC_NODE_TYPES,
 } from "@nodaro/shared/ugc"
 import { isValidUgcConnection } from "./ugc-handles"
+import { unitConnectionVerdict } from "./unit-connections"
 import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
 import { isVisualPickerType } from "./parameter-picker-types"
@@ -407,6 +408,14 @@ function connectionTypesAccepted(
   if (ugcOutsideRulesRefuse(imageSourceType, connection.sourceHandle, targetType ?? "", connection.targetHandle ?? "")) {
     return false
   }
+
+  // A node unit's inputs are judged by what its manifest declares they accept
+  // (unit.json handles.inputs[].accepts — unit-connections.ts): the validator is
+  // the legacy rules below ∪ the units'. A unit is never a legacy type, so no
+  // per-type rule below would have answered for it; the rules above, which
+  // every node shares, still apply to a unit.
+  const unitVerdict = unitConnectionVerdict(targetType, connection.targetHandle, imageSourceType)
+  if (unitVerdict !== undefined) return unitVerdict
 
   if (targetType === "generate-image" && connection.targetHandle) {
     return isValidGenerateImageConnection(

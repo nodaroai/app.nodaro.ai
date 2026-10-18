@@ -94,7 +94,7 @@ const cases = [
   ["registry needs a description", (m) => { m.registry.description = "" }, /registry needs a description/],
   ["docs needs a page or a reason", (m) => { delete m.docs.page }, /docs needs exactly one of page/],
   ["docs page must exist", (m) => { m.docs.page = "docs/nodes/utility/missing.md" }, /does not exist/],
-  ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["image"] }, /"image" has no editor connection rule for a unit input yet/],
+  ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["text"] }, /"text" has no editor connection rule for a unit input yet/],
   ["length:unknown with length:pass-video", (m) => { m.capabilities = ["length:unknown", "length:pass-video"] }, /"length:unknown" \(no rule bounds its length\) contradicts "length:pass-video"/, { capabilities: CAPABILITIES }],
   ["length:unknown with length:exact-video", (m) => { m.capabilities = ["length:exact-video", "length:unknown"] }, /"length:unknown" \(no rule bounds its length\) contradicts "length:exact-video"/, { capabilities: CAPABILITIES }],
   ["length:unknown without a reason", (m) => { m.capabilities = ["length:unknown"] }, /"length:unknown" needs lengthUnknownReason/, { capabilities: CAPABILITIES }],
@@ -113,6 +113,17 @@ for (const [name, edit, re, over] of cases) {
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 }
+
+test("G6 accepts: an input that takes images, alone or with another kind (the canvas judges it by unit-connections.ts)", () => {
+  for (const accepts of [["image"], ["video", "image"]]) {
+    const root = tree()
+    try {
+      withManifest(root, (m) => { m.handles.inputs[0].accepts = accepts })
+      const errs = problems(root, ctxFor(root)).filter((e) => /accepts/.test(e))
+      assert.deepEqual(errs, [], `accepts ${accepts.join(", ")}`)
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  }
+})
 
 const fileCases = [
   ["a worker without worker.ts", (root) => rmSync(path.join(root, BACKEND, "worker.ts")), /needs backend\/src\/nodes\/fixture-echo\/worker\.ts/],
@@ -244,6 +255,7 @@ test("unit.schema.json's enums are the validator's vocabularies", () => {
   const schema = JSON.parse(readFileSync(path.join(here, "../units/unit.schema.json"), "utf8"))
   assert.deepEqual(schema.properties.category.enum, vocabulary.CATEGORIES)
   assert.deepEqual(schema.properties.handles.properties.outputs.items.properties.kind.enum, vocabulary.HANDLE_KINDS)
+  assert.deepEqual(schema.properties.handles.properties.inputs.items.properties.accepts.items.enum, vocabulary.ACCEPTS_KINDS)
   assert.deepEqual(schema.properties.execution.properties.kind.enum, vocabulary.EXECUTION_KINDS)
   assert.deepEqual(schema.properties.execution.properties.queue.enum, vocabulary.QUEUES)
   assert.deepEqual(schema.properties.registry.properties.outputType.enum, vocabulary.OUTPUT_TYPES)

@@ -155,11 +155,12 @@ describe("output extraction", () => {
 })
 
 describe("connection rule of a unit input", () => {
-  it("video, audio, or both = any media; another kind has no rule (the validator refuses it first)", () => {
+  it("video, audio, image, or both media = any media; another kind has no rule (the validator refuses it first)", () => {
     expect(unitInputAccepts(["video"])).toBe(ACCEPTS_VIDEO)
     expect(unitInputAccepts(["audio"])).toBe(ACCEPTS_AUDIO)
     expect(unitInputAccepts(["video", "audio"])).toBe(ACCEPTS_MEDIA)
-    expect(() => unitInputAccepts(["image"])).toThrow(/ACCEPTS_KINDS/)
+    expect(typeof unitInputAccepts(["image"])).toBe("function") // equal to ACCEPTS_IMAGE_OR_DYN: unit-connections.test.ts
+    expect(() => unitInputAccepts(["text"])).toThrow(/ACCEPTS_KINDS/)
   })
 })
 
