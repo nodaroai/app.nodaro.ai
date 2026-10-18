@@ -218,13 +218,14 @@ export function undeclaredTestUsers(files, names, readSource) {
 /**
  * Product modules that name a registry export and declare neither
  * @registry-lookup nor @registry-enumerates. A composer is a pass-through only
- * for its own registries: a name of another registry counts.
+ * for its own registries: a name of another registry counts. A registry it
+ * folds at load (`foldsAtLoad`) is declared too — the enumerator that entry makes it.
  */
 export function undeclaredProductUsers(files, regs, readSource) {
   return files.filter((f) => {
     if (AGGREGATE_FILE.test(f) || unitOf(f)) return false
     const src = readSource(f)
-    const own = regs.composers.get(f) ?? new Set()
+    const own = new Set([...(regs.composers.get(f) ?? []), ...(regs.folds?.get(f) ?? [])])
     const names = new Set([...regs.exportsById].filter(([id]) => !own.has(id)).flatMap(([, s]) => [...s]))
     if (namesUsed(src, names).size === 0) return false
     const a = parseRegistryAnnotations(src)

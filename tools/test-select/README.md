@@ -345,7 +345,8 @@ registry. `registry.mjs` holds the rule (decided 2026-10-16):
 | Annotation | On | Meaning |
 |---|---|---|
 | `// @registry <glob>…` | aggregate | its imports of matching files are **member edges** |
-| `// @registry-exports <aggregate>: <Name>…` | aggregate | the names the aggregate's collection is consumed through. A **composer** declares the names it re-exports in `tools/units/registry-composers.json` (`exports`), and is a pass-through for those registries, not an enumerator |
+| `// @registry-exports <aggregate>: <Name>…` | aggregate | the names the aggregate's collection is consumed through. A **composer** declares the names it re-exports in `tools/units/registry-composers.json` (`exports`), and is a pass-through for those registries, not an enumerator — except those it lists in `foldsAtLoad` |
+| `foldsAtLoad: [<aggregate>…]` | composer, in `registry-composers.json` | it reads every unit of those registries **while it loads** (validates or folds them at module evaluation), so it is their **enumerator**. Derived from code, not chosen (below) |
 | `// @registry-lookup <reason>` | product module | names a registry export but only looks up the entry for a type it is given |
 | `// @registry-enumerates <reason>` | product module | iterates the collection (what an undeclared module is assumed to do) |
 | `// @test-units-by-name <reason>` | test or helper | names a registry export but only looks up the unit types it names literally |
@@ -353,7 +354,8 @@ registry. `registry.mjs` holds the rule (decided 2026-10-16):
 A changed file **inside a unit folder** that a test reaches **only through
 member edges** does not select it by "imports". It selects the test when (a)
 the test reaches an **enumerator** of that registry (a module that names an
-export, is not a pass-through and does not declare `@registry-lookup`), (b)
+export, is not a pass-through and does not declare `@registry-lookup`, or a
+composer that folds the registry at load), (b)
 the test names the unit's type id as a string literal, (c) the test names a
 registry export and declares neither `@test-units-by-name`, `@test-always`
 nor a `@test-watches` covering the changed file (a watch of migrations,
@@ -367,7 +369,38 @@ composed collection (`getEnrichedRegistry`, `FAMILY_RANK`, `localize*`) are
 listed in `registry-composers.json` (`exports`, or `lookups` for one-type
 answers), and `node-units-structure.test.ts` fails an unlisted one. An
 aggregate diff made only of `// unit:<type>` lines (a member added or
-removed; `--merge-commit` only) is narrowed the same way. `@test-always`, `@test-watches`, `@reads` and the
+removed; `--merge-commit` only) is narrowed the same way.
+
+**Composers that fold at load** (decided 2026-10-18). Most composers do more
+than pass a collection on: `types/nodes.ts` places every unit at its
+`position.after` and throws on a duplicate type, `node-options.tsx` demands each
+unit's option.tsx icon, `i18n/labels.ts` folds `Object.values(UNIT_LABELS)`,
+`node-registry.ts` maps each descriptor's category. That code runs when the
+module is imported, so one broken unit fails every test that merely loads the
+composer — including a test that reaches the unit only through a member edge,
+names no export, or is waived by `@test-units-by-name`. A mutation replay of
+the remove-audio unit found exactly those tests dropped and failing. Such a
+composer is therefore an enumerator of the registries it folds: they are listed
+in its `foldsAtLoad`, and `node-units-structure.test.ts` holds that list to
+`loadTimeRegistryReads` (`tools/units/structure.mjs`), in both directions. The
+predicate starts from the composer's values of a registry — a binding
+imported under one of its names, a default, namespace or dynamic `import()` of
+a module that holds it (an aggregate or a composer), `NS.<name>` of any
+namespace — and every local declaration derived from them. It counts a use by
+code that runs at module evaluation (a top-level initializer or statement,
+class statics and decorators, the constructor and instance members of a class
+constructed there, any function invoked or handed to a call there): a call, a
+member read, iteration, a spread, a destructuring, or a value or function
+handed to a call. Naming one is not a read: a bare alias, an object or array
+literal that is only named (`export const API = { get }`), `typeof`. The
+functions React's `memo` / `forwardRef` / `lazy` are given are stored, not run;
+their other arguments are evaluated. The same test holds every
+`@registry-lookup` module to reading no registry at load, judged strictly: a
+call or a read counts, a function handed over only to an iterating method
+(`.map`, `.forEach`, …). A composer that only reads a collection when called
+(`execute-node.ts`: `UNIT_EXECUTORS[node.type]`) keeps the narrowing.
+
+`@test-always`, `@test-watches`, `@reads` and the
 scanner rules keep their precedence. The full closure stays the test's
 `deps`, so the pass cache is still invalidated by any unit change.
 

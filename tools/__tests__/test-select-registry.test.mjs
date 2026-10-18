@@ -6,6 +6,7 @@
 // by the adjacency map below.
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import { selectTests } from "../test-select/select.mjs"
 import { summarizeTest } from "../test-select/test-node.mjs"
 import { testKey } from "../test-select/pass-cache.mjs"
@@ -262,4 +263,132 @@ test("sideEffectsOf: G7's AST check, for unit files only", { skip: typescript ? 
   assert.equal(sideEffectsOf(typescript, "frontend/src/lib/h.ts", "export const h = 1\n"), undefined, "never for a file outside a unit")
   assert.equal(sideEffectsOf(null, u, "export const a = 1\n"), undefined, "unknown without TypeScript")
   assert.equal(sideEffectsOf(typescript, u, null), undefined)
+})
+
+// ── Composers that read every unit while they load (decided 2026-10-18) ──
+// The mutation replay of the remove-audio unit found tests that failed on a
+// broken unit and that the rule dropped: they reach the unit only through a
+// member edge, and the composer that loads it validates or folds every unit at
+// module evaluation (registry-composers.json `foldsAtLoad`), so it was treated
+// as a pass-through. Each case below is one of those tests on the REAL tree:
+// its own source, the shortest value-import chain the Vite walk found from it
+// to the composer (each edge is checked to still be an import in the source),
+// the real composers, aggregates and registry-composers.json. Removing a
+// `foldsAtLoad` entry, or the engine reading it, drops the test again.
+const ROOT = new URL("../../", import.meta.url)
+const readRepo = (p) => readFileSync(new URL(p, ROOT), "utf8")
+const realComposers = JSON.parse(readRepo("tools/units/registry-composers.json")).composers
+const AGG = {
+  options: "frontend/src/nodes/_generated/options.ts",
+  definitions: "frontend/src/nodes/_generated/definitions.ts",
+  labels: "frontend/src/nodes/_generated/labels.ts",
+  registry: "backend/src/nodes/_generated/registry.ts",
+}
+const realInfo = (composers = realComposers) => collectRegistries(
+  [...Object.values(AGG), ...Object.keys(composers)].map((path) => ({ path, source: readRepo(path) })), composers)
+
+// The module stems a source imports (value or type — the chain was taken
+// from the Vite walk, which keeps only value edges; this only proves the edge
+// still exists): `@/` is the importer's tree's src/, relative is resolved.
+const stem = (p) => p.replace(/\.(?:[cm]?[jt]sx?)$/, "").replace(/\/index$/, "")
+function importedStems(from) {
+  const out = new Set()
+  for (const m of readRepo(from).matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g)) {
+    const spec = m[1]
+    if (spec.startsWith("@/")) out.add(stem(`${from.split("/")[0]}/src/${spec.slice(2)}`))
+    else if (spec.startsWith(".")) out.add(stem(new URL(spec, new URL(from, "file:///")).pathname.slice(1)))
+  }
+  return out
+}
+
+// One real test over its real chain: test → …chain → aggregate → member.
+function realChain({ file, chain, aggregate, member, info = realInfo() }) {
+  const hops = [file, ...chain, aggregate]
+  for (let i = 0; i + 1 < hops.length; i++) assert.ok(importedStems(hops[i]).has(stem(hops[i + 1])), `${hops[i]} no longer imports ${hops[i + 1]} — re-take the chain from the Vite walk`)
+  assert.ok(importedStems(aggregate).has(stem(member)), `${aggregate} no longer has the member ${member}`)
+  const adjacency = new Map([[file, [chain[0]]], [aggregate, [member]], [member, []]])
+  chain.forEach((f, i) => adjacency.set(f, [chain[i + 1] ?? aggregate]))
+  return summarizeTest({
+    file, source: readRepo(file),
+    deps: [...chain, aggregate, member].map((p) => ({ path: p, source: readRepo(p) })),
+    registry: { info, via: registryClosure(adjacency, file, info.aggregates).via, unitTypes: ["remove-audio"] },
+  })
+}
+const project = (t) => t.file.split("/")[0]
+const selects = (t, change) => selectTests({ project: project(t), changes: [change], tests: [t], registryRule: "enforce" }).files[0]?.why
+
+const OPTION_TSX = "frontend/src/nodes/remove-audio/option.tsx"
+const optionIcon = (info) => realChain({ info, file: "frontend/src/lib/__tests__/episode-chapters-registration.test.ts", chain: ["frontend/src/lib/node-options.tsx"], aggregate: AGG.options, member: OPTION_TSX })
+const DESCRIPTOR = "backend/src/nodes/remove-audio/descriptor.generated.ts"
+const descriptorCategory = (info) => realChain({ info, file: "backend/src/lib/__tests__/node-registry-credit-rate.test.ts", chain: ["backend/src/lib/node-registry.ts", "backend/src/lib/unit-descriptors.ts"], aggregate: AGG.registry, member: DESCRIPTOR })
+const DEFINITION = "frontend/src/nodes/remove-audio/definition.generated.ts"
+const definitions = (info) => realChain({ info, file: "frontend/src/components/nodes/__tests__/sticky-note-node.test.tsx", chain: ["frontend/src/types/nodes.ts"], aggregate: AGG.definitions, member: DEFINITION })
+const LABEL_MEMBER = "frontend/src/nodes/remove-audio/labels.generated.ts"
+const labels = (info) => realChain({
+  info, file: "frontend/src/lib/__tests__/workspace-context.test.ts",
+  chain: ["frontend/src/lib/workspace-context.ts", "frontend/src/lib/api.ts", "frontend/src/lib/use-case-request-body.ts", "frontend/src/lib/i18n/labels.ts"],
+  aggregate: AGG.labels, member: LABEL_MEMBER,
+})
+// The labels aggregate edit the replay made: a member's value made undefined
+// (`unitNodeLabels(Object.values(UNIT_LABELS))` then throws at load). Only a
+// `// unit:` line changed, so the CLI marks it narrowed to that unit.
+const LABELS_BEFORE = readRepo(AGG.labels)
+const LABELS_AFTER = LABELS_BEFORE.replace('"remove-audio": unit_remove_audio,', '"remove-audio": undefined,')
+
+test("load-time folds: the real registry-composers.json declares the four evidence composers", () => {
+  assert.ok(realComposers["frontend/src/lib/node-options.tsx"].foldsAtLoad.includes("options"))
+  assert.ok(realComposers["backend/src/lib/node-registry.ts"].foldsAtLoad.includes("registry"))
+  assert.ok(realComposers["frontend/src/types/nodes.ts"].foldsAtLoad.includes("definitions"))
+  assert.ok(realComposers["frontend/src/lib/i18n/labels.ts"].foldsAtLoad.includes("labels"))
+  assert.equal(realComposers["frontend/src/components/editor/workflow-editor/execute-node.ts"].foldsAtLoad, undefined, "its executors are read per node at run time")
+})
+
+test("load-time folds A: an option.tsx edit selects episode-chapters-registration (@test-units-by-name), which loads node-options.tsx (the `option.tsx icon` throw)", () => {
+  const t = optionIcon()
+  assert.ok(t.unitsByName, "it is waived by @test-units-by-name")
+  assert.match(selects(t, M(OPTION_TSX)) ?? "", /^reaches frontend\/src\/lib\/node-options\.tsx, which enumerates the options registry; frontend\/src\/nodes\/remove-audio\/option\.tsx changed$/)
+})
+
+test("load-time folds B: a descriptor edit selects node-registry-credit-rate (@test-units-by-name), which loads node-registry.ts (the `/v1/nodes category` throw)", () => {
+  const t = descriptorCategory()
+  assert.ok(t.unitsByName)
+  assert.match(selects(t, M(DESCRIPTOR)) ?? "", /^reaches backend\/src\/lib\/node-registry\.ts, which enumerates the registry registry; /)
+})
+
+test("load-time folds C: a definition edit selects sticky-note-node, which names no registry export but loads types/nodes.ts (the empty / duplicate definition throw)", () => {
+  const t = definitions()
+  assert.deepEqual(t.registryNames, {}, "it names nothing: rule (c) cannot select it")
+  assert.match(selects(t, M(DEFINITION)) ?? "", /^reaches frontend\/src\/types\/nodes\.ts, which enumerates the definitions registry; /)
+})
+
+test("load-time folds D: a labels aggregate member set undefined selects workspace-context, which loads i18n/labels.ts through a @registry-lookup module (the labels undefined-member throw)", () => {
+  const units = memberLineTypes(LABELS_BEFORE, LABELS_AFTER)
+  assert.deepEqual(units, ["remove-audio"])
+  const t = labels()
+  assert.deepEqual(t.registryNames, {})
+  assert.match(selects(t, M(AGG.labels, { registryUnits: units, registry: "labels" })) ?? "", /^reaches frontend\/src\/lib\/i18n\/labels\.ts, which enumerates the labels registry; frontend\/src\/nodes\/_generated\/labels\.ts changed$/)
+  assert.match(selects(t, M(LABEL_MEMBER)) ?? "", /enumerates the labels registry/, "and a labels.generated.ts edit")
+})
+
+test("load-time folds: without the foldsAtLoad entries each of those tests is dropped (what the rule did before)", () => {
+  const stripped = Object.fromEntries(Object.entries(realComposers).map(([p, e]) => [p, { ...e, foldsAtLoad: undefined }]))
+  const old = realInfo(stripped)
+  assert.equal(selects(optionIcon(old), M(OPTION_TSX)), undefined)
+  assert.equal(selects(descriptorCategory(old), M(DESCRIPTOR)), undefined)
+  assert.equal(selects(definitions(old), M(DEFINITION)), undefined)
+  assert.equal(selects(labels(old), M(AGG.labels, { registryUnits: ["remove-audio"], registry: "labels" })), undefined)
+})
+
+// node-units-structure.test.ts forbids a @registry-lookup module that reads a
+// registry at load, so a folding composer never declares it; should the two
+// meet anyway, the fold wins and the rule fails safe (the test is selected).
+test("load-time folds: a folding composer stays its registry's enumerator even under a (forbidden) @registry-lookup, and a pass-through for what it does not fold", () => {
+  const A = "frontend/src/nodes/_generated/executors.ts"
+  const composers = { "frontend/src/lib/c.ts": { exports: { executors: ["ALL"], options: ["OPTS"] }, foldsAtLoad: ["executors"] } }
+  const reg = collectRegistries([{ path: A, source: "// @registry frontend/src/nodes/*/exec.ts\n// @registry-exports executors: UNIT_EXECUTORS\n" }, { path: "frontend/src/lib/c.ts", source: "" }], composers)
+  assert.deepEqual([...reg.folds.get("frontend/src/lib/c.ts")], ["executors"])
+  assert.deepEqual([...reg.composers.get("frontend/src/lib/c.ts")], ["options"])
+  assert.ok(reg.exportsById.get("executors").has("ALL"), "its names still identify the registry")
+  const files = [{ path: "frontend/src/lib/c.ts", source: '// @registry-lookup by type\nimport { OPTS } from "./o"\n' }]
+  assert.deepEqual(enumeratorsIn(files, reg), { executors: "frontend/src/lib/c.ts" })
 })

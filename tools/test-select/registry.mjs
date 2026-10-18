@@ -15,7 +15,11 @@
 //   (a) it reaches an ENUMERATOR of R — a product module that names one of
 //       R's exports, is not a declared pass-through composer and does not
 //       declare `@registry-lookup` (the safety argument: any test reaching
-//       code that iterates the collection still runs);
+//       code that iterates the collection still runs). A composer that reads
+//       every unit of R WHILE IT LOADS (registry-composers.json `foldsAtLoad`:
+//       it validates or folds the collection at module evaluation, so one
+//       broken unit fails every test that imports it) is an enumerator of R,
+//       never a pass-through — decided 2026-10-18;
 //   (b) it names U's type id as a string literal (a payload test feeding that node);
 //   (c) it names one of R's exports itself and declares neither
 //       `@test-units-by-name` nor `@test-always`, nor a `@test-watches` that
@@ -68,26 +72,37 @@ export const registryRuleMode = (value) => (value === "enforce" ? "enforce" : "s
  * { exports: { <aggregate id>: [names] } } — the names each reviewed composer
  * re-exports a composed collection through (an array of paths is accepted
  * too). A composer's own `@registry-exports` comment, if it carries one, is
- * read as well. Returns
+ * read as well. A registry the entry lists in `foldsAtLoad` (the composer
+ * reads every unit of it while it loads) is NOT a pass-through: its names
+ * still join `exportsById`, and the composer is that registry's enumerator.
+ * Returns
  *   aggregates:  Map<path, { id, members: glob[], names: string[] }>
- *   composers:   Map<path, Set<id>> — a pass-through for the registries it exports (only those)
+ *   composers:   Map<path, Set<id>> — a pass-through for the registries it exports and does not fold at load (only those)
+ *   folds:       Map<path, Set<id>> — the registries it folds at load (an enumerator of each)
  *   exportsById: Map<id, Set<name>>
  */
 export function collectRegistries(files, composers = {}) {
   const aggregates = new Map()
   const passThrough = new Map()
+  const folds = new Map()
   const exportsById = new Map()
   const add = (id, names) => {
     if (!exportsById.has(id)) exportsById.set(id, new Set())
     for (const n of names) exportsById.get(id).add(n)
   }
   const listed = Array.isArray(composers) ? Object.fromEntries(composers.map((c) => [c, {}])) : composers
+  const folded = (path, id) => (listed[path]?.foldsAtLoad ?? []).includes(id)
+  const classify = (path, id) => {
+    const into = folded(path, id) ? folds : passThrough
+    if (!into.has(path)) into.set(path, new Set())
+    into.get(path).add(id)
+  }
   for (const [path, entry] of Object.entries(listed)) {
     for (const [id, names] of Object.entries(entry?.exports ?? {})) {
       add(id, names)
-      if (!passThrough.has(path)) passThrough.set(path, new Set())
-      passThrough.get(path).add(id)
+      classify(path, id)
     }
+    for (const id of entry?.foldsAtLoad ?? []) classify(path, id)
   }
   for (const { path, source } of files) {
     if (source == null) continue
@@ -97,11 +112,10 @@ export function collectRegistries(files, composers = {}) {
       const own = a.exports[0]
       aggregates.set(path, { id: own?.aggregate ?? path, members: a.members, names: own?.names ?? [] })
     } else if (Object.hasOwn(listed, path) && a.exports.length) {
-      if (!passThrough.has(path)) passThrough.set(path, new Set())
-      for (const e of a.exports) passThrough.get(path).add(e.aggregate)
+      for (const e of a.exports) classify(path, e.aggregate)
     }
   }
-  return { aggregates, composers: passThrough, exportsById }
+  return { aggregates, composers: passThrough, folds, exportsById }
 }
 
 const escape = (s) => s.replace(/[$]/g, "\\$")
@@ -197,12 +211,16 @@ export function registryClosure(adjacency, root, aggregates, excluded = new Set(
  * module (sorted) that names one of its exports, is not a pass-through
  * composer OF THAT REGISTRY (a composer of another one is classified like any
  * module), is not an aggregate or a unit file, and does not declare
- * `@registry-lookup`. `files`: [{ path, source }] of the test's cutDeps.
+ * `@registry-lookup` — or a composer that folds that registry at load
+ * (`folds`), whatever it names or declares: loading it reads every unit.
+ * `files`: [{ path, source }] of the test's cutDeps.
  */
 export function enumeratorsIn(files, registries) {
   const out = {}
   for (const { path, source } of [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) {
-    if (source == null || AGGREGATE_FILE.test(path) || unitOf(path)) continue
+    if (AGGREGATE_FILE.test(path) || unitOf(path)) continue
+    for (const id of registries.folds?.get(path) ?? []) out[id] ??= path
+    if (source == null) continue
     if (parseRegistryAnnotations(source).lookup) continue
     const passesThrough = registries.composers.get(path) ?? new Set()
     for (const [id, names] of registries.exportsById) {

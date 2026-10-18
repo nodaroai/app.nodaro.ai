@@ -96,7 +96,7 @@ the first node of such a kind builds its seam and flips its `live`.
 | `gen.mjs` | The CLI. |
 | `unit.schema.json` | Editor autocomplete (`"$schema"` in `unit.json`); the validator is the authority. |
 | `legacy-nodes.json` | Types still in the hand-written `NODE_DEFINITIONS` literal — a burn-down that only shrinks (G1). |
-| `registry-composers.json` | The reviewed composition points: the only product modules that may import an aggregate (G3), and the collections each re-exports (`exports`: the registry names G4 and the test-select registry rule read). |
+| `registry-composers.json` | The reviewed composition points: the only product modules that may import an aggregate (G3), and the collections each re-exports (`exports`: the registry names G4 and the test-select registry rule read), and `foldsAtLoad`: the registries a composer reads every unit of while it loads — their enumerator, derived by `structure.mjs` `loadTimeRegistryReads` and held to it by `node-units-structure.test.ts`. |
 | `central-mentions.json` | Reasoned exceptions to G2 (a unit's type id named outside its folders) — only shrinks. |
 | `__fixtures__/tree/` | The fixture unit `fixture-echo`: every optional file, every seam, used by the generator and guard tests. |
 
