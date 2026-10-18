@@ -2,7 +2,9 @@
  * One descriptor per use-case node (decided 2026-10-14): everything a route,
  * an estimator, the review and the editor need to know about a type, so none
  * of them names a type. Adding a use-case node = a builder + one entry here
- * (and its registrations outside this package). Pure.
+ * (and its registrations outside this package). The boot smoke's route probe
+ * follows from the entry (backend/scripts/use-case-probe-paths.mjs): no list
+ * to edit in ci.yml. Pure.
  */
 import {
   isUseCaseNodeType,

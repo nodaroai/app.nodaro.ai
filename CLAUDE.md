@@ -71,7 +71,10 @@
 the configuration we run daily; community is defined by SUBTRACTION (no provider
 keys, no credits, no admin, no publicly-reachable media host) and used to be
 exercised by nobody until a self-hoster hit it. Two CI jobs cover it:
-`backend-boot-smoke` (both editions start, ee routes register/404 correctly) and
+`backend-boot-smoke` (both editions start, ee routes register/404 correctly, every
+use-case node's run + continue is registered — that list is derived from the
+use-case registry by `backend/scripts/use-case-probe-paths.mjs`, so a new use-case
+node needs no `ci.yml` edit) and
 **`community-e2e`** (`.github/workflows/community-e2e.yml`), which builds the
 community image, boots the published `docker-compose.community.yml` with ZERO
 provider keys, and runs `tools/community-smoke.mjs` — a real path (sign up →
