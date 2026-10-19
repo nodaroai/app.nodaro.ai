@@ -1,7 +1,7 @@
 /**
  * Generate Mask — text-prompted IMAGE segmentation (Grounded SAM). The wire
- * contract of `POST /v1/generate-mask`, the `generate_mask` MCP verb,
- * `client.media.generateMask` and `nodaro media generate-mask`, defined ONCE:
+ * contract of `POST /v1/generate-mask`, the `generate_mask` MCP verb, the SDK's
+ * `nodes.run("generate-mask", …)` and `nodaro media generate-mask`, defined ONCE:
  * every bound the route schema and the SDK/CLI read.
  *
  * The finished job's output is `{ maskUrl, imageUrl }`: `maskUrl` is the

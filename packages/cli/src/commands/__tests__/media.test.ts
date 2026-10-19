@@ -23,7 +23,7 @@ const mocks = {
   suggestOverlayPlacement: vi.fn(),
   videoOverlay: vi.fn(),
   addCaptions: vi.fn(),
-  generateMask: vi.fn(),
+  nodesRun: vi.fn(),
   jobsGet: vi.fn(),
 }
 
@@ -44,8 +44,8 @@ vi.mock("../../client.js", () => ({
       suggestOverlayPlacement: mocks.suggestOverlayPlacement,
       videoOverlay: mocks.videoOverlay,
       addCaptions: mocks.addCaptions,
-      generateMask: mocks.generateMask,
     },
+    nodes: { run: mocks.nodesRun },
     jobs: { get: mocks.jobsGet },
   }),
   handleError: (err: unknown) => {
@@ -94,26 +94,26 @@ afterEach(() => {
 
 describe("media generate-mask command", () => {
   it("sends the image, the prompt and --threshold", async () => {
-    mocks.generateMask.mockResolvedValueOnce({ jobId: "j-mask" })
+    mocks.nodesRun.mockResolvedValueOnce({ jobId: "j-mask" })
     await runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--threshold", "0.45", "--json")
-    expect(mocks.generateMask).toHaveBeenCalledWith({ imageUrl: "https://x/photo.png", prompt: "the person", threshold: 0.45 })
+    expect(mocks.nodesRun).toHaveBeenCalledWith("generate-mask", { imageUrl: "https://x/photo.png", prompt: "the person", threshold: 0.45 })
     expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "j-mask" }, expect.anything())
   })
 
   it("omits threshold when the flag is not given (the server default applies)", async () => {
-    mocks.generateMask.mockResolvedValueOnce({ jobId: "j-mask" })
+    mocks.nodesRun.mockResolvedValueOnce({ jobId: "j-mask" })
     await runCmd("media", "generate-mask", "https://x/photo.png", "sky and clouds", "--json")
-    expect(mocks.generateMask).toHaveBeenCalledWith({ imageUrl: "https://x/photo.png", prompt: "sky and clouds" })
+    expect(mocks.nodesRun).toHaveBeenCalledWith("generate-mask", { imageUrl: "https://x/photo.png", prompt: "sky and clouds" })
   })
 
   it("refuses a --threshold outside 0–1 before calling the API", async () => {
     await expect(runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--threshold", "1.5")).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--threshold"))
-    expect(mocks.generateMask).not.toHaveBeenCalled()
+    expect(mocks.nodesRun).not.toHaveBeenCalled()
   })
 
   it("--watch polls the job to its end", async () => {
-    mocks.generateMask.mockResolvedValueOnce({ jobId: "j-mask" })
+    mocks.nodesRun.mockResolvedValueOnce({ jobId: "j-mask" })
     mocks.jobsGet.mockResolvedValueOnce({
       data: { id: "j-mask", status: "completed", output_data: { maskUrl: "https://x/mask.png", imageUrl: "https://x/photo.png" } },
     })

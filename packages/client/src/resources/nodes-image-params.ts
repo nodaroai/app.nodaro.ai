@@ -192,9 +192,9 @@ export type SplitImageResult = { images: SplitImageTile[] }
 
 /**
  * Typed request body for `nodes.run("generate-mask", …)` / `runAndWait` — a
- * black-and-white mask of the subject a prompt names (`POST /v1/generate-mask`,
- * the same route as `client.media.generateMask`), ready for `maskUrl` on the
- * inpainting routes. The completed job writes {@link GenerateMaskJobOutput}.
+ * black-and-white mask of the subject a prompt names (`POST /v1/generate-mask`),
+ * ready for `maskUrl` on the inpainting routes. The SDK's one way to start it.
+ * The completed job writes {@link GenerateMaskJobOutput}.
  *
  * The fields are `@nodaro/shared`'s {@link GenerateMaskRequest} — the route's
  * one wire contract, bounds in `GENERATE_MASK_LIMITS` — plus the session

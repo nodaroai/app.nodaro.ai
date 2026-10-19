@@ -1050,7 +1050,7 @@ image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for 
           process.exit(1)
         }
         const client = buildClient(opts.profile)
-        const result = await client.media.generateMask({
+        const result = await client.nodes.run("generate-mask", {
           imageUrl,
           prompt,
           ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
