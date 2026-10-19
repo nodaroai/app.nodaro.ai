@@ -68,11 +68,10 @@ const KIE_MODELS_WITHOUT_CATALOG: ReadonlySet<string> = new Set<string>([
   // generation-only (clearer scope).
   "wan-animate-move",
   "wan-animate-replace",
-  // L1#4-allowlist surfaced 2026-05-08 — KIE registers `luma-modify` (v2v)
-  // and `topaz` (video-upscale) and `elevenlabs` (TTS alias) without catalog
-  // entries. Same reason as above — frontend wires them via dedicated config
-  // panels, not the catalog.
-  "luma-modify",
+  // L1#4-allowlist surfaced 2026-05-08 — KIE registers `topaz`
+  // (video-upscale) and `elevenlabs` (TTS alias) without catalog entries.
+  // Same reason as above — frontend wires them via dedicated config panels,
+  // not the catalog. (`luma-modify` has had a catalog entry since 2026-10-19.)
   "topaz",
   "elevenlabs",
 ])

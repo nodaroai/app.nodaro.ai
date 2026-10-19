@@ -18,6 +18,7 @@ import {
   refVideoWorstCaseSecFor,
   seedance2RefVideoActualBaseCredits,
   seedance2RefVideoBaseCredits,
+  seedance2RefVideoExpectedBaseCredits,
   seedance2RefVideoBaseCreditsFromDurations,
 } from "../seedance2-ref-video-credits.js"
 
@@ -172,5 +173,33 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     await expect(
       seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [null] }),
     ).resolves.toBe(3990)
+  })
+})
+
+// The quote's `expected`: what the run should bill once delivered, from the
+// clips the reservation measured. 480p `-ref` is 340 / 8 = 42.5 base a second.
+describe("seedance2RefVideoExpectedBaseCredits", () => {
+  const base = { provider: "seedance-2-5", resolution: "480p" }
+
+  it("an Auto (edit-shape) run renders the clip's own length: input + that clip", () => {
+    expect(seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 15, autoDuration: true, durationsSec: [10] }))
+      .toBe(Math.ceil(42.5 * (10 + 10)))
+  })
+
+  it("a fixed-duration run renders what was asked: input + the requested seconds", () => {
+    expect(seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 5, autoDuration: false, durationsSec: [10] }))
+      .toBe(Math.ceil(42.5 * (10 + 5)))
+  })
+
+  it("is never above what the reservation holds", () => {
+    const durationsSec = [12, 4]
+    const expected = seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 15, autoDuration: true, durationsSec })!
+    const reserved = seedance2RefVideoBaseCreditsFromDurations({ ...base, outputDurationSec: 15, durationsSec })
+    expect(expected).toBeLessThanOrEqual(reserved)
+  })
+
+  it("has no answer when a clip could not be measured", () => {
+    expect(seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 5, autoDuration: false, durationsSec: [Number.NaN] }))
+      .toBeUndefined()
   })
 })

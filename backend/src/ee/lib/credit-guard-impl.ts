@@ -109,6 +109,46 @@ async function chargedBatchTotal(identifiers: readonly string[]): Promise<number
   return total
 }
 
+/**
+ * The post-markup credits a route's `computeCredits` prices this request at,
+ * or undefined when the route has none (its reservation then prices the
+ * identifier from model_pricing). Marked up ONCE, here, so the check, the
+ * reservation and a quote all read the same final number.
+ */
+export async function routeCreditOverride(
+  req: FastifyRequest,
+  modelIdentifier: string,
+  opts: CreditGuardOpts | undefined,
+): Promise<number | undefined> {
+  if (!opts?.computeCredits) return undefined
+  const baseCredits = await opts.computeCredits(req.body, req)
+  if (baseCredits === undefined) return undefined
+  return applyServiceMarkup(baseCredits, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * What a run of this request RESERVES when it starts — the number
+ * `POST /v1/quote` answers. The same two sources the guard and
+ * `CreditsService.reserveCredits` use: the route's computed override, else the
+ * identifier's charged model_pricing row (`getModelCreditCostFromDB`, the lookup
+ * `reserveCredits` falls back to). A batch is the sum of its jobs'.
+ */
+export async function reservedCreditsFor(
+  req: FastifyRequest,
+  modelIdentifier: string,
+  opts: CreditGuardOpts | undefined,
+): Promise<number> {
+  const batchIds = opts?.batchIdentifiers?.(req)
+  if (batchIds) return chargedBatchTotal(batchIds)
+  return (await routeCreditOverride(req, modelIdentifier, opts))
+    ?? (await getModelCreditCostFromDB(modelIdentifier)).creditCost
+}
+
+/** BASE credits marked up at `modelIdentifier`, the way a reservation is. */
+export async function markedUpCredits(baseCredits: number, modelIdentifier: string): Promise<number> {
+  return applyServiceMarkup(baseCredits, await getAppSettings(), modelIdentifier)
+}
+
 export function creditGuardImpl(
   modelResolver: (req: FastifyRequest) => string,
   opts?: CreditGuardOpts,
@@ -147,9 +187,7 @@ export function creditGuardImpl(
       }
     } else if (opts?.computeCredits) {
       try {
-        const baseCredits = await opts.computeCredits(req.body, req)
-        const settings = await getAppSettings()
-        computedCreditOverride = applyServiceMarkup(baseCredits, settings, modelIdentifier)
+        computedCreditOverride = await routeCreditOverride(req, modelIdentifier, opts)
       } catch (err) {
         // Hard-fail policy: a missing-price error during computeCredits must
         // reject the request, not silently proceed without a credit check.

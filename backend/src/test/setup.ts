@@ -132,3 +132,12 @@ console.info = noop
 console.warn = noop
 console.error = noop
 console.debug = noop
+
+// The reference-clip probe cache (lib/ref-video-probe.ts) outlives a test: two
+// tests of one file that reuse a clip URL with different mocked lengths would
+// read each other's measurement. Cleared by its global key, so this setup
+// never imports the module ahead of a test file's mocks.
+import { beforeEach as clearProbeCacheBeforeEach } from "vitest"
+clearProbeCacheBeforeEach(() => {
+  ;(globalThis as unknown as Record<symbol, Map<string, unknown> | undefined>)[Symbol.for("nodaro.refVideoProbeCache")]?.clear()
+})

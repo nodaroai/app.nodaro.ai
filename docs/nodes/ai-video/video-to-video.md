@@ -70,6 +70,15 @@ on the node is dispatched as a **text-to-video** job in edit shape:
   source clip's own length and aspect ratio**. That is why the node offers no
   Duration and no Aspect Ratio field for this model.
 
+**From the API or SDK**, send it to `POST /v1/video-to-video` like any other
+model of this node — `{ videoUrl, prompt, provider: "seedance-2-5",
+resolution?, draft?, audio?, seed?, referenceImageUrl? }`. The server builds the
+edit body above itself (`referenceImageUrl` becomes `@image_1`, `audio` the
+native sound) and runs it on the same Seedance reference-video lane, so the
+price, the clip-length check and the settlement are the ones described here.
+`480p` and `draft` are accepted for this model only. Price it first with
+`POST /v1/quote` (`type: "video-to-video"`).
+
 **The source clip must be 4–30 seconds.** Shorter or longer clips are rejected
 by the provider.
 

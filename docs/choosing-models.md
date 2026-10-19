@@ -143,6 +143,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling 3.0 Motion Transfer | Kuaishou | Standard | 330<!-- credits: kling-3.0-motion --> | motion-transfer | Premium motion transfer via Kling 3.0. |
 | Seedance 2 Fast | Bytedance | Standard | 341<!-- credits: seedance-2-fast --> | i2v, t2v | Cheaper / quicker Seedance 2 tier. |
 | Gemini Omni | Google | Standard | 347<!-- credits: gemini-omni-video --> | i2v, t2v | Google multimodal video with native audio; text/image-to-video + video-edit. |
+| Luma Modify | Luma | Standard | 352<!-- credits: luma-modify --> | v2v | Luma Modify — changes or restyles an existing video from a prompt. |
 | Runway Extend | Runway | Standard | 352<!-- credits: runway-extend --> | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Standard | 352<!-- credits: wan-videoedit --> | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
 | Wan 3.0 Prime | Alibaba | Standard | 352<!-- credits: wan-3-prime --> | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
