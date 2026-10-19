@@ -339,6 +339,27 @@ test("gh calls: a transient GitHub 5xx is retried, anything else throws at once"
   assert.equal(n, 3)
 })
 
+test("gh calls: a dropped connection (no HTTP status) is retried like a 5xx, then thrown; a 404 download is not", () => {
+  const pause = () => {}
+  for (const stderr of [
+    "error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n",
+    "read tcp 10.0.0.2:5555->140.82.112.6:443: read: connection reset by peer\n",
+    "net/http: TLS handshake timeout\n",
+    "dial tcp: i/o timeout\n",
+    'error downloading selection-backend-1: Get "https://productionresultssa2.blob.core.windows.net/x.zip": EOF\n',
+  ]) {
+    let n = 0
+    const blip = () => { if (++n < 2) throw Object.assign(new Error("Command failed"), { stderr }); return "ok" }
+    assert.equal(withRetry(blip, { pause }), "ok", stderr)
+    n = 0
+    assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr }) }, { pause, tries: 3 }))
+    assert.equal(n, 3, stderr)
+  }
+  let n = 0
+  assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "no valid artifacts found to download\n" }) }, { pause }))
+  assert.equal(n, 1)
+})
+
 test("gh calls: an empty or cut-off response gh could not parse (\"unexpected end of JSON input\") is retried like a 5xx, then thrown", () => {
   const pause = () => {}
   let n = 0

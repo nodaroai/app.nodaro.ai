@@ -244,14 +244,20 @@ export function shadowExpected({ base, hasArtifacts, expected }) {
 // pause: a report reads hundreds of runs over half an hour, and one 502 used to
 // end it with nothing printed. So is a response gh could not parse because it
 // was empty or cut off. gh then prints Go's "unexpected end of JSON input" or
-// "unexpected EOF", with no HTTP status. A call that still fails after the
-// retries is reported where it is used. Any other failure is the caller's to judge.
+// "unexpected EOF", with no HTTP status. So is a dropped connection: gh's "error
+// connecting to api.github.com" / "check your internet connection", a reset,
+// an i/o or TLS timeout, or an artifact download whose blob GET failed in
+// transit. One such blip used to end a half-hour report, or mark a check
+// "could not be read". A call that still fails after the retries is reported
+// where it is used. Any other failure is the caller's to judge.
+const TRANSIENT = /HTTP 5\d\d|unexpected end of JSON input|unexpected EOF|error connecting to|check your internet connection|connection reset by peer|i\/o timeout|TLS handshake timeout|error downloading [^:]+: Get "/
+
 export function withRetry(call, { tries = 4, pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
   for (let attempt = 1; ; attempt++) {
     try {
       return call()
     } catch (err) {
-      const transient = /HTTP 5\d\d|unexpected end of JSON input|unexpected EOF/.test(`${err?.stderr ?? ""} ${err?.message ?? ""}`)
+      const transient = TRANSIENT.test(`${err?.stderr ?? ""} ${err?.message ?? ""}`)
       if (!transient || attempt >= tries) throw err
       pause(2000 * attempt)
     }
