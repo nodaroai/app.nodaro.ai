@@ -7,8 +7,8 @@ import type { NodeTypeDefinition } from "@/types/nodes"
 import type { NodeOption } from "@/lib/node-compatibility"
 import {
   composeFamilyTypes, composeNodeDefinitions, composeTabSuperset, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
-  toNodeTypeDefinition, unitJsonProducers, unitNoMediumResults, unitNodeLabels, unitOutputTypes, unitOutputValue, unitPriceRows, unitRecord,
-  unitProducers, unitsWith, unitTabSuperset, unitTextSources,
+  jsonListItems, toNodeTypeDefinition, unitJobLanding, unitJsonJobLanding, unitJsonProducers, unitJsonRunPatch, unitJsonWorkers, unitNoMediumResults, unitNodeLabels,
+  unitOutputTypes, unitOutputValue, unitPipJson, unitPriceRows, unitProducers, unitRecord, unitsWith, unitTabSuperset, unitTextSources,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
@@ -225,6 +225,65 @@ describe("output extraction", () => {
   })
 })
 
+// A JSON-only worker, Speaker Map's shape: `json` (primary) and `edl`.
+const MAP: UnitDefinition = {
+  ...FIXTURE,
+  type: "fixture-map",
+  handles: {
+    inputs: [],
+    outputs: [{ id: "json", label: "Map", kind: "look", from: "generatedJson" }, { id: "edl", label: "EDL", kind: "look", from: "generatedEdl" }],
+  },
+}
+
+describe("a worker unit's JSON (look) outputs", () => {
+  it("unitOutputValue: a look output reads its field as the JSON string a wire carries", () => {
+    expect(unitOutputValue(MAP, { generatedJson: { a: 1 } }, "json")).toBe('{"a":1}')
+    expect(unitOutputValue(MAP, { generatedEdl: '{"a":1}' }, "edl")).toBe('{"a":1}')
+    expect(unitOutputValue(MAP, { generatedJson: { a: 1 } })).toBe('{"a":1}')
+    expect(unitOutputValue(MAP, { generatedJson: "" }, "json")).toBeUndefined()
+    expect(unitOutputValue(MAP, {}, "edl")).toBeUndefined()
+  })
+  it("unitJobLanding: each look output's output_data[<id>] on its field — a JSON string as its value, an absent one cleared; other keys dropped", () => {
+    expect(unitJobLanding(MAP, { json: { a: 1 }, videoUrl: "x" })).toEqual({ generatedJson: { a: 1 } })
+    const landed = unitJobLanding(MAP, { json: { a: 1 }, videoUrl: "x" })
+    expect(Object.hasOwn(landed, "generatedEdl") && landed.generatedEdl === undefined).toBe(true)
+    expect(unitJobLanding(MAP, { edl: '{"b":2}', json: "" })).toEqual({ generatedEdl: { b: 2 } })
+    expect(unitJobLanding(MAP, { json: "plain text" })).toEqual({ generatedJson: "plain text" })
+    expect(unitJobLanding(FIXTURE, { "video-out": "x" })).toEqual({})
+  })
+  it("unitJsonWorkers: worker units with look outputs (never a use case, never a media worker)", () => {
+    const useCase = { ...MAP, type: "case", execution: { kind: "use-case" } } as unknown as UnitDefinition
+    expect(unitJsonWorkers([FIXTURE, MAP, useCase]).map((u) => u.type)).toEqual(["fixture-map"])
+  })
+  it("unitJsonRunPatch: a server run's node output (unitOutputs, or json alone) as the landing; nothing to land → undefined", () => {
+    expect(unitJsonRunPatch(MAP, { unitOutputs: { json: '{"a":1}', edl: '{"b":2}' }, json: { a: 1 } })).toEqual({ generatedJson: { a: 1 }, generatedEdl: { b: 2 } })
+    expect(unitJsonRunPatch(MAP, { json: { a: 1 } })).toEqual({ generatedJson: { a: 1 } })
+    expect(unitJsonRunPatch(MAP, { unitOutputs: {} })).toBeUndefined()
+    expect(unitJsonRunPatch(MAP, {})).toBeUndefined()
+  })
+  it("unitPipJson: the wired look pip's value (a JSON string parsed), wrapped; undefined off a media pip or a use case", () => {
+    expect(unitPipJson(MAP, { generatedJson: { a: 1 }, generatedEdl: '{"b":2}' }, "edl")).toEqual({ value: { b: 2 } })
+    expect(unitPipJson(MAP, { generatedJson: { a: 1 } }, null)).toEqual({ value: { a: 1 } })
+    expect(unitPipJson(MAP, { generatedJson: { a: 1 } }, "edl")).toEqual({ value: undefined })
+    expect(unitPipJson(FIXTURE, { generatedVideoUrl: "x" }, "video-out")).toBeUndefined()
+    expect(unitPipJson({ ...MAP, execution: { kind: "use-case" } } as unknown as UnitDefinition, { generatedJson: { a: 1 } }, "json")).toBeUndefined()
+  })
+  it("jsonListItems: an array's elements, an object one item, a value its text, nothing for null/undefined", () => {
+    expect(jsonListItems([{ a: 1 }, "s", null, 2])).toEqual(['{"a":1}', "s", "2"])
+    expect(jsonListItems({ a: 1 })).toEqual(['{"a":1}'])
+    expect(jsonListItems(5)).toEqual(["5"])
+    expect(jsonListItems(null)).toEqual([])
+    expect(jsonListItems(undefined)).toEqual([])
+  })
+  it("unitJsonJobLanding: the fields a run clears at its start, and a job's patch plus the primary output as a wire carries it", () => {
+    const landing = unitJsonJobLanding(MAP)
+    expect(landing.fields).toEqual(["generatedJson", "generatedEdl"])
+    expect(landing.land({ json: { a: 1 }, edl: { b: 2 } })).toEqual({ patch: { generatedJson: { a: 1 }, generatedEdl: { b: 2 } }, result: '{"a":1}' })
+    expect(landing.land({ edl: { b: 2 } })).toEqual({ patch: { generatedEdl: { b: 2 } }, result: "" })
+    expect(landing.land({ videoUrl: "x" })).toBeUndefined()
+  })
+})
+
 describe("connection rule of a unit input", () => {
   it("video, audio, image, or both media = any media; another kind has no rule (the validator refuses it first)", () => {
     expect(unitInputAccepts(["video"])).toBe(ACCEPTS_VIDEO)
@@ -249,7 +308,7 @@ describe("the executor kit", () => {
     const ctx = { userId: "u1" } as never
     const kit = createUnitExecKit({
       node, ctx, inputs: { videoUrl: "https://r/in.mp4" } as never, overrideMediaUrl: undefined,
-      poll, setUserPromptTemplate: vi.fn(), getNodeData: () => ({ label: "My Echo" }), updateNodeData,
+      poll, pollJson: vi.fn(), setUserPromptTemplate: vi.fn(), getNodeData: () => ({ label: "My Echo" }), updateNodeData,
     })
     const start = async () => ({ jobId: "j1" })
     await expect(kit.runProcessingNode(start, "generatedVideoUrl", "Fixture Echo")).resolves.toBe("https://r/out.mp4")

@@ -1,3 +1,4 @@
+// @registry-enumerates the budgeted job types (BUDGETED_JOB_NAMES) carry every node unit whose job declares a budget (budget.ts)
 /**
  * An EXECUTION's budget excess, read from the database — for the clocks that
  * wait on an execution from outside its orchestrator (podcast Track 0.11).

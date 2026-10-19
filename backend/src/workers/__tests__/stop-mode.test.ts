@@ -111,6 +111,8 @@ const ORCHESTRATOR_SRC = readFileSync(
   join(REPO_ROOT, "backend/src/workers/orchestrator-worker.ts"),
   "utf8",
 )
+/** The one cancel ending every Stop branch calls: its write and its event. */
+const CANCEL_SRC = readFileSync(join(REPO_ROOT, "backend/src/workers/orchestrator-cancel.ts"), "utf8")
 
 describe("orchestrator-worker.ts dispatch loop branches on both stop modes", () => {
   it('contains a "controlStatus === \\"cancelled\\"" branch', () => {
@@ -146,42 +148,34 @@ describe("orchestrator-worker.ts dispatch loop branches on both stop modes", () 
     ).not.toBeNull()
   })
 
-  it("both branches mark the execution status as cancelled in the DB", () => {
-    // After the branch, the execution should be updated with status: "cancelled".
-    // We grep within ~400 chars for both branches.
+  it("both branches end the run through the one cancel ending (markExecutionCancelled)", () => {
+    // The branch calls the helper within ~400 chars; the helper holds the write and the event.
     const cancelledBlock = ORCHESTRATOR_SRC.match(
-      /controlStatus\s*===\s*"cancelled"[\s\S]{0,400}?status:\s*"cancelled"/,
+      /controlStatus\s*===\s*"cancelled"[\s\S]{0,400}?markExecutionCancelled\(/,
     )
     expect(
       cancelledBlock,
-      `The cancelled branch doesn't update the execution status to "cancelled" in the DB within 400 chars — the UI won't reflect the cancellation.`,
+      `The cancelled branch doesn't end the run through markExecutionCancelled within 400 chars — the execution is not marked cancelled and the UI won't reflect the cancellation.`,
     ).not.toBeNull()
 
     const stoppingBlock = ORCHESTRATOR_SRC.match(
-      /controlStatus\s*===\s*"stopping"[\s\S]{0,400}?status:\s*"cancelled"/,
+      /controlStatus\s*===\s*"stopping"[\s\S]{0,400}?markExecutionCancelled\(/,
     )
     expect(
       stoppingBlock,
-      `The stopping branch doesn't update the execution status to "cancelled" in the DB within 400 chars. Note: stopping → cancelled is by design (the user-visible terminal state is the same; "stopping" is just a transient signal).`,
+      `The stopping branch doesn't end the run through markExecutionCancelled within 400 chars. Note: stopping → cancelled is by design (the user-visible terminal state is the same; "stopping" is just a transient signal).`,
     ).not.toBeNull()
   })
 
-  it("both branches emit the execution:cancelled event", () => {
-    const cancelledEvent = ORCHESTRATOR_SRC.match(
-      /controlStatus\s*===\s*"cancelled"[\s\S]{0,500}?type:\s*"execution:cancelled"/,
-    )
+  it("the cancel ending marks the execution status as cancelled in the DB and emits the execution:cancelled event", () => {
     expect(
-      cancelledEvent,
-      `The cancelled branch doesn't emit an execution:cancelled event within 500 chars — SSE subscribers won't see the cancellation.`,
-    ).not.toBeNull()
-
-    const stoppingEvent = ORCHESTRATOR_SRC.match(
-      /controlStatus\s*===\s*"stopping"[\s\S]{0,500}?type:\s*"execution:cancelled"/,
-    )
+      /status:\s*"cancelled"/.test(CANCEL_SRC),
+      `markExecutionCancelled (orchestrator-cancel.ts) doesn't update the execution status to "cancelled" — the UI won't reflect the cancellation.`,
+    ).toBe(true)
     expect(
-      stoppingEvent,
-      `The stopping branch doesn't emit an execution:cancelled event within 500 chars.`,
-    ).not.toBeNull()
+      /type:\s*"execution:cancelled"/.test(CANCEL_SRC),
+      `markExecutionCancelled (orchestrator-cancel.ts) doesn't emit an execution:cancelled event — SSE subscribers won't see the cancellation.`,
+    ).toBe(true)
   })
 })
 

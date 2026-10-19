@@ -19,7 +19,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { billedProviderCost } from "../lib/llm-errors.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 
@@ -192,7 +192,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         }
 
         return reply.status(502).send({
-          error: { code: "llm_error", message },
+          error: { code: llmErrorCode(err), message },
         })
       }
     },
@@ -347,7 +347,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         if (!sse.isClosed) {
           sse.sendEvent({
             type: "error",
-            data: { code: "llm_error", message },
+            data: { code: llmErrorCode(err), message },
           })
           sse.close()
         }

@@ -364,7 +364,7 @@ central files.
 | Folder | Holds |
 |---|---|
 | `frontend/src/nodes/<type>/` | `unit.json` (the manifest: label, category, handles, default data, how it runs, its place in the picker), `types.ts` (its data type), `node.tsx` (canvas card), `config.tsx` (config panel), `option.tsx` (picker icon), `exec.ts` (editor executor), `api.ts` (client call), `strings.json` (its translations) |
-| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row); a use-case node has `use-case.ts` (its request body) and `price.ee.ts` instead |
+| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row), `budget.ts` when its job can run past the default 90-minute ceiling (its job budget, read off the job's payload); a use-case node has `use-case.ts` (its request body) and `price.ee.ts` instead |
 
 Start from the scaffold — it writes both folders from templates, checks
 them with the same validator CI runs, and regenerates:
@@ -382,8 +382,8 @@ npm run gen:units -- --new <type> --category <category> --kind worker \
 - `--kind` says how it runs. Today a server-run workflow (API, MCP,
   webhooks, schedules, published apps) can run a `worker` unit — a route
   that queues a job a worker runs — and a `use-case` unit, which runs as a
-  graph of existing nodes (Tighten Episode and Chapters are use-case
-  nodes). `sync`, `inline` and `source` units also need their server-side
+  graph of existing nodes (Tighten Episode, Chapters and Trailer are
+  use-case nodes). `sync`, `inline` and `source` units also need their server-side
   seam, so the scaffold refuses them until a node that needs one builds it
   (in that node's own PR).
 - `--kind use-case --builder <key> --price <credits>`: `--builder` names
@@ -395,7 +395,17 @@ npm run gen:units -- --new <type> --category <category> --kind worker \
   `price.ee.ts` row `use-case-fee:<type>`. It also needs its MCP verb (the
   `REGISTER_BY_BUILDER` entry in `backend/src/lib/mcp/tools/verbs-use-case.ts`,
   plus that tool's entry in `docs/mcp/tools.md`) and its row in
-  `use-case-graph-validity.test.ts`; the scaffold lists them.
+  `use-case-graph-validity.test.ts`; the scaffold lists them. Its spec
+  also states what the engines read about it: `outputLength` (the length of
+  each video it delivers — its length rule), `triesEvery` (built nodes that
+  all start even when one of them fails) and `audioForced` (what an audio-only
+  recording forces). What a run leaves on the node beyond its error code
+  follows its result kind (`USE_CASE_RESULT_KEYS` in `@nodaro/render-rules`),
+  and a node with a review (`contract.reviewHold`) must also send
+  `reviewBeforeRender` and render a preview when it is on —
+  `use-case-holding-types.test.ts` fails when the three disagree. A node
+  whose result is a list also declares `contract.fanOutEach` in its
+  manifest (below).
 - `--characterize` (worker only) adds `characterize.char.ts`: the ffmpeg
   output characterization the opt-in suite runs after the named operation,
   with the `ffmpeg-media` capability it needs. Its golden is blessed inside
@@ -407,8 +417,14 @@ until you write it — and finish with the steps that stay central on
 purpose: `strings.json` (the node label in every language), the
 `model_pricing` seed migration for its price, its page under `docs/nodes/`
 (in the same PR: the manifest's `docs.page` points at it, which also writes
-its row in `docs/nodes/README.md`), a length rule for a video output, and,
-for a node with a media output, a `@nodaro/shared` changeset. Regenerate and
+its row in `docs/nodes/README.md`), a length rule for a video output (a
+use-case node: its spec's `outputLength`), and, for a node with a media
+output or a contract row, a `@nodaro/shared` changeset. The manifest's
+`contract` holds what `@nodaro/shared` composes from a unit (`producer`,
+`jsonPips`, `nonPromptInputs`, `reviewHold`, `presents`, `fanOutEach`).
+`contract.fanOutEach` is `{ "each": [<output ids>], "primary": "<output id>" }`:
+the outputs an Each wire after it reads one item at a time when the node
+ran once per item, and the output a wire naming no output reads. Regenerate and
 check:
 
 ```bash

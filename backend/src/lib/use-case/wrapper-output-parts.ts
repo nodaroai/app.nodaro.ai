@@ -44,6 +44,8 @@ export interface UseCaseWrapperOutput {
   readonly failedClips?: number
   /** A run's delivered formats. */
   readonly formats?: readonly UseCaseFormatRow[]
+  /** The chosen formats whose step failed (the run keeps the formats that rendered). */
+  readonly failedFormats?: readonly string[]
   /** A text result (chapters). */
   readonly text?: string
 }

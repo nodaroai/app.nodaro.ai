@@ -21,10 +21,10 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 3,
-  "estimatedCredits": 704,
+  "estimatedCredits": 373,
   "estimatedPerMinuteCredits": 4,
   "withoutPreviewStopRule": {
-    "estimatedCredits": 382,
+    "estimatedCredits": 212,
     "estimatedPerMinuteCredits": 4,
     "description": "Cut a 20–40 second teaser from a long recording, put an optional intro card in front, and deliver it as a 9:16 story or reel, a square post and a 4:5 portrait post.",
     "notes": {

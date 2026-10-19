@@ -138,12 +138,123 @@ export function registryCategoryOf<C extends string>(u: UnitDescriptor, categori
 }
 
 /**
+ * A JSON output's value as a wire carries it: a string as stored, any other
+ * value serialised; null, undefined and "" are no value. The editor's twin is
+ * frontend/src/lib/unit-compose.ts `unitJsonString`.
+ */
+export function unitJsonString(v: unknown): string | undefined {
+  if (typeof v === "string") return v === "" ? undefined : v
+  return v === undefined || v === null ? undefined : JSON.stringify(v)
+}
+
+/** A JSON output's value: a string holding a JSON object or array is that object or array; anything else as it is. */
+export function unitJsonValue(v: unknown): unknown {
+  if (typeof v !== "string") return v
+  try {
+    const parsed: unknown = JSON.parse(v)
+    return typeof parsed === "object" && parsed !== null ? parsed : v
+  } catch {
+    return v
+  }
+}
+
+const lookOutputs = (u: UnitDescriptor) => u.handles.outputs.filter((h) => h.kind === "look")
+
+/**
+ * A worker unit whose job's result is JSON: it has look outputs, and (the
+ * validator, tools/units/json-output-rules.mjs) nothing but look outputs. Its
+ * job writes each output's value under the output's id.
+ */
+export function isUnitJsonWorker(u: UnitDescriptor): boolean {
+  return u.execution.kind === "worker" && lookOutputs(u).length > 0
+}
+
+/** What a unit's JSON outputs put on the node output (NodeOutput's `unitOutputs` and `json`). */
+export interface UnitJsonOutput {
+  /** By look output id: its value as the JSON string a wire carries. */
+  readonly unitOutputs?: Readonly<Record<string, string>>
+  /** The primary (first) look output's JSON value, for the readers that read `output.json`. */
+  readonly json?: unknown
+}
+
+/** The look outputs' values, each read by `read(output)`. Empty when none has a value. */
+function lookOutputValues(u: UnitDescriptor, read: (h: { readonly id: string; readonly from?: string }) => unknown): UnitJsonOutput {
+  const unitOutputs: Record<string, string> = {}
+  let json: unknown
+  const looks = lookOutputs(u)
+  for (const h of looks) {
+    const raw = read(h)
+    const value = unitJsonString(raw)
+    if (value === undefined) continue
+    unitOutputs[h.id] = value
+    if (h === looks[0]) json = unitJsonValue(raw)
+  }
+  if (Object.keys(unitOutputs).length === 0) return {}
+  return json === undefined ? { unitOutputs } : { unitOutputs, json }
+}
+
+/**
+ * A JSON worker unit's finished job as its node output: each look output's
+ * `output_data[<output id>]` (decided 2026-10-18); a key that names no output
+ * is dropped. `{}` when the job wrote none — the poll then fails the node.
+ */
+export function unitJobOutput(u: UnitDescriptor, outputData: Readonly<Record<string, unknown>>): UnitJsonOutput {
+  return lookOutputValues(u, (h) => (Object.hasOwn(outputData, h.id) ? outputData[h.id] : undefined))
+}
+
+/**
+ * The look output a wire from `sourceHandle` reads — the one it names, else
+ * the first (what an edge naming no pip reads); undefined when that output is
+ * not JSON or the unit is a use case (the use-case reader reads those).
+ */
+export function unitLookPipOf(u: UnitDescriptor, sourceHandle: string | null | undefined): string | undefined {
+  if (u.execution.kind === "use-case") return undefined
+  const outputs = u.handles.outputs
+  const h = (sourceHandle ? outputs.find((o) => o.id === sourceHandle) : undefined) ?? outputs[0]
+  return h?.kind === "look" ? h.id : undefined
+}
+
+/** What a wire from a unit's look pip carries: that output's JSON string off the node output (`unitOutputs`). */
+export function unitPipValue(
+  u: UnitDescriptor,
+  output: { readonly unitOutputs?: Readonly<Record<string, string>> },
+  sourceHandle: string | null | undefined,
+): string | undefined {
+  const pip = unitLookPipOf(u, sourceHandle)
+  return pip === undefined ? undefined : output.unitOutputs?.[pip]
+}
+
+/**
+ * The structured JSON a wire from a unit's look pip hands a consumer that reads
+ * JSON (Extract Field, JSON Process, the list operators): that output's value
+ * (`unitJsonValue` of its string). Undefined when the pip has none, or is not a look pip.
+ */
+export function unitPipJson(
+  u: UnitDescriptor,
+  output: { readonly unitOutputs?: Readonly<Record<string, string>> },
+  sourceHandle: string | null | undefined,
+): unknown {
+  const value = unitPipValue(u, output, sourceHandle)
+  return value === undefined ? undefined : unitJsonValue(value)
+}
+
+/** A unit's saved output: its media and text, and its JSON outputs (`unitSavedOutput`). */
+export interface UnitSavedOutput extends UnitJsonOutput {
+  readonly videoUrl?: string
+  readonly audioUrl?: string
+  readonly imageUrl?: string
+  readonly text?: string
+}
+
+/**
  * A unit's saved output, read the way every media node's is: per output
  * handle whose `from` names the node-data field, `<kind>Url` (videoUrl,
  * audioUrl, imageUrl) from the ACTIVE generated result's url, else the field;
- * `text` for a text output. Undefined when nothing is saved yet.
+ * `text` for a text output; a JSON (look) output's field on `unitOutputs` (and
+ * the first one's value on `json`), as a finished job's are (`unitJobOutput`).
+ * Undefined when nothing is saved yet.
  */
-export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string, unknown>>): Record<string, string> | undefined {
+export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string, unknown>>): UnitSavedOutput | undefined {
   const out: Record<string, string> = {}
   // Exactly the legacy media read (output-extractor.ts getActiveResultUrl, then
   // the field): `activeResultIndex ?? 0`, the active result's url when it is not
@@ -159,5 +270,7 @@ export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string,
       if (url && out[`${h.kind}Url`] === undefined) out[`${h.kind}Url`] = url
     } else if (h.kind === "text" && typeof value === "string" && value && out.text === undefined) out.text = value
   }
-  return Object.keys(out).length ? out : undefined
+  const json = lookOutputValues(u, (h) => (h.from ? data[h.from] : undefined))
+  const saved: UnitSavedOutput = { ...out, ...json }
+  return Object.keys(saved).length ? saved : undefined
 }

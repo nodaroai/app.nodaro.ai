@@ -1,5 +1,8 @@
+// @registry-enumerates JSON_RUN_RESULT_TYPES carries every worker node unit whose outputs are JSON (look)
 import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared/edl"
 import { telegramPostsFrom } from "@nodaro/shared/social"
+import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "./unit-definitions"
+import { composeSet, unitJsonRunPatch, unitJsonWorkers } from "./unit-compose"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -49,7 +52,7 @@ import { telegramPostsFrom } from "@nodaro/shared/social"
  * holds every node type whose saved json the server reads against these, from
  * a list a backend test computes.
  */
-export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
+export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = composeSet("JSON_RUN_RESULT_TYPES", new Set<string>([
   "edit-plan",
   "transcribe",
   "silence-detect",
@@ -74,7 +77,16 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   "text-to-dialogue",
   // Speaker Frames: the stored face-track file's descriptor on generatedJson.
   "speaker-frames",
-])
+  // …and every worker node unit whose outputs are JSON: each output's value on
+  // its own field (unitJobLanding), from the job row or the node output's
+  // per-pip carrier `unitOutputs`.
+]), unitJsonWorkers(UNIT_NODE_DEFINITIONS).map((u) => u.type))
+
+/** The JSON worker unit of `nodeType`, if it is one. */
+function jsonUnitOf(nodeType: string | null | undefined) {
+  const u = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
+  return u && unitJsonWorkers([u]).length > 0 ? u : undefined
+}
 
 /**
  * The field that says "this node holds a result" — what the saved-output
@@ -115,6 +127,9 @@ export interface JsonRunOutput {
   readonly listResults?: unknown
   /** Extract Field (List): the same list, one entry per array element. */
   readonly alignedListResults?: unknown
+  /** A JSON worker unit: its values by output id — the server's per-pip
+   *  carrier (each a JSON string), or a job row's output_data. */
+  readonly unitOutputs?: unknown
 }
 
 /** The run a Transcribe take records. */
@@ -137,6 +152,8 @@ export interface JsonRunTake {
 export function jobRunOutput(nodeType: string | null | undefined, outputData: unknown): JsonRunOutput {
   if (!outputData || typeof outputData !== "object") return {}
   const o = outputData as Record<string, unknown>
+  // A JSON worker unit writes each output's value under the output's id.
+  if (jsonUnitOf(nodeType)) return { unitOutputs: o }
   if (nodeType === "edit-plan") return { json: unwrapEditPlanOutput(o) }
   // Text to Dialogue: the worker writes the timings as `transcript` (the public
   // job-output key) — the backend's buildNodeOutputFromJobData reads it as json.
@@ -265,6 +282,8 @@ export function jsonRunResultPatch(
   take: JsonRunTake = {},
 ): Record<string, unknown> | undefined {
   if (!output || !isJsonRunResultType(nodeType)) return undefined
+  const unit = jsonUnitOf(nodeType)
+  if (unit) return unitJsonRunPatch(unit, output)
   if (nodeType === "transcribe") return transcribePatch(output, take)
   if (nodeType === "text-to-dialogue") return dialoguePatch(output, take)
   if (nodeType === "extract-field") return extractFieldPatch(output)
@@ -319,6 +338,9 @@ export function jsonRunResultPatch(
  * empty" lane (`applyCompletedExecutionResults`) leaves such a node alone.
  */
 export function holdsJsonRunResult(nodeType: string | null | undefined, data: Readonly<Record<string, unknown>>): boolean {
+  // A JSON worker unit: any of its outputs' fields.
+  const unit = jsonUnitOf(nodeType)
+  if (unit) return unit.handles.outputs.some((h) => h.from !== undefined && data[h.from] !== undefined)
   const field = (typeof nodeType === "string" && RESULT_FIELD[nodeType]) || "generatedJson"
   if (data[field] !== undefined) return true
   const takes = Array.isArray(data.generatedResults) && data.generatedResults.length > 0

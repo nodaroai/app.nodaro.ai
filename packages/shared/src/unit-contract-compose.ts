@@ -6,7 +6,7 @@
  * the tables that compose its rows (producer-types, presentation-utils,
  * json-kinds, fan-out-rows, preview-gate) are what consumers read.
  */
-import { UNIT_CONTRACTS, UNIT_JSON_PIPS, UNIT_NON_PROMPT_INPUTS, UNIT_PRESENTS, UNIT_REVIEW_HOLDS } from "./generated/unit-contracts.js"
+import { UNIT_CONTRACTS, UNIT_FAN_OUT_EACH, UNIT_JSON_PIPS, UNIT_NON_PROMPT_INPUTS, UNIT_PRESENTS, UNIT_REVIEW_HOLDS } from "./generated/unit-contracts.js"
 
 /**
  * `legacy ∪ units` as a set, `legacy` first, refusing a type that is in both —
@@ -17,6 +17,21 @@ export function composeUnitSet(what: string, legacy: readonly string[], units: r
   const clash = units.filter((t) => legacy.includes(t))
   if (clash.length > 0) throw new Error(`${what}: ${clash.join(", ")} is both hand-written and a node unit — a type lives in one place (tools/units/README.md)`)
   return new Set([...legacy, ...units])
+}
+
+/**
+ * `legacy` with each unit row added after it, refusing a type that is in both
+ * or a unit row given twice — the record twin of `composeUnitSet`. Throws at
+ * module load, so any import of the record fails.
+ */
+export function composeUnitRecord<V>(what: string, legacy: Readonly<Record<string, V>>, units: ReadonlyArray<readonly [string, V]>): Readonly<Record<string, V>> {
+  const out: Record<string, V> = { ...legacy }
+  for (const [type, value] of units) {
+    if (Object.hasOwn(legacy, type)) throw new Error(`${what}: ${type} is both hand-written and a node unit — a type lives in one place (tools/units/README.md)`)
+    if (Object.hasOwn(out, type)) throw new Error(`${what}: node unit ${type} has more than one row`)
+    out[type] = value
+  }
+  return out
 }
 
 /** The node units of one producer kind (`contract.producer`), in generated order. */
@@ -35,3 +50,6 @@ export const unitNonPromptInputs = (): ReadonlyArray<readonly [string, ReadonlyA
 
 /** The use-case units whose review-on run ends at a Preview that holds what follows (`contract.reviewHold`). */
 export const unitReviewHolds = (): readonly string[] => UNIT_REVIEW_HOLDS
+
+/** Each node unit's fan-out "each" outputs and primary pip (`contract.fanOutEach`), in generated order. */
+export const unitFanOutEach = (): ReadonlyArray<readonly [string, { readonly each: ReadonlyArray<string>; readonly primary: string }]> => UNIT_FAN_OUT_EACH

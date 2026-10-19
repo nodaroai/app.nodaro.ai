@@ -1,5 +1,5 @@
 /**
- * A use-case node (Tighten Episode, decided 2026-10-13) inside a workflow on
+ * A use-case node (Tighten Episode and the rest, decided 2026-10-13/14) inside a workflow on
  * the backend engine: one job node that calls its route on the internal lane
  * (use-case-request.ts) and waits on the wrapper job the route answers with —
  * the executeComponentNode wait (a budgeted deadline, cancel, drain), plus:
@@ -32,6 +32,7 @@
  *    already paid for); never started, or gone → a fresh run.
  */
 import { CONTINUATION_NOT_FAILED, CONTINUATION_NOT_FOUND, CONTINUATION_SUBSET_REQUIRED, CONTINUATION_SUPERSEDED } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType, usecaseCancelledMessage, usecaseDescriptor } from "@nodaro/render-rules"
 import { supabase } from "../../lib/supabase.js"
 import { BudgetedDeadline, executionBudgetExcessMs } from "../../lib/execution-budget.js"
 import { addBudgetExcess } from "../../lib/job-budget.js"
@@ -92,8 +93,26 @@ function runStarted(row: WrapperRow): boolean {
   return runOf(row) !== null
 }
 
+/**
+ * A completed wrapper's output as the node hands it on. Each row of a list
+ * result (Trailer's formats) names the wrapper as its job: a Render final of
+ * a server-run take needs a real run to name.
+ */
+export function wrapperOutputOf(outputData: unknown, jobId: string): NodeOutput {
+  return usecaseJobOutput((outputData ?? {}) as Record<string, unknown>, jobId)
+}
+
 /** What a node continuing a run that can't be resumed says when the run left no message. */
 export const CANNOT_CONTINUE_MESSAGE = "This run can't be continued — run the workflow again to start it fresh"
+
+/**
+ * How the node's own failures name it: its type's label (Tighten Episode,
+ * Chapters, Trailer) — the editor shows the cancelled one in the reader's
+ * language (`usecaseCancelledMessage`, matched there word for word).
+ */
+export function usecaseNodeLabel(type: string): string {
+  return isUseCaseNodeType(type) ? usecaseDescriptor(type).label : type
+}
 
 /** The run a wrapper started, as its input (the start's stamp) or its output (the finaliser's) names it. */
 function runOf(row: WrapperRow): string | null {
@@ -164,6 +183,7 @@ export async function executeUseCaseNode(
     throw new Error(`Component nesting depth exceeded (max ${USE_CASE_MAX_DEPTH}). Current depth: ${depth}`)
   }
   const key = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
+  const label = usecaseNodeLabel(node.type)
   const failedAttempt = failedAttemptOf(node, ctx, iterationIndex, idempotencyScope)
   let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttempt)
   /** A failed attempt this call would resume, not yet held to the node's current inputs. */
@@ -202,7 +222,7 @@ export async function executeUseCaseNode(
   while (!(await deadline.reached(Date.now() - startedAt))) {
     if (ctx.cancelled) {
       await stop()
-      throw new Error("Tighten Episode cancelled")
+      throw new Error(usecaseCancelledMessage(label))
     }
     let wait = USE_CASE_SETTLING_RETRY_MS
     if (recorded) {
@@ -210,7 +230,7 @@ export async function executeUseCaseNode(
       const row = await readWrapper(recorded.jobId, ctx.userId)
       if (row?.status === "completed") {
         // Done (and paid) in the run being continued: its result, none of its credits.
-        return { output: usecaseJobOutput((row.output_data ?? {}) as Record<string, unknown>), jobId: recorded.jobId, creditsUsed: 0 }
+        return { output: wrapperOutputOf(row.output_data, recorded.jobId), jobId: recorded.jobId, creditsUsed: 0 }
       }
       if (row && IN_FLIGHT.has(row.status)) {
         follow(recorded.jobId, false, row.idempotency_key === key)
@@ -259,7 +279,7 @@ export async function executeUseCaseNode(
       if (row === null) {
         // A continuation named while its claim is taken may not have its row
         // yet: ask the route again. A wrapper this call started is gone.
-        if (target.startedHere) throw new Error("Tighten Episode job not found")
+        if (target.startedHere) throw new Error(`${label} job not found`)
         target = undefined
         wait = USE_CASE_SETTLING_RETRY_MS
       } else if (row) {
@@ -267,13 +287,13 @@ export async function executeUseCaseNode(
         if (row.status === "completed") return completed(target, row, deadline.excessMs)
         if (row.status === "failed" && !target.startedHere) {
           // A continuation this node did not start failed: continue it in turn.
-          hop(target.jobId, row.error_message ?? "Tighten Episode failed")
+          hop(target.jobId, row.error_message ?? `${label} failed`)
           continue
         }
         if (row.status === "failed" || row.status === "cancelled") {
           // What the run made before it stopped (its plan, its transcript) stays on the failed node state.
           const kept = retainedOutputOfFailedJob(row.output_data, node.type)
-          throw coded(row.error_message ?? (row.status === "cancelled" ? "Tighten Episode was cancelled" : "Tighten Episode failed"), undefined, kept)
+          throw coded(row.error_message ?? (row.status === "cancelled" ? usecaseCancelledMessage(label) : `${label} failed`), undefined, kept)
         }
       }
       // (a read that failed is asked again on the next turn)
@@ -281,13 +301,13 @@ export async function executeUseCaseNode(
     // Every wait — a poll, a settling retry, a read retried — asks whether the run was cancelled.
     if (await executionCancelledNow(ctx, ++pollCycle)) {
       await stop()
-      throw new Error("Tighten Episode cancelled")
+      throw new Error(usecaseCancelledMessage(label))
     }
     if (isWorkerDraining()) throw new DrainAbortError()
     await sleep(wait)
   }
   await stop()
-  throw new Error(`Tighten Episode timed out after ${Math.round(deadline.limitMs / 60000)} minutes`)
+  throw new Error(`${label} timed out after ${Math.round(deadline.limitMs / 60000)} minutes`)
 
   async function completed(t: Target, row: WrapperRow, excessSoFar: number): Promise<Result> {
     const out = (row.output_data ?? {}) as Record<string, unknown>
@@ -295,6 +315,6 @@ export async function executeUseCaseNode(
     addBudgetExcess(ctx, Math.max(excessSoFar, inner ? await executionBudgetExcessMs(inner, ctx.userId) : 0))
     // Another request's continuation was paid there, not by this run.
     const credits = t.own && typeof row.credits_actual === "number" ? row.credits_actual : 0
-    return { output: usecaseJobOutput(out), jobId: t.jobId, creditsUsed: credits }
+    return { output: wrapperOutputOf(out, t.jobId), jobId: t.jobId, creditsUsed: credits }
   }
 }

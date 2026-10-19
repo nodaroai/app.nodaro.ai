@@ -1,7 +1,7 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions";
-import { composeSet, unitsWith } from "@/lib/unit-compose";
+import { composeSet, jsonListItems, unitsWith } from "@/lib/unit-compose";
 // @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
@@ -48,7 +48,7 @@ import type { ConnectedReference } from "@nodaro/shared/types"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
 import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
-import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
+import { editPlanOutputOf, unitSourceJsonOf } from "@/lib/edit-plan-saved-output";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -68,6 +68,7 @@ import { ANALYSIS_PRODUCER_TYPES } from "@/lib/data-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
 import { appendVideoAsMixTrack } from "./mix-audio-video-track";
 import { routeUseCaseInput, usecaseHandsOnEpisode, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
+import { routeUnitInput, type UnitResolvedInputs } from "./unit-inputs";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -665,8 +666,9 @@ export const VIDEO_OUTPUT_NODE_TYPES = new Set(
 );
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
-/** A use-case node's recording (`useCaseMedia`) and music bed (`useCaseMusic`) — use-case-io.ts. */
-export interface FrontendResolvedInputs extends UseCaseResolvedInputs {
+/** A use-case node's recording (`useCaseMedia`) and music bed (`useCaseMusic`) — use-case-io.ts;
+ *  a node unit's JSON and many-wire inputs (`unitInputs`) — unit-inputs.ts. */
+export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResolvedInputs {
   /** Slideshow: transition pick from a wired transition PARAMETER node
    *  (value routing — the suno-voice personaId precedent). */
   transition?: string;
@@ -949,7 +951,7 @@ function injectLocationContext(
  *  same capability. */
 export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
   "ENTITY_SUBJECT_TARGET_TYPES",
-  new Set<string>(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video", "gif-to-video"]),
+  new Set<string>(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video"]),
   unitsWith(UNIT_NODE_DEFINITIONS, "input:entity-subject"),
 )
 
@@ -1005,6 +1007,13 @@ export function extractNodeOutputAsList(
     return requestedType ? buckets[requestedType] : undefined;
   }
   const data = node.data as Record<string, unknown>;
+  // A node unit's look pip lists its own output (an array spreads, an object is
+  // one item) — never another output's. Mirror of the backend collector.
+  const unitJson = unitSourceJsonOf(node, sourceHandle);
+  if (unitJson) {
+    const items = jsonListItems(unitJson.value);
+    return items.length > 0 ? items : undefined;
+  }
   // A render whose descriptor says so (Apply EDL) on its media handle: its
   // LATEST batch only — never its accumulated history, which holds earlier
   // runs' clips too (TA6, decided 2026-10-04). None after a single run: the
@@ -1452,6 +1461,10 @@ export function resolveNodeInputs(
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"
         ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
+        // A node unit's look pip lists its own output, never another output's
+        // (the backend's unitLookPipJsonFor).
+        : unitSourceJsonOf(src, resolvedSourceHandle ?? undefined)
+        ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
         // An Edit Plan's list is its reviewed clips (extractNodeOutputAsList),
         // read BEFORE the generic `__listResults` below, which may still hold
         // the planner's clips from an older server run.
@@ -1718,6 +1731,10 @@ export function resolveNodeInputs(
       if (pick) inputs.transition = pick;
       continue;
     }
+    // A node unit's JSON and many-wire inputs, by the input they land on — before
+    // the empty-output skip, so a wired JSON input that got nothing is recorded.
+    // Mirror of the backend resolver (unit-inputs.ts).
+    if (routeUnitInput(inputs, node.type, srcEdge.targetHandle, src, resolvedSourceHandle, output, TEXT_PRODUCER_TYPES)) continue;
     // edit-plan's `offsets` wired but carrying no audio-sync result: record the
     // wire ("") so the run fails rather than plan without the sync the user
     // wired (B4). Mirror of the backend resolver.

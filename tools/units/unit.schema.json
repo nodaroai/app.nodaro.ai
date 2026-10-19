@@ -150,13 +150,18 @@
                   "enum": [
                     "video",
                     "audio",
-                    "image"
+                    "image",
+                    "look"
                   ]
                 }
               },
               "field": {
                 "type": "string",
-                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard)."
+                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard), never with many, and never on a JSON input (accepts look: it lands in unitInputs)."
+              },
+              "many": {
+                "const": true,
+                "description": "The input takes every wire, in order, each its own source (node id + URL) in unitInputs — only on a video/audio input, never with field, never on a use-case node."
               }
             }
           }
@@ -389,6 +394,16 @@
             "text"
           ],
           "description": "How a published app shows the result, where the producer sets do not decide it."
+        },
+        "fanOutEach": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["each", "primary"],
+          "properties": {
+            "each": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" }, "description": "Output ids (never a look output) an \"each\" edge reads one item at a time when the node ran once per item." },
+            "primary": { "type": "string", "description": "The output id an edge naming no pip reads." }
+          },
+          "description": "The node's FAN_OUT_EACH_HANDLES row: which outputs carry its per-item list."
         }
       },
       "description": "Published in @nodaro/shared: never a price, prompt or doctrine."

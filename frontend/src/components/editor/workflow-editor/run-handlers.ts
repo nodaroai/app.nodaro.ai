@@ -10,7 +10,7 @@ import {
   type NodeExecutionStatus as SharedNodeExecutionStatus,
   type NodeExecutionStateWire
 } from "@nodaro/shared/workflow";
-import { isRenderNodeType, withWiredSettings, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes";
+import { withWiredSettings, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes";
 import { ugcRunWaitsForPick } from "@nodaro/shared/ugc";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
@@ -55,8 +55,8 @@ import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields 
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { usecaseResultIsText } from "@nodaro/render-rules"
-import { usecaseFailedRunFields, usecaseTextRunPatch } from "@/lib/use-case-run-result"
-import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
+import { usecaseFailedRunFields, usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
+import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { serverNowIso } from "@/lib/server-clock"
@@ -1685,7 +1685,8 @@ export function applyRestoredJobCompletion(
 
   const updates: Record<string, unknown> = {
     executionStatus: "completed",
-    generatedResults: [newResult, ...existingResults],
+    // A list-result run (Trailer): every delivery, as the live run lands them.
+    generatedResults: usecaseRestoredResults(nodeType, job.output_data, jobId, existingResults, newResult.timestamp) ?? [newResult, ...existingResults],
     activeResultIndex: 0,
     currentJobId: undefined,
     currentJobProgress: undefined,
@@ -2524,7 +2525,7 @@ function syncNodeStatesToStore(
         // A render's row stamps: every row names the clip it was sent for, a
         // failed one too, so the clip cards match rows by key (decided
         // 2026-10-06). Always written (undefined clears an earlier batch's).
-        updates.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined;
+        updates.__listResultStamps = carriesRowStamps(nodeType) ? state.output.listResultStamps : undefined;
         // Selector dual-channel mirror — orchestrator state carries
         // pickedResults/restResults but the SelectorNode UI reads from
         // node.data (`__pickedResults`/`__restResults` + the snapshot

@@ -4,9 +4,9 @@
  */
 
 import { getLlmModel, type LlmModelDef } from "@nodaro/shared/llm-models"
-import { config } from "../config.js"
-import { LlmPlatformExhaustedError } from "../llm-errors.js"
+import { LlmAdvancedModeUnavailableError, LlmPlatformExhaustedError } from "../llm-errors.js"
 import { directLaneLatch } from "../llm-platform-exhaustion.js"
+import { anthropicDirectUsable, anthropicKeySet, kieKeySet } from "./anthropic-availability.js"
 import { callKie, streamKie } from "./kie-lane.js"
 import { serveFromFallback, type LaneFallbackCtx } from "./lane-fallback.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
@@ -17,7 +17,10 @@ import type { LlmRequest, LlmResponse } from "./types.js"
  * registry IS the equivalence table, see `kieEquivalentOf`), but no KIE wire
  * carries inline video bytes, and a video/audio URL would reach it only as an
  * `image_url` stand-in — a differently-grounded answer, not the same call.
- * Text and images travel (`callKie` inlines image URLs where the wire needs it).
+ * Text and images travel: the chat-completions and responses wires inline
+ * image URLs (`inlineImagesForKie`); the Claude wire sends them as URLs, which
+ * KIE fetches itself — a caller that needs them inline converts them first
+ * (`inlineImagesForClaudeKie`).
  */
 export function kieCanCarry(req: LlmRequest): boolean {
   return req.messages.every((m) =>
@@ -35,11 +38,12 @@ export function kieEquivalentOf(modelId: string): string | undefined {
 /**
  * KIE as the ONE retry for a DIRECT lane whose platform account refused —
  * even on a call pinned direct, because a pin chooses a lane for the answer's
- * sake, and a drained account gives no answer at all (staging 2026-10-14: the
+ * sake, and a drained or refused account gives no answer at all (staging 2026-10-14: the
  * UGC writer, pinned direct by the plugin host's multimodal default, failed
  * outright while KIE served the same model). Undefined when KIE cannot take
  * it: no key, the call is pinned to KIE already, or it carries media KIE
- * cannot carry ({@link kieCanCarry}).
+ * cannot carry ({@link kieCanCarry}) — and for an Advanced-mode call
+ * (`LlmRequest.advancedMode`), which must never run there.
  *
  * Billing is unchanged by it: the user's charge is the node's own reservation,
  * made before any lane ran; only the provider cost recorded follows the lane
@@ -49,7 +53,8 @@ export function kieEquivalentOf(modelId: string): string | undefined {
  * has no KIE twin to retry on.
  */
 export function exhaustionKieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmResponse>) | undefined {
-  if (!config.KIE_API_KEY || model.directOnly || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
+  // Advanced mode is the vendor's own API: never served from KIE (advancedModeRefusalOf names it instead).
+  if (!kieKeySet() || model.directOnly || req.requireLane === "kie" || req.advancedMode || !kieCanCarry(req)) return undefined
   return () => {
     if (req.reasoningEffort !== undefined) {
       console.warn(`[llm-lane-fallback] ${model.id}: reasoning effort ${req.reasoningEffort} runs as KIE's on/off thinkingFlag, not at its level`)
@@ -60,14 +65,16 @@ export function exhaustionKieFallback(model: LlmModelDef, req: LlmRequest): (() 
 
 /**
  * KIE in place of a DIRECT lane whose platform account is latched out
- * (`DIRECT_LANE_LATCH_MS`, armed by the refusal itself in `toPlatformExhausted`):
+ * (`DIRECT_LANE_LATCH_MS`, armed by the refusal itself in `toPlatformExhausted`
+ * — out of credit/quota, or a refused key where the caller asked to latch it):
  * the call goes straight to the leg a refusal would have sent it to, without
  * paying the refused round-trip first. Undefined — run the lanes as usual — when
  * nothing is latched for `provider`, or there is no KIE leg that can take the
- * call (no key, a KIE pin, media KIE cannot carry: pass the leg
+ * call (no key, a KIE pin, media KIE cannot carry, Advanced mode: pass the leg
  * {@link exhaustionKieFallback} builds, which already says so). The skip goes
  * through `serveFromFallback` with the refusal the latch remembers, so its log
- * line names the latch, and a KIE failure still reads as the capacity sentence.
+ * line names the latch and its kind, and a KIE failure still reads as the
+ * capacity sentence.
  */
 export function serveIfDirectLatched<T>(
   ctx: LaneFallbackCtx, provider: string, kie: (() => Promise<T>) | undefined,
@@ -77,7 +84,7 @@ export function serveIfDirectLatched<T>(
   if (!latch) return undefined
   const left = Math.max(1, Math.ceil((latch.until - Date.now()) / 1000))
   const remembered = new LlmPlatformExhaustedError(
-    `${provider} direct lane: platform account out of credit/quota — latched, not re-asked for ${left} s more — ${latch.detail}`,
+    `${provider} direct lane: platform account ${latch.kind === "billing" ? "out of credit/quota" : "key refused"} — latched, not re-asked for ${left} s more — ${latch.detail}`,
     { lane: "direct", provider, exhaustion: latch.kind },
   )
   return serveFromFallback({ ...ctx, primary: `${ctx.primary}, latched` }, remembered, kie)
@@ -123,6 +130,28 @@ export async function streamWithExhaustionFallback(
 export function exhaustionKieStreamFallback(
   model: LlmModelDef, req: LlmRequest, signal?: AbortSignal,
 ): ((onToken: (chunk: string) => void) => Promise<LlmResponse>) | undefined {
-  if (!config.KIE_API_KEY || model.directOnly || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
+  if (!kieKeySet() || model.directOnly || req.requireLane === "kie" || req.advancedMode || !kieCanCarry(req)) return undefined
   return (cb) => streamKie(model, req, cb, signal)
+}
+
+/**
+ * An Advanced-mode Claude call pinned direct while the Anthropic account
+ * cannot serve it here — no key, or latched out after a refusal — is refused
+ * before any request is made: there is no lane it may run on. (A Gemini
+ * Advanced call's key is checked at admission; its mid-call refusal is
+ * re-typed by {@link advancedModeRefusalOf}.)
+ */
+export function assertAdvancedModeServable(model: LlmModelDef, req: LlmRequest): void {
+  if (!req.advancedMode || req.requireLane !== "direct") return
+  if (model.directGeminiModel || !model.directFallbackModel) return
+  if (anthropicDirectUsable()) return
+  throw new LlmAdvancedModeUnavailableError(
+    `${model.id}: Advanced mode pinned direct, but the Anthropic account is not usable (${anthropicKeySet() ? "latched out" : "no key"})`,
+  )
+}
+
+/** An Advanced-mode call's platform-account refusal, as `LlmAdvancedModeUnavailableError`; any other error unchanged. */
+export function advancedModeRefusalOf(req: LlmRequest, err: unknown): unknown {
+  if (!req.advancedMode || !(err instanceof LlmPlatformExhaustedError)) return err
+  return new LlmAdvancedModeUnavailableError(`advanced mode: ${err.internalDetails}`, err)
 }

@@ -3,6 +3,7 @@
   "mentions": {
     "packages/cli/src/commands/edit.ts": {
       "episode-chapters": "the published CLI's per-node command (`nodaro edit episode-chapters`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
+      "episode-trailer": "the published CLI's per-node command (`nodaro edit episode-trailer`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "tighten-episode": "the published CLI's per-node command (`nodaro edit tighten-episode`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)"
     }
   }

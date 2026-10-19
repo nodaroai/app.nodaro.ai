@@ -1,0 +1,28 @@
+{
+  "keys": {
+    "apiErr.startGifToVideo": {"en": "Failed to start gif-to-video", "he": "התחלת המרת ה־GIF לווידאו נכשלה", "ja": "「GIF から動画」を開始できませんでした", "ko": "GIF 동영상 변환을 시작하지 못했습니다", "pt-br": "Não foi possível iniciar a conversão de GIF para vídeo"},
+    "node.chooseOrWireGif": {"en": "Choose or wire a GIF", "he": "בחרו או חברו GIF", "ja": "GIF を選択または接続", "ko": "GIF를 선택하거나 연결하세요", "pt-br": "Escolha ou conecte um GIF"},
+    "node.converting": {"en": "Converting", "he": "בהמרה", "ja": "変換中", "ko": "변환 중", "pt-br": "Convertendo"},
+    "node.dropGif": {"en": "Drop GIF", "he": "שחררו GIF", "ja": "GIF をドロップ", "ko": "GIF를 놓으세요", "pt-br": "Solte o GIF"},
+    "node.gifAsIs": {"en": "as-is", "he": "כמו שהוא", "ja": "そのまま", "ko": "길이 그대로", "pt-br": "original"},
+    "node.gifBackground": {"en": "bg {color}", "he": "רקע {color}", "ja": "背景 {color}", "ko": "배경 {color}", "pt-br": "fundo {color}"},
+    "node.gifLoopTo": {"en": "loop→{n}s", "he": "לולאה←{n} שנ׳", "ja": "{n} 秒までループ", "ko": "루프→{n}초", "pt-br": "loop→{n} s"},
+    "node.gifSmooth": {"en": "smooth", "he": "חלק", "ja": "なめらか", "ko": "부드럽게", "pt-br": "suave"},
+    "node.gifStepped": {"en": "stepped", "he": "מדורג", "ja": "コマ送り", "ko": "원본 타이밍", "pt-br": "quadro a quadro"},
+    "node.gifToMp4MotionReference": {"en": "GIF → MP4 for use as a motion reference", "he": "GIF → MP4 לשימוש כייחוס תנועה", "ja": "GIF → MP4（モーションリファレンス用）", "ko": "GIF → MP4(모션 레퍼런스용)", "pt-br": "GIF → MP4 para usar como referência de movimento"},
+    "node.replaceGif": {"en": "Replace GIF", "he": "החלפת ה־GIF", "ja": "GIF を置き換え", "ko": "GIF 교체", "pt-br": "Substituir GIF"},
+    "node.uploadingGif": {"en": "Uploading GIF…", "he": "מעלה GIF…", "ja": "GIF をアップロード中…", "ko": "GIF 업로드 중…", "pt-br": "Enviando GIF…"},
+    "nodeRun.noGIFWireAnImage": {"en": "no GIF — wire an image or upload one", "he": "אין GIF — חברו תמונה או העלו אחת", "ja": "GIF がありません。画像を接続するか、アップロードしてください。", "ko": "GIF가 없습니다. 이미지를 연결하거나 업로드하세요.", "pt-br": "nenhum GIF — conecte uma imagem ou envie uma"},
+    "proccfg.extendShortGifsToATarget": {"en": "Extend short GIFs to a target length", "he": "הארכת GIF-ים קצרים לאורך יעד", "ja": "短い GIF を目標の長さまで延長", "ko": "짧은 GIF를 목표 길이까지 연장", "pt-br": "Estender GIFs curtos até uma duração desejada"},
+    "proccfg.mostGifsAreShorterThanThe": {"en": "Most GIFs are shorter than the ~2s a motion reference needs. When on, the clip is looped up to the target duration (seam-aware — a non-seamless GIF ping-pongs so a hard repeat's jump-cut isn't reproduced as motion). A GIF already too short is looped regardless.", "he": "רוב ה-GIF-ים קצרים מ-2 השניות בערך שנדרשות לייחוס תנועה. כשהאפשרות פעילה, הקליפ רץ בלולאה עד משך היעד (עם מודעות לתפר — GIF שאינו רציף ינוע הלוך ושוב כדי שקפיצת החיתוך של חזרה חדה לא תתפרש כתנועה). GIF שכבר קצר מדי יעבור לולאה בכל מקרה.", "ja": "ほとんどの GIF は、モーションリファレンスに必要な約 2 秒より短いものです。オンにすると、クリップを目標の長さまでループします（継ぎ目を考慮し、シームレスでない GIF は往復再生するため、単純な繰り返しによるジャンプカットが動きとして再現されることはありません）。短すぎる GIF は、この設定に関係なくループされます。", "ko": "대부분의 GIF는 모션 레퍼런스에 필요한 약 2초보다 짧습니다. 켜면 클립을 목표 길이까지 반복합니다. 이때 이음매를 고려해, 매끄럽게 이어지지 않는 GIF는 앞뒤로 왕복 재생하므로 단순 반복에서 생기는 점프 컷이 움직임으로 재현되지 않습니다. 이미 너무 짧은 GIF는 설정과 관계없이 반복됩니다.", "pt-br": "A maioria dos GIFs tem menos que os ~2 s que uma referência de movimento exige. Quando ativado, o clipe é repetido até a duração desejada (atento à emenda — um GIF sem loop perfeito vai e volta, para que o salto de uma repetição seca não seja reproduzido como movimento). Um GIF curto demais é repetido de qualquer forma."},
+    "proccfg.motionSmoothing": {"en": "Motion smoothing", "he": "החלקת תנועה", "ja": "動きのスムージング", "ko": "모션 스무딩", "pt-br": "Suavização de movimento"},
+    "proccfg.mp4CanTCarryTransparencyA": {"en": "MP4 can't carry transparency — a GIF with an alpha channel is flattened onto this colour.", "he": "MP4 לא יכול לשאת שקיפות — GIF עם ערוץ אלפא משוטח על הצבע הזה.", "ja": "MP4 は透明度を保持できないため、アルファチャンネルを持つ GIF はこの色の上に合成されます。", "ko": "MP4는 투명도를 지원하지 않으므로, 알파 채널이 있는 GIF는 이 색상 위에 합성됩니다.", "pt-br": "O MP4 não suporta transparência — um GIF com canal alfa é achatado sobre esta cor."},
+    "proccfg.preserveOriginalTiming": {"en": "Preserve original timing", "he": "שמירה על התזמון המקורי", "ja": "元のタイミングを維持", "ko": "원래 타이밍 유지", "pt-br": "Preservar o tempo original"},
+    "proccfg.smoothInterpolateTo24fps": {"en": "Smooth (interpolate to 24fps)", "he": "חלק (אינטרפולציה ל-24fps)", "ja": "スムーズ（24fps に補間）", "ko": "부드럽게(24fps로 보간)", "pt-br": "Suave (interpolar para 24 fps)"},
+    "proccfg.smoothSynthesisesInBetweenFramesFor": {"en": "Smooth synthesises in-between frames for realistic footage; preserve keeps the GIF's stepped, choppy character (better for graphic animation).", "he": "״חלק״ מסנתז פריימי ביניים לצילום ריאליסטי; ״שמירה״ משמרת את האופי המדורג והקופצני של ה-GIF (מתאים יותר לאנימציה גרפית).", "ja": "「スムーズ」は実写映像向けに中間フレームを生成します。「元のタイミングを維持」は、GIF 特有のコマ送りのようなカクカクした質感を保ちます（グラフィックアニメーションに向いています）。", "ko": "“부드럽게”는 실사 영상에 맞게 중간 프레임을 합성하고, “원래 타이밍 유지”는 GIF 특유의 뚝뚝 끊기는 느낌을 그대로 둡니다(그래픽 애니메이션에 더 적합).", "pt-br": "“Suave” sintetiza quadros intermediários para imagens realistas; “Preservar” mantém o caráter escalonado e travado do GIF (melhor para animações gráficas)."},
+    "proccfg.transparentBackground": {"en": "Transparent background", "he": "רקע שקוף", "ja": "透明部分の背景", "ko": "투명 영역 배경", "pt-br": "Fundo transparente"}
+  },
+  "labels": {
+    "Gif to Video": {"he": "GIF לווידאו", "ja": "GIF から動画", "ko": "GIF 동영상 변환", "pt-br": "GIF para vídeo"}
+  }
+}

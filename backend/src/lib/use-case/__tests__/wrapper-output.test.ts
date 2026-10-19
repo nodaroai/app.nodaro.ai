@@ -1,13 +1,15 @@
 import { describe, it, expect } from "vitest"
 import {
   EPISODE_CHAPTERS_DEFAULTS,
+  EPISODE_TRAILER_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
   buildEpisodeChaptersGraph,
+  buildEpisodeTrailerGraph,
   buildTightenEpisodeGraph,
   toStoredInlineGraph,
   type TightenEpisodeSettings,
 } from "@nodaro/render-rules"
-import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "../wrapper-output.js"
+import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperKeepsPartial, usecaseWrapperOutput, type UseCaseWrapperOutput } from "../wrapper-output.js"
 import { usecaseJobOutput } from "../../../services/workflow-engine/use-case-output.js"
 
 const graph = (over: Partial<TightenEpisodeSettings> = {}) => {
@@ -162,5 +164,66 @@ describe("a Chapters run's result", () => {
   it("an episode, or an erased snapshot, keeps the words it had", () => {
     expect(usecaseNoResultMessage(graph())).toBe("The run finished without a result")
     expect(usecaseNoResultMessage(null)).toBe("The run finished without a result")
+  })
+})
+
+describe("a Trailer run's result", () => {
+  const settings = { ...EPISODE_TRAILER_DEFAULTS, formats: ["9:16", "1:1"] as const }
+  const g = toStoredInlineGraph(buildEpisodeTrailerGraph(settings, { media: { url: "https://r2/ep.mp4", kind: "video" } }), settings)
+  const done = (output: Record<string, unknown>) => ({ status: "completed", output })
+  it("one delivery per format, in format order; the first is the scalar read", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: { segments: [] } }),
+      "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final", planBasis: "pb", renderBasis: "rb" }),
+      "uc-format-9x16": done({ videoUrl: "https://r2/t-916.mp4" }),
+      "uc-format-1x1": done({ videoUrl: "https://r2/t-11.mp4" }),
+    }, "exec-2")
+    expect(out).toMatchObject({
+      formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }],
+      videoUrl: "https://r2/t-916.mp4", quality: "final", planBasis: "pb", renderBasis: "rb", json: { segments: [] },
+    })
+    expect(usecaseWrapperHasResult(g, out)).toBe(true)
+  })
+  it("a format that did not complete is left out; the first that did is the scalar read", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final" }),
+      "uc-format-9x16": { status: "failed", error: "boom" },
+      "uc-format-1x1": done({ videoUrl: "https://r2/t-11.mp4" }),
+    }, "exec-2")
+    expect(out).toMatchObject({ formats: [{ format: "1:1", url: "https://r2/t-11.mp4" }], videoUrl: "https://r2/t-11.mp4", failedNodeId: "uc-format-9x16", failedFormats: ["9:16"] })
+    // The run keeps the format that rendered (decided 2026-10-18).
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(true)
+  })
+  it("every format rendered: no failed formats named", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final" }),
+      "uc-format-9x16": done({ videoUrl: "https://r2/t-916.mp4" }),
+      "uc-format-1x1": done({ videoUrl: "https://r2/t-11.mp4" }),
+    }, "exec-2")
+    expect(out).not.toHaveProperty("failedFormats")
+  })
+  it("no format rendered, or a run that is not a list: nothing kept from a failed run", () => {
+    const none = usecaseWrapperOutput(g, {
+      "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final" }),
+      "uc-format-9x16": { status: "failed", error: "boom" },
+      "uc-format-1x1": { status: "failed", error: "boom" },
+    }, "exec-2")
+    expect(none).toMatchObject({ formats: [], failedFormats: ["9:16", "1:1"] })
+    expect(usecaseWrapperKeepsPartial(g, none)).toBe(false)
+    expect(usecaseWrapperKeepsPartial(graph(), { quality: "final", _executionId: "e", videoUrl: "https://r2/v.mp4" })).toBe(false)
+    expect(usecaseWrapperKeepsPartial(null, { quality: "final", _executionId: "e", formats: [{ format: "9:16", url: "u" }] })).toBe(false)
+  })
+  it("a final run whose formats never ran delivers nothing (the render alone is not the result)", () => {
+    const out = usecaseWrapperOutput(g, { "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final" }) }, "exec-2")
+    expect(out).toMatchObject({ formats: [], quality: "final" })
+    expect(out.videoUrl).toBeUndefined()
+    expect(usecaseWrapperHasResult(g, out)).toBe(false)
+  })
+  it("review on: the preview is the result until Render final", () => {
+    const review = { ...settings, reviewBeforeRender: true }
+    const gp = toStoredInlineGraph(buildEpisodeTrailerGraph(review, { media: { url: "https://r2/ep.mp4", kind: "video" } }), review)
+    const out = usecaseWrapperOutput(gp, { "uc-render": done({ videoUrl: "https://r2/preview.mp4", quality: "proxy" }) }, "exec-3")
+    expect(out).toMatchObject({ formats: [], videoUrl: "https://r2/preview.mp4", quality: "proxy" })
+    expect(usecaseWrapperHasResult(gp, out)).toBe(true)
   })
 })

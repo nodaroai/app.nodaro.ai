@@ -300,8 +300,8 @@ describe("executeSubWorkflow", () => {
     mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: [edge("rec", "t1"), edge("t1", "out")] }, error: null })
 
     const run = executeSubWorkflow(n, {}, ctx({ previewStopRule: true }))
-    await expect(run).rejects.toThrow(/a Tighten Episode node in it has “Review before render” on/)
-    await expect(run).rejects.toThrow(/Turn off “Review before render” on every Tighten Episode node that has it on/)
+    await expect(run).rejects.toThrow(/a node in it has “Review before render” on/)
+    await expect(run).rejects.toThrow(/Turn off “Review before render” on every node that has it on/)
     // The code carries what held it.
     await expect(run).rejects.toMatchObject({ code: "preview_render_nested_review_on", errorCode: "preview_render_nested_review_on" })
     expect(executeNode).not.toHaveBeenCalled()

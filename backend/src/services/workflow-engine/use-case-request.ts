@@ -13,14 +13,7 @@
  * node's Idempotency-Key.
  */
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED, RENDER_FINAL_ALREADY_RENDERED } from "@nodaro/shared/nodes"
-import {
-  USE_CASE_REVIEW_LIST_DRIVEN,
-  USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
-  usecaseContinuePath,
-  usecaseDescriptor,
-  usecaseFanOutRefused,
-  type UseCaseNodeType,
-} from "@nodaro/render-rules"
+import { usecaseContinuePath, usecaseDescriptor, usecaseFanOutRefusalOf, type UseCaseNodeType } from "@nodaro/render-rules"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../../lib/render-final-codes.js"
 import { usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
 import { loopbackFetch } from "./loopback-fetch.js"
@@ -56,12 +49,13 @@ export function coded(message: string, code?: string, output?: NodeOutput): Code
 }
 
 /**
- * The refusal for fanning a review-on use-case node out over a list, or null.
- * Asked where the engine fans a node out, before any item runs: nothing is
- * called, charged or started.
+ * The refusal for fanning a use-case node out over a list (one whose own
+ * result is a list, or one with review on), or null. Asked where the engine
+ * fans a node out, before any item runs: nothing is called, charged or started.
  */
 export function usecaseFanOutRefusal(node: SimpleNode): CodedError | null {
-  return usecaseFanOutRefused(node) ? coded(USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE, USE_CASE_REVIEW_LIST_DRIVEN) : null
+  const refusal = usecaseFanOutRefusalOf(node)
+  return refusal ? coded(refusal.message, refusal.code) : null
 }
 
 /** The override an app's Render final (or a continue-from-failed) sets on the node: its own earlier wrapper. */

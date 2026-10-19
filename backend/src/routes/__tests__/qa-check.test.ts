@@ -47,7 +47,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 
 import { qaCheckRoutes } from "../qa-check.js"
-import { LlmLaneError, LLM_ANSWER_UNREADABLE_MESSAGE } from "../../lib/llm-errors.js"
+import { ADVANCED_MODE_UNAVAILABLE_MESSAGE, LlmAdvancedModeUnavailableError, LlmLaneError, LLM_ANSWER_UNREADABLE_MESSAGE } from "../../lib/llm-errors.js"
 import { KIE_IMAGE_FETCH_FAILED_MESSAGE } from "../../lib/kie-inline-image.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
@@ -114,5 +114,13 @@ describe("POST /v1/qa-check — a failure the person can read", () => {
     const res = await post()
 
     expect(res.json().error.message).toBe("Model timed out")
+  })
+
+  it("an Advanced-mode refusal answers advanced_mode_unavailable, and the credits come back", async () => {
+    mocks.llmComplete.mockRejectedValue(new LlmAdvancedModeUnavailableError("advanced mode: anthropic refused"))
+    const res = await post()
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error).toEqual({ code: "advanced_mode_unavailable", message: ADVANCED_MODE_UNAVAILABLE_MESSAGE })
+    expect(mocks.refundCredits).toHaveBeenCalledWith("usage-1")
   })
 })

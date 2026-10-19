@@ -9,6 +9,7 @@ import type { ErrorHint } from "../../lib/safety-block.js"
 import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason } from "@nodaro/shared/workflow"
 import type { VideoOverlayWarning } from "@nodaro/shared/video"
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared/nodes"
+import type { UnitInputValue } from "@nodaro/render-rules"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -133,6 +134,10 @@ export interface NodeOutput {
   useCaseSettings?: Readonly<Record<string, unknown>>
   /** A use-case node's refused Render final: the final already under way or made, which it names. */
   useCaseFinalJobId?: string
+  /** A use-case node whose result is a list (Trailer): each delivery's file and its format, in delivery order — what the editor's per-row chips read. */
+  formats?: ReadonlyArray<{ readonly format: string; readonly url: string }>
+  /** Trailer: the formats whose render failed (the others were delivered). */
+  failedFormats?: readonly string[]
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -203,6 +208,10 @@ export interface NodeOutput {
    * also `videoUrl`, for the readers that take any image or video.
    */
   ugcOutputs?: import("@nodaro/shared/ugc").UgcOutputs
+  /** A worker node unit's JSON (look) outputs, by output id: each the JSON
+   *  string its pip hands on (`unitPipValue`, lib/unit-compose.ts). The first
+   *  one's value also rides `json`, for the readers that read that. */
+  unitOutputs?: Readonly<Record<string, string>>
   /** UGC Script: the job's result, as the node's `result` holds it (plan, category, warnings, notes, rounds). */
   ugcResult?: Record<string, unknown>
   /** UGC Creator, a run where a person picks: the options that passed, waiting for the pick. A COMPLETED state
@@ -659,6 +668,11 @@ export interface ResolvedInputs {
   useCaseMusic?: string
   /** A use-case node's optional `introCard` video (a type whose descriptor takes one). */
   useCaseIntroCard?: string
+  /** A node unit's JSON inputs (accepts "look": the wired JSON string; "" when
+   *  wired but its upstream produced nothing — the unit refuses the run) and
+   *  many-wire inputs (one row per upstream node, in edge-list order), by
+   *  input id (`unitInputLanding`, unit-inputs.ts). Absent when none is wired. */
+  unitInputs?: Readonly<Record<string, UnitInputValue>>
   /** speaker-view (P3.9): Speaker Frames' output descriptor wired into the
    *  `tracks` handle (stringified json) — `null` when the wire is there but
    *  its Speaker Frames has no output (refused, never rendered as v1) — and
@@ -737,6 +751,12 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
+  /** The nodes that try every one of their kind: a stage whose nodes are all
+   *  named here runs every one, whichever fails, each checking for a Stop
+   *  before it starts (a Trailer's formats, `usecaseTriesEvery`). Absent, or
+   *  a stage with any node not named: the default — the first failure stops
+   *  the nodes not started yet. */
+  triesEvery?: ReadonlySet<string>
   /** A continued run (`continueFromExecutionId`): the node states of the run it
    *  continues. A use-case node that failed there continues its own inner run
    *  rather than starting a new one (use-case-node.ts). */

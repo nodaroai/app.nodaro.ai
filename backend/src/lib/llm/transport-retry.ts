@@ -93,12 +93,17 @@ function transportRetryable(err: unknown, req: LlmRequest): boolean {
  *
  * `abandoned` lets a lane that shares ONE deadline across every attempt (the responses lane)
  * stop rather than start an attempt the caller no longer has time for.
+ *
+ * `signal` is a caller's cancel: a pause it fires during ends at once, throwing the signal's
+ * reason (an `AbortError` when the reason is not an Error) so the caller can tell a cancel from
+ * a transport failure — instead of sleeping out a pause of up to 30 s first.
  */
 export async function withTransportRetry<T>(
   modelId: string,
   req: LlmRequest,
   once: () => Promise<T>,
   abandoned: () => boolean = () => false,
+  signal?: AbortSignal,
 ): Promise<T> {
   // Read once, at entry: the ladder is bounded by the budget the CALL was given, not by a
   // fresh budget per attempt.
@@ -115,8 +120,32 @@ export async function withTransportRetry<T>(
         `[llm-kie-stream-retry] ${modelId} attempt ${attempt + 1}/${total} in ${pause} ms — ` +
           `attempt ${attempt} failed before any usage was reported: ${String(err).slice(0, 160)}`,
       )
-      await new Promise((resolve) => setTimeout(resolve, pause))
+      if (signal) await pauseUnlessAborted(pause, signal)
+      else await new Promise((resolve) => setTimeout(resolve, pause))
       if (abandoned()) throw err
     }
   }
+}
+
+/** The reason a fired signal stands for, as something a caller can recognise as a cancel. */
+function abortReasonOf(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : Object.assign(new Error("This operation was aborted"), { name: "AbortError" })
+}
+
+/** Wait `ms`, or reject the moment `signal` fires (at once if it already has). */
+function pauseUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(abortReasonOf(signal))
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(abortReasonOf(signal))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
 }

@@ -1,7 +1,8 @@
 /**
  * Podcast use-case verbs: one call per use-case over the editing primitives
  * (`tighten_episode` → POST /v1/tighten-episode, `make_chapters` → POST
- * /v1/episode-chapters, `continue_use_case` → POST
+ * /v1/episode-chapters, `make_trailer` → POST /v1/episode-trailer,
+ * `continue_use_case` → POST
  * /v1/<the run's type>/continue, the type read from the run's own job row). CORE and ungated like `apply_edl`: the route
  * answers an install that cannot run it (unconnected, keyless) with its own
  * honest 503 before any charge. Its own module (the video verbs file is past
@@ -21,8 +22,10 @@ import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import {
   EPISODE_CHAPTERS_DEFAULTS,
+  EPISODE_TRAILER_DEFAULTS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   TIGHTEN_EPISODE_DEFAULTS,
+  TRAILER_FORMATS,
   USE_CASE_NODE_TYPES,
   usecaseContinuePath,
   usecaseDescriptor,
@@ -142,6 +145,7 @@ function refusalText(statusCode: number, body: string): string | null {
 const REGISTER_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, (ctx: RegisterCtx) => void>> = {
   tighten: registerTightenEpisode,
   chapters: registerMakeChapters,
+  trailer: registerMakeTrailer,
 }
 
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {
@@ -334,6 +338,71 @@ function registerMakeChapters({ server, session, fastify }: RegisterCtx): void {
         },
         widgetKind: "generic",
         widgetData: { prompt: "(chapters)" },
+        ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
+      }),
+  )
+}
+
+function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
+  const TRAILER = usecaseDescriptor(usecaseTypeOfBuilder("trailer"))
+  server.registerTool(
+    "make_trailer",
+    {
+      title: "Trailer",
+      description:
+        "Cut a 20–40 second trailer from a podcast or interview recording in one call and deliver it in each chosen social format: " +
+        "transcribes it, plans the trailer from its strongest moments, renders it, and pads it to every format (never cropped). " +
+        "Pass `media_url` (a video recording, up to 3 hours; an audio-only recording is refused). `formats` (default 9:16, 1:1, 4:5; also 16:9). " +
+        "`intro_card_url`: an optional short video (15 s at most) played first. `review_before_render: true` stops at a quick proxy preview " +
+        "of the trailer (`output_data.videoUrl`; `formats` is empty until the final): inspect `output_data.json`, then `continue_use_case` " +
+        "with `mode: \"render-final\"`. Returns a job id: the trailers are `output_data.formats` (`[{ format, url }]`, in format order), " +
+        "the first also `output_data.videoUrl`. Every format is tried: one that fails is named in `output_data.failedFormats` and the run " +
+        "completes with the others, its fee kept, so it has no `from-failed`: render the missing format yourself from `output_data.json` " +
+        "(Apply EDL, Combine Videos with the intro card first if the run had one, then Social Media Format; no fee), or start a " +
+        "new run. If a run fails, `continue_use_case` with " +
+        "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
+        priceSentence(usecaseTypeOfBuilder("trailer")),
+      inputSchema: {
+        media_url: z.string().url().describe("The recording (a video URL)."),
+        intro_card_url: z.string().url().optional().describe("Optional intro card: a short video (15 s at most), the recording's size and shape."),
+        formats: z
+          .array(z.enum(tuple(TRAILER_FORMATS)))
+          .min(1)
+          .max(TRAILER_FORMATS.length)
+          .refine((list) => new Set(list).size === list.length, "Name each format once.")
+          .optional()
+          .describe(`The formats to deliver (default ${EPISODE_TRAILER_DEFAULTS.formats.join(", ")}).`),
+        review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${EPISODE_TRAILER_DEFAULTS.reviewBeforeRender}).`),
+        plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${EPISODE_TRAILER_DEFAULTS.planTier}).`),
+        instructions: z.string().max(4000).optional().describe("Instructions for the trailer (\"open on the funniest moment\")."),
+        style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
+        client_request_id: clientRequestIdSchema.optional(),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
+    },
+    async (args) =>
+      dispatchJob(fastify, session, {
+        // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
+        url: "/v1/episode-trailer",
+        label: TRAILER.label,
+        formatRefusal: refusalText,
+        payload: {
+          mediaUrls: [args.media_url],
+          ...(args.intro_card_url ? { introCardUrl: args.intro_card_url } : {}),
+          ...(args.formats ? { formats: args.formats } : {}),
+          ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
+          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+          ...(args.instructions ? { instructions: args.instructions } : {}),
+          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+          // The agent that asked for a review is its reviewer (as on tighten_episode).
+          ...(args.review_before_render === true ? { reviewerPresent: true } : {}),
+          mcp_client: session.clientName,
+          userId: session.userId,
+        },
+        widgetKind: "video",
+        widgetData: { prompt: "(trailer)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
       }),
   )

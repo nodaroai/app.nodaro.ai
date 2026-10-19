@@ -13,7 +13,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain, LLM_ANSWER_UNREADABLE_MESSAGE } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -186,7 +186,7 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
         }
 
         return reply.status(502).send({
-          error: { code: "llm_error", message },
+          error: { code: llmErrorCode(err), message },
         })
       }
     },

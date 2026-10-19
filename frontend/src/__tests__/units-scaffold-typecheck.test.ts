@@ -2,6 +2,7 @@
 // @test-watches tools/units/** frontend/src/nodes/*.ts backend/src/nodes/*.ts frontend/tsconfig.json backend/tsconfig.json
 // @test-watches frontend/src/types/nodes.ts frontend/src/lib/api.ts frontend/src/lib/ffmpeg-handles.ts frontend/src/lib/handle-colors.ts frontend/src/lib/data-handles.ts
 // @test-watches frontend/src/components/nodes/base-node.tsx frontend/src/components/nodes/handle-with-popover.tsx frontend/src/components/nodes/node-quick-strip.tsx frontend/src/components/nodes/video-node-defaults.ts
+// @test-watches frontend/src/components/nodes/use-case-node-shell.tsx frontend/src/lib/i18n/index.ts
 // @test-watches frontend/src/components/editor/config-panels/types.ts
 // @test-watches backend/src/lib/use-case/body-shapes.ts packages/shared/src/entries/edl.ts packages/shared/src/edit-plan-contract.ts
 // @test-watches backend/src/lib/url-validator.ts backend/src/lib/request-helpers.ts backend/src/lib/job-input-data.ts backend/src/lib/zod-error.ts backend/src/lib/http-errors.ts

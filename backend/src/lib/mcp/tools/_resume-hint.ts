@@ -37,11 +37,11 @@ import { heldFinalRun, type HeldFinalRun } from "../../continuation-held-final.j
 /**
  * What an agent is told when the newest continuation of a run stopped at a
  * Preview review: one held render → its `render_final`; anything else (two or
- * more renders, a held Tighten Episode review) → the one run that finishes
+ * more renders, a held review-on use-case node) → the one run that finishes
  * them together, `next` (`null`: it could not be named). `render_final` takes
  * one render, and with two Previews feeding the same node either one alone is
  * held again; a use-case node has no `render_final`, and its own continue
- * (`continue_use_case`) renders the episode without the nodes after it.
+ * (`continue_use_case`) renders its final result without the nodes after it.
  * That run is named as the `run_workflow` call that sends it as is
  * (`runWorkflowCallFor`).
  */
@@ -72,7 +72,7 @@ export function previewPendingHint(
   const alone =
     reviewNodeIds.length > 0
       ? ` For ${quoted(reviewNodeIds)} that run calls its continue route (render-final, no fee) inside the workflow, so the nodes after it run too; ` +
-        `continue_use_case on its own first renders the episode but leaves this chain held, and the same final is then refused render_final_already_rendered.`
+        `continue_use_case on its own first renders its final result but leaves this chain held, and the same final is then refused render_final_already_rendered.`
       : ""
   if (!next) return head + `Once the user has reviewed it, it is finished by one run continuing ${at} — ${why}${alone}`
   return (

@@ -4,7 +4,7 @@
     "podcast-clip-pack": 2,
     "podcast-multicam-cut": 180,
     "podcast-tighten-episode": 180,
-    "podcast-trailer-formats": 2
+    "podcast-trailer-formats": 1
   },
   "aboutPerEpisodeMinute": "The output minutes per minute of the episode the listing lists each render at; 0 (a fixed length) when a template is not listed.",
   "perEpisodeMinute": {

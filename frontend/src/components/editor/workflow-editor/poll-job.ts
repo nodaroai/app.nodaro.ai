@@ -4,6 +4,8 @@ import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared/workflow"
 import type { GeneratedResult } from "@/types/nodes";
 import type { RunResultIdentity } from "@/lib/run-result-identity";
+import type { UnitJsonLanding } from "@/lib/unit-compose";
+import { JSON_JOB_NO_RESULT, handleJsonJobCompleted, jsonLandingReset } from "./poll-json-landing";
 import { buildVariantResults } from "./variant-results";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -366,6 +368,10 @@ export interface PollJobResultOptions {
    *  `quality`, `clipKey`, `planBasis` and `renderBasis`: the node's
    *  `quality` is its own setting). */
   readonly resultFields?: (outputData: Record<string, unknown>) => Readonly<Record<string, unknown>> | RunResultIdentity
+  /** A job whose result is JSON (a worker node unit's look outputs): its
+   *  fields are emptied at the start and its patch lands on completion, in
+   *  place of the media take. */
+  readonly jsonLanding?: UnitJsonLanding
 }
 
 /**
@@ -390,7 +396,13 @@ export function pollJobWithNodeUpdate(
     // Every listed key is reset — a stale video result must not survive into
     // a run that ends up delivering audio (or vice versa).
     ...Object.fromEntries(outputKeyList(outputKey).map((k) => [k, undefined])),
+    // …and so is every field a JSON landing writes.
+    ...jsonLandingReset(opts.jsonLanding),
   });
+  const completed = (job: Awaited<ReturnType<typeof getJobStatusLean>>, jobId: string, resolve: (result: string) => void) =>
+    opts.jsonLanding
+      ? handleJsonJobCompleted(job.output_data as Record<string, unknown> | null | undefined, opts.jsonLanding, { nodeId, label, updateNodeData, resolve, success: (m) => guardedToast.success(m) })
+      : handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields);
 
   return new Promise<string>((resolve, reject) => {
     apiCall()
@@ -477,8 +489,8 @@ export function pollJobWithNodeUpdate(
 
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
-                if (!handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields)) {
-                  const errMsg = "No output URL returned from job";
+                if (!completed(job, jobId, resolve)) {
+                  const errMsg = opts.jsonLanding ? JSON_JOB_NO_RESULT : "No output URL returned from job";
                   updateNodeData(nodeId, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
@@ -534,7 +546,7 @@ export function pollJobWithNodeUpdate(
                     return;
                   }
                   if (finalJob.status === "completed") {
-                    if (handleJobCompleted(finalJob, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields)) {
+                    if (completed(finalJob, jobId, resolve)) {
                       return;
                     }
                   }

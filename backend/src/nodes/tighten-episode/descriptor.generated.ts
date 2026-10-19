@@ -5,7 +5,7 @@ export const descriptor = {
   "type": "tighten-episode",
   "label": "Tighten Episode",
   "category": "processing",
-  "description": "Tighten a podcast recording in one step: transcribes it, removes silences and filler, cuts the episode, and optionally adds captions and a music bed. Video or audio. Its steps are priced at their own rates, plus a per-run fee (listed at 10 credits).",
+  "description": "Tighten a podcast recording in one step: transcribes it, removes silences and filler, cuts the episode, and optionally adds captions and a music bed. Video or audio. Its steps are priced at their own rates, plus a per-run fee.",
   "outputType": "video",
   "position": {
     "after": "apply-edl"

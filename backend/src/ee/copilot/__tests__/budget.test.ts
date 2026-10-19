@@ -68,6 +68,16 @@ describe("estimateNextCallUsd", () => {
     const cached = estimateNextCallUsd("claude-sonnet-5", 200_000, true)
     expect(cached).toBeLessThan(fresh)
   })
+
+  it("prices a KIE call at KIE rates, and the direct lane stays the default", async () => {
+    const { calculateLlmCost } = await import("../../../lib/pricing/llm-cost.js")
+    const kie = estimateNextCallUsd("claude-opus-5.5", 40_000, false, "kie")
+    expect(kie).toBeCloseTo(calculateLlmCost("claude-opus-5.5", { inputTokens: 10_000, outputTokens: 3_000 }, "kie"), 12)
+    expect(estimateNextCallUsd("claude-opus-5.5", 40_000)).toBeCloseTo(
+      calculateLlmCost("claude-opus-5.5", { inputTokens: 10_000, outputTokens: 3_000 }, "direct"),
+      12,
+    )
+  })
 })
 
 describe("wouldExceedBudget", () => {

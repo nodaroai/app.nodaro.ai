@@ -38,7 +38,7 @@ import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared
 import type { OutputType } from "@nodaro/shared/apps"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
-import { SPEAKER_FRAMES_CREDIT_ID } from "@nodaro/render-rules"
+import { SPEAKER_FRAMES_CREDIT_ID, isUseCaseNodeType, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
@@ -356,6 +356,20 @@ export const CREDIT_RATE_SOURCES: Readonly<Record<string, CreditRateSource>> = {
     rounding: "ceil-run-total",
     note: "Per started block of 1,000 sampled frames, at least one block a run; the run's total (blocks × creditsPerUnit) is rounded up to a whole credit once.",
   },
+}
+
+/**
+ * How a use-case node's description ends (Tighten Episode, Chapters,
+ * Trailer): its steps at their own rates, plus a per-run fee. The registry
+ * names no figure — the fee is a charged price, so `chargedDescriptor` writes
+ * it in where the description is served (`usecaseFeeSentence`), and an
+ * edition that charges nothing serves the sentence as it is.
+ */
+export const USE_CASE_FEE_SENTENCE = "Its steps are priced at their own rates, plus a per-run fee."
+
+/** The fee sentence with its charged figure. */
+export function usecaseFeeSentence(fee: number): string {
+  return `Its steps are priced at their own rates, plus a per-run fee of ${fee} ${fee === 1 ? "credit" : "credits"}.`
 }
 
 /**
@@ -1851,7 +1865,6 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "speed-ramp", label: "Adjust Speed", category: "processing", description: "Change playback speed (0.05x to 100x), reverse, choose audio treatment (pitch-preserve / pitch-shift / drop), opt into motion-compensated frame interpolation (smooth slow-mo), or define a piecewise speed ramp via segments. FFmpeg only.", outputType: "video", creditCost: creditBandFor("speed-ramp") },
   { type: "split-media", label: "Split into Chunks", category: "processing", description: "Cut a video or audio file into frame-exact parts, each between minPartDuration (default 4 s) and chunkDuration seconds — video parts on the video output, audio parts on the audio output (at most 200 per file). A wire with outputMode \"each\" runs the next node once per part; a wire with no mode passes the part outputChunkIndex names.", outputType: "video" },
   // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
-  { type: "gif-to-video", label: "Gif to Video", category: "processing", description: "Convert an animated GIF into a widely-compatible H.264 MP4 so it can be used as a motion reference for video models that reject GIF input. Optional loop-to-minimum, seam-aware looping (ping-pong for non-seamless GIFs), and 24fps interpolation. Local FFmpeg — no provider, zero credits.", outputType: "video", creditCost: 0 },
   { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },
   { type: "mask-composite", label: "Mask Composite", category: "processing", description: "Put a foreground video over a background video through a mask video (white = foreground) — e.g. the subject from Video Mask over a new scene. Feather, grow/shrink and invert the mask; fit the background; pick the audio. Local FFmpeg — no provider. Priced per started 5 s of the result (one `mask-composite` row each, up to 300 s).", outputType: "video", creditCost: creditBandFor("mask-composite") },
   { type: "fade-video", label: "Fade Video", category: "processing", description: "Add fade transitions to the beginning and end of video.", outputType: "video" },
@@ -2212,8 +2225,21 @@ export function findNode(type: string): NodeDescriptor | undefined {
 export function chargedDescriptor(desc: NodeDescriptor, prices: ChargedPrices): NodeDescriptor {
   const creditCost = chargedCreditCost(desc, prices)
   const creditRate = chargedCreditRate(desc, prices)
-  if (creditCost === desc.creditCost && !creditRate) return desc
-  return { ...desc, creditCost, ...(creditRate ? { creditRate } : {}) }
+  const description = chargedDescription(desc, prices)
+  if (creditCost === desc.creditCost && !creditRate && description === desc.description) return desc
+  return { ...desc, creditCost, ...(creditRate ? { creditRate } : {}), description }
+}
+
+/**
+ * A use-case node's description with its fee at the charged price (the same
+ * figure the Run button and the docs state). As declared when nothing prices
+ * the fee (an edition that charges nothing).
+ */
+function chargedDescription(desc: NodeDescriptor, prices: ChargedPrices): string {
+  if (!isUseCaseNodeType(desc.type) || !desc.description.endsWith(USE_CASE_FEE_SENTENCE)) return desc.description
+  const fee = prices.credits(usecaseFeeCreditId(desc.type))
+  if (fee === undefined) return desc.description
+  return desc.description.slice(0, -USE_CASE_FEE_SENTENCE.length) + usecaseFeeSentence(fee)
 }
 
 /**

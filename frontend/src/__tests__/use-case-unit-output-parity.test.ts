@@ -57,7 +57,7 @@ describe("a use-case unit's output is the use-case reader's (the precedence guar
 
 /**
  * Concrete values, so the guard above cannot pass on two readers that agree on
- * the wrong thing: what each reader hands on for two shapes of the fixture.
+ * the wrong thing: what each reader hands on for some shapes of the fixture.
  */
 describe("what the two readers hand on (pinned values)", () => {
   const unit = (type: string) => {
@@ -82,4 +82,18 @@ describe("what the two readers hand on (pinned values)", () => {
     expect(extractNodeOutput(node("episode-chapters", data), "json")).toBe(JSON.stringify([{ startMs: 0, title: "Intro" }, { startMs: 62000, title: "Main" }]))
     for (const pip of ["text", "json", undefined]) expect(unitOutputValue(unit("episode-chapters"), data, pip)).toBeUndefined()
   })
+
+  // A list result (Trailer's formats): the first delivery is the episode it
+  // shows. The list itself (`__listResults`) is read by the input resolver's
+  // Each path, never by this per-pip read; a failed format is a run-result key,
+  // not a value it hands on, so a partial run hands on what it delivered.
+  for (const shape of ["formatsList", "formatsPartial"] as const) {
+    it(`Trailer, ${shape}: the first delivery on media and on no pip, nothing on json; the generic reader has nothing`, () => {
+      const data = SHAPES[shape]
+      expect(extractNodeOutput(node("episode-trailer", data), "media")).toBe("https://r/t-9x16.mp4")
+      expect(extractNodeOutput(node("episode-trailer", data), undefined)).toBe("https://r/t-9x16.mp4")
+      expect(extractNodeOutput(node("episode-trailer", data), "json")).toBeUndefined()
+      for (const pip of ["media", "json", undefined]) expect(unitOutputValue(unit("episode-trailer"), data, pip)).toBeUndefined()
+    })
+  }
 })

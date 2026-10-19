@@ -152,6 +152,21 @@ export function usecasePreviewTarget(state: unknown, nodeType?: string | null): 
 }
 
 /**
+ * The plan a run's node made, read off its state in that run (`output.plannedJson ?? output.json`:
+ * an Edit Plan's plan, a use-case node's — the EDL its Preview was cut from).
+ * A Render final QUOTE lays it on the node as `generatedJson` beside the
+ * reviewer's edit (`editedEdl`), so the render and what follows it are quoted
+ * on the edited cut's own length — the length their steps hold on (decided
+ * 2026-10-18). Undefined when the state holds no completed plan.
+ */
+export function usecaseRunPlan(state: unknown): unknown {
+  if (!isRecord(state) || state.status !== "completed" || !isRecord(state.output)) return undefined
+  // The plan as planned (a seed whose review was applied keeps it on `plannedJson`), as the run's seed reads it.
+  const json = state.output.plannedJson ?? state.output.json
+  return json === null ? undefined : json
+}
+
+/**
  * The one override a use-case node's Render final sends, for that run only:
  * `useCaseContinue: { mode: "render-final", jobId, settings }` on the node.
  * The node's executor turns it into a continue of that run at Final (no fee),

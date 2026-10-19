@@ -15,7 +15,7 @@
  * execution time (the prior drift bug, see issue 1 of the Task 4.1 review).
  */
 import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
-import { composeUnitSet, unitProducers } from "./unit-contract-compose.js"
+import { composeUnitRecord, composeUnitSet, unitFanOutEach, unitProducers } from "./unit-contract-compose.js"
 
 // Each producer set below is its hand-written members ∪ the node units
 // (tools/units/README.md) of that producer kind, from their generated contract
@@ -96,10 +96,6 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = composeUnitSet("VIDEO_P
   // Slideshow: 2-100 stills + one optional audio track → MP4 (local FFmpeg,
   // no provider). Same contract; images arrive via the image-collage lane.
   "slideshow",
-  // GIF to Video: animated GIF → H.264 MP4 (local FFmpeg, no provider).
-  // Emits generatedVideoUrl so it connects to any downstream video consumer
-  // (e.g. a Seedance video-reference input) by an ordinary edge.
-  "gif-to-video",
   // 3D Render Pro: authors a scene AND exports it in one operation, settling
   // with the standard `videoUrl` field. It is a video producer as much as it
   // is a composition producer — omitting it here is the "cannot connect the
@@ -315,8 +311,11 @@ export const FAN_OUT_EACH_TYPES: ReadonlySet<string> = new Set([
  * (`listResults`) — it exists only when the node itself ran once per item, so
  * after a single run the edge degrades to the single value, exactly like a
  * `FAN_OUT_EACH_TYPES` member with one item.
+ *
+ * Its hand-written rows ∪ the node units' rows (`contract.fanOutEach`,
+ * generated/unit-contracts.ts); a type in both refuses to load.
  */
-export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: readonly string[]; readonly primary: string }>> = {
+export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: readonly string[]; readonly primary: string }>> = composeUnitRecord("FAN_OUT_EACH_HANDLES", {
   // Camera Switch run once per clip (Edit Plan in clips mode): each clip's
   // switched EDL is its own Apply EDL render. Its transcript is the same for
   // every clip (the master clock, renamed), so that handle stays one value
@@ -328,7 +327,8 @@ export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: read
   // its list (`listResults`, the editor's `__listResults`). The pip an edge
   // with no handle reads is the UGC wires' own (UGC_PRIMARY_HANDLE).
   "ugc-clips": { each: ["clips"], primary: UGC_PRIMARY_HANDLE["ugc-clips"]! },
-}
+  // A node unit declares its row in unit.json (contract.fanOutEach); it is added after these.
+}, unitFanOutEach())
 
 /**
  * Fan-out nodes whose iterations must ALL succeed: one failed item fails the

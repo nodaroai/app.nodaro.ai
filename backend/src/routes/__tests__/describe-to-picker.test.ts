@@ -63,7 +63,11 @@ vi.mock("@/lib/supabase.js", () => {
 
 import Anthropic from "@anthropic-ai/sdk"
 import { DESCRIBE_TO_PICKER_FALLBACK_MODEL, getLlmModel } from "@nodaro/shared/llm-models"
-import { LlmContentRefusalError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError, LLM_CONTENT_REFUSAL_MESSAGE } from "../../lib/llm-errors.js"
+import { LlmAdvancedModeUnavailableError, LlmContentRefusalError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError, LLM_CONTENT_REFUSAL_MESSAGE } from "../../lib/llm-errors.js"
+import { config } from "../../lib/config.js"
+import { __resetPlatformExhaustionAlerts, latchDirectLaneExhausted } from "../../lib/llm-platform-exhaustion.js"
+import { assertAdvancedModeServable } from "../../lib/llm/exhaustion-fallback.js"
+import type { LlmRequest } from "../../lib/llm/types.js"
 import { serveFromFallback } from "../../lib/llm/lane-fallback.js"
 import { LLM_MAX_LANES_PER_CALL } from "../../lib/llm/router.js"
 import { LLM_STRUCTURED_DEFAULT_ATTEMPTS, LLM_STRUCTURED_DIRECT_BACKUP_ASKS } from "../../lib/llm/structured.js"
@@ -652,6 +656,7 @@ describe("POST /v1/describe-to-picker — Gemini fallback and empty reads", () =
   afterEach(async () => {
     warnSpy.mockRestore()
     errorSpy.mockRestore()
+    __resetPlatformExhaustionAlerts()
     await app.close()
   })
 
@@ -680,6 +685,48 @@ describe("POST /v1/describe-to-picker — Gemini fallback and empty reads", () =
     const logged = warnSpy.mock.calls.map((c: unknown[]) => String(c[0])).filter((l: string) => l.startsWith("[picker-fallback]"))
     expect(logged).toHaveLength(1)
     expect(logged[0]).toMatch(/^\[picker-fallback\] claude-opus-5\.5 → gemini-3\.8-flash: the anthropic platform account refused \(billing\)/)
+  })
+
+  // Tal's ruling: Advanced mode is withheld from KIE only. A latched Anthropic
+  // account still passes describe-to-picker's admission (keyless does not), the
+  // client's up-front Advanced check refuses mid-call, and Gemini answers.
+  it("Advanced mode with the Anthropic account latched out: admitted, refused by the client, and Gemini 3.8 Flash answers", async () => {
+    latchDirectLaneExhausted({ provider: "anthropic", kind: "billing", detail: "credit balance is too low" })
+    // The first call runs the client's real up-front check on the request the route built.
+    mocks.llmCompleteStructured
+      .mockImplementationOnce(async (req: LlmRequest) => {
+        assertAdvancedModeServable(getLlmModel(req.modelId)!, req)
+        throw new Error("assertAdvancedModeServable should have refused")
+      })
+      .mockResolvedValueOnce(answer(READ, "kie"))
+    const res = await app.inject({ method: "POST", url: URL, payload: { ...VALID, advancedMode: true } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1", pickerJson: READ })
+    const [claude, gemini] = requests(mocks.llmCompleteStructured)
+    expect(claude).toMatchObject({ modelId: "claude-opus-5.5", requireLane: "direct", advancedMode: true })
+    expect(gemini.modelId).toBe(DESCRIBE_TO_PICKER_FALLBACK_MODEL)
+    expect(gemini).not.toHaveProperty("advancedMode")
+    expect(gemini).not.toHaveProperty("requireLane")
+    expect(completedRow()).toMatchObject({ output_data: { answeredBy: "gemini-3.8-flash", json: READ } })
+    const logged = warnSpy.mock.calls.map((c: unknown[]) => String(c[0])).filter((l: string) => l.startsWith("[picker-fallback]"))
+    expect(logged).toEqual([expect.stringContaining("the Anthropic account can't serve Advanced mode right now")])
+  })
+
+  it("Advanced mode on an install with no Anthropic key is still refused at admission (400)", async () => {
+    const saved = { anthropic: config.ANTHROPIC_API_KEY, kie: config.KIE_API_KEY }
+    // A KIE key, so the route's either-key gate passes and admission is what refuses.
+    config.ANTHROPIC_API_KEY = ""
+    config.KIE_API_KEY = "test-kie-key"
+    try {
+      const res = await app.inject({ method: "POST", url: URL, payload: { ...VALID, advancedMode: true } })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("advanced_mode_unavailable")
+      expect(mocks.llmCompleteStructured).not.toHaveBeenCalled()
+    } finally {
+      config.ANTHROPIC_API_KEY = saved.anthropic
+      config.KIE_API_KEY = saved.kie
+    }
   })
 
   it("the KIE retry of Claude answers: no fallback, charged as the Claude model chosen", async () => {
@@ -889,6 +936,19 @@ describe("pickerFallbackReason", () => {
     expect(pickerFallbackReason(opus, kie(undefined))).toBe("the KIE lane failed (503)")
     // A drained account's raw reply is a 400 too — typed as exhaustion first.
     expect(pickerFallbackReason(opus, kie(new LlmPlatformExhaustedError("drained", { lane: "direct", provider: "anthropic", exhaustion: "billing" })))).toBe("the anthropic platform account refused (billing)")
+  })
+
+  it("an Advanced-mode refusal still falls back to Gemini (Tal's ruling)", () => {
+    const refused = new LlmPlatformExhaustedError("drained", { lane: "direct", provider: "anthropic", exhaustion: "billing" })
+    expect(pickerFallbackReason(opus, new LlmAdvancedModeUnavailableError("advanced mode: drained", refused))).toBe(
+      "the anthropic platform account refused (billing)",
+    )
+  })
+
+  it("an up-front Advanced-mode refusal (no cause) still falls back to Gemini", () => {
+    expect(pickerFallbackReason(opus, new LlmAdvancedModeUnavailableError("advanced mode: no Anthropic key"))).toBe(
+      "the Anthropic account can't serve Advanced mode right now",
+    )
   })
 
   it("a direct lane error that is the request's own is not platform-side", () => {

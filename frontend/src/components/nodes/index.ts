@@ -166,7 +166,6 @@ import { LoopVideoNode } from "./loop-video-node";
 import { FadeVideoNode } from "./fade-video-node";
 import { MaskCompositeNode } from "./mask-composite-node";
 import { StillToVideoNode } from "./still-to-video-node";
-import { GifToVideoNode } from "./gif-to-video-node";
 import { SlideshowNode } from "./slideshow-node";
 import { TranscodeVideoNode } from "./transcode-video-node";
 import { ManualEditNode } from "./manual-edit-node";
@@ -399,7 +398,6 @@ const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.Comp
   "fade-video": FadeVideoNode,
   "mask-composite": MaskCompositeNode,
   "still-to-video": StillToVideoNode,
-  "gif-to-video": GifToVideoNode,
   "slideshow": SlideshowNode,
   "transcode-video": TranscodeVideoNode,
   "manual-edit": ManualEditNode,

@@ -17,6 +17,8 @@ import type Anthropic from "@anthropic-ai/sdk"
 import { TURN_CAPS } from "./constants.js"
 import { anthropicVisionAccepts } from "../../lib/anthropic-image.js"
 import type { CopilotMessageRow } from "./store.js"
+import { imagesAsText, withoutDescriptions } from "./image-descriptions.js"
+import type { CopilotLane } from "./lane.js"
 
 interface TurnGroup {
   turnId: string
@@ -40,7 +42,7 @@ function readableByModel(block: Anthropic.Messages.ContentBlockParam): boolean {
   return anthropicVisionAccepts(source.url)
 }
 
-function toMessage(row: CopilotMessageRow): Anthropic.Messages.MessageParam | null {
+function toMessage(row: CopilotMessageRow, lane: CopilotLane): Anthropic.Messages.MessageParam | null {
   let content = Array.isArray(row.content) ? (row.content as Anthropic.Messages.ContentBlockParam[]) : null
   if (!content || content.length === 0) return null
   if (content.some((block) => !readableByModel(block))) content = content.filter(readableByModel)
@@ -56,6 +58,10 @@ function toMessage(row: CopilotMessageRow): Anthropic.Messages.MessageParam | nu
     if (first?.type === "text" && typeof first.text === "string" && first.text.startsWith("<workflow-context")) {
       content = content.slice(1)
     }
+    // An image's KIE description is stored on its block (image-descriptions.ts):
+    // KIE's model is sent the description in the image's place; Anthropic is
+    // sent the image and never the stored field.
+    content = lane === "kie" ? imagesAsText(content) : withoutDescriptions(content)
   }
   return content.length > 0 ? { role: row.role, content } : null
 }
@@ -67,10 +73,10 @@ function hasUnansweredToolUse(messages: Anthropic.Messages.MessageParam[]): bool
 }
 
 /** Group stored messages by turn, in order. */
-function groupTurns(rows: readonly CopilotMessageRow[]): TurnGroup[] {
+function groupTurns(rows: readonly CopilotMessageRow[], lane: CopilotLane): TurnGroup[] {
   const groups: TurnGroup[] = []
   for (const row of rows) {
-    const message = toMessage(row)
+    const message = toMessage(row, lane)
     if (!message) continue
     const current = groups[groups.length - 1]
     if (current && current.turnId === row.turn_id) {
@@ -110,8 +116,8 @@ export function stripThinkingBlocks(
   return out
 }
 
-export function buildHistory(rows: readonly CopilotMessageRow[]): Anthropic.Messages.MessageParam[] {
-  const groups = groupTurns(rows).filter((g) => !hasUnansweredToolUse(g.messages))
+export function buildHistory(rows: readonly CopilotMessageRow[], lane: CopilotLane = "direct"): Anthropic.Messages.MessageParam[] {
+  const groups = groupTurns(rows, lane).filter((g) => !hasUnansweredToolUse(g.messages))
   const budgetChars = TURN_CAPS.historyTokenBudget * 4
   const kept: TurnGroup[] = []
   let used = 0

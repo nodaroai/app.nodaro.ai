@@ -10,9 +10,10 @@ import { directLaneLatch } from "../llm-platform-exhaustion.js"
 import { extractJsonFromAIResponse } from "../json-utils.js"
 import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
+import { anthropicKeySet } from "./anthropic-availability.js"
 import { assertInlineVideoLane, claudeMustServeDirect, llmComplete } from "./router.js"
 import { kieFallback, laneFallbackAllowed, serveFromFallback } from "./lane-fallback.js"
-import { exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
+import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
 import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
 import type { LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
@@ -134,7 +135,7 @@ export async function llmStreamStructured<T>(
  *  reaches `onToolJson` there and the answer arrives whole. */
 function canStreamStructured(model: LlmModelDef, req: LlmRequest): boolean {
   if (model.structuredOutputMode !== "anthropic-tool") return false
-  const direct = Boolean(model.directFallbackModel) && Boolean(config.ANTHROPIC_API_KEY)
+  const direct = Boolean(model.directFallbackModel) && anthropicKeySet()
   if (req.requireLane === "direct") return direct
   if (req.requireLane === "kie") return Boolean(config.KIE_API_KEY)
   return direct || Boolean(config.KIE_API_KEY)
@@ -177,7 +178,7 @@ async function streamStructuredAttempt(
 ): Promise<LlmResponse> {
   const jsonSchema = req.jsonSchema
   if (!jsonSchema) return llmComplete(req)
-  const directAvailable = Boolean(model.directFallbackModel) && Boolean(config.ANTHROPIC_API_KEY)
+  const directAvailable = Boolean(model.directFallbackModel) && anthropicKeySet()
   const kieAvailable = Boolean(config.KIE_API_KEY) && req.requireLane !== "direct"
   // The same lane rule as llmStream: direct when pinned there, when KIE cannot
   // honour the call, or when there is no KIE key; KIE otherwise.
@@ -185,7 +186,10 @@ async function streamStructuredAttempt(
   const directFirst = req.requireLane === "direct" ||
     (req.requireLane !== "kie" && (!kieAvailable || (directAvailable && (!model.preferKie || claudeMustServeDirect(model, req)))))
   if (directFirst) {
-    // A drained direct account inside its latch window is not asked again (serveIfDirectLatched).
+    // Advanced mode never reaches KIE: refused here when the Anthropic account cannot serve it.
+    assertAdvancedModeServable(model, req)
+    // A direct account latched out after a refusal (out of credit, or a latched key refusal) is not asked
+    // again inside its window (serveIfDirectLatched).
     const latched = serveIfDirectLatched(
       { modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, "anthropic", exhaustionKieFallback(model, req),
     )
@@ -197,7 +201,7 @@ async function streamStructuredAttempt(
       const kie = kieAvailable && req.requireLane === undefined
         ? kieFallback(model, req)
         : err instanceof LlmPlatformExhaustedError ? exhaustionKieFallback(model, req) : undefined
-      if (!kie || err instanceof LlmStreamResponseError || signal?.aborted) throw err
+      if (!kie || err instanceof LlmStreamResponseError || signal?.aborted) throw advancedModeRefusalOf(req, err)
       return serveFromFallback({ modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, err, kie)
     }
   }
@@ -324,14 +328,15 @@ export const LLM_STRUCTURED_DEFAULT_ATTEMPTS = 3
  * what they had.
  *
  * Not when the call is pinned to KIE, there is no direct key or model, or the
- * direct account is latched out as drained: then the call fails as before.
+ * direct account is latched out (out of credit, or a latched key refusal):
+ * then the call fails as before.
  * The ask goes straight to the guarded direct adapter, so a platform refusal
  * there fails the call with the capacity sentence — it never loops back to KIE.
  */
 function directToolBackup(
   req: LlmRequest, lastLane: LlmServedLane | undefined,
 ): { modelId: string; call: (attemptReq: LlmRequest) => Promise<LlmResponse> } | undefined {
-  if (lastLane !== "kie" || req.requireLane === "kie" || !config.ANTHROPIC_API_KEY) return undefined
+  if (lastLane !== "kie" || req.requireLane === "kie" || !anthropicKeySet()) return undefined
   const model = resolveModel(req)
   if (model.structuredOutputMode !== "anthropic-tool" || !model.directFallbackModel) return undefined
   if (directLaneLatch("anthropic")) return undefined

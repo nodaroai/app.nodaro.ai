@@ -293,7 +293,8 @@ export function composeTabSuperset<T extends string>(
  * A unit's output, read the way every media node's is: an output handle
  * (the one named, else the first) whose `from` names the node-data field; a
  * media output prefers the ACTIVE generated result's url (the take the node
- * shows), as the legacy video nodes do. Undefined when it has no such output.
+ * shows), as the legacy video nodes do; a JSON (look) output the field as the
+ * JSON string a wire carries (`unitJsonString`). Undefined when it has no such output.
  */
 export function unitOutputValue(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle?: string): string | undefined {
   const outputs = u.handles.outputs
@@ -308,7 +309,130 @@ export function unitOutputValue(u: UnitDefinition, data: Readonly<Record<string,
     const active = (data.activeResultIndex as number | undefined) ?? 0
     return results[active]?.url ?? (field as string | undefined)
   }
+  if (h.kind === "look") return unitJsonString(field)
   return typeof field === "string" && field ? field : undefined
+}
+
+/**
+ * A JSON output's value as a wire carries it: a string as stored, any other
+ * value serialised; null, undefined and "" are no value. The server's twin is
+ * backend/src/lib/unit-compose.ts `unitJsonString`.
+ */
+export function unitJsonString(v: unknown): string | undefined {
+  if (typeof v === "string") return v === "" ? undefined : v
+  return v === undefined || v === null ? undefined : JSON.stringify(v)
+}
+
+/** A JSON output's value: a string holding a JSON object or array is that object or array; anything else as it is. */
+function unitJsonValue(v: unknown): unknown {
+  if (typeof v !== "string") return v
+  try {
+    const parsed: unknown = JSON.parse(v)
+    return typeof parsed === "object" && parsed !== null ? parsed : v
+  } catch {
+    return v
+  }
+}
+
+const lookOutputs = (u: UnitDefinition) => u.handles.outputs.filter((h) => h.kind === "look")
+
+/**
+ * What a wire from a unit's look pip hands a consumer that reads structured
+ * JSON (Extract Field, JSON Process, the list operators): that output's value
+ * — its field, a JSON string parsed — wrapped, `value` undefined when it holds
+ * none. Undefined when the pip the wire reads (the one named, else the first)
+ * is not a look output, or the unit is a use case. The server's twin is
+ * backend/src/lib/unit-compose.ts `unitPipJson`.
+ */
+export function unitPipJson(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined): { readonly value: unknown } | undefined {
+  if (u.execution.kind === "use-case") return undefined
+  const outputs = u.handles.outputs
+  const h = (sourceHandle ? outputs.find((o) => o.id === sourceHandle) : undefined) ?? outputs[0]
+  if (h?.kind !== "look") return undefined
+  const s = unitJsonString(h.from ? data[h.from] : undefined)
+  return { value: s === undefined ? undefined : unitJsonValue(s) }
+}
+
+/**
+ * A JSON value as list items, as the server's list collector makes them
+ * (inline-executor.ts collectItemsForEdge): an array's elements (a string as
+ * it is, anything else serialised; null and undefined skipped), an object one
+ * serialised item, any other value its text, nothing for null or undefined.
+ */
+export function jsonListItems(value: unknown): string[] {
+  if (value === undefined || value === null) return []
+  if (Array.isArray(value)) return value.filter((e) => e !== undefined && e !== null).map((e) => (typeof e === "string" ? e : JSON.stringify(e)))
+  return [typeof value === "object" ? JSON.stringify(value) : String(value)]
+}
+
+/**
+ * Worker units whose job's result is JSON: they have look outputs, and (the
+ * validator, tools/units/json-output-rules.mjs) nothing but look outputs.
+ * The ones the shared JSON mapping (json-run-result.ts) lands, and whose pips
+ * the add-node popup offers to typed JSON consumers (node-compatibility.ts).
+ */
+export const unitJsonWorkers = (units: ReadonlyArray<UnitDefinition>): UnitDefinition[] =>
+  units.filter((u) => u.execution.kind === "worker" && lookOutputs(u).length > 0)
+
+/**
+ * A worker unit's finished job, as node data (decided 2026-10-18): each look
+ * output's `values[<output id>]` on its `from` field — a string holding a JSON
+ * object or array as that value — and a look output with no value written as
+ * undefined, so a field an earlier run filled is emptied, never left beside
+ * this run's result. A key that names no output is dropped. `values` is the
+ * job's output_data, or a server run's per-pip carrier (`unitOutputs`, each a
+ * JSON string), so every lane lands the same patch. The server's reader of
+ * the same row is backend/src/lib/unit-compose.ts `unitJobOutput`.
+ */
+export function unitJobLanding(u: UnitDefinition, values: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const h of lookOutputs(u)) {
+    if (!h.from) continue
+    const value = Object.hasOwn(values, h.id) && unitJsonString(values[h.id]) !== undefined ? unitJsonValue(values[h.id]) : undefined
+    out[h.from] = value
+  }
+  return out
+}
+
+const landsSomething = (patch: Readonly<Record<string, unknown>>) => Object.values(patch).some((v) => v !== undefined)
+
+/**
+ * A server run's node output for a JSON worker unit, as the node-data patch
+ * (`unitJobLanding`): over its per-pip carrier `unitOutputs`, or — an output
+ * carrying `json` alone — over the primary output's value. Undefined when it
+ * lands nothing.
+ */
+export function unitJsonRunPatch(u: UnitDefinition, output: { readonly unitOutputs?: unknown; readonly json?: unknown }): Record<string, unknown> | undefined {
+  const primary = lookOutputs(u)[0]
+  const carrier = output.unitOutputs
+  const values = typeof carrier === "object" && carrier !== null && !Array.isArray(carrier)
+    ? (carrier as Readonly<Record<string, unknown>>)
+    : primary && output.json !== undefined ? { [primary.id]: output.json } : undefined
+  if (!values) return undefined
+  const patch = unitJobLanding(u, values)
+  return landsSomething(patch) ? patch : undefined
+}
+
+/** How a canvas run lands a JSON worker unit's job (the poll's JSON landing, poll-job.ts). */
+export interface UnitJsonLanding {
+  /** The node fields the run empties at its start: each JSON output's field. */
+  readonly fields: readonly string[]
+  /** The finished job's patch, and what the run resolves (the primary output as a wire carries it, "" when it has none); undefined when the job wrote no result (the node fails). */
+  land(outputData: Readonly<Record<string, unknown>>): { readonly patch: Readonly<Record<string, unknown>>; readonly result: string } | undefined
+}
+
+/** A JSON worker unit's canvas-run landing (`runJsonNode`): every lane's patch (`unitJobLanding`) over the job row. */
+export function unitJsonJobLanding(u: UnitDefinition): UnitJsonLanding {
+  const looks = lookOutputs(u)
+  return {
+    fields: looks.flatMap((h) => (h.from ? [h.from] : [])),
+    land(outputData) {
+      const patch = unitJobLanding(u, outputData)
+      if (!landsSomething(patch)) return undefined
+      const primary = looks[0]
+      return { patch, result: (primary && Object.hasOwn(outputData, primary.id) ? unitJsonString(outputData[primary.id]) : undefined) ?? "" }
+    },
+  }
 }
 
 /** The node-label tables' unit rows, by app locale ("pt-br" in strings.json is "pt-BR"). */

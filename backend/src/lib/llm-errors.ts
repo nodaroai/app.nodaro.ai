@@ -173,6 +173,32 @@ export class LlmPlatformExhaustedError extends LlmLaneError {
   }
 }
 
+/** What the person reads when an Advanced-mode call cannot run on the model's own provider right now. */
+export const ADVANCED_MODE_UNAVAILABLE_MESSAGE =
+  "Advanced mode can't run right now: this model's own provider isn't taking requests. Turn Advanced mode off to run the model, or try again later."
+
+/**
+ * An Advanced-mode call (`LlmRequest.advancedMode`) that the model's own API
+ * cannot serve — its platform account refused, is latched out, or has no key —
+ * and that is never served from KIE instead: Advanced mode IS the vendor's own
+ * API, and KIE ignores what it unlocks. A lane error with no status, so no
+ * route's own fallback reads it as a busy lane; routes answer it as
+ * `advanced_mode_unavailable` (`llmErrorCode`) and refund, as for any failure.
+ */
+export class LlmAdvancedModeUnavailableError extends LlmLaneError {
+  readonly code = "advanced_mode_unavailable"
+
+  constructor(diagnostic: string, cause?: unknown) {
+    super(ADVANCED_MODE_UNAVAILABLE_MESSAGE, {
+      lane: "direct",
+      userMessage: ADVANCED_MODE_UNAVAILABLE_MESSAGE,
+      internalDetails: diagnostic,
+      ...(cause !== undefined ? { cause } : {}),
+    })
+    this.name = "LlmAdvancedModeUnavailableError"
+  }
+}
+
 /**
  * The provider stopped because it reached the output-token cap: what it sent
  * back is a fragment, not an answer.
@@ -445,7 +471,7 @@ export function describeErrorChain(err: unknown): string {
  */
 export function toPlatformExhausted(
   err: unknown,
-  ctx: { lane: "kie" | "direct"; provider: string; modelId: string },
+  ctx: { lane: "kie" | "direct"; provider: string; modelId: string; latchAuth?: boolean },
 ): unknown {
   if (err instanceof LlmPlatformExhaustedError || err instanceof LlmStreamResponseError) return err
   const signal = exhaustionSignalOf(err)
@@ -453,9 +479,14 @@ export function toPlatformExhausted(
   if (!signal || !rule) return err
   const raw = err instanceof Error ? err.message : String(err)
   alertPlatformExhaustion({ provider: ctx.provider, kind: rule.kind, lane: ctx.lane, modelId: ctx.modelId, detail: raw })
-  // A drained DIRECT balance is skipped for a short window (DIRECT_LANE_LATCH_MS). Never a refused key: 401/403
-  // can be a transient permission blip, and never the KIE lane, which has no other lane to move to.
-  if (ctx.lane === "direct" && rule.kind === "billing") latchDirectLaneExhausted({ provider: ctx.provider, kind: rule.kind, detail: raw })
+  // A drained DIRECT balance is skipped for a short window (DIRECT_LANE_LATCH_MS). A refused key (401/403) is
+  // latched only for a caller that asks (`latchAuth`: the film pipelines and the Copilot, which move to KIE and
+  // would otherwise pay a refused round-trip on every call); the general client keeps treating it as a possible
+  // transient blip. Never the KIE lane, which has no other lane to move to. The latch is one per provider, so
+  // while it is open the router skips the direct lane too.
+  if (ctx.lane === "direct" && (rule.kind === "billing" || ctx.latchAuth === true)) {
+    latchDirectLaneExhausted({ provider: ctx.provider, kind: rule.kind, detail: raw })
+  }
   return new LlmPlatformExhaustedError(
     `${ctx.provider} ${ctx.lane} lane ${ctx.modelId}: platform account ${rule.kind === "billing" ? "out of credit/quota" : "key refused"} — ${raw}`,
     { lane: ctx.lane, provider: ctx.provider, exhaustion: rule.kind, httpStatus: signal.status, cause: err },

@@ -411,7 +411,6 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
     { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
     { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
   ],
-  "gif-to-video": { anyOf: ["imageUrl", "gifUrl"], kind: "image", noun: "a GIF" },
   "speech-to-video": [
     { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
     { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
@@ -6910,19 +6909,6 @@ export function buildPayload(
         fps: data.fps ?? 30,
         fit: data.fit ?? "cover",
         padColor: data.padColor ?? "#000000",
-        usageLogId,
-      })
-
-    case "gif-to-video":
-      // Zero-credit local ffmpeg conversion — the GIF arrives as an image
-      // input (an uploaded .gif) or from the node's own upload (data.gifUrl).
-      return ffmpegResult("gif-to-video", {
-        jobId,
-        gifUrl: resolvedInputs.imageUrl || data.gifUrl,
-        loopToMinimum: data.loopToMinimum ?? true,
-        targetDuration: data.targetDuration ?? 3,
-        interpolate: data.interpolate ?? true,
-        alphaBackground: data.alphaBackground ?? "white",
         usageLogId,
       })
 

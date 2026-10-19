@@ -17,16 +17,22 @@ import type { Job } from "bullmq"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+  EPISODE_TRAILER_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
+  buildEpisodeTrailerGraph,
+  renderFinalRunSet,
+  renderRunOverrides,
   buildTightenEpisodeGraph,
   initialRunNodeIds,
   toStoredInlineGraph,
   usecaseRenderFinalOverrides,
+  USE_CASE_LIST_DRIVEN,
   USE_CASE_REVIEW_LIST_DRIVEN,
   USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
   type TightenEpisodeSettings,
 } from "@nodaro/render-rules"
 import type { NodeExecutionState, OrchestratorContext, WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
+import { usecaseWrapperKeepsPartial, usecaseWrapperOutput } from "../../lib/use-case/wrapper-output.js"
 
 const mocks = vi.hoisted(() => {
   const executeNodeCalls: Array<{ id: string; inputs: Record<string, unknown>; data: Record<string, unknown> }> = []
@@ -632,5 +638,225 @@ describe("a review-on Tighten Episode fed by a list is refused where it would fa
     await processWorkflowExecution(listJob())
     expect(failedWrite()).toBeUndefined()
     expect(ran()).toEqual(["t1"])
+  })
+  it("a Trailer (its own result is a list) with review off, two items: refused before any item runs", async () => {
+    const graph = listed({ reviewBeforeRender: false }, ["https://r2/a.mp4", "https://r2/b.mp4"])
+    mocks.workflows.set("wf-3", { ...graph, nodes: graph.nodes.map((n) => (n.id === "t1" ? { ...n, type: "episode-trailer" } : n)) })
+    await processWorkflowExecution(listJob())
+    expect(ran()).toEqual([])
+    expect(states().t1).toMatchObject({ status: "failed", errorCode: USE_CASE_LIST_DRIVEN, error: "Trailer takes one recording. Use a separate workflow run for each recording." })
+    expect(states().fmt?.status).not.toBe("completed")
+  })
+})
+
+describe("a Trailer tries every format (decided 2026-10-18): one failure never stops the rest", () => {
+  type Call = { id: string; data?: Record<string, unknown> }
+  const reset = () => {
+    mocks.executeNode.mockReset()
+    mocks.executeNode.mockImplementation(async (node: Call, inputs: Record<string, unknown>) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 1 }
+    })
+  }
+  const FORMAT_IDS = ["uc-format-9x16", "uc-format-1x1", "uc-format-4x5"]
+  /**
+   * The first format (9:16) fails at once while 1:1 is still rendering. Two at
+   * a time (the free tier), so under fail-fast 4:5 would never start. `onFormat`
+   * runs as each format starts.
+   */
+  function steps(onFormat?: (id: string) => void) {
+    mocks.executeNode.mockImplementation((async (node: Call, inputs: Record<string, unknown>) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      if (node.id.startsWith("uc-format-")) {
+        onFormat?.(node.id)
+        if (node.id === "uc-format-9x16") throw new Error("format failed")
+        await new Promise((r) => setTimeout(r, 10))
+        return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 22 }
+      }
+      switch (node.id) {
+        case "uc-transcribe":
+          return { output: { json: { words: [] } }, creditsUsed: 1 }
+        case "uc-plan":
+          return { output: { json: { version: 1, sources: [], segments: [] } }, creditsUsed: 1 }
+        case "uc-render":
+          return { output: { videoUrl: "https://r2/trailer.mp4", quality: node.data?.quality }, creditsUsed: 11 }
+        default:
+          return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 0 }
+      }
+    }) as never)
+  }
+  const twoAtATime = { userId: OWNER, payer: "deployment", entitlements: { parallelism: 2 } }
+  const trailer = (over: Partial<typeof EPISODE_TRAILER_DEFAULTS> = {}) => {
+    const settings = { ...EPISODE_TRAILER_DEFAULTS, ...over }
+    return toStoredInlineGraph(buildEpisodeTrailerGraph(settings, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), settings)
+  }
+  const formatCalls = () => mocks.executeNodeCalls.filter((c) => c.id.startsWith("uc-format-")).map((c) => c.id)
+  const lastStates = () =>
+    (mocks.updateExecutionWithRetry.mock.calls.map(([, u]) => (u as { node_states?: Record<string, NodeExecutionState> }).node_states).filter(Boolean).pop() ?? {}) as Record<string, NodeExecutionState>
+  const statusWrite = (status: string) => mocks.updateExecutionWithRetry.mock.calls.find(([, u]) => (u as { status?: string })?.status === status)
+
+  it("a first run, 9:16 fails: all three are tried, two are delivered, 9:16 alone is named, and the run keeps them", async () => {
+    const g = trailer()
+    inline.graph = g
+    steps()
+    try {
+      await processWorkflowExecution(inlineJob({ billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(formatCalls().sort()).toEqual([...FORMAT_IDS].sort())
+    // The run failed (a step failed); the wrapper keeps what rendered.
+    expect(failedWrite()).toBeDefined()
+    const states = lastStates()
+    expect(states["uc-format-9x16"]!.status).toBe("failed")
+    expect(states["uc-format-1x1"]!.status).toBe("completed")
+    expect(states["uc-format-4x5"]!.status).toBe("completed")
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-1")
+    expect(out.formats).toEqual([
+      { format: "1:1", url: "https://r2/uc-format-1x1.mp4" },
+      { format: "4:5", url: "https://r2/uc-format-4x5.mp4" },
+    ])
+    expect(out.failedFormats).toEqual(["9:16"])
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(true)
+  })
+
+  it("a Render final, 9:16 fails: all three are tried, two are delivered, 9:16 alone is named", async () => {
+    const g = trailer({ reviewBeforeRender: true })
+    inline.graph = g
+    const done = (nodeType: string, output: Record<string, unknown>) => ({ status: "completed", nodeType, jobId: `j-${nodeType}`, output, completedAt: at })
+    mocks.executions.set("exec-0", {
+      id: "exec-0", user_id: OWNER, workflow_id: null, status: "completed", inline_graph: g,
+      node_states: {
+        "uc-source": { status: "completed", output: { videoUrl: "https://r2/ep.mp4" }, completedAt: at, fromSavedData: true },
+        "uc-transcribe": done("transcribe", { json: { words: [] } }),
+        "uc-plan": done("edit-plan", { json: { version: 1, sources: [], segments: [] } }),
+        "uc-render": done("apply-edl", { videoUrl: "https://r2/preview.mp4", quality: "proxy" }),
+      },
+    })
+    const runSet = renderFinalRunSet("uc-render", g.nodes, g.edges)
+    steps()
+    try {
+      await processWorkflowExecution(inlineJob({
+        executionId: "exec-2", continueFromExecutionId: "exec-0", reviewerPresent: false, billingContext: twoAtATime as never,
+        nodeIds: g.nodes.map((n) => n.id).filter((id) => runSet.has(id)), inputOverrides: renderRunOverrides("uc-render", "final", runSet),
+      }))
+    } finally {
+      reset()
+    }
+    expect(dataOf("uc-render")).toMatchObject({ quality: "final" })
+    expect(formatCalls().sort()).toEqual([...FORMAT_IDS].sort())
+    const out = usecaseWrapperOutput(g, lastStates() as Record<string, unknown>, "exec-2")
+    expect(out.formats!.map((f) => f.format)).toEqual(["1:1", "4:5"])
+    expect(out.failedFormats).toEqual(["9:16"])
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(true)
+  })
+
+  it("a Stop mid-stage starts no further format: the held one is neither delivered nor named failed, and the run is cancelled", async () => {
+    const g = trailer()
+    inline.graph = g
+    // A Stop lands while 9:16 and 1:1 are running (4:5 waits for a slot).
+    steps((id) => {
+      if (id === "uc-format-1x1") mocks.executions.set("exec-1", { status: "cancelled" })
+    })
+    try {
+      await processWorkflowExecution(inlineJob({ billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(formatCalls().sort()).toEqual(["uc-format-1x1", "uc-format-9x16"])
+    expect(statusWrite("completed")).toBeUndefined()
+    expect(statusWrite("cancelled")).toBeDefined()
+    const states = lastStates()
+    expect(states["uc-format-4x5"]!.status).toBe("skipped")
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-1")
+    expect(out.formats!.map((f) => f.format)).toEqual(["1:1"])
+    expect(out.failedFormats).toEqual(["9:16"])
+  })
+
+  /** Every format renders; `onFormat` runs as each one starts. */
+  function allRender(onFormat: (id: string) => void) {
+    mocks.executeNode.mockImplementation((async (node: Call, inputs: Record<string, unknown>) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      if (node.id.startsWith("uc-format-")) {
+        onFormat(node.id)
+        await new Promise((r) => setTimeout(r, 10))
+        return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 22 }
+      }
+      return node.id === "uc-render"
+        ? { output: { videoUrl: "https://r2/trailer.mp4", quality: node.data?.quality }, creditsUsed: 11 }
+        : { output: { json: { version: 1, sources: [], segments: [], words: [] } }, creditsUsed: 1 }
+    }) as never)
+  }
+
+  it("a Stop as the first format starts: what started is delivered by its own result, the rest are skipped, and the run is cancelled (no fee kept)", async () => {
+    const g = trailer()
+    inline.graph = g
+    // Two at a time: 9:16 and 1:1 have both passed their Stop check when the Stop lands; 4:5 has not.
+    allRender((id) => {
+      if (id === "uc-format-9x16") mocks.executions.set("exec-1", { status: "cancelled" })
+    })
+    try {
+      await processWorkflowExecution(inlineJob({ billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(formatCalls().sort()).toEqual(["uc-format-1x1", "uc-format-9x16"])
+    const states = lastStates()
+    expect(states["uc-format-9x16"]!.status).toBe("completed")
+    expect(states["uc-format-1x1"]!.status).toBe("completed")
+    expect(states["uc-format-4x5"]).toMatchObject({ status: "skipped" })
+    expect(states["uc-format-4x5"]).not.toHaveProperty("error")
+    expect(statusWrite("cancelled")).toBeDefined()
+    expect(statusWrite("completed")).toBeUndefined()
+    expect(statusWrite("failed")).toBeUndefined()
+    // The run ends cancelled, and the finaliser settles the wrapper from that: a cancelled run keeps
+    // nothing, its fee refunded (finalize-wrapper.test "a cancelled run keeps nothing").
+    expect(fin.finalize).toHaveBeenCalledWith("exec-1", "job-w")
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-1")
+    expect(out.failedFormats).toBeUndefined()
+  })
+
+  it("a format held back by anything but a Stop is a failure, named as one (never skipped)", async () => {
+    const g = trailer()
+    inline.graph = g
+    // 4:5's own Stop check cannot read the run: it never starts, and no Stop was asked for.
+    let reads = 0
+    allRender((id) => {
+      if (id !== "uc-format-1x1") return
+      mocks.executions.set("exec-1", {
+        get status() {
+          reads++
+          if (reads === 1) throw new Error("status read failed")
+          return "running"
+        },
+      })
+    })
+    try {
+      await processWorkflowExecution(inlineJob({ billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(formatCalls().sort()).toEqual(["uc-format-1x1", "uc-format-9x16"])
+    const states = lastStates()
+    expect(states["uc-format-4x5"]).toMatchObject({ status: "failed", error: "status read failed" })
+    expect(statusWrite("cancelled")).toBeUndefined()
+    expect(statusWrite("completed")).toBeUndefined()
+    expect(failedWrite()).toBeDefined()
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-1")
+    expect(out.formats!.map((f) => f.format)).toEqual(["9:16", "1:1"])
+    expect(out.failedFormats).toEqual(["4:5"])
+  })
+
+  it("the switch is the Trailer's own: the same chain as a saved workflow keeps the engine's default (the first failure stops what has not started)", async () => {
+    const g = trailer()
+    mocks.workflows.set("wf-1", { nodes: g.nodes, edges: g.edges, settings: {}, user_id: OWNER })
+    steps()
+    try {
+      await processWorkflowExecution(inlineJob({ inlineGraph: undefined, wrapperJobId: undefined, workflowId: "wf-1", triggerType: "manual", billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(formatCalls().sort()).toEqual(["uc-format-1x1", "uc-format-9x16"])
+    expect(lastStates()["uc-format-4x5"]).toMatchObject({ status: "failed", error: "Execution cancelled" })
   })
 })

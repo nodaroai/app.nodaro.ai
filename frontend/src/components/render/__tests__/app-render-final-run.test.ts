@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { TIGHTEN_EPISODE_DEFAULTS, runsUseCaseRenderFinal } from "@nodaro/render-rules"
+import { editPlanBasis } from "@nodaro/shared/edl"
 import { appRenderFinalRun, appUseCaseFinalTarget } from "../app-render-final-run"
 import { runEstimateGraph } from "../app-render-review"
 import { estimateRunCredits, runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
@@ -71,6 +72,28 @@ describe("an app's Render final of a use-case node", () => {
     expect(t1.editedEdl).toEqual(edit)
   })
 
+  it("quotes a Trailer's final on the run's plan as the review leaves it: a longer edited cut is quoted longer (decided 2026-10-18)", () => {
+    const edlOf = (sec: number) => ({ version: 1, clock: "master", sources: [{ id: "rec", url: "https://r2/ep.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: sec * 1000, video: "rec" }] })
+    const plan = edlOf(35)
+    const tr = { id: "t1", type: "episode-trailer", position: at, data: { label: "Trailer", reviewBeforeRender: true } }
+    const trEdges = [{ id: "i", source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" }] as unknown as WorkflowEdge[]
+    const state = (editedEdl?: unknown) => ({
+      status: "completed",
+      jobId: "00000000-0000-4000-8000-0000000000aa",
+      output: { videoUrl: "https://r2/p.mp4", quality: "proxy", json: plan },
+      ...(editedEdl ? { editedEdl } : {}),
+    })
+    const quote = (editedEdl?: unknown) => {
+      const states = { rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" } }, t1: state(editedEdl) }
+      const g = runEstimateGraph([rec, tr] as unknown as WorkflowNode[], states as never)
+      const run = appRenderFinalRun("t1", g, trEdges, states)
+      // A per-unit row's whole-run price (`<rate>:<units>u`) at 3 a unit, so a render's minutes show.
+      return estimateRunCredits(run.executable, run.nodes, trEdges, (id) => 3 * Number(/:(\d+)u$/.exec(id)?.[1] ?? 1))
+    }
+    const lengthened = { v: 1, kind: "edl", basis: editPlanBasis(plan), edl: { segments: edlOf(150).segments, dropped: [] } }
+    expect(quote(lengthened)).toBeGreaterThan(quote())
+  })
+
   it("offers none for a Final take, a take with no run named, or a node fed by a list", () => {
     const final = appGraph({ ...previewState, output: { ...previewState.output, quality: "final" } })
     expect(appRenderFinalRun("t1", final.graph, edges, final.states).executable).toEqual([])
@@ -90,6 +113,19 @@ describe("an app's Render final of a use-case node", () => {
     const graph = runEstimateGraph([list, snapshotT1, fmt] as unknown as WorkflowNode[], states as never)
     expect(appUseCaseFinalTarget("t1", graph, listEdges, states)).toBeNull()
     expect(appRenderFinalRun("t1", graph, listEdges, states).executable).toEqual([])
+  })
+
+  it("a review-on Trailer's Preview (its list empty until the final) is offered Render final: a continuation of its own run", () => {
+    const trSettings = { formats: ["9:16", "1:1"], reviewBeforeRender: true }
+    const snapshotTr = { id: "t1", type: "episode-trailer", position: at, data: { label: "Trailer", fieldMappings: {}, reviewBeforeRender: true } }
+    const trState = { status: "completed", jobId: "00000000-0000-4000-8000-0000000000bb", output: { videoUrl: "https://r2/p.mp4", quality: "proxy", listResults: [], useCaseSettings: trSettings, json: PLAN } }
+    const states = { rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" } }, t1: trState }
+    const graph = runEstimateGraph([rec, snapshotTr, fmt] as unknown as WorkflowNode[], states as never)
+    expect(appUseCaseFinalTarget("t1", graph, edges, states)).not.toBeNull()
+    const run = appRenderFinalRun("t1", graph, edges, states)
+    expect(run.executable.map((n) => n.id).sort()).toEqual(["fmt", "t1"])
+    const t1 = run.nodes.find((n) => n.id === "t1")!.data as Record<string, unknown>
+    expect(t1.useCaseContinue).toEqual({ mode: "render-final", jobId: "00000000-0000-4000-8000-0000000000bb", settings: trSettings })
   })
 
   it("a render's Render final is unchanged: its set, the render at Final", () => {

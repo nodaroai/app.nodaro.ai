@@ -11,6 +11,27 @@ It was recorded once, on the unmodified P1 code, before the use-case registry
 refactor (`WRITE_TIGHTEN_IDENTITY=1`). **Never re-record it after the
 refactor**: a re-recording takes whatever the code then builds as the truth.
 
+## `episode-trailer-identity.json`
+
+Trailer's composed facts on the server before it became a node unit: its
+request body (as JSON Schema), its `GET /v1/nodes` entry and charged
+description, its use-case descriptor, the stored snapshot (graph, settings,
+hash) of four built cases, the length it delivers for four intro-card cases,
+its fee and the credit id a run reserves, the lists it belongs to, and its MCP
+handle row. Only Trailer's own facts are kept, plus its predecessor in each
+ordered list, so other nodes joining those lists never touch it. Each graph and
+length row holds its own inputs, and `episode-trailer-identity.test.ts`
+rebuilds every row from them. Its editor twin is
+`frontend/src/__tests__/fixtures/episode-trailer-identity.json`.
+Its `connectionsOut` freezes today's node-type-keyed validator answers (e.g.
+`json → combine-videos.in` true); if dev changes the validator before the
+conversion, rule on it — never re-record.
+
+It was recorded once, on `feat/episode-trailer` before the units merge
+(`UNITS_RECORD_TRAILER_IDENTITY=1`; the test refuses to overwrite an existing
+fixture). **Never re-record it**: a re-recording takes whatever the code then
+builds as the truth.
+
 ## `speaker-view-parity.json`
 
 The cloud plugin's own answers to a set of Speaker View requests: the drift

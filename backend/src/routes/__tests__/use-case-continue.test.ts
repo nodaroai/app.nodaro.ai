@@ -168,6 +168,32 @@ describe("render-final", () => {
     expect(arg).toMatchObject({ userId: USER, runNodeIds: ["uc-render", "uc-captions"], overrides: { "uc-render": { quality: "final" } } })
   })
 
+  it("the quote's plan node holds the run's plan (that quote only), so the reviewer's edit is priced on its own length", async () => {
+    const plan = { version: 1, clock: "master", sources: [], segments: [{ id: "s0", inMs: 0, outMs: 30_000 }] }
+    src.source = { ...previewSource, nodeStates: { ...previewSource.nodeStates, "uc-plan": { status: "completed", output: { json: plan } } } }
+    const edit = { v: 1, kind: "edl", edl: { segments: [], dropped: [] } }
+    await post({ jobId: ID, mode: "render-final", editedEdl: edit })
+    const arg = src.finalCreditsArgs[0] as { nodes: Array<{ id: string; data: Record<string, unknown> }>; overrides: Record<string, Record<string, unknown>> }
+    expect(arg.nodes.find((n) => n.id === "uc-plan")!.data.generatedJson).toEqual(plan)
+    expect(arg.overrides["uc-plan"]).toEqual({ editedEdl: edit })
+    // The run itself is sent no plan: only the reviewer's edit.
+    expect(m.execute.mock.calls[0]![0].inputOverrides["uc-plan"]).toEqual({ editedEdl: edit })
+  })
+
+  it("a seed whose review was applied: the quote reads the plan as planned (plannedJson)", async () => {
+    const planned = { version: 1, clock: "master", sources: [], segments: [{ id: "s0", inMs: 0, outMs: 30_000 }] }
+    src.source = { ...previewSource, nodeStates: { ...previewSource.nodeStates, "uc-plan": { status: "completed", output: { json: { applied: true }, plannedJson: planned } } } }
+    await post({ jobId: ID, mode: "render-final" })
+    const arg = src.finalCreditsArgs[0] as { nodes: Array<{ id: string; data: Record<string, unknown> }> }
+    expect(arg.nodes.find((n) => n.id === "uc-plan")!.data.generatedJson).toEqual(planned)
+  })
+
+  it("a run whose plan state holds no plan: the quote's plan node is as stored", async () => {
+    await post({ jobId: ID, mode: "render-final" })
+    const arg = src.finalCreditsArgs[0] as { nodes: Array<{ id: string; data: Record<string, unknown> }> }
+    expect(arg.nodes.find((n) => n.id === "uc-plan")!.data).not.toHaveProperty("generatedJson")
+  })
+
   it("without an edit: only the render's Final", async () => {
     await post({ jobId: ID, mode: "render-final" })
     expect(m.execute.mock.calls[0]![0].inputOverrides).toEqual({ "uc-render": { quality: "final" } })

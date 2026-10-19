@@ -8,8 +8,9 @@ import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { familyIdsFrom, familyTypesFrom, loadUnits, repoContext } from "../../../tools/units/manifest.mjs"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { isCanvasMacroType } from "@/lib/canvas-macros"
-import { ACCEPTS_KINDS, CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, JSON_PIP_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PICKER_TABS, PRESENTS, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES, USE_CASE_INPUT_HANDLES } from "../../../tools/units/vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, JSON_PIP_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PICKER_TABS, PRESENTS, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES, USE_CASE_INPUT_HANDLES } from "../../../tools/units/vocabulary.mjs"
 import { unitInputAccepts } from "@/lib/ffmpeg-handles"
+import { ACCEPTS_JSON } from "@/lib/data-handles"
 import type { UnitHandleKind } from "@/nodes/kit"
 import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 
@@ -101,6 +102,16 @@ describe("the validator's vocabularies are the product's", () => {
     expect(kinds).toEqual(ACCEPTS_KINDS)
     for (const k of kinds) expect(typeof unitInputAccepts([k])).toBe("function")
     expect(typeof unitInputAccepts(kinds)).toBe("function")
+  })
+
+  it("a JSON input's rule is ACCEPTS_JSON; an input taking every wire takes media streams only", () => {
+    expect(ACCEPTS_KINDS).toContain("look")
+    expect(unitInputAccepts(["look"])).toBe(ACCEPTS_JSON)
+    expect(MANY_KINDS).toEqual(["video", "audio"])
+    for (const k of MANY_KINDS) {
+      expect(ACCEPTS_KINDS).toContain(k)
+      expect(MEDIA_INPUT_KINDS).toContain(k)
+    }
   })
 
   it("required-media kinds = RequiredMediaInput.kind of the payload builder", () => {

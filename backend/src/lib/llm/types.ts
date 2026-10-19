@@ -131,20 +131,27 @@ export interface LlmRequest {
    */
   jsonSchema?: { name: string; schema: Record<string, unknown> }
   /**
-   * Pin the serving lane for THIS call, overriding the model's registry
-   * default — and disable fallback entirely.
+   * Pin the serving lane for THIS call, overriding the model's registry default.
    *
-   * `"direct"` means direct-ONLY: no KIE leg, ever. Video-analysis uses this.
-   * The point is that a silent fallback would be WORSE than an outage there —
-   * KIE reaches Gemini through the `image_url` URL-smuggling hack rather than
-   * real media parts, and its `response_format` drops record-shaped schema
-   * fields, so a fallback run would quietly produce differently-grounded
-   * analysis rather than fail. A hard error is the honest outcome.
+   * `"direct"` means the vendor's own API, with one exception: when the account
+   * behind it cannot serve — no Anthropic key for a Claude model, or a
+   * platform-account refusal — the call is served by KIE on the same registry
+   * model, unless it is Advanced mode (`advancedMode`) or carries media KIE
+   * cannot carry (`kieCanCarry`). Video-analysis pins direct for exactly that
+   * last reason: its video never reaches a KIE leg, and a refusal surfaces.
    *
    * Pinning a model with no lane of that kind is a configuration error and
    * throws rather than degrading — see {@link assertLanePinnable}.
    */
   requireLane?: LlmServingLane
+  /**
+   * Set by `resolveLlmParams` when the person turned Advanced mode on (it also
+   * pins `requireLane: "direct"`). Such a call is never served from KIE — not by
+   * the exhaustion fallback, its latched skip, a stream twin, or a keyless
+   * Claude pin: it fails as `advanced_mode_unavailable` instead
+   * (`LlmAdvancedModeUnavailableError`).
+   */
+  advancedMode?: boolean
   /**
    * Reject the response unless the provider reports at least this many PROMPT
    * tokens. Set it when the request carries media the answer depends on.
@@ -172,6 +179,14 @@ export interface LlmRequest {
    * Setting the field on a direct-pinned call is harmless and simply inert.
    */
   minPromptTokens?: number
+  /**
+   * Send KIE's binary `thinkingFlag` on the Claude wire even with no reasoning
+   * effort set. For a caller that moves a call to KIE itself and asks a model
+   * that reasons by default (`thinkingDefaultOn`) — on the direct lane such a
+   * model thinks with no parameter at all, on KIE only when flagged. Ignored by
+   * every other wire and by the direct lane.
+   */
+  thinkingFlag?: boolean
 }
 
 /**
@@ -188,6 +203,14 @@ export interface LlmResponse {
   model: string
   /** Estimated provider cost in USD based on token usage */
   providerCost?: number
+  /**
+   * KIE's own charge for this call (`credits_consumed`, converted to USD), when
+   * the reply carried it — absent otherwise, including when `providerCost` is
+   * only a rate-table estimate. A caller that must not cost a KIE Claude call
+   * from its reported input tokens (they leave out the caller's own prompt)
+   * reads this, and estimates from sizes when it is absent (`kie-cost.ts`).
+   */
+  creditsUsd?: number
   /** Which lane served this response (see {@link LlmServedLane}). */
   lane: LlmServedLane
 }

@@ -18,7 +18,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
 
 const imageToTextBody = z.object({
@@ -165,7 +165,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         }
 
         return reply.status(502).send({
-          error: { code: "llm_error", message },
+          error: { code: llmErrorCode(err), message },
         })
       }
     },

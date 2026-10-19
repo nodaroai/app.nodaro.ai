@@ -172,3 +172,44 @@ describe("what a Chapters node hands on", () => {
     expect(extractSavedNodeOutput(node("c1", "episode-chapters"))).toBeUndefined()
   })
 })
+
+describe("what a Trailer node hands on", () => {
+  const trailer = node("tr", "episode-trailer")
+  const formats = [{ format: "9:16", url: "https://r2/a.mp4" }, { format: "1:1", url: "https://r2/b.mp4" }]
+
+  it("a Trailer wrapper hands on its deliveries as its list, the first as its media", () => {
+    expect(usecaseJobOutput({ formats, videoUrl: "https://r2/a.mp4", quality: "final" })).toMatchObject({
+      videoUrl: "https://r2/a.mp4",
+      listResults: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      listResultStamps: [{ quality: "final" }, { quality: "final" }],
+      quality: "final",
+    })
+    // A review-on run's preview: no deliveries yet, no list.
+    expect(usecaseJobOutput({ formats: [], videoUrl: "https://r2/p.mp4", quality: "proxy" })).not.toHaveProperty("listResults")
+  })
+
+  it("rebuilt from its wrapper's row: the same list", () => {
+    expect(buildNodeOutputFromJobData({ formats, videoUrl: "https://r2/a.mp4", quality: "final", _executionId: "e" }, "episode-trailer")).toMatchObject({
+      videoUrl: "https://r2/a.mp4",
+      listResults: ["https://r2/a.mp4", "https://r2/b.mp4"],
+    })
+  })
+
+  it("a node after it, on its media pip, runs once per delivery; its json pip is one value", () => {
+    const cap = node("cap", "add-captions")
+    const states = { tr: done({ ...usecaseJobOutput({ formats, videoUrl: "https://r2/a.mp4", json: { v: 1 }, quality: "final" }) }) }
+    const each = planFanOut(getListFanOutForNode(cap, [edge("tr", "cap", "media", "in")], states, [trailer, cap]), cap.type, cap.data)
+    expect(each?.items).toEqual(["https://r2/a.mp4", "https://r2/b.mp4"])
+    const extract = node("x", "extract-field")
+    expect(planFanOut(getListFanOutForNode(extract, [edge("tr", "x", "json", "in")], states, [trailer, extract]), extract.type, extract.data)).toBeNull()
+  })
+
+  it("saved: its last run's deliveries are its own list", () => {
+    expect(extractSavedNodeOutput(node("tr", "episode-trailer", { generatedVideoUrl: "https://r2/a.mp4", __listResults: ["https://r2/a.mp4", "https://r2/b.mp4"] })))
+      .toEqual({ videoUrl: "https://r2/a.mp4", listResults: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(extractSavedNodeOutput(node("tr", "episode-trailer", { __listResults: ["https://r2/a.mp4"] }))).toEqual({ listResults: ["https://r2/a.mp4"] })
+    // A single-result node never reads a saved list as its own.
+    expect(extractSavedNodeOutput(node("t1", "tighten-episode", { generatedVideoUrl: "https://r2/ep.mp4", __listResults: ["https://r2/x.mp4"] }))).toEqual({ videoUrl: "https://r2/ep.mp4" })
+    expect(extractSavedNodeOutput(node("tr", "episode-trailer"))).toBeUndefined()
+  })
+})

@@ -1,7 +1,7 @@
 // @test-units-by-name composes only the in-memory fixture unit it declares, and looks the aggregates up by prototype keys only
 import { describe, expect, it } from "vitest"
 import type { UnitDescriptor, UnitPrice } from "../../nodes/kit.js"
-import { composeRecord, composeRecordSorted, composeSet, placeAfter, registryCategoryOf, unitRecord, unitSavedOutput, unitStaticCosts, unitsWith } from "../unit-compose.js"
+import { composeRecord, composeRecordSorted, composeSet, isUnitJsonWorker, placeAfter, registryCategoryOf, unitJobOutput, unitLookPipOf, unitPipJson, unitPipValue, unitRecord, unitSavedOutput, unitStaticCosts, unitsWith } from "../unit-compose.js"
 
 /**
  * Every server seam the node units compose through (§5.8 B PR1b,
@@ -100,6 +100,56 @@ describe("saved output", () => {
     expect(unitSavedOutput(FIXTURE, { generatedResults: [{ url: "r0" }, { url: "r1" }], activeResultIndex: 1, generatedVideoUrl: "f" })).toEqual({ videoUrl: "r1" })
     expect(unitSavedOutput(FIXTURE, { generatedVideoUrl: "f" })).toEqual({ videoUrl: "f" })
     expect(unitSavedOutput(FIXTURE, {})).toBeUndefined()
+  })
+})
+
+// A JSON-only worker, Speaker Map's shape: `json` (primary) and `edl`.
+const MAP: UnitDescriptor = {
+  ...FIXTURE,
+  type: "fixture-map",
+  outputType: "data",
+  outputs: ["json", "edl"],
+  handles: {
+    inputs: [],
+    outputs: [{ id: "json", label: "Map", kind: "look", from: "generatedJson" }, { id: "edl", label: "EDL", kind: "look", from: "generatedEdl" }],
+  },
+}
+
+describe("a worker unit's JSON (look) outputs", () => {
+  it("isUnitJsonWorker: a worker with look outputs — never a media worker, never a use case", () => {
+    expect(isUnitJsonWorker(MAP)).toBe(true)
+    expect(isUnitJsonWorker(FIXTURE)).toBe(false)
+    expect(isUnitJsonWorker({ ...MAP, execution: { kind: "use-case" } } as unknown as UnitDescriptor)).toBe(false)
+  })
+  it("unitSavedOutput: each look output's field, as the JSON string a wire carries, on unitOutputs; the primary's value on json", () => {
+    expect(unitSavedOutput(MAP, { generatedJson: { a: 1 }, generatedEdl: '{"b":2}' })).toEqual({ unitOutputs: { json: '{"a":1}', edl: '{"b":2}' }, json: { a: 1 } })
+    expect(unitSavedOutput(MAP, { generatedJson: '{"a":1}' })).toEqual({ unitOutputs: { json: '{"a":1}' }, json: { a: 1 } })
+    expect(unitSavedOutput(MAP, { generatedEdl: { b: 2 } })).toEqual({ unitOutputs: { edl: '{"b":2}' } })
+    expect(unitSavedOutput(MAP, { generatedJson: "", generatedEdl: null })).toBeUndefined()
+    expect(unitSavedOutput(MAP, {})).toBeUndefined()
+  })
+  it("unitJobOutput: output_data[<output id>] per look output; keys naming no output are dropped; nothing → {}", () => {
+    expect(unitJobOutput(MAP, { json: { a: 1 }, edl: { b: 2 }, videoUrl: "x" })).toEqual({ unitOutputs: { json: '{"a":1}', edl: '{"b":2}' }, json: { a: 1 } })
+    expect(unitJobOutput(MAP, { edl: { b: 2 } })).toEqual({ unitOutputs: { edl: '{"b":2}' } })
+    expect(unitJobOutput(MAP, { videoUrl: "x" })).toEqual({})
+  })
+  it("unitLookPipOf / unitPipValue: the look pip a wire reads (the one named, else the first), from unitOutputs", () => {
+    const output = { unitOutputs: { json: '{"a":1}', edl: '{"b":2}' } }
+    expect(unitLookPipOf(MAP, "edl")).toBe("edl")
+    expect(unitLookPipOf(MAP, null)).toBe("json")
+    expect(unitLookPipOf(MAP, "nope")).toBe("json")
+    expect(unitLookPipOf(FIXTURE, "video-out")).toBeUndefined()
+    expect(unitLookPipOf(FIXTURE, null)).toBeUndefined()
+    expect(unitPipValue(MAP, output, "edl")).toBe('{"b":2}')
+    expect(unitPipValue(MAP, output, undefined)).toBe('{"a":1}')
+    expect(unitPipValue(MAP, {}, "edl")).toBeUndefined()
+    expect(unitPipValue(FIXTURE, output, "video-out")).toBeUndefined()
+  })
+  it("unitPipJson: the wired look pip's JSON value; undefined when it holds none or is not a look pip", () => {
+    const output = { unitOutputs: { json: '{"a":1}', edl: '{"b":2}' } }
+    expect(unitPipJson(MAP, output, "edl")).toEqual({ b: 2 })
+    expect(unitPipJson(MAP, { unitOutputs: { edl: '{"b":2}' } }, "json")).toBeUndefined()
+    expect(unitPipJson(FIXTURE, output, "video-out")).toBeUndefined()
   })
 })
 

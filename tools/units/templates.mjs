@@ -83,6 +83,9 @@ export function definitionSource(unit, priceRows) {
     // The editor's price mirror (estimates before the server answers): every
     // staticCosts row of price.ee.ts — never written by hand, never in unit.json.
     priceRows: Object.fromEntries(Object.keys(priceRows ?? {}).sort(byCodeUnit).map((k) => [k, priceRows[k]])),
+    // A worker that declares a job budget (backend budget.ts) runs long: a reload
+    // re-attaches its poll for the long horizon (single-node-restore.ts). Absent otherwise.
+    ...(unit.files.backend.includes("budget.ts") ? { longRunning: true } : {}),
   }
   return [GENERATED_HEADER, "// The projection of unit.json the editor reads: edit unit.json, then run npm run gen:units.", "", `export const definition = ${json(def)} as const`, ""].join("\n")
 }
@@ -182,10 +185,10 @@ export function contractsSource(units, legacyTypes = []) {
     GENERATED_HEADER,
     "// The unit contract published in @nodaro/shared (decided 2026-10-16, widened 2026-10-18): node type",
     "// ids with closed vocabularies — each unit's producer kind, the use-case types, what each JSON pip",
-    "// carries, the input pips that are never a prompt lane, the review holds and how a published app",
-    "// presents the result. Never a price, credit id, number, prompt or doctrine string. Each block",
-    "// replaces a hand-written published list, which composes its rows (unit-contract-compose.ts);",
-    "// every row is an irrevocable Apache grant.",
+    "// carries, the input pips that are never a prompt lane, the review holds, how a published app",
+    "// presents the result and which outputs fan out item by item. Never a price, credit id, number,",
+    "// prompt or doctrine string. Each block feeds a published table that composes its rows with the",
+    "// hand-written ones (unit-contract-compose.ts); every row is an irrevocable Apache grant.",
     "",
     "export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: \"audio\" | \"video\" | \"image\" | \"dynamic\"]> = [",
     ...rows.map((u) => `  [${JSON.stringify(u.type)}, ${JSON.stringify(u.manifest.contract.producer)}], ${tag(u.type)}`),
@@ -214,6 +217,11 @@ export function contractsSource(units, legacyTypes = []) {
     "// How a published app shows each unit's result where the producer sets do not decide it (contract.presents) — presentation-utils.ts.",
     "export const UNIT_PRESENTS: ReadonlyArray<readonly [type: string, presents: \"image\" | \"video\" | \"audio\" | \"text\"]> = [",
     ...ordered.filter((u) => contract(u).presents).map((u) => row(u.type, [JSON.stringify(contract(u).presents)])),
+    "]",
+    "",
+    "// The outputs an \"each\" edge reads item by item when the unit ran once per item, and the pip an edge naming none reads (contract.fanOutEach) — producer-types.ts.",
+    "export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly [type: string, handles: { readonly each: ReadonlyArray<string>; readonly primary: string }]> = [",
+    ...ordered.filter((u) => contract(u).fanOutEach).map((u) => row(u.type, [`{ "each": [${contract(u).fanOutEach.each.map((h) => JSON.stringify(h)).join(", ")}], "primary": ${JSON.stringify(contract(u).fanOutEach.primary)} }`])),
     "]",
     "",
   ].join("\n")

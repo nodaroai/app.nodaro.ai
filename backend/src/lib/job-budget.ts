@@ -27,8 +27,11 @@
  * pre-task heartbeat beats for exactly this long), and the orchestrator sizes
  * the node from the SAME call on the SAME payload — there is no second copy of
  * any formula to drift. Adding a budgeted job type is one entry here plus the
- * handler's one-line delegation; `workers/handlers/__tests__/ffmpeg.test.ts`
- * fails if a handler declares a budget this registry does not return.
+ * handler's one-line delegation — or, for a node unit, its own `budget.ts`
+ * (gen:units composes it under the unit's type, `UNIT_BUDGETS`, below; the
+ * video worker's dispatch falls back to this registry for a handler that
+ * declares no budget); `workers/handlers/__tests__/ffmpeg.test.ts` fails if a
+ * handler declares a budget this registry does not return.
  *
  * KEYED BY JOB NAME, READ BY ROW TOO. A `jobs` row carries the name the
  * registry is keyed on in `job_type` once the video worker picks it up (the
@@ -70,7 +73,9 @@
  * source's length, but the 200-part cap bounds it (200 × the part length), so
  * its leaf sums its steps' kill budgets over that longest source at the 4K30
  * liveness canvas (`providers/video/split-media-plan.ts`).
- * Pure: imports only the budget leaves and the engine's constants.
+ * Pure: imports only the budget leaves, the units' budget leaves (the
+ * aggregate imports each unit's budget.ts and nothing else), the pure compose
+ * helper and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
 import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
@@ -78,6 +83,9 @@ import { silenceDetectJobBudgetMs } from "../providers/audio/silence-detect-budg
 import { speakerFramesJobBudgetMs } from "../providers/video/speaker-frames-budget.js"
 import { speakerViewJobBudgetMs } from "../providers/video/speaker-view-budget.js"
 import { splitMediaJobBudgetMs } from "../providers/video/split-media-plan.js"
+import { UNIT_BUDGETS } from "../nodes/_generated/budgets.js"
+import type { UnitBudget } from "../nodes/kit.js"
+import { composeRecord } from "./unit-compose.js"
 import {
   NODE_TIMEOUT_MS,
   POLL_ABSOLUTE_TIMEOUT_MS,
@@ -85,16 +93,22 @@ import {
   type OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 
-type JobBudgetFn = (data: unknown) => number | undefined
+type JobBudgetFn = UnitBudget
 
-const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freeze({
+const LEGACY_JOB_BUDGETS: Record<string, JobBudgetFn> = {
   "apply-edl": applyEdlJobBudgetMs,
   "audio-sync": audioSyncJobBudgetMs,
   "silence-detect": silenceDetectJobBudgetMs,
   "speaker-frames": speakerFramesJobBudgetMs,
   "speaker-view": speakerViewJobBudgetMs,
   "split-media": splitMediaJobBudgetMs,
-})
+}
+
+/** The legacy rows and every worker unit's budget.ts, under its type (its job
+ *  name). A type in both throws at load: it lives in exactly one place. */
+const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freeze(
+  composeRecord("DECLARED_JOB_BUDGETS", LEGACY_JOB_BUDGETS, UNIT_BUDGETS),
+)
 
 /** Every job name that can declare a budget — the `job_type` filter a row
  *  reader uses (`lib/execution-budget.ts`). */

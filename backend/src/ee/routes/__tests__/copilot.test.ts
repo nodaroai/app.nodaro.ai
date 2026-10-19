@@ -210,6 +210,28 @@ describe("copilot routes — access", () => {
 })
 
 describe("copilot routes — turn preconditions", () => {
+  it("serves a turn with only KIE configured, and refuses only when neither key is", async () => {
+    const { config } = await import("@/lib/config.js")
+    const saved = { anthropic: config.ANTHROPIC_API_KEY, kie: config.KIE_API_KEY }
+    try {
+      config.ANTHROPIC_API_KEY = ""
+      config.KIE_API_KEY = "kie-key"
+      state.thread = null
+      const app = await buildApp()
+      // Past the provider gate: the thread lookup answered.
+      const res = await app.inject({ method: "POST", url: "/v1/copilot/threads/th1/messages", payload: { message: "hi" } })
+      expect(res.statusCode).toBe(404)
+
+      config.KIE_API_KEY = "  "
+      const res2 = await (await buildApp()).inject({ method: "POST", url: "/v1/copilot/threads/th1/messages", payload: { message: "hi" } })
+      expect(res2.statusCode).toBe(503)
+      expect(res2.json().error.code).toBe("provider_unavailable")
+    } finally {
+      config.ANTHROPIC_API_KEY = saved.anthropic
+      config.KIE_API_KEY = saved.kie
+    }
+  })
+
   it("409s on a stale baseVersion instead of editing the wrong graph", async () => {
     const app = await buildApp()
     const res = await app.inject({

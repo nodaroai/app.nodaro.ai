@@ -50,6 +50,8 @@ vi.mock("../store.js", () => ({
   nextSeq: async () => 1,
   touchTurnHeartbeat: vi.fn(),
   updateTurnProgress: vi.fn(),
+  recordTurnLane: vi.fn(),
+  updateMessageContent: vi.fn(),
   // The real one: OFF unless the thread explicitly says otherwise. Stubbing
   // it true here would quietly grant this fixture an exemption it never asked
   // for.

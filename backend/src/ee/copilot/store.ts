@@ -126,6 +126,8 @@ export interface CopilotTurn {
   error: string | null
   started_at: string
   finished_at: string | null
+  /** Which lane served the turn (migration 536); absent on a database the migration has not reached. */
+  lane?: "direct" | "kie" | null
 }
 
 export interface CopilotMessageRow {
@@ -401,6 +403,22 @@ export async function updateTurnProgress(
     .eq("id", turnId)
 }
 
+/**
+ * Which lane served the turn. Its own best-effort write: on a database
+ * without the `lane` column (staging, before the release applies its
+ * migration) PostgREST refuses the update whole — so it fails alone, and the
+ * turn's progress writes are untouched. It never throws: the runner calls it
+ * just before settling the turn's credits.
+ */
+export async function recordTurnLane(turnId: string, lane: "direct" | "kie"): Promise<void> {
+  try {
+    const { error } = await supabase.from("copilot_turns").update({ lane }).eq("id", turnId)
+    if (error) console.warn(`[copilot] turn ${turnId}: lane ${lane} not recorded (${error.message})`)
+  } catch (err) {
+    console.warn(`[copilot] turn ${turnId}: lane ${lane} not recorded (${err instanceof Error ? err.message : String(err)})`)
+  }
+}
+
 export async function finishTurn(
   turnId: string,
   status: Exclude<TurnStatus, "running">,
@@ -521,6 +539,17 @@ export async function appendMessage(input: {
     .single()
   if (error) throw new Error(`appendMessage: ${error.message}`)
   return data as CopilotMessageRow
+}
+
+/**
+ * Replace a stored message's content — a Copilot image's KIE description
+ * written onto its block (image-descriptions.ts). Best-effort: a failed write
+ * (the 256 KB content CHECK included) leaves the row as it was, and the image
+ * is simply described again on a later KIE turn.
+ */
+export async function updateMessageContent(messageId: string, content: unknown[]): Promise<void> {
+  const { error } = await supabase.from("copilot_messages").update({ content }).eq("id", messageId)
+  if (error) console.warn(`[copilot] message ${messageId}: image description not stored (${error.message})`)
 }
 
 export async function bumpThreadActivity(threadId: string, userTurnDelta: number): Promise<void> {

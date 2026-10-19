@@ -6,7 +6,9 @@ export const definition = {
   "label": "Fixture Echo",
   "category": "utility",
   "inputs": [
-    "in"
+    "in",
+    "sources",
+    "plan"
   ],
   "outputs": [
     "video-out"
@@ -36,6 +38,22 @@ export const definition = {
           "video"
         ],
         "field": "videoUrl"
+      },
+      {
+        "id": "sources",
+        "label": "Sources",
+        "accepts": [
+          "video",
+          "audio"
+        ],
+        "many": true
+      },
+      {
+        "id": "plan",
+        "label": "Plan",
+        "accepts": [
+          "look"
+        ]
       }
     ],
     "outputs": [
@@ -66,5 +84,6 @@ export const definition = {
   },
   "priceRows": {
     "fixture-echo": 3
-  }
+  },
+  "longRunning": true
 } as const

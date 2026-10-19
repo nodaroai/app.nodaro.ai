@@ -144,7 +144,7 @@ describe("publishing a component that holds a Preview render", () => {
     const res = await app.inject({ method: "POST", url: "/v1/apps/publish", headers: { "x-user-id": OWNER }, payload: component })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toEqual({ code: PREVIEW_RENDER_NESTED, message: previewRefusalMessage("componentPublish", "review") })
-    expect(res.json().error.message).toMatch(/turn off “Review before render” on every Tighten Episode node in it/)
+    expect(res.json().error.message).toMatch(/turn off “Review before render” on every node that has it on before publishing it/)
   })
 
   it("the render's refusal is the text it has always been", async () => {

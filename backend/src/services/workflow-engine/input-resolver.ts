@@ -14,7 +14,7 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput, savedOutputFor, unitLookPipJsonFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
   pro3DRenderShotStills
 } from "@nodaro/shared/scene3d"
@@ -85,6 +85,7 @@ import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
 import { routeUseCaseInput } from "./use-case-inputs.js"
+import { routeUnitInput } from "./unit-inputs.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor, splitMediaPartsFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -311,9 +312,12 @@ export function resolveNodeInputs(
       : undefined
 
     const servesList = listResultsServeHandle(sourceNode.type, effectiveSourceHandle)
+    // A node unit's look pip lists its own output (an array is its list), never
+    // another output's (unitLookPipJsonFor; the editor's extractNodeOutputAsList).
+    const unitPipJson = unitLookPipJsonFor(sourceNode, state, effectiveSourceHandle)
     const effectiveListResults = isLlmChatItemsEdge || !servesList
       ? undefined
-      : selectorListResults ?? splitParts ?? listFor(sourceNode, state)
+      : selectorListResults ?? splitParts ?? (unitPipJson ? jsonArrayItems(unitPipJson.value) : listFor(sourceNode, state))
     // What a fan-out iteration indexes BY ROW: the row-aligned twin when the
     // source publishes one (Extract Field), else the list itself. Addressing by
     // position (item / item:N / range / Bundle) keeps using the public list above.
@@ -585,6 +589,10 @@ export function resolveNodeInputs(
     // skip. `text-prompt` is both a parameter type and a text source, so the
     // text-source carve-out keeps it routing into `inputs.prompt`.
     if (PARAMETER_NODE_TYPES.has(sourceNode.type) && !TEXT_SOURCE_NODE_TYPES.has(sourceNode.type)) continue
+
+    // A node unit's JSON and many-wire inputs, by the input they land on — before
+    // the empty-output skip, so a wired JSON input that got nothing is recorded.
+    if (routeUnitInput(inputs, targetNode, edge, sourceNode, effectiveSourceHandle, output, TEXT_SOURCE_NODE_TYPES)) continue
 
     // edit-plan's `offsets` wired but carrying no audio-sync result: record the
     // wire (null) so the payload builder fails the run rather than plan without
@@ -1169,6 +1177,15 @@ export function getListFanOutForNode(
       continue
     }
 
+    // 4c. A node unit's look pip lists its own output (an array is its list) —
+    //     never another output's (unitLookPipJsonFor; the editor's extractNodeOutputAsList).
+    const unitJson = unitLookPipJsonFor(sourceNode, state, edge.sourceHandle)
+    if (unitJson) {
+      const items = jsonArrayItems(unitJson.value)
+      if (items) consider(edge, selectListItems(items, selectorArg))
+      continue
+    }
+
     // 4. Any node with listResults from a prior fan-out execution — read through
     //    its row-aligned twin when it publishes one (Extract Field), so its holes
     //    keep the rows of a sibling list in place.
@@ -1468,9 +1485,7 @@ const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "l
  *  capability (tools/units/capabilities.mjs), so a migrated node is never named
  *  here. The editor's twin is `ENTITY_SUBJECT_TARGET_TYPES` in
  *  frontend/src/components/editor/workflow-editor/node-input-resolver.ts,
- *  composed from the same capability. Its legacy rows lack "gif-to-video",
- *  which the editor's have: a server-run Character → GIF to Video sends the
- *  portrait as a reference, which its payload never reads. */
+ *  composed from the same capability. */
 export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
   "ENTITY_SUBJECT_TARGET_TYPES",
   new Set(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video"]),

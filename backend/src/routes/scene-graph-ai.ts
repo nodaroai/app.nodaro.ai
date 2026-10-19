@@ -20,7 +20,7 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -203,7 +203,7 @@ Composition style: ${prompt}`
         }
 
         return reply.status(502).send({
-          error: { code: "llm_error", message },
+          error: { code: llmErrorCode(err), message },
         })
       }
     },

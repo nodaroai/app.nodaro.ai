@@ -23,7 +23,7 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -202,7 +202,7 @@ Overlay style: ${prompt}${assetSection}`
         }
 
         return reply.status(502).send({
-          error: { code: "llm_error", message },
+          error: { code: llmErrorCode(err), message },
         })
       }
     },

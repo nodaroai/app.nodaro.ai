@@ -20,9 +20,9 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 vi.mock("../execute-node", () => ({ executeNode: (...args: unknown[]) => mockExecuteNode(...args) }))
 
-import { USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE } from "@nodaro/render-rules"
+import { USE_CASE_LIST_DRIVEN, usecaseListDrivenMessage, USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE } from "@nodaro/render-rules"
 import { tx } from "@/lib/i18n"
-import { nodeStateErrorText } from "@/lib/execution-error-text"
+import { executionErrorText, nodeStateErrorText } from "@/lib/execution-error-text"
 import { executeNodeForList } from "../list-execution"
 import { getListFanOutForNode } from "../node-input-resolver"
 import { planFanOut } from "@nodaro/shared/workflow"
@@ -79,5 +79,35 @@ describe("a review-on Tighten Episode is never fanned out over a list", () => {
     expect(nodeStateErrorText({ error: "boom", errorCode: "insufficient_credits" })).toBe("boom")
     expect(nodeStateErrorText({ error: "boom" })).toBe("boom")
     expect(nodeStateErrorText({})).toBe("Node failed")
+  })
+})
+
+describe("a Trailer (its own result is a list) is never fanned out over a list", () => {
+  beforeEach(() => vi.clearAllMocks())
+  const trailer = (data: Record<string, unknown>) => {
+    const node = { id: "tr", type: "episode-trailer", position: { x: 0, y: 0 }, data: { label: "Trailer", ...data } }
+    mockNodes = [node]
+    return node as unknown as WorkflowNode
+  }
+  // The label the generic message names is the node TYPE's, localized (here: English).
+  const text = () => tx("nodeRun.usecaseListDriven", { label: "Trailer" })
+
+  it("review off: refused before any item runs, with its own reason", async () => {
+    await expect(executeNodeForList(trailer({ reviewBeforeRender: false }), ["https://r2/a.mp4", "https://r2/b.mp4"], ctx)).rejects.toThrow(text())
+    expect(mockExecuteNode).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledTimes(1)
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("tr", expect.objectContaining({ executionStatus: "failed", errorMessage: expect.stringContaining(text()) }))
+  })
+
+  it("the English text is the server's word for word (decided 2026-10-18), and names no other node", () => {
+    expect(text()).toBe("Trailer takes one recording. Use a separate workflow run for each recording.")
+    expect(text()).toBe(usecaseListDrivenMessage("Trailer"))
+    expect(text()).not.toMatch(/Tighten/)
+  })
+
+  it("a server run's refusal reads by its code (with the node's type) or its sentence, in the reader's language", () => {
+    expect(nodeStateErrorText({ error: "anything", errorCode: USE_CASE_LIST_DRIVEN }, "episode-trailer")).toBe(text())
+    expect(executionErrorText(usecaseListDrivenMessage("Trailer"))).toBe(text())
+    expect(executionErrorText(`Node execution failed: tr: ${usecaseListDrivenMessage("Trailer")}`)).toBe(`Node execution failed: tr: ${text()}`)
   })
 })

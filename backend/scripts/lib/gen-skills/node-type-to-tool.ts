@@ -1,3 +1,7 @@
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { loadUnits } from "../../../../tools/units/manifest.mjs"
+
 /**
  * Best-effort node-type → MCP tool name map. Unmapped node types omit the
  * mcp-call block (renderMcpCallBlock returns "" when the schema is
@@ -5,8 +9,13 @@
  *
  * Shared by gen-skills (the mcp-call block of each node skill) and the
  * surface checker (scripts/check-surfaces.ts, the MCP column of a node).
+ *
+ * The hand-written rows ∪ every node unit that names its verb in its manifest
+ * (unit.json `mcp.widgetModelFor`, the MCP tool that dispatches its type): a
+ * unit is never named here. A unit naming several verbs gets no row (which of
+ * them is "the" tool is not something the manifest says).
  */
-export const NODE_TYPE_TO_TOOL: Readonly<Record<string, string>> = {
+const LEGACY_NODE_TYPE_TO_TOOL: Readonly<Record<string, string>> = {
   "generate-image": "generate_image",
   "image-to-image": "image_to_image",
   "image-to-video": "animate_image",
@@ -31,7 +40,6 @@ export const NODE_TYPE_TO_TOOL: Readonly<Record<string, string>> = {
   "video-depth": "video_depth",
   "extend-video": "extend_video",
   "loop-video": "loop_video",
-  "gif-to-video": "gif_to_video",
   "motion-transfer": "motion_transfer",
   "face-swap": "face_swap",
   "speech-to-video": "speech_to_video",
@@ -64,3 +72,24 @@ export const NODE_TYPE_TO_TOOL: Readonly<Record<string, string>> = {
   "suno-separate": "suno_separate_stems",
   "video-overlay": "overlay_images",
 }
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..")
+
+/** The [type, tool] rows of the node units in `root` that name exactly one MCP verb. */
+export function unitNodeTools(root: string): Array<[type: string, tool: string]> {
+  return loadUnits(root).flatMap((u) => {
+    const tools = (u.manifest as { mcp?: { widgetModelFor?: unknown } } | null)?.mcp?.widgetModelFor
+    return Array.isArray(tools) && tools.length === 1 && typeof tools[0] === "string" ? [[u.type, tools[0]] as [string, string]] : []
+  })
+}
+
+function composeNodeTools(): Readonly<Record<string, string>> {
+  const out: Record<string, string> = { ...LEGACY_NODE_TYPE_TO_TOOL }
+  for (const [type, tool] of unitNodeTools(REPO_ROOT)) {
+    if (Object.hasOwn(out, type)) throw new Error(`NODE_TYPE_TO_TOOL: "${type}" is both a hand-written row and a node unit — drop the row`)
+    out[type] = tool
+  }
+  return out
+}
+
+export const NODE_TYPE_TO_TOOL: Readonly<Record<string, string>> = composeNodeTools()

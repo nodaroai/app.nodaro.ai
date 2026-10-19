@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
+import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { meterSyncLlm } from "../lib/meter-sync-llm.js"
@@ -84,12 +84,12 @@ async function captionPortrait(portraitUrl: string): Promise<string | null> {
 }
 
 function checkProvider(reply: FastifyReply): boolean {
-  // captionPortrait() calls llmComplete with modelId="claude-sonnet-4.6" which
-  // routes through Anthropic specifically. Without ANTHROPIC_API_KEY the LLM
-  // call 502s mid-request — gate it here with a clean 503 instead.
-  if (!config.ANTHROPIC_API_KEY) {
+  // captionPortrait() calls llmComplete with modelId="claude-sonnet-4.6", which
+  // the router serves on KIE or on the Anthropic account — refuse only when
+  // neither is configured, with a clean 503 instead of a mid-request failure.
+  if (!claudeLaneConfigured()) {
     reply.status(503).send({
-      error: { code: "provider_unavailable", message: "Anthropic API key not configured" },
+      error: { code: "provider_unavailable", message: "No AI provider key is configured" },
     })
     return false
   }

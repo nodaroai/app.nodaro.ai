@@ -1,0 +1,319 @@
+{
+  "$comment": "The JSON consumers that read a source's structured JSON directly \u2014 Extract Field, JSON Process and the list operators (filter-list here) \u2014 read the JSON output of the PIP a wire leaves from, on both engines (decided 2026-10-18). The source is the JSON-only worker of unit-json-outputs.json (type fixture-map: `json` first, `edl` second). `sources` are its states: `both`, a node holding both outputs (the editor's data; the server seeds its output from it), `arrayFirst`, a node whose first output is a list (its items must never reach the edl pip), and `edlOnly`, a job that wrote only `edl` (the server reads it live from `outputData` and seeded from `data`). Each case wires `pip` into a `consumer` with `data`; `text` is Extract Field's extractedText, `processedResult` JSON Process's, `items` filter-list's list. `fanOut` cases wire `pip` on an Each wire into an ordinary node: `items` is the list it fans out over (null: no fan-out) \u2014 a unit whose first output is a list fans out over it only from that pip. `edgeModes` cases wire `pip` with edge mode `mode` (an item pick, item:N, a Bundle, Selected) into fixture-echo's JSON input `plan`: `plan` is what lands in unitInputs.plan \u2014 a list-valued pip's items are picked or joined, never another output's.",
+  "sources": {
+    "both": {
+      "data": {
+        "generatedJson": {
+          "version": 1,
+          "speakerMap": {
+            "s0": "a"
+          }
+        },
+        "generatedEdl": {
+          "version": 1,
+          "segments": [
+            {
+              "id": "s1",
+              "inMs": 0,
+              "outMs": 900
+            },
+            {
+              "id": "s2",
+              "inMs": 900,
+              "outMs": 1800
+            }
+          ]
+        }
+      }
+    },
+    "edlOnly": {
+      "outputData": {
+        "edl": {
+          "version": 1,
+          "segments": [
+            {
+              "id": "s1",
+              "inMs": 0,
+              "outMs": 900
+            },
+            {
+              "id": "s2",
+              "inMs": 900,
+              "outMs": 1800
+            }
+          ]
+        }
+      },
+      "data": {
+        "generatedEdl": {
+          "version": 1,
+          "segments": [
+            {
+              "id": "s1",
+              "inMs": 0,
+              "outMs": 900
+            },
+            {
+              "id": "s2",
+              "inMs": 900,
+              "outMs": 1800
+            }
+          ]
+        }
+      }
+    },
+    "arrayFirst": {
+      "data": {
+        "generatedJson": [
+          {
+            "s": "a"
+          },
+          {
+            "s": "b"
+          }
+        ],
+        "generatedEdl": {
+          "version": 1,
+          "segments": [
+            {
+              "id": "s1",
+              "inMs": 0,
+              "outMs": 900
+            },
+            {
+              "id": "s2",
+              "inMs": 900,
+              "outMs": 1800
+            }
+          ]
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "the edl pip into Extract Field reads the edit, not the first output",
+      "source": "both",
+      "pip": "edl",
+      "consumer": "extract-field",
+      "data": {
+        "field": "segments"
+      },
+      "text": "{\"id\":\"s1\",\"inMs\":0,\"outMs\":900}\n{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}"
+    },
+    {
+      "name": "the json pip into Extract Field reads the first output",
+      "source": "both",
+      "pip": "json",
+      "consumer": "extract-field",
+      "data": {
+        "field": "speakerMap.s0"
+      },
+      "text": "a"
+    },
+    {
+      "name": "a job that wrote only edl: its edl pip into Extract Field reads it",
+      "source": "edlOnly",
+      "pip": "edl",
+      "consumer": "extract-field",
+      "data": {
+        "field": "segments"
+      },
+      "text": "{\"id\":\"s1\",\"inMs\":0,\"outMs\":900}\n{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}"
+    },
+    {
+      "name": "a job that wrote only edl: its json pip into Extract Field reads nothing",
+      "source": "edlOnly",
+      "pip": "json",
+      "consumer": "extract-field",
+      "data": {
+        "field": "version"
+      },
+      "text": ""
+    },
+    {
+      "name": "the edl pip into JSON Process processes the edit",
+      "source": "both",
+      "pip": "edl",
+      "consumer": "json-process",
+      "data": {
+        "mode": "visual",
+        "inputPath": "segments",
+        "filters": [],
+        "projections": [
+          "id"
+        ]
+      },
+      "processedResult": [
+        {
+          "id": "s1"
+        },
+        {
+          "id": "s2"
+        }
+      ]
+    },
+    {
+      "name": "a job that wrote only edl: its json pip into JSON Process has no input",
+      "source": "edlOnly",
+      "pip": "json",
+      "consumer": "json-process",
+      "data": {
+        "mode": "visual",
+        "inputPath": "segments",
+        "filters": [],
+        "projections": [
+          "id"
+        ]
+      },
+      "processedResult": null
+    },
+    {
+      "name": "the edl pip into filter-list lists the edit (an object is one item)",
+      "source": "both",
+      "pip": "edl",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+      ]
+    },
+    {
+      "name": "a job that wrote only edl: its edl pip into filter-list lists it",
+      "source": "edlOnly",
+      "pip": "edl",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+      ]
+    },
+    {
+      "name": "a job that wrote only edl: its json pip into filter-list lists nothing",
+      "source": "edlOnly",
+      "pip": "json",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": []
+    },
+    {
+      "name": "a first output that is a list never hands its items to the edl pip of filter-list",
+      "source": "arrayFirst",
+      "pip": "edl",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+      ]
+    },
+    {
+      "name": "the json pip of a list-valued first output into filter-list lists its items",
+      "source": "arrayFirst",
+      "pip": "json",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"s\":\"a\"}",
+        "{\"s\":\"b\"}"
+      ]
+    }
+  ],
+  "fanOut": [
+    {
+      "name": "the edl pip of a unit whose first output is a list does not fan out over that list",
+      "source": "arrayFirst",
+      "pip": "edl",
+      "items": null
+    },
+    {
+      "name": "the json pip of a list-valued first output fans out over its items",
+      "source": "arrayFirst",
+      "pip": "json",
+      "items": [
+        "{\"s\":\"a\"}",
+        "{\"s\":\"b\"}"
+      ]
+    },
+    {
+      "name": "an object on the pip is one item, so it does not fan out",
+      "source": "both",
+      "pip": "edl",
+      "items": null
+    }
+  ],
+  "edgeModes": [
+    {
+      "name": "a first output that is a list: an item wire on its edl pip reads the edit, never the list's first item",
+      "source": "arrayFirst",
+      "pip": "edl",
+      "mode": "item",
+      "plan": "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+    },
+    {
+      "name": "a first output that is a list: item:1 on its edl pip reads the edit, never the list's second item",
+      "source": "arrayFirst",
+      "pip": "edl",
+      "mode": "item:1",
+      "plan": "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+    },
+    {
+      "name": "a first output that is a list: a Bundle wire on its edl pip hands on the edit, never the list",
+      "source": "arrayFirst",
+      "pip": "edl",
+      "mode": "all",
+      "plan": "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+    },
+    {
+      "name": "an item wire on a list-valued json pip reads its first item",
+      "source": "arrayFirst",
+      "pip": "json",
+      "mode": "item",
+      "plan": "{\"s\":\"a\"}"
+    },
+    {
+      "name": "item:1 on a list-valued json pip reads its second item",
+      "source": "arrayFirst",
+      "pip": "json",
+      "mode": "item:1",
+      "plan": "{\"s\":\"b\"}"
+    },
+    {
+      "name": "a Bundle wire on a list-valued json pip joins its items",
+      "source": "arrayFirst",
+      "pip": "json",
+      "mode": "all",
+      "plan": "{\"s\":\"a\"}, {\"s\":\"b\"}"
+    },
+    {
+      "name": "a Selected wire on a list-valued json pip hands on the whole output",
+      "source": "arrayFirst",
+      "pip": "json",
+      "mode": "last",
+      "plan": "[{\"s\":\"a\"},{\"s\":\"b\"}]"
+    },
+    {
+      "name": "an object pip is one item: item:1 on it reads the object",
+      "source": "both",
+      "pip": "json",
+      "mode": "item:1",
+      "plan": "{\"version\":1,\"speakerMap\":{\"s0\":\"a\"}}"
+    },
+    {
+      "name": "an object pip is one item: a Bundle wire on it hands on the object",
+      "source": "both",
+      "pip": "edl",
+      "mode": "all",
+      "plan": "{\"version\":1,\"segments\":[{\"id\":\"s1\",\"inMs\":0,\"outMs\":900},{\"id\":\"s2\",\"inMs\":900,\"outMs\":1800}]}"
+    }
+  ]
+}

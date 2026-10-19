@@ -14,7 +14,7 @@ import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
 import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared/workflow"
-import { isRenderNodeType, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
+import { type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
 import { ugcAwaitsPick } from "@nodaro/shared/ugc"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
@@ -30,8 +30,8 @@ import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields 
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { usecaseFailedRunFields } from "@/lib/use-case-run-result"
-import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
+import { usecaseFailedRunFields, usecaseRestoredResults } from "@/lib/use-case-run-result"
+import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds } from "@nodaro/render-rules"
@@ -325,6 +325,9 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       if (!hasResultForJob && outputUrl) {
         updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...takeIdentity, ...(overlayRun ?? {}), ...takeTranscript })
       }
+      // A list-result run (Trailer): every delivery, as the live run lands them, in place of the one take.
+      const restoredRows = usecaseRestoredResults(node.type, job.output_data, job.id, results, new Date().toISOString())
+      if (restoredRows) updatedResults.splice(0, updatedResults.length, ...restoredRows)
 
       const newData: Record<string, unknown> = {
         ...data,
@@ -619,7 +622,7 @@ export function applyBackendExecutionState(
           // lands here too), so a canvas run after a reload still pairs by row.
           data.__alignedListResults = state.output.alignedListResults
           // A render's row stamps: the clip each row was sent for, a failed one too.
-          data.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined
+          data.__listResultStamps = carriesRowStamps(nodeType) ? state.output.listResultStamps : undefined
           data.__listTotal = state.output.listResults!.length
           data.__listCompleted = state.output.listResults!.length
         } else {
@@ -878,7 +881,7 @@ export function applyCompletedExecutionResults(
       // …and its row-aligned twin (see the first sync site above).
       newData.__alignedListResults = state.output.alignedListResults
       // …and a render's row stamps (see the first sync site above).
-      newData.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined
+      newData.__listResultStamps = carriesRowStamps(nodeType) ? state.output.listResultStamps : undefined
       newData.__listTotal = state.output.listResults!.length
       newData.__listCompleted = state.output.listResults!.length
     } else if (outputUrl) {

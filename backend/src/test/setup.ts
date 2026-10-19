@@ -40,6 +40,12 @@ process.env.NETWORK_HASH_SECRET = ""
 // reach live Stripe from any test that boots the app (the public plans list
 // reads prices from Stripe). A test that needs a key sets one on `config`.
 process.env.STRIPE_SECRET_KEY = ""
+// Likewise no real LLM provider: a developer's backend/.env Anthropic or KIE
+// key would otherwise decide which lane a pipeline stage takes (and could let
+// a test reach the provider). CI leaves both unset; a test that needs a lane
+// sets the key on `config`.
+process.env.ANTHROPIC_API_KEY = ""
+process.env.KIE_API_KEY = ""
 // EDITION=cloud above means hasCredits() is true by default in every test
 // file, so any test that calls the real buildApp() (or imports
 // video-worker.ts) exercises the real loadPrivatePlugins() path

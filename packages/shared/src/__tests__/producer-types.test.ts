@@ -138,6 +138,15 @@ describe("defaultEdgeOutputMode / listResultsServeHandle", () => {
     expect(defaultEdgeOutputMode("ugc-clips", "transcript")).toBe("last")
     expect(listResultsServeHandle("ugc-clips", "plan-out")).toBe(false)
   })
+  it("Trailer: its deliveries (media, and no handle) are each; its plan is one value; a video producer", () => {
+    expect(FAN_OUT_EACH_HANDLES["episode-trailer"]).toEqual({ each: ["media"], primary: "media" })
+    expect(defaultEdgeOutputMode("episode-trailer", "media")).toBe("each")
+    expect(defaultEdgeOutputMode("episode-trailer", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("episode-trailer", "json")).toBe("last")
+    expect(listResultsServeHandle("episode-trailer", "media")).toBe(true)
+    expect(listResultsServeHandle("episode-trailer", "json")).toBe(false)
+    expect(VIDEO_PRODUCER_TYPES.has("episode-trailer")).toBe(true)
+  })
   it("only the each handles read the per-iteration results", () => {
     expect(listResultsServeHandle("camera-switch", "edl")).toBe(true)
     expect(listResultsServeHandle("camera-switch", undefined)).toBe(true)

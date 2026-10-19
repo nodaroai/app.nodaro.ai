@@ -88,7 +88,7 @@ test("G1: a node type is a unit or a legacy literal entry — never both; the le
  * raised.
  */
 export const BURN_DOWN_PINS = {
-  "tools/units/legacy-nodes.json": 222,
+  "tools/units/legacy-nodes.json": 221,
   "tools/test-select/registry-users-tests.json": 240,
   "tools/test-select/registry-users-product.json": 207,
 }
@@ -155,8 +155,13 @@ test("G3: every aggregate declares @registry and @registry-exports; only reviewe
 // caller that names the type. Credit-id lookups (ids are not type ids:
 // composites like "foo:pro", ids built by helpers) and functions returning a
 // collection (familyById → .types) go in `exports`. A new lookup is added here
-// with that reason, in a reviewed change.
-const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "usecaseInputSchemaOf"])
+// with that reason, in a reviewed change. (unitInputHandleOf: its first
+// argument is the target node's type; the second only picks one of that
+// type's inputs. declaredJobBudgetMs: its first argument is a job name, and
+// every budgeted job name is its node's type — a unit's budget.ts is keyed by
+// its type, and node-executor-budget-ceilings.test.ts dispatches every legacy
+// name as its node type.)
+const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "unitInputHandleOf", "usecaseInputSchemaOf", "declaredJobBudgetMs"])
 
 test("G3: composer `lookups` are only one-node-type lookups", () => {
   const bad = Object.entries(composerMap).flatMap(([f, e]) => (e.lookups ?? []).filter((n) => !LOOKUPS_BY_NODE_TYPE.has(n)).map((n) => `${f}: ${n}`))

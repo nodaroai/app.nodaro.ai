@@ -44,6 +44,8 @@ vi.mock("../../../../lib/anthropic.js", () => ({
 // ─── Imports (after mocks) ──────────────────────────────────────────────────
 
 import { callLLM, type ProgressUpdate } from "../call-llm.js"
+import { config } from "../../../../lib/config.js"
+import { __resetPlatformExhaustionAlerts } from "../../../../lib/llm-platform-exhaustion.js"
 
 function fakeSupabase() {
   return {
@@ -67,6 +69,8 @@ const finalMessageFixture = {
 }
 
 beforeEach(() => {
+  config.ANTHROPIC_API_KEY = "sk-ant-test"
+  __resetPlatformExhaustionAlerts()
   vi.clearAllMocks()
 })
 

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
+import { renderLengthSec, resolveApplyEdlEstimateLength } from "@nodaro/render-rules"
 import { persistedEdlPlan, resolveApplyEdlEstimateMinutes } from "../apply-edl-estimate"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, data })
@@ -144,9 +145,15 @@ describe("wired from Edit Plan (trailer): one short teaser", () => {
     const ae = node("ae", "apply-edl", {})
     return { ae, nodes: [master, plan, ae], edges: [edge("m", "ep", "sources"), edge("ep", "ae", "edl")] }
   }
-  it("re-planning: twice the longest teaser (40 s), not the whole episode", () => {
+  it("re-planning: the longest trailer the plan cuts (40 s, one minute), not the whole episode", () => {
     const g = trailer()
-    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, reruns("ep"))).toBe(2)
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, reruns("ep"))).toBe(1)
+    expect(renderLengthSec(resolveApplyEdlEstimateLength(g.ae, g.nodes, g.edges, reruns("ep")))).toBe(40)
+  })
+  it("NOT re-planning: a persisted teaser is read to the second (decided 2026-10-18)", () => {
+    const g = trailer({ generatedJson: edlOf(seg(0, 95_000)) })
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, NONE)).toBe(2)
+    expect(renderLengthSec(resolveApplyEdlEstimateLength(g.ae, g.nodes, g.edges, NONE))).toBe(95)
   })
   it("a teaser is never priced longer than the episode it is cut from", () => {
     const g = trailer({}, 50) // a 50-second master

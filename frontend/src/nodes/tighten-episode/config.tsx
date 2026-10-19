@@ -6,6 +6,7 @@ import {
   drawnTightenFraming,
   resolveTightenEpisodeSettings,
   tightenFramingLayouts,
+  usecaseDescriptor,
   usecaseMediaKindOf,
   type TightenFramingAspect,
   type TightenFramingLayout,
@@ -54,7 +55,10 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: Confi
   // stored value differs from what the run would read, so opening a settled
   // node writes nothing.
   useEffect(() => {
-    if (audioSource && (data.output !== "audio" || data.captions === true)) onUpdate({ output: "audio", captions: false })
+    // An audio recording forces its spec's values (`audioForced`). A stored
+    // audio output with no captions set already reads as no captions, so it
+    // is left as stored.
+    if (audioSource && (data.output !== "audio" || data.captions === true)) onUpdate({ ...usecaseDescriptor("tighten-episode").audioForced })
   }, [audioSource])
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/podcast-trailer-formats.json
 /**
  * A use-case node's estimate is its built chain, wired to its real source and
  * priced by the ordinary rules, plus its per-run fee (decided 2026-10-13).
@@ -5,19 +6,35 @@
  * Speaker View at its complex rate before the edit is known.
  *
  * The engine is tested at its static rows. The public docs state the CHARGED
- * price (docs/nodes/processing-video/tighten-episode.md and episode-chapters.md,
- * "What the estimate shows"), so each worked example there is pinned in this file:
+ * price (docs/nodes/processing-video/tighten-episode.md, episode-chapters.md and
+ * episode-trailer.md, "What the estimate shows"), so each worked example there is pinned in this file:
  * its steps, as price ids, sum to the engine's figure at the static rows, and
  * the same steps priced by `statedPrices()` (the rule the docs census holds
  * every figure to) sum to the figure the page states.
+ *
+ * Trailer's parity reference is the shipped `podcast-trailer-formats` template
+ * itself (`templateTwin`): the chain the builder emits, priced as hand-built.
  */
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, it, expect, vi } from "vitest"
 vi.mock("@/lib/config.js", async (orig) => ({ ...(await orig<typeof import("@/lib/config.js")>()), hasCredits: () => false }))
 const flag = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => flag.on }))
 import { CREDIT_COSTS, CreditsService, STATIC_CREDIT_COSTS, estimateRunSetCredits, estimateWorkflowCredits } from "../credits.js"
 import { statedPrices } from "../stated-prices.js"
-import { buildTightenEpisodeGraph, renderFinalRunSet, renderRunOverrides, TIGHTEN_EPISODE_DEFAULTS, toStoredInlineGraph } from "@nodaro/render-rules"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
+import {
+  EPISODE_TRAILER_DEFAULTS,
+  buildEpisodeTrailerGraph,
+  buildTightenEpisodeGraph,
+  editPlanRenderEstimateLength,
+  renderFinalRunSet,
+  renderRunOverrides,
+  TIGHTEN_EPISODE_DEFAULTS,
+  toStoredInlineGraph,
+} from "@nodaro/render-rules"
 
 const video = (sec: number) => ({ id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4", metadata: { durationSeconds: sec } } })
 const audio = (sec: number) => ({ id: "rec", type: "upload-audio", data: { url: "https://r2/ep.m4a", metadata: { durationSeconds: sec } } })
@@ -254,4 +271,206 @@ describe("the docs' worked examples, at the charged price (episode-chapters.md, 
       expect(chargedOf(c.steps)).toBe(c.docs)
     })
   }
+})
+
+const trailer = (data: Record<string, unknown>) => ({ id: "tr", type: "episode-trailer", data: { label: "Trailer", ...data } })
+const trailerWire = { source: "rec", target: "tr", sourceHandle: "video", targetHandle: "media" }
+const TRAILER_RENDER_MINUTES = editPlanRenderEstimateLength({ mode: "trailer" }, 3600).fixedMinutes
+
+type TemplateNode = { id: string; type: string; data: Record<string, unknown> }
+type TemplateEdge = { id?: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
+const TRAILER_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib", "tutorial-seed", "templates", "podcast-trailer-formats.json")
+
+/**
+ * The shipped `podcast-trailer-formats` template as the chain Trailer builds
+ * for a 60-minute video: its notes dropped, Apply Cut at final (review off),
+ * its upload holding the recording's URL and length. Without `introSec` its
+ * intro card and Combine Videos are removed (the formats read Apply Cut);
+ * with it they stay, the card holding that URL and length. The first
+ * `formats` format nodes are kept, in the template's order.
+ */
+function templateTwin({ formats, introSec }: { readonly formats: number; readonly introSec?: number }): [TemplateNode[], TemplateEdge[]] {
+  const t = JSON.parse(readFileSync(TRAILER_TEMPLATE, "utf8")) as { nodes: TemplateNode[]; edges: TemplateEdge[] }
+  const formatIds = t.nodes.filter((n) => n.type === "social-media-format").map((n) => n.id)
+  const apply = t.nodes.find((n) => n.type === "apply-edl")!.id
+  const combine = t.nodes.find((n) => n.type === "combine-videos")!.id
+  const intro = introSec === undefined
+  const dropped = new Set([
+    ...t.nodes.filter((n) => n.type === "sticky-note").map((n) => n.id),
+    ...(intro ? [combine, "trailer-intro"] : []),
+    ...formatIds.slice(formats),
+  ])
+  const nodes = t.nodes
+    .filter((n) => !dropped.has(n.id))
+    .map((n) => {
+      if (n.id === "trailer-src") return { ...n, data: { ...n.data, url: "https://r2/ep.mp4", metadata: { durationSeconds: 3600 } } }
+      if (n.id === "trailer-intro") return { ...n, data: { ...n.data, url: "https://r2/card.mp4", metadata: { durationSeconds: introSec } } }
+      if (n.id === apply) return { ...n, data: { ...n.data, quality: "final" } }
+      return { ...n, data: { ...n.data } }
+    })
+  const edges = t.edges
+    .map((e) => (intro && e.source === combine ? { ...e, source: apply, sourceHandle: "media" } : { ...e }))
+    .filter((e) => !dropped.has(e.source) && !dropped.has(e.target))
+  return [nodes, edges]
+}
+
+describe("Trailer estimate = its chain + 10", () => {
+  it("the template twin is the chain the builder emits (no intro card, three formats)", () => {
+    const [nodes, edges] = templateTwin({ formats: 3 })
+    expect(nodes.map((n) => n.type)).toEqual(["upload-video", "transcribe", "edit-plan", "apply-edl", "social-media-format", "social-media-format", "social-media-format"])
+    expect(edges.filter((e) => e.target.startsWith("trailer-format-")).every((e) => e.source === "trailer-apply" && e.sourceHandle === "media")).toBe(true)
+  })
+  it("60-min, three formats: transcribe, Edit Plan (trailer), the trailer render, three formats, the fee", async () => {
+    expect(await estimateWorkflowCredits([video(3600), trailer({})], [trailerWire])).toBe(
+      await estimateWorkflowCredits(...templateTwin({ formats: 3 })) + STATIC_CREDIT_COSTS["use-case-fee:episode-trailer"]!,
+    )
+  })
+  it("one format costs less than three only by the formats' own price", async () => {
+    const one = await estimateWorkflowCredits([video(3600), trailer({ formats: ["9:16"] })], [trailerWire])
+    expect(one).toBe(await estimateWorkflowCredits(...templateTwin({ formats: 1 })) + STATIC_CREDIT_COSTS["use-case-fee:episode-trailer"]!)
+  })
+  it("an Add Captions after a three-format Trailer runs once per format", async () => {
+    const cap = { id: "cap", type: "add-captions", data: { style: "word-highlight" } }
+    const base = await estimateWorkflowCredits([video(3600), trailer({})], [trailerWire])
+    expect(await estimateWorkflowCredits([video(3600), trailer({}), cap], [trailerWire, { source: "tr", target: "cap", sourceHandle: "media", targetHandle: "in" }])).toBe(base + 3 * STATIC_CREDIT_COSTS["add-captions:kinetic"]!)
+  })
+  it("review on: the preview run is quoted up to the proxy render", async () => {
+    expect(await estimateWorkflowCredits([video(3600), trailer({ reviewBeforeRender: true })], [trailerWire])).toBe(
+      listOf([["elevenlabs-stt"], ["edit-plan:trailer:standard:per-minute", 60], ["edit-plan:trailer:standard:flat"], ["apply-edl:proxy", TRAILER_RENDER_MINUTES], ["use-case-fee:episode-trailer"]]),
+    )
+  })
+  it("its own charge is its fee", () => expect(CREDIT_COSTS["episode-trailer"]!({})).toBe("use-case-fee:episode-trailer"))
+})
+
+describe("Trailer with an intro card: Combine Videos is quoted on the card's probed length", () => {
+  const fee = () => STATIC_CREDIT_COSTS["use-case-fee:episode-trailer"]!
+  const built = (introSec?: number) =>
+    buildEpisodeTrailerGraph(EPISODE_TRAILER_DEFAULTS, {
+      media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 },
+      introCard: { url: "https://r2/card.mp4", ...(introSec !== undefined ? { durationSec: introSec } : {}) },
+    })
+  const priced = (g: ReturnType<typeof built>) => estimateWorkflowCredits(g.nodes.map((n) => ({ id: n.id, type: n.type, data: { ...n.data } })), g.edges)
+
+  it("the route's quote (its built graph, the card's length on it) is the template twin's with that card", async () => {
+    for (const introSec of [4, 14]) {
+      expect(await priced(built(introSec)), String(introSec)).toBe(await estimateWorkflowCredits(...templateTwin({ formats: 3, introSec })))
+    }
+  })
+  it("the card's probed length rides on the built card (no fallback length is assumed)", () => {
+    expect(built(14).nodes.find((n) => n.id === "uc-intro")!.data).toMatchObject({ metadata: { durationSeconds: 14 } })
+    expect(built().nodes.find((n) => n.id === "uc-intro")!.data).not.toHaveProperty("metadata")
+  })
+  it("a wired card in a workflow: the node's chain with the real card, plus the fee", async () => {
+    const card = { id: "card", type: "upload-video", data: { url: "https://r2/card.mp4", metadata: { durationSeconds: 14 } } }
+    expect(await estimateWorkflowCredits([video(3600), card, trailer({})], [trailerWire, { source: "card", target: "tr", sourceHandle: "video", targetHandle: "introCard" }])).toBe(
+      await estimateWorkflowCredits(...templateTwin({ formats: 3, introSec: 14 })) + fee(),
+    )
+  })
+})
+
+describe("Trailer's Render final, after a review: every format and what follows each, no fee", () => {
+  it("the final part of a review-on Trailer: the render at final, the formats, a per-format Add Captions; no fee", async () => {
+    const cap = { id: "cap", type: "add-captions", data: { style: "word-highlight" } }
+    const capWire = { source: "tr", target: "cap", sourceHandle: "media", targetHandle: "in" }
+    const preview = { ...trailer({ reviewBeforeRender: true }), id: "tr" }
+    const finalNode = { ...preview, data: { ...preview.data, useCaseContinue: { mode: "render-final", jobId: "job-0" } } }
+    const final = await estimateRunSetCredits([video(3600), finalNode, cap], [trailerWire, capWire], new Set(["tr", "cap"]))
+    // The final chain priced whole (review off), minus its first run, minus the fee.
+    const reviewOff = await estimateWorkflowCredits([video(3600), trailer({}), cap], [trailerWire, capWire])
+    const firstRunSteps = listOf([["elevenlabs-stt"], ["edit-plan:trailer:standard:per-minute", 60], ["edit-plan:trailer:standard:flat"]])
+    expect(final).toBe(reviewOff - firstRunSteps - STATIC_CREDIT_COSTS["use-case-fee:episode-trailer"]!)
+    // Three formats, each followed by its own captions.
+    const formatsOnly = await estimateRunSetCredits([video(3600), finalNode], [trailerWire], new Set(["tr"]))
+    expect(final - formatsOnly).toBe(3 * STATIC_CREDIT_COSTS["add-captions:kinetic"]!)
+  })
+})
+
+/** A trailer EDL of one cut of `sec` seconds from the recording. */
+const trailerEdl = (sec: number) => ({
+  version: 1,
+  clock: "master",
+  sources: [{ id: "rec", url: "https://r2/ep.mp4", kind: "video" }],
+  segments: [{ id: "seg-0", inMs: 600_000, outMs: 600_000 + sec * 1000, video: "rec" }],
+})
+/** The plan a 35-second trailer run made, and a review of it that leaves the trailer `sec` seconds long. */
+const PLAN_35 = trailerEdl(35)
+const reviewOf = (sec: number) => ({ v: EDITED_EDL_VERSION, kind: "edl", basis: editPlanBasis(PLAN_35), edl: { segments: trailerEdl(sec).segments, dropped: [] } })
+/** A review-on Trailer's Render final after a review that leaves the trailer `sec` seconds long. */
+function reviewed(sec: number) {
+  const preview = trailer({ reviewBeforeRender: true })
+  return { ...preview, data: { ...preview.data, generatedJson: PLAN_35, editedEdl: reviewOf(sec), useCaseContinue: { mode: "render-final", jobId: "job-0" } } }
+}
+
+describe("the docs' worked examples, at the charged price (episode-trailer.md, What the estimate shows)", () => {
+  const head: Step[] = [["elevenlabs-stt"], ["edit-plan:trailer:standard:per-minute", 60], ["edit-plan:trailer:standard:flat"]]
+  const formats: Step = ["social-media-format", 3]
+  const fee: Step = ["use-case-fee:episode-trailer"]
+  // A 10-second card after the trailer's 40 seconds: 50 s, 10 started 5-second blocks.
+  const card = { id: "card", type: "upload-video", data: { url: "https://r2/card.mp4", metadata: { durationSeconds: 10 } } }
+  const cardWire = { source: "card", target: "tr", sourceHandle: "video", targetHandle: "introCard" }
+  const preview = trailer({ reviewBeforeRender: true })
+  // A real Render final carries the run's plan (the editor's node, the app's run state, /continue's quote).
+  const finalNode = { ...preview, data: { ...preview.data, generatedJson: PLAN_35, useCaseContinue: { mode: "render-final", jobId: "job-0" } } }
+  const trailerCases: ReadonlyArray<{ name: string; steps: Step[]; engine: () => Promise<number>; docs: number }> = [
+    {
+      name: "60-min video, three formats (the trailer at 40 seconds: one minute)",
+      steps: [...head, ["apply-edl", 1], formats, fee],
+      engine: () => estimateWorkflowCredits([video(3600), trailer({})], [trailerWire]),
+      docs: 399,
+    },
+    {
+      name: "60-min video, three formats, a 10-second intro card",
+      steps: [...head, ["apply-edl", 1], ["combine-videos", 10], formats, fee],
+      engine: () => estimateWorkflowCredits([video(3600), card, trailer({})], [trailerWire, cardWire]),
+      docs: 509,
+    },
+    {
+      name: "review on: the preview",
+      steps: [...head, ["apply-edl:proxy", 1], fee],
+      engine: () => estimateWorkflowCredits([video(3600), preview], [trailerWire]),
+      docs: 324,
+    },
+    {
+      name: "review on, no edits: its Render final on the 35-second cut the run made, every format, no fee",
+      steps: [["apply-edl", 1], formats],
+      engine: () => estimateRunSetCredits([video(3600), finalNode], [trailerWire], new Set(["tr"])),
+      docs: 77,
+    },
+    {
+      name: "review on, an edit that lengthens the trailer to 90 s: its Render final on that length",
+      steps: [["apply-edl", 2], formats],
+      engine: () => estimateRunSetCredits([video(3600), reviewed(90)], [trailerWire], new Set(["tr"])),
+      docs: 88,
+    },
+  ]
+  for (const c of trailerCases) {
+    it(`${c.name}: the engine's steps, charged = ${c.docs}`, async () => {
+      expect(listOf(c.steps)).toBe(await c.engine())
+      expect(chargedOf(c.steps)).toBe(c.docs)
+    })
+  }
+})
+
+describe("Trailer is quoted at 40 seconds; its Render final on the cut the run made, with the review's edits (decided 2026-10-18)", () => {
+  const card = { id: "card", type: "upload-video", data: { url: "https://r2/card.mp4", metadata: { durationSeconds: 10 } } }
+  const cardWire = { source: "card", target: "tr", sourceHandle: "video", targetHandle: "introCard" }
+  const steps = (s: Step[]) => listOf(s)
+  it("a review-off run: the render at 40 seconds (one minute), Combine Videos on 40 s + the card", async () => {
+    expect(TRAILER_RENDER_MINUTES).toBe(1)
+    const without = await estimateWorkflowCredits([video(3600), trailer({})], [trailerWire])
+    const withCard = await estimateWorkflowCredits([video(3600), card, trailer({})], [trailerWire, cardWire])
+    expect(withCard - without).toBe(steps([["combine-videos", Math.ceil((40 + 10) / 5)]]))
+  })
+  it("a Render final after a Restore that lengthens the cut to 150 s: the render on its 3 minutes, Combine Videos on 150 s + the card", async () => {
+    const final = await estimateRunSetCredits([video(3600), card, reviewed(150)], [trailerWire, cardWire], new Set(["tr"]))
+    expect(final).toBe(steps([["apply-edl", 3], ["combine-videos", Math.ceil((150 + 10) / 5)], ["social-media-format", 3]]))
+  })
+  it("a Render final after an edit that shortens the cut to 20 s: Combine Videos on 20 s + the card, below the unedited cut's quote", async () => {
+    const final = await estimateRunSetCredits([video(3600), card, reviewed(20)], [trailerWire, cardWire], new Set(["tr"]))
+    expect(final).toBe(steps([["apply-edl", 1], ["combine-videos", Math.ceil((20 + 10) / 5)], ["social-media-format", 3]]))
+    // The same Render final with no edits: the 35-second cut the run made, plus the card.
+    const unedited = await estimateRunSetCredits([video(3600), card, { ...reviewed(20), data: { ...reviewed(20).data, editedEdl: undefined } }], [trailerWire, cardWire], new Set(["tr"]))
+    expect(unedited).toBe(steps([["apply-edl", 1], ["combine-videos", Math.ceil((35 + 10) / 5)], ["social-media-format", 3]]))
+    expect(final).toBeLessThan(unedited)
+  })
 })

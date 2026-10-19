@@ -155,7 +155,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = composeRecord("NODE_TYPE
   "extract-frame": "Extract Frame",
   "speed-ramp": "Adjust Speed",
   "loop-video": "Loop Video",
-  "gif-to-video": "Gif to Video",
   "fade-video": "Fade In/Out",
   "mask-composite": "Mask Composite",
   "still-to-video": "Still to Video",

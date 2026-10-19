@@ -25,8 +25,9 @@ vi.mock("@/lib/pricing/charged-prices.js", async () => {
   }
 })
 
+import { USE_CASE_NODE_TYPES, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { nodesRoutes } from "../nodes.js"
-import { CREDIT_BAND_SOURCES } from "../../lib/node-registry.js"
+import { CREDIT_BAND_SOURCES, NODE_REGISTRY, USE_CASE_FEE_SENTENCE, usecaseFeeSentence } from "../../lib/node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 
 const charged = (identifier: string, units = 1) => Math.ceil((STATIC_CREDIT_COSTS[identifier]! * units * 110) / 100)
@@ -94,6 +95,22 @@ describe("GET /v1/nodes — the charged price", () => {
       data: Array<{ type: string; creditRate?: unknown }>
     }
     expect(list.data.filter((n) => n.creditRate !== undefined).map((n) => n.type)).toEqual(["speaker-frames"])
+  })
+
+  it("a use-case node states its per-run fee at the charged price, never a static figure (base 10, charged 11)", async () => {
+    expect(charged("use-case-fee:tighten-episode")).toBe(11)
+    const list = (await app.inject({ method: "GET", url: "/v1/nodes" })).json() as {
+      data: Array<{ type: string; description: string }>
+    }
+    for (const type of USE_CASE_NODE_TYPES) {
+      // The registry names no figure; the served description names the charged one.
+      const declared = NODE_REGISTRY.find((n) => n.type === type)!.description
+      expect(declared.endsWith(USE_CASE_FEE_SENTENCE), type).toBe(true)
+      expect(declared, type).not.toMatch(/\d+ credits/)
+      const served = list.data.find((n) => n.type === type)!.description
+      expect(served, type).toBe(declared.slice(0, -USE_CASE_FEE_SENTENCE.length) + usecaseFeeSentence(charged(usecaseFeeCreditId(type))))
+      expect(served, type).toMatch(/plus a per-run fee of 11 credits\.$/)
+    }
   })
 
   it("/v1/nodes/:type quotes the same charged price as the list", async () => {

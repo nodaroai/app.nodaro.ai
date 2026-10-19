@@ -1,0 +1,20 @@
+{
+  "keys": {
+    "proccfg.trailerFormatsHint": {"en": "Each format pads the trailer to its shape (the whole picture, with bars).", "he": "כל פורמט מרפד את הטריילר לצורה שלו (התמונה המלאה, עם פסים).", "ja": "各フォーマットでは、トレーラーをその形に合わせて余白で埋めます（画面全体を残し、帯を付けます）。", "ko": "각 형식은 트레일러를 해당 모양에 맞게 여백으로 채웁니다(화면 전체를 유지하고 띠를 추가).", "pt-br": "Cada formato ajusta o trailer à sua forma com barras (a imagem inteira aparece)."},
+    "proccfg.trailerIntroHint": {"en": "Optional: a short video that plays before the trailer. Make it the same shape as your recording.", "he": "אופציונלי: סרטון קצר שמתנגן לפני הטריילר. כדאי שיהיה באותה צורה כמו ההקלטה.", "ja": "任意：トレーラーの前に再生する短い動画です。録音と同じ形にしてください。", "ko": "선택 사항: 트레일러 앞에 재생되는 짧은 동영상입니다. 녹화와 같은 모양으로 만드세요.", "pt-br": "Opcional: um vídeo curto que toca antes do trailer. Use a mesma forma da sua gravação."},
+    "proccfg.trailerReview": {"en": "Review before render", "he": "סקירה לפני רינדור", "ja": "レンダリング前に確認", "ko": "렌더링 전에 검토", "pt-br": "Revisar antes de renderizar"},
+    "proccfg.trailerReviewHint": {"en": "Stops at a quick preview you can review and edit; Render final makes the full-quality trailer", "he": "עוצר בתצוגה מקדימה מהירה לסקירה ועריכה; רינדור סופי יוצר את הטריילר באיכות מלאה", "ja": "確認・編集できる簡易プレビューで止まります。「最終レンダリング」でフル品質のトレーラーを作成します", "ko": "검토하고 편집할 수 있는 빠른 미리보기에서 멈춥니다. “최종 렌더링”으로 최고 품질의 트레일러를 만듭니다", "pt-br": "Para em uma prévia rápida que você pode revisar e editar; “Renderização final” gera o trailer em qualidade total"},
+    "proccfg.trailerPlanTier": {"en": "Editing quality", "he": "איכות העריכה", "ja": "編集の品質", "ko": "편집 품질", "pt-br": "Qualidade da edição"},
+    "node.trailerFormats": {"en": "Formats", "he": "פורמטים", "ja": "フォーマット", "ko": "형식", "pt-br": "Formatos"},
+    "node.trailerFormat9x16": {"en": "9:16 Story / Reel", "he": "9:16 סטורי / ריל", "ja": "9:16 ストーリーズ / リール", "ko": "9:16 스토리 / 릴스", "pt-br": "9:16 Story / Reel"},
+    "node.trailerFormat1x1": {"en": "1:1 Square", "he": "1:1 ריבוע", "ja": "1:1 正方形", "ko": "1:1 정사각형", "pt-br": "1:1 Quadrado"},
+    "node.trailerFormat4x5": {"en": "4:5 Portrait", "he": "4:5 לאורך", "ja": "4:5 縦長", "ko": "4:5 세로", "pt-br": "4:5 Retrato"},
+    "node.trailerFormat16x9": {"en": "16:9 Landscape", "he": "16:9 לרוחב", "ja": "16:9 横長", "ko": "16:9 가로", "pt-br": "16:9 Paisagem"},
+    "node.trailerDeliveries": {"en": "Trailers", "he": "טריילרים", "ja": "トレーラー", "ko": "트레일러", "pt-br": "Trailers do episódio"},
+    "node.trailerFormatsFailed": {"en": "Could not render: {formats}", "he": "לא ניתן היה לרנדר: {formats}", "ja": "レンダリングできなかったフォーマット：{formats}", "ko": "렌더링하지 못한 형식: {formats}", "pt-br": "Não foi possível renderizar: {formats}"},
+    "node.trailerPlan": {"en": "Edit (EDL)", "he": "עריכה (EDL)", "ja": "編集（EDL）", "ko": "편집(EDL)", "pt-br": "Edição (EDL)"}
+  },
+  "labels": {
+    "Trailer": {"he": "טריילר", "ja": "トレーラー", "ko": "트레일러", "pt-br": "Trailer do episódio"}
+  }
+}

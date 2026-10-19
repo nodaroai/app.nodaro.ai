@@ -8,10 +8,13 @@ import type { LlmServingLane } from "../pricing/llm-cost.js"
 import { callGeminiDirect as callGeminiDirectUnguarded, streamGeminiDirect as streamGeminiDirectUnguarded } from "../gemini/client.js"
 import { guardLaneAccount } from "../llm-errors.js"
 import { deriveParams, resolveModel } from "./params.js"
+import { anthropicKeySet } from "./anthropic-availability.js"
 import { callKie, streamKie } from "./kie-lane.js"
 import { callAnthropicDirect, streamAnthropicDirect } from "./anthropic-lane.js"
 import { kieFallback, laneFallbackAllowed, serveFromFallback, streamWithFallback, withFallback } from "./lane-fallback.js"
 import {
+  advancedModeRefusalOf,
+  assertAdvancedModeServable,
   exhaustionKieFallback,
   exhaustionKieStreamFallback,
   serveIfDirectLatched,
@@ -62,23 +65,35 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   const model = resolveModel(req)
   assertInlineVideoLane(req, model)
 
-  // A pinned lane wins over every registry preference below, and never falls back.
+  // A pinned lane wins over every registry preference below. It falls back only to KIE serving the same model, and only when the account behind it cannot serve: no Anthropic key (keylessClaudePin), or a platform-account refusal (exhaustionKieFallback). Never for Advanced mode, which is refused instead (assertAdvancedModeServable, advancedModeRefusalOf).
   if (req.requireLane) {
+    assertAdvancedModeServable(model, req)
+    if (keylessClaudePin(model, req)) {
+      const kie = exhaustionKieFallback(model, req)
+      if (kie) {
+        warnKeylessPin(model)
+        return kie()
+      }
+    }
     assertLanePinnable(model, req.requireLane)
     if (req.requireLane === "kie") return callKie(model, req)
-    // A direct pin never falls back — except from a platform-account refusal,
-    // which is retried once on KIE serving the same model (exhaustionKieFallback).
-    return withExhaustionFallback(
-      { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini (pinned)" : "direct-anthropic (pinned)", fallback: "kie" },
-      model.directGeminiModel ? "google" : "anthropic",
-      () => model.directGeminiModel
-        ? callGeminiDirect(model, req, deriveParams(model, req))
-        : callAnthropicDirect(model, req),
-      exhaustionKieFallback(model, req),
-    )
+    // Past the keyless branch, a direct pin falls back only from a platform-account refusal, retried once on KIE
+    // serving the same model (exhaustionKieFallback) — never for Advanced mode, whose refusal is re-typed instead.
+    try {
+      return await withExhaustionFallback(
+        { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini (pinned)" : "direct-anthropic (pinned)", fallback: "kie" },
+        model.directGeminiModel ? "google" : "anthropic",
+        () => model.directGeminiModel
+          ? callGeminiDirect(model, req, deriveParams(model, req))
+          : callAnthropicDirect(model, req),
+        exhaustionKieFallback(model, req),
+      )
+    } catch (err) {
+      throw advancedModeRefusalOf(req, err)
+    }
   }
 
-  if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
+  if (model.directFallbackModel && anthropicKeySet()) {
     if (!model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY) {
       // Direct is the primary lane here, but it is not incident-free — Anthropic
       // logged four elevated-error incidents across 2026-08-04/05, two of them
@@ -178,7 +193,7 @@ export function assertInlineVideoLane(req: LlmRequest, model: LlmModelDef): void
 function assertLanePinnable(model: LlmModelDef, lane: LlmServingLane): void {
   if (lane === "direct") {
     if (!model.directGeminiModel && model.directFallbackModel) {
-      if (!config.ANTHROPIC_API_KEY) {
+      if (!anthropicKeySet()) {
         throw new Error(
           `Model ${model.id} is pinned to the direct lane but ANTHROPIC_API_KEY is not set — ` +
             `set it in the environment (Railway: staging AND production)`,
@@ -206,6 +221,32 @@ function assertLanePinnable(model: LlmModelDef, lane: LlmServingLane): void {
   if (!config.KIE_API_KEY) {
     throw new Error(`Model ${model.id} is pinned to the KIE lane but KIE_API_KEY is not set`)
   }
+}
+
+/**
+ * A Claude call pinned to the direct lane on an install with no Anthropic key
+ * (the key empty or blank). Served from KIE on the same registry model — the
+ * leg a refused account gets (`exhaustionKieFallback`), so it is never built
+ * for a call KIE cannot carry, nor (Advanced mode) for one that must not run
+ * there. With no such leg the pin runs as before and `assertLanePinnable`
+ * names the missing key.
+ */
+function keylessClaudePin(model: LlmModelDef, req: LlmRequest): boolean {
+  return req.requireLane === "direct" && !model.directGeminiModel && Boolean(model.directFallbackModel) && !anthropicKeySet()
+}
+
+/** A missing key is a setting, not an event: said once per process, like the K2 line. */
+let keylessPinWarned = false
+
+function warnKeylessPin(model: LlmModelDef): void {
+  if (keylessPinWarned) return
+  keylessPinWarned = true
+  console.warn(`[llm-lane-fallback] ${model.id}: pinned to the direct lane, but no Anthropic key is set — serving from KIE`)
+}
+
+/** Tests only: say the keyless-pin line again. */
+export function __resetKeylessPinWarning(): void {
+  keylessPinWarned = false
 }
 
 /** The direct Google lane is usable when the registry names a Gemini model id
@@ -268,22 +309,35 @@ export async function llmStream(
   const model = resolveModel(req)
   assertInlineVideoLane(req, model)
 
-  // A pinned lane wins over every registry preference below, and never falls back.
+  // A pinned lane wins over every registry preference below. It falls back only to KIE serving the same model, and only when the account behind it cannot serve: no Anthropic key (keylessClaudePin), or a platform-account refusal (exhaustionKieFallback). Never for Advanced mode, which is refused instead (assertAdvancedModeServable, advancedModeRefusalOf).
   if (req.requireLane) {
+    assertAdvancedModeServable(model, req)
+    if (keylessClaudePin(model, req)) {
+      const kie = exhaustionKieStreamFallback(model, req, signal)
+      if (kie) {
+        warnKeylessPin(model)
+        return kie(onToken)
+      }
+    }
     assertLanePinnable(model, req.requireLane)
     if (req.requireLane === "kie") return streamKie(model, req, onToken, signal)
-    return streamWithExhaustionFallback(
-      { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini stream (pinned)" : "direct-anthropic stream (pinned)", fallback: "kie stream" },
-      model.directGeminiModel ? "google" : "anthropic",
-      (cb) => model.directGeminiModel
-        ? streamGeminiDirect(model, req, deriveParams(model, req), cb, signal)
-        : streamAnthropicDirect(model, req, cb, signal),
-      exhaustionKieStreamFallback(model, req, signal),
-      onToken,
-    )
+    // Past the keyless branch, as llmComplete: a refusal only, never for Advanced mode.
+    try {
+      return await streamWithExhaustionFallback(
+        { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini stream (pinned)" : "direct-anthropic stream (pinned)", fallback: "kie stream" },
+        model.directGeminiModel ? "google" : "anthropic",
+        (cb) => model.directGeminiModel
+          ? streamGeminiDirect(model, req, deriveParams(model, req), cb, signal)
+          : streamAnthropicDirect(model, req, cb, signal),
+        exhaustionKieStreamFallback(model, req, signal),
+        onToken,
+      )
+    } catch (err) {
+      throw advancedModeRefusalOf(req, err)
+    }
   }
 
-  if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
+  if (model.directFallbackModel && anthropicKeySet()) {
     // A streamed tool call is read on the KIE path too (parseSseStream collects
     // its `input_json_delta` fragments), so a structured stream no longer has
     // to go direct — only what KIE cannot honour does.

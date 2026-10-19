@@ -13,13 +13,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
+import { jsonOutputProblems } from "./json-output-rules.mjs"
 import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
-import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
 const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp"]
-const CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "reviewHold", "presents"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
 // backend/src/nodes/<type>/price.ee.ts (Enterprise License), prompt content in
@@ -244,6 +244,14 @@ function checkHandles(h, errors) {
           }
         }
         if (handle.field !== undefined && !isNonEmptyString(handle.field)) errors.push(`${at}.field must be a non-empty string`)
+        const kinds = Array.isArray(handle.accepts) ? handle.accepts : []
+        if (kinds.includes("look") && kinds.length > 1) errors.push(`${at}: a JSON input (accepts "look") accepts nothing else — a wire is either a JSON value or a medium`)
+        if (kinds.includes("look") && handle.field !== undefined) errors.push(`${at}.field: a JSON input (accepts "look") lands in unitInputs, never a data field — remove field`)
+        if (handle.many !== undefined) {
+          if (handle.many !== true) errors.push(`${at}.many: only true (or absent)`)
+          else if (kinds.length === 0 || !kinds.every((k) => MANY_KINDS.includes(k))) errors.push(`${at}.many: only on a video/audio input (accepts ⊆ ${MANY_KINDS.join(", ")}) — each wire is one ordered media source`)
+          if (handle.field !== undefined) errors.push(`${at}.many: an input that takes every wire lands in unitInputs, never a data field — remove field`)
+        }
       } else {
         if (!HANDLE_KINDS.includes(handle.kind)) errors.push(`${at}.kind: "${handle.kind}" is not a handle kind (${HANDLE_KINDS.join(", ")})`)
         if (handle.from !== undefined && !isNonEmptyString(handle.from)) errors.push(`${at}.from must be a non-empty string`)
@@ -299,6 +307,8 @@ function checkFiles(unit, m, ctx, errors) {
   if (need.route && routes.length === 0) errors.push(`execution.kind "${kind}" needs ${unit.dirs.backend}/route.ts (or route.ee.ts when Cloud-only)`)
   if (!need.route && routes.length > 0) errors.push(`execution.kind "${kind}" runs no route — remove ${routes.join(", ")} or change the kind`)
   for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && kind !== "use-case" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
+  // The video worker sizes a job's liveness from it (declaredJobBudgetMs), so only a worker's job has one.
+  if (kind !== "worker" && has("backend", "budget.ts")) errors.push(`budget.ts is only for execution.kind "worker" (the video worker's liveness budget)`)
   errors.push(...useCaseFileProblems(unit, kind, has, ctx))
   if (kind === "source" && has("frontend", "exec.ts")) errors.push("execution.kind \"source\" runs nothing — remove exec.ts or change the kind")
   // The add-node picker renders the icon of option.tsx (node-options.tsx composes it).
@@ -506,6 +516,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   checkProducer(m, errors)
   checkMcp(m.mcp, errors)
   errors.push(...useCaseProblems(unit, m, ctx))
+  errors.push(...jsonOutputProblems(m))
   const docs = m.docs
   if (!isObject(docs) || (docs.page === undefined) === (docs.awaiting === undefined)) errors.push("docs needs exactly one of page (the docs/nodes/… page) or awaiting (why it has none yet)")
   else if (docs.page !== undefined) {

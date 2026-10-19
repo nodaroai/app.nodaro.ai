@@ -1,3 +1,4 @@
+// @test-watches backend/src/nodes/**
 /**
  * Podcast Track 0.11 — budget-aware caps, at the node executor.
  *

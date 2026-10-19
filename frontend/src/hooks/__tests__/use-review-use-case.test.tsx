@@ -29,6 +29,7 @@ import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
 import { REVIEW_WRITE_IDLE_MS, reviewOf as editOf } from "@/lib/edl-review/write-review"
 import { keptSetOf } from "@/lib/edl-review/kept-set"
 import { reviewViewOf } from "@/lib/edl-review/use-case-review-source"
+import { reviewKindOf } from "@/lib/edl-review/review-entry"
 import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 
@@ -287,6 +288,44 @@ describe("an edit made on another take of the node (decided 2026-10-13)", () => 
     const hook = renderHook(() => useReview("t1"))
     act(() => hook.result.current.edits.cutRange({ inMs: 5000, outMs: 9000 }))
     expect(hook.result.current.edits.replaceAsked).toBe(false)
+    hook.unmount()
+  })
+})
+
+describe("a review-on Trailer reviews through the cut review (decided 2026-10-14)", () => {
+  /** A completed review-on Trailer holding its plan (a trailer EDL) and its Preview. */
+  function loadTrailer() {
+    useWorkflowStore.setState({
+      nodes: [REC, node("tr", "episode-trailer", {
+        formats: ["9:16", "1:1"], reviewBeforeRender: true, useCaseJobId: "job-1",
+        generatedJson: PLAN, generatedTranscript: TRANSCRIPT, executionStatus: "completed", ...TAKE,
+      })] as never,
+      edges: [edge("rec", "video", "tr", "media")] as never,
+      isReadOnly: false,
+      workflowId: null,
+    })
+  }
+
+  it("opens the cut review: an EDL plan, rendered by Apply EDL to video", async () => {
+    loadTrailer()
+    const { nodes, edges } = useWorkflowStore.getState()
+    expect(reviewKindOf("tr", nodes as never, edges as never)).toBe("edl")
+    const own = await reviewOf("tr")
+    expect(own.model.planKind).toBe("edl")
+    expect(own.model.render?.output).toBe("video")
+    expect(own.model.transcript?.words).toHaveLength(3)
+  })
+
+  it("an edit made in the review is written to the node", async () => {
+    loadTrailer()
+    const hook = renderHook(() => useReview("tr"))
+    expect(hook.result.current.model.planId).toBe("tr")
+    act(() => hook.result.current.edits.cutRange({ inMs: 5000, outMs: 9000 }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REVIEW_WRITE_IDLE_MS + 1)
+    })
+    const data = useWorkflowStore.getState().nodes.find((n) => n.id === "tr")!.data as Record<string, unknown>
+    expect(data.editedEdl).toMatchObject({ kind: "edl", basis: editPlanBasis(PLAN) })
     hook.unmount()
   })
 })

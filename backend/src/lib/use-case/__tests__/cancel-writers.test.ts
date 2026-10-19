@@ -33,7 +33,7 @@ const DELEGATES_USE_CASE: ReadonlyMap<string, string> = new Map([
 /** Files whose raw cancel can never meet a use-case wrapper. */
 const CANNOT_REACH: ReadonlyMap<string, string> = new Map([
   ["lib/use-case/cancel-run.ts", "writes workflow_executions (the hidden run), not jobs"],
-  ["workers/orchestrator-worker.ts", "writes workflow_executions"],
+  ["workers/orchestrator-cancel.ts", "writes workflow_executions (the run a Stop ends, for the orchestrator)"],
   ["services/workflow-engine/node-executor.ts", "cancelJobAndThrow: jobs a polled node made (a use-case node waits through its own executor and cancels via cancelOwnedJob); the other site writes workflow_executions"],
   ["lib/job-policy-gate.ts", "withdraws a parked (pending_review) row it owns"],
   ["lib/reconcile/replicate.ts", "character LoRA training jobs only"],

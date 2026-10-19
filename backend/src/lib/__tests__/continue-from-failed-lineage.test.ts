@@ -421,6 +421,9 @@ describe("previewPendingMessage", () => {
     expect(message).toContain('the review of "t"')
     expect(message).not.toContain("renderFinal: {")
     expect(message).toContain('"next"')
+    // Any review-on use-case type holds, so the message never names one kind of result.
+    expect(message).toContain("renders its final result")
+    expect(message).not.toMatch(/episode/i)
   })
 })
 

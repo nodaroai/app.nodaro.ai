@@ -39,6 +39,13 @@ export interface UnitExecKit {
    * store key `resultField` (generatedVideoUrl, generatedAudioUrl, …); resolves with the result.
    */
   runProcessingNode(start: () => Promise<{ jobId: string }>, resultField: OutputKeySpec, label: string): Promise<string>
+  /**
+   * Start a server job whose result is JSON (the unit's look outputs) and poll
+   * it to completion: each output's value lands on its `from` field, as every
+   * server-run lane lands it (unitJobLanding); resolves with the first output
+   * as a wire carries it ("" when the job wrote none of it).
+   */
+  runJsonNode(start: () => Promise<{ jobId: string }>, label: string): Promise<string>
   /** `Node "<label>": <message>` in the interface language, for a toast or an error. */
   nodeRunError(key: MessageKey, vars?: Record<string, string | number>): string
   setUserPromptTemplate(template: string | undefined): void

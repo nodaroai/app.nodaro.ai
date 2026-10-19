@@ -1,14 +1,15 @@
 /**
  * The "length:unknown" seam (tools/units/capabilities.mjs): a node unit with
  * that capability gets the unbounded length rule the hand-written unbounded
- * nodes (gif-to-video, render-video, …) have, and a row in
+ * nodes (render-video, manual-edit, …) have, and a row in
  * UNBOUNDED_LENGTH_REASONS — composed in video-output-length.ts from the
  * unit descriptors (lib/unit-descriptors.ts).
  *
  * Proven on an in-memory fixture unit, both through the pure helper and
  * through the module's own composition (the descriptors door mocked), and
- * held to zero change today: the composed tables of the live tree are the
- * tables composed with no unit at all.
+ * held to zero change by gif-to-video's migration: the live tables are the
+ * tables composed with no unit plus gif-to-video's former hand-written row,
+ * moved into its unit (same rule behaviour, same reason text).
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { UnitDescriptor } from "../../nodes/kit.js"
@@ -51,6 +52,8 @@ const DATA: Record<string, unknown>[] = [{}, { duration: 12, provider: "seedance
 /** video-output-length.ts loaded with `units` as the node units' descriptors. */
 async function loadWith(units: ReadonlyArray<UnitDescriptor> | null): Promise<LengthModule> {
   vi.resetModules()
+  // null = the real descriptors: unmock, or a mock set earlier in the same test would still answer.
+  if (!units) vi.doUnmock("../unit-descriptors.js")
   if (units) {
     vi.doMock("../unit-descriptors.js", () => ({
       UNIT_NODE_DESCRIPTORS: units,
@@ -82,17 +85,17 @@ describe("unitUnknownLengths: the rows a \"length:unknown\" unit adds", () => {
     expect(unitUnknownLengths([KEEPER])).toEqual({ rules: {}, reasons: {} })
   })
 
-  it("gives the unit the very rule gif-to-video has, and the reason its manifest states", async () => {
+  it("gives the unit the very rule a hand-written unbounded node (render-video) has, and the reason its manifest states", async () => {
     const { unitUnknownLengths, VIDEO_OUTPUT_LENGTH_RULES } = await loadWith(null)
     const { rules, reasons } = unitUnknownLengths([FIXTURE, KEEPER])
     expect(Object.keys(rules)).toEqual(["fixture-echo"])
     expect(reasons).toEqual({ "fixture-echo": FIXTURE.lengthUnknownReason })
-    const gif = VIDEO_OUTPUT_LENGTH_RULES["gif-to-video"]!
+    const legacy = VIDEO_OUTPUT_LENGTH_RULES["render-video"]!
     const unit = rules["fixture-echo"]!
-    expect(unit.via).toBe(gif.via)
+    expect(unit.via).toBe(legacy.via)
     for (const data of DATA) for (const inputs of BATTERY) {
       expect(unit.run!({ id: "n", type: "fixture-echo", data }, inputs)).toBe("unknown")
-      expect(unit.run!({ id: "n", type: "fixture-echo", data }, inputs)).toBe(gif.run!({ id: "n", type: "gif-to-video", data }, inputs))
+      expect(unit.run!({ id: "n", type: "fixture-echo", data }, inputs)).toBe(legacy.run!({ id: "n", type: "render-video", data }, inputs))
     }
   })
 
@@ -131,21 +134,25 @@ describe("the module composes the units' rows into both tables", () => {
   })
 
   it("a type that is both hand-written and a \"length:unknown\" unit fails at load (a type lives in one place)", async () => {
-    await expect(loadWith([{ ...FIXTURE, type: "gif-to-video" }])).rejects.toThrow(/exactly one place/)
+    await expect(loadWith([{ ...FIXTURE, type: "render-video" }])).rejects.toThrow(/exactly one place/)
   })
 })
 
-// When gif-to-video migrates, this test changes with it: the migration PR
-// restates it as "the old table equals the new one with the legacy row moved
-// into the unit" (same keys, same rule behaviour, same reason text).
-describe("zero change today: no unit has the capability yet", () => {
-  it("the live tree composes exactly the tables composed with no unit", async () => {
+// gif-to-video's migration (decided 2026-10-18): its hand-written rows moved into
+// its unit (capability "length:unknown", lengthUnknownReason in unit.json). The
+// tables are the ones composed with no unit, plus exactly the rows it had: the
+// unbounded rule (every input → "unknown") and its reason, verbatim.
+const GIF_LEGACY_REASON = "its length is the GIF's, which only the file says"
+
+describe("zero change: gif-to-video's legacy rows, moved into its unit", () => {
+  it("the live tree composes the tables with no unit plus gif-to-video's former rows", async () => {
     const none = await loadWith([])
     const live = await loadWith(null)
-    expect(Object.keys(live.VIDEO_OUTPUT_LENGTH_RULES)).toEqual(Object.keys(none.VIDEO_OUTPUT_LENGTH_RULES))
-    expect(behaviour(live)).toEqual(behaviour(none))
-    expect(live.UNBOUNDED_LENGTH_REASONS).toEqual(none.UNBOUNDED_LENGTH_REASONS)
+    expect(none.VIDEO_OUTPUT_LENGTH_RULES["gif-to-video"]).toBeUndefined()
+    expect(Object.keys(live.VIDEO_OUTPUT_LENGTH_RULES).sort()).toEqual([...Object.keys(none.VIDEO_OUTPUT_LENGTH_RULES), "gif-to-video"].sort())
+    const unknownEverywhere = { via: "rule", runs: DATA.flatMap(() => BATTERY.map(() => "unknown")) }
+    expect(behaviour(live)).toEqual({ ...behaviour(none), "gif-to-video": unknownEverywhere })
+    expect(live.UNBOUNDED_LENGTH_REASONS).toEqual({ ...none.UNBOUNDED_LENGTH_REASONS, "gif-to-video": GIF_LEGACY_REASON })
     expect(live.PASS_THROUGH_VIDEO_TYPES).toEqual(none.PASS_THROUGH_VIDEO_TYPES)
-    expect(live.VIDEO_OUTPUT_LENGTH_RULES["gif-to-video"]?.via).toBe("rule")
   })
 })

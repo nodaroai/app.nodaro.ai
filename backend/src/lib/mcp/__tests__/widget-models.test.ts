@@ -43,8 +43,9 @@ function fakeServer() {
 }
 
 describe("zero behaviour change: gif_to_video's widget model is what the verb sent before", () => {
-  it("the composed value is the legacy literal", () => {
-    expect(widgetModelOf("gif_to_video", "gif-to-video")).toBe("gif-to-video")
+  it("the unit's declaration composes the legacy literal the verb passed before the migration (decided 2026-10-18)", () => {
+    expect(widgetModelOf("gif_to_video")).toBe("gif-to-video")
+    expect(() => widgetModelOf("gif_to_video", "gif-to-video")).toThrow()
   })
 
   it("the real verb dispatches with model \"gif-to-video\"", async () => {

@@ -84,7 +84,12 @@ export type EditPlanOutputReader = (data: Readonly<Record<string, unknown>>) => 
 export const ASSUMED_CLIP_TARGET_SEC = 90
 /** The target is something the planner aims near, not a clamp: price double. */
 export const CLIP_LENGTH_HEADROOM = 2
-/** Trailer mode plans one 20–40 s teaser; priced at double its longest. */
+/**
+ * Trailer mode plans one 20–40 s teaser: the longest trailer the plan cuts
+ * (the planner's selector never passes it; its crossfades only shorten), and
+ * the length every quote of a trailer the plan cuts is priced at (decided
+ * 2026-10-18). A trailer a reviewer edited is quoted at its own length.
+ */
 export const TRAILER_MAX_SEC = 40
 
 const minutesOf = (sec: number): number => Math.max(1, Math.ceil(sec / 60))
@@ -226,6 +231,12 @@ export function withoutMediaLength(data: Record<string, unknown> | undefined): R
  * that cannot be measured prices the ceiling — never the one-minute floor.
  */
 function edlMinutes(value: unknown): number | undefined {
+  const sec = edlSeconds(value)
+  return sec === undefined ? undefined : minutesOf(sec)
+}
+
+/** Seconds of ONE EDL value, measured as {@link edlMinutes} measures it (a non-empty EDL that cannot be measured: the ceiling). */
+function edlSeconds(value: unknown): number | undefined {
   let raw = value
   if (typeof raw === "string") {
     if (!raw.trim()) return undefined
@@ -240,9 +251,9 @@ function edlMinutes(value: unknown): number | undefined {
     const edl = normalizeEdl(raw)
     if (edl.segments.length === 0) return undefined
     const ms = edlDurationMs(edl)
-    return Number.isFinite(ms) && ms > 0 ? minutesOf(ms / 1000) : EDIT_PLAN_MAX_MINUTES
+    return Number.isFinite(ms) && ms > 0 ? ms / 1000 : EDIT_PLAN_MAX_MINUTES * 60
   } catch {
-    return EDIT_PLAN_MAX_MINUTES
+    return EDIT_PLAN_MAX_MINUTES * 60
   }
 }
 
@@ -343,6 +354,18 @@ export function resolveEditPlanEpisodeSec(
 export interface RenderEstimateLength {
   readonly fixedMinutes: number
   readonly perEpisodeMinute: number
+  /**
+   * The fixed part to the second, where a step after the render is quoted on
+   * it (Combine Videos per started 5 s): a trailer — the plan's 40 s, or an
+   * edited trailer's own length (decided 2026-10-18). The render itself is
+   * still priced on `fixedMinutes`. Absent: `fixedMinutes` whole minutes.
+   */
+  readonly fixedSec?: number
+}
+
+/** A render's estimated length in seconds at its ceiling: what a step after it is quoted on. */
+export function renderLengthSec(length: RenderEstimateLength): number {
+  return length.perEpisodeMinute === 0 && length.fixedSec !== undefined ? length.fixedSec : renderLengthCeilingMinutes(length) * 60
 }
 
 /** The minutes a length stands for when the episode is as long as it may be (the 180-minute cap). */
@@ -351,6 +374,8 @@ export function renderLengthCeilingMinutes(length: RenderEstimateLength): number
 }
 
 const fixedLength = (minutes: number): RenderEstimateLength => ({ fixedMinutes: minutes, perEpisodeMinute: 0 })
+/** A length known to the second: its whole minutes for the render, its seconds for what follows. */
+const fixedSecLength = (sec: number): RenderEstimateLength => ({ fixedMinutes: minutesOf(sec), perEpisodeMinute: 0, fixedSec: sec })
 
 /**
  * The length a re-planning Edit Plan's render is estimated at, from its
@@ -370,8 +395,8 @@ export function editPlanRenderEstimateLength(
     return fixedLength(episodeSec !== undefined ? Math.min(perClip, minutesOf(episodeSec)) : perClip)
   }
   if (plan.mode === "trailer") {
-    const teaser = minutesOf(TRAILER_MAX_SEC * CLIP_LENGTH_HEADROOM)
-    return fixedLength(episodeSec !== undefined ? Math.min(teaser, minutesOf(episodeSec)) : teaser)
+    // The longest trailer the plan cuts, and never longer than the episode.
+    return fixedSecLength(episodeSec !== undefined ? Math.min(TRAILER_MAX_SEC, episodeSec) : TRAILER_MAX_SEC)
   }
   return episodeSec !== undefined
     ? fixedLength(Math.min(EDIT_PLAN_MAX_MINUTES, minutesOf(episodeSec)))
@@ -402,6 +427,12 @@ function wiredEdlLength(
 
   // EXACT: the producer is not re-running, so its persisted plan is what renders.
   if (!rerunIds.has(producer.id)) {
+    // A trailer plan, as its review leaves it, to the second (decided 2026-10-18).
+    if (producer.type === "edit-plan" && dataOf(producer).mode === "trailer") {
+      const plan = persistedEdlPlan(producer, planOutputOf)
+      const sec = Array.isArray(plan) ? undefined : edlSeconds(plan)
+      if (sec !== undefined) return fixedSecLength(Math.min(EDIT_PLAN_MAX_MINUTES * 60, sec))
+    }
     const exact = persistedPlanMinutes(producer, planOutputOf)
     if (exact !== undefined) return fixedLength(exact)
   }

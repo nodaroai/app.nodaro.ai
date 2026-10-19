@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { supabase } from "../../lib/supabase.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { meterSyncLlm } from "../../lib/meter-sync-llm.js"
+import { config } from "../../lib/config.js"
 import { characterPortraitApprovalRoutes } from "../character-portrait-approval.js"
 
 vi.mock("../../lib/llm-client.js", () => ({
@@ -22,6 +23,7 @@ vi.mock("../../lib/meter-sync-llm.js", () => ({ meterSyncLlm: vi.fn() }))
 // logic runs. Mock the keys as truthy so the preflight passes.
 vi.mock("../../lib/config.js", () => ({
   config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: "test-key" },
+  hasCredits: () => true,
 }))
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
@@ -80,6 +82,33 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
     const update = vi.fn().mockReturnValue({ eq: eq1 })
     return { update, eq1, eq2 }
   }
+
+  it("passes the provider gate with only KIE configured, and refuses only when neither key is", async () => {
+    const saved = { anthropic: config.ANTHROPIC_API_KEY, kie: config.KIE_API_KEY }
+    try {
+      config.ANTHROPIC_API_KEY = ""
+      const jobChain = mockJobFetch({ data: null, error: { code: "PGRST116" } })
+      const charPreFetch = mockCharPreFetch({ data: { id: TEST_CHARACTER_ID }, error: null })
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === "jobs") return { select: jobChain.select } as never
+        return { select: charPreFetch.select } as never
+      })
+      const post = () => app.inject({
+        method: "POST",
+        url: `/v1/characters/${TEST_CHARACTER_ID}/approve-portrait`,
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { candidateJobId: TEST_JOB_ID },
+      })
+      expect((await post()).statusCode).toBe(404)
+      config.KIE_API_KEY = ""
+      const refused = await post()
+      expect(refused.statusCode).toBe(503)
+      expect(refused.json().error.code).toBe("provider_unavailable")
+    } finally {
+      config.ANTHROPIC_API_KEY = saved.anthropic
+      config.KIE_API_KEY = saved.kie
+    }
+  })
 
   it("returns 401 unauthenticated", async () => {
     const res = await app.inject({

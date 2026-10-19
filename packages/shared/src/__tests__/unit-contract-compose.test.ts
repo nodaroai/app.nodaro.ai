@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 /**
  * The tables that compose the node units' generated rows (unit-contract-compose.ts):
  * the presentation sets, JSON_OUTPUT_KINDS, NON_PROMPT_TEXT_LANES, the review
- * holds and USE_CASE_NODE_TYPES. Each case loads the modules fresh over
+ * holds, USE_CASE_NODE_TYPES and FAN_OUT_EACH_HANDLES. Each case loads the modules fresh over
  * stand-in rows (the real units' rows left out) — a unit is added after the
  * hand-written entries, and a type that is in both refuses to load. The
  * use-case types and the review holds have no hand-written entries left.
@@ -16,6 +16,7 @@ type Rows = {
   UNIT_NON_PROMPT_INPUTS?: ReadonlyArray<readonly [string, readonly string[]]>
   UNIT_REVIEW_HOLDS?: readonly string[]
   UNIT_PRESENTS?: ReadonlyArray<readonly [string, string]>
+  UNIT_FAN_OUT_EACH?: ReadonlyArray<readonly [string, { each: readonly string[]; primary: string }]>
 }
 
 function withRows(rows: Rows): void {
@@ -27,6 +28,7 @@ function withRows(rows: Rows): void {
     UNIT_NON_PROMPT_INPUTS: [],
     UNIT_REVIEW_HOLDS: [],
     UNIT_PRESENTS: [],
+    UNIT_FAN_OUT_EACH: [],
     ...rows,
   }))
 }
@@ -44,6 +46,7 @@ describe("a node unit's contract rows join the published tables", () => {
       UNIT_NON_PROMPT_INPUTS: [["fixture-case", ["music", "media", "negative"]]],
       UNIT_REVIEW_HOLDS: ["fixture-case"],
       UNIT_PRESENTS: [["fixture-case", "text"]],
+      UNIT_FAN_OUT_EACH: [["fixture-case", { each: ["media"], primary: "media" }]],
     })
     const { getOutputType } = await import("../presentation-utils.js")
     const { declaredJsonOutput, declaredJsonOutputRows } = await import("../json-kinds.js")
@@ -72,10 +75,20 @@ describe("a node unit's contract rows join the published tables", () => {
 
     expect([...USE_CASE_NODE_TYPES]).toEqual(["fixture-case"])
     expect(isUseCaseNodeType("fixture-case")).toBe(true)
+
+    const { FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle } = await import("../producer-types.js")
+    expect(Object.keys(FAN_OUT_EACH_HANDLES).at(-1)).toBe("fixture-case")
+    expect(FAN_OUT_EACH_HANDLES["camera-switch"]).toEqual({ each: ["edl"], primary: "edl" })
+    expect(defaultEdgeOutputMode("fixture-case", "media")).toBe("each")
+    expect(defaultEdgeOutputMode("fixture-case", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("fixture-case", "json")).toBe("last")
+    expect(listResultsServeHandle("fixture-case", "json")).toBe(false)
   })
 
   it("with no rows every table is exactly its hand-written entries", async () => {
     withRows({})
+    const { FAN_OUT_EACH_HANDLES } = await import("../producer-types.js")
+    expect(Object.keys(FAN_OUT_EACH_HANDLES)).toEqual(["camera-switch", "ugc-clips"])
     const { NON_PROMPT_TEXT_LANES } = await import("../fan-out-rows.js")
     const { REVIEW_HOLDING_USE_CASE_TYPES } = await import("../preview-gate.js")
     expect(NON_PROMPT_TEXT_LANES.music).toBeUndefined()
@@ -91,6 +104,7 @@ describe("a type that is hand-written and a node unit refuses to load", () => {
     ["../fan-out-rows.js", { UNIT_NON_PROMPT_INPUTS: [["apply-edl", ["transcript"]]] }, /NON_PROMPT_TEXT_LANES: apply-edl is listed for "transcript" both by hand and as a node unit/],
     ["../use-case-types.js", { UNIT_USE_CASE_TYPES: ["episode-chapters", "episode-chapters"] }, /USE_CASE_NODE_TYPES: .* lists a type twice/],
     ["../producer-types.js", { UNIT_CONTRACTS: [["upload-video", "video"]] }, /VIDEO_PRODUCER_TYPES: upload-video is both hand-written and a node unit/],
+    ["../producer-types.js", { UNIT_FAN_OUT_EACH: [["camera-switch", { each: ["edl"], primary: "edl" }]] }, /FAN_OUT_EACH_HANDLES: camera-switch is both hand-written and a node unit/],
   ]
   for (const [mod, rows, message] of cases) {
     it(mod, async () => {
@@ -98,6 +112,13 @@ describe("a type that is hand-written and a node unit refuses to load", () => {
       await expect(import(/* @vite-ignore */ mod)).rejects.toThrow(message)
     })
   }
+})
+
+describe("a node unit with two fan-out rows refuses to load", () => {
+  it("../producer-types.js", async () => {
+    withRows({ UNIT_FAN_OUT_EACH: [["fixture-case", { each: ["media"], primary: "media" }], ["fixture-case", { each: ["json"], primary: "json" }]] })
+    await expect(import("../producer-types.js")).rejects.toThrow(/FAN_OUT_EACH_HANDLES: node unit fixture-case has more than one row/)
+  })
 })
 
 describe("a node unit's own row that names one handle twice refuses to load", () => {

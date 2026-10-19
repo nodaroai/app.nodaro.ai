@@ -19,7 +19,7 @@ import {
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -261,7 +261,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({
           error: {
-            code: isParseFail ? "invalid_llm_output" : "llm_error",
+            code: isParseFail ? "invalid_llm_output" : llmErrorCode(err),
             message: isParseFail ? "LLM returned invalid JSON; see job.output_data.rawLlmText" : message,
           },
         })

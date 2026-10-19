@@ -1929,6 +1929,21 @@ Needs `workflows:execute`.
 | `style_guide` | string |  | Style guide for the chapter titles. At most 4000 characters. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `make_trailer`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) | yes | The recording (a video URL). |
+| `intro_card_url` | string (URL) |  | Optional intro card: a short video (15 s at most), the recording's size and shape. |
+| `formats` | string[] |  | The formats to deliver (default 9:16, 1:1, 4:5). From 1 to 4 items. |
+| `review_before_render` | boolean |  | Stop at a proxy preview for review (default false). |
+| `plan_tier` | string |  | Editing quality (default standard). One of `economy`, `standard`, `premium`. |
+| `instructions` | string |  | Instructions for the trailer ("open on the funniest moment"). At most 4000 characters. |
+| `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `mark_card_done`
 
 Needs `assets:write` · Nodaro Cloud only.

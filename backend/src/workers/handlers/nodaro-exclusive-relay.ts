@@ -1,3 +1,4 @@
+// @registry-enumerates loads the job-budget registry (BUDGETED_JOB_NAMES), which folds every node unit's budget.ts at load
 /**
  * Run a Nodaro-EXCLUSIVE node on the connected cloud (4b, PR 3).
  *

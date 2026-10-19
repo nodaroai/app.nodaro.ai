@@ -77,7 +77,7 @@ import type { SceneData } from "@nodaro/shared/types"
 import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type UgcOutputs } from "@nodaro/shared/ugc"
 import { buildScenePrompt } from "@nodaro/prompts/prompt-builder"
 import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
-import { unitSavedOutput } from "../../lib/unit-compose.js"
+import { isUnitJsonWorker, unitJobOutput, unitLookPipOf, unitPipJson, unitPipValue, unitSavedOutput } from "../../lib/unit-compose.js"
 export { extractVideoDurationFromNode } from "@nodaro/shared/video"
 export { extractAllGeneratedResults }
 
@@ -723,6 +723,36 @@ export function fanOutIterationValue(output: NodeOutput, nodeType: string | unde
 }
 
 /**
+ * The structured JSON a consumer that reads JSON (Extract Field, JSON Process,
+ * the list operators) takes off a source's output, for the pip its wire leaves
+ * from: a node unit's look pip its own output (`unitPipJson`), any other
+ * source `output.json`. Mirrors the editor's sourceJsonOf / extractNodeOutputAsList.
+ */
+export function structuredJsonOf(output: NodeOutput | undefined, sourceType: string | undefined, sourceHandle: string | null | undefined): unknown {
+  const unit = output ? unitDescriptorOf(sourceType) : undefined
+  if (output && unit && unitLookPipOf(unit, sourceHandle)) return unitPipJson(unit, output, sourceHandle)
+  return output?.json
+}
+
+/**
+ * What a wire from a node unit's look pip hands a fan-out: that output's own
+ * JSON (`unitPipJson`) — this run's output, or the seeded saved one, else (no
+ * state) its saved data. Undefined for any other source or pip, which keep the
+ * generic list reads. Mirrors the editor's extractNodeOutputAsList, which lists
+ * a unit's look pip ahead of every other read.
+ */
+export function unitLookPipJsonFor(
+  node: SimpleNode,
+  state: NodeExecutionState | undefined,
+  sourceHandle: string | null | undefined,
+): { readonly value: unknown } | undefined {
+  const unit = unitDescriptorOf(node.type)
+  if (!unit || !unitLookPipOf(unit, sourceHandle)) return undefined
+  const output = state ? state.output : extractSavedNodeOutput(node)
+  return { value: output ? unitPipJson(unit, output, sourceHandle) : undefined }
+}
+
+/**
  * Get the primary media URL or text from a NodeOutput, given the source node type.
  * Uses the media type sets from execution-graph.ts for consistency.
  */
@@ -758,6 +788,11 @@ export function getPrimaryOutput(
     const value = ugcPipValue(output.ugcOutputs, sourceType, sourceHandle)
     return sourceType === "ugc-clip" || sourceType === "ugc-finish-clips" ? output.videoUrl || value : value
   }
+
+  // A node unit's JSON (look) pip hands on its own JSON string (unitOutputs);
+  // its media and text pips take the paths below. Mirrors the editor's unitOutputValue.
+  const unit = unitDescriptorOf(sourceType)
+  if (unit && unitLookPipOf(unit, sourceHandle)) return unitPipValue(unit, output, sourceHandle)
 
   // Sub-workflow / component output routing by handle (matches frontend)
   if (sourceType === "sub-workflow" || sourceType === "component") {
@@ -1442,7 +1477,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // A use-case node (legacy or a unit): the episode it shows, its plan with the
   // review applied, and its text. Ahead of the unit branch (decided 2026-10-18),
   // whose generic `from` read would save the wrong value, and of the media sets.
-  if (isUseCaseNodeType(type)) return usecaseSavedNodeOutput(data)
+  if (isUseCaseNodeType(type)) return usecaseSavedNodeOutput(data, type)
 
   // A node unit's saved output is what its manifest declares (handles.outputs[].from,
   // the active result first for media) — never a legacy type below. Mirrors the
@@ -2178,6 +2213,8 @@ function ugcJobOutput(outputData: Record<string, unknown>, nodeType: "ugc-script
 export function buildNodeOutputFromJobData(
   outputData: Record<string, unknown>,
   nodeType: string,
+  /** The job the row is, when the caller has it (a use-case node's list rows name it). */
+  jobId?: string,
 ): NodeOutput {
   // The UGC jobs read through the shared UGC wires only, ahead of the generic
   // copy below: their rows are not read for any other key (a script's plan is
@@ -2187,12 +2224,16 @@ export function buildNodeOutputFromJobData(
   // The two plugin jobs of a UGC video cut from one recorded speech — child steps of UGC Clips (the split) and
   // UGC Finish (the finish): their whole row, read by the shared UGC lane wires only.
   if (nodeType === "ugc-segments" || nodeType === "ugc-finish") return { json: outputData }
-  // A use-case wrapper's row (Tighten Episode): read by its own mapping only.
-  if (isUseCaseNodeType(nodeType)) return usecaseJobOutput(outputData)
+  // A use-case wrapper's row (Tighten Episode): read by its own mapping only,
+  // each row of a list result naming the job it was rebuilt from.
+  if (isUseCaseNodeType(nodeType)) return usecaseJobOutput(outputData, jobId)
   // Site Capture: the job's output IS the capture (its route's public shape) — on `json`, with its
   // first still on `image` and every still, in page order, as its list. A capture with no still hands
   // on its json only.
   if (nodeType === "site-capture") return siteCaptureNodeOutputs(outputData)
+  // A JSON worker unit (look outputs only): each output's value under its id, read by its manifest alone.
+  const jsonUnit = unitDescriptorOf(nodeType)
+  if (jsonUnit && isUnitJsonWorker(jsonUnit)) return unitJobOutput(jsonUnit, outputData)
 
   const output: NodeOutput = {}
 

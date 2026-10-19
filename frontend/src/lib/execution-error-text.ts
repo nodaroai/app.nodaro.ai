@@ -23,7 +23,20 @@ import {
 import {
   UGC_PICK_FIRST_MESSAGE,
 } from "@nodaro/shared/ugc"
-import { USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE, previewRefusalOfCode } from "@nodaro/render-rules"
+import {
+  USE_CASE_LIST_DRIVEN,
+  USE_CASE_NODE_TYPES,
+  USE_CASE_REVIEW_LIST_DRIVEN,
+  USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
+  isUseCaseNodeType,
+  previewRefusalOfCode,
+  usecaseCancelledMessage,
+  usecaseDescriptor,
+  usecaseListDrivenMessage,
+  usecaseListsItsResult,
+  type UseCaseNodeType,
+} from "@nodaro/render-rules"
+import { usecaseLabelVars } from "@/lib/use-case-request-body"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { previewRefusalText } from "@/lib/preview-refusal-text"
 
@@ -64,6 +77,33 @@ const CODE_TEXT: Readonly<Record<string, MessageKey>> = {
   [USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE]: "nodeRun.tightenReviewListDriven",
 }
 
+/**
+ * A use-case node whose own result is a list (Trailer), fed by a list: the
+ * server's English sentence names the node type, so each type's sentence is
+ * known here and shown with the localized label.
+ */
+const LIST_DRIVEN_TYPE_BY_MESSAGE: ReadonlyMap<string, UseCaseNodeType> = new Map(
+  USE_CASE_NODE_TYPES.filter((t) => usecaseListsItsResult(t)).map((t) => [usecaseListDrivenMessage(usecaseDescriptor(t).label), t] as const),
+)
+
+/**
+ * A use-case node whose run was cancelled, as the server's engine words it
+ * (`usecaseCancelledMessage`, naming the node type): shown with the localized label.
+ */
+const CANCELLED_TYPE_BY_MESSAGE: ReadonlyMap<string, UseCaseNodeType> = new Map(
+  USE_CASE_NODE_TYPES.map((t) => [usecaseCancelledMessage(usecaseDescriptor(t).label), t] as const),
+)
+
+/** A known code or sentence, in the reader's language; null for any other text. */
+function knownText(message: string): string | null {
+  const key = CODE_TEXT[message]
+  if (key) return tx(key)
+  const listDriven = LIST_DRIVEN_TYPE_BY_MESSAGE.get(message)
+  if (listDriven) return tx("nodeRun.usecaseListDriven", usecaseLabelVars(listDriven))
+  const cancelled = CANCELLED_TYPE_BY_MESSAGE.get(message)
+  return cancelled ? tx("nodeRun.usecaseCancelled", usecaseLabelVars(cancelled)) : null
+}
+
 export function executionErrorText(message: string | null | undefined): string | null {
   if (!message) return null
   // A preview refusal (decided 2026-10-04): a run nobody can review, or a
@@ -72,9 +112,7 @@ export function executionErrorText(message: string | null | undefined): string |
   // code (and every older row's) reads as it always has.
   const refusal = previewRefusalOfCode(message)
   if (refusal) return previewRefusalText(refusal.family, refusal.kind)
-  const key = CODE_TEXT[message]
-  if (key) return tx(key)
-  return nodeFailuresText(message) ?? message
+  return knownText(message) ?? nodeFailuresText(message) ?? message
 }
 
 /** How the server's engine words a run that stopped on failed nodes: `Node execution failed: <id>: <error>; …`. */
@@ -90,10 +128,10 @@ function nodeFailuresText(message: string): string | null {
   let known = false
   const parts = message.slice(NODE_FAILURES_PREFIX.length).split("; ").map((part) => {
     const at = part.indexOf(": ")
-    const key = at > 0 ? CODE_TEXT[part.slice(at + 2)] : undefined
-    if (!key) return part
+    const text = at > 0 ? knownText(part.slice(at + 2)) : null
+    if (text === null) return part
     known = true
-    return `${part.slice(0, at)}: ${tx(key)}`
+    return `${part.slice(0, at)}: ${text}`
   })
   return known ? `${NODE_FAILURES_PREFIX}${parts.join("; ")}` : null
 }
@@ -113,15 +151,21 @@ const NODE_CODE_TEXT: Readonly<Record<string, MessageKey>> = {
 export function nodeErrorCodeText(code: string, nodeType?: string | null): string | null {
   const known = NODE_CODE_TEXT[code]
   if (known) return tx(known)
+  // A use-case node whose own result is a list, about to run once per list item: named by its type.
+  if (code === USE_CASE_LIST_DRIVEN && isUseCaseNodeType(nodeType)) return tx("nodeRun.usecaseListDriven", usecaseLabelVars(nodeType))
   if (!REVIEW_HOLDING_USE_CASE_TYPES.has(nodeType ?? "")) return null
   const refusal = previewRefusalOfCode(code)
   return refusal ? previewRefusalText(refusal.family, "review") : null
 }
 
-/** A failed node state's error, as a person reads it: a known code localized, any other error as sent. */
+/**
+ * A failed node state's error, as a person reads it: a known code localized,
+ * a known sentence (a use-case node's run cancelled) localized, any other
+ * error as sent.
+ */
 export function nodeStateErrorText(
   state: { readonly error?: string | null; readonly errorCode?: string | null },
   nodeType?: string | null,
 ): string {
-  return (state.errorCode ? nodeErrorCodeText(state.errorCode, nodeType) : null) ?? state.error ?? "Node failed"
+  return (state.errorCode ? nodeErrorCodeText(state.errorCode, nodeType) : null) ?? (state.error ? knownText(state.error) : null) ?? state.error ?? "Node failed"
 }

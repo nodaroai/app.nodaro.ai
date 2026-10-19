@@ -419,6 +419,8 @@ export async function parseSseStream(
     usage,
     model: modelId,
     providerCost,
+    // KIE's own charge, only when the stream stated one (see LlmResponse.creditsUsd).
+    ...(actualUsd !== undefined ? { creditsUsd: actualUsd } : {}),
     // Only KIE's three formats stream through this parser.
     lane: "kie",
   }

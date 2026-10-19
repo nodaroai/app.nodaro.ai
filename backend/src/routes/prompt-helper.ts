@@ -17,7 +17,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -294,7 +294,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         const truncated = err instanceof Error && err.cause instanceof LlmOutputTruncatedError
         const isMalformed = diagnostic.includes("Malformed") || diagnostic.includes("invalid JSON") || diagnostic.includes("llm-structured")
         return reply.status(isMalformed || truncated ? 502 : 500).send({
-          error: { code: isMalformed ? "malformed_response" : "llm_error", message },
+          error: { code: isMalformed ? "malformed_response" : llmErrorCode(err), message },
         })
       }
     },

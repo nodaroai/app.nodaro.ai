@@ -172,7 +172,6 @@ import {
   transcodeVideoApi,
   speedRampApi,
   loopVideoApi,
-  gifToVideoApi,
   fadeVideoApi,
   maskCompositeApi,
   videoMaskApi,
@@ -377,7 +376,6 @@ import type {
   ManualEditData,
   SpeedRampData,
   LoopVideoData,
-  GifToVideoData,
   FadeVideoData,
   MaskCompositeData,
   StillToVideoData,
@@ -1470,6 +1468,7 @@ function executeNodeCore(
       inputs,
       overrideMediaUrl,
       poll: runProcessingNode,
+      pollJson: (id, start, landing, label, c) => pollJobWithNodeUpdate(id, start, [], label, c, undefined, undefined, { jsonLanding: landing }),
       setUserPromptTemplate,
       getNodeData: (id) => useWorkflowStore.getState().nodes.find((n) => n.id === id)?.data as Readonly<Record<string, unknown>> | undefined,
       updateNodeData: (id, patch) => useWorkflowStore.getState().updateNodeData(id, patch),
@@ -8520,34 +8519,6 @@ function executeNodeCore(
     );
   }
 
-  if (node.type === "gif-to-video") {
-    const d = node.data as GifToVideoData;
-    // The GIF arrives as an image input (an uploaded .gif) or via the node's
-    // own upload dropzone (data.gifUrl).
-    const gifUrl = overrideMediaUrl ?? inputs.imageUrl ?? d.gifUrl;
-    if (!gifUrl) {
-      toast.error(nodeRunError(d.label, "nodeRun.noGIFWireAnImage"));
-      return Promise.reject(new Error("No GIF"));
-    }
-    return runProcessingNode(
-      node.id,
-      () =>
-        gifToVideoApi(
-          gifUrl,
-          {
-            loopToMinimum: d.loopToMinimum ?? true,
-            targetDuration: d.targetDuration ?? 3,
-            interpolate: d.interpolate ?? true,
-            alphaBackground: d.alphaBackground ?? "white",
-          },
-          ctx.userId,
-        ),
-      "generatedVideoUrl",
-      "Gif to Video",
-      ctx,
-    );
-  }
-
   if (node.type === "fade-video") {
     const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
     if (!videoUrl) {
@@ -10064,7 +10035,7 @@ function executeNodeCore(
 
     // Prefer structured json from the source node's data (web-scrape's
     // generatedJson; an Edit Plan's plan as the person's review leaves it).
-    let value: unknown = sourceJsonOf(src);
+    let value: unknown = sourceJsonOf(src, inEdge.sourceHandle);
 
     // When upstream is a list-producing node (filter-list / deduplicate /
     // merge-lists / split-text), iterate over the FULL list so the path
@@ -10137,7 +10108,7 @@ function executeNodeCore(
       return Promise.resolve("");
     }
 
-    let input: unknown = sourceJsonOf(src);
+    let input: unknown = sourceJsonOf(src, inEdge.sourceHandle);
     if (input === undefined) {
       const text = extractNodeOutput(src, inEdge.sourceHandle ?? undefined);
       if (typeof text !== "string" || text.length === 0) {

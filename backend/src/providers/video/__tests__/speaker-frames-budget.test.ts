@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only speaker-frames (BUDGETED_JOB_NAMES)
 // Speaker Frames' registered job budget (P3.3b). Its handler is a PRIVATE
 // PLUGIN handler, which cannot declare `livenessBudgetMs`, so without a
 // registry entry the worker's heartbeat stops at the 90-minute default and a

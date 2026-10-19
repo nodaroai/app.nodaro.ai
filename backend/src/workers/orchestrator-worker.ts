@@ -11,7 +11,7 @@ import {
   isPreviewHoldingType
 } from "@nodaro/shared/nodes"
 import { UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick } from "@nodaro/shared/ugc"
-import { bypassTeleports } from "@nodaro/render-rules"
+import { bypassTeleports, usecaseTriesEvery } from "@nodaro/render-rules"
 import { previewHoldKind, previewHoldKindOf, previewRefusalCode } from "@nodaro/render-rules"
 /**
  * Orchestrator worker — processes workflow executions.
@@ -83,6 +83,7 @@ import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { continuationRootOf, pinRunRoot } from "../lib/continuation-run-root.js"
 import { loadInlineGraph } from "../lib/execution-inline-graph.js"
 import { finalizeUseCaseWrapper } from "../lib/use-case/finalize-wrapper.js"
+import { markExecutionCancelled } from "./orchestrator-cancel.js"
 import { mirrorUseCaseProgress } from "../lib/use-case/progress.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
@@ -612,6 +613,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
       workflowData = { nodes: inline.nodes, edges: inline.edges, settings: {} }
       ctx.workflowOwnerId = userId
+      ctx.triesEvery = usecaseTriesEvery(inline)
       inlineGraphHash = inline.hash
     }
 
@@ -1521,15 +1523,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           return
         }
         ctx.cancelled = true
-        await updateExecution(executionId, { status: "cancelled", node_states: nodeStates, completed_at: new Date().toISOString() })
-        emitExecutionEvent({
-          type: "execution:cancelled",
-          executionId,
-          nodeStates: { ...nodeStates },
-          completedNodes: resumedNodeCount,
-          failedNodes: 0,
-          totalCreditsUsed: 0,
-        })
+        await markExecutionCancelled(executionId, nodeStates, { completedNodes: resumedNodeCount, failedNodes: 0, totalCreditsUsed: 0 })
         return
       }
       if (fetched.kind === "refused") {
@@ -1590,19 +1584,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // control states are handled together.
       if (controlStatus === "cancelled" || controlStatus === "stopping") {
         ctx.cancelled = true
-        await updateExecution(executionId, {
-          status: "cancelled",
-          node_states: nodeStates,
-          completed_at: new Date().toISOString(),
-        })
-        emitExecutionEvent({
-          type: "execution:cancelled",
-          executionId,
-          nodeStates: { ...nodeStates },
-          completedNodes: completedCount,
-          failedNodes: failedCount,
-          totalCreditsUsed: totalCredits,
-        })
+        await markExecutionCancelled(executionId, nodeStates, { completedNodes: completedCount, failedNodes: failedCount, totalCreditsUsed: totalCredits })
         return
       }
 
@@ -1698,8 +1680,32 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         continue
       }
 
+      // Per-level abort ref so fail-fast doesn't pollute ctx.cancelled
+      // (which is checked between levels for stopping mode).
+      // User cancellation still works: running tasks detect it in their poll
+      // loops and throw, which triggers fail-fast on this ref.
+      const levelAborted = { cancelled: ctx.cancelled }
+      // A stage whose nodes all try every one of their kind (a Trailer's
+      // formats, decided 2026-10-18): one that fails never stops the others
+      // from starting. Without fail-fast to hold them back, each node asks for
+      // a Stop itself before it starts — a fresh read, never the throttled
+      // poll's flag alone — so a Stop never starts a paid step. A node a Stop
+      // held back never started: it is neither delivered nor failed.
+      const triesEveryLevel = executableNodes.length > 1 && executableNodes.every((n) => ctx.triesEvery?.has(n.id) === true)
+      const started = new Set<string>()
+      let stoppedMidLevel = false
+
       // Execute nodes in this level with concurrency cap to prevent starving other users
       const tasks = executableNodes.map((node) => async () => {
+          if (triesEveryLevel) {
+            if (ctx.cancelled || levelAborted.cancelled || (await checkExecutionControl(executionId)) === "cancelled") {
+              ctx.cancelled = true
+              levelAborted.cancelled = true
+              stoppedMidLevel = true
+              throw new Error("Execution cancelled")
+            }
+            started.add(node.id)
+          }
           // Mark as running — for component nodes, use the component's label as display name
           const displayType = node.type === "component"
             ? (node.data as Record<string, unknown>).label as string || "Component"
@@ -1870,12 +1876,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
 
           return result
       })
-      // Per-level abort ref so fail-fast doesn't pollute ctx.cancelled
-      // (which is checked between levels for stopping mode).
-      // User cancellation still works: running tasks detect it in their poll
-      // loops and throw, which triggers fail-fast on this ref.
-      const levelAborted = { cancelled: ctx.cancelled }
-      const results = await settledWithLimit(tasks, concurrencyLimit, levelAborted)
+      const results = await settledWithLimit(tasks, concurrencyLimit, levelAborted, !triesEveryLevel)
 
       // Check for failures
       for (let i = 0; i < results.length; i++) {
@@ -1889,6 +1890,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         // reconciles the in-flight children from `jobs`.
         if (result.status === "rejected" && result.reason instanceof DrainAbortError) {
           throw result.reason
+        }
+
+        // A tries-every node a Stop held back never started: no failure, no charge. Only a Stop
+        // does that; any other rejection of a node that never started is a failure, named below.
+        if (result.status === "rejected" && stoppedMidLevel && !started.has(node.id)) {
+          nodeStates[node.id] = { status: "skipped", nodeType: node.type, completedAt: new Date().toISOString() }
+          continue
         }
 
         if (result.status === "rejected") {
@@ -1980,6 +1988,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         failedNodes: failedCount,
         totalCreditsUsed: totalCredits,
       })
+
+      // A Stop held back part of a tries-every stage: the run stops here, as a
+      // Stop seen at a level boundary does (the nodes after it never run).
+      if (stoppedMidLevel) {
+        await markExecutionCancelled(executionId, nodeStates, { completedNodes: completedCount, failedNodes: failedCount, totalCreditsUsed: totalCredits })
+        return
+      }
 
       // If any node failed, stop execution
       if (failedCount > 0) {
@@ -2136,7 +2151,7 @@ async function executeNodeForList(
   maxConcurrency?: number,
   onToleratedFailures?: (count: number) => void,
 ): Promise<ExecuteNodeResult> {
-  // A review-on use-case node cannot run once per item: refused before any item runs.
+  // A use-case node whose result is a list, or with review on, cannot run once per item: refused before any item runs.
   const useCaseRefusal = usecaseFanOutRefusal(node)
   if (useCaseRefusal) throw useCaseRefusal
   const items = plan.items

@@ -44,11 +44,13 @@ import {
   UNBOUNDED_LENGTH_REASONS,
   VIDEO_OUTPUT_LENGTH_RULES,
   floorLength,
+  usecaseLength,
   videoOutputLength,
   type InputLength,
   type WireInput,
   type WireLength,
 } from "../video-output-length.js"
+import { USE_CASE_SPECS, editPlanRenderEstimateLength, renderLengthSec, TRAILER_MAX_SEC } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "../seedance-extend-model.js"
 import { generateVideoProClampedSec, generateVideoProLengthSec } from "../generate-video-pro-length.js"
 import { computeGenerateVideoProPricing } from "../../ee/billing/generate-video-pro-credits.js"
@@ -399,5 +401,28 @@ describe("the four length-priced steps pass a length on", () => {
     expect(run("video-sfx", [wire("video", fixed(900), "video")])).toEqual(fixed(VIDEO_SFX_PRICING.MAX_DURATION_SEC))
     expect(run("video-sfx", [wire("video", episode, "video")])).toEqual(fixed(VIDEO_SFX_PRICING.MAX_DURATION_SEC))
     expect(run("video-sfx", [wire("video", "unknown", "video")])).toEqual(fixed(VIDEO_SFX_PRICING.MAX_DURATION_SEC))
+  })
+})
+
+describe("Trailer: the teaser at its render's estimated length, after its intro card", () => {
+  // 40 seconds, the longest trailer the plan cuts (decided 2026-10-18), to the second.
+  const teaserSec = renderLengthSec(editPlanRenderEstimateLength({ mode: "trailer" }, undefined))
+  // Its rule is its spec's output length (use-case-output-length.test.ts ties every use-case rule to its spec).
+  const length = USE_CASE_SPECS.trailer.outputLength!
+  it("its spec's output length is the teaser's estimated length, after the intro card", () => {
+    expect(teaserSec).toBe(TRAILER_MAX_SEC)
+    expect(length).toEqual({ fixedSec: teaserSec, after: "introCard" })
+  })
+  it("no intro card: the teaser's estimated length, whatever the recording's length", () => {
+    expect(usecaseLength(length, [video(episode, "media")])).toEqual({ fixedSec: teaserSec, perEpisodeSec: 0 })
+  })
+  it("an intro card adds its length; one with no known length leaves the delivery unknown", () => {
+    expect(usecaseLength(length, [video(episode, "media"), video(fixed(4), "introCard")])).toEqual({ fixedSec: teaserSec + 4, perEpisodeSec: 0 })
+    expect(usecaseLength(length, [video(episode, "media"), video("unknown", "introCard")])).toBe("unknown")
+  })
+  it("the node's own rule (through the floor every rule passes) delivers the same lengths", () => {
+    expect(run("episode-trailer", [video(episode, "media")])).toEqual({ fixedSec: teaserSec, perEpisodeSec: 0 })
+    expect(run("episode-trailer", [video(episode, "media"), video(fixed(4), "introCard")])).toEqual({ fixedSec: teaserSec + 4, perEpisodeSec: 0 })
+    expect(run("episode-trailer", [video(episode, "media"), video("unknown", "introCard")])).toBe("unknown")
   })
 })

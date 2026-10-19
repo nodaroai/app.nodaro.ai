@@ -29,6 +29,10 @@ import { studioSkillTails } from "./studio-skill.js"
 import { copilotSurface } from "./surfaces.js"
 import { buildHistory, buildUserContent, extractImageRefIds, extractUserLinks } from "./history.js"
 import { runAgentLoop, type LoopResult } from "./agent-loop.js"
+import { kieKeySet, pickClaudeLane } from "../../lib/llm/anthropic-availability.js"
+import { CopilotDirectRefusedError, type CopilotLane } from "./lane.js"
+import { describeImageUrls } from "./kie-vision.js"
+import { applyDescriptions, imagesAsText, undescribedImageUrls, withoutDescriptions } from "./image-descriptions.js"
 import { buildToolSurface } from "./tools/registry.js"
 import { registerTurnAbort, unregisterTurnAbort } from "./cancel-registry.js"
 import {
@@ -38,9 +42,12 @@ import {
   isCancelRequested,
   listRecentMessages,
   nextSeq,
+  recordTurnLane,
   touchTurnHeartbeat,
+  updateMessageContent,
   updateTurnProgress,
   threadAllowsPublishing,
+  type CopilotMessageRow,
   type CopilotThread,
   type CopilotTurn,
 } from "./store.js"
@@ -186,6 +193,9 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     void touchTurnHeartbeat(input.turn.id)
   }, HEARTBEAT_INTERVAL_MS)
 
+  // Which lane served the turn; null while no model call was attempted.
+  let turnLane: CopilotLane | null = null
+
   try {
     const isStudio = profile.surface === "studio"
     const [budget, context, priorRows, tools, tails] = await Promise.all([
@@ -274,7 +284,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
 
     const userContent = buildUserContent(preamble, input.message, imageUrls)
     const seq = await nextSeq(input.thread.id)
-    await appendMessage({
+    const userRow = await appendMessage({
       threadId: input.thread.id,
       turnId: input.turn.id,
       userId: input.userId,
@@ -285,55 +295,94 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       textPreview: input.message,
     })
 
-    result = await runAgentLoop({
-      tier: { ...COPILOT_TIERS[input.tier ?? DEFAULT_COPILOT_TIER], caps: input.caps },
-      system: buildSystemPrompt(profile.surface, tails),
-      tools: tools.definitions,
-      history: buildHistory(priorRows),
-      userContent: userContent as Anthropic.Messages.ContentBlockParam[],
-      budget,
-      signal: controller.signal,
-      // `created` starts at zero per TURN, which is what bounds it: a fresh
-      // object here means one conversation cannot accumulate creations across
-      // messages by keeping the loop alive.
-      deps: {
-        ctx: { ...ctx, emit: emitWithVersion },
-        invoker,
-        addedNodeTypes,
-        wiredAssets,
-        created: { count: 0 },
-        surface: profile,
-        // Per-turn state, never a module: two concurrent turns share nothing.
-        // What list time learned about the tools rides here because the
-        // definitions no longer say it — the marks are dropped with `_meta`.
-        ...(isStudio
-          ? {
-              studio: {
-                tools: { confirmClasses: tools.confirmClasses, quotable: tools.quotable },
-                proposed: false,
-                previewUnavailable: false,
-              },
-            }
-          : {}),
-      },
-      events: {
-        onToken: (delta) => input.emit({ type: "token", data: { text: delta } }),
-        onToolCall: (event) => input.emit({ type: "tool_call", data: { ...event } }),
-        onIteration: async (state) => {
-          lastUsage = state.usage
-          await updateTurnProgress(input.turn.id, {
-            iterations: state.iterations,
-            tool_calls: state.toolCalls,
-            input_tokens: state.usage.inputTokens,
-            output_tokens: state.usage.outputTokens,
-            cache_read_tokens: state.usage.cacheReadTokens,
-            cache_write_tokens: state.usage.cacheWriteTokens,
-            cost_usd: state.usage.costUsd,
+    const tierSpec = { ...COPILOT_TIERS[input.tier ?? DEFAULT_COPILOT_TIER], caps: input.caps }
+    // The turn's wall clock starts here, once: a restart on KIE runs on what is left of it.
+    const turnStartedAt = Date.now()
+    const runOn = async (lane: CopilotLane): Promise<LoopResult> => {
+      const prepared = lane === "kie"
+        ? await prepareKieTurn({
+            registryId: tierSpec.registryId,
+            userRowId: userRow.id,
+            userContent: userContent as Anthropic.Messages.ContentBlockParam[],
+            priorRows,
+            signal: controller.signal,
           })
+        : {
+            history: buildHistory(priorRows, "direct"),
+            userContent: withoutDescriptions(userContent as Anthropic.Messages.ContentBlockParam[]),
+            costUsd: 0,
+          }
+      // The descriptions are paid for before the loop: a loop that then fails still settles them.
+      lastUsage = { ...lastUsage, costUsd: prepared.costUsd }
+      return runAgentLoop({
+        lane,
+        startedAt: turnStartedAt,
+        priorCostUsd: prepared.costUsd,
+        tier: tierSpec,
+        system: buildSystemPrompt(profile.surface, tails),
+        tools: tools.definitions,
+        history: prepared.history,
+        userContent: prepared.userContent,
+        budget,
+        signal: controller.signal,
+        // `created` starts at zero per TURN, which is what bounds it: a fresh
+        // object here means one conversation cannot accumulate creations across
+        // messages by keeping the loop alive.
+        deps: {
+          ctx: { ...ctx, emit: emitWithVersion },
+          invoker,
+          addedNodeTypes,
+          wiredAssets,
+          created: { count: 0 },
+          surface: profile,
+          // Per-turn state, never a module: two concurrent turns share nothing.
+          // What list time learned about the tools rides here because the
+          // definitions no longer say it — the marks are dropped with `_meta`.
+          ...(isStudio
+            ? {
+                studio: {
+                  tools: { confirmClasses: tools.confirmClasses, quotable: tools.quotable },
+                  proposed: false,
+                  previewUnavailable: false,
+                },
+              }
+            : {}),
         },
-      },
-      isCancelRequested: () => isCancelRequested(input.turn.id),
-    })
+        events: {
+          onToken: (delta) => input.emit({ type: "token", data: { text: delta } }),
+          onToolCall: (event) => input.emit({ type: "tool_call", data: { ...event } }),
+          onIteration: async (state) => {
+            lastUsage = state.usage
+            await updateTurnProgress(input.turn.id, {
+              iterations: state.iterations,
+              tool_calls: state.toolCalls,
+              input_tokens: state.usage.inputTokens,
+              output_tokens: state.usage.outputTokens,
+              cache_read_tokens: state.usage.cacheReadTokens,
+              cache_write_tokens: state.usage.cacheWriteTokens,
+              cost_usd: state.usage.costUsd,
+            })
+          },
+        },
+        isCancelRequested: () => isCancelRequested(input.turn.id),
+      })
+    }
+
+    // The turn's lane, chosen once: the platform's Anthropic account while it
+    // is usable, KIE otherwise. A refusal of the turn's FIRST call before any
+    // token restarts it on KIE — nothing was spent and no tool ran. With no KIE
+    // key there is nowhere to move, and the refusal ends the turn as it always did.
+    turnLane = pickClaudeLane()
+    console.info(`[copilot] turn ${input.turn.id} on lane ${turnLane}`)
+    try {
+      result = await runOn(turnLane)
+    } catch (err) {
+      if (!(err instanceof CopilotDirectRefusedError)) throw err
+      if (!kieKeySet()) throw err.refusal
+      console.warn(`[copilot] turn ${input.turn.id}: the Anthropic account refused before the first token — restarting on KIE`)
+      turnLane = "kie"
+      result = await runOn(turnLane)
+    }
   } catch (err) {
     if (err instanceof TurnVerdict) {
       // Not a fault, so not an incident: the deployment cannot serve this
@@ -360,6 +409,9 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     unregisterTurnAbort(input.turn.id)
     await invoker.close().catch(() => undefined)
   }
+
+  // Best-effort and its own write (store.ts): a missing column never costs the turn.
+  if (turnLane) await recordTurnLane(input.turn.id, turnLane)
 
   const usage = result?.usage ?? lastUsage
   const status = resolveStatus(result, failure)
@@ -416,6 +468,55 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     usage,
     ...(proposal ? { proposal } : {}),
     ...(failure ? { error: failure } : {}),
+  }
+}
+
+/**
+ * A turn on KIE, made ready. KIE's model cannot see an image while the request
+ * carries tools, so this turn's images and the newest earlier ones still
+ * without a description (at most TURN_CAPS.maxVisionImages of each) are
+ * described first — in ONE parallel batch, inside the turn's wall clock and
+ * under its cancel — each description is stored on its image block (the row
+ * keeps the image), and the model is sent the descriptions in the images'
+ * place. What the descriptions cost is the turn's from the start.
+ */
+async function prepareKieTurn(opts: {
+  registryId: string
+  userRowId: string
+  userContent: Anthropic.Messages.ContentBlockParam[]
+  priorRows: readonly CopilotMessageRow[]
+  signal: AbortSignal
+}): Promise<{ history: Anthropic.Messages.MessageParam[]; userContent: Anthropic.Messages.ContentBlockParam[]; costUsd: number }> {
+  const cap = TURN_CAPS.maxVisionImages
+  const currentUrls = undescribedImageUrls(opts.userContent).slice(0, cap)
+  const historyUrls: string[] = []
+  for (let i = opts.priorRows.length - 1; i >= 0 && historyUrls.length < cap; i--) {
+    const row = opts.priorRows[i]!
+    if (row.role !== "user" || !Array.isArray(row.content)) continue
+    for (const url of undescribedImageUrls(row.content)) {
+      if (historyUrls.length < cap && !historyUrls.includes(url) && !currentUrls.includes(url)) historyUrls.push(url)
+    }
+  }
+  const { descriptions, costUsd } = await describeImageUrls(opts.registryId, [...currentUrls, ...historyUrls], {
+    signal: opts.signal,
+    limit: cap * 2,
+  })
+
+  const current = applyDescriptions(opts.userContent, descriptions)
+  if (current.changed) await updateMessageContent(opts.userRowId, current.content)
+  const rows = await Promise.all(
+    opts.priorRows.map(async (row) => {
+      if (row.role !== "user" || !Array.isArray(row.content)) return row
+      const applied = applyDescriptions(row.content, descriptions)
+      if (!applied.changed) return row
+      await updateMessageContent(row.id, applied.content)
+      return { ...row, content: applied.content }
+    }),
+  )
+  return {
+    history: buildHistory(rows, "kie"),
+    userContent: imagesAsText(current.content as Anthropic.Messages.ContentBlockParam[]),
+    costUsd,
   }
 }
 

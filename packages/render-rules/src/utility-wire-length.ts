@@ -21,7 +21,7 @@ import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import { extractVideoDurationFromNode } from "@nodaro/shared/video"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
-  renderLengthCeilingMinutes,
+  renderLengthSec,
   resolveApplyEdlEstimateLength,
   resolveGraphOrigin,
   type EditPlanOutputReader,
@@ -347,7 +347,7 @@ export interface RunWireLengthOptions {
  * The length, in seconds, of the video on a wire when a RUN is estimated, or
  * `undefined` when it is not known (the estimators' fallback length stands in,
  * as before): a render's output is the render's estimated minutes at the
- * ceiling ({@link renderLengthCeilingMinutes}, the figure the render itself is
+ * ceiling ({@link renderLengthSec}, the figure the render itself is
  * priced at); the output of a Trim, Loop, Combine Videos or Video SFX is the
  * length that step passes on, from its own inputs' ({@link utilityOutputLength});
  * any other source is the caller's `otherSec`, and when that has none and the
@@ -372,7 +372,7 @@ export function runWireLengthSec(
   )
   if (!origin) return undefined
   if (isRenderNodeType(origin.type)) {
-    return renderLengthCeilingMinutes(resolveApplyEdlEstimateLength(origin, nodes, edges, rerunIds, options.planOutputOf)) * 60
+    return renderLengthSec(resolveApplyEdlEstimateLength(origin, nodes, edges, rerunIds, options.planOutputOf))
   }
   if (LENGTH_PRICED_UTILITY_TYPES.has(origin.type ?? "")) {
     if (seen.has(origin.id)) return undefined

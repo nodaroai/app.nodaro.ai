@@ -92,13 +92,14 @@ export interface RunWorkflowParams {
    * not used). A run through the API has nobody to review a Preview render, so
    * a workflow whose Apply EDL render is set to Preview is refused
    * (`preview_review_required`) unless the run sets it to Final:
-   * `{ [renderNodeId]: { quality: "final" } }`. A Tighten Episode node with
-   * Review before render on is refused the same way (turn its review off). A
-   * failed execution records what held it — `preview_review_required` /
-   * `preview_render_nested` (a render), `…_review_on` (a review-on node) or
-   * `…_mixed` (both); match all six with `isPreviewRefusalCode` from
-   * `@nodaro/shared`. A review-on Tighten Episode fed by a List is refused
-   * with `use_case_review_list_driven`.
+   * `{ [renderNodeId]: { quality: "final" } }`. A node with Review before
+   * render on (Tighten Episode, Trailer) is refused the same way (turn its
+   * review off). A failed execution records what held it —
+   * `preview_review_required` / `preview_render_nested` (a render),
+   * `…_review_on` (a review-on node) or `…_mixed` (both); match all six with
+   * `isPreviewRefusalCode` from `@nodaro/shared`. A review-on Tighten Episode
+   * fed by a List is refused with `use_case_review_list_driven`; a Trailer fed
+   * by a List, with `use_case_list_driven`.
    */
   inputOverrides?: Record<string, Record<string, unknown>>
   /**

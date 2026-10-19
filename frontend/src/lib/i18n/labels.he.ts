@@ -25,7 +25,6 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Paint Mask": "ציור מסכה",
   "Slideshow": "מצגת",
   "Still to Video": "תמונה נייחת לווידאו",
-  "Gif to Video": "GIF לווידאו",
   // Inputs
   "Text": "טקסט",
   "Upload Image": "העלאת תמונה",
@@ -420,6 +419,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Record": "רשומה",
   "Records": "רשומות",
   "Recording": "הקלטה",
+  "Intro card": "כרטיס פתיחה",
   "Item": "פריט",
   "Reference": "ייחוס",
   "Rejected": "נדחים",

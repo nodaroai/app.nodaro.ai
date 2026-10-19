@@ -24,7 +24,8 @@
         "definitions"
       ],
       "lookups": [
-        "unitDefinitionOf"
+        "unitDefinitionOf",
+        "unitInputHandleOf"
       ]
     },
     "frontend/src/components/editor/workflow-editor/types.ts": {
@@ -181,7 +182,8 @@
         "registry"
       ],
       "lookups": [
-        "unitDescriptorOf"
+        "unitDescriptorOf",
+        "unitInputHandleOf"
       ]
     },
     "backend/src/services/workflow-engine/payload-builder.ts": {
@@ -217,6 +219,20 @@
       ],
       "lookups": [
         "usecaseInputSchemaOf"
+      ]
+    },
+    "backend/src/lib/job-budget.ts": {
+      "composes": "DECLARED_JOB_BUDGETS = the legacy job budgets + UNIT_BUDGETS, each unit's budget.ts under its type (its BullMQ job name); a type in both throws at load",
+      "exports": {
+        "budgets": [
+          "BUDGETED_JOB_NAMES"
+        ]
+      },
+      "foldsAtLoad": [
+        "budgets"
+      ],
+      "lookups": [
+        "declaredJobBudgetMs"
       ]
     }
   }

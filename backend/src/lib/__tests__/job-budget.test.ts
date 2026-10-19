@@ -1,3 +1,4 @@
+// @test-watches backend/src/nodes/**
 // Podcast Track 0.11 — budget-aware caps. The decided rule: a node that
 // declares a budget (apply-edl today) gets node/poll timeouts = its budget,
 // and the workflow cap grows by the same excess; everything that declares
@@ -17,6 +18,7 @@ import {
   workflowCapMs,
 } from "../job-budget.js"
 import { applyEdlRenderBudgetMs } from "../../providers/video/apply-edl-budget.js"
+import { unitDescriptorOf } from "../unit-descriptors.js"
 import { audioSyncRenderBudgetMs } from "../../providers/audio/audio-sync-budget.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS, WORKFLOW_TIMEOUT_MS } from "../../services/workflow-engine/types.js"
 
@@ -93,8 +95,9 @@ describe("declaredJobBudgetMs — the one per-job budget both readers call", () 
     expect(declaredJobBudgetMs("audio-sync", { sources: "a,b" })).toBeUndefined()
   })
 
-  it("registers exactly apply-edl, audio-sync, silence-detect, speaker-frames, speaker-view and split-media today", () => {
-    expect([...BUDGETED_JOB_NAMES]).toEqual(["apply-edl", "audio-sync", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
+  it("registers exactly apply-edl, audio-sync, silence-detect, speaker-frames, speaker-view and split-media as legacy rows; every other name is a node unit's budget.ts", () => {
+    expect(BUDGETED_JOB_NAMES.filter((n) => !unitDescriptorOf(n))).toEqual(["apply-edl", "audio-sync", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
+    for (const n of BUDGETED_JOB_NAMES.filter((t) => unitDescriptorOf(t))) expect(unitDescriptorOf(n)?.execution.kind, n).toBe("worker")
   })
 })
 

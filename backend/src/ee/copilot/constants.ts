@@ -16,10 +16,11 @@ export type { CopilotSurface } from "./store.js"
 
 /**
  * The model ladder — the v1 plan's dormant design, activated. THREE tiers,
- * Claude-family only (the loop runs on the direct Anthropic SDK; KIE's proxy
- * mangles tool_use, and a cross-vendor loop would be a different loop), chosen
- * PER THREAD (the cached prompt prefix is per model — a per-message flip would
- * pay a full prefix rewrite every time).
+ * Claude-family only (the loop is the Anthropic SDK's own — run on the
+ * platform's Anthropic account, or on KIE's Anthropic-compatible endpoint when
+ * that account cannot serve, see agent-loop.ts; a cross-vendor loop would be a
+ * different loop), chosen PER THREAD (the cached prompt prefix is per model —
+ * a per-message flip would pay a full prefix rewrite every time).
  *
  * `registryId` prices the call (LLM_MODELS / calculateLlmCost); `anthropicModelId`
  * is what the SDK is asked for; `creditId` scales the reservation ceiling.

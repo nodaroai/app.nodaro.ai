@@ -13,6 +13,8 @@ vi.mock("../../../../lib/anthropic.js", () => {
 import { callLLM, CallLLMRefusalError, CallLLMTruncatedError, CallLLMValidationError } from "../call-llm.js"
 import { LLM_CONTENT_REFUSAL_MESSAGE, LlmContentRefusalError } from "../../../../lib/llm-errors.js"
 import * as AnthropicMod from "../../../../lib/anthropic.js"
+import { config } from "../../../../lib/config.js"
+import { __resetPlatformExhaustionAlerts } from "../../../../lib/llm-platform-exhaustion.js"
 
 const { messagesCreate } = (AnthropicMod as unknown as { __mocked: { messagesCreate: ReturnType<typeof vi.fn> } }).__mocked
 
@@ -36,7 +38,12 @@ function fakeSupabase() {
 const schema = z.object({ greeting: z.string() })
 
 describe("callLLM", () => {
-  beforeEach(() => messagesCreate.mockReset())
+  beforeEach(() => {
+    messagesCreate.mockReset()
+    // The lane comes from the live key (pickClaudeLane): pin the direct lane.
+    config.ANTHROPIC_API_KEY = "sk-ant-test"
+    __resetPlatformExhaustionAlerts()
+  })
 
   it("returns parsed output on first success", async () => {
     messagesCreate.mockResolvedValueOnce({

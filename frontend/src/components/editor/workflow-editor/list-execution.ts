@@ -15,7 +15,8 @@ import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 import { UGC_NEWER_TAKE_WINS_TYPE, ugcCanvasRunMark } from "@/lib/ugc-run-patch";
 import { browserRenderRowSentStamps } from "./apply-edl-stamps";
 import { fanOutRowStamps } from "./fan-out-row-stamps";
-import { usecaseFanOutRefused } from "@nodaro/render-rules";
+import { USE_CASE_LIST_DRIVEN, isUseCaseNodeType, usecaseFanOutRefusalOf } from "@nodaro/render-rules";
+import { usecaseLabelVars } from "@/lib/use-case-request-body";
 import { toast } from "sonner";
 import { nodeRunError } from "./node-run-message";
 
@@ -55,10 +56,15 @@ export async function executeNodeForList(
   ctx: ExecutionContext,
   fanOut?: Pick<FanOutPlan, "rows" | "targetHandle">,
 ): Promise<void> {
-  // A review-on use-case node cannot run once per item (no Render final names
-  // one of them): refused before any item runs — no call, no fee, no wrapper.
-  if (usecaseFanOutRefused(node)) {
-    const message = nodeRunError((node.data as { label?: string }).label, "nodeRun.tightenReviewListDriven");
+  // A use-case node whose own result is a list (one run per recording is
+  // already a list), or one with review on (no Render final names one of its
+  // runs), cannot run once per item: refused before any item runs — no call,
+  // no fee, no wrapper.
+  const refusal = usecaseFanOutRefusalOf(node);
+  if (refusal) {
+    const message = refusal.code === USE_CASE_LIST_DRIVEN && isUseCaseNodeType(node.type)
+      ? nodeRunError((node.data as { label?: string }).label, "nodeRun.usecaseListDriven", usecaseLabelVars(node.type))
+      : nodeRunError((node.data as { label?: string }).label, "nodeRun.tightenReviewListDriven");
     useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: message });
     toast.error(message);
     throw new Error(message);

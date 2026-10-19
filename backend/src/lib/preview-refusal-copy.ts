@@ -8,7 +8,9 @@
  * Every refusal site takes its text from here.
  *
  * The render texts are the ones clients have always seen (pinned by a test);
- * the editor's localized copy (`previewGate.*`) follows the same table.
+ * the editor's localized copy (`previewGate.*`) follows the same table. The
+ * review texts name no node type (decided 2026-10-18): every node that has
+ * "Review before render" holds a run the same way, whichever type it is.
  */
 import type { PreviewHoldKind } from "@nodaro/render-rules"
 
@@ -29,31 +31,31 @@ const COPY: Readonly<Record<PreviewRefusalSituation, Readonly<Record<PreviewHold
       "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. " +
       "Open it there to run it, or set the render to Final (or send a Final quality override for it).",
     review:
-      "This workflow stops for a review: a Tighten Episode node in it has “Review before render” on, and only a run started in the Nodaro editor or on an app's own page can stop for one. " +
-      "Open it there to run it, or turn off “Review before render” on every Tighten Episode node that has it on.",
+      "This workflow stops for a review: a node in it has “Review before render” on, and only a run started in the Nodaro editor or on an app's own page can stop for one. " +
+      "Open it there to run it, or turn off “Review before render” on every node that has it on.",
     any:
       "This workflow stops for a review, and only a run started in the Nodaro editor or on an app's own page can stop for one. " +
-      "Open it there to run it, or set any render at Preview to Final (or send a Final quality override for it) and turn off “Review before render” on any Tighten Episode node.",
+      "Open it there to run it, or set any render at Preview to Final (or send a Final quality override for it) and turn off “Review before render” on every node that has it on.",
   },
   nested: {
     render: "This sub-workflow stops for a review (its render is set to Preview), and a nested workflow cannot. Set that render to Final.",
     review:
-      "This sub-workflow stops for a review (a Tighten Episode node in it has “Review before render” on), and a nested workflow cannot. " +
-      "Turn off “Review before render” on every Tighten Episode node that has it on.",
+      "This sub-workflow stops for a review (a node in it has “Review before render” on), and a nested workflow cannot. " +
+      "Turn off “Review before render” on every node that has it on.",
     any:
       "This sub-workflow stops for a review, and a nested workflow cannot. " +
-      "Set any render at Preview to Final and turn off “Review before render” on any Tighten Episode node.",
+      "Set any render at Preview to Final and turn off “Review before render” on every node that has it on.",
   },
   componentPublish: {
     render: "A component cannot stop for a review: set its render to Final before publishing it.",
-    review: "A component cannot stop for a review: turn off “Review before render” on every Tighten Episode node in it before publishing it.",
+    review: "A component cannot stop for a review: turn off “Review before render” on every node that has it on before publishing it.",
     any:
-      "A component cannot stop for a review: set any render at Preview to Final and turn off “Review before render” on any Tighten Episode node before publishing it.",
+      "A component cannot stop for a review: set any render at Preview to Final and turn off “Review before render” on every node that has it on before publishing it.",
   },
   componentRun: {
     render: "A component cannot stop for a review: its render must be set to Final.",
-    review: "A component cannot stop for a review: every Tighten Episode node in it must have “Review before render” off.",
-    any: "A component cannot stop for a review: any render at Preview must be set to Final, and any Tighten Episode node must have “Review before render” off.",
+    review: "A component cannot stop for a review: every node in it must have “Review before render” off.",
+    any: "A component cannot stop for a review: any render at Preview must be set to Final, and every node in it must have “Review before render” off.",
   },
 }
 

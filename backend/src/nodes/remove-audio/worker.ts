@@ -10,7 +10,7 @@ import { descriptor } from "./descriptor.generated.js"
 // (providers/video/remove-audio.ts), upload, thumbnail, complete, commit.
 export const worker: UnitWorker = async function handleRemoveAudio(job, ctx) {
   const { videoUrl } = job.data as { jobId: string; videoUrl: string }
-  console.log(`[worker] remove-audio ${ctx.jobId}`)
+  console.log(`[worker] ${descriptor.type} ${ctx.jobId}`)
   const result = await removeAudio({ videoUrl, workDirPrefix: descriptor.type })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)

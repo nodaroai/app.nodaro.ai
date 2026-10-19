@@ -14,6 +14,8 @@ vi.mock("sonner", () => ({
 vi.mock("@/lib/i18n", () => ({
   tx: (key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${JSON.stringify(vars)}` : key),
 }))
+// The use-case label lookup reads the locale store, which reads the browser's storage at load.
+vi.mock("@/lib/use-case-request-body", () => ({ usecaseLabelVars: (type: string) => ({ label: type }) }))
 
 import { toastBackendRunCompleted, toastBackendRunFailed } from "../run-ended-toast"
 

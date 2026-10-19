@@ -41,7 +41,7 @@ vi.mock("../../../continuation-held-final.js", () => ({
   heldFinalRun: vi.fn(async (input: unknown) => (held.calls.push(input), held.next)),
 }))
 
-import { resumeFailedRunHint } from "../_resume-hint.js"
+import { previewPendingHint, resumeFailedRunHint } from "../_resume-hint.js"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 
@@ -134,6 +134,18 @@ describe("resumeFailedRunHint and the run's lineage", () => {
     expect(hint).toContain('"useCaseContinue"')
     expect(hint).toContain("continue_use_case on its own first")
     expect(hint).not.toContain("render_final({")
+  })
+
+  it("a held review names every held use-case node, and never says what kind of result it renders (any review-on type holds)", () => {
+    const next = { continueFromExecutionId: LATER, nodeIds: ["n1", "n2", "cap"], inputOverrides: {} }
+    for (const renders of [[], ["cut"]])
+      for (const run of [null, next]) {
+        const hint = previewPendingHint("wf-1", LATER, renders, ["n1", "n2"], run)
+        expect(hint).toContain('the review of "n1", "n2"')
+        expect(hint).toContain('For "n1", "n2" that run calls its continue route')
+        expect(hint).toContain("renders its final result")
+        expect(hint).not.toMatch(/episode/i)
+      }
   })
 
   it("a held review whose run cannot be named: still no continuation, and why", async () => {

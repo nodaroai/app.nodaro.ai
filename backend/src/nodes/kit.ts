@@ -12,6 +12,7 @@
 //   worker.ts               → `worker: UnitWorker`
 //   price.ee.ts             → `price: UnitPrice` (Enterprise License, by filename)
 //   use-case.ts             → `useCase: UnitUseCase` (execution.kind "use-case")
+//   budget.ts               → `budget: UnitBudget` (execution.kind "worker"; a pure leaf)
 // The aggregates (backend/src/nodes/_generated/, backend/src/ee/nodes/_generated/)
 // are typed with these, so a unit whose export does not fit fails typecheck at
 // its aggregate line.
@@ -32,6 +33,8 @@ export interface UnitInputHandle {
   readonly label: string
   readonly accepts: ReadonlyArray<UnitHandleKind>
   readonly field?: string
+  /** The input takes every wire, in order, each its own source (a video/audio input with no field). */
+  readonly many?: true
 }
 
 export interface UnitOutputHandle {
@@ -99,6 +102,16 @@ export type UnitPayload = (kit: UnitPayloadKit) => PayloadResult
 
 /** worker.ts — the BullMQ handler, registered on the unit's `execution.queue`. */
 export type UnitWorker = HandlerFn
+
+/**
+ * budget.ts — the job budget (ms) of ONE job of this worker unit, read off its
+ * queue payload; undefined when the payload names nothing to size (every reader
+ * then keeps its default). job-budget.ts composes it under the unit's type (its
+ * BullMQ job name): the video worker's liveness, the orchestrator's ceilings and
+ * the row sweeps read it. A PURE leaf — it must not load the ffmpeg runtime,
+ * storage, supabase or config (lib/__tests__/job-budget-leaf.test.ts).
+ */
+export type UnitBudget = (data: unknown) => number | undefined
 
 /** use-case.ts — a use-case node's request body (the factory route POST /v1/<type> parses it) and its GET /v1/nodes input schema. */
 export interface UnitUseCase {

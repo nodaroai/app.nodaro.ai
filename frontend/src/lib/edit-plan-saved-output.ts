@@ -1,4 +1,7 @@
+// @registry-lookup reads the JSON of the one node unit a wire leaves from (unitDefinitionOf(src.type))
 import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared/edl"
+import { unitDefinitionOf } from "./unit-definitions"
+import { unitPipJson } from "./unit-compose"
 
 /**
  * An Edit Plan node's saved output with the person's review applied — the ONE
@@ -33,18 +36,32 @@ export function editPlanOutputOf(data: Readonly<Record<string, unknown>>): EditP
 }
 
 /**
+ * What a wire from a node unit's look pip hands a JSON consumer (`unitPipJson`):
+ * wrapped, `value` undefined when the output holds none; undefined when the
+ * wire does not leave a unit's look pip.
+ */
+export function unitSourceJsonOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle: string | null | undefined): { readonly value: unknown } | undefined {
+  const unit = unitDefinitionOf(src.type)
+  return unit ? unitPipJson(unit, src.data as Readonly<Record<string, unknown>>, sourceHandle) : undefined
+}
+
+/**
  * The structured JSON a node hands a JSON consumer (Extract Field, JSON
- * Process) that reads its source's data directly: an Edit Plan's plan as the
- * person's review leaves it (the kept clips only, edited hooks included), any
+ * Process) that reads its source's data directly, for the pip the wire leaves
+ * from: an Edit Plan's plan as the person's review leaves it (the kept clips
+ * only, edited hooks included), a node unit's look pip its own output, any
  * other node's `generatedJson`. The server's consumers read the same value off
- * the plan's seeded state (`output.json`, from `editPlanSavedOutput`).
+ * the source's state (`structuredJsonOf`: the plan's seeded `output.json`,
+ * from `editPlanSavedOutput`; a unit's `unitOutputs`).
  *
  * `edit-plan-saved-output-sites.test.ts` fails when an executor or resolver
  * reads a source's `generatedJson` without this.
  */
-export function sourceJsonOf(src: { readonly type?: string; readonly data: unknown }): unknown {
+export function sourceJsonOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle?: string | null): unknown {
   const data = src.data as Readonly<Record<string, unknown>>
   if (src.type === "edit-plan") return editPlanOutputOf(data)?.json
+  const unit = unitSourceJsonOf(src, sourceHandle)
+  if (unit) return unit.value
   return data.generatedJson
 }
 
