@@ -120,6 +120,26 @@ describe("POST /v1/objects/:id/llm-caption", () => {
     expect(res.statusCode).toBe(401)
   })
 
+  it("returns 503 'provider_unavailable' when every Claude key is whitespace only", async () => {
+    const { config } = await import("../../lib/config.js")
+    const cfg = config as Record<string, unknown>
+    const original = { anthropic: cfg.ANTHROPIC_API_KEY, kie: cfg.KIE_API_KEY }
+    cfg.ANTHROPIC_API_KEY = "  "
+    cfg.KIE_API_KEY = "\n"
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/objects/${TEST_OBJECT_ID}/llm-caption`,
+        headers: { "x-user-id": TEST_USER_ID },
+      })
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error.code).toBe("provider_unavailable")
+    } finally {
+      cfg.ANTHROPIC_API_KEY = original.anthropic
+      cfg.KIE_API_KEY = original.kie
+    }
+  })
+
   it("returns 400 on invalid id param", async () => {
     const res = await app.inject({
       method: "POST",

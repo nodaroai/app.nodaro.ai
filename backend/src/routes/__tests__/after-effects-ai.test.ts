@@ -172,6 +172,22 @@ describe("POST /v1/after-effects/generate", () => {
     expect(res.json().error.code).toBe("provider_unavailable")
   })
 
+  it("returns 503 when every Claude key is whitespace only", async () => {
+    const { config } = await import("../../lib/config.js")
+    const original = { anthropic: config.ANTHROPIC_API_KEY, kie: (config as Record<string, unknown>).KIE_API_KEY }
+    ;(config as Record<string, unknown>).ANTHROPIC_API_KEY = "  "
+    ;(config as Record<string, unknown>).KIE_API_KEY = "\n"
+    let res
+    try {
+      res = await app.inject({ method: "POST", url: "/v1/after-effects/generate", payload: VALID_PAYLOAD })
+    } finally {
+      ;(config as Record<string, unknown>).ANTHROPIC_API_KEY = original.anthropic
+      ;(config as Record<string, unknown>).KIE_API_KEY = original.kie
+    }
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("provider_unavailable")
+  })
+
   it("returns 500 when job insert fails", async () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: null, error: { message: "DB error" } })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })

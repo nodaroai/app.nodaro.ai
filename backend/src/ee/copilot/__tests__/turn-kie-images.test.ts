@@ -187,6 +187,31 @@ describe("a KIE turn with an image", () => {
   })
 })
 
+describe("describe-first's reach into earlier turns", () => {
+  const userRow = (i: number, url: string) => ({
+    id: `prior-${i}`, thread_id: "th1", turn_id: `t${i}`, seq: i, role: "user", context_preamble: null, text_preview: null,
+    created_at: "2026-10-18T10:00:00Z",
+    content: [{ type: "text", text: `see ${i}` }, { type: "image", source: { type: "url", url } }],
+  })
+
+  it("describes the 4 newest of 6 earlier undescribed images, and no older one", async () => {
+    h.priorRows = [0, 1, 2, 3, 4, 5].map((i) => userRow(i, `https://r2.example/old-${i}.png`))
+    h.callKie.mockResolvedValue(kieAnswer("An old picture."))
+    await runCopilotTurn(input("make it warmer"))
+    expect(h.callKie).toHaveBeenCalledTimes(4)
+    const described = h.updateMessageContent.mock.calls.map((c) => c[0] as string).sort()
+    expect(described).toEqual(["prior-2", "prior-3", "prior-4", "prior-5"])
+  })
+
+  it("skips an earlier image the model cannot read (its block is dropped from the history anyway)", async () => {
+    h.priorRows = [userRow(0, "https://r2.example/old.png"), userRow(1, "https://r2.example/scan.avif")]
+    h.callKie.mockResolvedValue(kieAnswer("An old picture."))
+    await runCopilotTurn(input("make it warmer"))
+    expect(h.callKie).toHaveBeenCalledTimes(1)
+    expect(h.updateMessageContent.mock.calls.map((c) => c[0])).toEqual(["prior-0"])
+  })
+})
+
 describe("a direct turn", () => {
   it("describes nothing and never sends a stored description", async () => {
     config.ANTHROPIC_API_KEY = "sk-ant-test"

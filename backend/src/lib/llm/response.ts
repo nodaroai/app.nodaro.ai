@@ -83,11 +83,12 @@ export function buildResponse(
   if (end.refusalFails) {
     assertNotContentRefusal({
       modelId: model.id, lane: lane === "direct" ? "direct-anthropic" : "kie", stopReason: end.stopReason, usage, providerCost,
+      creditsUsd: actualUsd,
     })
   }
   assertNotOutputCapped({
     modelId: model.id, lane: lane === "direct" ? "direct-anthropic" : "kie",
-    stopReason: end.stopReason, cap: end.cap, usage, providerCost,
+    stopReason: end.stopReason, cap: end.cap, usage, providerCost, creditsUsd: actualUsd,
   })
   return {
     text,

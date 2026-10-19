@@ -38,6 +38,13 @@ export interface LlmFailureUsage {
   inputTokens: number
   outputTokens: number
   providerCost?: number
+  /**
+   * KIE's own stated charge (USD), when the reply carried one — `providerCost`
+   * is then that charge too; otherwise `providerCost` is only the rate-table
+   * figure from the reported tokens, which a KIE Claude caller must not use
+   * (`kieFailureCostUsd`).
+   */
+  creditsUsd?: number
   /** Both token usage and cost were reported. */
   complete: boolean
 }
@@ -349,8 +356,10 @@ export function assertNotContentRefusal(opts: {
   stopReason: unknown
   usage: { inputTokens: number; outputTokens: number } | undefined
   providerCost: number | undefined
+  /** KIE's own stated charge, when the reply carried one (`LlmFailureUsage.creditsUsd`). */
+  creditsUsd?: number
 }): void {
-  const { modelId, lane, stopReason, usage, providerCost } = opts
+  const { modelId, lane, stopReason, usage, providerCost, creditsUsd } = opts
   if (!isContentRefusalStop(stopReason)) return
   const detail = `${lane} ${modelId} stopped with ${String(stopReason)} (in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
   console.warn(`[llm-content-refusal] ${detail}`)
@@ -358,6 +367,7 @@ export function assertNotContentRefusal(opts: {
     inputTokens: usage?.inputTokens ?? 0,
     outputTokens: usage?.outputTokens ?? 0,
     providerCost,
+    ...(creditsUsd !== undefined ? { creditsUsd } : {}),
     complete: usage !== undefined && providerCost !== undefined,
   })
 }
@@ -422,8 +432,10 @@ export function assertNotOutputCapped(opts: {
   cap: number | undefined
   usage: { inputTokens: number; outputTokens: number } | undefined
   providerCost: number | undefined
+  /** KIE's own stated charge, when the reply carried one (`LlmFailureUsage.creditsUsd`). */
+  creditsUsd?: number
 }): void {
-  const { modelId, lane, stopReason, cap, usage, providerCost } = opts
+  const { modelId, lane, stopReason, cap, usage, providerCost, creditsUsd } = opts
   if (!isOutputCapStop(stopReason)) return
   const detail = `${lane} ${modelId} stopped with ${String(stopReason)} at cap ${cap ?? "provider default"} ` +
     `(in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
@@ -434,6 +446,7 @@ export function assertNotOutputCapped(opts: {
     inputTokens: usage?.inputTokens ?? 0,
     outputTokens: usage?.outputTokens ?? 0,
     providerCost,
+    ...(creditsUsd !== undefined ? { creditsUsd } : {}),
     complete: usage !== undefined && providerCost !== undefined,
   })
 }

@@ -154,6 +154,26 @@ describe("the turn's lane", () => {
     expect(h.recordTurnLane).toHaveBeenCalledWith("turn1", "direct")
   })
 
+  it("the app report keeps the vendor's own reply (an LlmLaneError's internalDetails), not the user sentence", async () => {
+    config.ANTHROPIC_API_KEY = ""
+    const failure = new LlmPlatformExhaustedError("kie credits insufficient: balance 0", {
+      lane: "kie", provider: "kie", exhaustion: "billing", httpStatus: 402,
+    })
+    h.loopScript.push(() => Promise.reject(failure))
+    await runCopilotTurn(input())
+    expect(h.insertAppReport).toHaveBeenCalledTimes(1)
+    const payload = h.insertAppReport.mock.calls[0]![0].payload as { error: string }
+    expect(failure.message).not.toContain("kie credits insufficient")
+    expect(payload.error).toBe(failure.internalDetails.slice(0, 500))
+    expect(payload.error).toContain("kie credits insufficient")
+  })
+
+  it("a plain failure's report keeps its message", async () => {
+    h.loopScript.push(() => Promise.reject(new Error("boom")))
+    await runCopilotTurn(input())
+    expect(h.insertAppReport.mock.calls[0]![0].payload.error).toBe("boom")
+  })
+
   it("any other loop failure ends the turn as today — no restart", async () => {
     h.loopScript.push(() => Promise.reject(new Error("boom")))
     const outcome = await runCopilotTurn(input())

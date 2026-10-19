@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { config } from "../lib/config.js"
+import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
 import { supabase } from "../lib/supabase.js"
 import { captionObject } from "../lib/object-caption.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -73,7 +73,7 @@ export async function objectLlmCaptionRoutes(app: FastifyInstance) {
       // KIE_API_KEY as fallback) the LLM call would 502 mid-request —
       // gate it here with a clean 503 instead. Mirrors the location
       // precedent.
-      if (!config.ANTHROPIC_API_KEY && !config.KIE_API_KEY) {
+      if (!claudeLaneConfigured()) {
         return reply.status(503).send({
           error: { code: "provider_unavailable", message: "No LLM provider configured" },
         })

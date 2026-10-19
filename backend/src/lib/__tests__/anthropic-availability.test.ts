@@ -26,7 +26,9 @@ import {
   anthropicDirectUsable,
   anthropicKeySet,
   claudeLaneConfigured,
+  geminiKeySet,
   kieKeySet,
+  localLlmKeySet,
   pickClaudeLane,
 } from "../llm/anthropic-availability.js"
 import {
@@ -43,6 +45,7 @@ beforeEach(() => {
   createSpy.mockReset()
   cfg.ANTHROPIC_API_KEY = "sk-ant-test"
   cfg.KIE_API_KEY = "kie-test"
+  cfg.GEMINI_API_KEY = ""
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -122,6 +125,24 @@ describe("claudeLaneConfigured", () => {
     expect(claudeLaneConfigured()).toBe(true)
     cfg.KIE_API_KEY = "  "
     expect(claudeLaneConfigured()).toBe(false)
+  })
+})
+
+describe("localLlmKeySet — any local LLM lane (KIE, Anthropic, Gemini)", () => {
+  it("is true with any one key, trimmed, and false when every key is blank", () => {
+    cfg.ANTHROPIC_API_KEY = "  "
+    cfg.KIE_API_KEY = "\n"
+    cfg.GEMINI_API_KEY = " \t "
+    expect(localLlmKeySet()).toBe(false)
+    expect(geminiKeySet()).toBe(false)
+    for (const key of ["KIE_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"] as const) {
+      cfg.ANTHROPIC_API_KEY = " "
+      cfg.KIE_API_KEY = " "
+      cfg.GEMINI_API_KEY = " "
+      cfg[key] = "set"
+      expect(localLlmKeySet(), key).toBe(true)
+    }
+    expect(geminiKeySet()).toBe(true)
   })
 })
 

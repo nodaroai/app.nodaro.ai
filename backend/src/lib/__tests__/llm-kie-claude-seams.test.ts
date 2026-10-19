@@ -19,7 +19,8 @@ vi.mock("../anthropic-image.js", async (importOriginal) => ({
 
 import { callKie } from "../llm/kie-lane.js"
 import { buildMessagesBody } from "../llm/message-builders.js"
-import { KIE_IMAGE_ESTIMATE_CHARS, kieCostUsd, kieCreditsUsdOf, requestChars } from "../llm/kie-cost.js"
+import { KIE_IMAGE_ESTIMATE_CHARS, kieCostUsd, kieCreditsUsdOf, kieFailureCostUsd, kieInputTokens, requestChars } from "../llm/kie-cost.js"
+import { LlmContentRefusalError, LlmOutputTruncatedError } from "../llm-errors.js"
 import { inlineImagesForClaudeKie } from "../llm/claude-kie-images.js"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 import type { LlmRequest } from "../llm/types.js"
@@ -120,6 +121,50 @@ describe("credits_consumed on the response", () => {
   })
 })
 
+describe("a refusal or a cut-off answer on KIE carries KIE's own charge apart from the estimate", () => {
+  const stopped = (stop: string, extra = "") => sse([
+    `data: {"type":"content_block_delta","delta":{"text":"no"}}\n`,
+    `data: {"type":"message_delta","delta":{"stop_reason":"${stop}"},"usage":{"input_tokens":2,"output_tokens":9}${extra}}\n`,
+  ])
+
+  it("a refusal: usage.creditsUsd is KIE's charge when the reply stated it", async () => {
+    fetchMock.mockResolvedValue(stopped("refusal", ',"credits_consumed":0.07'))
+    const err = await callKie(sonnet55, req({ failOnRefusal: true })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LlmContentRefusalError)
+    expect((err as LlmContentRefusalError).usage.creditsUsd).toBeCloseTo(0.07 * 0.005, 12)
+  })
+
+  it("a refusal with no stated charge: no creditsUsd (providerCost is then only the rate-table guess)", async () => {
+    fetchMock.mockResolvedValue(stopped("refusal"))
+    const err = (await callKie(sonnet55, req({ failOnRefusal: true })).catch((e: unknown) => e)) as LlmContentRefusalError
+    expect(err.usage.creditsUsd).toBeUndefined()
+    expect(err.usage.providerCost).toBeGreaterThan(0)
+  })
+
+  it("a cut-off answer: usage.creditsUsd is KIE's charge when the reply stated it", async () => {
+    fetchMock.mockResolvedValue(stopped("max_tokens", ',"credits_consumed":0.07'))
+    const err = await callKie(sonnet55, req({ maxTokens: 9 })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LlmOutputTruncatedError)
+    expect((err as LlmOutputTruncatedError).usage.creditsUsd).toBeCloseTo(0.07 * 0.005, 12)
+  })
+})
+
+describe("kieFailureCostUsd / kieInputTokens", () => {
+  it("a failure that stated KIE's charge costs that charge", () => {
+    expect(kieFailureCostUsd("claude-sonnet-5.5", { inputTokens: 2, outputTokens: 9, providerCost: 0.000001, creditsUsd: 0.0007, complete: true }, 40_000)).toBe(0.0007)
+  })
+
+  it("one that did not costs the size estimate — the prompt's size and the reported output — never KIE's input count", () => {
+    const usage = { inputTokens: 2, outputTokens: 100, providerCost: 0.000001, complete: true }
+    expect(kieFailureCostUsd("claude-sonnet-5.5", usage, 4000)).toBeCloseTo(kieCostUsd("claude-sonnet-5.5", { promptChars: 4000, answerChars: 400 }), 12)
+  })
+
+  it("the input token count recorded for a KIE call is the size estimate (chars ÷ 4, rounded up)", () => {
+    expect(kieInputTokens(4000)).toBe(1000)
+    expect(kieInputTokens(4001)).toBe(1001)
+  })
+})
+
 describe("thinkingFlag", () => {
   it("is sent when the request asks for it, and not otherwise", () => {
     expect(buildMessagesBody(sonnet55, req({ thinkingFlag: true })).thinkingFlag).toBe(true)
@@ -184,5 +229,12 @@ describe("inlineImagesForClaudeKie", () => {
       { type: "text", text: "judge these" },
     ])
     expect(prefetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("hands the caller's signal to every prefetch", async () => {
+    prefetchMock.mockImplementation(async () => ({ type: "image_base64", mediaType: "image/png", data: "QUJD" }))
+    const ctrl = new AbortController()
+    await inlineImagesForClaudeKie([{ type: "image", source: { type: "url", url: "https://r2.example/a.png" } }], ctrl.signal)
+    expect(prefetchMock).toHaveBeenCalledWith("https://r2.example/a.png", ctrl.signal)
   })
 })

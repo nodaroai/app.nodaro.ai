@@ -2913,9 +2913,10 @@ primary lane falls back to one alternate, so the ceiling is
 `(maxRetries + 1) x 2 x 240 s` — 24 minutes at the default `maxRetries: 2`, 32 at
 the maximum. Give your HTTP client a timeout sized against that, or use the
 asynchronous twin below and stop holding a connection open.
-Errors: 400 `validation_error`, 401, 402 (credits), 500 `internal_error` (the
-job row could not be created), 502 `llm_error` once the retries are spent, 502
-`advanced_mode_unavailable`, 503 `provider_unavailable`. SDK: `client.llm.structured(body)` — mind the client's
+Errors: 400 `validation_error`, 400 `advanced_mode_unavailable`, 401, 402
+(credits), 500 `internal_error` (the job row could not be created), 502
+`llm_error` once the retries are spent, 502 `advanced_mode_unavailable`, 503
+`provider_unavailable`. SDK: `client.llm.structured(body)` — mind the client's
 `timeoutMs`: the default 60 s is far shorter than this call can run, and even
 `timeoutMs: 300_000` only covers a fast draft, not the ceiling above. Size it
 against your own `maxRetries`, or use the asynchronous twin below.

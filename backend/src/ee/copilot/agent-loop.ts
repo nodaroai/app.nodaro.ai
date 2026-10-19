@@ -20,7 +20,7 @@ import { getLlmModel } from "@nodaro/shared/llm-models"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"
 import { LlmPlatformExhaustedError, toPlatformExhausted } from "../../lib/llm-errors.js"
-import { kieCostUsd, kieCreditsUsdOf } from "../../lib/llm/kie-cost.js"
+import { kieCostUsd, kieCreditsUsdOf, kieInputTokens } from "../../lib/llm/kie-cost.js"
 import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, TURN_CAPS, type CopilotTierSpec } from "./constants.js"
 import { stripThinkingBlocks } from "./history.js"
 import { estimateNextCallUsd, wouldExceedBudget, type TurnBudget } from "./budget.js"
@@ -194,9 +194,16 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
 
     let call: StreamedCall
     try {
-      call = lane === "kie"
-        ? await withKieRetry(once, { signal: input.signal, deadline, delayMs: input.kieRetryDelayMs ?? KIE_COPILOT_RETRY_DELAY_MS })
+      const answered = lane === "kie"
+        ? await withKieRetry(once, {
+            signal: input.signal,
+            deadline,
+            delayMs: input.kieRetryDelayMs ?? KIE_COPILOT_RETRY_DELAY_MS,
+            isCancelRequested: input.isCancelRequested,
+          })
         : await once(newCallState())
+      if (answered === KIE_RETRY_CANCELLED) return finish("cancelled")
+      call = answered
     } catch (err) {
       if (input.signal.aborted) return finish("cancelled")
       throw typeLoopFailure(err, { lane, modelId: tier.registryId, nothingStreamed: iterations === 0 && assistantText === "" })
@@ -210,7 +217,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
         promptChars: sentChars + toolsChars,
         answerChars: JSON.stringify(final.content).length,
       })
-      accumulateKieUsage(usage, final.usage, costUsd)
+      accumulateKieUsage(usage, final.usage, { inputTokens: kieInputTokens(sentChars + toolsChars), costUsd })
     } else {
       accumulateUsage(usage, final.usage, tier.registryId)
     }
@@ -331,12 +338,14 @@ async function streamOnce(
  * {@link KIE_COPILOT_RETRIES} times, `delayMs` apart. Those attempts cost
  * nothing. A failure after a token or after `message_delta` ends the turn as
  * it always did; tool edits already made stay. No attempt starts past the
- * turn's wall clock or after a cancel.
+ * turn's wall clock or after a cancel — this replica's abort, or the DB-backed
+ * cancel another replica set (read after each pause, which then ends the turn
+ * as cancelled: {@link KIE_RETRY_CANCELLED}).
  */
 async function withKieRetry(
   once: (state: CallState) => Promise<StreamedCall>,
-  opts: { signal: AbortSignal; deadline: number; delayMs: number },
-): Promise<StreamedCall> {
+  opts: { signal: AbortSignal; deadline: number; delayMs: number; isCancelRequested: () => Promise<boolean> },
+): Promise<StreamedCall | typeof KIE_RETRY_CANCELLED> {
   for (let attempt = 1; ; attempt++) {
     const state = newCallState()
     try {
@@ -353,9 +362,15 @@ async function withKieRetry(
       // A cancel ends the pause early; the next attempt must not start (its
       // stream would never see an abort that already happened).
       if (opts.signal.aborted) throw err
+      // A Stop pressed on another replica reaches this one only through the
+      // DB — the same check that runs before every tool call.
+      if (await opts.isCancelRequested()) return KIE_RETRY_CANCELLED
     }
   }
 }
+
+/** {@link withKieRetry} saw a cancel from another replica between attempts. */
+const KIE_RETRY_CANCELLED = Symbol("kie-retry-cancelled")
 
 /** Wait `ms`, or until the turn is cancelled. */
 function pause(ms: number, signal: AbortSignal): Promise<void> {
@@ -413,14 +428,19 @@ function accumulateUsage(target: LoopUsage, raw: Anthropic.Messages.Usage, tierR
 }
 
 /**
- * A KIE call's usage: its reported input/output counts, and none of its cache
- * fields — those are KIE's own injected prefix, not our cache. The cost is the
- * one `kieCostUsd` gave (KIE's charge, or the size estimate).
+ * A KIE call's usage: the input count is the size estimate (`kieInputTokens` —
+ * KIE's own count leaves out our prompt), the output count KIE's, and none of
+ * its cache fields — those are KIE's own injected prefix, not our cache. The
+ * cost is the one `kieCostUsd` gave (KIE's charge, or the size estimate).
  */
-function accumulateKieUsage(target: LoopUsage, raw: Anthropic.Messages.Usage, costUsd: number): void {
-  target.inputTokens += raw.input_tokens ?? 0
+function accumulateKieUsage(
+  target: LoopUsage,
+  raw: Anthropic.Messages.Usage,
+  sized: { inputTokens: number; costUsd: number },
+): void {
+  target.inputTokens += sized.inputTokens
   target.outputTokens += raw.output_tokens ?? 0
-  target.costUsd += costUsd
+  target.costUsd += sized.costUsd
 }
 
 /**

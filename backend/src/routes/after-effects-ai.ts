@@ -4,7 +4,7 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
-import { config } from "../lib/config.js"
+import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -66,7 +66,7 @@ export async function afterEffectsAIRoutes(app: FastifyInstance) {
       const { prompt, inputVideoUrl, fps, aspectRatio, durationSeconds } = parsed.data
       const userId = req.userId
 
-      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
+      if (!claudeLaneConfigured()) {
         return reply.status(503).send({
           error: {
             code: "provider_unavailable",

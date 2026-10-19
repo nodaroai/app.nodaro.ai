@@ -1,5 +1,5 @@
 import type { Job } from "bullmq"
-import { config } from "../../lib/config.js"
+import { localLlmKeySet } from "../../lib/llm/anthropic-availability.js"
 import { generateImage, imageToVideo, videoToVideo } from "../../providers/index.js"
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
 import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
@@ -230,7 +230,7 @@ function makeEntityImageHandler(
  * keeps its own path untouched.
  */
 async function shouldRunLlmOnCloud(): Promise<boolean> {
-  if (config.KIE_API_KEY || config.ANTHROPIC_API_KEY || config.GEMINI_API_KEY) return false
+  if (localLlmKeySet()) return false
   const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
   return isNodaroConnected().catch(() => false)
 }

@@ -27,6 +27,20 @@ export function kieKeySet(): boolean {
   return (config.KIE_API_KEY ?? "").trim() !== ""
 }
 
+/** The Gemini key, trimmed, is non-empty. */
+export function geminiKeySet(): boolean {
+  return (config.GEMINI_API_KEY ?? "").trim() !== ""
+}
+
+/**
+ * Some local lane can serve an LLM call: the KIE, Anthropic or Gemini key,
+ * each trimmed. The keyless-install test the cloud proxy reads (an install
+ * holding none of the three sends its LLM calls to its Nodaro connection).
+ */
+export function localLlmKeySet(): boolean {
+  return kieKeySet() || anthropicKeySet() || geminiKeySet()
+}
+
 /** The key is set AND the account is not latched out. */
 export function anthropicDirectUsable(): boolean {
   return anthropicKeySet() && directLaneLatch("anthropic") === null
