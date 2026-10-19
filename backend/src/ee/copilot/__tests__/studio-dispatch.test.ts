@@ -207,6 +207,20 @@ describe("a document write", () => {
     expect(editPreviewOf(outcome?.proposal).receipts).toHaveLength(2)
   })
 
+  it("carries a receipt's detail to the card exactly as the service sent it", async () => {
+    // The service words a receipt in English (`summary`) and may add the data a
+    // client words it from. This layer maps nothing: a field it has never heard
+    // of reaches the card, which is where it is read.
+    const detail = { template: "rename_shot", vars: { from: "Opening", to: "Arrival", count: 2 } }
+    const sent = receipt("rename_shot", "S", { detail })
+    const h = harness({ edit_studio_production: preview([sent]) })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "rename_shot" }] })
+
+    const [carried] = editPreviewOf(outcome?.proposal).receipts
+    expect(carried).toEqual(sent)
+    expect(carried.detail).toEqual(detail)
+  })
+
   it("never lets the model choose the preview flag, the version or the strict flag", async () => {
     const h = harness({ edit_studio_production: preview([receipt("add_shot", "S")]) })
     const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", {

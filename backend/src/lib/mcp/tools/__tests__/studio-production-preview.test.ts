@@ -43,6 +43,8 @@ const OPS = [{ op: "example", target: "s1" }]
 const h = vi.hoisted(() => ({
   /** What the ops route answers a body that carries the preview flag. */
   dryRunAnswer: null as unknown,
+  /** What it answers a body that does not; null = the stub's plain applied answer. */
+  applyAnswer: null as unknown,
 }))
 
 interface Call {
@@ -62,7 +64,9 @@ function stub(): { fastify: FastifyInstance; calls: Call[] } {
     capture(req)
     const body = req.body as { dryRun?: unknown }
     if (body?.dryRun === true) return { data: h.dryRunAnswer }
-    return { data: { production: { id: PRODUCTION }, version: 4, rebased: false, receipts: [], warnings: [] } }
+    return {
+      data: h.applyAnswer ?? { production: { id: PRODUCTION }, version: 4, rebased: false, receipts: [], warnings: [] },
+    }
   })
   fastify.post("/v1/studio/productions/:id/reconcile", async (req) => {
     capture(req)
@@ -96,6 +100,7 @@ function preview(receipts: unknown[] = []): Record<string, unknown> {
 
 beforeEach(() => {
   h.dryRunAnswer = preview()
+  h.applyAnswer = null
 })
 
 describe("edit_studio_production, asked for a preview", () => {
@@ -117,6 +122,29 @@ describe("edit_studio_production, asked for a preview", () => {
     expect(calls[1].body).toMatchObject({ ops: OPS, dryRun: true })
     expect(res.isError).toBeFalsy()
     expect(res.structuredContent).toMatchObject({ dryRun: true, version: 4 })
+  })
+
+  it("hands the receipts on exactly as the route sent them — a field it has never heard of included", async () => {
+    // `detail` is the data a client words a receipt from. This tool forwards the
+    // route's answer whole, so a mapping added here would drop, silently, what
+    // the route adds.
+    const sent = [
+      { op: "rename_shot", summary: "Renamed a scene", class: "S", detail: { template: "rename_shot", vars: { to: "Arrival" } } },
+    ]
+    h.dryRunAnswer = preview(sent)
+    const { server } = serverWith()
+    const res = await callTool(server, "edit_studio_production", { production_id: PRODUCTION, ops: OPS, dry_run: true })
+
+    expect((res.structuredContent as { receipts: unknown }).receipts).toEqual(sent)
+  })
+
+  it("hands an applied change's receipts on exactly as the route sent them too", async () => {
+    const sent = [{ op: "rename_shot", summary: "Renamed a scene", detail: { template: "rename_shot", vars: { to: "Arrival" } } }]
+    h.applyAnswer = { production: { id: PRODUCTION }, version: 5, rebased: false, receipts: sent, warnings: [] }
+    const { server } = serverWith()
+    const res = await callTool(server, "edit_studio_production", { production_id: PRODUCTION, ops: OPS })
+
+    expect((res.structuredContent as { receipts: unknown }).receipts).toEqual(sent)
   })
 
   it("carries the caller's version and strict flag on the batch, never on the ping", async () => {

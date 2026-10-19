@@ -98,6 +98,23 @@ export interface StudioOpsDryRunReceipt {
   readonly impact?: { keyframeIds: string[]; shotIds: string[] }
   readonly class: "S" | "D" | "P" | "$"
   readonly restorable?: true
+  /**
+   * The data a client words this receipt from, once the studio service sends it.
+   * Carried verbatim: `proposeEdit` maps nothing, so this layer neither builds
+   * nor reads it. Absent = `summary` is the whole wording.
+   */
+  readonly detail?: ReceiptDetail
+}
+
+/**
+ * A sentence as data: the id of the template a client words it from, and the
+ * values that template fills in. `summary` stays the English wording and the
+ * fallback, so a client with no wording for `template` shows `summary` and
+ * loses nothing.
+ */
+export interface ReceiptDetail {
+  readonly template: string
+  readonly vars: Record<string, string | number>
 }
 
 /** A previewed change to the production: what it would do, at which version. */
