@@ -34,6 +34,7 @@ import type { PipelineStatus } from "@nodaro/shared/pipeline"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { previewTypeOfNodeType } from "@/lib/preview-node-types"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
 import { initialEdgeData } from "@/lib/initial-edge-data"
 import { ensureNodePositions } from "@/lib/node-position"
@@ -145,35 +146,29 @@ function detectLoopColumnType(
   return "text"
 }
 
-function classifyPreviewValue(
+/**
+ * The preview type of a value the store auto-fills a Preview with (a Preview
+ * wired to a source that already has results). Twin of detectPreviewItemType
+ * in execution-graph.ts: a recognised extension decides first here (the run
+ * path decides by node type first — that disagreement is left deliberately,
+ * decided 2026-10-19); with no recognised extension both decide by the same
+ * node-type rule, previewTypeOfNodeType, and an undecided type is text.
+ */
+export function classifyPreviewValue(
   nodeType: string,
   value: string,
   sourceHandle?: string | null,
 ): PreviewItem["type"] {
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   if (nodeType === "forced-alignment") return "data"
-  // Must precede the `includes("video")` catch-all below — video-analysis (and
+  // Must precede the extension checks below — video-analysis (and
   // video-audit, which re-emits the corrected analysis) emit a JSON scene
-  // breakdown, not a video URL. Twin of detectPreviewItemType in
-  // execution-graph.ts — the pair must stay in lockstep.
+  // breakdown, not a video URL.
   if (nodeType === "video-analysis" || nodeType === "video-audit") return "data"
   if (/\.(png|jpe?g|gif|webp|svg|bmp)/i.test(value)) return "image"
   if (/\.(mp4|mov|webm)/i.test(value)) return "video"
   if (/\.(mp3|wav|ogg|aac|flac|m4a)/i.test(value)) return "audio"
-  if (nodeType.includes("image") || nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
-    return "image"
-  }
-  if (nodeType.includes("video")) return "video"
-  if (
-    nodeType.includes("audio") ||
-    nodeType.includes("speech") ||
-    nodeType.includes("music") ||
-    nodeType.includes("suno") ||
-    nodeType === "voice-design"
-  ) {
-    return "audio"
-  }
-  return "text"
+  return previewTypeOfNodeType(nodeType) ?? "text"
 }
 
 /**
