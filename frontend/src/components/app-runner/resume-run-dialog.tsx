@@ -48,7 +48,10 @@ export function resumeDialogText(state: ResumeDialogState | null, t: TFunction):
   const credits = hasCredits() && plan.estimatedCredits !== null ? plan.estimatedCredits : null
   const notes = [
     ...(plan.reusedClips === 1 ? [t("runner.retryReusedClipOne")] : plan.reusedClips > 1 ? [t("runner.retryReusedClips", { n: plan.reusedClips })] : []),
-    ...(plan.sufficient === false ? [t("runner.retryInsufficient")] : []),
+    // The app credits, when they are what stops it; else the balance.
+    ...(plan.sufficient === false
+      ? [t(plan.appCreditsAllowance !== undefined ? "runner.retryNoAppCredits" : "runner.retryInsufficient")]
+      : []),
     t("runner.retryInputsNote"),
   ]
   return {

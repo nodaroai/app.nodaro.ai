@@ -8755,6 +8755,7 @@ export const ja: ChromeDict = {
   "runner.retryReusedClipOne": "完成済みのクリップ1本は無料で再利用されます。",
   "runner.retryReusedClips": "完成済みのクリップ{n}本は無料で再利用されます。",
   "runner.retryInsufficient": "残高がこの再試行に足りません。",
+  "runner.retryNoAppCredits": "この再試行に使えるアプリクレジットが残っていません。",
   "runner.retryInputsNote": "この実行の入力とアプリのバージョンを使います。変更するには最初からやり直してください。",
   "runner.retryVersionGone": "この実行が使ったアプリのバージョンは利用できなくなったため、続きから実行できません。最初からやり直すと、アプリの現在のバージョンで実行されます。",
   "runner.retryVersionChanged": "この実行のあとでアプリが更新されたため、続きから実行できません。最初からやり直すと現在のバージョンで実行されます。",

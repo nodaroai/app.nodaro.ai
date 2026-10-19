@@ -8755,6 +8755,7 @@ export const ptBR: ChromeDict = {
   "runner.retryReusedClipOne": "1 clipe que já ficou pronto é reutilizado sem custo.",
   "runner.retryReusedClips": "{n} clipes que já ficaram prontos são reutilizados sem custo.",
   "runner.retryInsufficient": "Seu saldo não cobre esta nova tentativa.",
+  "runner.retryNoAppCredits": "Você não tem créditos de app restantes para esta nova tentativa.",
   "runner.retryInputsNote": "Usa as entradas e a versão do app desta execução. Para mudá-las, comece de novo.",
   "runner.retryVersionGone": "A versão do app que esta execução usou não está mais disponível, então ela não pode continuar. Comece de novo para executar a versão atual do app.",
   "runner.retryVersionChanged": "O app foi atualizado desde esta execução, então ela não pode continuar. Comece de novo para executar a versão atual.",

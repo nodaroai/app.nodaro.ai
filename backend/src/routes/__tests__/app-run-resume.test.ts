@@ -316,6 +316,22 @@ describe("POST /v1/app/:slug/runs/:runId/resume", () => {
       expect(res.json().data.estimatedCredits).toBe(100)
     })
 
+    it("dryRun: app credits the real call would refuse make the quote not sufficient, and say so; nothing created", async () => {
+      mocks.eligibility.mockResolvedValue({ allowed: false, error: "You need app credits to run this app.", appCreditsAllowance: 0 })
+      const res = await post({ dryRun: true, reviewer: "app" })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data).toMatchObject({ estimatedCredits: 125, sufficient: false, available: 900, appCreditsAllowance: 0 })
+      expect(mocks.eligibility).toHaveBeenCalledWith(USER)
+      nothingWritten()
+    })
+
+    it("dryRun: app credits that allow it add nothing to the quote", async () => {
+      mocks.eligibility.mockResolvedValue({ allowed: true, appCreditsAllowance: 40 })
+      const res = await post({ dryRun: true, reviewer: "app" })
+      expect(res.json().data.sufficient).toBe(true)
+      expect(res.json().data).not.toHaveProperty("appCreditsAllowance")
+    })
+
     it("a balance below the hold: 402 before anything is created", async () => {
       mocks.checkRunSet.mockResolvedValue({ sufficient: false, required: 185, available: 50 })
       const res = await post()

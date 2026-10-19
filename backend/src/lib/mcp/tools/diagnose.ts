@@ -214,7 +214,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         }))
         // How a completed run ended: "nothing_new" when a node was skipped for want of input.
         const outcome = executionOutcome(execution.status, nodeStates as Record<string, { status?: unknown; skipReason?: unknown }>) ?? null
-        // A failed run of a saved workflow can be continued where it stopped.
+        // A failed run of a saved workflow, or an app run, can be continued where it stopped.
         const resumeHint = await resumeFailedRunHint(execution, session)
         return {
           content: [

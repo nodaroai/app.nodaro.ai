@@ -189,6 +189,17 @@ describe("run_app tool", () => {
     })
   })
 
+  it("returns the run id beside the execution id, and names the Retry for a run that fails", async () => {
+    chainResolvesSingle({ name: "Headshot Pro", snapshot_settings: {}, snapshot_nodes: [] })
+    const fastify = Fastify()
+    fastify.post("/v1/app/:slug/run", async (_req, reply) => reply.status(202).send({ executionId: "e-app", runId: "run-1", status: "pending" }))
+    const server = buildServer()
+    registerApps({ server, session: newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "Claude" }), fastify })
+    const result = await callTool(server, "run_app", { slug: "headshot-pro" })
+    expect(result.structuredContent).toMatchObject({ executionId: "e-app", runId: "run-1" })
+    expect(result.content[0]?.text).toContain('retry_app_run({ slug: "headshot-pro", run_id: "run-1" })')
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const server = buildServer()
     registerApps({

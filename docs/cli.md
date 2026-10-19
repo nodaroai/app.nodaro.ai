@@ -164,6 +164,13 @@ nodaro apps run <slug> --input prompt="…" [--watch]
 nodaro apps run <slug> --params-file inputs.json [--watch]
 nodaro apps runs <slug> [--limit <n>] [--cursor <token>] [--json]  # list past runs
 nodaro apps run-get <slug> <runId>
+nodaro apps run-retry <slug> <runId> [--dry-run] [--app-version <n>] [--watch] [--json]
+#   retries a FAILED run from where it stopped: only the steps it did not complete run, and only those are charged;
+#   every step it completed hands on its result. It runs the version the run ran, with the inputs the run applied (it takes none).
+#   --dry-run lists the steps it would run and what it would charge, and starts nothing.
+#   --app-version is the app version you expect it to run (default: the app's latest). When the app changed since the run, the
+#   Retry is refused (app_run_version_changed) and the CLI prints both ways on: start over with `nodaro apps run`, or
+#   continue on the run's own version with --app-version <that version>. A run that was stopped rather than failing is started over.
 
 # Nodes — list types + run a single node directly
 nodaro nodes list [--category input|parameter|ai-image|ai-video|ai-audio|ai-text|processing|composition|output|control|entity|trigger|utility] [--json]

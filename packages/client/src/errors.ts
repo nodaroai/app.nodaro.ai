@@ -200,6 +200,47 @@ function heldFinalRunOf(v: unknown): HeldFinalRun | undefined {
 }
 
 /**
+ * HTTP 409 `already_running` that names the execution under way (a top-level
+ * `executionId`): the run you asked to start or continue is still running —
+ * follow `executionId` (`client.executions.get`) instead of starting it again.
+ * Sent by the workflow run route and by an app run's Retry
+ * (`client.apps.resume`). An `already_running` that names a job instead stays
+ * {@link ContinuationRefusedError}; one that names nothing, a plain
+ * `NodaroError`.
+ */
+export class AlreadyRunningError extends NodaroError {
+  constructor(
+    message: string,
+    /** The execution under way. */
+    public readonly executionId: string,
+  ) {
+    super(message, "already_running", 409)
+    this.name = "AlreadyRunningError"
+  }
+}
+
+/**
+ * HTTP 409 `app_run_version_changed`: a Retry of a failed app run
+ * (`client.apps.resume`) refused because the app is on another version than
+ * the one the run ran — continuing would mix them. `runVersion` is the run's
+ * version, `appVersion` the one you are on (the `version` you sent, else the
+ * app's latest). Start the run over (`client.apps.run`) to run `appVersion`,
+ * or send `{ version: runVersion }` to continue on the run's own version.
+ * Nothing was written or billed. Selected by code; the two numbers are
+ * `undefined` when the answer does not carry them.
+ */
+export class AppRunVersionChangedError extends NodaroError {
+  constructor(
+    message: string,
+    public readonly runVersion?: number,
+    public readonly appVersion?: number,
+  ) {
+    super(message, "app_run_version_changed", 409)
+    this.name = "AppRunVersionChangedError"
+  }
+}
+
+/**
  * HTTP 422 `job_blocked`. A job policy registered by this deployment refused
  * the generation **before it ran** — no job was created, nothing was reserved
  * and nothing was charged. `message` is the policy's user-safe text: show it
@@ -396,6 +437,9 @@ interface ApiErrorBody {
   required?: unknown
   /** …and what the caller has (withheld on a deployment-paid instance). */
   balance?: unknown
+  /** `app_run_version_changed`: the version the run ran, and the one the caller is on. */
+  runVersion?: unknown
+  appVersion?: unknown
 }
 
 const finite = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined)
@@ -486,6 +530,12 @@ export function throwFromResponse(status: number, body: ApiErrorBody): never {
       stringList(parsed.reviewNodeIds),
       heldFinalRunOf(parsed.next),
     )
+  }
+  if (status === 409 && code === "already_running" && typeof parsed.executionId === "string") {
+    throw new AlreadyRunningError(message, parsed.executionId)
+  }
+  if (status === 409 && code === "app_run_version_changed") {
+    throw new AppRunVersionChangedError(message, finite(parsed.runVersion), finite(parsed.appVersion))
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(read.message)
   if (status === 403 && code === "insufficient_scope") {

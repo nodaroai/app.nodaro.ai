@@ -9033,6 +9033,7 @@ export const en = {
   "runner.retryReusedClipOne": "1 clip that already finished is reused at no cost.",
   "runner.retryReusedClips": "{n} clips that already finished are reused at no cost.",
   "runner.retryInsufficient": "Your balance does not cover this retry.",
+  "runner.retryNoAppCredits": "You have no app credits left for this retry.",
   "runner.retryInputsNote": "It uses this run's inputs and app version. To change them, start over.",
   "runner.retryVersionGone": "The app version this run used is no longer available, so it cannot be continued. Start over to run the app's current version.",
   "runner.retryVersionChanged": "The app has been updated since this run, so it cannot be continued. Start over to run the current version.",

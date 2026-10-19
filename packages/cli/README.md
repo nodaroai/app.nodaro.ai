@@ -114,6 +114,7 @@ nodaro apps run <slug> --input prompt="…" --input duration=8 [--watch]
 nodaro apps run <slug> --params-file inputs.json [--watch]
 nodaro apps runs <slug>                                 # list past runs
 nodaro apps run-get <slug> <runId>
+nodaro apps run-retry <slug> <runId> [--dry-run] [--app-version <n>] [--watch]   # retry a failed run from where it stopped
 
 # Nodes — list types + run a single node directly (no workflow, no DAG)
 nodaro nodes list [--category ai|processing|input|...]

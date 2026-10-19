@@ -25,7 +25,7 @@
  * (`POST /v1/app/:slug/run` with `runId`).
  *
  * `dryRun: true` answers what the Retry would run and charge — the steps, the
- * price, whether the balance covers it — and creates nothing. The runner's
+ * price, whether the balance and the runner's app credits cover it — and creates nothing. The runner's
  * confirmation reads it before the Retry starts.
  *
  * Refused before anything is written or billed when: the run is not the
@@ -261,6 +261,11 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
         return { nodeId: id, type: currentTypeOf.get(id) ?? "", label }
       })
       if (dryRun) {
+        // The app-credit allowance the real call checks (read only: it writes nothing), so the
+        // quote never says "covered" for a runner the Retry would refuse for want of app credits.
+        const eligibility = hasCredits()
+          ? await (await import("../ee/billing/credits.js")).CreditsService.checkAppRunEligibility(userId)
+          : { allowed: true as const, appCreditsAllowance: undefined }
         return reply.send({
           data: {
             runId,
@@ -270,8 +275,10 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
             steps: stepList,
             estimatedCredits: price?.estimatedCredits ?? null,
             reusedClips: price?.reusedClips ?? 0,
-            sufficient: price?.sufficient ?? null,
+            sufficient: price ? price.sufficient && eligibility.allowed : null,
             available: price?.available ?? null,
+            // Present only when the app credits are what stops it.
+            ...(eligibility.allowed ? {} : { appCreditsAllowance: eligibility.appCreditsAllowance ?? 0 }),
           },
         })
       }

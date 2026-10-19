@@ -947,6 +947,22 @@ describe("get_app_run tool", () => {
     }
   })
 
+  it("a failed app run that is its run's current execution: resumeHint names the app's Retry", async () => {
+    const execution = { id: JOB_UUID, status: "failed", workflow_id: JOB_UUID_2, trigger_type: "app_run", error_message: "boom", user_id: "u1", node_states: {} }
+    const rows: Record<string, unknown> = {
+      workflow_executions: execution,
+      app_runs: { id: "run-1", app_id: "app-v1" },
+      published_apps: { workflow_id: JOB_UUID_2, slug: "hair-styler", version: 1, publish_type: "app" },
+    }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => makeChainableSingle(rows[table] ?? null))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    const hint = (result.structuredContent as { resumeHint?: string }).resumeHint
+    expect(hint).toContain('retry_app_run({ slug: "hair-styler", run_id: "run-1" })')
+    expect(hint).not.toContain("run_workflow")
+  })
+
   it("no resumeHint for a failed run of a workflow run_workflow does not reach (outside the mcp project)", async () => {
     const execution = { id: JOB_UUID, status: "failed", workflow_id: JOB_UUID_2, trigger_type: "manual", error_message: "boom", user_id: "u1", node_states: {} }
     // The caller has an "mcp" project, but the project-scoped workflow read finds nothing.

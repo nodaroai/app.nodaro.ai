@@ -493,6 +493,39 @@ with this very edit already completed — `jobId` holds its result).
 Selected for exactly those three codes when the 409 carries a top-level
 `jobId` string; every other 409 stays a plain `NodaroError`.
 
+### `class AlreadyRunningError extends NodaroError`
+
+HTTP 409 `already_running` that names the execution under way: the run you
+asked to start or continue is still running. Follow `executionId`
+(`client.executions.get`) instead of starting it again. Sent by
+`workflows.run` and by an app run's Retry
+([`apps.resume`](#resumeslug-runid-opts)).
+
+- `executionId: string` — the execution under way
+- `code = "already_running"`; `status = 409`
+- **Constructor:** `new AlreadyRunningError(message: string, executionId: string)`
+
+Selected when the 409 carries a top-level `executionId` string. One that
+names a job (`jobId`) is a [`ContinuationRefusedError`](#class-continuationrefusederror-extends-nodaroerror);
+one that names nothing stays a plain `NodaroError`.
+
+### `class AppRunVersionChangedError extends NodaroError`
+
+HTTP 409 `app_run_version_changed`: a Retry of a failed app run
+([`apps.resume`](#resumeslug-runid-opts)) was refused because the app is on
+another version than the one the run ran, and continuing would mix the two.
+Nothing was written or billed. Start the run over with `apps.run` to run the
+app's version, or send `{ version: err.runVersion }` to continue on the run's
+own version.
+
+- `runVersion?: number` — the version the run ran
+- `appVersion?: number` — the version you are on (the `version` you sent, else the app's latest)
+- `code = "app_run_version_changed"`; `status = 409`
+- **Constructor:** `new AppRunVersionChangedError(message: string, runVersion?: number, appVersion?: number)`
+
+Selected by code; the two numbers are `undefined` when the answer does not
+carry them.
+
 ### `class StudioPreviewUnavailable extends NodaroError`
 
 Not an HTTP error — thrown by `studio.productions.ops(id, { …, dryRun: true })`
@@ -743,7 +776,10 @@ Starts an execution and returns immediately with `{ executionId, status }`.
 `options.idempotencyKey` is sent as the `Idempotency-Key` header (at least 8
 characters; a shorter one is ignored): retry a request with the same key and it
 answers the run it already started (`deduped: true`) instead of starting a
-second one.
+second one. While a run of this workflow is still under way, a new one is
+refused with `409 already_running`, thrown as an
+[`AlreadyRunningError`](#class-alreadyrunningerror-extends-nodaroerror) whose
+`executionId` is the run to follow.
 Optionally restrict to a subset of node IDs, and pass `inputOverrides` —
 nested `{ nodeId: { field: value } }` node data for THIS run, shallow-merged
 over each node's saved data (the overridden node's saved results are not
@@ -4293,6 +4329,80 @@ getRun(slug: string, runId: string): Promise<{ data: AppRun }>
 ```
 
 List past runs for an app, or fetch one run by id.
+
+#### `resume(slug, runId, opts?)`
+
+```ts
+resume(slug: string, runId: string, opts: { dryRun: true; version?: number }): Promise<{ data: AppRunResumePlan }>
+resume(slug: string, runId: string, opts?: { dryRun?: false; version?: number }): Promise<AppRunResumeResult>
+```
+
+Retries a **failed** run from where it stopped — the app page's **Retry**. Only
+the steps the run did not complete run, and only those are charged; every step
+it completed hands on its result, and a
+[UGC Clip](./nodes/ai-video/ugc-clip.md) that failed renders only the clips it
+did not finish. The Retry runs the app version the run ran, with the inputs the
+run applied: it takes none of its own. The run's execution moves to the
+Retry's, so `getRun` then shows it, and a Retry of a Retry continues from what
+the latest one completed. A second call made while that Retry is pending is
+refused with `already_running` (an `AlreadyRunningError` naming its
+execution); only a concurrent double press reaches the same Retry, answered
+with `deduped: true`.
+
+- `opts.dryRun` — answer what the Retry would do and start nothing:
+  `{ data: AppRunResumePlan }` with `runId`, `continuesExecutionId`,
+  `appVersion`, `nodeIds`, `steps` (`{ nodeId, type, label }` — the steps that
+  run again), `estimatedCredits` (what it is expected to charge, the creator's
+  fee on the app included; `null` without credits), `reusedClips` (clips handed
+  back at no cost), `sufficient` (whether your balance and your app credits
+  cover it), `available`, and `appCreditsAllowance` — present only when your
+  app credits are what stops it (the Retry would be refused
+  `insufficient_app_credits`). Show it before a Retry.
+- `opts.version` — the app version you expect it to run, the one starting over
+  would run (default: the app's latest).
+
+Without `dryRun` it returns `AppRunResumeResult`:
+`{ executionId, runId, status: "pending", nodeIds, deduped? }` — poll via
+`client.executions.get(executionId)`.
+
+Refusals (nothing is written or billed) carry a code from
+`AppRunResumeRefusalCode`:
+
+| `code` | Thrown as | When |
+|---|---|---|
+| `not_found` | `NotFoundError` | no such run of yours under this app |
+| `continuation_not_found` | `NotFoundError` (its `code` reads `not_found`) | the run's execution is not yours |
+| `validation_error` | `NodaroError` (400) | a malformed run id or body, or a component's run (it is continued by the run that called it) |
+| `app_run_version_unavailable` | `NodaroError` (409) | the version the run ran is gone: start the run over |
+| `app_run_version_changed` | `AppRunVersionChangedError` | the app is on another version than the run ran: start over, or send `version: err.runVersion` |
+| `continuation_workflow_mismatch` / `continuation_version_mismatch` | `NodaroError` (400) | the run's execution ran another workflow, or another version of it (rare): start the run over |
+| `continuation_not_failed` | `NodaroError` (409) | the run completed or was stopped: start it over |
+| `already_running` | `AlreadyRunningError` (409, `executionId`) | the run is still running, or a Retry of it is pending: follow `executionId`. Started again elsewhere meanwhile: a plain `NodaroError` |
+| `continuation_subset_required` | `NodaroError` (409, or 400) | nothing is left to retry: every step completed (409), or the app runs no step (400) |
+| `locked_field` | `NodaroError` (400) | an input the run applied sets a field the app does not let a runner set |
+| `preview_review_required` | `NodaroError` (400) | the Retry would stop at a Preview with nobody to review it: retry it from the app page, where a person can review it |
+| `insufficient_app_credits` / `insufficient_credits` | `InsufficientCreditsError` (its `code` reads `insufficient_credits`; the message says which) | your app credits, or balance, cannot cover it |
+| `billing_unavailable` | `NodaroError` (503) | billing is briefly unavailable for a workspace run: try again shortly |
+
+To run with other inputs or on the app's current version, start the run over
+with `run(slug, inputs)` instead: every step runs, and is charged, again. See
+[Retry of a failed app run](./api-integration.md#retry-of-a-failed-app-run).
+
+```ts
+import { AppRunVersionChangedError } from "@nodaro/sdk/errors"
+
+const { data: plan } = await client.apps.resume("pro-headshot", runId, { dryRun: true })
+console.log(`${plan.steps.length} step(s) again, about ${plan.estimatedCredits} credits`)
+
+try {
+  const { executionId } = await client.apps.resume("pro-headshot", runId)
+} catch (err) {
+  if (err instanceof AppRunVersionChangedError && err.runVersion !== undefined) {
+    // Continue on the run's own version anyway (or start over with apps.run).
+    await client.apps.resume("pro-headshot", runId, { version: err.runVersion })
+  }
+}
+```
 
 #### `deleteRun(slug, runId)`
 
@@ -7900,6 +8010,10 @@ not two.
 - `AppRun` — a single app-run record
 - `ListAppRunsParams` — query params for `listRuns()`
 - `DeleteAppRunResult` — `{ success }`-style delete response
+- `ResumeAppRunOptions` — third argument to `resume()`: `{ dryRun?, version? }`
+- `AppRunResumePlan`, `AppRunResumeStep` — what `resume(…, { dryRun: true })` answers
+- `AppRunResumeResult` — the started Retry: `{ executionId, runId, status, nodeIds, deduped? }`
+- `AppRunResumeRefusalCode` — the codes a `resume()` refusal carries
 
 ### Community
 

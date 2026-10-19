@@ -35,6 +35,13 @@ describe("the Retry confirmation names the steps that run again and their price"
     expect(text.canRetry).toBe(false)
   })
 
+  it("app credits that do not cover it: names the app credits, not the balance, and Retry cannot be pressed", () => {
+    const text = resumeDialogText(state({ plan: plan({ sufficient: false, appCreditsAllowance: 0 }) }), t)
+    expect(text.notes).toContain(tx("runner.retryNoAppCredits"))
+    expect(text.notes).not.toContain(tx("runner.retryInsufficient"))
+    expect(text.canRetry).toBe(false)
+  })
+
   it("while the plan is asked: no steps yet, nothing to press", () => {
     expect(resumeDialogText(state({}), t)).toMatchObject({ body: tx("runner.retryChecking"), steps: [], canRetry: false })
   })

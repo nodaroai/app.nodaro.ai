@@ -1104,7 +1104,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           // node was skipped for want of input and nothing failed; absent until it completes.
           outcome: z.enum(["succeeded", "nothing_new"]).optional(),
           errorMessage: z.string().nullable().optional(),
-          // A failed run of a saved workflow: how to continue it from where it stopped.
+          // A failed run: how to continue it from where it stopped (run_workflow, or an app run's retry_app_run).
           resumeHint: z.string().optional(),
           summary: z
             .object({ total: z.number(), completed: z.number(), failed: z.number(), skipped: z.number(), skippedForEmptyInput: z.number() })
@@ -1251,7 +1251,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           skippedForEmptyInput: countEmptyInputSkips(ns),
         }
         const errorMessage = (data.error_message as string | null | undefined) ?? null
-        // A failed run of a saved workflow can be continued where it stopped.
+        // A failed run of a saved workflow, or an app run, can be continued where it stopped.
         const resumeHint = await resumeFailedRunHint(data, session)
         const run = {
           executionId: data.id,

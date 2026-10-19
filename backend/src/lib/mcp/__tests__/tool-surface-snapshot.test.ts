@@ -1005,6 +1005,20 @@ const RUN_WORKFLOW_NODE_IDS_BYTES = 427
 // live in docs/api-integration.md.
 const RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES = 176
 
+// RAISED 2026-10-19 by the app's Retry of a failed run, and nothing else: ONE new
+// tool, `retry_app_run` (the MCP face of POST /v1/app/:slug/runs/:runId/resume,
+// with `version`, and `confirm` — price confirmation as render_final: the quote
+// without it, the run with it), gated by workflows:execute beside run_app, so
+// cloud/all AND community/all name it and the fixture moves by that one name; and
+// run_app's outputSchema gains the optional `runId` the run route already returns
+// (the id retry_app_run takes). The resume hint on get_app_run / diagnose_run is a
+// result, not schema, so it costs nothing here. Measured by this suite on the same
+// tree with and without the change (dev's apps.ts swapped in), after the
+// named-never-run raise above: 447_723 total − 446_349 = 1_374 B; the 27 B of
+// headroom the list had before is carried across. The refusals and the version
+// rule live in docs/api-integration.md.
+const RETRY_APP_RUN_BYTES = 1_374
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1122,7 +1136,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_4_ARGON_ID_BYTES +
     RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES +
     RUN_WORKFLOW_NODE_IDS_BYTES +
-    RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES,
+    RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
+    RETRY_APP_RUN_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

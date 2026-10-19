@@ -2415,6 +2415,17 @@ Needs `workflows:execute`.
 | `alignment[].start` | number | yes |  |
 | `alignment[].end` | number | yes |  |
 
+## `retry_app_run`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The app's slug. At least 1 character. |
+| `run_id` | string | yes | The run's id (run_app's runId). At least 1 character. |
+| `version` | integer |  | The app version to expect (default: the latest). The run's own version continues it after the app changed. Above 0. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+
 ## `revoice_studio_clip`
 
 Needs `workflows:write` and `workflows:execute` · Nodaro Cloud only.

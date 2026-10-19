@@ -13,7 +13,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|-------|
 | `workflows:read` | `export_workflow`, `get_component_inputs`, `get_project`, `get_recast_status`†, `get_studio_production`†, `get_workflow`, `get_workflow_json`, `list_components`, `list_projects`, `list_studio_productions`†, `list_workflows`, `plan_studio_export`†, `validate_studio_plan`† |
 | `workflows:write` | `clone_studio_production`†, `create_studio_production`†, `create_workflow`, `delete_workflow`, `edit_studio_production`†, `import_recast_script`†, `import_studio_production`†, `import_workflow`, `share_studio_production`†, `update_workflow_json` |
-| `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `make_chapters`, `make_trailer`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
+| `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `make_chapters`, `make_trailer`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `retry_app_run`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `list_sessions`, `read_session`, `wait_for_job` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_moodboards`, `list_objects`, `list_palettes`, `list_saved_posts`†, `read_collection` |
 | `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_node_preset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
@@ -1619,7 +1619,11 @@ URL the node produced, `{ kind, url }`) — and `outputs[]`, every media URL
 across the run with the source job's `prompt`, `model` and `createdAt`. A failed
 run `run_workflow` can continue (a saved workflow it reaches, not an app run)
 also carries `resumeHint`: the `run_workflow` call that continues it from where
-it stopped (see [`run_workflow`](#run_workflow)).
+it stopped (see [`run_workflow`](#run_workflow)). A failed app run carries the
+app's Retry instead, the [`retry_app_run`](#retry_app_run) call that quotes
+it — only on the run's current execution (after a Retry or a fresh
+start, the earlier execution gets none), and naming the run's own `version`
+when the app has changed since the run.
 
 Once the run completes it also carries `outcome`: `"nothing_new"` when at least
 one node was skipped for want of input and nothing failed — a feed that found no
@@ -1783,7 +1787,9 @@ not the error type), so treat them as guidance. Reserved credits are
 auto-refunded except for `post_processing` (post-delivery) failures; check
 `creditsActual` per node. A failed run `run_workflow` can continue (a saved
 workflow it reaches, not an app run) also carries `resumeHint`, the
-`run_workflow` call that continues it from where it stopped.
+`run_workflow` call that continues it from where it stopped; a failed app run
+carries the [`retry_app_run`](#retry_app_run) call instead, as in
+[`get_app_run`](#get_app_run).
 
 A completed run also reports its `outcome` (`"succeeded"` or `"nothing_new"` —
 see [`get_app_run`](#get_app_run)), and a node in `nodes[]` that the run skipped
@@ -1874,7 +1880,8 @@ only reads the sound (Transcribe, Suno Cover) gets just the sound. See
 **Scope:** `workflows:execute`
 
 Run a published app by slug. `inputs` is a FLAT object keyed by the schema
-input keys (from `get_app_inputs`). Returns an `execution_id`.
+input keys (from `get_app_inputs`). Returns an `execution_id`, and the run's
+`runId` — the id [`retry_app_run`](#retry_app_run) takes if the run fails.
 `inputOverrides` (advanced) sets raw node fields such as `promptPrefix` /
 `promptSuffix` per run; a field set to `null` there is cleared for the run (the
 node runs with no value there, not the creator's saved one). It cannot set a destination on an outbound node (a
@@ -1882,6 +1889,48 @@ Webhook Output's `url`, a publisher's account, a scraper's target) — the run i
 refused with `400 locked_field`.
 
 **Input:** `slug`, `inputs?`, `inputOverrides?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
+
+---
+
+### `retry_app_run`
+
+**Scope:** `workflows:execute`
+
+Retry a **failed** app run from where it stopped — the app page's **Retry**.
+Only the steps the run did not complete run, and only those are charged; every
+step it completed hands on its result, and a UGC Clip that failed renders only
+the clips it did not finish. The Retry runs the app version the run ran, with
+the inputs the run applied: it takes none of its own. The run's execution moves
+to the Retry's, so a Retry of a Retry continues from what the latest one
+completed.
+
+Price confirmation works as in [`render_final`](#render_final): without
+`confirm` the tool returns the **quote** only — the steps it would run again,
+the price (`estimatedCredits`, the creator's fee on the app included),
+`reusedClips` and whether the balance and the app credits cover it
+(`sufficient`; `appCreditsAllowance` when the app credits are what stops it, and
+the quote then says so) — and starts
+nothing. Show that to the user; call it again with `confirm: true` only once
+they accept it. Then it quotes again (which also checks the run) and starts the
+Retry, returning its execution id; poll [`get_app_run`](#get_app_run). A second
+call while that Retry is pending is refused with `already_running`, and the
+error names the execution to poll.
+
+`version` is the app version you expect it to run (default: the app's latest).
+When the app has changed since the run, a plain Retry is refused
+(`app_run_version_changed`, naming the run's version and the app's): start the
+run over with `run_app`, or pass the run's own version to continue on it. A run
+that completed or was stopped rather than failing, or whose version is no
+longer available, is started over with `run_app`; the tool's error says which.
+A Retry that would stop at a Preview render is refused here
+(`preview_review_required`): retry it from the app page, where a person can
+review the Preview. A refusal for credits keeps the route's own message (the
+app credits or the balance).
+The full list of refusals is under
+[Retry of a failed app run](../api-integration.md#retry-of-a-failed-app-run).
+
+**Input:** `slug`, `run_id` (the run's id: `run_app`'s `runId`, or the one a
+`resumeHint` names), `version?`, `confirm?`
 
 ---
 

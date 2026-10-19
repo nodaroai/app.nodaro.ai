@@ -164,7 +164,8 @@ export interface RunWorkflowOptions {
    * ignores a shorter one). Reuse the same value when retrying the same
    * request: the server answers the run it already started (`deduped: true`)
    * instead of starting a second one — or, once that run is under way or has
-   * superseded the one it continued, refuses with `already_running` or
+   * superseded the one it continued, refuses with `already_running` (an
+   * `AlreadyRunningError` carrying its `executionId`) or
    * `continuation_superseded` naming it. Either way nothing runs twice.
    */
   idempotencyKey?: string

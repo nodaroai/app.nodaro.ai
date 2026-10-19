@@ -8755,6 +8755,7 @@ export const ko: ChromeDict = {
   "runner.retryReusedClipOne": "이미 완성된 클립 1개는 비용 없이 다시 사용됩니다.",
   "runner.retryReusedClips": "이미 완성된 클립 {n}개는 비용 없이 다시 사용됩니다.",
   "runner.retryInsufficient": "잔액이 이 재시도에 부족합니다.",
+  "runner.retryNoAppCredits": "이 재시도에 쓸 앱 크레딧이 남아 있지 않습니다.",
   "runner.retryInputsNote": "이 실행의 입력과 앱 버전을 사용합니다. 바꾸려면 처음부터 다시 시작하세요.",
   "runner.retryVersionGone": "이 실행이 사용한 앱 버전을 더 이상 사용할 수 없어 이어서 실행할 수 없습니다. 처음부터 다시 시작하면 앱의 현재 버전으로 실행됩니다.",
   "runner.retryVersionChanged": "이 실행 이후 앱이 업데이트되어 이어서 실행할 수 없습니다. 처음부터 다시 시작하면 현재 버전으로 실행됩니다.",
