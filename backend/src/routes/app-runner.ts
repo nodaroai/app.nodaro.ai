@@ -8,6 +8,9 @@ import { ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
  * GET    /v1/app/:slug/runs     — List runner's past runs
  * GET    /v1/app/:slug/runs/:runId  — Get run details
  * DELETE /v1/app/:slug/runs/:runId  — Delete run from history
+ *
+ * OAuth app tokens: every run route takes a scope (lib/app-run-scopes.ts);
+ * the public loader does not.
  */
 
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
@@ -44,6 +47,8 @@ import { appRunViewStates } from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
 import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 import { clientRunUpdates, executionBelongsToRun } from "../lib/app-run-ownership.js"
+import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
+import { APP_RUN_READ_SCOPES } from "../lib/app-run-scopes.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -353,7 +358,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
   // --- Run the app (auth required, runner pays) ---
   // Spend-surface threading (D1 v2): captured at creation, rides the payload.
-  app.post("/v1/app/:slug/run", async (req, reply) => {
+  app.post("/v1/app/:slug/run", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -734,7 +739,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   })
 
   // --- Create a draft run (no execution yet) ---
-  app.post("/v1/app/:slug/runs", async (req, reply) => {
+  app.post("/v1/app/:slug/runs", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -804,7 +809,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   })
 
   // --- Update a draft run's input values ---
-  app.patch("/v1/app/:slug/runs/:runId", async (req, reply) => {
+  app.patch("/v1/app/:slug/runs/:runId", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -852,7 +857,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   })
 
   // --- List runner's past runs for this app ---
-  app.get("/v1/app/:slug/runs", async (req, reply) => {
+  app.get("/v1/app/:slug/runs", { preHandler: requireAnyAppScope(APP_RUN_READ_SCOPES) }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1024,7 +1029,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   })
 
   // --- Get run details ---
-  app.get("/v1/app/:slug/runs/:runId", async (req, reply) => {
+  app.get("/v1/app/:slug/runs/:runId", { preHandler: requireAnyAppScope(APP_RUN_READ_SCOPES) }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1140,7 +1145,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   // This powers the global archive view in the Nodaro UI. API/SDK/MCP don't
   // surface archived runs by default; listing them is intentionally only
   // available to the runner's own UI.
-  app.get("/v1/me/archived-runs", async (req, reply) => {
+  app.get("/v1/me/archived-runs", { preHandler: requireAnyAppScope(APP_RUN_READ_SCOPES) }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1250,7 +1255,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   // The run row is preserved with deleted_at timestamp. Users can restore or
   // permanently delete from the Nodaro UI's archive view. API/SDK/MCP delete
   // calls soft-delete; recovery is UI-only by design.
-  app.delete("/v1/app/:slug/runs/:runId", async (req, reply) => {
+  app.delete("/v1/app/:slug/runs/:runId", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1285,7 +1290,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   })
 
   // --- Restore an archived run ---
-  app.post("/v1/app/:slug/runs/:runId/restore", async (req, reply) => {
+  app.post("/v1/app/:slug/runs/:runId/restore", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1334,7 +1339,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   // spending), and a fee cannot be settled here instead because the final
   // credits do not exist yet. So the delete waits; archiving does not (it
   // keeps the row).
-  app.delete("/v1/app/:slug/runs/:runId/permanent", async (req, reply) => {
+  app.delete("/v1/app/:slug/runs/:runId/permanent", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },

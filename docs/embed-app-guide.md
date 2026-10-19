@@ -518,7 +518,7 @@ This is a standard authorization-code flow. Full walkthrough: [oauth-flow.md](./
 4. **Exchange** the code (server-side) at `POST /v1/oauth/token` with `client_id` + `client_secret` + `code`. Receive `access_token` (`ndr_app_<64hex>`, lifetime 90 days).
 5. Use `Authorization: Bearer ndr_app_...` on every call. The token carries the user's identity and granted scopes.
 
-**Required scopes for running a published app:** `workflows:execute` (run) and `jobs:read` (poll).
+**Required scopes for running a published app:** `workflows:execute` (run, retry, Render final, and renaming or deleting a run) and `jobs:read` (poll the run and list runs; `workflows:execute` alone or `assets:read` is accepted for these too). Loading the app (`GET /v1/app/:slug`) needs no scope.
 
 If a 403 `insufficient_scope` comes back, re-do the authorize flow with broader scopes.
 

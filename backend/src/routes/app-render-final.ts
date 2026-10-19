@@ -82,6 +82,7 @@ import {
 } from "../services/workflow-engine/run-continuation.js"
 import { executeAppRenderFinal } from "../services/app-render-final.js"
 import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-codes.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 
 /** Stable refusal codes of this route (clients branch on the code). */
 export const APP_RENDER_FINAL_NOT_A_RENDER = "not_a_render"
@@ -98,7 +99,7 @@ type SnapshotNode = { id: string; type?: string; data?: Record<string, unknown>;
 type SnapshotEdge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
 export async function appRenderFinalRoutes(app: FastifyInstance) {
-  app.post("/v1/app/:slug/runs/:runId/render-final", async (req, reply) => {
+  app.post("/v1/app/:slug/runs/:runId/render-final", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }

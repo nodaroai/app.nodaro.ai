@@ -72,6 +72,7 @@ import {
   type ContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { resumeRouteNodeIds, resumeSource } from "../lib/app-run-resume.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 /** The app version the run ran is gone: it cannot be continued; starting over runs the current one. */
@@ -111,7 +112,7 @@ type VersionRow = {
 }
 
 export async function appRunResumeRoutes(app: FastifyInstance) {
-  app.post("/v1/app/:slug/runs/:runId/resume", async (req, reply) => {
+  app.post("/v1/app/:slug/runs/:runId/resume", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }

@@ -19,6 +19,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import { requireScope } from "../lib/scopes.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { completedJobColumns } from "../lib/job-status.js"
 
 
@@ -47,7 +48,7 @@ async function updateWrapperJob(jobId: string, fields: Record<string, unknown>) 
 }
 
 export async function componentExecuteRoutes(app: FastifyInstance) {
-  app.post("/v1/component/execute", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.post("/v1/component/execute", { preHandler: requireAppScope("workflows:execute") }, async (req: FastifyRequest, reply: FastifyReply) => {
     // Spend-surface threading (D1 v2): stamped on the request so the
     // reserve path applies pool-aware payg semantics.
     req.webFreeMode = await resolveWebSurfaceFlag(req)

@@ -178,6 +178,20 @@ workflows by ID with input overrides — they live under `/v1/api/` and
 predate the published-app system. Most new integrations should prefer
 `/v1/app/:slug/run` instead, but these remain supported.
 
+**OAuth scopes for the app-run routes.** With an OAuth app token
+(`ndr_app_…`), starting and changing app runs needs `workflows:execute`:
+`POST /v1/app/:slug/run`, `POST /v1/app/:slug/runs`, `PATCH` / `DELETE
+/v1/app/:slug/runs/:runId`, `POST /v1/app/:slug/runs/:runId/resume`,
+`/render-final` and `/restore`, and `DELETE /v1/app/:slug/runs/:runId/permanent`.
+Running a published component (`POST /v1/component/execute`) needs
+`workflows:execute` too. Reading runs (`GET /v1/app/:slug/runs`,
+`GET /v1/app/:slug/runs/:runId` and the archived runs at
+`GET /v1/me/archived-runs`) needs `jobs:read`, `assets:read` or
+`workflows:execute`, so an app that starts runs can always poll them. A token without the scope gets `403
+insufficient_scope` with `missingScope`. `GET /v1/app/:slug` is public and needs
+no scope. Session tokens and personal API tokens are not scope-checked. See
+[OAuth scope vocabulary](./oauth-flow.md#4-scope-vocabulary).
+
 `POST /v1/app/:slug/run` takes the app's exposed fields as flat `inputs`, plus an
 optional `inputOverrides` — nested `{ nodeId: { field: value } }` raw node
 overrides for THIS run. The two are merged, not either/or: the nested overrides
@@ -3354,7 +3368,8 @@ The same fields are on every job read above, on `GET /v1/jobs/:id` and
 ### How long a component run may take
 
 `POST /v1/component/execute` answers `202 { jobId }` and runs the component in the
-background; poll that wrapper job like any other. The server gives the run 90 minutes,
+background; poll that wrapper job like any other. With an OAuth app token it needs
+`workflows:execute` (and the wait-limit read below, `jobs:read`). The server gives the run 90 minutes,
 plus the time budget of any long render inside it (today: an Apply EDL final render,
 whose budget is sized from its edit). A client that polls with its own time limit can ask
 how long the server will wait:
