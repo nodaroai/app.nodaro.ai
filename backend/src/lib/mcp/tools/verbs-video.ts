@@ -2321,7 +2321,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   // Animated GIF → H.264 MP4, FFmpeg-only, ZERO credits. Bridges a GIF into
   // the video pipeline so it can be used as a motion reference for models that
   // reject GIF in the video slot (Seedance et al.).
-  const gifToVideoWidgetModel = widgetModelOf("gif_to_video", "gif-to-video")
+  const gifToVideoWidgetModel = widgetModelOf("gif_to_video")
   server.registerTool(
     "gif_to_video",
     {

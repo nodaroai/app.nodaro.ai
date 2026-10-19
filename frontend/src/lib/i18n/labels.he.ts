@@ -25,7 +25,6 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Paint Mask": "ציור מסכה",
   "Slideshow": "מצגת",
   "Still to Video": "תמונה נייחת לווידאו",
-  "Gif to Video": "GIF לווידאו",
   // Inputs
   "Text": "טקסט",
   "Upload Image": "העלאת תמונה",

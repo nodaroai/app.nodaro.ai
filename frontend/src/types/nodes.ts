@@ -4954,32 +4954,6 @@ export type LoopVideoData = {
   activeResultIndex?: number
 }
 
-export type GifToVideoData = {
-  currentJobProgress?: number
-  [key: string]: unknown
-  label: string
-  /** Source GIF URL — set by the node's built-in upload dropzone OR resolved
-   *  from an upstream image producer edge (an uploaded .gif). */
-  gifUrl?: string
-  /** Asset id when the GIF was uploaded via the node's own dropzone. */
-  assetId?: string
-  /** Extend a short GIF by looping up to the target window. A sub-floor GIF is
-   *  looped regardless; this toggle governs stretching an already-valid GIF. */
-  loopToMinimum: boolean
-  /** Target duration when looping (2-8s). */
-  targetDuration: number
-  /** true → minterpolate (smooth). false → preserve the GIF's stepped timing. */
-  interpolate: boolean
-  /** Colour transparent GIFs are flattened onto. */
-  alphaBackground: "white" | "black"
-  fieldMappings: FieldMappings
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  generatedVideoUrl?: string
-  generatedResults?: readonly GeneratedResult[]
-  activeResultIndex?: number
-}
-
 export type FadeVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -7467,7 +7441,6 @@ export type SceneNodeData =
   | RenderVideoData
   | SpeedRampData
   | LoopVideoData
-  | GifToVideoData
   | FadeVideoData
   | MaskCompositeData
   | VideoOverlayData
@@ -7708,7 +7681,6 @@ export type SceneNodeType =
   | "render-video"
   | "speed-ramp"
   | "loop-video"
-  | "gif-to-video"
   | "fade-video"
   | "mask-composite"
   | "video-overlay"
@@ -9887,14 +9859,6 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Loop Video", mode: "repeat", repeatCount: 2, targetDuration: 10, fieldMappings: {} },
-  },
-  {
-    type: "gif-to-video",
-    label: "Gif to Video",
-    category: "processing",
-    inputs: ["image"],
-    outputs: ["video"],
-    defaultData: { label: "Gif to Video", loopToMinimum: true, targetDuration: 3, interpolate: true, alphaBackground: "white", fieldMappings: {} },
   },
   {
     type: "fade-video",

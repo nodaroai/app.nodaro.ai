@@ -172,7 +172,6 @@ import {
   transcodeVideoApi,
   speedRampApi,
   loopVideoApi,
-  gifToVideoApi,
   fadeVideoApi,
   maskCompositeApi,
   videoMaskApi,
@@ -377,7 +376,6 @@ import type {
   ManualEditData,
   SpeedRampData,
   LoopVideoData,
-  GifToVideoData,
   FadeVideoData,
   MaskCompositeData,
   StillToVideoData,
@@ -8516,34 +8514,6 @@ function executeNodeCore(
         ),
       "generatedVideoUrl",
       "Loop Video",
-      ctx,
-    );
-  }
-
-  if (node.type === "gif-to-video") {
-    const d = node.data as GifToVideoData;
-    // The GIF arrives as an image input (an uploaded .gif) or via the node's
-    // own upload dropzone (data.gifUrl).
-    const gifUrl = overrideMediaUrl ?? inputs.imageUrl ?? d.gifUrl;
-    if (!gifUrl) {
-      toast.error(nodeRunError(d.label, "nodeRun.noGIFWireAnImage"));
-      return Promise.reject(new Error("No GIF"));
-    }
-    return runProcessingNode(
-      node.id,
-      () =>
-        gifToVideoApi(
-          gifUrl,
-          {
-            loopToMinimum: d.loopToMinimum ?? true,
-            targetDuration: d.targetDuration ?? 3,
-            interpolate: d.interpolate ?? true,
-            alphaBackground: d.alphaBackground ?? "white",
-          },
-          ctx.userId,
-        ),
-      "generatedVideoUrl",
-      "Gif to Video",
       ctx,
     );
   }

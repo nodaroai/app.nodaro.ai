@@ -1,14 +1,14 @@
-import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
-import { insertJob } from "../lib/insert-job.js"
-import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
-import { extractMcpClient } from "../lib/extract-mcp-client.js"
-import { buildJobInputData } from "../lib/job-input-data.js"
-import { formatZodError } from "../lib/zod-error.js"
-import { sendInternalError } from "../lib/http-errors.js"
+import { safeUrlSchema } from "../../lib/url-validator.js"
+import { insertJob } from "../../lib/insert-job.js"
+import { videoQueue } from "../../lib/queue.js"
+import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../../lib/request-helpers.js"
+import { extractMcpClient } from "../../lib/extract-mcp-client.js"
+import { buildJobInputData } from "../../lib/job-input-data.js"
+import { formatZodError } from "../../lib/zod-error.js"
+import { sendInternalError } from "../../lib/http-errors.js"
+import type { UnitRoute } from "../kit.js"
 
 // Zero credits — pure local FFmpeg conversion (no provider call). The guard's
 // credit check passes trivially while the storage-limit check, the admin
@@ -28,7 +28,8 @@ const gifToVideoBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
-export async function gifToVideoRoutes(app: FastifyInstance) {
+// POST /v1/gif-to-video: queue a video-queue job (worker.ts) that converts the GIF to an MP4.
+export const route: UnitRoute = async function gifToVideoRoutes(app) {
   app.post("/v1/gif-to-video", { preHandler: creditGuard(() => "gif-to-video") }, async (req, reply) => {
     const parsed = gifToVideoBody.safeParse(req.body)
     if (!parsed.success) {

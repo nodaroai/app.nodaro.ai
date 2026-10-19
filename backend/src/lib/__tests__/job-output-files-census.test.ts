@@ -129,7 +129,7 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "routes/youtube-audio.ts :: thumbR2Key": `${NOT_A_JOB} (downloaded source audio's poster)`,
   "services/media-proxy.ts :: key": `${CACHE} (an analysis proxy, by source url + settings)`,
   "services/media-proxy.ts :: manifestKey": `${CACHE} (the proxy's manifest)`,
-  "workers/handlers/ffmpeg.ts :: cacheKey": `${CACHE} (GIF → MP4, by content hash)`,
+  "nodes/gif-to-video/worker.ts :: cacheKey": `${CACHE} (GIF → MP4, by content hash)`,
   "workers/shared.ts :: `audios/cover-src-${outputId}.mp3`":
     `${NOT_A_JOB} (a workflow run's link audio, fetched by the run before any of its jobs and read by its later nodes)`,
   // The copy helpers.

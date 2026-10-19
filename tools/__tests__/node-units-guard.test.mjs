@@ -88,7 +88,7 @@ test("G1: a node type is a unit or a legacy literal entry — never both; the le
  * raised.
  */
 export const BURN_DOWN_PINS = {
-  "tools/units/legacy-nodes.json": 222,
+  "tools/units/legacy-nodes.json": 221,
   "tools/test-select/registry-users-tests.json": 240,
   "tools/test-select/registry-users-product.json": 207,
 }

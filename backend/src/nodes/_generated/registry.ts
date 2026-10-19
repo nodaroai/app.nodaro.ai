@@ -3,11 +3,13 @@
 // @registry-exports registry: UNIT_REGISTRY
 import type { UnitDescriptor } from "../kit.js"
 import { descriptor as unit_episode_chapters } from "../episode-chapters/descriptor.generated.js" // unit:episode-chapters
+import { descriptor as unit_gif_to_video } from "../gif-to-video/descriptor.generated.js" // unit:gif-to-video
 import { descriptor as unit_remove_audio } from "../remove-audio/descriptor.generated.js" // unit:remove-audio
 import { descriptor as unit_tighten_episode } from "../tighten-episode/descriptor.generated.js" // unit:tighten-episode
 
 export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.assign(Object.create(null), {
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
+  "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

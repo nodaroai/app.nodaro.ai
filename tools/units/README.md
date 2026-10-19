@@ -252,7 +252,8 @@ any `node.type` a workflow carries ("constructor", "toString") finds no unit.
 registry; the snapshot was retired once remove-audio landed, decided
 2026-10-16. It was restored once more for the conversion of Tighten Episode
 and Chapters into use-case units, with sections for the use-case paths, and
-retired again when that conversion landed. What outlives it is the shared
+retired again when that conversion landed. It was restored a third time for
+the gif-to-video migration, and retired when that migration landed. What outlives it is the shared
 use-case output shapes fixture, `__fixtures__/use-case-output-shapes.json`,
 which the two engines' parity tests read.)
 

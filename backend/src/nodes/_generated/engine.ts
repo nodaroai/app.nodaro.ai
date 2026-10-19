@@ -2,8 +2,10 @@
 // @registry backend/src/nodes/*/payload.ts
 // @registry-exports engine: UNIT_PAYLOADS
 import type { UnitPayload } from "../kit.js"
+import { payload as unit_gif_to_video } from "../gif-to-video/payload.js" // unit:gif-to-video
 import { payload as unit_remove_audio } from "../remove-audio/payload.js" // unit:remove-audio
 
 export const UNIT_PAYLOADS: Readonly<Record<string, UnitPayload>> = Object.assign(Object.create(null), {
+  "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
 })

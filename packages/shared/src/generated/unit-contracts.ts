@@ -9,6 +9,7 @@
 export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "audio" | "video" | "image" | "dynamic"]> = [
   ["tighten-episode", "dynamic"], // unit:tighten-episode
   ["remove-audio", "video"], // unit:remove-audio
+  ["gif-to-video", "video"], // unit:gif-to-video
 ]
 
 // The use-case node units (execution.kind "use-case"), in position order — each a route POST /v1/<type> (+ /estimate, /continue).

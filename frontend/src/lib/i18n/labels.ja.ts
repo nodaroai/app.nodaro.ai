@@ -25,7 +25,6 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Paint Mask": "マスクを描画",
   "Slideshow": "スライドショー",
   "Still to Video": "静止画から動画",
-  "Gif to Video": "GIF から動画",
   "Text": "テキスト",
   "Upload Image": "画像アップロード",
   "Upload Video": "動画アップロード",

@@ -14,12 +14,17 @@ import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
  * seam: the target's subject (`imageUrl`), one more reference image
  * (`referenceImageUrls`), or nowhere — a target that never reads an entity's
  * image. The table was recorded from origin/dev's resolver before the seam
- * (every type has one outcome for every entity and handle). The server's list
- * lacks gif-to-video, which the editor's has (see ENTITY_SUBJECT_TARGET_TYPES):
- * here it takes the entity as a reference.
+ * (every type has one outcome for every entity and handle). One outcome
+ * changed on purpose: gif-to-video took the entity as a reference here (the
+ * server's legacy list lacked it, the editor's had it, and its payload never
+ * read a reference). Since its migration it declares "input:entity-subject" —
+ * the server follows the editor (decision 2 of the gif-to-video migration,
+ * decided 2026-10-18) — so it takes the entity as its subject.
  */
 type Outcome = "subject" | "reference" | "none"
 const LEGACY_ENTITY_SUBJECT_TARGETS = ["ai-avatar", "lip-sync", "motion-transfer", "speech-to-video", "still-to-video"]
+/** Units declaring "input:entity-subject" (gif-to-video was "reference" before decision 2, decided 2026-10-18). */
+const UNIT_ENTITY_SUBJECT_TARGETS = ["gif-to-video"]
 /** Takes an entity as its image in its own branch, before the entity branch reads the set. */
 const ROUTED_BEFORE_THE_ENTITY_BRANCH = ["image-overlay"]
 /** Targets the entity's image never reaches. */
@@ -28,7 +33,7 @@ const NOT_REACHED = [
   "slideshow", "sort-list", "speaker-frames", "telegram-account-send", "ugc-finish-clips", "video-overlay",
 ]
 const outcomeOf = (type: string): Outcome =>
-  LEGACY_ENTITY_SUBJECT_TARGETS.includes(type) || ROUTED_BEFORE_THE_ENTITY_BRANCH.includes(type) ? "subject"
+  LEGACY_ENTITY_SUBJECT_TARGETS.includes(type) || UNIT_ENTITY_SUBJECT_TARGETS.includes(type) || ROUTED_BEFORE_THE_ENTITY_BRANCH.includes(type) ? "subject"
     : NOT_REACHED.includes(type) ? "none"
     : "reference"
 
@@ -49,9 +54,9 @@ function landing(target: string, entity: string, sourceHandle: string | null): O
 }
 
 describe("entity-subject targets: zero behaviour change", () => {
-  it("no unit declares the capability yet, so the set is the legacy list", () => {
-    expect(UNIT_NODE_DESCRIPTORS.filter((u) => u.capabilities.includes("input:entity-subject"))).toEqual([])
-    expect([...ENTITY_SUBJECT_TARGET_TYPES].sort()).toEqual(LEGACY_ENTITY_SUBJECT_TARGETS)
+  it("the set is the legacy list and the units declaring the capability", () => {
+    expect(UNIT_NODE_DESCRIPTORS.filter((u) => u.capabilities.includes("input:entity-subject")).map((u) => u.type)).toEqual(UNIT_ENTITY_SUBJECT_TARGETS)
+    expect([...ENTITY_SUBJECT_TARGET_TYPES].sort()).toEqual([...LEGACY_ENTITY_SUBJECT_TARGETS, ...UNIT_ENTITY_SUBJECT_TARGETS].sort())
   })
 
   it("covers every node type and each entity's real handles (never vacuous)", () => {
@@ -62,7 +67,7 @@ describe("entity-subject targets: zero behaviour change", () => {
 
   it("the table names only node types that exist", () => {
     const types = new Set(NODE_REGISTRY.map((d) => d.type))
-    for (const t of [...LEGACY_ENTITY_SUBJECT_TARGETS, ...ROUTED_BEFORE_THE_ENTITY_BRANCH, ...NOT_REACHED]) expect(types.has(t), t).toBe(true)
+    for (const t of [...LEGACY_ENTITY_SUBJECT_TARGETS, ...UNIT_ENTITY_SUBJECT_TARGETS, ...ROUTED_BEFORE_THE_ENTITY_BRANCH, ...NOT_REACHED]) expect(types.has(t), t).toBe(true)
   })
 
   for (const { type } of NODE_REGISTRY) {

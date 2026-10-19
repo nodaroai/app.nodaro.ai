@@ -69,7 +69,7 @@ import { resizeVideoRoutes } from "../resize-video.js"
 import { speedRampRoutes } from "../speed-ramp.js"
 import { fadeVideoRoutes } from "../fade-video.js"
 import { loopVideoRoutes } from "../loop-video.js"
-import { gifToVideoRoutes } from "../gif-to-video.js"
+import { route as gifToVideoRoutes } from "../../nodes/gif-to-video/route.js"
 import { mergeVideoAudioRoutes } from "../merge-video-audio.js"
 import { trimAudioRoutes } from "../trim-audio.js"
 import { mixAudioRoutes } from "../mix-audio.js"
@@ -187,7 +187,8 @@ const FFMPEG_ROUTES: FFmpegRouteConfig[] = [
   {
     name: "gif-to-video",
     path: "/v1/gif-to-video",
-    routeFn: gifToVideoRoutes,
+    // A node unit now (backend/src/nodes/gif-to-video/route.ts): a FastifyPluginAsync, which also takes its options.
+    routeFn: (app) => gifToVideoRoutes(app, {}),
     requiredField: "gifUrl",
     invalidPayload: { userId: VALID_UUID, loopToMinimum: true },
     validPayload: {

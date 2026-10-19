@@ -130,7 +130,7 @@ const LEGACY_NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-format-export",
     label: "Format & Export",
     tab: "video",
-    types: ["resize-video", "social-media-format", "video-upscale", "transcode-video", "gif-to-video"],
+    types: ["resize-video", "social-media-format", "video-upscale", "transcode-video"],
   },
   {
     id: "video-analyze",

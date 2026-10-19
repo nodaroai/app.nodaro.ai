@@ -41,7 +41,6 @@ import { unitConnectionVerdict, unitInputConnectionAccepted } from "../unit-conn
 import { isValidWorkflowConnection } from "../connection-validation"
 import { isValidFfmpegConnection, unitInputAccepts, ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "../ffmpeg-handles"
 import { ACCEPTS_IMAGE_OR_DYN } from "../image-producer-handles"
-import { isValidGifToVideoConnection } from "../video-producer-handles"
 import { UNIT_NODE_DEFINITIONS } from "../unit-definitions"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { getCompatibleNodes } from "../node-compatibility"
@@ -134,10 +133,20 @@ describe("the seam changes no edge today", () => {
     for (const source of ALL_TYPES) expect(any(source)).toBe(ACCEPTS_VIDEO(source) || ACCEPTS_IMAGE_OR_DYN(source))
   })
 
+  // The hand-written rule gif-to-video had before it became a unit
+  // (video-producer-handles.ts isValidGifToVideoConnection, deleted by that
+  // migration, decided 2026-10-18): its one "image" input took any image or
+  // dynamic producer, and any other handle nothing.
+  const legacyGifRule = (handle: string, source: string): boolean => handle === "image" && ACCEPTS_IMAGE_OR_DYN(source)
+
   it("an image input declared in a manifest reproduces the hand-written GIF-input rule, handle for handle", () => {
-    for (const handle of ["image", "video", "zz-undeclared"]) {
-      for (const source of ALL_TYPES) {
-        expect(unitInputConnectionAccepted(FIXTURE as unknown as UnitDefinition, handle, source), `${source} → [${handle}]`).toBe(isValidGifToVideoConnection(handle, source))
+    const gif = UNIT_NODE_DEFINITIONS.find((u) => u.type === "gif-to-video")
+    expect(gif, "gif-to-video is a unit").toBeDefined()
+    for (const unit of [FIXTURE as unknown as UnitDefinition, gif!]) {
+      for (const handle of ["image", "video", "zz-undeclared"]) {
+        for (const source of ALL_TYPES) {
+          expect(unitInputConnectionAccepted(unit, handle, source), `${source} → ${unit.type}[${handle}]`).toBe(legacyGifRule(handle, source))
+        }
       }
     }
   })

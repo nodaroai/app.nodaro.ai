@@ -651,7 +651,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "trim-video" ||
     type === "speed-ramp" ||
     type === "loop-video" ||
-    type === "gif-to-video" ||
     type === "fade-video" ||
     type === "mask-composite" ||
     type === "video-overlay" ||
@@ -1284,7 +1283,6 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER: ReadonlySet<string> = composeSet("VI
   "render-video",
   "speed-ramp",
   "loop-video",
-  "gif-to-video",
   "fade-video",
   "video-overlay",
   "transcode-video",

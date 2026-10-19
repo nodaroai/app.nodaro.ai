@@ -1468,9 +1468,7 @@ const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "l
  *  capability (tools/units/capabilities.mjs), so a migrated node is never named
  *  here. The editor's twin is `ENTITY_SUBJECT_TARGET_TYPES` in
  *  frontend/src/components/editor/workflow-editor/node-input-resolver.ts,
- *  composed from the same capability. Its legacy rows lack "gif-to-video",
- *  which the editor's have: a server-run Character → GIF to Video sends the
- *  portrait as a reference, which its payload never reads. */
+ *  composed from the same capability. */
 export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
   "ENTITY_SUBJECT_TARGET_TYPES",
   new Set(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video"]),

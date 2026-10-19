@@ -949,7 +949,7 @@ function injectLocationContext(
  *  same capability. */
 export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
   "ENTITY_SUBJECT_TARGET_TYPES",
-  new Set<string>(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video", "gif-to-video"]),
+  new Set<string>(["lip-sync", "speech-to-video", "motion-transfer", "ai-avatar", "still-to-video"]),
   unitsWith(UNIT_NODE_DEFINITIONS, "input:entity-subject"),
 )
 

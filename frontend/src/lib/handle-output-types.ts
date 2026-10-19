@@ -74,7 +74,6 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "mask-composite": { video: "video" },
   "video-overlay": { "video-out": "video" },
   "still-to-video": { video: "video" },
-  "gif-to-video": { video: "video" },
   "slideshow": { video: "video" },
   "filter-list": { out: "list" },
   "forced-alignment": { data: "look" },

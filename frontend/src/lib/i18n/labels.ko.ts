@@ -25,7 +25,6 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Paint Mask": "마스크 그리기",
   "Slideshow": "슬라이드쇼",
   "Still to Video": "정지 이미지로 동영상 만들기",
-  "Gif to Video": "GIF 동영상 변환",
   "Text": "텍스트",
   "Upload Image": "이미지 업로드",
   "Upload Video": "동영상 업로드",

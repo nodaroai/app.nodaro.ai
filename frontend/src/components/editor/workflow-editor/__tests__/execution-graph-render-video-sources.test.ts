@@ -14,8 +14,10 @@ import { VIDEO_SOURCE_TYPES_FOR_RENDER, collectMediaAssets, detectPreviewItemTyp
 /**
  * VIDEO_SOURCE_TYPES_FOR_RENDER = the legacy rows ∪ every node unit whose
  * contract.producer is "video" (decided 2026-10-18). The legacy rows below are
- * origin/dev's literal, unchanged; remove-audio is the one real unit that
- * joins (tighten-episode is "dynamic", episode-chapters has no producer).
+ * origin/dev's literal, less gif-to-video, which left it when it became a unit
+ * (decided 2026-10-18) and stays a member through its contract.producer
+ * "video". remove-audio and gif-to-video are the real units that join
+ * (tighten-episode is "dynamic", episode-chapters has no producer).
  */
 const LEGACY_RENDER_VIDEO_SOURCES = [
   "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "generate-video-pro",
@@ -23,7 +25,7 @@ const LEGACY_RENDER_VIDEO_SOURCES = [
   "speech-to-video", "ai-avatar", "cinematic-avatar", "motion-transfer", "video-upscale", "video-depth",
   "extend-video", "video-retake", "face-swap", "suno-music-video", "merge-video-audio", "still-to-video",
   "slideshow", "add-captions", "resize-video", "social-media-format", "trim-video", "render-video",
-  "speed-ramp", "loop-video", "gif-to-video", "fade-video", "video-overlay", "transcode-video", "manual-edit",
+  "speed-ramp", "loop-video", "fade-video", "video-overlay", "transcode-video", "manual-edit",
   "video-sfx", "ugc-clip", "video-mask", "mask-composite",
 ]
 
@@ -31,8 +33,9 @@ const node = (id: string, type: string, data: Record<string, unknown> = {}) =>
   ({ id, type, position: { x: 0, y: 0 }, data: { label: type, ...data } }) as any
 
 describe("VIDEO_SOURCE_TYPES_FOR_RENDER", () => {
-  it("is the legacy rows, unchanged and in order, then the video-producing units (remove-audio)", () => {
-    expect([...VIDEO_SOURCE_TYPES_FOR_RENDER]).toEqual([...LEGACY_RENDER_VIDEO_SOURCES, "remove-audio"])
+  it("is the legacy rows, unchanged and in order, then the video-producing units (remove-audio, gif-to-video)", () => {
+    expect([...VIDEO_SOURCE_TYPES_FOR_RENDER].slice(0, LEGACY_RENDER_VIDEO_SOURCES.length)).toEqual(LEGACY_RENDER_VIDEO_SOURCES)
+    expect([...VIDEO_SOURCE_TYPES_FOR_RENDER].slice(LEGACY_RENDER_VIDEO_SOURCES.length).sort()).toEqual(["gif-to-video", "remove-audio"])
   })
 
   it("leaves out a dynamic-producer unit and a unit with no producer", () => {

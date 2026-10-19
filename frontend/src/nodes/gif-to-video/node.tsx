@@ -1,30 +1,30 @@
-"use client"
-
 import { useT, type MessageKey } from "@/lib/i18n"
-import { memo, useState, useEffect, useMemo, useRef } from "react"
+import { memo, useState, useEffect, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, RotateCcw, Upload, Image as ImageIcon } from "lucide-react"
-import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
-import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
-import { isValidGifToVideoConnection } from "@/lib/video-producer-handles"
-import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
-import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { BaseNode } from "@/components/nodes/base-node"
+import { RunNodeButton } from "@/components/nodes/run-node-button"
+import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
+import { HandleWithPopover, HANDLE_COLORS } from "@/components/nodes/handle-with-popover"
+import { unitInputConnectionAccepted } from "@/lib/ffmpeg-handles"
+import { useUnitNodeKit } from "@/components/nodes/use-unit-node-kit"
+import { useUnitUpstreamOutput } from "@/components/nodes/use-unit-upstream-output"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { VideoResultOverlay } from "./video-result-overlay"
+import { VideoResultOverlay } from "@/components/nodes/video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { videoNodeSizing } from "./video-node-defaults"
+import { videoNodeSizing } from "@/components/nodes/video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
-import type { GifToVideoData } from "@/types/nodes"
+import { definition } from "./definition.generated"
+import type { GifToVideoData } from "./types"
 
 /** The background choices, by their config-panel label (the summary shows the label, never the stored value). */
 const BACKGROUND_LABEL: Record<GifToVideoData["alphaBackground"], MessageKey> = { white: "proccfg.white", black: "proccfg.black" }
 
-const ACCEPTS_IMAGE = (t: string) => isValidGifToVideoConnection("image", t)
+// The pip glow follows the manifest's declared input — the same rule the canvas
+// and the add-node popup judge a wire into it by (unit-connections.ts).
+const ACCEPTS_IMAGE = (t: string) => unitInputConnectionAccepted(definition, "image", t)
 
 function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -32,10 +32,9 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
   // Zero credits by design (local FFmpeg, no provider) — a static 0, not the
   // ee pricing hook: keeps this core file free of ee/ imports.
   const credits = 0
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
-  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
+  // The workflow store's services, bound to this node (the unit kit — a unit never imports the store).
+  const kit = useUnitNodeKit(id)
+  const { updateNodeData, videoAutoplay } = kit
   const { upload, isUploading, uploadError } = useFileUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
@@ -55,20 +54,8 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
     setVideoError(false)
   }, [activeUrl])
 
-  // Re-render when an incoming connection or upstream source data changes.
-  const connectedFingerprint = useWorkflowStore((s) =>
-    incomingSourcesFingerprint(s.nodes, s.edges, id),
-  )
-  const upstreamGifUrl = useMemo(() => {
-    const { nodes, edges } = useWorkflowStore.getState()
-    for (const edge of edges) {
-      if (edge.target !== id || edge.targetHandle !== "image") continue
-      const src = nodes.find((n) => n.id === edge.source)
-      if (src) return extractNodeOutput(src, edge.sourceHandle ?? undefined)
-    }
-    return undefined
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectedFingerprint, id])
+  // What is wired into the GIF pip (re-read when an incoming connection or upstream source data changes).
+  const upstreamGifUrl = useUnitUpstreamOutput(id, "image")
 
   // The GIF that will be converted: an upstream edge wins, else the one
   // uploaded through the node's own dropzone.
@@ -79,14 +66,14 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
     if (!file) return
     try {
       const res = await upload(file)
-      updateNodeData(id, { gifUrl: res.url, assetId: res.assetId ?? "" })
+      updateNodeData({ gifUrl: res.url, assetId: res.assetId ?? "" })
     } catch {
       // useFileUpload surfaces the error (storage modal / state); nothing else to do.
     }
   }
 
   function handleDeleteResult(indexToDelete: number) {
-    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
+    updateNodeData(computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
   const progressPct = nodeData.currentJobProgress
@@ -98,12 +85,12 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>
-      <EditableNodeLabel label={nodeData.label} icon={<Film className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
+      <EditableNodeLabel label={nodeData.label} icon={<Film className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData({ label: newLabel })} />
       <BaseNode id={id} label={nodeData.label} icon={<Film className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio ?? 16 / 9)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
-        topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
+        topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={() => kit.run()} />)}
         handles={[
           { id: "image", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
           { id: "video", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
@@ -176,7 +163,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   </div>
                 </div>
                 <button type="button" className="nodrag w-full h-8 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition-colors flex items-center justify-center gap-1.5"
-                  onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}>
+                  onClick={(e) => { e.stopPropagation(); kit.run() }}>
                   <RotateCcw className="w-3 h-3" /> {t("editor.retry")}
                 </button>
               </div>
@@ -233,9 +220,9 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 {results.slice(0, 5).map((r, i) => (
                   <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
                     {r.thumbnailUrl ? (
-                      <img src={r.thumbnailUrl} alt="" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} />
+                      <img src={r.thumbnailUrl} alt="" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData({ activeResultIndex: i, generatedVideoUrl: r.url }) }} />
                     ) : (
-                      <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
+                      <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData({ activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                     )}
                     <button type="button" aria-label={t("node.removeResult")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
                   </div>
@@ -255,7 +242,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
       {hasResult && (
         <VideoResultOverlay
           url={activeUrl}
-          onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)}
+          onEdit={() => kit.openFreeCut(activeUrl!, activeResult?.freecutProjectUrl)}
           videoAutoplay={videoAutoplay}
           label={nodeData.label}
           hasResults={results.length > 0}
@@ -274,4 +261,4 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const GifToVideoNode = memo(GifToVideoNodeComponent)
+export const NodeComponent = memo(GifToVideoNodeComponent)

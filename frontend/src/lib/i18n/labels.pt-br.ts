@@ -25,7 +25,6 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Paint Mask": "Pintar máscara",
   "Slideshow": "Apresentação de slides",
   "Still to Video": "Imagem fixa para vídeo",
-  "Gif to Video": "GIF para vídeo",
   "Text": "Texto",
   "Upload Image": "Enviar imagem",
   "Upload Video": "Enviar vídeo",

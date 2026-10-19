@@ -199,7 +199,6 @@ import {
   ExtractFrameConfig,
   SpeedRampConfig,
   LoopVideoConfig,
-  GifToVideoConfig,
   FadeVideoConfig,
   StillToVideoConfig,
   SlideshowConfig,
@@ -544,7 +543,6 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "render-video": return <RenderVideoConfig {...configProps} />
     case "speed-ramp": return <SpeedRampConfig {...configProps} />
     case "loop-video": return <LoopVideoConfig {...configProps} />
-    case "gif-to-video": return <GifToVideoConfig {...configProps} />
     case "fade-video": return <FadeVideoConfig {...configProps} />
     case "mask-composite": return <MaskCompositeConfig {...configProps} />
     case "still-to-video": return <StillToVideoConfig {...configProps} />

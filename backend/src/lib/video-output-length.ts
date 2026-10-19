@@ -181,7 +181,6 @@ export const UNBOUNDED_LENGTH_REASONS: Readonly<Record<string, string>> = compos
   "speech-to-video": "its length is the audio's, and a wired-in audio, or a generated voice whose script comes from a source with no known length, has no length before the run",
   "slideshow": "with an audio wired its length is the audio's, which a wired-in audio, or a generated voice whose script comes from a source with no known length, has no length for before the run",
   "still-to-video": "its length is the audio's, and a wired-in audio, or a generated voice whose script comes from a source with no known length, has no length before the run",
-  "gif-to-video": "its length is the GIF's, which only the file says",
   "render-video": "its length is the upstream composition plan's, which the node does not carry",
   "manual-edit": "its length is the timeline the user cuts",
   "merge-video-audio": "it ends with its longest track, and an audio with no length before the run (a generated voice whose script comes from a source with no known length) may be longer than the video",
@@ -463,7 +462,6 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "suno-music-video": { via: "rule", run: () => "unknown" },
 
   // Nodes no rule can bound (UNBOUNDED_LENGTH_REASONS).
-  "gif-to-video": { via: "rule", run: () => "unknown" },
   "render-video": { via: "rule", run: () => "unknown" },
   "manual-edit": { via: "rule", run: () => "unknown" },
   "list": { via: "rule", run: () => "unknown" },
