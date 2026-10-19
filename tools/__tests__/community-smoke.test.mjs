@@ -333,6 +333,11 @@ function stubServer(shape) {
       // ── Tighten Episode ───────────────────────────────────────────────────
       if (path === "/v1/jobs" && req.method === "GET") return send(200, { data: state.jobs, nextCursor: null })
       if (path === "/v1/tighten-episode" && req.method === "POST") {
+        // A multicam body (several recordings or a Master audio) may be answered on its own.
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.tightenMulticam) return send(shape.tightenMulticam.status, shape.tightenMulticam.body)
         if (shape.tighten.createsJob) {
           state.jobs = [{ id: "job_tighten", status: "processing", input_data: { type: "tighten-episode" } }, ...state.jobs]
         }
@@ -618,6 +623,26 @@ test("advertising tighten-episode on an unconnected install fails the Tighten Ep
 test("a Tighten Episode run accepted with a job handle fails the Tighten Episode contract", async () => {
   const { out } = await probeWith((shape) => {
     shape.tighten = { status: 202, body: { jobId: "job_tighten", executionId: "exec_1" }, createsJob: true }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("a multicam body refused 403 by a gate that runs before the connection check fails the Tighten Episode contract", async () => {
+  // Speaker Map is keyless and not withheld on a community install, so several
+  // recordings + a Master audio reach the same connection refusal as one: a 403
+  // means the install withheld it (or a new gate refused the body) instead.
+  const { out } = await probeWith((shape) => {
+    shape.tightenMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Tighten Episode on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("a multicam body accepted with a job handle fails the Tighten Episode contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.tightenMulticam = { status: 202, body: { jobId: "job_tighten", executionId: "exec_1" } }
   })
   assertContract(out, TIGHTEN, "FAIL")
 })

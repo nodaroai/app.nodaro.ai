@@ -32,10 +32,13 @@
  *    lib/use-case-list-result.ts. Each take of the run keeps what its
  *    delivery is (its format; its clip, and whether its captions failed)
  *    beside the run's plan, and what the run could not deliver.
+ *  - A run on several recordings or a Master audio lands its cameras report
+ *    (who was put on which camera, the sync and map notes) on
+ *    `useCaseCameras` — the node's camera note and its review read it.
  */
 import { editPlanResultPatch } from "@nodaro/shared/edl"
 import { USE_CASE_NOTHING_KEPT } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, usecaseDescriptor, usecaseListsItsResult, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseCamerasReportOf, usecaseDescriptor, usecaseListsItsResult, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { usecaseFailedDeliveriesField, usecaseListFields, usecaseListRowFields, usecaseListStamp, usecaseMergeRunRows, usecaseRunRows, usecaseRunShortfall } from "@/lib/use-case-list-result"
 import { clipPackRowKey, trailerRowKey, usecaseRunRowsOnShow } from "@/lib/use-case-run-rows"
@@ -124,8 +127,22 @@ export function usecaseRunResultFields(
     ...(episode?.medium === "audio" ? { generatedAudioUrl: episode.url, generatedVideoUrl: undefined } : {}),
     ...usecaseJsonFields(output, data),
     ...listResultFields(nodeType, output, jobId),
+    ...camerasField(output, data, !!episode),
     ...wrapperOf(jobId),
   }
+}
+
+/**
+ * A multicam run's cameras report on the node (`useCaseCameras`): the wrapper
+ * job carries it on `cameras`, the server engine's node output on
+ * `useCaseCameras` — one reader for both. A run that delivers an episode
+ * without one clears an earlier run's; nothing is written on a node that
+ * holds none, so every other run's landing is as it was.
+ */
+function camerasField(output: Output | null | undefined, data: Readonly<Record<string, unknown>> | undefined, delivered: boolean): Record<string, unknown> {
+  const report = usecaseCamerasReportOf(output?.cameras ?? output?.useCaseCameras)
+  if (report) return { useCaseCameras: report }
+  return delivered && data?.useCaseCameras !== undefined ? { useCaseCameras: undefined } : {}
 }
 
 /**

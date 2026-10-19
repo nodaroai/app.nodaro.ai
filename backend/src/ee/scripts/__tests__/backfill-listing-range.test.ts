@@ -1,5 +1,18 @@
-import { describe, it, expect } from "vitest"
-import { appMaxColumns, parseRangeArgs, planRangeWrite, templateMaxColumns } from "../backfill-listing-range.js"
+import { describe, it, expect, vi } from "vitest"
+
+const db = vi.hoisted(() => ({ from: vi.fn() }))
+const avail = vi.hoisted(() => ({ loaded: true, calls: 0 }))
+vi.mock("@/lib/config.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/config.js")>()), hasCredits: () => true }))
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: db.from } }))
+vi.mock("@/lib/availability-override.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/availability-override.js")>()),
+  loadAvailabilityOverridesForScript: async () => {
+    avail.calls++
+    return avail.loaded
+  },
+}))
+
+import { appMaxColumns, parseRangeArgs, planRangeWrite, runRangeBackfill, templateMaxColumns } from "../backfill-listing-range.js"
 
 /**
  * The "up to" backfill (migration 517): each published app / component version
@@ -29,5 +42,20 @@ describe("backfill-listing-range — pure parts", () => {
   it("is a dry run unless --apply", () => {
     expect(parseRangeArgs([]).apply).toBe(false)
     expect(parseRangeArgs(["--apply", "--include-templates"])).toMatchObject({ apply: true, includeTemplates: true })
+  })
+})
+
+describe("backfill-listing-range — prices as a general user's run", () => {
+  it("refuses when the deployment's availability cannot be read, before any listing is read: a cold cache reads a hidden Speaker Map as released", async () => {
+    avail.loaded = false
+    avail.calls = 0
+    db.from.mockClear()
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    expect(await runRangeBackfill({ apply: false, includeTemplates: false } as never)).toEqual({ ok: false, written: 0, rows: 0 })
+    expect(avail.calls).toBe(1)
+    expect(db.from).not.toHaveBeenCalled()
+    expect(error.mock.calls.flat().join(" ")).toContain("Admin → Availability")
+    error.mockRestore()
+    avail.loaded = true
   })
 })

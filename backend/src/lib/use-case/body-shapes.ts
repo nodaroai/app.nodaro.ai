@@ -59,12 +59,15 @@ export const camerasShape = z.object({
  * The recordings of a multicam-capable node: 1 to USE_CASE_MAX_RECORDINGS
  * recordings, an optional Master audio and the Cameras settings. A node's
  * `use-case.ts` spreads this in place of `usecaseRecordingShape` from its
- * multicam work on; no node does yet, so every body is unchanged.
+ * multicam work on (Tighten Episode first).
  * (body-shapes.ts is not a unit module, so it may compute from an import; a
  * unit's `use-case.ts` only spreads these constants.)
  */
 export const usecaseMulticamRecordingShape = {
   mediaUrls: z.array(safeUrlSchema).min(1).max(USE_CASE_MAX_RECORDINGS),
   masterAudioUrl: safeUrlSchema.optional(),
-  cameras: camerasShape.optional(),
+  // Read (and checked against `camerasShape`) only by a run on two or more
+  // recordings or a Master audio (prepareUseCase, decided 2026-10-19): a
+  // one-recording run ignores whatever it holds, as it always did.
+  cameras: z.unknown().optional(),
 } satisfies z.ZodRawShape

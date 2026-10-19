@@ -48,6 +48,7 @@ export type {
   UseCaseEstimate,
   UseCaseJobResult,
   UseCaseNodeType,
+  UseCaseRecordingsInput,
   UseCaseRequestOptions,
 } from "../resources/edit.js"
 

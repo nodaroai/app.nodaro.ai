@@ -28,6 +28,7 @@ import { describe, it, expect } from "vitest"
 import { LLM_MCP_FIELDS } from "../tools/_llm-fields.js"
 import { SCENE3D_MCP_AUTHORING_FIELDS } from "../tools/verbs-scene3d.js"
 import { imageBatchArgs } from "../tools/_image-batch.js"
+import { recordingsInputShape } from "../tools/verbs-use-case-recordings.js"
 
 const TOOLS_DIR = join(__dirname, "..", "tools")
 const TOOL_FILES = readdirSync(TOOLS_DIR).filter(
@@ -120,6 +121,8 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
   // generate_image reads these by name (`args.count`, `args.models`), so they
   // need no mapper below.
   imageBatchArgs: Object.keys(imageBatchArgs),
+  // A use-case verb's recordings (media_url / media_urls, master_audio_url, cameras).
+  recordingsInputShape: Object.keys(recordingsInputShape),
 }
 
 /**
@@ -132,6 +135,7 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
  */
 const FRAGMENT_CONSUMERS: Record<string, string> = {
   LLM_MCP_FIELDS: "llmPayloadFields(args)",
+  recordingsInputShape: "recordingsPayload(args)",
 }
 
 /** Keys that a spread fragment contributes, mapped to the consumer call that

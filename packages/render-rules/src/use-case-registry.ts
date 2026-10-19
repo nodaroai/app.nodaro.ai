@@ -33,10 +33,8 @@ export interface UseCaseSources {
   /** The card's probed length, when known (a quote prices what follows it on that). */
   readonly introCard?: { readonly url: string; readonly durationSec?: number }
 }
-/** Every recording of a run, the first first, in the order it is built in. */
-export function usecaseRecordings(sources: UseCaseSources): readonly UseCaseMediaSource[] {
-  return [sources.media, ...(sources.moreMedia ?? [])]
-}
+/** Every recording of a run, the first first, in the order it is built in (one definition, in the leaf). */
+export { usecaseRecordings } from "./use-case-cameras"
 export type UseCaseSettings = Readonly<Record<string, unknown>>
 /**
  * How long each video a use-case node delivers is, for a listing: a fixed

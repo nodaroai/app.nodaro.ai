@@ -118,7 +118,7 @@ const ALLOWLIST: readonly Entry[] = [
   // ── Packages registration ─────────────────────────────────────────────────
   ["packages/cli/src/commands/edit.ts", `.command("apply-edl"`, "CLI verb"],
   ["packages/render-rules/src/generated/node-data-fields.ts", `"apply-edl"`, "generated node-data table (gen:skills): its declared settings"],
-  ["packages/render-rules/src/tighten-episode-graph.ts", `const RENDER_TYPE = "apply-edl"`, "the Tighten Episode builder emits the shipped Apply EDL node as its render step (the built chain is the shipped template)"],
+  ["packages/render-rules/src/tighten-episode-parts.ts", `export const TIGHTEN_RENDER_TYPE = "apply-edl"`, "the Tighten Episode builder emits the shipped Apply EDL node as its render step (the built chain is the shipped template); both halves of the builder read it from this leaf"],
   ["packages/render-rules/src/episode-trailer-graph.ts", `const RENDER_TYPE = "apply-edl"`, "the Trailer builder emits the shipped Apply EDL node as its render step (the built chain is the shipped template)"],
   ["packages/render-rules/src/clip-pack-graph.ts", `const RENDER_TYPE = "apply-edl"`, "the Clip Pack builder emits the shipped Apply EDL node as its unframed render step (the built chain is the shipped template)"],
   // Input lanes: Apply EDL ACCEPTS a transcript and an EDL. These are target

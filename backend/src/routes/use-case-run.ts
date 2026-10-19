@@ -16,6 +16,7 @@ import {
   initialRunNodeIds,
   toStoredInlineGraph,
   usecaseDescriptor,
+  usecaseDistinctMaster,
   usecaseFeeCreditId,
   type UseCaseMediaSource,
   type UseCaseNodeType,
@@ -48,7 +49,8 @@ import {
   usecaseUnavailable,
 } from "../lib/use-case/lanes.js"
 import { prepareUseCase, usecaseReviewerPresent, type PreparedUseCase } from "../lib/use-case/request.js"
-import { usecaseSourcesOf } from "../lib/use-case/sources.js"
+import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
+import { usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 
 type Ready = { readonly userId: string; readonly body: UseCaseBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
@@ -76,6 +78,12 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     return null
   }
   const body = parsed.data as UseCaseBody
+  // Several recordings or a Master audio asked for by a caller who may not use Speaker Map: refused before anything is probed.
+  const multicamDenied = await usecaseMulticamDenial(type, body, userId)
+  if (multicamDenied) {
+    reply.status(multicamDenied.status).send({ error: { code: multicamDenied.code, message: multicamDenied.message } })
+    return null
+  }
   const internal = isInternal(req)
   if (internal && (body.componentDepth ?? 0) >= USE_CASE_MAX_DEPTH) {
     reply.status(400).send({ error: { code: "nesting_too_deep", message: `Nodes inside components can nest ${USE_CASE_MAX_DEPTH} levels deep.` } })
@@ -99,9 +107,10 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
   // out to be audio (where the run would drop it), so an unconnected self-host
   // may refuse such a request that would have run. Its sources are built as
   // the run builds them (usecaseSourcesOf), from the unprobed inputs.
+  const masterAudioUrl = usecaseDistinctMaster(body.masterAudioUrl, body.mediaUrls)
   const { sources: unprobed, shape } = usecaseSourcesOf({
     recordings: body.mediaUrls.map((url) => ({ url, kind: "video" as const })) as [UseCaseMediaSource, ...UseCaseMediaSource[]],
-    ...(body.masterAudioUrl ? { masterAudio: { url: body.masterAudioUrl, kind: "audio" as const } } : {}),
+    ...(masterAudioUrl ? { masterAudio: { url: masterAudioUrl, kind: "audio" as const } } : {}),
     ...(body.musicUrl ? { musicUrl: body.musicUrl } : {}),
     ...(body.introCardUrl ? { introCard: { url: body.introCardUrl } } : {}),
   })
@@ -116,6 +125,12 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     reply.status(prep.status).send({ error: { code: prep.code, message: prep.message } })
     return null
   }
+  // A step of the chain this caller may not run (Speaker Map, on several cameras) refuses the run and its estimate alike.
+  const denial = await usecaseInnerDenial(type, prep.graph.nodes, userId)
+  if (denial) {
+    reply.status(denial.status).send({ error: { code: denial.code, message: denial.message } })
+    return null
+  }
   return { userId, body, prep }
 }
 
@@ -126,7 +141,7 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
   app.post(`${d.route}/estimate`, async (req, reply) => {
     const p = await prepared(type, req, reply, { run: false })
     if (!p) return
-    const durationSec = p.prep.sources.media.durationSec ?? null
+    const durationSec = usecaseClockSec(p.prep.sources) ?? null
     if (!hasCredits()) return { data: { totalCredits: 0, stepsCredits: 0, feeCredits: 0, durationSec } }
     const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
     return { data: { ...(await estimateUseCaseCredits(p.prep.graph)), durationSec } }
@@ -171,7 +186,9 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
       mediaUrl: prep.sources.media.url,
       ...(prep.sources.music ? { musicUrl: prep.sources.music.url } : {}),
       ...(prep.sources.introCard ? { introCardUrl: prep.sources.introCard.url } : {}),
-      durationSec: prep.sources.media.durationSec ?? null,
+      // Several recordings or a Master audio: every recording, the master and the run's kind (a continuation's resume match reads them).
+      ...usecaseWrapperRecordings(prep.sources),
+      durationSec: usecaseClockSec(prep.sources) ?? null,
       _feeCredits: feeCredits,
     }
     // Never `workflow_execution_id`: the wrapper reaches its run only through

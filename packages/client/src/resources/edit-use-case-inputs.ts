@@ -8,14 +8,46 @@ import type { EditPlanTier, EdlTargetAspect, SpeakerEmphasisStyle, SpeakerSwitch
 import type { CaptionStyle } from "@nodaro/shared/captions"
 
 /**
- * Input for {@link EditResource.tightenEpisode} and
- * {@link EditResource.estimateTightenEpisode}: one recording in, the tightened
- * episode out. Only `mediaUrl` is required; every other field left out takes
- * the node's default.
+ * The recordings of a use-case run: one (`mediaUrl`), or the recordings of one
+ * conversation (`mediaUrls`, in order — the cameras; one may be sound only),
+ * an optional Master audio and the Cameras settings. Pass `mediaUrl` or
+ * `mediaUrls`, not both.
+ *
+ * Several recordings or a Master audio need Speaker Map, which tells who is on
+ * which camera: where it is not available to you (not yet on nodaro.ai) the
+ * request is refused `403 node_not_available` — send one recording.
  */
-export interface TightenEpisodeInput {
+export interface UseCaseRecordingsInput {
   /** The recording — a video or audio URL, up to 3 hours. */
-  mediaUrl: string
+  mediaUrl?: string
+  /**
+   * Instead of `mediaUrl`: the recordings of one conversation, in order — up
+   * to six in all with the Master audio; without one, two or more cameras keep
+   * a place for the sound, so up to five. With two or more the run lines them
+   * up, works out who is on which camera and cuts to whoever is talking.
+   */
+  mediaUrls?: string[]
+  /** The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. */
+  masterAudioUrl?: string
+  /** With several recordings or a Master audio: the Cameras settings (ignored with one recording and no Master audio). */
+  cameras?: {
+    /** Which recording (1-based) is the wide shot, shown when a speaker has no camera of their own; `null` for none. */
+    wide?: number | null
+    /** The recordings already share one clock: skip lining them up. */
+    synced?: boolean
+    /** Who is on which camera: speaker number (`"1"` = the first voice heard) → recording number, 0 = the wide shot. Overrides the automatic map. */
+    speakerCameras?: Record<string, number>
+  }
+}
+
+/**
+ * Input for {@link EditResource.tightenEpisode} and
+ * {@link EditResource.estimateTightenEpisode}: the recording (or the
+ * recordings of one conversation, see {@link UseCaseRecordingsInput}) in, the
+ * tightened episode out. Only the recording is required; every other field
+ * left out takes the node's default.
+ */
+export interface TightenEpisodeInput extends UseCaseRecordingsInput {
   /** Optional music bed, ducked under the voice and ending with the episode. */
   musicUrl?: string
   /** `"video"` or `"audio"`; an audio recording always makes an audio episode. */
@@ -148,23 +180,56 @@ export interface ClipPackInput {
   styleGuide?: string
 }
 
-export function tightenBody(input: TightenEpisodeInput): Record<string, unknown> {
-  const { mediaUrl, ...rest } = input
-  return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) }
-}
-
-export function chaptersBody(input: EpisodeChaptersInput): Record<string, unknown> {
+/**
+ * The body's recordings (`mediaUrls`, then `masterAudioUrl` and `cameras` when
+ * given), and the rest of the input as it came: the one mapper every use-case
+ * body goes through. Throws before any request when the input names both
+ * `mediaUrl` and `mediaUrls`, or neither.
+ */
+function withRecordings<T extends UseCaseRecordingsInput>(input: T): Record<string, unknown> {
+  const { mediaUrl, mediaUrls, masterAudioUrl, cameras, ...rest } = input
+  if (mediaUrl !== undefined && mediaUrls !== undefined) throw new TypeError("pass mediaUrl or mediaUrls, not both")
+  const recordings = mediaUrls ?? (mediaUrl !== undefined ? [mediaUrl] : undefined)
+  if (!recordings) throw new TypeError("pass mediaUrl or mediaUrls")
   return {
-    mediaUrls: [input.mediaUrl],
-    ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
-    ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
-    ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
+    mediaUrls: [...recordings],
+    ...(masterAudioUrl !== undefined ? { masterAudioUrl } : {}),
+    ...(cameras !== undefined ? { cameras } : {}),
+    ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)),
   }
 }
 
+/**
+ * Sends `send` the body `build` makes, or rejects (never throws) with the
+ * error of an input the body cannot take — before any request, as every input
+ * check of the `edit` resource rejects.
+ */
+export function withUseCaseBody<T>(build: () => Record<string, unknown>, send: (body: Record<string, unknown>) => Promise<T>): Promise<T> {
+  let body: Record<string, unknown>
+  try {
+    body = build()
+  } catch (err) {
+    return Promise.reject(err)
+  }
+  return send(body)
+}
+
+export function tightenBody(input: TightenEpisodeInput): Record<string, unknown> {
+  return withRecordings(input)
+}
+
+export function chaptersBody(input: EpisodeChaptersInput): Record<string, unknown> {
+  return withRecordings({
+    mediaUrl: input.mediaUrl,
+    ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
+    ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
+    ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
+  })
+}
+
 export function trailerBody(input: EpisodeTrailerInput): Record<string, unknown> {
-  return {
-    mediaUrls: [input.mediaUrl],
+  return withRecordings({
+    mediaUrl: input.mediaUrl,
     ...(input.introCardUrl !== undefined ? { introCardUrl: input.introCardUrl } : {}),
     // An empty list is sent as is: the route refuses it (at least one format).
     ...(input.formats !== undefined ? { formats: input.formats } : {}),
@@ -172,11 +237,10 @@ export function trailerBody(input: EpisodeTrailerInput): Record<string, unknown>
     ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
     ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
     ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
-  }
+  })
 }
 
 /** Clip Pack's body: what the caller set, `framing: null` included (no framing). */
 export function clipPackBody(input: ClipPackInput): Record<string, unknown> {
-  const { mediaUrl, ...rest } = input
-  return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) }
+  return withRecordings(input)
 }

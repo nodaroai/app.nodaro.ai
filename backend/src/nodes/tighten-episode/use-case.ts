@@ -1,6 +1,7 @@
 // backend/src/nodes/tighten-episode/use-case.ts — Tighten Episode's request body (the factory
-// route POST /v1/tighten-episode parses it) and its GET /v1/nodes input schema: the recording, an
-// optional music bed, and the episode's settings.
+// route POST /v1/tighten-episode parses it) and its GET /v1/nodes input schema: one to six
+// recordings, an optional Master audio and Cameras settings, an optional music bed, and the
+// episode's settings.
 //
 // Decisions this unit carries (they lived beside the hand-written rows it replaced):
 // - A use-case node (decided 2026-10-13): one job that builds and runs the transcribe → silence →
@@ -17,11 +18,12 @@ import { SPEAKER_VIEW_LAYOUT_SETTINGS } from "@nodaro/render-rules"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../../lib/url-validator.js"
-import { usecaseLaneShape, usecasePlanShape, usecaseRecordingShape } from "../../lib/use-case/body-shapes.js"
+import { usecaseLaneShape, usecaseMulticamRecordingShape, usecasePlanShape } from "../../lib/use-case/body-shapes.js"
 import type { UnitUseCase } from "../kit.js"
 
 export const body = z.object({
-  ...usecaseRecordingShape,
+  // Up to six recordings, a Master audio and the Cameras settings (decided 2026-10-17).
+  ...usecaseMulticamRecordingShape,
   musicUrl: z.optional(safeUrlSchema),
   output: z.enum(["video", "audio"]).optional(),
   /**
@@ -47,6 +49,8 @@ export const useCase: UnitUseCase = {
   inputSchema: {
     fields: [
       { key: "mediaUrls", type: "video-url-array", required: true },
+      { key: "masterAudioUrl", type: "audio-url" },
+      { key: "cameras", type: "object" },
       { key: "musicUrl", type: "audio-url" },
       { key: "output", type: "select", options: ["video", "audio"] },
       { key: "framing", type: "object" },

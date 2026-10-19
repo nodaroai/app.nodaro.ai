@@ -13,6 +13,14 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...orig, speechLengthPricingEnabled: () => flag.on, hasCredits: () => flag.credits }
 })
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: db.from } }))
+const avail = vi.hoisted(() => ({ loaded: true, calls: 0 }))
+vi.mock("@/lib/availability-override.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/availability-override.js")>()),
+  loadAvailabilityOverridesForScript: async () => {
+    avail.calls++
+    return avail.loaded
+  },
+}))
 
 import { formatLine, hasPerMinutePart, hasSpeechNode, parseArgs, planWrite, recomputePrice, runBackfill, selectCandidates, speechNodeSummary } from "../backfill-speech-app-prices.js"
 
@@ -110,6 +118,21 @@ describe("the edition gate", () => {
     expect(error.mock.calls.flat().join(" ")).toContain("EDITION=cloud")
     error.mockRestore()
     flag.credits = true
+  })
+
+  it("refuses when the deployment's availability cannot be read, before any listing is read: a cold cache reads a hidden Speaker Map as released (multicam listings over-quoted)", async () => {
+    flag.on = true
+    flag.credits = true
+    avail.loaded = false
+    avail.calls = 0
+    db.from.mockClear()
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    expect(await runBackfill(opts)).toEqual({ ok: false, lines: [] })
+    expect(avail.calls).toBe(1)
+    expect(db.from).not.toHaveBeenCalled()
+    expect(error.mock.calls.flat().join(" ")).toContain("Admin → Availability")
+    error.mockRestore()
+    avail.loaded = true
   })
 
   it("the rollback path (--allow-flag-off) does not lift it", async () => {

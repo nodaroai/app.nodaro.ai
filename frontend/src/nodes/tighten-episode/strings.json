@@ -19,6 +19,8 @@
     "node.tightenPlan": {"en": "Edit (EDL)", "he": "עריכה (EDL)", "ja": "編集（EDL）", "ko": "편집(EDL)", "pt-br": "Edição (EDL)"}
   },
   "labels": {
-    "Tighten Episode": {"he": "הידוק פרק", "ja": "エピソードを引き締める", "ko": "에피소드 다듬기", "pt-br": "Enxugar episódio"}
+    "Tighten Episode": {"he": "הידוק פרק", "ja": "エピソードを引き締める", "ko": "에피소드 다듬기", "pt-br": "Enxugar episódio"},
+    "Recordings": {"he": "הקלטות", "ja": "録音", "ko": "녹음", "pt-br": "Gravações"},
+    "Master audio": {"he": "אודיו ראשי", "ja": "マスターオーディオ", "ko": "마스터 오디오", "pt-br": "Áudio principal"}
   }
 }

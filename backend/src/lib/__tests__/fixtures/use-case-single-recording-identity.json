@@ -12003,13 +12003,18 @@
       "properties": {
         "mediaUrls": {
           "minItems": 1,
-          "maxItems": 1,
+          "maxItems": 6,
           "type": "array",
           "items": {
             "type": "string",
             "format": "uri"
           }
         },
+        "masterAudioUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "cameras": {},
         "musicUrl": {
           "type": "string",
           "format": "uri"

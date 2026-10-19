@@ -30,7 +30,8 @@ the final.**
 Each podcast use-case has a one-node verb. Reach for it first when it is in your tool list:
 
 - **`tighten_episode`** — a plain "tighten this episode" is one call: pass the recording's `media_url` — it runs the whole
-  chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job.
+  chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job. A
+  conversation on several cameras is one call too: `media_urls` + `master_audio_url` (see [Multicam](#multicam-several-cameras-one-conversation)).
   Set `review_before_render: true` to stop at a preview; then `continue_use_case` with `mode: "render-final"`.
 - **`make_clip_pack`** — "make clips from this episode" is one call: pass the recording's `media_url` and, optionally,
   `count` (default 8) and `target_length_sec` (default 60). It runs transcribe → plan in `clips` mode → one render per
@@ -124,6 +125,20 @@ The one call is `make_clip_pack` (above); these are the steps it runs, for when 
 the user (or a description field) as-is.
 
 ## Multicam (several cameras, one conversation)
+
+**One step first: `tighten_episode` with `media_urls`.** Pass the cameras' recordings in order as
+`media_urls` (Camera 1, Camera 2…; one may be sound only), the mic recorder as `master_audio_url`,
+and optionally `cameras` (`wide_camera`: which recording is the wide shot; `already_synced`;
+`speaker_cameras`: speaker number → recording number, 0 = the wide shot, to override the
+automatic map). It lines the recordings up, transcribes the sound, works out who is on which
+camera (Speaker Map), plans the tightened cut, switches to whoever is talking and renders it —
+the steps below, as one job. Read `output_data.cameras` back to the user: who went on which
+camera (`camera: null` = the wide shot) and the line-up and map notes. Several recordings or a
+Master audio need Speaker Map; where it is not available to the user (not yet on nodaro.ai) the
+call is refused `403 node_not_available` — then use the steps below, or send one recording.
+
+The steps by hand, when you need more control (a hand-edited switch, clips or chapters of a
+multicam recording):
 
 Each device started recording at a different moment, so the files are on different
 clocks. The plan is always timed on ONE clock — the **master**: the source with

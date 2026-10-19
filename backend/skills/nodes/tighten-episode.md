@@ -1,7 +1,7 @@
 ---
 node_type: tighten-episode
-generated_at: 2026-10-19T15:56:14.657Z
-generated_from: e04b2b33b
+generated_at: 2026-10-19T20:50:32.611Z
+generated_from: eddbe739a
 ---
 
 # Tighten Episode
@@ -10,7 +10,7 @@ generated_from: e04b2b33b
 **Type:** `tighten-episode`
 **Category:** processing
 **Credit cost:** `per-minute` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
-**Inputs (target handles):** `media`, `music`
+**Inputs (target handles):** `media`, `music`, `masterAudio`
 **Outputs (source handles):** `media`, `json`
 
 **Required data fields:**
@@ -19,6 +19,7 @@ generated_from: e04b2b33b
 
 **Optional data fields:**
 - `mediaOrder?: string[]`
+- `cameras?: UseCaseCamerasInput`
 - `output?: "video" | "audio"`
 - `framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null`
 - `captions?: boolean`
@@ -38,6 +39,7 @@ generated_from: e04b2b33b
 - `generatedVideoUrl?: string`
 - `generatedAudioUrl?: string`
 - `generatedResults?: readonly GeneratedResult[]`
+- `useCaseCameras?: UseCaseCamerasReport`
 - `activeResultIndex?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

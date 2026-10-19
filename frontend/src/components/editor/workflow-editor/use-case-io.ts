@@ -16,6 +16,8 @@ export interface UseCaseResolvedInputs {
   useCaseIntroCard?: string
   /** The separate audio wired into `masterAudio` (a type whose descriptor takes it reads it). */
   useCaseMasterAudio?: string
+  /** The upstream node `useCaseMasterAudio` comes from: a master from the node a recording comes from is no master (`usecaseRunRecordings`). */
+  useCaseMasterAudioNodeId?: string
 }
 
 /**
@@ -39,6 +41,7 @@ export function routeUseCaseInput(inputs: UseCaseResolvedInputs, targetHandle: s
   }
   if (targetHandle === "masterAudio") {
     inputs.useCaseMasterAudio = output
+    inputs.useCaseMasterAudioNodeId = sourceId
     return true
   }
   return false

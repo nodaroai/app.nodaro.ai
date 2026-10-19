@@ -1,4 +1,5 @@
 import { registerVideoProEstimate } from "./video-pro-estimate.js"
+import { usecaseMulticamAvailable } from "../../lib/use-case/inner-availability.js"
 import { registerSeedanceHdEstimate } from "./seedance-hd-estimate.js"
 import { registerSeedanceRefEstimate } from "./seedance-ref-estimate.js"
 import { registerNodeQuote } from "./node-quote.js"
@@ -644,7 +645,11 @@ export async function creditsRoutes(app: FastifyInstance) {
     const { nodes, edges } = parsed.data
 
     try {
-      const totalCredits = await CreditsService.estimateWorkflowCredits(nodes, edges)
+      // A use-case node is priced on what the caller's run reads: several recordings only while Speaker Map is theirs.
+      const multicam = await usecaseMulticamAvailable(req.userId)
+      const totalCredits = multicam
+        ? await CreditsService.estimateWorkflowCredits(nodes, edges, { multicam })
+        : await CreditsService.estimateWorkflowCredits(nodes, edges)
       // P14/W8: the payer-aware half. The billing hook already resolved this
       // request's payer (rung 1 via the body's workflowId — which required
       // the run predicate — or rung 2 via the validated workspace header),

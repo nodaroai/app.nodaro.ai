@@ -299,10 +299,11 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //   - camera-switch's `speakerMap` (a Speaker Map result) accepts json
   //     producers. Drift mirror of the registry.
   "speakerMap",
-  //   - Tighten Episode's inputs: `media` (the recording, video or audio) and
-  //     `music` (an audio bed); Trailer's `introCard` (a video card played
-  //     before the trailer). Drift mirror of the registry.
-  "media", "music", "introCard",
+  //   - Tighten Episode's inputs: `media` (the recordings, video or audio),
+  //     `music` (an audio bed) and `masterAudio` (a separate recorder's track);
+  //     Trailer's `introCard` (a video card played before the trailer). Drift
+  //     mirror of the registry.
+  "media", "music", "introCard", "masterAudio",
   //   - Content Recipe's `link` (the post's page link: Video URL or text) and
   //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
   //     (text only). Drift mirror of the registry.

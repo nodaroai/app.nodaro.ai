@@ -23,8 +23,9 @@
  * an override of that run only) continues a run that paid its fee: it is
  * built — from the settings of that run when the continuation carries them
  * (`settings`, the preview's) — as the FINAL chain (review off, its render at final, its consumers
- * reading the episode), its members are its render and what follows it, and
- * it has no fee. Its earlier steps stay on the graph, unrun, for the render to
+ * reading the episode), its members are what the server's continuation runs
+ * (`renderFinalRunSet`: its render, what follows it, and what sits between its
+ * plan and its render — a multicam run's Camera Switch), and it has no fee. Its earlier steps stay on the graph, unrun, for the render to
  * read — its plan holding the run's plan and the reviewer's edit, kept on the
  * node — so price it as a run subset.
  */
@@ -40,8 +41,10 @@ import {
   type UseCaseMediaKind,
   type UseCaseNodeType,
 } from "./use-case-graph"
-import { descendantsOf } from "./graph-walk"
-import { usecaseRecordingNodeId, usecaseRecordingsOf, type UseCaseSourcesShape } from "./use-case-cameras"
+import { mediaLengthSecOf } from "./apply-edl-estimate"
+import { renderFinalRunSet } from "./render-final-set"
+import { USE_CASE_MASTER_NODE_ID, usecaseRecordingNodeId, usecaseRecordingsOf, type UseCaseSourcesShape } from "./use-case-cameras"
+import { usecaseDistinctMaster, usecaseRecordingsKind, usecaseRunMaxRecordings, usecaseSoundRecordingIndex } from "./use-case-multicam"
 import { usecaseDescriptor, type UseCaseInputHandle, type UseCaseSources } from "./use-case-registry"
 
 type AnyNode = { readonly id?: string; readonly type?: string | null; readonly data?: unknown }
@@ -77,6 +80,13 @@ export interface UseCaseExpandOptions {
    * differ only for a review-on node.
    */
   readonly chain?: "first-run" | "whole"
+  /**
+   * Whether the viewer the estimate is for may run several cameras (Speaker
+   * Map is available to them, decided 2026-10-19): then a node reads every
+   * recording its type takes and its Master audio; otherwise (the default)
+   * the first recording only, as before multicam (`usecaseRunMaxRecordings`).
+   */
+  readonly multicam?: boolean
 }
 
 const PLACEHOLDER_URL = "estimate://use-case-source"
@@ -190,35 +200,60 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
   if (useCases.length === 0) return { nodes: [...nodes], edges: [...edges], fees: [], members: new Map(), expanded: false }
 
   const whole = options?.chain === "whole"
+  const multicam = options?.multicam === true
   const byId = new Map(nodes.flatMap((n) => (typeof n.id === "string" ? [[n.id, n] as const] : [])))
   const ucIds = new Set(useCases.map((u) => u.id))
   const wireInto = (id: string, handle: string) => edges.find((e) => e.target === id && e.targetHandle === handle && !!e.source)
   /**
    * The recordings a node reads: its `media` wires in the node's `mediaOrder`
    * (both engines' order), one per upstream node, up to as many as its type
-   * takes. Wire i is recording i. With no `mediaOrder` the first is the first
-   * wire, as it always was.
+   * takes for this viewer (`usecaseRunMaxRecordings`). Wire i is recording
+   * i. With no `mediaOrder` the first is the first wire, as it always was.
    */
   const mediaWires = (u: N & { readonly id: string; readonly type: UseCaseNodeType }): E[] =>
     usecaseRecordingsOf(
       edges.filter((e) => e.target === u.id && e.targetHandle === "media" && !!e.source).map((edge) => ({ nodeId: edge.source!, edge })),
       u.data,
-      usecaseDescriptor(u.type).maxRecordings,
+      usecaseRunMaxRecordings(usecaseDescriptor(u.type).maxRecordings, multicam),
     ).map((w) => w.edge)
   const kindOf = (w: E | undefined): UseCaseMediaKind => usecaseMediaKindOf(byId.get(w?.source ?? ""), w?.sourceHandle)
 
   /** Each node's recordings, read once: the build and the replacement below use the same wires. */
   const recordingWires = new Map(useCases.map((u) => [u.id, mediaWires(u)] as const))
+  /**
+   * The wire into a node's optional input `h`, as the run reads it: a Master
+   * audio wired from one of its recordings' nodes is no Master audio
+   * (`usecaseDistinctMaster`) — neither built nor replaced, as the route builds it.
+   */
+  const inputWire = (id: string, h: Exclude<UseCaseInputHandle, "media">): E | undefined => {
+    const w = wireInto(id, h)
+    if (h !== "masterAudio" || !w) return w
+    // A viewer who may not run several cameras reads no Master audio either.
+    if (!multicam) return undefined
+    return usecaseDistinctMaster(w.source!, (recordingWires.get(id) ?? []).map((r) => r.source!)) ? w : undefined
+  }
 
   const built = new Map<string, UseCaseGraph>()
+  /**
+   * A built `uc-master` no Master audio wire replaces (the sound a multicam
+   * run repeats from a camera, decided 2026-10-17) stays an inner node, and
+   * takes the recorded length of the recording it repeats — else the plan's
+   * clock is a placeholder of unknown length and the run is quoted at the
+   * ceiling. It is not replaced by that recording's wire: Audio Sync is priced
+   * per source, and the run aligns the second source too.
+   */
+  const soundLengthSec = new Map<string, number>()
   const finals = new Set(useCases.filter((u) => runsUseCaseRenderFinal(u.data)).map((u) => u.id))
   for (const u of useCases) {
     const d = usecaseDescriptor(u.type)
     const wires = recordingWires.get(u.id)!
-    const kind = kindOf(wires[0])
+    const kinds = wires.map(kindOf)
+    // The run's kind from every recording's (one rule with the route and the
+    // audio lock); none wired is read as an unknown one is: video.
+    const kind = usecaseRecordingsKind(kinds) ?? kindOf(undefined)
     // A wired optional input is a placeholder of its own (its real source replaces it below).
     const optional: Partial<Pick<UseCaseSources, Exclude<UseCaseInputHandle, "media">>> = Object.fromEntries(
-      d.inputs.flatMap((h) => (h !== "media" && wireInto(u.id, h) ? [[h, { ...OPTIONAL_INPUT_PLACEHOLDERS[h] }] as const] : [])),
+      d.inputs.flatMap((h) => (h !== "media" && inputWire(u.id, h) ? [[h, { ...OPTIONAL_INPUT_PLACEHOLDERS[h] }] as const] : [])),
     )
     const shape: UseCaseSourcesShape = { recordings: Math.max(1, wires.length), masterAudio: optional.masterAudio !== undefined }
     const raw = (u.data ?? {}) as Readonly<Record<string, unknown>>
@@ -227,7 +262,14 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? raw), reviewBeforeRender: false } : raw, kind, shape)
     // Recordings 2..n are placeholders too, each of its own kind (absent for one recording).
     const moreMedia: UseCaseSources["moreMedia"] = wires.length > 1 ? wires.slice(1).map((w) => ({ url: PLACEHOLDER_URL, kind: kindOf(w) })) : undefined
-    built.set(u.id, d.build(settings, { media: { url: PLACEHOLDER_URL, kind }, ...(moreMedia ? { moreMedia } : {}), ...optional }))
+    const g = d.build(settings, { media: { url: PLACEHOLDER_URL, kind: kinds[0] ?? kind }, ...(moreMedia ? { moreMedia } : {}), ...optional })
+    built.set(u.id, g)
+    if (!optional.masterAudio && g.nodes.some((n) => n.id === USE_CASE_MASTER_NODE_ID)) {
+      const wide = (settings as { readonly cameras?: { readonly wide?: unknown } }).cameras?.wide
+      const i = usecaseSoundRecordingIndex(kinds, typeof wide === "number" ? wide : null, false)
+      const sec = i === null ? undefined : mediaLengthSecOf(byId.get(wires[i]?.source ?? "")?.data as Record<string, unknown> | undefined)
+      if (sec !== undefined) soundLengthSec.set(u.id, sec)
+    }
   }
 
   /**
@@ -293,7 +335,7 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     recordingWires.get(u.id)!.forEach((w, i) => replaced.set(usecaseRecordingNodeId(i), fromWire(w)))
     for (const h of d.inputs) {
       if (h === "media") continue
-      const w = wireInto(u.id, h)
+      const w = inputWire(u.id, h)
       const builtId = d.inputNodeIds[h]
       if (w && builtId) replaced.set(builtId, fromWire(w))
     }
@@ -304,7 +346,10 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     // A Render final runs its render and what follows it; the rest is read, not
     // run. A graph that renders nothing has no Render final (it is not reviewable).
     const renderId = usecaseRenderNodeId(g.outputMap)
-    const finalPart = renderId !== null && finals.has(u.id) ? new Set([renderId, ...descendantsOf(renderId, g.edges)]) : null
+    // What the server's continuation runs (renderFinalRunSet): the render and
+    // what follows, and whatever sits between the plan and the render (a
+    // multicam run's Camera Switch, re-run on the reviewed cut).
+    const finalPart = renderId !== null && finals.has(u.id) ? renderFinalRunSet(renderId, g.nodes, g.edges) : null
     const final = finalPart !== null
     const ids: string[] = []
     // Its plan is the run's, kept on the node (and the reviewer's edit of it):
@@ -316,7 +361,9 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     for (const n of g.nodes) {
       if (replaced.has(n.id) || !runs(n.id)) continue
       if (!finalPart || finalPart.has(n.id)) ids.push(inner(u.id, n.id))
-      const data = usecaseRenameInnerIds(n.data, rename, builtIds)
+      const renamed = usecaseRenameInnerIds(n.data, rename, builtIds)
+      const soundSec = n.id === USE_CASE_MASTER_NODE_ID ? soundLengthSec.get(u.id) : undefined
+      const data = soundSec === undefined ? renamed : { ...renamed, metadata: { ...(renamed.metadata as Record<string, unknown> | undefined), durationSeconds: soundSec } }
       outNodes.push({ id: inner(u.id, n.id), type: n.type, data: n.id === g.outputMap.planNodeId ? { ...data, ...planResult } : data })
     }
     for (const e of g.edges) {

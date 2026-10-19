@@ -18,6 +18,7 @@ import {
   buildEpisodeChaptersGraph,
   buildTightenEpisodeGraph,
   isStoredInlineGraph,
+  resolveTightenEpisodeSettings,
   toStoredInlineGraph,
   usecaseGraphHash,
 } from "@nodaro/render-rules"
@@ -567,5 +568,64 @@ describe("a Clip Pack that stopped before captioning its rendered clips", () => 
     expect(res.statusCode).toBe(202)
     expect(m.reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "use-case-fee:clip-pack")
     expect(m.execute.mock.calls[0]![0]).toMatchObject({ continueFromExecutionId: "exec-0", continueMode: "from-failed", nodeIds: ["uc-captions"] })
+  })
+})
+
+/**
+ * A run on several recordings and a Master audio (decided 2026-10-17): its
+ * Render final re-runs Camera Switch on the reviewed cut and the render (never
+ * Audio Sync, Speaker Map, Transcribe or the plan), with no fee; a step it
+ * would run that the caller may not (a withheld Speaker Map) refuses it before
+ * anything is written; its wrapper carries the recordings on.
+ */
+describe("a run on several recordings and a Master audio", () => {
+  const multiSettings = resolveTightenEpisodeSettings({ reviewBeforeRender: true }, "video", { recordings: 2, masterAudio: true })
+  const multiGraph = toStoredInlineGraph(
+    buildTightenEpisodeGraph(multiSettings, {
+      media: { url: "https://r2/c1.mp4", kind: "video", durationSec: 3600 },
+      moreMedia: [{ url: "https://r2/c2.mp4", kind: "video", durationSec: 3600 }],
+      masterAudio: { url: "https://r2/m.wav", kind: "audio", durationSec: 3600 },
+    }),
+    multiSettings,
+  )
+  const recordings = { mediaUrl: "https://r2/c1.mp4", mediaUrls: ["https://r2/c1.mp4", "https://r2/c2.mp4"], masterAudioUrl: "https://r2/m.wav", mediaKind: "video" }
+  const done = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { status: "completed" }]))
+  const upstream = ["uc-source", "uc-cam-2", "uc-master", "uc-sync", "uc-transcribe", "uc-map", "uc-silence", "uc-plan", "uc-switch"]
+  beforeEach(() => {
+    src.graph = multiGraph
+  })
+
+  it("its Render final runs Camera Switch and the render (and what follows), no fee, and is quoted on exactly those", async () => {
+    src.wrapper = { ...completedPreviewWrapper, input_data: { ...completedPreviewWrapper.input_data, ...recordings } }
+    src.source = {
+      ...previewSource, inlineGraphHash: multiGraph.hash,
+      nodeStates: { ...done(upstream), "uc-render": { status: "completed", output: { videoUrl: "https://r2/p.mp4", quality: "proxy" } }, "uc-captions": { status: "skipped" } },
+    }
+    m.deniedTypes = ["speaker-map"]
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.statusCode).toBe(202)
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute.mock.calls[0]![0].nodeIds).toEqual(["uc-switch", "uc-render", "uc-captions"])
+    expect((src.finalCreditsArgs[0] as { runNodeIds: string[] }).runNodeIds).toEqual(["uc-switch", "uc-render", "uc-captions"])
+    // The wrapper carries the run's recordings, master and kind on.
+    expect(m.insertJob.mock.calls[0]![1].input_data).toMatchObject(recordings)
+  })
+
+  it("a from-failed that would re-run a withheld Speaker Map: 403 node_not_available, nothing written", async () => {
+    src.wrapper = { ...failedWrapper, input_data: { ...failedWrapper.input_data, ...recordings } }
+    src.source = { ...failedSource, inlineGraphHash: multiGraph.hash, nodeStates: { ...done(["uc-source", "uc-cam-2", "uc-master", "uc-sync", "uc-transcribe"]), "uc-map": { status: "failed" } } }
+    m.deniedTypes = ["speaker-map"]
+    const res = await post({ jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toEqual({ code: "node_not_available", message: "Tighten Episode needs Speaker Map for this run, which is not available on this deployment." })
+    nothingWritten()
+  })
+
+  it("a from-failed past Speaker Map (it completed) is not refused for it", async () => {
+    src.wrapper = { ...failedWrapper, input_data: { ...failedWrapper.input_data, ...recordings } }
+    src.source = { ...failedSource, inlineGraphHash: multiGraph.hash, nodeStates: { ...done(upstream), "uc-render": { status: "failed" } } }
+    m.deniedTypes = ["speaker-map"]
+    expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(202)
+    expect(m.execute.mock.calls[0]![0].nodeIds).not.toContain("uc-map")
   })
 })

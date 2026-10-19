@@ -542,8 +542,30 @@ export {
   usecaseRecordingPosition,
   usecaseRecordingsOf,
   type UseCaseCameras,
+  type UseCaseCamerasInput,
   type UseCaseSourcesShape,
 } from "./use-case-cameras"
+// The multicam front every use-case builder puts before its plan (decided 2026-10-17).
+export { usecaseShapeIsMulticam } from "./use-case-cameras"
+export { usecaseCamerasReportOf, type UseCaseCameraSpeaker, type UseCaseCamerasReport } from "./use-case-cameras-report"
+export {
+  MULTICAM_NODE_IDS,
+  MULTICAM_SPEAKER_MAP_TYPE,
+  usecaseDistinctMaster,
+  usecaseIsMulticam,
+  usecaseMulticamFront,
+  usecaseMulticamSoundNode,
+  usecaseRecordingsKind,
+  usecaseRecordingsProblem,
+  usecaseRunMaxRecordings,
+  usecaseRunRecordings,
+  usecaseSoundRecordingIndex,
+  usecaseSwitchNode,
+  usecaseSwitchWires,
+  type MulticamFront,
+  type MulticamSourceRole,
+  type UseCaseRecordingsProblem,
+} from "./use-case-multicam"
 export { USE_CASE_ROWS, composeUseCaseRows, usecaseRowOf, usecaseTypeOfBuilder, type UseCaseRow } from "./use-case-rows"
 export { USE_CASE_SPECS, type UseCaseBuilderKey, type UseCaseBuilderSpec } from "./use-case-specs"
 export {

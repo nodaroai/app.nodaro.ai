@@ -4,7 +4,16 @@
  * shape for the editor and for the app runner.
  */
 import { describe, it, expect } from "vitest"
-import { runsUseCaseRenderFinal, usecaseFinalRunSet, usecasePreviewTarget, usecaseRenderFinalOverrides } from "@nodaro/render-rules"
+import {
+  buildTightenEpisodeGraph,
+  renderFinalRunSet,
+  resolveTightenEpisodeSettings,
+  runsUseCaseRenderFinal,
+  toStoredInlineGraph,
+  usecaseFinalRunSet,
+  usecasePreviewTarget,
+  usecaseRenderFinalOverrides,
+} from "@nodaro/render-rules"
 
 const nodes = [
   { id: "rec", type: "upload-video" },
@@ -18,6 +27,20 @@ const edges = [
   { source: "t1", target: "fmt" },
   { source: "fmt", target: "post" },
 ]
+
+describe("the server's Render final of a stored run on several recordings (decided 2026-10-17)", () => {
+  it("re-runs Camera Switch on the reviewed cut, then the render and what follows — never Audio Sync, Speaker Map, Transcribe or the plan", () => {
+    const settings = resolveTightenEpisodeSettings({ reviewBeforeRender: true }, "video", { recordings: 3, masterAudio: true })
+    const v = (n: number) => ({ url: `https://r2/c${n}.mp4`, kind: "video" as const })
+    const stored = toStoredInlineGraph(
+      buildTightenEpisodeGraph(settings, { media: v(1), moreMedia: [v(2), v(3)], masterAudio: { url: "https://r2/m.wav", kind: "audio" } }),
+      settings,
+    )
+    const runs = renderFinalRunSet(stored.outputMap.renderNodeId!, stored.nodes, stored.edges)
+    expect(stored.nodes.map((n) => n.id).filter((id) => runs.has(id))).toEqual(["uc-switch", "uc-render", "uc-captions"])
+    for (const id of ["uc-sync", "uc-map", "uc-transcribe", "uc-plan"]) expect(runs.has(id), id).toBe(false)
+  })
+})
 
 describe("usecaseFinalRunSet — a use-case node's Render final", () => {
   it("is the node and everything after it, never what feeds it or an unrelated node", () => {

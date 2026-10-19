@@ -22,7 +22,15 @@
  * it (a run sends only its descriptor's setting keys), and a node preset
  * never carries it (`PRESET_EXCLUDED_KEYS`). Pure.
  */
-import { USE_CASE_NODE_TYPES, usecaseDescriptor, usecaseMediaKindOf } from "@nodaro/render-rules"
+import {
+  USE_CASE_NODE_TYPES,
+  bypassTeleports,
+  isUseCaseNodeType,
+  usecaseDescriptor,
+  usecaseRecordingsKind,
+  usecaseRunMaxRecordings,
+} from "@nodaro/render-rules"
+import { usecaseCarriedWiresOver } from "@/lib/use-case-wired-recordings"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /** The node field the remembered values live in. */
@@ -75,10 +83,32 @@ export function usecaseAudioLockPatch(
   return undefined
 }
 
-/** The kind of recording wired into node `id`'s `media` input, by the estimate's rule; undefined when nothing is. */
-export function usecaseWiredMediaKind(id: string, nodes: readonly WorkflowNode[], edges: readonly WorkflowEdge[]): "audio" | "video" | undefined {
-  const wire = edges.find((e) => e.target === id && e.targetHandle === "media" && !!e.source)
-  return wire ? usecaseMediaKindOf(nodes.find((n) => n.id === wire.source), wire.sourceHandle) : undefined
+/**
+ * The kind of the recordings a run of node `id` reads, by the run's own rules
+ * (decided 2026-10-18): the wires into `media` in the node's order, as many
+ * as this viewer's run reads (`usecaseRecordingsOf`, `usecaseRunMaxRecordings`
+ * — the first alone unless `multicam`), each kind by the estimate's rule
+ * (`usecaseMediaKindOf`); video when any has picture, audio only when every
+ * one is sound only (`usecaseRecordingsKind`); undefined when nothing is
+ * wired. `masterAudio` is another handle and never counts. A wire through a
+ * Teleport pair is judged by what it carries (raw or carried edges alike).
+ */
+export function usecaseWiredMediaKind(id: string, nodes: readonly WorkflowNode[], edges: readonly WorkflowEdge[], multicam = false): "audio" | "video" | undefined {
+  return kindOverCarried(id, nodes, bypassTeleports(nodes, edges), multicam)
+}
+
+/**
+ * `usecaseWiredMediaKind` over edges already carried through any Teleport
+ * pair: a wire is ordered by the id it was drawn from (the key `mediaOrder`
+ * is saved under) and judged by the node it carries.
+ */
+function kindOverCarried(id: string, nodes: readonly WorkflowNode[], carried: readonly WorkflowEdge[], multicam: boolean): "audio" | "video" | undefined {
+  const node = nodes.find((n) => n.id === id)
+  const type = node?.type ?? undefined
+  const max = isUseCaseNodeType(type) ? usecaseDescriptor(type).maxRecordings : 1
+  // The one wire reader (lib/use-case-wired-recordings.ts), as many as this viewer's run reads.
+  const { recordings } = usecaseCarriedWiresOver({ id, data: node?.data }, usecaseRunMaxRecordings(max, multicam), nodes, carried)
+  return recordings.length === 0 ? undefined : usecaseRecordingsKind(recordings.map((r) => r.kind))
 }
 
 const isForced = (data: Data, forced: Readonly<Record<string, unknown>>): boolean => Object.keys(forced).every((k) => data[k] === forced[k])
@@ -152,7 +182,10 @@ export function usecaseAudioLockGraph(
   prevEdges: readonly WorkflowEdge[],
   nodes: readonly WorkflowNode[],
   edges: readonly WorkflowEdge[],
+  /** The viewer's run reads several recordings (`usecaseMulticamOffered`): the lock judges what that run reads. */
+  opts: { readonly multicam?: boolean } = {},
 ): readonly WorkflowNode[] {
+  const multicam = opts.multicam === true
   const edgesChanged = edges !== prevEdges
   if (!edgesChanged && nodes === prevNodes) return nodes
   if (!nodes.some(isLocked)) return nodes
@@ -167,9 +200,12 @@ export function usecaseAudioLockGraph(
     const i = index.get(id)!
     current[i] = { ...current[i]!, data: data as WorkflowNode["data"] }
   }
+  // The wires as they carry (through any Teleport pair): the node types and wires decide it, never a data write.
+  const carried = bypassTeleports(nodes, edges)
+  let prevCarried: readonly WorkflowEdge[] | undefined
   const prevKinds = new Map<string, "audio" | "video" | undefined>()
   const kindBefore = (id: string) => {
-    if (!prevKinds.has(id)) prevKinds.set(id, usecaseWiredMediaKind(id, prevNodes, prevEdges))
+    if (!prevKinds.has(id)) prevKinds.set(id, kindOverCarried(id, prevNodes, (prevCarried ??= bypassTeleports(prevNodes, prevEdges)), multicam))
     return prevKinds.get(id)
   }
 
@@ -180,7 +216,7 @@ export function usecaseAudioLockGraph(
     const prev = before?.get(id)
     if (!isLocked(node) || !prev) continue
     const forced = USE_CASE_AUDIO_LOCKS[node.type!]!
-    const patch = ownWritePatch(prev.data as Data, node.data as Data, forced, usecaseWiredMediaKind(id, current, edges))
+    const patch = ownWritePatch(prev.data as Data, node.data as Data, forced, kindOverCarried(id, current, carried, multicam))
     if (patch) write(id, { ...(node.data as Data), ...patch })
   }
 
@@ -192,7 +228,7 @@ export function usecaseAudioLockGraph(
     for (const node of current) {
       if (!isLocked(node)) continue
       if (frontier !== undefined && !frontier.has(node.id) && !reached!.has(node.id)) continue
-      const after = usecaseWiredMediaKind(node.id, current, edges)
+      const after = kindOverCarried(node.id, current, carried, multicam)
       if (after === kindBefore(node.id)) continue
       const patch = usecaseAudioLockPatch(after, node.data as Data, USE_CASE_AUDIO_LOCKS[node.type!]!)
       if (!patch) continue

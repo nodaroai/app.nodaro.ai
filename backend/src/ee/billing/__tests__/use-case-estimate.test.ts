@@ -1,4 +1,4 @@
-// @test-watches backend/src/lib/tutorial-seed/templates/podcast-trailer-formats.json backend/src/lib/tutorial-seed/templates/podcast-clip-pack.json
+// @test-watches backend/src/lib/tutorial-seed/templates/podcast-trailer-formats.json backend/src/lib/tutorial-seed/templates/podcast-clip-pack.json backend/src/lib/tutorial-seed/templates/podcast-multicam-cut.json
 /**
  * A use-case node's estimate is its built chain, wired to its real source and
  * priced by the ordinary rules, plus its per-run fee (decided 2026-10-13).
@@ -15,6 +15,9 @@
  * Trailer's parity reference is the shipped `podcast-trailer-formats` template
  * itself (`templateTwin`): the chain the builder emits, priced as hand-built.
  * Clip Pack's is the shipped `podcast-clip-pack` template (`clipPackTemplateTwin`).
+ * Tighten on several recordings is held to the shipped `podcast-multicam-cut`
+ * template (`multicamTemplateTwin`): the same chain plus Silence Detect and
+ * Speaker Map.
  */
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -31,9 +34,11 @@ import {
   buildEpisodeTrailerGraph,
   buildTightenEpisodeGraph,
   editPlanRenderEstimateLength,
+  initialRunNodeIds,
   renderFinalRunSet,
   renderRunOverrides,
   TIGHTEN_EPISODE_DEFAULTS,
+  resolveTightenEpisodeSettings,
   toStoredInlineGraph,
 } from "@nodaro/render-rules"
 
@@ -187,6 +192,60 @@ describe("a step priced by its input's length, after the node, is priced at the 
   })
 })
 
+type MulticamNode = { id: string; type: string; data: Record<string, unknown> }
+type MulticamEdge = { id?: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
+const MULTICAM_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib", "tutorial-seed", "templates", "podcast-multicam-cut.json")
+const cam = (n: number) => ({ url: `https://r2/cam${n}.mp4`, kind: "video" as const, durationSec: 5400 })
+const master90 = { url: "https://r2/master.wav", kind: "audio" as const, durationSec: 5400 }
+
+/** The shipped `podcast-multicam-cut` template, its notes dropped, each named upload holding that source's URL and length. */
+function multicamTemplateTwin(sources: Readonly<Record<string, { readonly url: string; readonly durationSec: number }>>): [MulticamNode[], MulticamEdge[]] {
+  const t = JSON.parse(readFileSync(MULTICAM_TEMPLATE, "utf8")) as { nodes: MulticamNode[]; edges: MulticamEdge[] }
+  const nodes = t.nodes
+    .filter((n) => n.type !== "sticky-note")
+    .map((n) => (sources[n.id] ? { ...n, data: { ...n.data, url: sources[n.id]!.url, metadata: { durationSeconds: sources[n.id]!.durationSec } } } : { ...n, data: { ...n.data } }))
+  return [nodes, t.edges.map((e) => ({ ...e }))]
+}
+
+/** Tighten's chain on three cameras (the third the wide) + Master audio, 90 minutes each, captions off. */
+const multicam = (raw: Record<string, unknown>) =>
+  buildTightenEpisodeGraph(
+    resolveTightenEpisodeSettings({ captions: false, cameras: { wide: 3 }, ...raw }, "video", { recordings: 3, masterAudio: true }),
+    { media: cam(1), moreMedia: [cam(2), cam(3)], masterAudio: master90 },
+  )
+const chainNodes = (g: ReturnType<typeof multicam>) => g.nodes.map((n) => ({ id: n.id, type: n.type, data: { ...n.data } }))
+
+describe("Tighten Episode on several recordings = its chain + 10 (decided 2026-10-17)", () => {
+  it("90-minute recording on three cameras + Master audio, captions off, review off: Audio Sync over four sources, Speaker Map, Camera Switch, the render at the episode's length", async () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 90], ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["apply-edl", 90]]
+    const g = multicam({})
+    expect(await estimateWorkflowCredits(chainNodes(g), g.edges)).toBe(listOf(steps))
+    expect(listOf([...steps, ["use-case-fee:tighten-episode"]])).toBe(1352)
+  })
+  it("review on: the run up to the proxy render, the switch included", async () => {
+    const g = multicam({ reviewBeforeRender: true })
+    const steps: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 90], ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["apply-edl:proxy", 90]]
+    expect(await estimateRunSetCredits(chainNodes(g), g.edges, new Set(initialRunNodeIds(g)!))).toBe(listOf(steps))
+  })
+  it("parity with the hand-built Multicam Cut template (review on): the one-node steps are the template's + Silence Detect + Speaker Map", async () => {
+    const [nodes, edges] = multicamTemplateTwin({ "multicam-cam-a": cam(1), "multicam-cam-b": cam(2), "multicam-wide": cam(3), "multicam-master": master90 })
+    const g = multicam({ reviewBeforeRender: true })
+    const oneNode = await estimateRunSetCredits(chainNodes(g), g.edges, new Set(initialRunNodeIds(g)!))
+    expect(oneNode).toBe((await estimateWorkflowCredits(nodes, edges)) + listOf([["silence-detect"], ["speaker-map"]]))
+  })
+  it("already in sync: no Audio Sync", async () => {
+    const g = multicam({ cameras: { wide: 3, synced: true } })
+    expect(await estimateWorkflowCredits(chainNodes(g), g.edges)).toBe(listOf([["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 90], ["speaker-map"], ["camera-switch"], ["apply-edl", 90]]))
+  })
+  it("an audio episode over Master audio: the master's chain alone (no multicam step)", async () => {
+    const g = buildTightenEpisodeGraph(
+      resolveTightenEpisodeSettings({ output: "audio" }, "video", { recordings: 2, masterAudio: true }),
+      { media: cam(1), moreMedia: [cam(2)], masterAudio: master90 },
+    )
+    expect(await estimateWorkflowCredits(chainNodes(g), g.edges)).toBe(listOf([["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 90], ["apply-edl", 90]]))
+  })
+})
+
 describe("the docs' worked examples, at the charged price (tighten-episode.md, What the estimate shows)", () => {
   const head: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 60]]
   const fee: Step = ["use-case-fee:tighten-episode"]
@@ -206,6 +265,21 @@ describe("the docs' worked examples, at the charged price (tighten-episode.md, W
     { name: "captions on, music bed", steps: [...head, ["apply-edl", 60], captions, fee, ["mix-audio"], ["merge-video-audio"]], engine: () => estimateWorkflowCredits([video(3600), bed, node({})], [wire("video"), music]), docs: 1070 },
     { name: "framing 9:16 stacked, captions on", steps: [...head, ["speaker-view:complex", 60], captions, fee], engine: () => estimateWorkflowCredits([video(3600), node(framed)], [wire("video")]), docs: 1158 },
     { name: "framing + review on: the preview", steps: [...head, ["speaker-view:complex:proxy", 60], fee], engine: () => estimateWorkflowCredits([video(3600), node({ ...framed, reviewBeforeRender: true })], [wire("video")]), docs: 509 },
+    {
+      // A viewer who may use Speaker Map (decided 2026-10-19): every recording and the Master audio are read.
+      name: "three cameras (the third the wide) + Master audio, 90 min each, captions off",
+      steps: [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 90], ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["apply-edl", 90], fee],
+      engine: () => {
+        const cams = [1, 2, 3].map((n) => ({ id: `cam${n}`, type: "upload-video", data: { url: `https://r2/cam${n}.mp4`, metadata: { durationSeconds: 5400 } } }))
+        const mic = { id: "mic", type: "upload-audio", data: { url: "https://r2/master.wav", metadata: { durationSeconds: 5400 } } }
+        const wires = [
+          ...cams.map((c) => ({ source: c.id, target: "t1", sourceHandle: "video", targetHandle: "media" })),
+          { source: "mic", target: "t1", sourceHandle: "audio", targetHandle: "masterAudio" },
+        ]
+        return estimateWorkflowCredits([...cams, mic, node({ captions: false, cameras: { wide: 3 } })], wires, { multicam: true })
+      },
+      docs: 1488,
+    },
     {
       name: "unknown length, captions off (the 180-minute ceiling)",
       steps: [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 180], ["apply-edl", 180], fee],

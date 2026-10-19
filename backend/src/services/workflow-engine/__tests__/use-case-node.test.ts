@@ -27,7 +27,10 @@ const m = vi.hoisted(() => ({
   graphs: new Map<string, unknown>(),
   /** How many inner-run reads fail before one answers. */
   runReadErrors: 0,
+  /** Node types withheld from the run's user (a hidden Speaker Map). */
+  deniedTypes: [] as string[],
 }))
+vi.mock("../../../lib/availability-viewer.js", () => ({ isNodeDeniedForUser: async (type: string) => m.deniedTypes.includes(type) }))
 
 vi.mock("../loopback-fetch.js", () => ({ loopbackFetch: m.fetch }))
 vi.mock("../../../lib/supabase.js", () => ({
@@ -138,6 +141,7 @@ beforeEach(() => {
   m.readErrors = 0
   m.sequence.clear()
   m.graphs.clear()
+  m.deniedTypes = []
   m.runReadErrors = 0
 })
 
@@ -852,5 +856,29 @@ describe("executeUseCaseNode — the node's own failures name ITS type (decided 
       { quality: "final", planBasis: "plan-b", renderBasis: "render-b", jobId: "job-w" },
       { quality: "final", planBasis: "plan-b", renderBasis: "render-b", jobId: "job-w" },
     ])
+  })
+})
+
+/**
+ * Several recordings are read only for a run whose user may use Speaker Map
+ * (decided 2026-10-19): for anyone else the node sends its first recording,
+ * exactly as before multicam — never a request the route would refuse.
+ */
+describe("several recordings, by the run's user", () => {
+  const two: ResolvedInputs = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+  const sent = () => JSON.parse((m.fetch.mock.calls[0]![1] as { body: string }).body) as Record<string, unknown>
+
+  it("a user Speaker Map is withheld from: the first recording only, the request as with that recording alone", async () => {
+    m.deniedTypes = ["speaker-map"]
+    await executeUseCaseNode(tighten({ cameras: { wide: 2 } }), two, ctx(), undefined)
+    const withTwo = sent()
+    m.fetch.mockClear()
+    await executeUseCaseNode(tighten(), { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }, ctx(), undefined)
+    expect(withTwo).toEqual(sent())
+    expect(withTwo.mediaUrls).toEqual(["https://r2/a.mp4"])
+  })
+  it("a user who may use Speaker Map (an admin while it is hidden): every recording and the Cameras settings", async () => {
+    await executeUseCaseNode(tighten({ cameras: { wide: 2 } }), two, ctx(), undefined)
+    expect(sent()).toMatchObject({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { wide: 2 } })
   })
 })

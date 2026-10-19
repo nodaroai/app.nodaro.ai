@@ -9,7 +9,7 @@ import type { ErrorHint } from "../../lib/safety-block.js"
 import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason } from "@nodaro/shared/workflow"
 import type { VideoOverlayWarning } from "@nodaro/shared/video"
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared/nodes"
-import type { UnitInputValue } from "@nodaro/render-rules"
+import type { UnitInputValue, UseCaseCamerasReport } from "@nodaro/render-rules"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -138,6 +138,8 @@ export interface NodeOutput {
   formats?: ReadonlyArray<{ readonly format: string; readonly url: string }>
   /** Trailer: the formats whose render failed (the others were delivered). */
   failedFormats?: readonly string[]
+  /** A use-case run on several recordings or a Master audio: who was put on which camera, and Audio Sync's and Speaker Map's notes (the node's saved `useCaseCameras`). */
+  useCaseCameras?: UseCaseCamerasReport
   /** A use-case node whose result is a clip set (Clip Pack): each clip's file and take stamps, with its title and hook, in plan order. */
   clips?: ReadonlyArray<{
     readonly url: string
@@ -708,6 +710,8 @@ export interface ResolvedInputs {
   useCaseIntroCard?: string
   /** A use-case node's optional `masterAudio` — the separate audio its recordings are synced to (a type whose descriptor takes it). */
   useCaseMasterAudio?: string
+  /** The upstream node `useCaseMasterAudio` comes from: a master from the node a recording comes from is no master (`usecaseRunRecordings`). */
+  useCaseMasterAudioNodeId?: string
   /** A node unit's JSON inputs (accepts "look": the wired JSON string; "" when
    *  wired but its upstream produced nothing — the unit refuses the run) and
    *  many-wire inputs (one row per upstream node, in edge-list order), by

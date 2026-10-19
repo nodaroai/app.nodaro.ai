@@ -165,6 +165,10 @@ export const PRESET_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
   "extraRefs",
   // editor-only memory of the node's own wiring (an audio recording's lock)
   "settingsBeforeAudio",
+  // a use-case node's recordings order (its upstream node ids — this node's
+  // wiring) and the cameras report of its last run (a result, never config)
+  "mediaOrder",
+  "useCaseCameras",
   // structural identifiers
   "routes",
   "routeId",

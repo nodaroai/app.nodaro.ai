@@ -47,6 +47,7 @@ import {
 } from "@nodaro/render-rules"
 import { edlSpanKey } from "@nodaro/shared/nodes"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseClipRow, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
 
 export function listOutput(
   graph: StoredInlineGraph,
@@ -56,9 +57,11 @@ export function listOutput(
   const map = graph.outputMap
   const planOut = completedOutput(nodeStates, map.planNodeId)
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
+  const cameras = usecaseCamerasReport(graph, nodeStates)
   const common = {
     ...(transcriptOut?.json !== undefined ? { transcript: transcriptOut.json } : {}),
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
+    ...(cameras ? { cameras } : {}),
     _executionId: executionId,
     ...failedStepOf(graph, nodeStates),
   }

@@ -11,6 +11,7 @@ import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../lib/execution-budget.js"
 import { estimateWorkflowCredits, type EstimateEdge, type EstimateNode } from "../ee/billing/credits.js"
+import { usecaseMulticamEstimateFor } from "../lib/use-case/inner-availability.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
@@ -383,7 +384,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return { id: nodeId, type: node.type ?? "", data, parentId: node.parentId }
     })
 
-    return reply.send({ estimatedCredits: await estimateWorkflowCredits(priced, edges) })
+    // A use-case node is priced on several recordings only for a caller who may use Speaker Map (decided 2026-10-19).
+    const multicam = await usecaseMulticamEstimateFor(priced, req.userId)
+    return reply.send({ estimatedCredits: await (multicam ? estimateWorkflowCredits(priced, edges, { multicam }) : estimateWorkflowCredits(priced, edges)) })
   })
 
   // ── How long this component run may take (podcast Track 0.11 follow-up) ──

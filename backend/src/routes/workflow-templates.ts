@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { usecaseMulticamForEveryone } from "../lib/use-case/inner-availability.js"
 import { selectWithMax, writeWithMax } from "../lib/listing-max-columns.js"
 import { storedTemplateRange } from "../lib/app-listing-price.js"
 import {
@@ -613,6 +614,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       // sample recording's length is not theirs (decided 2026-10-07).
       replaceableMediaNodeIds: exposedMediaNodeIds(null, pricedNodes as unknown as EstimateNode[]),
       snapshotSettings: published.settings as Record<string, unknown> | null,
+      // Shown to everyone: several recordings only while Speaker Map is every user's (decided 2026-10-20).
+      ...(usecaseMulticamForEveryone(pricedNodes as unknown as EstimateNode[]) ? { multicam: true } : {}),
     })
     const estimatedCredits = listing.preview + listing.final
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.

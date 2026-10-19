@@ -155,9 +155,13 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "ugc-clips": ["quote", "result", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["result", "ugcOutputs"],
-  // A use-case node's failure code (a refused Render final), and what a list
-  // kind could not deliver (its result kind's keys): its last run's, gone with it.
-  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => [t, ["errorCode", ...USE_CASE_RESULT_KEYS[usecaseDescriptor(t).resultKind]]])),
+  // A use-case node's failure code (a refused Render final), its cameras report
+  // (a type that takes several recordings), and what a list kind could not
+  // deliver (its result kind's keys): its last run's, gone with it.
+  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => {
+    const d = usecaseDescriptor(t)
+    return [t, ["errorCode", ...(d.maxRecordings > 1 ? ["useCaseCameras"] : []), ...USE_CASE_RESULT_KEYS[d.resultKind]]]
+  })),
 }
 
 const RESULT_KEYS: ReadonlySet<string> = new Set([

@@ -25,6 +25,9 @@ import {
   buildTightenEpisodeGraph,
   resolveTightenEpisodeSettings,
   usecaseDescriptor,
+  usecaseRecordings,
+  usecaseRecordingsKind,
+  usecaseRecordingsProblem,
   usecaseRenderNodeId,
   type UseCaseGraph,
   type UseCaseHandleRef,
@@ -32,6 +35,7 @@ import {
   type UseCaseNodeType,
   type UseCaseSettings,
   type UseCaseSources,
+  type UseCaseSourcesShape,
 } from "@nodaro/render-rules"
 import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import { ALL_NODE_HANDLES } from "../node-handles.js"
@@ -54,6 +58,51 @@ function* settingsSpace() {
 
 type SettingsCase = { readonly raw: UseCaseSettings; readonly kind: UseCaseMediaKind; readonly sources: UseCaseSources }
 
+/**
+ * Tighten on several recordings or a Master audio (decided 2026-10-17): every
+ * recordings set the route lets run (`usecaseRecordingsProblem`; up to six in
+ * all, the sound's slot counted) × in sync × the wide × the override ×
+ * framing × captions × review × output, a few with music.
+ */
+const vid = (n: number) => ({ url: `https://r2/cam${n}.mp4`, kind: "video" as const, durationSec: 3600 })
+const MULTICAM_RECORDINGS: ReadonlyArray<{ readonly name: string; readonly sources: UseCaseSources }> = [
+  { name: "1 camera + master", sources: { media: vid(1), masterAudio: { url: "https://r2/master.wav", kind: "audio" } } },
+  { name: "2 cameras", sources: { media: vid(1), moreMedia: [vid(2)] } },
+  { name: "2 cameras + master", sources: { media: vid(1), moreMedia: [vid(2)], masterAudio: { url: "https://r2/master.wav", kind: "audio" } } },
+  { name: "3 cameras", sources: { media: vid(1), moreMedia: [vid(2), vid(3)] } },
+  { name: "3 cameras + master", sources: { media: vid(1), moreMedia: [vid(2), vid(3)], masterAudio: { url: "https://r2/master.wav", kind: "audio" } } },
+  { name: "a sound-only recording + 2 cameras", sources: { media: { url: "https://r2/mixer.wav", kind: "audio" }, moreMedia: [vid(2), vid(3)] } },
+  { name: "6: a sound-only recording + 5 cameras", sources: { media: { url: "https://r2/mixer.wav", kind: "audio" }, moreMedia: [vid(2), vid(3), vid(4), vid(5), vid(6)] } },
+  { name: "5 cameras + master", sources: { media: vid(1), moreMedia: [vid(2), vid(3), vid(4), vid(5)], masterAudio: { url: "https://r2/master.wav", kind: "audio" } } },
+]
+
+function* multicamSpace(): Generator<SettingsCase & { readonly name: string }> {
+  for (const { name, sources } of MULTICAM_RECORDINGS) {
+    const recs = usecaseRecordings(sources)
+    const kinds = recs.map((r) => r.kind)
+    for (const synced of [false, true])
+      for (const wide of [null, recs.length])
+        for (const speakerCameras of [{}, { "1": 2, "2": 0 }])
+          for (const framing of [null, { aspect: "9:16", layout: "stacked" }])
+            for (const captions of [true, false])
+              for (const reviewBeforeRender of [true, false])
+                for (const output of ["video", "audio"] as const) {
+                  const cameras = { wide, synced, speakerCameras }
+                  if (usecaseRecordingsProblem({ kinds, masterAudio: !!sources.masterAudio, cameras })) continue
+                  const music = synced && captions
+                  yield {
+                    name,
+                    raw: { ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, framing, cameras },
+                    kind: usecaseRecordingsKind(kinds)!,
+                    sources: { ...sources, ...(music ? { music: { url: "https://r2/bed.mp3" } } : {}) },
+                  }
+                }
+  }
+}
+
+/** The shape a run of these sources is resolved against (how many recordings, whether a master is wired). */
+const shapeOf = (sources: UseCaseSources): UseCaseSourcesShape => ({ recordings: usecaseRecordings(sources).length, masterAudio: !!sources.masterAudio })
+
 /** One settings table per registered use-case type: the raw settings and inputs its builder is walked over. */
 const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
   "tighten-episode": function* () {
@@ -67,6 +116,7 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
         },
       }
     }
+    yield* multicamSpace()
   },
   "episode-chapters": function* () {
     for (const kind of ["video", "audio"] as const)
@@ -117,7 +167,7 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
 /** Every graph `type`'s descriptor builds over its settings table, with the case it was built from. */
 function* graphsOf(type: UseCaseNodeType): Generator<{ readonly c: SettingsCase; readonly g: UseCaseGraph }> {
   const d = usecaseDescriptor(type)
-  for (const c of SETTINGS_TABLES[type]()) yield { c, g: d.build(d.resolveSettings(c.raw, c.kind), c.sources) }
+  for (const c of SETTINGS_TABLES[type]()) yield { c, g: d.build(d.resolveSettings(c.raw, c.kind, shapeOf(c.sources)), c.sources) }
 }
 
 /** Every handle ref of the output map: its plan, transcript, and (a rendering graph) its preview and deliveries. */
@@ -194,6 +244,18 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
       count++
     }
     expect(count).toBe(1152)
+  })
+
+  it("Tighten Episode on several recordings or a Master audio (every set the route lets run)", () => {
+    let count = 0
+    const d = usecaseDescriptor("tighten-episode")
+    for (const c of multicamSpace()) {
+      const g = d.build(d.resolveSettings(c.raw, c.kind, shapeOf(c.sources)), c.sources)
+      expect(problems(g), JSON.stringify({ name: c.name, raw: c.raw })).toEqual([])
+      count++
+    }
+    // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 framings × 2 captions × 2 review × 2 outputs, none refused.
+    expect(count).toBe(1024)
   })
 
   it("has a settings table for every registered use-case type", () => {

@@ -4,7 +4,7 @@
 
 /** Per use-case type, the settings its request body takes as null (a None that is not the default). */
 export const USE_CASE_NULL_SETTINGS: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "tighten-episode": ["framing"],
+  "tighten-episode": ["framing", "cameras"],
   "episode-chapters": [],
   "episode-trailer": [],
   "clip-pack": ["framing"],
@@ -12,7 +12,7 @@ export const USE_CASE_NULL_SETTINGS: Readonly<Record<string, ReadonlyArray<strin
 
 /** Per use-case type, the settings its request body takes as an empty string (free text). */
 export const USE_CASE_EMPTY_SETTINGS: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "tighten-episode": ["instructions", "styleGuide"],
+  "tighten-episode": ["instructions", "styleGuide", "cameras"],
   "episode-chapters": ["instructions", "styleGuide"],
   "episode-trailer": ["instructions", "styleGuide"],
   "clip-pack": ["instructions", "styleGuide"],

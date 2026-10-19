@@ -10,8 +10,9 @@
  *    `workflow_execution_id`;
  *  - a run that cannot start unwinds: wrapper failed, fee refunded.
  */
+import { USER, graph, m, routeConfigs, makeApp, media, ok, post } from "./helpers/tighten-episode-route-harness.js"
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
+import Fastify from "fastify"
 import {
   EPISODE_CHAPTERS_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
@@ -20,141 +21,7 @@ import {
   usecaseDescriptor,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
-
-const USER = "00000000-0000-4000-8000-000000000001"
-const graph = buildTightenEpisodeGraph(TIGHTEN_EPISODE_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } })
-const m = vi.hoisted(() => ({
-  credits: true,
-  denied: false,
-  absent: false,
-  authKind: "jwt" as "jwt" | "internal" | "api_token",
-  prepared: null as unknown,
-  preflight: null as unknown,
-  cover: { ok: true } as { ok: boolean; balance?: number },
-  coverArgs: [] as unknown[],
-  estimateCalls: 0,
-  estimatedTypes: [] as Array<string | undefined>,
-  reserveSeen: [] as Array<{ billingContext: unknown; creditOverride: unknown }>,
-  insertJob: vi.fn(),
-  insertIdem: vi.fn(),
-  reserve: vi.fn(),
-  execute: vi.fn(),
-  stamp: vi.fn(),
-  failed: vi.fn(async (..._a: unknown[]) => true),
-  refund: vi.fn(async (..._a: unknown[]) => 1),
-  prepare: vi.fn(),
-  existingByKey: null as { id: string; provider?: string | null; jobType?: string | null } | null,
-  keyLookups: [] as unknown[][],
-  payer: undefined as unknown,
-  stampThrows: false,
-  guard: "pass" as "pass" | 402 | 413,
-  guardCalls: 0,
-}))
-vi.mock("@/lib/dedup-fingerprint.js", async (orig) => ({
-  ...(await orig<typeof import("@/lib/dedup-fingerprint.js")>()),
-  findJobByIdempotencyKey: async (...a: unknown[]) => {
-    m.keyLookups.push(a)
-    return m.existingByKey
-  },
-}))
-vi.mock("@/lib/config.js", async (orig) => ({ ...(await orig<typeof import("@/lib/config.js")>()), hasCredits: () => m.credits }))
-vi.mock("@/lib/availability-viewer.js", () => ({ isNodeDeniedForUser: async () => m.denied }))
-vi.mock("@/lib/execution-inline-graph.js", () => ({ ensureInlineGraphColumns: async () => !m.absent }))
-vi.mock("@/lib/use-case/request.js", async (orig) => ({
-  ...(await orig<typeof import("@/lib/use-case/request.js")>()),
-  prepareUseCase: (...a: unknown[]) => m.prepare(...a),
-}))
-vi.mock("@/lib/use-case/preflight.js", () => ({ usecasePreflight: async () => m.preflight }))
-vi.mock("@/ee/billing/use-case-estimate.js", () => ({
-  estimateUseCaseCredits: async (graph: { nodeType?: string }) => {
-    m.estimateCalls++
-    m.estimatedTypes.push(graph?.nodeType)
-    return { stepsCredits: 922, feeCredits: 10, totalCredits: 932 }
-  },
-}))
-vi.mock("@/ee/billing/credits.js", async (orig) => ({
-  // The price table and the charged-price rule the MCP verbs' credit hint reads (statedPrices).
-  STATIC_CREDIT_COSTS: (await orig<typeof import("@/ee/billing/credits.js")>()).STATIC_CREDIT_COSTS,
-  chargedPriceTableFrom: (await orig<typeof import("@/ee/billing/credits.js")>()).chargedPriceTableFrom,
-  chargedCredits: (await orig<typeof import("@/ee/billing/credits.js")>()).chargedCredits,
-  DEPLOYMENT_OUT_OF_CREDITS: "This deployment is out of credits. Contact your administrator.",
-  CreditsService: {
-    checkBalanceCovers: async (...a: unknown[]) => {
-      m.coverArgs = a
-      return m.cover
-    },
-  },
-}))
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: m.insertJob, insertJobIdempotent: m.insertIdem, billingPairColumns: () => ({}) }))
-vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async (_req: unknown, reply: { status: (n: number) => { send: (b: unknown) => unknown } }) => {
-    m.guardCalls++
-    if (m.guard === 402) return reply.status(402).send({ error: { code: "insufficient_credits", message: "Insufficient credits" } })
-    if (m.guard === 413) return reply.status(413).send({ error: { code: "storage_limit_exceeded", message: "Storage limit reached" } })
-  },
-  reserveCreditsForJob: (req: FastifyRequest, ...rest: unknown[]) => {
-    m.reserveSeen.push({ billingContext: req.billingContext, creditOverride: req.creditReservation?.creditOverride })
-    return m.reserve(req, ...rest)
-  },
-  resolveWebSurfaceFlag: async () => false,
-}))
-vi.mock("@/services/use-case-execution.js", async (orig) => ({
-  ...(await orig<typeof import("@/services/use-case-execution.js")>()),
-  executeInlineGraph: m.execute,
-}))
-vi.mock("@/lib/supabase.js", () => ({
-  supabase: {
-    from: () => ({
-      update: (row: unknown) => ({
-        eq: () => ({
-          // The stamp is filtered by the wrapper's owner as well as its id.
-          eq: async (col: string) => {
-            if (m.stampThrows) throw new Error("socket hang up")
-            if (col === "user_id") m.stamp(row)
-            return { error: null }
-          },
-        }),
-      }),
-    }),
-  },
-}))
-vi.mock("@/lib/job-failure.js", () => ({ markJobFailed: m.failed }))
-vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: m.refund }))
-import { usecaseRunRoutes } from "../use-case-run.js"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
-
-const routeConfigs: Array<{ url: string; config: unknown }> = []
-async function makeApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false })
-  app.addHook("onRoute", (r) => {
-    routeConfigs.push({ url: r.url, config: r.config })
-  })
-  app.addHook("preHandler", async (req) => {
-    req.userId = USER
-    req.authKind = m.authKind
-    if (m.payer) req.billingContext = m.payer as never
-  })
-  await app.register(usecaseRunRoutes)
-  await app.ready()
-  return app
-}
-const media = { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 }
-const ok = () => ({ ok: true, settings: TIGHTEN_EPISODE_DEFAULTS, sources: { media }, graph })
-const post = (app: FastifyInstance, payload: Record<string, unknown>, headers: Record<string, string> = {}) =>
-  app.inject({ method: "POST", url: "/v1/tighten-episode", payload, headers })
-
-beforeEach(() => {
-  Object.assign(m, {
-    credits: true, denied: false, absent: false, authKind: "jwt", prepared: ok(), preflight: null, cover: { ok: true },
-    coverArgs: [], estimateCalls: 0, estimatedTypes: [], reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
-  })
-  m.insertJob.mockReset().mockResolvedValue({ data: { id: "job-1" }, error: null })
-  m.insertIdem.mockReset().mockResolvedValue({ created: true, row: { id: "job-1" } })
-  m.reserve.mockReset().mockResolvedValue({ usageLogId: "ul-1", creditsReserved: 10, watermark: false })
-  m.execute.mockReset().mockResolvedValue({ executionId: "exec-1", deduped: false })
-  m.prepare.mockReset().mockImplementation(async () => m.prepared)
-  for (const f of [m.stamp, m.failed, m.refund]) f.mockClear()
-})
 
 describe("POST /v1/tighten-episode", () => {
   it("starts the run: wrapper (use-case, processing), fee reserved, inline run, stamped, 202", async () => {
@@ -244,20 +111,25 @@ describe("POST /v1/tighten-episode", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
-  it("two recordings: still 400 validation_error (Tighten takes one recording in this phase), nothing prepared", async () => {
-    const res = await post(await makeApp(), { mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+  it("seven recordings: 400 validation_error, nothing prepared (Tighten takes up to six, decided 2026-10-17)", async () => {
+    const res = await post(await makeApp(), { mediaUrls: Array.from({ length: 7 }, (_, i) => `https://r2/c${i + 1}.mp4`) })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
     expect(m.prepare).not.toHaveBeenCalled()
   })
 
-  it("a masterAudioUrl is not Tighten's to take yet: stripped from the body, never prepared or probed", async () => {
-    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], masterAudioUrl: "https://r2/m.wav", cameras: { wide: 1 } })
+  it("several recordings, a Master audio and the Cameras settings reach preparation", async () => {
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], masterAudioUrl: "https://r2/m.wav", cameras: { wide: 1 } })
     expect(res.statusCode).toBe(202)
-    const body = m.prepare.mock.calls[0]![1] as Record<string, unknown>
-    expect(body).not.toHaveProperty("masterAudioUrl")
-    expect(body).not.toHaveProperty("cameras")
+    expect(m.prepare.mock.calls[0]![1]).toMatchObject({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], masterAudioUrl: "https://r2/m.wav", cameras: { wide: 1 } })
   })
+
+  it("one recording: the wrapper records what it always did (no recordings list, master or kind)", async () => {
+    await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    const input = (m.insertJob.mock.calls[0]![1] as { input_data: Record<string, unknown> }).input_data
+    expect(Object.keys(input)).toEqual(["type", "mode", "settings", "mediaUrl", "durationSec", "_feeCredits"])
+  })
+
 
   it("review on from a caller outside any run: runs only up to the proxy render, as the reviewer", async () => {
     const review = buildTightenEpisodeGraph({ ...TIGHTEN_EPISODE_DEFAULTS, reviewBeforeRender: true }, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } })
@@ -738,6 +610,7 @@ describe("MCP tighten_episode through the real route", () => {
       // As the auth hook decides it: the orchestrator secret is the internal lane.
       req.authKind = req.headers["x-internal-orchestrator-secret"] !== undefined ? "internal" : "jwt"
     })
+    const { usecaseRunRoutes } = await import("../use-case-run.js")
     await app.register(usecaseRunRoutes)
     await app.ready()
     const { registerUseCaseVerbs } = await import("@/lib/mcp/tools/verbs-use-case.js")

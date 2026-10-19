@@ -18,6 +18,7 @@
  * this stays in CORE — the live-cost cache lives under `@/ee` (credits are an
  * enterprise concern) and only the already-allowlisted callers reach into it.
  */
+import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
@@ -256,7 +257,8 @@ interface ExpandedGraph {
  * edge shape (inner ids are `<node>::<id>`). `null` when there is none.
  */
 function expandedForEditor(nodes: WorkflowNode[], edges: WorkflowEdge[]): ExpandedGraph | null {
-  const expansion = expandUseCaseNodes(nodes, edges)
+  // Several recordings and a master only for a viewer who may use Speaker Map: the run reads what the quote prices.
+  const expansion = expandUseCaseNodes(nodes, edges, { multicam: usecaseMulticamOffered() })
   if (!expansion.expanded) return null
   return {
     expansion,

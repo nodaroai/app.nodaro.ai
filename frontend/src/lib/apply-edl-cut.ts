@@ -61,6 +61,9 @@ export interface ApplyEdlRunOutput {
   readonly plan?: unknown
   /** A use-case node's text (Chapters' show notes). */
   readonly text?: unknown
+  /** A multicam use-case run's cameras report: the wrapper job's `cameras`, the server node output's `useCaseCameras`. */
+  readonly cameras?: unknown
+  readonly useCaseCameras?: unknown
 }
 
 /**

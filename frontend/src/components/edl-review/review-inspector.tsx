@@ -45,6 +45,7 @@ import { ReviewActions, ReviewMeta, ReviewTitle, type ReviewView } from "./revie
 import { ReviewBody, type ReviewBodyHandle } from "./review-body"
 import { ReviewFooter } from "./review-footer"
 import { ReviewJsonView } from "./review-json-view"
+import { UseCaseCamerasSummary } from "./use-case-cameras-summary"
 import { isControl, isTextField } from "./transcript-keys"
 
 import type { ReviewInspectorProps } from "./inspector-props"
@@ -70,6 +71,8 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
   useEffect(() => setRenderId(anchoredAt), [anchoredAt])
 
   const model = useReviewModel(renderId)
+  // A use-case source's multicam take: who its run put on which camera.
+  const camerasReport = useWorkflowStore((s) => (s.nodes.find((n) => n.id === model.planId)?.data as { useCaseCameras?: unknown } | undefined)?.useCaseCameras)
   const edits = useReviewEdits(model)
   const checks = useReviewChecks(model, edits)
   const runs = useReviewRuns(model, edits, checks)
@@ -125,13 +128,16 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
       icon={<Scissors />}
       title={<ReviewTitle planId={model.planId} renderId={renderId} />}
       meta={
-        <ReviewMeta
-          planId={model.planId}
-          renderId={renderId}
-          onRenderChange={changeRender}
-          take={model.take}
-          validity={checks.validity}
-        />
+        <>
+          <ReviewMeta
+            planId={model.planId}
+            renderId={renderId}
+            onRenderChange={changeRender}
+            take={model.take}
+            validity={checks.validity}
+          />
+          <UseCaseCamerasSummary report={camerasReport} />
+        </>
       }
       actions={
         model.base ? (

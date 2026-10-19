@@ -1,10 +1,18 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { isRenderNodeType, renderPlanPath } from "@nodaro/shared/nodes"
 import { buildEpisodeTrailerGraph, buildTightenEpisodeGraph, resolveEpisodeTrailerSettings, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
 import { reviewViewOf, usecaseReviewSource } from "../use-case-review-source"
 import { reviewEntryOf, reviewKindOf, reviewRendersOf, reviewTargetOf } from "../review-entry"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
+import SINGLE_VIEWS from "./fixtures/use-case-review-view-single.json"
+
+// The viewer's answer: may they use Speaker Map (several recordings, decided 2026-10-19)? "No" by default.
+const viewer = vi.hoisted(() => ({ multicam: false }))
+vi.mock("@/lib/use-case-multicam-viewer", () => ({ usecaseMulticamOffered: () => viewer.multicam }))
+afterEach(() => {
+  viewer.multicam = false
+})
 
 /**
  * A use-case node (Tighten Episode) is its own review source (decided
@@ -119,5 +127,105 @@ describe("a use-case node is its own review source", () => {
     expect(source.render).toMatchObject({ targetAspect: "9:16", layout: "stacked" })
     // A take that kept none reads the node's own.
     expect(usecaseReviewSource("t1", [rec, t1({ framing: null, generatedResults: [{ url: "https://r2/p.mp4" }] })], [wire])!.renderType).toBe(built({}).type)
+  })
+})
+
+describe("one recording's review view is as it was before multicam (frozen from that code)", () => {
+  const aud = { id: "aud", type: "upload-audio", position: at, data: { url: "https://r2/ep.m4a" } }
+  const cam2 = { id: "cam2", type: "upload-video", position: at, data: { url: "https://r2/cam2.mp4" } }
+  const mic = { id: "mic", type: "upload-audio", position: at, data: { url: "https://r2/mic.wav" } }
+  const w = (source: string, sourceHandle: string, targetHandle = "media") => ({ id: `w-${source}`, source, target: "t1", sourceHandle, targetHandle })
+  const now: Record<string, unknown> = {
+    "video": reviewViewOf("t1", [rec, t1()], [w("rec", "video")]),
+    "video, framed": reviewViewOf("t1", [rec, t1({ framing: { aspect: "9:16", layout: "auto" } })], [w("rec", "video")]),
+    "audio": reviewViewOf("t1", [aud, t1({ output: "audio" })], [w("aud", "audio")]),
+    "video, review on, captions": reviewViewOf("t1", [rec, t1({ reviewBeforeRender: true, captions: true })], [w("rec", "video")]),
+    "two cameras and a master, viewer not multicam": reviewViewOf("t1", [rec, cam2, mic, t1()], [w("rec", "video"), w("cam2", "video"), w("mic", "audio", "masterAudio")]),
+  }
+  for (const [name, view] of Object.entries(SINGLE_VIEWS)) {
+    it(name, () => expect(JSON.parse(JSON.stringify(now[name]))).toEqual(view))
+  }
+})
+
+describe("a recording wired through a Teleport pair is reviewed as the same recording wired directly", () => {
+  const send = { id: "send", type: "teleport-send", position: at, data: {} }
+  const recv = { id: "recv", type: "teleport-receive", position: at, data: {} }
+  const viaPair = [
+    { id: "e1", source: "rec", target: "send", sourceHandle: "video", targetHandle: "in" },
+    { id: "tp", source: "send", target: "recv", sourceHandle: "out", targetHandle: "in", data: { teleporter: true } },
+    { id: "e2", source: "recv", target: "t1", sourceHandle: "out", targetHandle: "media" },
+  ]
+  const rowsOf = (view: ReturnType<typeof reviewViewOf>) => {
+    const render = view.nodes.find((n) => n.id === view.renderId)!
+    return renderReviewAdapterOf(render.type as string)!.rows(render as never, view.nodes as never, view.edges as never)
+  }
+  for (const [name, data] of [["video", {}], ["video, framed", { framing: { aspect: "9:16", layout: "auto" } }], ["audio", { output: "audio" }]] as const) {
+    it(name, () => {
+      const direct = reviewViewOf("t1", [rec, t1(data)], [wire])
+      const teleported = reviewViewOf("t1", [rec, send, recv, t1(data)], viaPair)
+      if (name === "video") expect(rowsOf(teleported).map((r) => r.sources)).toEqual([["https://r2/ep.mp4"]])
+      expect(rowsOf(teleported).map((r) => r.sources)).toEqual(rowsOf(direct).map((r) => r.sources))
+      expect(JSON.parse(JSON.stringify(teleported))).toEqual(JSON.parse(JSON.stringify(direct)))
+      expect(usecaseReviewSource("t1", [rec, send, recv, t1(data)], viaPair)!.recordingUrl).toBe("https://r2/ep.mp4")
+    })
+  }
+})
+
+describe("a first recording with no file yet is skipped, as the run skips it (its resolver hands the run none)", () => {
+  const empty = { id: "e0", type: "upload-video", position: at, data: {} }
+  const clipPlan = [{ ...plan, meta: { title: "Clip" } }]
+  const cases = [
+    ["Tighten Episode", { ...t1() }],
+    ["Trailer", { ...t1({ formats: ["9:16"], reviewBeforeRender: true }), type: "episode-trailer" }],
+    ["Clip Pack", { ...t1({ generatedJson: clipPlan }), type: "clip-pack" }],
+  ] as const
+  for (const [name, node] of cases) {
+    it(name, () => {
+      const into = (source: string, id: string) => ({ id, source, target: "t1", sourceHandle: "video", targetHandle: "media" })
+      const both = [into("e0", "w0"), into("rec", "w1")]
+      expect(usecaseReviewSource("t1", [empty, rec, node], both)!.recordingUrl).toBe("https://r2/ep.mp4")
+      const view = reviewViewOf("t1", [empty, rec, node], both)
+      const sourceUrls = view.nodes.filter((n) => String(n.type).startsWith("upload-")).map((n) => (n.data as { url?: unknown }).url)
+      expect(sourceUrls.length).toBeGreaterThan(0)
+      expect(sourceUrls.every((u) => u === "https://r2/ep.mp4")).toBe(true)
+      expect(JSON.parse(JSON.stringify(view))).toEqual(JSON.parse(JSON.stringify(reviewViewOf("t1", [rec, node], [into("rec", "w1")]))))
+    })
+  }
+})
+
+describe("a multicam take's review view (decided 2026-10-17)", () => {
+  const cam2 = { id: "cam2", type: "upload-video", position: at, data: { url: "https://r2/cam2.mp4" } }
+  const mic = { id: "mic", type: "upload-audio", position: at, data: { url: "https://r2/mic.wav" } }
+  const w = (source: string, sourceHandle: string, targetHandle = "media") => ({ id: `w-${source}`, source, target: "t1", sourceHandle, targetHandle })
+  const wires = [w("rec", "video"), w("cam2", "video"), w("mic", "audio", "masterAudio")]
+  /** A take whose run kept the settings it was built from: a multicam run's carry `cameras`. */
+  const take = (settings: object) => ({ reviewBeforeRender: true, generatedResults: [{ url: "https://r2/p.mp4", quality: "proxy", useCaseSettings: settings }] })
+  const multicam = resolveTightenEpisodeSettings({ reviewBeforeRender: true, cameras: { speakerCameras: { "1": 2 } } }, "video", { recordings: 2, masterAudio: true })
+
+  it("holds the recordings, the master, the plan, Camera Switch, the render and the transcript, wired plan → switch → render", () => {
+    const view = reviewViewOf("t1", [rec, cam2, mic, t1(take(multicam))], wires)
+    const ids = view.nodes.map((n) => n.id)
+    for (const id of ["t1::uc-source", "t1::uc-cam-2", "t1::uc-master", "t1", "t1::uc-switch", "t1::uc-render", "t1::uc-transcribe"]) expect(ids).toContain(id)
+    // Speaker Map (and its gated wire) and Audio Sync are not part of the review.
+    expect(ids).not.toContain("t1::uc-map")
+    expect(ids).not.toContain("t1::uc-sync")
+    expect(view.edges.map((e) => `${e.source}>${e.target}.${e.targetHandle}`)).toEqual(expect.arrayContaining(["t1>t1::uc-switch.edl", "t1::uc-switch>t1::uc-render.edl"]))
+    expect(renderPlanPath(view.renderId, view.nodes, view.edges as never)?.planId).toBe("t1")
+    const render = view.nodes.find((n) => n.id === view.renderId)!
+    expect(renderReviewAdapterOf(render.type)!.rows(render as never, view.nodes as never, view.edges as never)).toHaveLength(1)
+  })
+  it("the ids named inside data follow the view's names: the plan's roles, the switch's override", () => {
+    const view = reviewViewOf("t1", [rec, cam2, mic, t1(take(multicam))], wires)
+    const data = (id: string) => view.nodes.find((n) => n.id === id)!.data as Record<string, unknown>
+    expect(data("t1")).toMatchObject({ sourceOrder: ["t1::uc-master", "t1::uc-source", "t1::uc-cam-2"], sourceConfig: { "t1::uc-master": { role: "master-audio" } } })
+    expect(data("t1::uc-switch")).toMatchObject({ speakerMapByOrder: { "1": "t1::uc-cam-2" } })
+    expect(data("t1::uc-cam-2")).toMatchObject({ url: "https://r2/cam2.mp4" })
+    expect(data("t1::uc-master")).toMatchObject({ url: "https://r2/mic.wav" })
+  })
+  it("a take whose run read one recording is reviewed as that run, whoever the viewer now is", () => {
+    viewer.multicam = true
+    const single = resolveTightenEpisodeSettings({ reviewBeforeRender: true }, "video")
+    const view = reviewViewOf("t1", [rec, cam2, mic, t1(take(single))], wires)
+    expect(view.nodes.map((n) => n.id)).toEqual(["t1::uc-source", "t1::uc-transcribe", "t1::uc-silence", "t1", "t1::uc-render"])
   })
 })

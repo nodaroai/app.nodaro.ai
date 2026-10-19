@@ -539,9 +539,13 @@ nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker
                                                          # --speaker-map-result = a speaker-map result: a label in --speaker-map wins over it.
                                                          # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
                                                          # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
-nodaro edit tighten-episode --media <url> [--music <url>] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip]] (--layout only with --framing) [--no-captions] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit tighten-episode --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--music <url>] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip]] (--layout only with --framing) [--no-captions] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Tighten Episode: one recording (video or audio, up to 3 hours) in, the tightened
                                                          # episode out — transcribe, plan, render, plus captions / music / framing as set.
+                                                         # Several cameras: repeat --media (in order), --master-audio for the mixer track;
+                                                         # --wide-camera, --synced, --speaker-camera 1=2 (0 = the wide shot) set the Cameras.
+                                                         # Several recordings or a master need Speaker Map (not yet enabled on nodaro.ai:
+                                                         # refused 403 node_not_available until it is).
                                                          # Priced as its steps plus a per-run fee (the fees are listed after this block).
                                                          # --review stops at a preview; render its final with edit continue-use-case.
 nodaro edit episode-chapters --media <url> [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]

@@ -236,6 +236,79 @@ describe("tighten_episode", () => {
   })
 })
 
+describe("tighten_episode on several recordings (decided 2026-10-19)", () => {
+  it("posts the recordings in order, the Master audio and the Cameras settings camelCased", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", {
+      media_urls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      master_audio_url: "https://r2/m.wav",
+      cameras: { wide_camera: 3, already_synced: false, speaker_cameras: { "1": 2 } },
+    })
+    expect(res.isError).toBeFalsy()
+    expect(seen.body).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 3, synced: false, speakerCameras: { "1": 2 } },
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+  })
+
+  it("sends only the Cameras settings the caller set", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { wide_camera: 2 } })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { wide: 2 }, mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("one recording in media_urls is the same request as media_url", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_urls: ["https://r2/ep.mp4"] })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("media_url and media_urls together are a tool error before any request", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", { media_url: "https://r2/a.mp4", media_urls: ["https://r2/b.mp4"] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toMatch(/media_url or media_urls, not both/)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("neither media_url nor media_urls is a tool error before any request", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", { master_audio_url: "https://r2/m.wav" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toMatch(/Pass media_url/)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("more recordings than a run takes, or a speaker past the last, are refused by the schema", async () => {
+    const { server, seen } = await setup()
+    const seven = Array.from({ length: 7 }, (_, i) => `https://r2/${i}.mp4`)
+    expect((await callTool(server, "tighten_episode", { media_urls: seven })).isError).toBe(true)
+    const badSpeaker = await callTool(server, "tighten_episode", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { speaker_cameras: { "7": 1 } } })
+    expect(badSpeaker.isError).toBe(true)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("a refusal for a caller without Speaker Map reaches the agent with its code and message", async () => {
+    const message = "Tighten Episode on several recordings or with a Master audio is not available on this deployment yet. Send one recording."
+    const { server } = await setup(403, { error: { code: "node_not_available", message } })
+    const res = await callTool(server, "tighten_episode", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("node_not_available")
+    expect(textOf(res)).toContain("Send one recording")
+  })
+
+  it("the description says several recordings need Speaker Map and names the cameras report", async () => {
+    const { server } = await setup()
+    const tool = (await listTools(server)).find((t) => t.name === "tighten_episode")
+    expect(tool?.description).toMatch(/Speaker Map/)
+    expect(tool?.description).toMatch(/403/)
+    expect(tool?.description).toContain("output_data.cameras")
+  })
+})
+
 describe("make_chapters", () => {
   it("posts the recording and the plan settings to /v1/episode-chapters, with the client's idempotency key", async () => {
     const { server, seen } = await setup(202, { jobId: "00000000-0000-4000-8000-0000000000cc" })

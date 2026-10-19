@@ -11,6 +11,7 @@ import {
   buildTightenEpisodeGraph,
   clipPackNoneRenderedMessage,
   parseClipPackNoneRendered,
+  resolveTightenEpisodeSettings,
   toStoredInlineGraph,
   type TightenEpisodeSettings,
 } from "@nodaro/render-rules"
@@ -481,5 +482,66 @@ describe("a Clip Pack run's result", () => {
     }, "exec-9")
     expect(out).toMatchObject({ audioUrl: "https://r2/a0.m4a", clips: [{ url: "https://r2/a0.m4a" }, { url: "https://r2/a1.m4a" }] })
     expect(out.videoUrl).toBeUndefined()
+  })
+})
+
+describe("the cameras report (decided 2026-10-17)", () => {
+  const v = (n: number) => ({ url: `https://r2/c${n}.mp4`, kind: "video" as const })
+  const multicamGraph = (raw: Record<string, unknown>, recordings: number, master: boolean) => {
+    const settings = resolveTightenEpisodeSettings({ captions: false, ...raw }, "video", { recordings, masterAudio: master })
+    const sources = {
+      media: v(1),
+      ...(recordings > 1 ? { moreMedia: Array.from({ length: recordings - 1 }, (_, i) => v(i + 2)) } : {}),
+      ...(master ? { masterAudio: { url: "https://r2/m.wav", kind: "audio" as const } } : {}),
+    }
+    return toStoredInlineGraph(buildTightenEpisodeGraph(settings, sources), settings)
+  }
+  const render = { "uc-render": { status: "completed", output: { videoUrl: "https://r2/out.mp4", quality: "final" } } }
+
+  it("a multicam run reports who was put on which camera, and the sync and map notes", () => {
+    const graph = multicamGraph({}, 3, true)
+    const states = {
+      "uc-sync": { status: "completed", output: { json: { version: 1, reference: "uc-master", offsets: [], notes: ["\"uc-cam-3\": no clear match …"] } } },
+      "uc-map": { status: "completed", output: { json: { version: 1, speakerMap: { speaker_0: "uc-cam-2", speaker_1: "" }, confidence: { speaker_0: { camera: "uc-cam-2", marginDb: 7.5 }, speaker_1: { camera: "", marginDb: 0.4 } }, notes: ["…"] } } },
+      "uc-transcribe": { status: "completed", output: { json: { words: [{ text: "a", startMs: 0, endMs: 1, speaker: "speaker_1" }, { text: "b", startMs: 2, endMs: 3, speaker: "speaker_0" }] } } },
+      ...render,
+    }
+    expect(usecaseWrapperOutput(graph, states, "exec-1").cameras).toEqual({
+      speakers: [{ speaker: "speaker_1", ordinal: 1, camera: null, marginDb: 0.4 }, { speaker: "speaker_0", ordinal: 2, camera: 2, marginDb: 7.5 }],
+      syncNotes: ["\"uc-cam-3\": no clear match …"],
+      mapNotes: ["…"],
+    })
+  })
+  it("the first camera is position 1; a speaker the map names but the transcript never heard comes last", () => {
+    const graph = multicamGraph({}, 2, false)
+    const states = {
+      "uc-map": { status: "completed", output: { json: JSON.stringify({ version: 1, speakerMap: { speaker_0: "uc-source", speaker_9: "uc-cam-2" }, confidence: { speaker_0: { camera: "uc-source", marginDb: null } }, notes: [] }) } },
+      "uc-transcribe": { status: "completed", output: { json: { words: [{ text: "a", startMs: 0, endMs: 1, speaker: "speaker_0" }] } } },
+      ...render,
+    }
+    expect(usecaseWrapperOutput(graph, states, "e").cameras!.speakers).toEqual([
+      { speaker: "speaker_0", ordinal: 1, camera: 1, marginDb: null },
+      { speaker: "speaker_9", ordinal: 2, camera: 2, marginDb: null },
+    ])
+  })
+  it("a sync output that is a string which does not parse, or steps that never completed: no notes, never a throw", () => {
+    const graph = multicamGraph({}, 2, true)
+    const out = usecaseWrapperOutput(graph, { "uc-sync": { status: "completed", output: { json: "{not json" } }, "uc-map": { status: "failed" }, ...render }, "e")
+    expect(out.cameras).toEqual({ speakers: [], syncNotes: [], mapNotes: [] })
+  })
+  it("one camera + Master audio: Audio Sync's notes only (nothing is cut between, no speakers)", () => {
+    const graph = multicamGraph({}, 1, true)
+    const states = { "uc-sync": { status: "completed", output: { json: { version: 1, notes: ["offset 1.2 s"] } } }, ...render }
+    expect(usecaseWrapperOutput(graph, states, "e").cameras).toEqual({ speakers: [], syncNotes: ["offset 1.2 s"], mapNotes: [] })
+  })
+  it("a one-recording run has no cameras report", () => {
+    const g = toStoredInlineGraph(buildTightenEpisodeGraph(TIGHTEN_EPISODE_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }), TIGHTEN_EPISODE_DEFAULTS)
+    expect(usecaseWrapperOutput(g, render, "e")).not.toHaveProperty("cameras")
+  })
+  it("the node's output carries it as useCaseCameras (a malformed one is dropped)", () => {
+    const cameras = { speakers: [{ speaker: "speaker_0", ordinal: 1, camera: 2, marginDb: 6 }], syncNotes: ["x"], mapNotes: [] }
+    expect(usecaseJobOutput({ videoUrl: "https://r2/out.mp4", cameras })).toMatchObject({ useCaseCameras: cameras })
+    expect(usecaseJobOutput({ videoUrl: "https://r2/out.mp4", cameras: { speakers: "no" } })).not.toHaveProperty("useCaseCameras")
+    expect(usecaseJobOutput({ videoUrl: "https://r2/out.mp4" })).not.toHaveProperty("useCaseCameras")
   })
 })

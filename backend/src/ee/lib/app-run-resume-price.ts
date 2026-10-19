@@ -61,9 +61,11 @@ export async function appRunResumeCredits(input: {
   readonly sourceStates: Readonly<Record<string, State>>
   /** The run key the Retry's UGC Clip sends: the chain root. */
   readonly runKey: string
+  /** The runner may use Speaker Map (`usecaseMulticamEstimateFor`): a use-case node is priced on every recording it reads. */
+  readonly multicam?: boolean
 }): Promise<AppRunResumeCredits> {
   const { caller, nodes, edges, runNodeIds, sourceStates, runKey } = input
-  const rest = await estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds)
+  const rest = await (input.multicam ? estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds, true) : estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds))
   const byId = new Map(nodes.map((n) => [n.id, n] as const))
   const keeps = (id: string, type: "ugc-script" | "ugc-creator") => ugcKeptOutputs(type, byId.get(id)?.data ?? {}) !== null
   const prices: Array<{ id: string; credits: number }> = []

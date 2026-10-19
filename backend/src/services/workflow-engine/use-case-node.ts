@@ -40,6 +40,7 @@ import { DrainAbortError, isWorkerDraining } from "../../lib/worker-drain.js"
 import { cancelOwnedJob } from "../../lib/cancel-job.js"
 import { IN_FLIGHT_JOB_STATUSES } from "../../lib/job-status.js"
 import { USE_CASE_MAX_DEPTH } from "../../lib/use-case/lanes.js"
+import { usecaseMulticamAvailable } from "../../lib/use-case/inner-availability.js"
 import { syncHttpIdempotencyKey } from "./idempotency-key.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
 import { usecaseJobOutput } from "./use-case-output.js"
@@ -139,6 +140,8 @@ export async function attemptStillApplies(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   userId: string,
+  /** Whether the run's viewer may use Speaker Map: what a fresh run of the node would read (`freshRunInputs`). */
+  multicam = false,
 ): Promise<boolean | undefined> {
   const row = await readWrapper(jobId, userId)
   if (row === undefined) return undefined
@@ -152,15 +155,15 @@ export async function attemptStillApplies(
     return undefined
   }
   const graph = execution && execution.userId === userId ? execution.inlineGraph : null
-  const kind = graph ? attemptMediaKind(type, graph) : null
+  const ranWith = (row.input_data && typeof row.input_data === "object" ? row.input_data : {}) as Record<string, unknown>
+  const kind = graph ? attemptMediaKind(type, graph, ranWith) : null
   if (!kind) return false
   let now: Record<string, unknown>
   try {
-    now = freshRunInputs(node, resolvedInputs)
+    now = freshRunInputs(node, resolvedInputs, multicam)
   } catch {
     return false
   }
-  const ranWith = (row.input_data && typeof row.input_data === "object" ? row.input_data : {}) as Record<string, unknown>
   return attemptRanWithInputs(type, ranWith, kind, now)
 }
 
@@ -185,7 +188,9 @@ export async function executeUseCaseNode(
   const key = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
   const label = usecaseNodeLabel(node.type)
   const failedAttempt = failedAttemptOf(node, ctx, iterationIndex, idempotencyScope)
-  let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttempt)
+  // Several recordings and a Master audio are read only for a viewer who may use Speaker Map (decided 2026-10-19).
+  const multicam = await usecaseMulticamAvailable(ctx.userId)
+  let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttempt, multicam)
   /** A failed attempt this call would resume, not yet held to the node's current inputs. */
   let attemptToCheck = failedAttempt !== null && request.fallback ? failedAttempt : null
   let target: Target | undefined
@@ -251,7 +256,7 @@ export async function executeUseCaseNode(
       }
     } else if (attemptToCheck) {
       // The attempt is resumed only on the inputs it ran with; else a fresh run.
-      const applies = await attemptStillApplies(attemptToCheck, node, resolvedInputs, ctx.userId)
+      const applies = await attemptStillApplies(attemptToCheck, node, resolvedInputs, ctx.userId, multicam)
       if (applies !== undefined) {
         attemptToCheck = null
         if (!applies) request = request.fallback!()

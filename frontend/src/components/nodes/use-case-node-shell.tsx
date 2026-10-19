@@ -68,15 +68,19 @@ export function useUseCaseNodeRun(id: string, nodeType: string, data: UseCaseShe
   return { credits, status: data.executionStatus ?? "idle", listDriven, errorCode, shownError }
 }
 
-/** One pip's place on the card: an input on the left, an output on the right, at the top or the bottom. */
+/** One pip's place on the card: an input on the left, an output on the right, at the top, the middle or the bottom. */
 export interface UseCaseHandleSlot {
   readonly id: string
   readonly type: "target" | "source"
-  readonly at: "top" | "bottom"
+  readonly at: "top" | "middle" | "bottom"
 }
 
-const TOP = "24px"
-const BOTTOM = "calc(100% - 24px)"
+const SLOT_TOP: Readonly<Record<UseCaseHandleSlot["at"], string>> = { top: "24px", middle: "50%", bottom: "calc(100% - 24px)" }
+
+/** A slot's offset from the card's top — the shell's handle and the node's own pip read the same one. */
+export function usecaseSlotTop(at: UseCaseHandleSlot["at"]): string {
+  return SLOT_TOP[at]
+}
 
 export function UseCaseNodeShell({
   id,
@@ -151,7 +155,7 @@ export function UseCaseNodeShell({
           id: h.id,
           type: h.type,
           position: h.type === "target" ? Position.Left : Position.Right,
-          customStyle: h.type === "target" ? { top: h.at === "top" ? TOP : BOTTOM, left: "-29px" } : { top: h.at === "top" ? TOP : BOTTOM, right: "-29px" },
+          customStyle: h.type === "target" ? { top: SLOT_TOP[h.at], left: "-29px" } : { top: SLOT_TOP[h.at], right: "-29px" },
           external: true,
         }))}
       >

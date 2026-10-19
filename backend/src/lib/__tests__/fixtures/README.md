@@ -207,3 +207,13 @@ these rows is free text): the
 four types, Tighten Episode's "a music bed" and "framing None", Trailer's "an
 intro card", and Clip Pack's "framing None" and "framing None and captions
 null". Every editor row now equals its engine row plus the caller's `userId`.
+
+One record was corrected by hand, never re-recorded, when Tighten Episode
+came to take up to six recordings (ruled 2026-10-19), recomputed with the
+test's own function: `bodySchemas["tighten-episode"]` — the route's body takes
+one to six recordings, a Master audio (`masterAudioUrl`) and the Cameras
+settings (`cameras`, read only by a run on several recordings or a Master
+audio). Several recordings are read only for a viewer who may use Speaker Map;
+every engine and estimate call these fixtures make is a viewer who may not, so
+every body and expansion row — the two-recording rows included — is the run
+exactly as before, unchanged.

@@ -18,7 +18,7 @@
  * Otherwise the node runs fresh, and that run's fee is the one charged.
  * Pure (the descriptors are pure data), so the engine's request half can ask it.
  */
-import { usecaseDescriptor, type StoredInlineGraph, type UseCaseMediaKind, type UseCaseNodeType } from "@nodaro/render-rules"
+import { usecaseDescriptor, type StoredInlineGraph, type UseCaseMediaKind, type UseCaseNodeType, type UseCaseSourcesShape } from "@nodaro/render-rules"
 import type { NodeExecutionState } from "./types.js"
 
 export function failedAttemptJobIdOf(state: Readonly<NodeExecutionState> | undefined): string | null {
@@ -56,19 +56,28 @@ function canonical(value: unknown): string {
 
 const urlOf = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null)
 
+/** A non-empty list of non-empty strings, or null. */
+const urlsOf = (value: unknown): string[] | null =>
+  Array.isArray(value) && value.length > 0 && value.every((v) => urlOf(v) !== null) ? (value as string[]) : null
+
 /**
  * Did the failed attempt run with exactly what the node would run with now?
- *  - `ranWith`: the attempt's wrapper `input_data` — the recording, music and
- *    intro card it ran on, and the settings it resolved (a continuation's
- *    wrapper copies its source's);
- *  - `mediaKind`: what its recording was (its stored graph's source), which
- *    the settings were resolved for;
+ *  - `ranWith`: the attempt's wrapper `input_data` — the recordings, Master
+ *    audio, music and intro card it ran on, and the settings it resolved (a
+ *    continuation's wrapper copies its source's). A run on one recording
+ *    without a master records only its `mediaUrl`; one on several (or with a
+ *    master) also records every recording in order (`mediaUrls`) and the
+ *    master (decided 2026-10-18);
+ *  - `mediaKind`: what its recordings were (`attemptMediaKind`), which the
+ *    settings were resolved for;
  *  - `now`: what a fresh run of the node would send (`freshRunInputs`).
- * The current settings are resolved for the same recording kind and compared
- * setting by setting (`settingsUnchanged`), with the inputs the type takes,
- * key order ignored. Everything else on the wrapper (its mode, its lineage and
- * claim keys, its fee, the recording's probed length) says nothing about the
- * inputs and is not compared. Pure.
+ * Every recording (in order), the master and the inputs the type takes are
+ * compared; then the current settings are resolved for the same recordings —
+ * kind and shape (how many, whether a master), so the Cameras settings are
+ * read as the run reads them — and compared setting by setting
+ * (`settingsUnchanged`), key order ignored. Everything else on the wrapper
+ * (its mode, its lineage and claim keys, its fee, the probed length) says
+ * nothing about the inputs and is not compared. Pure.
  */
 export function attemptRanWithInputs(
   type: UseCaseNodeType,
@@ -78,28 +87,36 @@ export function attemptRanWithInputs(
 ): boolean {
   const d = usecaseDescriptor(type)
   const takes = (input: "music" | "introCard", value: unknown) => (d.inputs.includes(input) ? urlOf(value) : null)
-  const mediaNow = Array.isArray(now.mediaUrls) ? urlOf(now.mediaUrls[0]) : null
+  // A row written before runs took several recordings records the first alone.
+  const ranMedia = urlsOf(ranWith.mediaUrls) ?? (urlOf(ranWith.mediaUrl) !== null ? [ranWith.mediaUrl as string] : null)
+  const mediaNow = urlsOf(now.mediaUrls)
+  if (ranMedia === null || mediaNow === null) return false
   const ran = {
-    media: urlOf(ranWith.mediaUrl),
+    media: ranMedia,
+    masterAudio: urlOf(ranWith.masterAudioUrl),
     music: takes("music", ranWith.musicUrl),
     introCard: takes("introCard", ranWith.introCardUrl),
   }
-  if (ran.media === null || mediaNow === null) return false
   const current = {
     media: mediaNow,
+    masterAudio: urlOf(now.masterAudioUrl),
     music: takes("music", now.musicUrl),
     introCard: takes("introCard", now.introCardUrl),
   }
   if (canonical(ran) !== canonical(current)) return false
   const stored = ranWith.settings
   if (!isPlainRecord(stored)) return false
+  // The same recordings (proven just above), so one shape serves both readings.
+  const shape: UseCaseSourcesShape = { recordings: mediaNow.length, masterAudio: current.masterAudio !== null }
   // A setting the attempt has no value for (one added since it ran) holds
   // what the current resolver makes of the attempt's own settings: its
-  // default. Read with the recording, music and intro card the node has now
-  // (proven the attempt's own just above), so a default a resolver derives
-  // from one of them is the attempt's too.
-  const inputsNow = Object.fromEntries((["mediaUrls", "musicUrl", "introCardUrl"] as const).flatMap((k) => (now[k] !== undefined ? [[k, now[k]] as const] : [])))
-  return settingsUnchanged(stored, d.resolveSettings(now, mediaKind), d.resolveSettings({ ...inputsNow, ...stored }, mediaKind))
+  // default. Read with the recordings, master, music and intro card the node
+  // has now (proven the attempt's own just above), so a default a resolver
+  // derives from one of them is the attempt's too.
+  const inputsNow = Object.fromEntries(
+    (["mediaUrls", "masterAudioUrl", "musicUrl", "introCardUrl"] as const).flatMap((k) => (now[k] !== undefined ? [[k, now[k]] as const] : [])),
+  )
+  return settingsUnchanged(stored, d.resolveSettings(now, mediaKind, shape), d.resolveSettings({ ...inputsNow, ...stored }, mediaKind, shape))
 }
 
 const isPlainRecord = (v: unknown): v is Readonly<Record<string, unknown>> => typeof v === "object" && v !== null && !Array.isArray(v)
@@ -137,13 +154,21 @@ export function settingsUnchanged(
 }
 
 /**
- * What the recording of an attempt's run was, read off the graph it stored:
- * its source node is an audio or a video upload (`usecaseSourceNode`). `null`
- * when the graph is another type's or has no such source — the attempt's
- * inputs cannot be told, so it is not resumed. Pure.
+ * What the recordings of an attempt's run were — the kind its settings were
+ * resolved for. A run on several recordings or a Master audio recorded it on
+ * its wrapper (`ranWith.mediaKind`: its recordings', which a graph that kept
+ * only its sound cannot tell). Otherwise it is read off the graph the run
+ * stored: its source node is an audio or a video upload (`usecaseSourceNode`).
+ * `null` when the graph is another type's or has no such source — the
+ * attempt's inputs cannot be told, so it is not resumed. Pure.
  */
-export function attemptMediaKind(type: UseCaseNodeType, graph: Pick<StoredInlineGraph, "nodeType" | "nodes">): UseCaseMediaKind | null {
+export function attemptMediaKind(
+  type: UseCaseNodeType,
+  graph: Pick<StoredInlineGraph, "nodeType" | "nodes">,
+  ranWith?: Readonly<Record<string, unknown>>,
+): UseCaseMediaKind | null {
   if (graph.nodeType !== type) return null
+  if (ranWith?.mediaKind === "video" || ranWith?.mediaKind === "audio") return ranWith.mediaKind
   const sourceId = usecaseDescriptor(type).inputNodeIds.media
   const source = graph.nodes.find((n) => n.id === sourceId)
   return source?.type === "upload-audio" ? "audio" : source?.type === "upload-video" ? "video" : null

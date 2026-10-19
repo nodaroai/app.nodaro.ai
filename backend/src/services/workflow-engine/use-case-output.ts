@@ -25,13 +25,15 @@
  *    still — and the wrapper job. The clips themselves (with each one's title
  *    and hook) ride on `clips`, how many could not be rendered on
  *    `failedClips`, and how many came uncaptioned (their captions could not
- *    be added) on `failedCaptions`.
+ *    be added) on `failedCaptions`. A run on several recordings or a Master
+ *    audio reports its cameras (who was put on which camera, the sync and map
+ *    notes) on `useCaseCameras`, the node's saved field of that name.
  *  - `usecaseSavedNodeOutput`: the saved-data reader, read off what the node
  *    holds — the use-case branch of `extractSavedNodeOutput`, ahead of its
  *    unit branch.
  */
 import { editPlanSavedOutput } from "@nodaro/shared/edl"
-import { usecaseListsItsResult } from "@nodaro/render-rules"
+import { usecaseCamerasReportOf, usecaseListsItsResult } from "@nodaro/render-rules"
 import type { NodeOutput } from "./types.js"
 
 const url = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
@@ -71,6 +73,7 @@ export function usecaseJobOutput(
   const failedCaptions = typeof outputData.failedCaptions === "number" && Number.isInteger(outputData.failedCaptions) && outputData.failedCaptions > 0
     ? outputData.failedCaptions
     : undefined
+  const useCaseCameras = usecaseCamerasReportOf(outputData.cameras)
   const failedFormats = Array.isArray(outputData.failedFormats)
     ? (outputData.failedFormats as unknown[]).filter((f): f is string => typeof f === "string" && f.length > 0)
     : []
@@ -90,6 +93,7 @@ export function usecaseJobOutput(
       ? { listResults: rows, listResultStamps: rows.map(() => ({ ...(quality ? { quality } : {}), ...(planBasis ? { planBasis } : {}), ...(renderBasis ? { renderBasis } : {}), ...(jobId ? { jobId } : {}) })), formats: delivered }
       : {}),
     ...(failedFormats.length > 0 ? { failedFormats } : {}),
+    ...(useCaseCameras ? { useCaseCameras } : {}),
     // Every row is its own clip's take: its own quality, clip key and render's bases.
     ...(clips.length > 0
       ? {

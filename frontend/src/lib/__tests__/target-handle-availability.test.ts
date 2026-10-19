@@ -1,4 +1,4 @@
-// @test-units-by-name looks up Camera Switch's own declared inputs only
+// @test-units-by-name looks up Camera Switch's and Tighten Episode's own declared inputs only
 /**
  * Camera Switch's Speaker map input exists for Speaker Map's result alone, so
  * while Speaker Map is withheld from the viewer (the admin switch hides it from
@@ -97,5 +97,44 @@ describe("Camera Switch's Speaker map input follows Speaker Map's availability",
       expect(getTargetHandlesAccepting(JSON_SOURCE).some(speakerMapMatch)).toBe(true)
       expect(isValidWorkflowConnection(wireTo("speakerMap"), typeOf)).toBe(true)
     })
+  })
+})
+
+/**
+ * Tighten Episode's Master audio is read only by a run on several cameras —
+ * only for a viewer who may use Speaker Map (decided 2026-10-19) — so it is
+ * withheld with Speaker Map, exactly as Camera Switch's Speaker map input is.
+ */
+describe("a use-case node's Master audio input follows Speaker Map's availability", () => {
+  const typeOfT = (id: string) => (id === "mic" ? "upload-audio" : id === "t" ? "tighten-episode" : undefined)
+  const micTo = (targetHandle: string) => ({ source: "mic", sourceHandle: "audio", target: "t", targetHandle })
+  const masterMatch = (m: { nodeType: string; handleId: string }) => m.nodeType === "tighten-episode" && m.handleId === "masterAudio"
+
+  it("stays declared either way: saved and agent-written wires resolve", () => {
+    withheld()
+    expect(NODE_DEFINITIONS.find((d) => d.type === "tighten-episode")?.inputs).toContain("masterAudio")
+  })
+  it("withheld (and before the answer lands): no pip unless wired, no candidate, a new wire refused — Music still connects", () => {
+    for (const state of [withheld, () => __resetSurfaceAvailabilityForTests(null)]) {
+      state()
+      expect(isTargetHandleWithheld("tighten-episode", "masterAudio")).toBe(true)
+      expect(isTargetHandleWithheld("tighten-episode", "music")).toBe(false)
+      expect(isTargetHandleWithheld("tighten-episode", "media")).toBe(false)
+      // A type whose descriptor does not take a master withholds nothing.
+      expect(isTargetHandleWithheld("episode-chapters", "masterAudio")).toBe(false)
+      expect(targetHandleShown("t", "tighten-episode", "masterAudio", [])).toBe(false)
+      expect(targetHandleShown("t", "tighten-episode", "masterAudio", [{ target: "t", targetHandle: "masterAudio" }])).toBe(true)
+      expect(getTargetHandlesAccepting("upload-audio").some(masterMatch)).toBe(false)
+      expect(isValidWorkflowConnection(micTo("masterAudio"), typeOfT)).toBe(false)
+      expect(isValidWorkflowConnection(micTo("music"), typeOfT)).toBe(true)
+      expect(resolveTargetHandle("tighten-episode", "audio", "source", "upload-audio")).not.toBe("masterAudio")
+    }
+  })
+  it("offered to a viewer who may use Speaker Map", () => {
+    available()
+    expect(isTargetHandleWithheld("tighten-episode", "masterAudio")).toBe(false)
+    expect(targetHandleShown("t", "tighten-episode", "masterAudio", [])).toBe(true)
+    expect(getTargetHandlesAccepting("upload-audio").some(masterMatch)).toBe(true)
+    expect(isValidWorkflowConnection(micTo("masterAudio"), typeOfT)).toBe(true)
   })
 })

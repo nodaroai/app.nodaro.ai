@@ -40,6 +40,7 @@ import {
 } from "@nodaro/render-rules"
 import { usecaseLabelVars } from "@/lib/use-case-request-body"
 import { tx, type MessageKey } from "@/lib/i18n"
+import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
 import { previewRefusalText } from "@/lib/preview-refusal-text"
 
 /** The continue route's code for a Render final of a run that made no Preview (backend render-final-run.ts). */
@@ -151,6 +152,8 @@ function nodeFailuresText(message: string): string | null {
 const NODE_CODE_TEXT: Readonly<Record<string, MessageKey>> = {
   // A review-on use-case node about to run once per list item.
   [USE_CASE_REVIEW_LIST_DRIVEN]: "nodeRun.tightenReviewListDriven",
+  // A use-case run's recordings that cannot run (usecaseRecordingsProblem, and a Master audio that is not audio).
+  ...USE_CASE_RECORDINGS_REASON_KEYS,
 }
 
 /**

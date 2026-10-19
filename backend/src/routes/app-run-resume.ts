@@ -72,6 +72,7 @@ import {
   type ContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { resumeRouteNodeIds, resumeSource } from "../lib/app-run-resume.js"
+import { usecaseMulticamEstimateFor } from "../lib/use-case/inner-availability.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
@@ -395,6 +396,8 @@ async function resumePrice(input: {
   const { checkRunSetCredits, estimateRunSetCredits } = await import("../ee/billing/credits.js")
   const priced = withRunOverrides(input.nodes as Array<SnapshotNode & { type?: string }>, input.effective) as Array<{ id: string; type: string; data?: Record<string, unknown> }>
   const runNodeIds = new Set(input.runSet)
+  // A use-case node is priced on several recordings only for a runner who may use Speaker Map, as the Retry runs it (decided 2026-10-19).
+  const multicam = await usecaseMulticamEstimateFor(priced, input.userId)
   let base: { credits: number; hold: number; reusedClips: number }
   try {
     base = await appRunResumeCredits({
@@ -404,11 +407,12 @@ async function resumePrice(input: {
       runNodeIds,
       sourceStates: (input.source.nodeStates ?? {}) as Parameters<typeof appRunResumeCredits>[0]["sourceStates"],
       runKey: continuationRootOf(input.source),
+      ...(multicam ? { multicam } : {}),
     })
   } catch (err) {
     // No UGC pricing on this deployment: the run set as every estimate prices it.
     if (!(err instanceof UgcEstimateUnavailable)) throw err
-    const credits = await estimateRunSetCredits(priced, input.edges, runNodeIds)
+    const credits = await (multicam ? estimateRunSetCredits(priced, input.edges, runNodeIds, undefined, multicam) : estimateRunSetCredits(priced, input.edges, runNodeIds))
     base = { credits, hold: credits, reusedClips: 0 }
   }
   // The creator's markup, settled by the run once on what it runs (never from the runner who made the app).

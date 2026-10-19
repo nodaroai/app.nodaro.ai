@@ -533,6 +533,22 @@ const episode = await client.edit.tightenEpisode({ mediaUrl: masterUrl, musicUrl
 const done = await client.jobs.getStatus(episode.jobId) // output_data.videoUrl (or audioUrl)
 ```
 
+A conversation filmed on several cameras is one call as well: pass the
+cameras' recordings in order as `mediaUrls`, the mixer track as
+`masterAudioUrl`, and optionally `cameras` (`wide`, `synced`,
+`speakerCameras`). The run lines them up, works out who is on which camera and
+cuts to whoever is talking; `output_data.cameras` says who went where. This
+needs Speaker Map, which is not yet enabled on nodaro.ai: until it is, the
+request is refused `403 node_not_available`.
+
+```ts
+const multicam = await client.edit.tightenEpisode({
+  mediaUrls: [camAUrl, camBUrl, wideUrl],
+  masterAudioUrl: mixerUrl,
+  cameras: { wide: 3 },
+})
+```
+
 Its chapters, for the show notes, are one call too: `client.edit.episodeChapters`
 transcribes the recording and plans its chapters; nothing is rendered. Its fee
 is 11 credits<!-- credits: use-case-fee:episode-chapters --> per run, on top of its steps (quote it with

@@ -20,6 +20,8 @@
  *   its media node hands on, read as the step after the node is charged
  *   (`runForwardedVideoLengthSec`) — the cut its render recorded, through the
  *   captions and the music mix and merge that keep it (decided 2026-10-16).
+ * - a run on several recordings or a Master audio: its cameras report
+ *   (`cameras`, wrapper-output-cameras.ts), for an episode and a list alike.
  */
 import {
   runForwardedVideoLengthSec,
@@ -30,10 +32,11 @@ import {
 } from "@nodaro/render-rules"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 import { listOutput } from "./wrapper-output-lists.js"
+import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
 
 export { usecaseNoClipsRenderedMessage, usecaseNoResultMessage, usecaseWrapperKeepsPartial } from "./wrapper-output-lists.js"
 
-export type { UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+export type { UseCaseCameraSpeaker, UseCaseCamerasReport, UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 
 function episodeOutput(
   graph: StoredInlineGraph,
@@ -54,6 +57,7 @@ function episodeOutput(
   const durationSec = videoUrl || audioUrl
     ? runForwardedVideoLengthSec(mediaNodeId, undefined, graph.nodes, graph.edges, (id) => completedOutput(nodeStates, id) as RunOutputLengths | undefined)
     : undefined
+  const cameras = usecaseCamerasReport(graph, nodeStates)
   return {
     ...(videoUrl ? { videoUrl } : {}),
     ...(audioUrl ? { audioUrl } : {}),
@@ -64,6 +68,7 @@ function episodeOutput(
     ...(str(render?.renderBasis) ? { renderBasis: str(render?.renderBasis) } : {}),
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
+    ...(cameras ? { cameras } : {}),
     _executionId: executionId,
     ...failedStepOf(graph, nodeStates),
   }

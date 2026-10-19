@@ -10,7 +10,6 @@ import {
   drawnTightenFraming,
   isClipPackEmphasis,
   tightenFramingLayouts,
-  usecaseMediaKindOf,
   type TightenFramingAspect,
   type TightenFramingLayout,
 } from "@nodaro/render-rules"
@@ -27,7 +26,7 @@ import { CAPTION_STYLE_LABEL_KEYS } from "@/components/editor/config-panels/capt
 import { SPEAKER_EMPHASIS_LABEL_KEYS } from "@/components/editor/config-panels/speaker-view-reasons"
 import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
 import { useSpeakerSwitchLabel } from "@/components/editor/config-panels/speaker-switch-label"
-import { USE_CASE_AUDIO_LOCKS, usecaseAudioLockFailSafe } from "@/lib/use-case-audio-lock"
+import { USE_CASE_AUDIO_LOCKS, usecaseAudioLockFailSafe, usecaseWiredMediaKind } from "@/lib/use-case-audio-lock"
 import type { UnitConfigKit } from "../exec-kit"
 import type { ClipPackData } from "./types"
 
@@ -56,8 +55,8 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: Confi
   const data = raw as unknown as ClipPackData
   const t = useT()
   const switchLabel = useSpeakerSwitchLabel()
-  const mediaWire = (edges ?? []).find((e) => e.target === nodeId && e.targetHandle === "media" && !!e.source)
-  const wiredKind = mediaWire ? usecaseMediaKindOf(nodes.find((n) => n.id === mediaWire.source), mediaWire.sourceHandle) : undefined
+  // The recording the run reads, in the node's order — the store's lock reads it so too.
+  const wiredKind = usecaseWiredMediaKind(nodeId, nodes, edges ?? [])
   const audioSource = wiredKind === "audio"
   // No framing stored = the run's default framing; null = none.
   const framing: Framing | null = audioSource ? null : data.framing === undefined ? { ...CLIP_PACK_DEFAULT_FRAMING } : data.framing

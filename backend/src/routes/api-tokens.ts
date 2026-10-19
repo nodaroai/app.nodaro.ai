@@ -31,6 +31,7 @@ import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits, type EstimateNode } from "../ee/billing/credits.js"
+import { usecaseMulticamEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
@@ -691,6 +692,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // the author's placeholder (lib/exposed-text-caps.ts).
       const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges, {
         speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
+        // A use-case node is priced on several recordings only for a caller who may use Speaker Map (decided 2026-10-19).
+        ...((await usecaseMulticamEstimateFor(nodes as EstimateNode[], resolved.userId)) ? { multicam: true } : {}),
       })
 
       const inputs = sortedInputs.map((node) => {

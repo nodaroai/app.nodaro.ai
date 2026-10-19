@@ -7,7 +7,8 @@ export const definition = {
   "category": "processing",
   "inputs": [
     "media",
-    "music"
+    "music",
+    "masterAudio"
   ],
   "outputs": [
     "media",
@@ -51,7 +52,7 @@ export const definition = {
     "inputs": [
       {
         "id": "media",
-        "label": "Recording",
+        "label": "Recordings",
         "accepts": [
           "video",
           "audio"
@@ -60,6 +61,13 @@ export const definition = {
       {
         "id": "music",
         "label": "Music",
+        "accepts": [
+          "audio"
+        ]
+      },
+      {
+        "id": "masterAudio",
+        "label": "Master audio",
         "accepts": [
           "audio"
         ]

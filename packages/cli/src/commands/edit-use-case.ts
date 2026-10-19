@@ -31,6 +31,7 @@ import pc from "picocolors"
 import { emit, warn } from "../output.js"
 import { reportQueuedJob } from "../util.js"
 import { readJsonFile, refuseUnknownPlanTier, type GlobalOpts, type WatchOpts } from "./edit-shared.js"
+import { recordingsInput, withRecordingsOptions, type RecordingsOpts } from "./edit-recordings.js"
 
 /** The emphasis values Speaker View draws: "none", or its atoms joined with "+" (each once). */
 const EMPHASIS_HELP = `none, or ${SPEAKER_EMPHASIS_STYLES.filter((s) => s !== "none").join(", ")} joined with "+" (each once)`
@@ -46,10 +47,11 @@ const CONTINUATION_NEXT_STEP: Readonly<Record<string, (jobId: string) => string>
 export function registerUseCaseCommands(cmd: Command): void {
   // ── tighten-episode (podcast use-case node) ─────────────────────────────
   const framingLayouts: readonly string[] = ["auto", ...SPEAKER_LAYOUT_IDS]
-  cmd
-    .command("tighten-episode")
-    .description("tighten a podcast recording in one step (transcribe, cut silences, render; optional captions, music and framing)")
-    .requiredOption("--media <url>", "the recording (video or audio URL, up to 3 hours)")
+  withRecordingsOptions(
+    cmd
+      .command("tighten-episode")
+      .description("tighten a podcast recording in one step (transcribe, cut silences, render; optional captions, music and framing)"),
+  )
     .option("--music <url>", "optional music bed, ducked under the voice")
     .option("--output <kind>", "video | audio (an audio recording always makes an audio episode)")
     .option("--framing <aspect>", `frame a video episode on its speakers: ${EDL_TARGET_ASPECTS.join(" | ")}`)
@@ -65,8 +67,8 @@ export function registerUseCaseCommands(cmd: Command): void {
     .action(
       async (
         opts: GlobalOpts &
-          WatchOpts & {
-            media: string
+          WatchOpts &
+          RecordingsOpts & {
             music?: string
             output?: string
             framing?: string
@@ -95,11 +97,12 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--layout must be ${framingLayouts.join(", ")} (got "${opts.layout}")`)
           process.exit(1)
         }
+        const recordings = recordingsInput(opts)
         type Framing = NonNullable<TightenEpisodeInput["framing"]>
         try {
           const client = buildClient(opts.profile)
           const result = await client.edit.tightenEpisode({
-            mediaUrl: opts.media,
+            ...recordings,
             ...(opts.music ? { musicUrl: opts.music } : {}),
             ...(opts.output ? { output: opts.output as "video" | "audio" } : {}),
             ...(opts.framing

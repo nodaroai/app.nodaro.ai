@@ -25,6 +25,10 @@ const {
   mockAllowanceFor: vi.fn(),
 }))
 
+// Several recordings are priced only for a caller who may use Speaker Map (decided 2026-10-19).
+const multicamViewer = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/use-case/inner-availability.js", () => ({ usecaseMulticamAvailable: async () => multicamViewer.on }))
+
 // The batch route prices from the price table; the rest of the billing module
 // stays real (chargedCredits is the formula under test with it).
 const { mockGetChargedPriceTable } = vi.hoisted(() => ({ mockGetChargedPriceTable: vi.fn() }))
@@ -692,6 +696,18 @@ describe("POST /v1/credits/estimate-workflow", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ totalCredits: 50, nodeCount: 2, payer: "user" })
     expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes, edges)
+  })
+
+  it("a caller who may use Speaker Map: a use-case node is priced on every recording it reads (multicam)", async () => {
+    mockEstimateWorkflowCredits.mockReturnValue(50)
+    multicamViewer.on = true
+    try {
+      const nodes = [{ id: "t", type: "tighten-episode", data: {} }]
+      await app.inject({ method: "POST", url: "/v1/credits/estimate-workflow", payload: { nodes } })
+      expect(mockEstimateWorkflowCredits).toHaveBeenLastCalledWith(nodes, undefined, { multicam: true })
+    } finally {
+      multicamViewer.on = false
+    }
   })
 
   it("keeps only the fields the estimate reads: prices, and the preview stop rule's feeds", async () => {

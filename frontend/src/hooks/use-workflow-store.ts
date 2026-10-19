@@ -38,7 +38,8 @@ import { previewTypeOfNodeType } from "@/lib/preview-node-types"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
 import { initialEdgeData } from "@/lib/initial-edge-data"
 import { ensureNodePositions } from "@/lib/node-position"
-import { usecaseAudioLockGraph } from "@/lib/use-case-audio-lock"
+import { usecaseNodeInvariantsGraph } from "@/lib/use-case-cameras-invariant"
+import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { refreshEntityNodes } from "@/lib/entity-node-data"
@@ -1098,8 +1099,8 @@ export function focusPatch(
 }
 
 /**
- * A store write with the audio lock applied to the graph it leaves (see `set`
- * in the store). A graph adopted as stored — a load or a remote change (a new
+ * A store write with the audio lock and the Cameras settings of every
+ * use-case node applied to the graph it leaves (see `set` in the store). A graph adopted as stored — a load or a remote change (a new
  * `loadGeneration`), a save conflict's merge (marked `adoptedAsStored`, which
  * is stripped here and never reaches state) — is taken as it is: its changes
  * are never a local edit. Any other write of the graph is locked, whatever
@@ -1109,7 +1110,8 @@ function withAudioLock(state: WorkflowState, marked: WorkflowWrite): Partial<Wor
   const { adoptedAsStored, ...patch } = marked
   if ((!patch.nodes && !patch.edges) || patch.loadGeneration !== undefined || adoptedAsStored === true) return patch
   const nodes = patch.nodes ?? state.nodes
-  const locked = usecaseAudioLockGraph(state.nodes, state.edges, nodes, patch.edges ?? state.edges)
+  // The audio lock and the Cameras settings (lib/use-case-cameras-invariant.ts), on what this viewer's run reads.
+  const locked = usecaseNodeInvariantsGraph(state.nodes, state.edges, nodes, patch.edges ?? state.edges, { multicam: usecaseMulticamOffered() })
   return locked === nodes ? patch : { ...patch, nodes: locked as WorkflowNode[] }
 }
 

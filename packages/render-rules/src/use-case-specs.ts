@@ -12,7 +12,7 @@
  * `  <key>: defineUseCase<…>({`. Adding a builder = a new key here. Pure.
  */
 import type { UseCaseGraph, UseCaseMediaKind } from "./use-case-graph"
-import type { UseCaseSourcesShape } from "./use-case-cameras"
+import { USE_CASE_MASTER_NODE_ID, USE_CASE_MAX_RECORDINGS, type UseCaseSourcesShape } from "./use-case-cameras"
 import { editPlanRenderEstimateLength, renderLengthSec } from "./apply-edl-estimate"
 import type { UseCaseDescriptor, UseCaseSettings, UseCaseSources } from "./use-case-registry"
 import {
@@ -70,16 +70,19 @@ function defineUseCase<S extends object>(spec: UseCaseSpec<S>): UseCaseBuilderSp
 export const USE_CASE_SPECS = {
   tighten: defineUseCase<TightenEpisodeSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
-    maxRecordings: 1,
+    // Up to six recordings (decided 2026-10-17): the route's body, both
+    // engines' inputs, the estimate and the stored-attempt match read them all.
+    maxRecordings: USE_CASE_MAX_RECORDINGS,
     needsVideo: false,
-    inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music },
-    settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount"],
+    inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music, masterAudio: USE_CASE_MASTER_NODE_ID },
+    // `cameras` is resolved (and sent) only for two or more recordings or a Master audio.
+    settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras"],
     resultKind: "episode",
     // An audio recording makes an audio episode, with no captions (its framing is only hidden, never cleared).
     audioForced: Object.freeze({ output: "audio", captions: false }),
-    resolveSettings: (raw, kind) => resolveTightenEpisodeSettings(raw, kind),
-    build: (settings, sources) =>
-      buildTightenEpisodeGraph(settings, { media: sources.media, ...(sources.music ? { music: sources.music } : {}) }),
+    resolveSettings: (raw, kind, shape) => resolveTightenEpisodeSettings(raw, kind, shape),
+    // Every recording, the master and the bed: one recording builds exactly as before.
+    build: (settings, sources) => buildTightenEpisodeGraph(settings, sources),
   }),
   chapters: defineUseCase<EpisodeChaptersSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,

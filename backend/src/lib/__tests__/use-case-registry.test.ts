@@ -7,6 +7,8 @@
 import { describe, it, expect } from "vitest"
 import {
   USE_CASE_DESCRIPTORS,
+  USE_CASE_MASTER_NODE_ID,
+  USE_CASE_MAX_RECORDINGS,
   USE_CASE_NODE_TYPES,
   usecaseContinuePath,
   usecaseDescriptor,
@@ -32,8 +34,8 @@ describe("the use-case registry", () => {
         expect(d.inputs[0]).toBe("media")
         for (const h of d.inputs) expect(typeof d.inputNodeIds[h]).toBe("string")
       })
-      it("takes one recording in this phase, and its first recording is the built source every builder names", () => {
-        expect(d.maxRecordings).toBe(1)
+      it("takes the recordings it builds (Tighten six, the others one), and its first recording is the built source every builder names", () => {
+        expect(d.maxRecordings).toBe(type === "tighten-episode" ? USE_CASE_MAX_RECORDINGS : 1)
         expect(d.inputNodeIds.media).toBe(usecaseRecordingNodeId(0))
       })
       it("builds a graph of its own type and result kind", () => {
@@ -46,12 +48,21 @@ describe("the use-case registry", () => {
   }
   it("tighten-episode is the P1 node", () => {
     const d = usecaseDescriptor("tighten-episode")
-    expect(d).toMatchObject({ label: "Tighten Episode", reviewable: true, resultKind: "episode", needsVideo: false, inputs: ["media", "music"] })
-    expect(d.inputNodeIds).toEqual({ media: "uc-source", music: "uc-music" })
-    expect(d.settingKeys).toEqual(["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount"])
+    expect(d).toMatchObject({ label: "Tighten Episode", reviewable: true, resultKind: "episode", needsVideo: false, inputs: ["media", "music", "masterAudio"] })
+    // Its Master audio pip (unit.json) replaces the built Master audio.
+    expect(d.inputNodeIds).toEqual({ media: "uc-source", music: "uc-music", masterAudio: "uc-master" })
+    expect(d.settingKeys).toEqual(["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras"])
   })
-  it("every builder spec declares how many recordings it takes", () => {
-    for (const [key, spec] of Object.entries(USE_CASE_SPECS)) expect(spec.maxRecordings, key).toBe(1)
+  it("a builder that builds several recordings names the built Master audio its wire replaces", () => {
+    expect(USE_CASE_SPECS.tighten.inputNodeIds.masterAudio).toBe(USE_CASE_MASTER_NODE_ID)
+    const g = usecaseDescriptor("tighten-episode").build(
+      usecaseDescriptor("tighten-episode").resolveSettings({ captions: false }, "video", { recordings: 1, masterAudio: true }),
+      { media: { url: "https://r2/cam1.mp4", kind: "video" }, masterAudio: { url: "https://r2/master.wav", kind: "audio" } },
+    )
+    expect(g.nodes.find((n) => n.id === USE_CASE_MASTER_NODE_ID)).toMatchObject({ type: "upload-audio" })
+  })
+  it("every builder spec declares how many recordings it takes: Tighten up to six (decided 2026-10-17), the others one until their multicam work", () => {
+    for (const [key, spec] of Object.entries(USE_CASE_SPECS)) expect(spec.maxRecordings, key).toBe(key === "tighten" ? USE_CASE_MAX_RECORDINGS : 1)
   })
   it("anything else is not a list-result type", () => {
     expect(usecaseListsItsResult("apply-edl")).toBe(false)

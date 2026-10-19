@@ -1,4 +1,5 @@
 import type { CaptionStyle } from "@nodaro/shared/captions"
+import type { UseCaseCamerasInput, UseCaseCamerasReport } from "@nodaro/render-rules"
 import type { FieldMappings, GeneratedResult } from "@/types/nodes"
 
 /** Tighten Episode (podcast use-case node): one recording in, the tightened
@@ -11,6 +12,8 @@ export type TightenEpisodeData = {
   fieldMappings: FieldMappings
   /** The recordings' order (their upstream node ids): the run sends and builds them in it; a wired recording it does not list follows in wire order. */
   mediaOrder?: string[]
+  /** On two or more recordings or a Master audio: the wide shot (a camera's position), recordings already in sync, and who is on which camera (speaker ordinal → camera position, 0 = the wide shot). Read only by a multicam run. */
+  cameras?: UseCaseCamerasInput
   output?: "video" | "audio"
   /** Frame the episode with Speaker View: an output aspect and a layout, on
    *  automatic boxes — the shipped default boxes over the speakers on screen,
@@ -37,6 +40,8 @@ export type TightenEpisodeData = {
   generatedVideoUrl?: string
   generatedAudioUrl?: string
   generatedResults?: readonly GeneratedResult[]
+  /** The last multicam run's report: who was put on which camera, and Audio Sync's and Speaker Map's notes. */
+  useCaseCameras?: UseCaseCamerasReport
   activeResultIndex?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

@@ -1,4 +1,4 @@
-import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE } from "@nodaro/render-rules"
+import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, MULTICAM_SPEAKER_MAP_TYPE, isUseCaseNodeType, usecaseDescriptor } from "@nodaro/render-rules"
 import { isNodeUnavailable, surfaceAvailabilityLoaded } from "./surface-availability"
 
 /**
@@ -25,9 +25,18 @@ const TARGET_HANDLE_FOLLOWS: Readonly<Record<string, Readonly<Record<string, str
   "camera-switch": { [CAMERA_SWITCH_SPEAKER_MAP_HANDLE]: "speaker-map" },
 }
 
+/**
+ * A use-case node's Master audio is read only by a run on several cameras,
+ * which only a viewer who may use Speaker Map gets (decided 2026-10-19):
+ * every use-case type whose descriptor takes `masterAudio` withholds that
+ * input with Speaker Map — from the descriptor, no type named here.
+ */
+const USE_CASE_MASTER_HANDLE = "masterAudio"
+
 /** The node type whose availability this input follows, if any. */
 export function targetHandleGovernedBy(nodeType: string | undefined, handleId: string | null | undefined): string | undefined {
   if (!nodeType || !handleId) return undefined
+  if (handleId === USE_CASE_MASTER_HANDLE && isUseCaseNodeType(nodeType) && usecaseDescriptor(nodeType).inputs.includes(USE_CASE_MASTER_HANDLE)) return MULTICAM_SPEAKER_MAP_TYPE
   return TARGET_HANDLE_FOLLOWS[nodeType]?.[handleId]
 }
 

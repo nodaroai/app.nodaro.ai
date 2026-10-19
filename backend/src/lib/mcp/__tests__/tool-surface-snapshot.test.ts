@@ -1055,6 +1055,17 @@ const SPEAKER_MAP_TOOL_BYTES = 3_371 + 63
 // by the canvas's own rule) and saying what "" means in `speaker_map`. No tool was added, so the
 // fixture does NOT move. Measured by this suite: 455_060 total − 454_570 = 490 B.
 const SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES = 490
+// RAISED 2026-10-19 by `tighten_episode` taking several recordings (`media_urls`, `master_audio_url`,
+// `cameras`, from the shared module verbs-use-case-recordings.ts that the other use-case verbs will
+// reuse) and its description saying they need Speaker Map (refused 403 where it is withheld) and
+// naming `output_data.cameras`. No tool was added, so the fixture does NOT move. Measured by this
+// suite on the same tree: 462_651 total − 460_990 before = 1_661 B (tighten_episode 3_871 → 5_532,
+// under the per-tool budget); the 103 B of headroom carry across.
+const TIGHTEN_RECORDINGS_BYTES = 1_661
+// RAISED 2026-10-20 by `media_urls`' description naming the five-camera cap without a Master audio
+// (two or more cameras keep one place for the sound) — one clause, one tool. Measured by this suite:
+// 462_730 total − 462_651 = 79 B (tighten_episode 5_532 → 5_611); the 103 B of headroom carry across.
+const TIGHTEN_CAMERA_CAP_BYTES = 79
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
@@ -1180,7 +1191,9 @@ export const TOOL_WIRE_BUDGET = {
     RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
     RETRY_APP_RUN_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
-    SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES,
+    SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
+    TIGHTEN_RECORDINGS_BYTES +
+    TIGHTEN_CAMERA_CAP_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

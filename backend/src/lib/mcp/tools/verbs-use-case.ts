@@ -52,6 +52,7 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { creditsOf } from "./_credit-hint.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
+import { RECORDINGS_SENTENCE, recordingsInputShape, recordingsPayload } from "./verbs-use-case-recordings.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
@@ -234,7 +235,10 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
       description:
         "Tighten a podcast or interview recording in one call: transcribes it (speakers labelled), finds the silences, " +
         "plans the tightened cut, renders it, and optionally adds captions and a music bed ducked under the voice. " +
-        "Pass `media_url` (a video or audio recording, up to 3 hours). `output`: `video` (default) or `audio` — an audio " +
+        "Pass `media_url` (a video or audio recording, up to 3 hours), or `media_urls` (several cameras of one conversation) " +
+        "and optionally `master_audio_url`. " +
+        RECORDINGS_SENTENCE +
+        " `output`: `video` (default) or `audio` — an audio " +
         "recording always makes an audio episode. `review_before_render: true` stops at a quick proxy preview: inspect " +
         "`output_data.json` (the edit), then call `continue_use_case` with `mode: \"render-final\"` (optionally `edited_edl`). " +
         "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish — " +
@@ -242,7 +246,7 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
         "(`output_data.videoUrl` or `audioUrl`), the edit is `output_data.json`." +
         priceSentence(usecaseTypeOfBuilder("tighten")),
       inputSchema: {
-        media_url: z.string().url().describe("The recording (video or audio URL)."),
+        ...recordingsInputShape,
         music_url: z.string().url().optional().describe("Optional music bed, ducked under the voice and ending with the episode."),
         output: z.enum(["video", "audio"]).optional().describe("video (default) or an audio-only episode."),
         framing_aspect: z
@@ -271,14 +275,16 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const recordings = recordingsPayload(args)
+      if ("error" in recordings) return recordings.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/tighten-episode",
         label: TIGHTEN.label,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
+          ...recordings.payload,
           ...(args.music_url ? { musicUrl: args.music_url } : {}),
           ...(args.output ? { output: args.output } : {}),
           ...(args.framing_aspect ? { framing: { aspect: args.framing_aspect, layout: args.framing_layout ?? "auto" } } : {}),
@@ -299,7 +305,8 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
         widgetKind: args.output === "audio" ? "audio" : "video",
         widgetData: { prompt: "(tighten episode)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }
 

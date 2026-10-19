@@ -5,6 +5,7 @@
  * Pure.
  */
 import type { StoredInlineGraph } from "@nodaro/render-rules"
+import type { UseCaseCamerasReport } from "@nodaro/render-rules"
 
 /** One clip of a clip set, in plan order. */
 export interface UseCaseClipRow {
@@ -26,6 +27,9 @@ export interface UseCaseFormatRow {
   readonly format: string
   readonly url: string
 }
+
+/** The cameras report's shape is render-rules' (one reader for every lane, usecaseCamerasReportOf). */
+export type { UseCaseCameraSpeaker, UseCaseCamerasReport } from "@nodaro/render-rules"
 
 export interface UseCaseWrapperOutput {
   readonly videoUrl?: string
@@ -58,6 +62,8 @@ export interface UseCaseWrapperOutput {
   readonly failedFormats?: readonly string[]
   /** A text result (chapters). */
   readonly text?: string
+  /** A run on several recordings or a Master audio: who was put on which camera, and the sync and map notes. */
+  readonly cameras?: UseCaseCamerasReport
 }
 
 type State = { readonly status?: unknown; readonly output?: Readonly<Record<string, unknown>> }

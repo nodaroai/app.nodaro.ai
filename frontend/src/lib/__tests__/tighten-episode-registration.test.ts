@@ -9,13 +9,14 @@ import { EXECUTABLE_TYPES, NODE_CREDIT_COSTS } from "@/components/editor/workflo
 import { NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { NODE_FAMILIES, TAB_SUPERSET } from "@/lib/node-families"
+import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 
-const typeOf = (id: string) => ({ rec: "upload-video", bed: "upload-audio", tts: "text-to-speech", t: "tighten-episode", combine: "combine-videos", cap: "add-captions" } as Record<string, string>)[id]
+const typeOf = (id: string) => ({ rec: "upload-video", rec2: "upload-video", bed: "upload-audio", mic: "upload-audio", tts: "text-to-speech", t: "tighten-episode", combine: "combine-videos", cap: "add-captions" } as Record<string, string>)[id]
 
 describe("Tighten Episode is registered everywhere it must be", () => {
-  it("definition: inputs media+music, outputs media+json, defaults", () => {
+  it("definition: inputs media (the recordings) + music + masterAudio, outputs media+json, defaults", () => {
     const def = NODE_DEFINITIONS.find((d) => d.type === "tighten-episode")!
-    expect(def.inputs).toEqual(["media", "music"])
+    expect(def.inputs).toEqual(["media", "music", "masterAudio"])
     expect(def.outputs).toEqual(["media", "json"])
     expect(def.defaultData).toMatchObject({ label: "Tighten Episode", output: "video", captions: true, reviewBeforeRender: false, planTier: "standard" })
   })
@@ -35,6 +36,14 @@ describe("Tighten Episode is registered everywhere it must be", () => {
     expect(isValidWorkflowConnection({ source: "bed", target: "t", sourceHandle: "audio", targetHandle: "music" }, typeOf)).toBe(true)
     expect(isValidWorkflowConnection({ source: "rec", target: "t", sourceHandle: "video", targetHandle: "music" }, typeOf)).toBe(false)
     expect(isValidWorkflowConnection({ source: "t", target: "combine", sourceHandle: "media", targetHandle: "in" }, typeOf)).toBe(true)
+  })
+  it("connections (decided 2026-10-17): an Upload Audio into Master audio (for a viewer who may use Speaker Map), never a video; two recordings into media", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [] })
+    expect(isValidWorkflowConnection({ source: "mic", target: "t", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(true)
+    expect(isValidWorkflowConnection({ source: "rec", target: "t", sourceHandle: "video", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+    expect(isValidWorkflowConnection({ source: "rec", target: "t", sourceHandle: "video", targetHandle: "media" }, typeOf)).toBe(true)
+    expect(isValidWorkflowConnection({ source: "rec2", target: "t", sourceHandle: "video", targetHandle: "media" }, typeOf)).toBe(true)
+    __resetSurfaceAvailabilityForTests(null)
   })
 })
 

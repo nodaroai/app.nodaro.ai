@@ -22,6 +22,7 @@ import {
   clipPackBody,
   tightenBody,
   trailerBody,
+  withUseCaseBody,
   type ClipPackInput,
   type EpisodeChaptersInput,
   type EpisodeTrailerInput,
@@ -29,7 +30,7 @@ import {
 } from "./edit-use-case-inputs.js"
 
 export { CLIP_PACK_MAX_TARGET_SEC, CLIP_PACK_MIN_TARGET_SEC, TRAILER_FORMATS } from "./edit-use-case-inputs.js"
-export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, TightenEpisodeInput, TrailerFormat } from "./edit-use-case-inputs.js"
+export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, TightenEpisodeInput, TrailerFormat, UseCaseRecordingsInput } from "./edit-use-case-inputs.js"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -500,7 +501,7 @@ export class EditResource {
    * {@link estimateTightenEpisode}.
    */
   tightenEpisode(input: TightenEpisodeInput, options?: UseCaseRequestOptions): Promise<TightenEpisodeJobResult> {
-    return this.client.request("POST", "/v1/tighten-episode", { body: tightenBody(input), ...idempotencyHeaders(options) })
+    return withUseCaseBody(() => tightenBody(input), (body) => this.client.request("POST", "/v1/tighten-episode", { body, ...idempotencyHeaders(options) }))
   }
 
   /**
@@ -510,7 +511,7 @@ export class EditResource {
    * full length, while the charge follows the minutes actually rendered.
    */
   estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpisodeEstimate }> {
-    return this.client.request("POST", "/v1/tighten-episode/estimate", { body: tightenBody(input) })
+    return withUseCaseBody(() => tightenBody(input), (body) => this.client.request("POST", "/v1/tighten-episode/estimate", { body }))
   }
 
   /**
@@ -524,7 +525,7 @@ export class EditResource {
    * listed per-run fee; quote it first with {@link estimateEpisodeChapters}.
    */
   episodeChapters(input: EpisodeChaptersInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
-    return this.client.request("POST", "/v1/episode-chapters", { body: chaptersBody(input), ...idempotencyHeaders(options) })
+    return withUseCaseBody(() => chaptersBody(input), (body) => this.client.request("POST", "/v1/episode-chapters", { body, ...idempotencyHeaders(options) }))
   }
 
   /**
@@ -534,7 +535,7 @@ export class EditResource {
    * 180-minute ceiling.
    */
   estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEstimate }> {
-    return this.client.request("POST", "/v1/episode-chapters/estimate", { body: chaptersBody(input) })
+    return withUseCaseBody(() => chaptersBody(input), (body) => this.client.request("POST", "/v1/episode-chapters/estimate", { body }))
   }
 
   /**
@@ -548,7 +549,7 @@ export class EditResource {
    * the listed per-run fee; quote it first with {@link estimateEpisodeTrailer}.
    */
   episodeTrailer(input: EpisodeTrailerInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
-    return this.client.request("POST", "/v1/episode-trailer", { body: trailerBody(input), ...idempotencyHeaders(options) })
+    return withUseCaseBody(() => trailerBody(input), (body) => this.client.request("POST", "/v1/episode-trailer", { body, ...idempotencyHeaders(options) }))
   }
 
   /**
@@ -559,7 +560,7 @@ export class EditResource {
    * review's edits), plus the intro card.
    */
   estimateEpisodeTrailer(input: EpisodeTrailerInput): Promise<{ data: UseCaseEstimate }> {
-    return this.client.request("POST", "/v1/episode-trailer/estimate", { body: trailerBody(input) })
+    return withUseCaseBody(() => trailerBody(input), (body) => this.client.request("POST", "/v1/episode-trailer/estimate", { body }))
   }
 
   /**
@@ -581,7 +582,7 @@ export class EditResource {
    * quote it first with {@link estimateClipPack}.
    */
   clipPack(input: ClipPackInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
-    return this.client.request("POST", "/v1/clip-pack", { body: clipPackBody(input), ...idempotencyHeaders(options) })
+    return withUseCaseBody(() => clipPackBody(input), (body) => this.client.request("POST", "/v1/clip-pack", { body, ...idempotencyHeaders(options) }))
   }
 
   /**
@@ -591,7 +592,7 @@ export class EditResource {
    * a clip longer than asked); the charge follows each clip's real length.
    */
   estimateClipPack(input: ClipPackInput): Promise<{ data: UseCaseEstimate }> {
-    return this.client.request("POST", "/v1/clip-pack/estimate", { body: clipPackBody(input) })
+    return withUseCaseBody(() => clipPackBody(input), (body) => this.client.request("POST", "/v1/clip-pack/estimate", { body }))
   }
 
   /**

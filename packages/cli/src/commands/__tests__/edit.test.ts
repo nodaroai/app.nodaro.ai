@@ -410,6 +410,50 @@ describe("edit tighten-episode", () => {
   })
 })
 
+describe("edit tighten-episode on several recordings (decided 2026-10-19)", () => {
+  it("maps repeated --media, --master-audio and the camera flags to the recordings input", async () => {
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-m" })
+    await runCmd(
+      "edit", "tighten-episode",
+      "--media", "https://r2/a.mp4", "--media", "https://r2/b.mp4",
+      "--master-audio", "https://r2/m.wav",
+      "--wide-camera", "2",
+      "--speaker-camera", "1=2", "--speaker-camera", "2=0",
+      "--json",
+    )
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 2, speakerCameras: { "1": 2, "2": 0 } },
+    })
+  })
+
+  it("--synced, and one --media with a Master audio", async () => {
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-s" })
+    await runCmd("edit", "tighten-episode", "--media", "https://r2/a.mp4", "--master-audio", "https://r2/m.wav", "--synced", "--json")
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/a.mp4", masterAudioUrl: "https://r2/m.wav", cameras: { synced: true } })
+  })
+
+  it("refuses a camera flag with one recording and no Master audio, and malformed camera flags, before any request", async () => {
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/a.mp4", "--wide-camera", "1")).rejects.toThrow("process.exit(1)")
+    const two = ["--media", "https://r2/a.mp4", "--media", "https://r2/b.mp4"]
+    await expect(runCmd("edit", "tighten-episode", ...two, "--wide-camera", "0")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", ...two, "--speaker-camera", "1")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", ...two, "--speaker-camera", "0=1")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", ...two, "--speaker-camera", "1=-1")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", ...two, "--speaker-camera", "1=1", "--speaker-camera", "1=2")).rejects.toThrow("process.exit(1)")
+    expect(mocks.tightenEpisode).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/^--wide-camera, --synced and --speaker-camera apply with several --media or --master-audio/),
+      expect.stringMatching(/^--wide-camera must be a recording number/),
+      expect.stringMatching(/^--speaker-camera must be <speaker>=<recording>/),
+      expect.stringMatching(/^--speaker-camera must be <speaker>=<recording>/),
+      expect.stringMatching(/^--speaker-camera must be <speaker>=<recording>/),
+      expect.stringMatching(/^--speaker-camera names speaker 1 twice/),
+    ])
+  })
+})
+
 describe("edit episode-chapters", () => {
   it("maps flags to client.edit.episodeChapters", async () => {
     mocks.episodeChapters.mockResolvedValueOnce({ jobId: "job-c" })

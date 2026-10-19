@@ -23,12 +23,13 @@ export function usecaseEdge(source: string, sourceHandle: string, target: string
  * The recording's upload node. Its probed length rides the declared
  * `metadata.durationSeconds` (unstamped, so `editPlanSourceDurationSec` trusts
  * it) — Edit Plan's and the estimate's length come from it; unknown leaves it
- * off (the 180-minute ceiling).
+ * off (the 180-minute ceiling). A one-recording chain names it "Episode
+ * recording"; a multicam front names each by its place (Camera 2, Master audio).
  */
-export function usecaseSourceNode(id: string, media: UseCaseMediaSource, column: number, row: number): UseCaseGraphNode {
+export function usecaseSourceNode(id: string, media: UseCaseMediaSource, column: number, row: number, label = "Episode recording"): UseCaseGraphNode {
   const duration = typeof media.durationSec === "number" && media.durationSec > 0 ? { metadata: { durationSeconds: media.durationSec } } : {}
   return usecaseNode(id, media.kind === "audio" ? "upload-audio" : "upload-video", column, row, {
-    label: "Episode recording", assetId: "", url: media.url, ...duration,
+    label, assetId: "", url: media.url, ...duration,
   })
 }
 

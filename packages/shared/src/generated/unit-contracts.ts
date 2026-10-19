@@ -33,7 +33,7 @@ export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonl
 
 // Input pips that are never a prompt lane (contract.nonPromptInputs) — fan-out-rows.ts composes these.
 export const UNIT_NON_PROMPT_INPUTS: ReadonlyArray<readonly [type: string, handles: ReadonlyArray<string>]> = [
-  ["tighten-episode", ["music"]], // unit:tighten-episode
+  ["tighten-episode", ["music", "masterAudio"]], // unit:tighten-episode
   ["episode-trailer", ["introCard"]], // unit:episode-trailer
 ]
 

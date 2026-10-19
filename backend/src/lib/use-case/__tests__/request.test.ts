@@ -21,10 +21,18 @@ const body = (over = {}): UseCaseBody => tightenEpisodeBody.parse({ mediaUrls: [
 const renderOf = (r: Awaited<ReturnType<typeof prepareUseCase>>) => (r.ok ? r.graph.nodes.find((n) => n.id === "uc-render")! : null)
 
 describe("tightenEpisodeBody", () => {
-  it("takes exactly one recording (multicam is a later phase)", () => {
+  it("takes one to six recordings, a Master audio and the Cameras settings (decided 2026-10-17)", () => {
+    const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://a/${i + 1}.mp4`)
     expect(tightenEpisodeBody.safeParse({ mediaUrls: [] }).success).toBe(false)
-    expect(tightenEpisodeBody.safeParse({ mediaUrls: ["https://a/1.mp4", "https://a/2.mp4"] }).success).toBe(false)
-    expect(tightenEpisodeBody.safeParse({ mediaUrls: ["https://a/1.mp4"] }).success).toBe(true)
+    expect(tightenEpisodeBody.safeParse({ mediaUrls: urls(1) }).success).toBe(true)
+    expect(tightenEpisodeBody.safeParse({ mediaUrls: urls(2) }).success).toBe(true)
+    expect(tightenEpisodeBody.safeParse({ mediaUrls: urls(6), masterAudioUrl: "https://a/m.wav", cameras: { wide: 2, synced: true, speakerCameras: { "1": 2 } } }).success).toBe(true)
+    expect(tightenEpisodeBody.safeParse({ mediaUrls: urls(7) }).success).toBe(false)
+    // The Cameras settings are checked by a run that reads them (prepareUseCase), never by the body.
+    expect(tightenEpisodeBody.safeParse({ mediaUrls: urls(1), cameras: "anything" }).success).toBe(true)
+  })
+  it("Chapters still takes exactly one recording", () => {
+    expect(USE_CASE_BODIES["episode-chapters"].safeParse({ mediaUrls: ["https://a/1.mp4", "https://a/2.mp4"] }).success).toBe(false)
   })
 })
 
@@ -151,9 +159,8 @@ describe("prepareUseCase: Trailer", () => {
 })
 
 /**
- * Several recordings and a Master audio reach prepareUseCase only once a type
- * takes them (each route's body refuses them before; none does in this phase),
- * so these call it with a body no route would parse yet.
+ * Several recordings and a Master audio: Tighten's body takes them (decided
+ * 2026-10-17); these call prepareUseCase with the body itself.
  */
 describe("prepareUseCase: every recording and the master are probed", () => {
   const a = "https://r2/a.mp4", b = "https://r2/b.mp4", master = "https://r2/master.wav"
@@ -185,7 +192,8 @@ describe("prepareUseCase: every recording and the master are probed", () => {
   })
   it("a master that reads as audio rides as masterAudio; one that does not is refused", async () => {
     const r = await prepareUseCase("tighten-episode", several({ masterAudioUrl: master }))
-    expect(r.ok && r.sources.masterAudio).toEqual({ url: master, kind: "audio" })
+    // Its probed length rides on it: the plan's clock, Edit Plan quoted and held on it.
+    expect(r.ok && r.sources.masterAudio).toEqual({ url: master, kind: "audio", durationSec: 3600 })
     probe.streams.mockImplementation(async (u: string) => (u === master ? { hasVideo: false, hasAudio: false } : { hasVideo: true, hasAudio: true }))
     expect(await prepareUseCase("tighten-episode", several({ masterAudioUrl: master }))).toMatchObject({
       ok: false, status: 400, code: "master_audio_unreadable", message: "The master audio could not be read as audio.",
@@ -200,6 +208,99 @@ describe("prepareUseCase: every recording and the master are probed", () => {
     } finally {
       spy.mockRestore()
     }
+  })
+})
+
+describe("prepareUseCase on several recordings (decided 2026-10-17)", () => {
+  const multi = (over: Record<string, unknown> = {}) =>
+    tightenEpisodeBody.parse({ mediaUrls: ["https://r2/c1.mp4", "https://r2/c2.mp4", "https://r2/c3.mp4"], ...over }) as UseCaseBody
+
+  it("seven in all → too_many_recordings, before any length probe", async () => {
+    const r = await prepareUseCase("tighten-episode", tightenEpisodeBody.parse({ mediaUrls: Array.from({ length: 6 }, (_, i) => `https://r2/c${i + 1}.mp4`), masterAudioUrl: "https://r2/m.wav" }) as UseCaseBody)
+    expect(r).toMatchObject({ ok: false, status: 400, code: "too_many_recordings" })
+    expect(probe.duration).not.toHaveBeenCalled()
+  })
+  it("two sound-only recordings → recordings_two_audio_only", async () => {
+    probe.streams.mockImplementation(async (u: string) => ({ hasVideo: !/c[12]\.mp4/.test(u), hasAudio: true }))
+    expect(await prepareUseCase("tighten-episode", multi())).toMatchObject({ ok: false, status: 400, code: "recordings_two_audio_only" })
+    expect(probe.duration).not.toHaveBeenCalled()
+  })
+  it("Cameras settings that are not valid refuse a run on several recordings (invalid_cameras), before any probe", async () => {
+    expect(await prepareUseCase("tighten-episode", multi({ cameras: { wide: 7 } }))).toMatchObject({ ok: false, status: 400, code: "invalid_cameras" })
+    expect(await prepareUseCase("tighten-episode", multi({ cameras: "two" }))).toMatchObject({ ok: false, code: "invalid_cameras" })
+    expect(probe.streams).not.toHaveBeenCalled()
+    // None (null) is the defaults.
+    expect(await prepareUseCase("tighten-episode", multi({ cameras: null }))).toMatchObject({ ok: true })
+  })
+  it("a one-recording run ignores whatever Cameras settings it is sent: exactly the run without them (decided 2026-10-19)", async () => {
+    const plain = await prepareUseCase("tighten-episode", body())
+    for (const cameras of [{ wide: 7 }, "two", 5, [], { speakerCameras: "x" }]) {
+      expect(await prepareUseCase("tighten-episode", body({ cameras })), JSON.stringify(cameras)).toEqual(plain)
+    }
+  })
+  it("a wide camera past the last recording → wide_camera_out_of_range", async () => {
+    expect(await prepareUseCase("tighten-episode", multi({ cameras: { wide: 4 } }))).toMatchObject({ ok: false, status: 400, code: "wide_camera_out_of_range" })
+  })
+  it("recording 2 has no sound → media_has_no_audio, naming it", async () => {
+    probe.streams.mockImplementation(async (u: string) => ({ hasVideo: true, hasAudio: !u.includes("c2") }))
+    expect(await prepareUseCase("tighten-episode", multi())).toMatchObject({ ok: false, code: "media_has_no_audio", message: "Recording 2 has no sound to transcribe." })
+  })
+  it("an unreadable Master audio → master_audio_unreadable", async () => {
+    probe.streams.mockImplementation(async (u: string) => {
+      if (u.includes("m.wav")) throw new Error("404")
+      return { hasVideo: true, hasAudio: true }
+    })
+    expect(await prepareUseCase("tighten-episode", multi({ masterAudioUrl: "https://r2/m.wav" }))).toMatchObject({ ok: false, code: "master_audio_unreadable" })
+  })
+  it("a Master audio longer than the type takes → media_too_long, naming it, before any row", async () => {
+    probe.duration.mockImplementation(async (u: string) => (u.includes("m.wav") ? 180 * 60 + 1 : 3600))
+    expect(await prepareUseCase("tighten-episode", multi({ masterAudioUrl: "https://r2/m.wav" }))).toMatchObject({
+      ok: false, status: 400, code: "media_too_long", message: expect.stringMatching(/^The master audio is too long\./),
+    })
+  })
+  it("three cameras + master: the multicam graph; every recording and the master probed for length", async () => {
+    const r = await prepareUseCase("tighten-episode", multi({ masterAudioUrl: "https://r2/m.wav", cameras: { wide: 3 } }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.graph.nodes.map((n) => n.type)).toEqual(expect.arrayContaining(["audio-sync", "speaker-map", "camera-switch"]))
+    expect(r.sources).toMatchObject({ moreMedia: [{ url: "https://r2/c2.mp4" }, { url: "https://r2/c3.mp4" }], masterAudio: { url: "https://r2/m.wav", kind: "audio", durationSec: 3600 } })
+    expect(probe.duration).toHaveBeenCalledTimes(4)
+  })
+  it("one recording: P1's sources object exactly (no new keys)", async () => {
+    const r = await prepareUseCase("tighten-episode", body())
+    expect(r.ok && Object.keys(r.sources)).toEqual(["media"])
+  })
+  it("the run's kind is every recording's: a sound-only recording first beside a camera is a video run, also for a type that needs video", async () => {
+    probe.streams.mockImplementation(async (u: string) => ({ hasVideo: !u.includes("c1"), hasAudio: true }))
+    const spy = vi.spyOn(usecaseDescriptor("episode-trailer"), "resolveSettings")
+    try {
+      const r = await prepareUseCase("episode-trailer", { mediaUrls: ["https://r2/c1.mp4", "https://r2/c2.mp4"] } as UseCaseBody)
+      expect(r).toMatchObject({ ok: true })
+      expect(spy.mock.calls[0]![1]).toBe("video")
+    } finally {
+      spy.mockRestore()
+    }
+  })
+  describe("a Master audio that is one of the recordings is none (decided 2026-10-19)", () => {
+    it("one camera + the same file as master: exactly the one-recording run, the master never probed", async () => {
+      const plain = await prepareUseCase("tighten-episode", body())
+      probe.streams.mockClear()
+      const same = await prepareUseCase("tighten-episode", body({ masterAudioUrl: "https://r2/ep.mp4" }))
+      expect(same).toEqual(plain)
+      expect(probe.streams.mock.calls.map((c) => c[0])).toEqual(["https://r2/ep.mp4"])
+    })
+    it("two cameras + camera 2's file as master: the run with no master (no Audio Sync of a file against itself)", async () => {
+      const cams = ["https://r2/c1.mp4", "https://r2/c2.mp4"]
+      const none = await prepareUseCase("tighten-episode", tightenEpisodeBody.parse({ mediaUrls: cams }) as UseCaseBody)
+      const same = await prepareUseCase("tighten-episode", tightenEpisodeBody.parse({ mediaUrls: cams, masterAudioUrl: cams[1] }) as UseCaseBody)
+      expect(same).toEqual(none)
+      expect(same.ok && same.sources).not.toHaveProperty("masterAudio")
+    })
+    it("one sound-only recording + its own file as master is not two sound-only recordings", async () => {
+      probe.streams.mockImplementation(async (u: string) => ({ hasVideo: !u.includes("c1"), hasAudio: true }))
+      const r = await prepareUseCase("tighten-episode", multi({ masterAudioUrl: "https://r2/c1.mp4" }))
+      expect(r.ok).toBe(true)
+    })
   })
 })
 

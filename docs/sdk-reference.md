@@ -7509,14 +7509,17 @@ estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpiso
 
 Tighten a podcast recording in one call: the run transcribes it, plans the
 tightened cut, renders it and — as set — captions it, frames it and lays a
-music bed under it. Only `mediaUrl` is required; a field left out takes the
-node's default.
+music bed under it. Only the recording is required (`mediaUrl`, or
+`mediaUrls`); a field left out takes the node's default.
 
-**`TightenEpisodeInput`:**
+**`TightenEpisodeInput`** (with `UseCaseRecordingsInput`, its recordings):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls` | `string[]` | `mediaUrl` or `mediaUrls` | Instead of `mediaUrl`: the recordings of one conversation, in order (Camera 1, Camera 2…; one may be sound only) — up to six in all with the Master audio; without one, two or more cameras keep a place for the sound, so up to five. See [Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras). **Needs Speaker Map** (below). |
+| `masterAudioUrl` | `string` | no | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. **Needs Speaker Map** (below). |
+| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: `wide`, the recording number of the wide shot (`null` for none); `synced: true` when the recordings already share one clock; `speakerCameras`, a speaker number (`"1"` = the first voice heard) → a recording number, `0` for the wide shot, overriding the automatic map. Ignored on one recording with no Master audio. |
 | `musicUrl` | `string` | no | A music bed, ducked under the voice and ending with the episode. |
 | `output` | `"video" \| "audio"` | no | An audio recording always makes an audio episode. |
 | `framing` | `{ aspect, layout } \| null` | no | Frame a video episode with Speaker View, on automatic boxes over the speakers on screen. `aspect`: `"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`; `layout`: `"auto"` \| `"single"` \| `"side-by-side"` \| `"stacked"` \| `"grid"` \| `"pip"` (a layout the aspect does not draw is snapped to one it does). `null` or absent: no framing. |
@@ -7528,6 +7531,12 @@ node's default.
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
 
+Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
+`TypeError` before any request. **Several recordings or a Master audio need Speaker Map**,
+which is not yet enabled on nodaro.ai: until it is, such a request is refused
+`403 node_not_available` before anything is probed or charged — send one
+recording.
+
 `options.idempotencyKey` is sent as the `Idempotency-Key` header: retry the
 same request with the same key and the answer is the run already started
 (`deduped: true`), not a second one.
@@ -7535,7 +7544,10 @@ same request with the same key and the answer is the run already started
 `tightenEpisode` answers `TightenEpisodeJobResult` (the same shape as `UseCaseJobResult`) — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data` holds the episode (`videoUrl`,
 or `audioUrl` for an audio episode), the plan's EDL on `json`, and `quality`
-(`"proxy"` for a review-on run's preview, `"final"` otherwise).
+(`"proxy"` for a review-on run's preview, `"final"` otherwise). A run on
+several recordings or a Master audio adds `cameras`: `{ speakers: [{ speaker,
+ordinal, camera, marginDb }], syncNotes, mapNotes }` — who was put on which
+recording (`camera` `null` = the wide shot).
 
 `estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:tighten-episode --> per run.
@@ -7547,7 +7559,9 @@ could not be read.
 
 Both refuse before anything is created or charged: `400` (`validation_error`,
 `media_unreadable`, `media_has_no_audio`, `media_too_long`,
-`music_has_no_audio`), `403 node_not_available`, `503
+`music_has_no_audio`, and on several recordings `too_many_recordings`,
+`recordings_two_audio_only`, `wide_camera_out_of_range`, `invalid_cameras`),
+`403 node_not_available`, `503
 nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
 or `503 use_case_unavailable`. `tightenEpisode` also throws
 `InsufficientCreditsError` when the balance does not cover the estimate.
