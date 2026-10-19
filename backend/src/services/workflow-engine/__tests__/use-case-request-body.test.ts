@@ -13,7 +13,7 @@
  * alike (no framing).
  */
 import { describe, expect, it } from "vitest"
-import { resolveTightenEpisodeSettings } from "@nodaro/render-rules"
+import { resolveTightenEpisodeSettings, usecaseDescriptor, type UseCaseDescriptor } from "@nodaro/render-rules"
 import { USE_CASE_BODIES } from "../../../lib/use-case/bodies.js"
 import { requestOf } from "../use-case-request.js"
 import type { OrchestratorContext, ResolvedInputs, SimpleNode } from "../types.js"
@@ -80,5 +80,35 @@ describe("a setting set to None", () => {
     const body = bodyOf({ ...DEFAULTS, captions: null, captionStyle: null })
     expect(body).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"output":"video","reviewBeforeRender":false,"planTier":"standard","instructions":"",${LANE}}`)
     expect(tightenEpisodeBody.safeParse(JSON.parse(body)).success).toBe(true)
+  })
+})
+
+describe("recordings and Master audio (every type takes one recording in this phase)", () => {
+  const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+
+  it("a type that takes one recording sends the first in mediaOrder, byte-identical to before when no order is set", () => {
+    expect(JSON.parse(bodyOf({ mediaOrder: ["b"] }, TWO)).mediaUrls).toEqual(["https://r2/b.mp4"])
+    expect(JSON.parse(bodyOf({}, TWO)).mediaUrls).toEqual(["https://r2/a.mp4"])
+    expect(bodyOf(DEFAULTS)).toBe(
+      `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","captions":true,"captionStyle":"word-highlight","reviewBeforeRender":false,"planTier":"standard","instructions":"",${LANE}}`,
+    )
+  })
+
+  it("a wired Master audio is not sent by a type whose descriptor does not take it (none does yet)", () => {
+    expect(bodyOf(DEFAULTS, { ...REC, useCaseMasterAudio: "https://r2/m.wav" })).not.toContain("masterAudioUrl")
+  })
+
+  it("a type that takes Master audio sends it after the other optional inputs, before the settings", () => {
+    const d = usecaseDescriptor("tighten-episode") as { -readonly [K in keyof UseCaseDescriptor]: UseCaseDescriptor[K] }
+    const inputs = d.inputs
+    d.inputs = [...inputs, "masterAudio"]
+    try {
+      expect(bodyOf({ output: "audio" }, { ...REC, useCaseMusic: "https://r2/bed.mp3", useCaseMasterAudio: "https://r2/m.wav" })).toBe(
+        `{"mediaUrls":["https://r2/ep.mp4"],"musicUrl":"https://r2/bed.mp3","masterAudioUrl":"https://r2/m.wav","output":"audio",${LANE}}`,
+      )
+      expect(bodyOf({ output: "audio" })).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"output":"audio",${LANE}}`)
+    } finally {
+      d.inputs = inputs
+    }
   })
 })

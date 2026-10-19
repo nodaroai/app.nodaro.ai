@@ -10,27 +10,30 @@ import { localizeNodeLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"
 
 export interface UseCaseApiParams {
-  mediaUrl: string
+  /** The recordings, in the order they are sent (a type before its multicam work takes one). */
+  mediaUrls: readonly string[]
   musicUrl?: string
   introCardUrl?: string
+  masterAudioUrl?: string
   /** The node's settings, as its descriptor names them (`settingKeys`). */
   settings: Readonly<Record<string, unknown>>
   userId?: string
 }
 
 /**
- * The route's body. An unset setting (undefined) and an empty one ("") are
- * not sent — the route then takes its default; a setting set to None (null)
- * is, since a None is not the default (decided 2026-10-16). Key order is the
- * wire's: the recording, the optional inputs, the settings in the
- * descriptor's order, the caller.
+ * The route's body. `settings` are what the run sends (`usecaseSentSettings`,
+ * both engines' rule: a null or an empty string only where the body takes
+ * one); an unset one (undefined) is not sent. Key order is the
+ * wire's: the recordings, the optional inputs (music, intro card, master),
+ * the settings in the descriptor's order, the caller.
  */
 export function usecaseBody(p: UseCaseApiParams): Record<string, unknown> {
   return {
-    mediaUrls: [p.mediaUrl],
+    mediaUrls: [...p.mediaUrls],
     ...(p.musicUrl ? { musicUrl: p.musicUrl } : {}),
     ...(p.introCardUrl ? { introCardUrl: p.introCardUrl } : {}),
-    ...Object.fromEntries(Object.entries(p.settings).filter(([, v]) => v !== undefined && v !== "")),
+    ...(p.masterAudioUrl ? { masterAudioUrl: p.masterAudioUrl } : {}),
+    ...Object.fromEntries(Object.entries(p.settings).filter(([, v]) => v !== undefined)),
     ...(p.userId ? { userId: p.userId } : {}),
   }
 }

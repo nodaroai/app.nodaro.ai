@@ -133,6 +133,33 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
 }
 
 /**
+ * BASE credits a reference-video run is EXPECTED to bill once delivered — a
+ * quote's `expected`, beside the worst case the reservation holds. Same input
+ * rule as the reservation ({@link billedInputSeconds}); the output is the
+ * length the run will most likely render:
+ *  - Auto duration (the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE`): an edit
+ *    renders its source clip's length — the longest clip, the one the
+ *    reservation's edit rule already covers;
+ *  - a fixed duration: the requested seconds (a style run).
+ * The settlement still measures what was delivered, so this is an estimate a
+ * client can show, not a price. Undefined when a clip could not be measured:
+ * that clip's length is unknown, so the expected cost is too.
+ */
+export function seedance2RefVideoExpectedBaseCredits(args: {
+  provider: string
+  resolution: string
+  outputDurationSec: number
+  autoDuration: boolean
+  durationsSec: readonly number[]
+}): number | undefined {
+  const { provider, resolution, outputDurationSec, autoDuration, durationsSec } = args
+  if (durationsSec.length === 0 || !durationsSec.every(isUsableDuration)) return undefined
+  const { perClip, totalSec } = billedInputSeconds(provider, durationsSec)
+  const renderedSec = autoDuration ? Math.max(...perClip) : outputDurationSec
+  return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec: renderedSec, inputVideoDurationSec: totalSec })
+}
+
+/**
  * ffprobe the connected reference videos, sum their durations, and return the
  * BASE (0%-markup) credit total for the full `unit × (input + output)` Seedance 2
  * reference run. This is the SINGLE shared entry point for both the route

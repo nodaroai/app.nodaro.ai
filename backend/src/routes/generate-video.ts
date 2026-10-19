@@ -8,7 +8,9 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
+import { noteAddon, noteAutoDurationSettles, noteExtraReferenceImages, noteRefVideoPricing } from "../lib/video-price-notes.js"
+import { noteExpectedBase } from "../lib/price-notes.js"
 import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
@@ -24,7 +26,7 @@ import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
-import { VIDEO_DURATION_AUTO, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
@@ -477,6 +479,11 @@ export function frameSeatImageCap(provider: string, hasStartFrame: boolean, hasE
  * computes `hasImageRefs` for its transport refusal, and its schema carries no
  * rail captions to gate on (nothing for one to be index-aligned with).
  */
+/** An editor reference token (`{image:N}`, `{video:N}`, `{audio:N}`) in a
+ *  prompt. A flat request (URL arrays only) carrying one still has to bind it
+ *  to its wire form (`@video_1`): the raw token means nothing to the model. */
+export const REFERENCE_TOKEN_PROBE = /\{(?:image|video|audio):\d+/i
+
 export function hasVideoReferenceChannels(b: {
   connectedReferences?: unknown
   describedReferences?: unknown
@@ -713,181 +720,205 @@ export async function validateRefVideoDurationPreHandler(
   }
 }
 
+/**
+ * Everything /v1/generate-video prices a request with — registered as the
+ * route's preHandlers and run as-is by `POST /v1/quote` (one copy, so a quote
+ * is what the run reserves).
+ */
+export const generateVideoPricing: RoutePricing = {
+  prechecks: [validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  modelResolver: (req) => {
+    const body = req.body as Record<string, unknown>
+    const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+    const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
+    // Placement rule: the CHECK identifier, `computeCredits` and the
+    // reservation must all be computed from the SAME normalized values.
+    // Stash them so the two later sites cannot re-derive them differently.
+    const norm = resolveVideoRequestNorm({
+      provider: sel.provider,
+      aspectRatio: body?.aspectRatio as string | undefined,
+      resolution: body?.resolution as string | undefined,
+      duration: sel.duration,
+      draft: body?.draft === true,
+    })
+    req.videoNorm = norm
+    req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
+    return buildVideoCreditModelIdentifier(
+      sel.provider,
+      norm.duration ?? sel.duration,
+      body?.sound as boolean | undefined,
+      "image-to-video",
+      body?.videoSize as string | undefined,
+      norm.resolution,
+      hasVideoRef,
+    )
+  },
+  opts: {
+    computeCredits: async (body, req) => {
+      const b = body as Record<string, unknown>
+      const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+      // R14: read the resolution the CHECK identifier was built from, never
+      // the raw body — normalizing in the preHandler but not here would make
+      // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
+      // the exact drift this normalizer exists to remove.
+      const normResolution = req.videoNorm?.resolution ?? (b.resolution as string | undefined)
+      // A dynamically priced BASE (reference-video runs) replaces the seeded
+      // composite below; the add-ons (loop trim, the voiced audio step)
+      // ride on top of whichever base applies, so a voiced Seedance run
+      // with a reference video — the `voiced-video` lane forwards the
+      // reference videos like any other run (#1396) — reserves the same
+      // worst case as an unvoiced one plus its audio step.
+      let dynamicBase: number | undefined
+      // Seedance 2 reference-video runs are billed unit×(input+output). The
+      // seeded `-ref` composite only encodes the per-8s OUTPUT rate, so we
+      // ffprobe the connected reference videos and reserve the FULL scaled
+      // base UP FRONT (commit_credits only refunds — never up-charges). Core
+      // may not statically import ee/, so the helper is loaded dynamically
+      // (the allowed escape hatch — same pattern the credit-guard shim uses).
+      if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
+        const { seedance2RefVideoBaseCreditsFromDurations } =
+          await import("../ee/billing/seedance2-ref-video-credits.js")
+        const priceArgs = {
+          provider: b.provider as string,
+          resolution: normResolution ?? "720p",
+          // The seconds this run RENDERS when the caller omitted a duration
+          // — the provider's own default, the same source the credit
+          // identifier's tier reads (#1397: a literal 5 under-reserved
+          // seedance-2-5's 8s render).
+          outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
+        }
+        // Probe once, use twice: when validateRefVideoDurationPreHandler
+        // already ffprobed this request (it runs first, for every provider
+        // with a declared duration limit), price from ITS durations rather
+        // than paying for a second uncached probe per clip. Identical
+        // arithmetic — the same worst-case rule applies to a NaN entry —
+        // so the CHECK and the DEBIT read the same probed set.
+        // A provider without a declared bound was not pre-probed: probe here
+        // and STASH it the same way, so the handler carries the probe onto
+        // the job for the settlement (which prices the input from it).
+        const durationsSec =
+          req.refVideoDurationsSec ??
+          (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
+        req.refVideoDurationsSec = durationsSec
+        await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
+        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec })
+      }
+      // MiniMax Hailuo 3 bills unit×(input+output) for reference-video runs
+      // AND surcharges input images beyond the first 5 (11 KIE cr each).
+      // Predict the ASSEMBLED reference-image count exactly the way the
+      // handler will build it (connectedReferences → referenceImageUrls →
+      // frames folded by the shared resolver), then reserve the full
+      // scaled base up front (commit_credits only refunds).
+      //
+      // The `direction` fold is deliberately NOT applied here, and the
+      // prediction stays exact without it: the fold is TEXT-ONLY, and the
+      // billed quantity below is the assembled REFERENCE COUNT, which no
+      // amount of prompt text can move. The one shape that could — a
+      // catalog hint, term or LABEL containing a literal `{image:N}` /
+      // `{ref:` / `@slug:N` (labels are woven verbatim into the multi-pick
+      // blend clauses) — is ruled out for every registered catalog by
+      // `packages/prompts/src/__tests__/direction-hint-token-safety.test.ts`.
+      if (isMinimaxH3Provider(b?.provider as string | undefined)) {
+        const { minimaxH3BaseCreditsFromUrls, minimaxH3BaseCreditsFromDurations, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
+          await import("../ee/billing/minimax-h3-credits.js")
+        const refVideos = Array.isArray(b.referenceVideoUrls) ? (b.referenceVideoUrls as unknown[]) : []
+        const assembled = assembleVideoConnectedReferences({
+          prompt: b.prompt as string | undefined,
+          provider: b.provider as string,
+          imageCapOverride: frameSeatImageCap(b.provider as string, b.imageUrl !== undefined, b.endFrameUrl !== undefined),
+          connectedReferences: (Array.isArray(b.connectedReferences) ? b.connectedReferences : []) as ConnectedReference[],
+          baseReferenceImageUrls: (Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls : undefined) as string[] | undefined,
+          referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
+          referenceVideoCount: refVideos.length,
+          referenceAudioCount: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]).length : 0,
+          // Text-only channels: they move no reference COUNT, so the price
+          // is unchanged — forwarded so this prediction stays the handler's
+          // mirror if a later channel ever does move one.
+          ...(Array.isArray(b.describedReferences)
+            ? { describedReferences: b.describedReferences as DescribedReference[] }
+            : {}),
+          ...(Array.isArray(b.referenceVideoCaptions)
+            ? { referenceVideoCaptions: b.referenceVideoCaptions as string[] }
+            : {}),
+          ...(Array.isArray(b.referenceAudioCaptions)
+            ? { referenceAudioCaptions: b.referenceAudioCaptions as string[] }
+            : {}),
+        })
+        const refImageCount = minimaxH3BillableRefImageCount({
+          referenceImageUrls: assembled.referenceImageUrls,
+          firstFrameUrl: b.imageUrl,
+          lastFrameUrl: b.endFrameUrl,
+          referenceVideoUrls: refVideos,
+          referenceAudioUrls: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]) : undefined,
+        })
+        noteExtraReferenceImages(req, { count: refImageCount, free: MINIMAX_H3_FREE_INPUT_IMAGES })
+        if (hasVideoRef || refImageCount > MINIMAX_H3_FREE_INPUT_IMAGES) {
+          const h3PriceArgs = {
+            outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
+            referenceImageCount: refImageCount,
+            resolution: normResolution,
+          }
+          // Probe once, use twice (R15) — same contract as the seedance
+          // branch above: validateRefVideoDurationPreHandler already
+          // ffprobed this request (minimax-h3 has a declared bound), so the
+          // DEBIT prices from the very array the CHECK read, NaN included.
+          const stashed = req.refVideoDurationsSec
+          if (hasVideoRef && stashed) {
+            await noteRefVideoPricing(req, {
+              provider: b.provider as string,
+              resolution: normResolution ?? "",
+              outputDurationSec: h3PriceArgs.outputDurationSec,
+              rawDuration: b.duration,
+              durationsSec: stashed,
+              settlesToActual: false,
+            })
+          }
+          dynamicBase = stashed
+            ? minimaxH3BaseCreditsFromDurations({ ...h3PriceArgs, durationsSec: stashed })
+            : await minimaxH3BaseCreditsFromUrls({ ...h3PriceArgs, referenceVideoUrls: refVideos })
+        }
+        // No ref videos and ≤5 images → the seeded duration composite prices it.
+      }
+      const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
+      const modelId = buildVideoCreditModelIdentifier(
+        bSel.provider,
+        req.videoNorm?.duration ?? bSel.duration,
+        b?.sound as boolean | undefined,
+        "image-to-video",
+        b?.videoSize as string | undefined,
+        normResolution,
+        hasVideoRef,
+      )
+      // The seeded composite prices every run the dynamic branches above
+      // did not; the add-ons stack on either base.
+      const baseCost = dynamicBase ?? (await getModelCreditBaseCost(modelId)).creditCost
+      // Normalize legacy autoLoopTrim into loopTrim for addon math.
+      const rawLoopTrim = b.loopTrim as { enabled?: boolean; framesToTest?: number } | undefined
+      const legacyAuto = b.autoLoopTrim as boolean | undefined
+      const loopTrim = rawLoopTrim ?? (legacyAuto !== undefined
+        ? (legacyAuto ? { enabled: true, framesToTest: 8 } : { enabled: false })
+        : undefined)
+      // Sized on the seconds the model renders (Auto: its ceiling, unset:
+      // its own default) — the worker's settlement and the reconcile read
+      // the same helper, so what is held here is what is refunded.
+      const addon = loopTrimAddonCreditsFor(loopTrim, bSel.provider, b.duration as number | string | undefined)
+      const audioAddon = await voicedAudioAddonCredits(b)
+      if (dynamicBase === undefined && isSeedance2Provider(bSel.provider) && isAutoVideoDuration(req.videoNorm?.duration ?? bSel.duration)) {
+        noteAutoDurationSettles(req)
+      }
+      noteAddon(req, "loop_trim_addon", addon)
+      noteAddon(req, "voiced_audio_addon", audioAddon)
+      // The expected cost covers the whole run: the add-ons ride on it too.
+      const expectedBase = req.priceNotes?.expectedBase
+      if (expectedBase !== undefined) noteExpectedBase(req, expectedBase + addon + audioAddon)
+      return baseCost + addon + audioAddon
+    },
+  },
+}
+
 export async function generateVideoRoutes(app: FastifyInstance) {
   app.post("/v1/generate-video", {
-    preHandler: [
-      validateSeedance2AudioPreHandler,
-      validateRefVideoDurationPreHandler,
-      creditGuard(
-      (req) => {
-        const body = req.body as Record<string, unknown>
-        const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
-        const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
-        // Placement rule: the CHECK identifier, `computeCredits` and the
-        // reservation must all be computed from the SAME normalized values.
-        // Stash them so the two later sites cannot re-derive them differently.
-        const norm = resolveVideoRequestNorm({
-          provider: sel.provider,
-          aspectRatio: body?.aspectRatio as string | undefined,
-          resolution: body?.resolution as string | undefined,
-          duration: sel.duration,
-          draft: body?.draft === true,
-        })
-        req.videoNorm = norm
-        req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
-        return buildVideoCreditModelIdentifier(
-          sel.provider,
-          norm.duration ?? sel.duration,
-          body?.sound as boolean | undefined,
-          "image-to-video",
-          body?.videoSize as string | undefined,
-          norm.resolution,
-          hasVideoRef,
-        )
-      },
-      {
-        computeCredits: async (body, req) => {
-          const b = body as Record<string, unknown>
-          const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
-          // R14: read the resolution the CHECK identifier was built from, never
-          // the raw body — normalizing in the preHandler but not here would make
-          // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
-          // the exact drift this normalizer exists to remove.
-          const normResolution = req.videoNorm?.resolution ?? (b.resolution as string | undefined)
-          // A dynamically priced BASE (reference-video runs) replaces the seeded
-          // composite below; the add-ons (loop trim, the voiced audio step)
-          // ride on top of whichever base applies, so a voiced Seedance run
-          // with a reference video — the `voiced-video` lane forwards the
-          // reference videos like any other run (#1396) — reserves the same
-          // worst case as an unvoiced one plus its audio step.
-          let dynamicBase: number | undefined
-          // Seedance 2 reference-video runs are billed unit×(input+output). The
-          // seeded `-ref` composite only encodes the per-8s OUTPUT rate, so we
-          // ffprobe the connected reference videos and reserve the FULL scaled
-          // base UP FRONT (commit_credits only refunds — never up-charges). Core
-          // may not statically import ee/, so the helper is loaded dynamically
-          // (the allowed escape hatch — same pattern the credit-guard shim uses).
-          if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
-            const { seedance2RefVideoBaseCreditsFromDurations } =
-              await import("../ee/billing/seedance2-ref-video-credits.js")
-            const priceArgs = {
-              provider: b.provider as string,
-              resolution: normResolution ?? "720p",
-              // The seconds this run RENDERS when the caller omitted a duration
-              // — the provider's own default, the same source the credit
-              // identifier's tier reads (#1397: a literal 5 under-reserved
-              // seedance-2-5's 8s render).
-              outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
-            }
-            // Probe once, use twice: when validateRefVideoDurationPreHandler
-            // already ffprobed this request (it runs first, for every provider
-            // with a declared duration limit), price from ITS durations rather
-            // than paying for a second uncached probe per clip. Identical
-            // arithmetic — the same worst-case rule applies to a NaN entry —
-            // so the CHECK and the DEBIT read the same probed set.
-            // A provider without a declared bound was not pre-probed: probe here
-            // and STASH it the same way, so the handler carries the probe onto
-            // the job for the settlement (which prices the input from it).
-            const durationsSec =
-              req.refVideoDurationsSec ??
-              (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
-            req.refVideoDurationsSec = durationsSec
-            dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec })
-          }
-          // MiniMax Hailuo 3 bills unit×(input+output) for reference-video runs
-          // AND surcharges input images beyond the first 5 (11 KIE cr each).
-          // Predict the ASSEMBLED reference-image count exactly the way the
-          // handler will build it (connectedReferences → referenceImageUrls →
-          // frames folded by the shared resolver), then reserve the full
-          // scaled base up front (commit_credits only refunds).
-          //
-          // The `direction` fold is deliberately NOT applied here, and the
-          // prediction stays exact without it: the fold is TEXT-ONLY, and the
-          // billed quantity below is the assembled REFERENCE COUNT, which no
-          // amount of prompt text can move. The one shape that could — a
-          // catalog hint, term or LABEL containing a literal `{image:N}` /
-          // `{ref:` / `@slug:N` (labels are woven verbatim into the multi-pick
-          // blend clauses) — is ruled out for every registered catalog by
-          // `packages/prompts/src/__tests__/direction-hint-token-safety.test.ts`.
-          if (isMinimaxH3Provider(b?.provider as string | undefined)) {
-            const { minimaxH3BaseCreditsFromUrls, minimaxH3BaseCreditsFromDurations, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
-              await import("../ee/billing/minimax-h3-credits.js")
-            const refVideos = Array.isArray(b.referenceVideoUrls) ? (b.referenceVideoUrls as unknown[]) : []
-            const assembled = assembleVideoConnectedReferences({
-              prompt: b.prompt as string | undefined,
-              provider: b.provider as string,
-              imageCapOverride: frameSeatImageCap(b.provider as string, b.imageUrl !== undefined, b.endFrameUrl !== undefined),
-              connectedReferences: (Array.isArray(b.connectedReferences) ? b.connectedReferences : []) as ConnectedReference[],
-              baseReferenceImageUrls: (Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls : undefined) as string[] | undefined,
-              referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
-              referenceVideoCount: refVideos.length,
-              referenceAudioCount: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]).length : 0,
-              // Text-only channels: they move no reference COUNT, so the price
-              // is unchanged — forwarded so this prediction stays the handler's
-              // mirror if a later channel ever does move one.
-              ...(Array.isArray(b.describedReferences)
-                ? { describedReferences: b.describedReferences as DescribedReference[] }
-                : {}),
-              ...(Array.isArray(b.referenceVideoCaptions)
-                ? { referenceVideoCaptions: b.referenceVideoCaptions as string[] }
-                : {}),
-              ...(Array.isArray(b.referenceAudioCaptions)
-                ? { referenceAudioCaptions: b.referenceAudioCaptions as string[] }
-                : {}),
-            })
-            const refImageCount = minimaxH3BillableRefImageCount({
-              referenceImageUrls: assembled.referenceImageUrls,
-              firstFrameUrl: b.imageUrl,
-              lastFrameUrl: b.endFrameUrl,
-              referenceVideoUrls: refVideos,
-              referenceAudioUrls: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]) : undefined,
-            })
-            if (hasVideoRef || refImageCount > MINIMAX_H3_FREE_INPUT_IMAGES) {
-              const h3PriceArgs = {
-                outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
-                referenceImageCount: refImageCount,
-                resolution: normResolution,
-              }
-              // Probe once, use twice (R15) — same contract as the seedance
-              // branch above: validateRefVideoDurationPreHandler already
-              // ffprobed this request (minimax-h3 has a declared bound), so the
-              // DEBIT prices from the very array the CHECK read, NaN included.
-              const stashed = req.refVideoDurationsSec
-              dynamicBase = stashed
-                ? minimaxH3BaseCreditsFromDurations({ ...h3PriceArgs, durationsSec: stashed })
-                : await minimaxH3BaseCreditsFromUrls({ ...h3PriceArgs, referenceVideoUrls: refVideos })
-            }
-            // No ref videos and ≤5 images → the seeded duration composite prices it.
-          }
-          const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
-          const modelId = buildVideoCreditModelIdentifier(
-            bSel.provider,
-            req.videoNorm?.duration ?? bSel.duration,
-            b?.sound as boolean | undefined,
-            "image-to-video",
-            b?.videoSize as string | undefined,
-            normResolution,
-            hasVideoRef,
-          )
-          // The seeded composite prices every run the dynamic branches above
-          // did not; the add-ons stack on either base.
-          const baseCost = dynamicBase ?? (await getModelCreditBaseCost(modelId)).creditCost
-          // Normalize legacy autoLoopTrim into loopTrim for addon math.
-          const rawLoopTrim = b.loopTrim as { enabled?: boolean; framesToTest?: number } | undefined
-          const legacyAuto = b.autoLoopTrim as boolean | undefined
-          const loopTrim = rawLoopTrim ?? (legacyAuto !== undefined
-            ? (legacyAuto ? { enabled: true, framesToTest: 8 } : { enabled: false })
-            : undefined)
-          // Sized on the seconds the model renders (Auto: its ceiling, unset:
-          // its own default) — the worker's settlement and the reconcile read
-          // the same helper, so what is held here is what is refunded.
-          const addon = loopTrimAddonCreditsFor(loopTrim, bSel.provider, b.duration as number | string | undefined)
-          const audioAddon = await voicedAudioAddonCredits(b)
-          return baseCost + addon + audioAddon
-        },
-      },
-    ),
-    ],
+    preHandler: [...generateVideoPricing.prechecks, creditGuard(generateVideoPricing.modelResolver, generateVideoPricing.opts)],
   }, async (req, reply) => {
     const parsed = generateVideoBody.safeParse(req.body)
     if (!parsed.success) {
@@ -955,7 +986,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     //
     // Mirrors the assembly's own gate exactly: no `connectedReferences` → the
     // body is not framed at all, so the frame is identity.
-    const framesReferences = hasVideoReferenceChannels(parsed.data)
+    // A flat request whose prompt carries an editor token goes through the same
+    // assembly (empty channels), so `{video:1}` binds exactly as on
+    // /v1/text-to-video's flat path; with no token the body is untouched.
+    const framesReferences = hasVideoReferenceChannels(parsed.data) || REFERENCE_TOKEN_PROBE.test(rawPrompt ?? "")
     const frameWithReferences = (body: string | undefined): string | undefined =>
       framesReferences
         ? assembleVideoConnectedReferences({
@@ -1031,8 +1065,9 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // references to the right attached image. Absent → flat path untouched
     // (byte-identical to before). Runs BEFORE identity injection so that, when
     // both are set, the canonical-description suffix layers on top of the
-    // assembled prompt (mirrors generate-image's ordering).
-    if (hasVideoReferenceChannels(parsed.data)) {
+    // assembled prompt (mirrors generate-image's ordering). A flat request whose
+    // prompt carries an editor token is assembled too (see `framesReferences`).
+    if (framesReferences) {
       const assembled = assembleVideoConnectedReferences({
         prompt,
         provider,

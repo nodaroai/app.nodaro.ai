@@ -147,3 +147,63 @@ It was recorded once, on `feat/clip-pack` before the units merge
 (`UNITS_RECORD_CLIP_PACK_IDENTITY=1`; the test refuses to overwrite an existing
 fixture). **Never re-record it**: a re-recording takes whatever the code then
 builds as the truth.
+
+## `use-case-single-recording-identity.json`
+
+What a use-case node does with ONE recording, before the multicam work: the
+facts the fixtures above leave open, so that work can prove it changes nothing
+for one recording. Three sections, each row holding its own inputs:
+
+- `graphs`: Chapters, Trailer and Clip Pack built from one recording (video,
+  and audio where the type takes it; its probed length unknown or 3600 s; for
+  Trailer, no intro card or one with an unknown or 6 s length) and the hash,
+  `outputMap`, first-run subset and resolved settings built from it, plus one
+  whole stored snapshot per type. Tighten Episode's graphs stay in
+  `tighten-episode-identity.json`.
+- `bodies`: what the engine sends each of the four types' routes
+  (`freshRunInputs`, as a JSON string, key order included) for the defaults,
+  tuned settings, empty and null settings, and two recordings with every
+  optional input wired. Its editor twin,
+  `frontend/src/__tests__/fixtures/use-case-single-recording-body.json`, keeps
+  the body the canvas's own run sends for the same rows, by name; the editor
+  test reads the inputs from here.
+- `expansions`: what `expandUseCaseNodes` makes of each of the four types
+  (nodes, edges, fees and members) unwired, wired to one recording (video, and
+  audio where taken), to two, with every optional input and a consumer on each
+  output, review on (first run and the whole chain) and in a Render final.
+- `bodySchemas`: Tighten Episode's and Chapters' route bodies as JSON Schema
+  (Trailer's and Clip Pack's are in their own fixtures).
+
+`use-case-single-recording-identity.test.ts` and its editor twin rebuild every
+row, and `use-case-single-recording-prepare.test.ts` holds the server's own
+preparation to the graph rows (the body parsed by the route's schema, the
+probes, `prepareUseCase`, and the route's keyless preflight graph), without
+recording anything. The four types are named in the tests, never read from the
+live type list, so a type added later records its own facts. Both fixtures
+were recorded on dev before the multicam work
+(`RECORD_SINGLE_RECORDING_IDENTITY=1`). This fixture is recorded section by
+section: a write records only a section it does not hold yet and is refused
+when it holds every one; the editor twin refuses to overwrite. **Never
+re-record a section**: a re-recording takes whatever the code then builds as
+the truth. A deliberate change to one record is ruled on and corrected by
+hand, record by record.
+
+Five records of the editor twin have since been corrected by hand, never
+re-recorded: the canvas's run used to send a null on a setting whose body takes
+no null (which the route refused), where the engine leaves it out. It now
+follows the engine's rule (a null only where the body takes one,
+`usecaseSettingTakesNull`), so these rows drop the refused nulls: "null
+instructions and review" of each of the four types (`reviewBeforeRender`,
+`instructions`) and Clip Pack's "framing None and captions null" (`captions`;
+its `framing: null` is kept, the body takes it).
+
+Thirteen more were corrected by hand the same way when the canvas's run came
+to send an empty free-text setting (`instructions: ""`, `styleGuide: ""`), as
+the engine always has (both engines now share `usecaseSentSettings`, which
+sends an empty string only where the body takes one — free text — and leaves
+any other empty value out; no engine row changed, since every empty value in
+these rows is free text): the
+"defaults" and "an empty instruction and style guide" rows of each of the
+four types, Tighten Episode's "a music bed" and "framing None", Trailer's "an
+intro card", and Clip Pack's "framing None" and "framing None and captions
+null". Every editor row now equals its engine row plus the caller's `userId`.

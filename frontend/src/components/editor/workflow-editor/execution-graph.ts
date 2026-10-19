@@ -1,6 +1,6 @@
-import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "@/lib/unit-definitions";
-import { composeSet, unitOutputValue, unitProducers } from "@/lib/unit-compose";
-// @registry-enumerates VIDEO_SOURCE_TYPES_FOR_RENDER carries every node unit whose contract.producer is "video"
+import { unitDefinitionOf } from "@/lib/unit-definitions";
+import { unitOutputValue } from "@/lib/unit-compose";
+import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, previewTypeOfNodeType } from "@/lib/preview-node-types";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
@@ -1220,110 +1220,7 @@ export function collapseExpandedClones(): {
   return { nodes, edges };
 }
 
-export const IMAGE_SOURCE_TYPES = new Set([
-  "generate-image",
-  "reference-board",
-  "upload-image",
-  "edit-image",
-  "image-to-image",
-  "modify-image",
-  "upscale-image",
-  "remove-background",
-  "extract-frame",
-  "image-collage",
-  "image-overlay",
-  "character",
-  "face",
-  "object",
-  "creature",
-  "location",
-  "scene",
-]);
-/** The node types whose output a render / composition node collects as a
- *  video (collectMediaAssets) and the preview types as one
- *  (detectPreviewItemType). Legacy rows ∪ every node unit whose
- *  `contract.producer` is "video" (unit-definitions.ts), so a migrated node is
- *  never named here; a "dynamic" unit is not a member. */
-export const VIDEO_SOURCE_TYPES_FOR_RENDER: ReadonlySet<string> = composeSet("VIDEO_SOURCE_TYPES_FOR_RENDER", new Set<string>([
-  "image-to-video",
-  "video-to-video",
-  "switchx",
-  "text-to-video",
-  // Generate Video — unified video node (Task 6.1). Mirrors backend
-  // execution-graph's VIDEO_SOURCE_TYPES so detectPreviewItemType /
-  // collectMediaAssets treat its output as video.
-  "generate-video",
-  // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
-  // Mirrors the "generate-video" entry above (same output field shape).
-  "generate-video-pro",
-  // Edit Video Pro — span-replace sibling of generate-video-pro (Task 14).
-  "edit-video-pro",
-  "upload-video",
-  "youtube-video",
-  "combine-videos",
-  "assemble-narrated-video",
-  "lip-sync",
-  "speech-to-video",
-  "ai-avatar",
-  "cinematic-avatar",
-  "motion-transfer",
-  "video-upscale",
-  "video-depth",
-  "extend-video",
-  "video-retake",
-  "face-swap",
-  "suno-music-video",
-  "merge-video-audio",
-  "still-to-video",
-  "slideshow",
-  "add-captions",
-  "resize-video",
-  "social-media-format",
-  "trim-video",
-  "render-video",
-  "speed-ramp",
-  "loop-video",
-  "fade-video",
-  "video-overlay",
-  "transcode-video",
-  "manual-edit",
-  "video-sfx",
-  // UGC Clip: one rendered clip — a video wherever the server sorts media too
-  // (its preview typing reads the shared video producers).
-  "ugc-clip",
-  "video-mask",
-  "mask-composite",
-]), unitProducers(UNIT_NODE_DEFINITIONS, "video"));
-export const AUDIO_SOURCE_TYPES = new Set([
-  "text-to-speech",
-  "text-to-audio",
-  "generate-music",
-  "upload-audio",
-  "suno-generate",
-  "suno-cover",
-  "suno-extend",
-  "suno-separate",
-  "audio-separation",
-  "suno-mashup",
-  "suno-replace-section",
-  "suno-add-instrumental",
-  "suno-add-vocals",
-  "suno-convert-wav",
-  "suno-upload-extend",
-  "trim-audio",
-  "mix-audio",
-  "combine-audio",
-  "adjust-volume",
-  "audio-fx",
-  "pitch-tempo",
-  "reference-audio",
-  "voice-changer",
-  "voice-changer-pro",
-  "dubbing",
-  "voice-remix",
-  "voice-design",
-  "audio-isolation",
-]);
+export { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES };
 
 export const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif)/i
 export const VIDEO_URL_RE = /^https?:\/\/.*\.(mp4|mov|webm|avi|mkv)/i
@@ -1337,32 +1234,16 @@ export function detectPreviewItemType(
 ): "image" | "video" | "audio" | "data" | "text" {
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
-  // through to the audio set below. Must come before AUDIO_SOURCE_TYPES.
+  // through to the node-type sets (lib/preview-node-types.ts). Must come before them.
   if (nodeType === "text-to-dialogue" && sourceHandle === "json") return "data"
   // A use-case node's `json` pip is its plan (data), its `text` pip its text
   // (Chapters' show notes); its episode is typed by its URL below.
   if (isUseCaseNodeType(nodeType) && sourceHandle === "json") return "data"
   if (isUseCaseNodeType(nodeType) && sourceHandle === "text") return "text"
-  if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
-  if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
-  if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
-  if (nodeType === "forced-alignment") return "data"
-  // Both analysis emitters: a JSON scene breakdown, never a media URL. Must
-  // stay paired — video-audit's type string contains "video", so dropping it
-  // here would classify an audited analysis as a video by the fallthrough.
-  if (nodeType === "video-analysis" || nodeType === "video-audit") return "data"
-  // Silence-detect emits a { version, ranges, durationMs } JSON object, never a
-  // media URL — classify it as data so its preview isn't mis-typed by the URL
-  // fallthrough below.
-  if (nodeType === "silence-detect") return "data"
-  // audio-sync emits its offsets as JSON, never a media URL.
-  if (nodeType === "audio-sync") return "data"
-  // edit-plan emits an EDL plan (json), never a media URL — classify as data.
-  if (nodeType === "edit-plan") return "data"
-  // camera-switch emits the switched edit + the renamed transcript, both json.
-  if (nodeType === "camera-switch") return "data"
-  // speaker-frames emits the stored face-track file's descriptor (json).
-  if (nodeType === "speaker-frames") return "data"
+  // What the node type alone decides (the source sets, then the JSON
+  // emitters) — shared with the store's classifyPreviewValue.
+  const byType = previewTypeOfNodeType(nodeType)
+  if (byType) return byType
   // Content Recipe's `json` handle is the recipe object; its `text` handle
   // and Content Ideas are readable text.
   if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"

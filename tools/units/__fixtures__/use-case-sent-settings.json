@@ -1,0 +1,86 @@
+{
+  "$comment": "Which of a use-case node's settings a run sends its route, on BOTH engines: the server's (backend/src/services/workflow-engine/__tests__/use-case-sent-settings.test.ts, freshRunInputs) and the editor's (frontend/src/__tests__/use-case-sent-settings.test.ts, the executor's request body without the caller's userId) are each held to the bodies here, key order included. The rule (usecaseSentSettings): an unset setting is not sent; a null only where the type's body takes one (a None); an empty string only where the body takes one (free text), any other empty value left out so the route takes its default; anything else as the node holds it. Each case is a node of `type` holding `data`, with one recording wired. Written by hand; a case is added, an existing expectation is changed only by a ruled decision.",
+  "cases": [
+    {
+      "name": "Tighten Episode: an empty instruction and style guide are sent as empty",
+      "type": "tighten-episode",
+      "data": {
+        "instructions": "",
+        "styleGuide": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"instructions\":\"\",\"styleGuide\":\"\"}"
+    },
+    {
+      "name": "Tighten Episode: a None framing is sent; a null its body does not take is not",
+      "type": "tighten-episode",
+      "data": {
+        "output": "video",
+        "framing": null,
+        "captions": null,
+        "captionStyle": null,
+        "instructions": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"output\":\"video\",\"framing\":null,\"instructions\":\"\"}"
+    },
+    {
+      "name": "Chapters: its defaults, the empty instruction and style guide included",
+      "type": "episode-chapters",
+      "data": {
+        "planTier": "economy",
+        "instructions": "",
+        "styleGuide": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"planTier\":\"economy\",\"instructions\":\"\",\"styleGuide\":\"\"}"
+    },
+    {
+      "name": "Trailer: a null review is not sent; an empty instruction is",
+      "type": "episode-trailer",
+      "data": {
+        "reviewBeforeRender": null,
+        "planTier": "standard",
+        "instructions": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"planTier\":\"standard\",\"instructions\":\"\"}"
+    },
+    {
+      "name": "Clip Pack: a None framing is sent, a null captions is not, an empty style guide is",
+      "type": "clip-pack",
+      "data": {
+        "framing": null,
+        "captions": null,
+        "styleGuide": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"framing\":null,\"styleGuide\":\"\"}"
+    },
+    {
+      "name": "Tighten Episode: an empty choice (captionStyle, planTier) is not sent; the route takes its default instead of refusing the run",
+      "type": "tighten-episode",
+      "data": {
+        "output": "video",
+        "captionStyle": "",
+        "planTier": "",
+        "instructions": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"output\":\"video\",\"instructions\":\"\"}"
+    },
+    {
+      "name": "Clip Pack: an empty caption style and tier are not sent; an empty instruction is",
+      "type": "clip-pack",
+      "data": {
+        "captionStyle": "",
+        "planTier": "",
+        "instructions": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"instructions\":\"\"}"
+    },
+    {
+      "name": "Trailer: an empty tier is not sent; an empty style guide is",
+      "type": "episode-trailer",
+      "data": {
+        "planTier": "",
+        "styleGuide": ""
+      },
+      "body": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"styleGuide\":\"\"}"
+    }
+  ]
+}

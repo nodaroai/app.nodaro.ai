@@ -244,6 +244,21 @@ describe("POST /v1/tighten-episode", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
+  it("two recordings: still 400 validation_error (Tighten takes one recording in this phase), nothing prepared", async () => {
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(m.prepare).not.toHaveBeenCalled()
+  })
+
+  it("a masterAudioUrl is not Tighten's to take yet: stripped from the body, never prepared or probed", async () => {
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], masterAudioUrl: "https://r2/m.wav", cameras: { wide: 1 } })
+    expect(res.statusCode).toBe(202)
+    const body = m.prepare.mock.calls[0]![1] as Record<string, unknown>
+    expect(body).not.toHaveProperty("masterAudioUrl")
+    expect(body).not.toHaveProperty("cameras")
+  })
+
   it("review on from a caller outside any run: runs only up to the proxy render, as the reviewer", async () => {
     const review = buildTightenEpisodeGraph({ ...TIGHTEN_EPISODE_DEFAULTS, reviewBeforeRender: true }, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } })
     m.prepared = { ...ok(), settings: { ...TIGHTEN_EPISODE_DEFAULTS, reviewBeforeRender: true }, graph: review }

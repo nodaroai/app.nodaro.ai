@@ -10,7 +10,9 @@ import {
   USE_CASE_NODE_TYPES,
   usecaseContinuePath,
   usecaseDescriptor,
+  USE_CASE_SPECS,
   usecaseListsItsResult,
+  usecaseRecordingNodeId,
   usecaseResultKind,
 } from "@nodaro/render-rules"
 
@@ -30,6 +32,10 @@ describe("the use-case registry", () => {
         expect(d.inputs[0]).toBe("media")
         for (const h of d.inputs) expect(typeof d.inputNodeIds[h]).toBe("string")
       })
+      it("takes one recording in this phase, and its first recording is the built source every builder names", () => {
+        expect(d.maxRecordings).toBe(1)
+        expect(d.inputNodeIds.media).toBe(usecaseRecordingNodeId(0))
+      })
       it("builds a graph of its own type and result kind", () => {
         const g = d.build(d.resolveSettings({}, "video"), { media: { url: "https://r2/ep.mp4", kind: "video" } })
         expect(g.nodeType).toBe(type)
@@ -43,6 +49,9 @@ describe("the use-case registry", () => {
     expect(d).toMatchObject({ label: "Tighten Episode", reviewable: true, resultKind: "episode", needsVideo: false, inputs: ["media", "music"] })
     expect(d.inputNodeIds).toEqual({ media: "uc-source", music: "uc-music" })
     expect(d.settingKeys).toEqual(["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount"])
+  })
+  it("every builder spec declares how many recordings it takes", () => {
+    for (const [key, spec] of Object.entries(USE_CASE_SPECS)) expect(spec.maxRecordings, key).toBe(1)
   })
   it("anything else is not a list-result type", () => {
     expect(usecaseListsItsResult("apply-edl")).toBe(false)

@@ -11,6 +11,7 @@ import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
 import { extractSourceNodeOutputAsList } from "../output-extractor.js"
 import { computeRouterGatedIds } from "../execution-graph.js"
 import { buildPayload } from "../payload-builder.js"
+import { freshRunInputs } from "../use-case-request.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
@@ -245,5 +246,23 @@ describe("the orchestrator's graph through a Teleport pair", () => {
     })
     // A node with no re-pointed wire is returned as it is.
     expect(carriedNodeSettings(nodes[1], edges)).toBe(nodes[1])
+  })
+
+  it("a use-case node's mediaOrder naming a Receive sends that origin's recording through the pair", () => {
+    const nodes: SimpleNode[] = [
+      node("a", "upload-video", { url: "https://r2/a.mp4" }), node("o", "upload-video", { url: "https://r2/o.mp4" }),
+      node("s", "teleport-send"), node("r", "teleport-receive"),
+    ]
+    const consumer = node("t", "tighten-episode", { mediaOrder: ["r"] })
+    const edges = bypassTeleports([...nodes, consumer], [
+      edge("a", "video", "t", "media"),
+      edge("o", "video", "s", "in"),
+      edge("s", "out", "r", "in", { teleporter: true }),
+      { ...edge("r", "out", "t", "media"), id: "r->t" },
+    ])
+    const carried = carriedNodeSettings(consumer, edges)
+    expect((carried.data as Record<string, unknown>).mediaOrder).toEqual(["o"])
+    const inputs = resolveNodeInputs(carried, edges, {}, [...nodes, carried])
+    expect(freshRunInputs(carried, inputs).mediaUrls).toEqual(["https://r2/o.mp4"])
   })
 })

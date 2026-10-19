@@ -100,7 +100,7 @@ describe("Chapters on the canvas: a text result", () => {
     jobAnswers({ status: "processing", progress: 40 }, { status: "completed", output_data: { text: NOTES, json: ROWS, transcript: { words: [] }, _executionId: "exec-1" } })
     const node = chaptersNode({ generatedText: "0:00 Older", generatedJson: [{ startMs: 0, title: "Older" }] })
     expect(await run(node)).toBe(NOTES)
-    expect(api.runUseCase).toHaveBeenCalledWith("episode-chapters", expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", settings: { planTier: "economy", instructions: undefined, styleGuide: undefined } }), undefined)
+    expect(api.runUseCase).toHaveBeenCalledWith("episode-chapters", expect.objectContaining({ mediaUrls: ["https://r2/ep.mp4"], settings: { planTier: "economy", instructions: undefined, styleGuide: undefined } }), undefined)
     expect(poll.pollJobWithNodeUpdate).not.toHaveBeenCalled()
     expect(store.updateNodeData).toHaveBeenCalledWith("c1", { currentJobProgress: 40 })
     expect(dataNow()).toMatchObject({

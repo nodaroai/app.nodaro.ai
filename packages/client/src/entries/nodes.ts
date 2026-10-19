@@ -93,6 +93,14 @@ export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 export type { ReferenceCaptionParams, AssembleNarratedVideoParams, RunNodeOptions } from "../resources/nodes.js"
 
 export type {
+  // `nodes.run("video-to-video", …)` and `nodes.quote(type, params)`.
+  VideoToVideoParams,
+  NodeQuote,
+  QuoteAdjustment,
+  QuoteWarning,
+} from "../resources/nodes-video-params.js"
+
+export type {
   // The image routes beside generate-image: `nodes.run("image-to-image" |
   // "edit-image" | "split-image" | "generate-mask", …)`.
   ImageJobStarted,
@@ -107,6 +115,10 @@ export type {
   GenerateMaskParams,
   GenerateMaskJobOutput,
 } from "../resources/nodes-image-params.js"
+
+// The shared Generate Mask contract the params and the job output are built
+// from (the request body and the completed job's fields).
+export type { GenerateMaskRequest, GenerateMaskOutput } from "@nodaro/shared/media"
 
 export type {
   // The vocabularies those params take.

@@ -10,6 +10,8 @@ export type ClipPackData = {
   [key: string]: unknown
   label: string
   fieldMappings: FieldMappings
+  /** The recordings' order (their upstream node ids): the run sends and builds them in it; a wired recording it does not list follows in wire order. */
+  mediaOrder?: string[]
   count?: number
   targetDurationSec?: number
   /** null = no framing (the recording's shape); absent = the run's default framing. */

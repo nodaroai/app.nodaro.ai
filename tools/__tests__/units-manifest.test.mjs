@@ -224,7 +224,7 @@ test("many: only true, only on a video/audio input, never with a field", () => {
   }
 })
 
-test("a use-case input is never JSON and never many (routeUseCaseInput routes media, music, introCard)", () => {
+test("a use-case input is never JSON and never many (routeUseCaseInput routes media, music, introCard, masterAudio)", () => {
   // Refused by id already: a use-case input is one of the vocabulary's handles.
   assert.match(inputProblems([{ id: "plan", label: "P", accepts: ["look"] }], CASE).join("\n"), /a use-case input is one of/)
   // Refused by kind: a media pip that would take JSON.
@@ -238,6 +238,15 @@ test("a use-case input is never JSON and never many (routeUseCaseInput routes me
     withManifest(many, (m) => { m.handles.inputs[0].many = true }, CASE)
     assert.match(problems(many).join("\n"), /handles\.inputs\[0\]\.many: a use-case input already takes every wire \(routeUseCaseInput\) — remove it/)
   } finally { rmSync(many, { recursive: true, force: true }) }
+})
+
+test("a use-case unit may take Master audio beside its media; any other id is refused naming every lane", () => {
+  const master = { id: "masterAudio", label: "Master audio", accepts: ["audio"] }
+  assert.deepEqual(inputProblems([master], CASE), [])
+  const refused = inputProblems([{ id: "master", label: "Master", accepts: ["audio"] }], CASE).join("\n")
+  assert.match(refused, /handles\.inputs\[1\]\.id "master": a use-case input is one of media, music, introCard, masterAudio \(routeUseCaseInput routes only these\)/)
+  assert.match(inputProblems([{ ...master, field: "audioUrl" }], CASE).join("\n"), /handles\.inputs\[1\]\.field: a use-case input lands in useCaseMedia \/ useCaseMusic \/ useCaseIntroCard \/ useCaseMasterAudio, never a data field/)
+  assert.match(inputProblems([{ ...master, accepts: ["look"] }], CASE).join("\n"), /handles\.inputs\[1\]\.accepts: a use-case input takes media, never JSON \(routeUseCaseInput routes it into useCaseMedia \/ useCaseMusic \/ useCaseIntroCard \/ useCaseMasterAudio\)/)
 })
 
 const fileCases = [
@@ -504,7 +513,7 @@ test("contract.nonPromptInputs naming an input twice is refused", () => {
 
 test("use-case: an input with a field or an unknown id, and an output with from, are refused", () => {
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.inputs[0].field = "videoUrl" }, CASE)), /handles\.inputs\[0\]\.field: a use-case input lands in useCaseMedia/)
-  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.inputs[0].id = "video" }, CASE)), /handles\.inputs\[0\]\.id "video": a use-case input is one of media, music, introCard/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.inputs[0].id = "video" }, CASE)), /handles\.inputs\[0\]\.id "video": a use-case input is one of media, music, introCard, masterAudio \(/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs[0].from = "text" }, CASE)), /handles\.outputs\[0\]\.from: a use-case node's outputs are read by the use-case reader/)
 })
 

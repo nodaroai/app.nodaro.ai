@@ -9,6 +9,8 @@ export type EpisodeChaptersData = {
   [key: string]: unknown
   label: string
   fieldMappings: FieldMappings
+  /** The recordings' order (their upstream node ids): the run sends and builds them in it; a wired recording it does not list follows in wire order. */
+  mediaOrder?: string[]
   planTier?: "economy" | "standard" | "premium"
   instructions?: string
   styleGuide?: string

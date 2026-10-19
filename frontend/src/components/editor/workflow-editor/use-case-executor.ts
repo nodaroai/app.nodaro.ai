@@ -31,7 +31,14 @@
  *    the reader's language where the code has one.
  */
 import { toast } from "sonner"
-import { usecaseDescriptor, usecaseListsItsResult, type UseCaseNodeType, type UseCaseResultKind } from "@nodaro/render-rules"
+import {
+  usecaseDescriptor,
+  usecaseListsItsResult,
+  usecaseRecordingsOf,
+  usecaseSentSettings,
+  type UseCaseNodeType,
+  type UseCaseResultKind,
+} from "@nodaro/render-rules"
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED } from "@nodaro/shared/nodes"
 import { continueUseCase, getJobStatus, runUseCase, type UseCaseApiParams } from "@/lib/api"
 import { executionErrorText } from "@/lib/execution-error-text"
@@ -69,6 +76,7 @@ export interface UseCaseInputs {
   readonly useCaseMedia?: ReadonlyArray<{ readonly nodeId: string; readonly url: string }>
   readonly useCaseMusic?: string
   readonly useCaseIntroCard?: string
+  readonly useCaseMasterAudio?: string
 }
 
 export interface UseCaseContinueParams {
@@ -386,19 +394,22 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
   if (data.useCaseJobId !== undefined || data.useCaseExecutionId !== undefined) {
     useWorkflowStore.getState().updateNodeData(node.id, { useCaseJobId: undefined, useCaseExecutionId: undefined })
   }
-  const media = inputs.useCaseMedia?.[0]
-  if (!media) {
+  // The recordings in the node's order, as many as its type takes (the server's engine's rule).
+  const recordings = usecaseRecordingsOf(inputs.useCaseMedia, data, d.maxRecordings)
+  if (recordings.length === 0) {
     // Names the node's type in the reader's language; the node's own name heads the message.
     toast.error(nodeRunError(data.label, "nodeRun.usecaseNeedsRecording", usecaseLabelVars(type)))
     return Promise.reject(new Error(`No recording wired into ${d.label}`))
   }
-  const settings = Object.fromEntries(d.settingKeys.map((k) => [k, data[k]]))
+  // Both engines' rule (usecaseSentSettings): unset not sent, a null or "" only where the body takes one, the rest as held.
+  const settings = usecaseSentSettings(type, d.settingKeys, data)
   return runUseCaseFresh(
     node,
     {
-      mediaUrl: media.url,
+      mediaUrls: recordings.map((m) => m.url),
       ...(inputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: inputs.useCaseMusic } : {}),
       ...(inputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: inputs.useCaseIntroCard } : {}),
+      ...(inputs.useCaseMasterAudio && d.inputs.includes("masterAudio") ? { masterAudioUrl: inputs.useCaseMasterAudio } : {}),
       settings,
     },
     ctx,

@@ -1735,6 +1735,11 @@ not in the route's own response body.
 `{ portraitUrl, canonicalDescription }` — `canonicalDescription` is `null` if
 the LLM caption sub-failed (portrait still set; retry via `llm-caption`).
 
+Both routes change the character, so an OAuth app token needs `assets:write`
+(`403 insufficient_scope` without it), the same as creating or deleting one.
+The same holds for `approve-main-image` and `llm-caption` on locations,
+objects and creatures. Your own session and API keys need no scope.
+
 ### Worked example: create → generate → approve
 
 ```bash
@@ -1868,7 +1873,7 @@ route returns `{ sourceImageUrl, canonicalDescription }` —
 `canonicalDescription` is `""` (not null) when the LLM caption sub-failed
 (main image still set; retry via `llm-caption`). The `llm-caption` route
 502s on LLM failure and 400 `main_image_required` when no main image is
-set yet.
+set yet. OAuth app tokens need `assets:write` for both routes.
 
 ### Worked example: create → generate → approve
 
@@ -3443,6 +3448,29 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 
 The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. With every clip named, `credits` is exactly what the run reserves — the same measurement, the same billable seconds (see [Generate Video → Reference videos bill input + output duration](nodes/ai-video/generate-video.md)), the same rounding — and `min` equals it. A clip that cannot be measured counts as the model's longest accepted clip, as the run counts it. With `unknownReferenceVideos`, `exact` is `false`: `credits` prices each unknown clip at the longest clip the model accepts (never below what the run can reserve) and `min` at the shortest. A clip the run would refuse is refused here with the run's own `400 video_too_long`, and nothing is charged.
+
+### Run quotes
+
+`POST /v1/quote` returns what a node run will reserve, before you start it. Send the node type and **exactly the body you would send to its run route**: the server prices it with the run route's own code — the same body validation, the same reference-clip measurement, the same credit id and the same arithmetic — so the quote is what the run reserves. Nothing is started and nothing is charged. Cloud only; requires authentication; rate-limited to 30 requests a minute. SDK: `client.nodes.quote(type, params)`.
+
+Quotable today: `text-to-video`, `generate-video`, `video-to-video`. Any other type is a `400 quote_unsupported` that lists them.
+
+```json
+{"type":"text-to-video","params":{"prompt":"edit {video:1} as follows:
+make it black and white","provider":"seedance-2-5","duration":-1,"aspectRatio":"adaptive","referenceVideoUrls":["https://…/clip.mp4"]}}
+```
+
+The response is `{ "data": { identifier, reserve, expected?, adjustments, warnings } }`:
+
+| Field | Meaning |
+|---|---|
+| `identifier` | The credit id the run is charged under. |
+| `reserve` | Credits the run holds when it starts. |
+| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit); `expected` is input plus the length it will most likely render — the source clip's length for an Auto-duration edit, the requested seconds otherwise. Never above `reserve`. |
+| `adjustments` | `{ code, message, credits? }` — why the price is what it is: `ref_video_length` (priced by the clips' lengths), `extra_reference_images` (MiniMax Hailuo 3 images past the first 5), `auto_duration`, `loop_trim_addon` / `voiced_audio_addon` (with their credits), `params_adjusted` (a resolution or ratio snapped to one the model offers). |
+| `warnings` | `{ code, message }` — `settles_to_actual` (the run is charged for what was generated and the rest of `reserve` is refunded), `ref_video_unmeasured` (a clip could not be measured and is priced as the longest the model accepts). |
+
+An invalid body gets the run route's own `400`, a clip the run would refuse gets its `400 video_too_long`, and a model this deployment does not offer gets the run's `403 model_not_available`. A clip stored on Nodaro (an upload or a generated result) is remembered for 15 minutes once measured, so quoting and then running the same body measures it once. A quote checks the body and the price, not your balance or plan: the run can still answer `402`, and a few checks only the run makes (for example a model that needs a start frame) can still refuse a body that was quoted.
 
 ## 13a. Favorites and ratings
 

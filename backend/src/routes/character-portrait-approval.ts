@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { meterSyncLlm } from "../lib/meter-sync-llm.js"
@@ -118,6 +119,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
   app.post(
     "/v1/characters/:id/approve-portrait",
     {
+      preHandler: requireAppScope("assets:write"),
       // 10 req/min/IP — gates the paid LLM caption (Claude Sonnet vision,
       // per call). Mirrors `location-main-image-approval.ts`. Without
       // this, a motivated attacker can burn /min in Anthropic credits.
@@ -207,7 +209,8 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
     {
       // dedup:false — this route returns { canonicalDescription }, not the
       // { jobId, deduped:true } shape the idempotency short-circuit would send.
-      preHandler: creditGuard(() => CAPTION_CREDIT_IDENTIFIER, { dedup: false }),
+      // Scope first: an app without assets:write is refused before any credit check.
+      preHandler: [requireAppScope("assets:write"), creditGuard(() => CAPTION_CREDIT_IDENTIFIER, { dedup: false })],
       // 10 req/min/IP — gates the paid LLM caption. Mirrors location-llm-caption.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },

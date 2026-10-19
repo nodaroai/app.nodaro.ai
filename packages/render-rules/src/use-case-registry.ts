@@ -17,15 +17,25 @@ import {
   type UseCaseNodeType,
   type UseCaseResultKind,
 } from "./use-case-graph"
+import type { UseCaseSourcesShape } from "./use-case-cameras"
 import { USE_CASE_ROWS } from "./use-case-rows"
 import { USE_CASE_SPECS, type UseCaseBuilderKey } from "./use-case-specs"
 
-export type UseCaseInputHandle = "media" | "music" | "introCard"
+export type UseCaseInputHandle = "media" | "music" | "introCard" | "masterAudio"
 export interface UseCaseSources {
+  /** The first recording (a builder that takes one recording reads only this one). */
   readonly media: UseCaseMediaSource
+  /** Recordings 2..n, in order (decided 2026-10-17); absent for one recording. */
+  readonly moreMedia?: readonly UseCaseMediaSource[]
+  /** The separate audio every recording is synced to, when one is wired. */
+  readonly masterAudio?: UseCaseMediaSource
   readonly music?: { readonly url: string }
   /** The card's probed length, when known (a quote prices what follows it on that). */
   readonly introCard?: { readonly url: string; readonly durationSec?: number }
+}
+/** Every recording of a run, the first first, in the order it is built in. */
+export function usecaseRecordings(sources: UseCaseSources): readonly UseCaseMediaSource[] {
+  return [sources.media, ...(sources.moreMedia ?? [])]
 }
 export type UseCaseSettings = Readonly<Record<string, unknown>>
 /**
@@ -47,6 +57,8 @@ export interface UseCaseDescriptor {
   /** A recording without picture is refused before anything starts. */
   readonly needsVideo: boolean
   readonly inputs: readonly UseCaseInputHandle[]
+  /** How many recordings `media` takes (Master audio not counted); a wire past the last is not read. */
+  readonly maxRecordings: number
   /** The built node each wired input stands for (an estimate replaces it by the real source). */
   readonly inputNodeIds: Readonly<Partial<Record<UseCaseInputHandle, string>>>
   /** The node data keys a run sends its route. */
@@ -73,7 +85,8 @@ export interface UseCaseDescriptor {
    * (`needsVideo`) and for one an audio recording changes nothing on.
    */
   readonly audioForced?: Readonly<Record<string, unknown>>
-  resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind): UseCaseSettings
+  /** `shape`: how many recordings the run has and whether Master audio is wired (a one-recording run's settings never depend on it). */
+  resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind, shape?: UseCaseSourcesShape): UseCaseSettings
   build(settings: UseCaseSettings, sources: UseCaseSources): UseCaseGraph
 }
 

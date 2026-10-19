@@ -682,12 +682,26 @@ describe("finalizeJobWithMedia", () => {
     expect(updateArg.output_data.seed).toBe(12345)
   })
 
-  it("image + mediaUrl + extraMediaUrls: skips upload, uses passed URLs as the variant array", async () => {
+  it("image + mediaUrl: refused before any read, claim or upload (#2386 watermark skip)", async () => {
+    await expect(
+      finalizeJobWithMedia({
+        jobId: "j-img-pre",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/raw.png", cost: 0.02, providerUsed: "p" },
+        mediaUrl: "https://r2.example/v0.png",
+      }),
+    ).rejects.toThrow(/result\.url, not mediaUrl/)
+
+    expect(mocks.jobsSingleMock).not.toHaveBeenCalled()
+    expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
+  })
+
+  it("image for a watermarked user: the uploaded image is watermarked and charged to the user", async () => {
     mocks.jobsSingleMock.mockResolvedValueOnce({
       data: {
-        id: "j-img-pre",
+        id: "j-img-wm",
         user_id: "u1",
-        should_watermark: false,
+        should_watermark: true,
         is_public: true,
         job_type: "generate-image",
         workflow_execution_id: null,
@@ -697,17 +711,13 @@ describe("finalizeJobWithMedia", () => {
     })
 
     await finalizeJobWithMedia({
-      jobId: "j-img-pre",
+      jobId: "j-img-wm",
       jobType: "generate-image",
-      result: { url: "https://kie.example/raw.png", cost: 0.02, providerUsed: "p" },
-      mediaUrl: "https://r2.example/v0.png",
-      extraMediaUrls: ["https://r2.example/v1.png"],
+      result: { url: "https://r2.example/inpaint/j-img-wm.png", cost: 0.02, providerUsed: "p" },
     })
 
-    expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
-    expect(sharedMocks.buildImageOutputData).toHaveBeenCalledWith(
-      expect.anything(),
-      ["https://r2.example/v0.png", "https://r2.example/v1.png"],
+    expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
+      ["https://r2.example/inpaint/j-img-wm.png"], "j-img-wm", "u1", true,
     )
   })
 

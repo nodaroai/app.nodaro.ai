@@ -173,6 +173,7 @@ export const MODEL_MAKERS = {
   ideogram: { name: "Ideogram" },
   kuaishou: { name: "Kuaishou" },
   lightricks: { name: "Lightricks" },
+  luma: { name: "Luma AI" },
   meituan: { name: "Meituan" },
   minimax: { name: "MiniMax" },
   nodaro: { name: "Nodaro" },
@@ -2464,6 +2465,18 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Runway Aleph — video-to-video conversion.",
     useCases: ["v2v", "restyle"],
     pricing: [{ identifier: "runway-aleph", credits: 350, note: "5s clip" }],
+  },
+  "luma-modify": {
+    id: "luma-modify",
+    kind: "video",
+    modes: ["v2v"] as const,
+    family: "Luma",
+    maker: "luma",
+    label: "Luma Modify",
+    series: "Luma",
+    description: "Luma Modify — changes or restyles an existing video from a prompt.",
+    useCases: ["v2v", "restyle"],
+    pricing: [{ identifier: "luma-modify", credits: 320, note: "per clip" }],
   },
 
   // ── Extend / Upscale ──

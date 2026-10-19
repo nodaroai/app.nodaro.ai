@@ -4,10 +4,15 @@
  * pinned byte for byte (key order included) to the ones its P1 client sent,
  * captured from that code before the client served every use-case node.
  *
- * One deliberate difference: a setting the person set to None (`framing:
- * null`) now reaches the route as `null` instead of being left out (decided
- * 2026-10-16) — a later node's None is not its default. For Tighten Episode
- * both mean "no framing" (its settings resolver reads null and absent alike).
+ * Two deliberate differences:
+ * - a setting the person set to None (`framing: null`) now reaches the route
+ *   as `null` instead of being left out (decided 2026-10-16) — a later node's
+ *   None is not its default. For Tighten Episode both mean "no framing" (its
+ *   settings resolver reads null and absent alike);
+ * - an empty free-text setting (`instructions: ""`) is now sent, as the
+ *   server's engine sends it (decided 2026-10-19: both engines send an empty
+ *   string only where the body takes one). The route reads an empty
+ *   instruction as none.
  */
 import { describe, expect, it, vi } from "vitest"
 
@@ -26,6 +31,7 @@ vi.mock("../poll-job", () => ({
   },
 }))
 
+import { usecaseDescriptor, type UseCaseDescriptor } from "@nodaro/render-rules"
 import { executeUseCase } from "../use-case-executor"
 
 const USER = "00000000-0000-4000-8000-000000000001"
@@ -58,21 +64,55 @@ describe("Tighten Episode's run body is P1's, byte for byte", () => {
     )
   })
 
-  it("the default settings (an empty instruction is not sent)", async () => {
+  it("the default settings (an empty instruction is sent, as the server's engine sends it)", async () => {
     expect(await bodyOf(DEFAULTS)).toBe(
-      `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","captions":true,"captionStyle":"word-highlight","reviewBeforeRender":false,"planTier":"standard","userId":"${USER}"}`,
+      `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","captions":true,"captionStyle":"word-highlight","reviewBeforeRender":false,"planTier":"standard","instructions":"","userId":"${USER}"}`,
     )
   })
 
   it("an audio episode with only its output set", async () => {
-    expect(await bodyOf({ output: "audio", instructions: "" })).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"output":"audio","userId":"${USER}"}`)
+    expect(await bodyOf({ output: "audio", instructions: "" })).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"output":"audio","instructions":"","userId":"${USER}"}`)
   })
 })
 
 describe("a setting set to None", () => {
   it("reaches the route as null, in its own place (P1 left it out; Tighten reads both as no framing)", async () => {
     expect(await bodyOf({ ...DEFAULTS, framing: null })).toBe(
-      `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","framing":null,"captions":true,"captionStyle":"word-highlight","reviewBeforeRender":false,"planTier":"standard","userId":"${USER}"}`,
+      `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","framing":null,"captions":true,"captionStyle":"word-highlight","reviewBeforeRender":false,"planTier":"standard","instructions":"","userId":"${USER}"}`,
     )
+  })
+})
+
+describe("a stored null on a setting whose body takes no null", () => {
+  it("is not sent — the engine's rule (an agent's or an import's write); a None the body takes still is", async () => {
+    expect(await bodyOf({ ...DEFAULTS, framing: null, captions: null, captionStyle: null, reviewBeforeRender: null })).toBe(
+      `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","framing":null,"planTier":"standard","instructions":"","userId":"${USER}"}`,
+    )
+  })
+})
+
+describe("recordings and Master audio (every type takes one recording in this phase)", () => {
+  const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+
+  it("a type that takes one recording sends the first in mediaOrder; the first wire when no order is set", async () => {
+    expect(JSON.parse(await bodyOf({ mediaOrder: ["b"] }, TWO)).mediaUrls).toEqual(["https://r2/b.mp4"])
+    expect(JSON.parse(await bodyOf({}, TWO)).mediaUrls).toEqual(["https://r2/a.mp4"])
+  })
+
+  it("a wired Master audio is not sent by a type whose descriptor does not take it (none does yet)", async () => {
+    expect(await bodyOf(DEFAULTS, { ...REC, useCaseMasterAudio: "https://r2/m.wav" })).not.toContain("masterAudioUrl")
+  })
+
+  it("a type that takes Master audio sends it after the other optional inputs, before the settings", async () => {
+    const d = usecaseDescriptor("tighten-episode") as { -readonly [K in keyof UseCaseDescriptor]: UseCaseDescriptor[K] }
+    const inputs = d.inputs
+    d.inputs = [...inputs, "masterAudio"]
+    try {
+      expect(await bodyOf({ output: "audio" }, { ...REC, useCaseMusic: "https://r2/bed.mp3", useCaseMasterAudio: "https://r2/m.wav" })).toBe(
+        `{"mediaUrls":["https://r2/ep.mp4"],"musicUrl":"https://r2/bed.mp3","masterAudioUrl":"https://r2/m.wav","output":"audio","userId":"${USER}"}`,
+      )
+    } finally {
+      d.inputs = inputs
+    }
   })
 })

@@ -1,0 +1,11 @@
+{
+  "$comment": "Which recording a use-case node's run sends, from the node's `mediaOrder`, on BOTH engines and in the estimate: the server's (backend/src/services/workflow-engine/__tests__/use-case-media-order.test.ts: freshRunInputs and expandUseCaseNodes) and the editor's (frontend/src/__tests__/use-case-media-order.test.ts: the executor's request body and expandUseCaseNodes) are each held to the values here. Each case wires `wired` (upstream node ids, in edge-list order) into `media` of a node of `type` whose data holds `mediaOrder` (left out when absent) and expects the run to send `sent` (upstream node ids, in order) and the estimate to build on the first of them. Every type takes one recording in this phase. `mediaOrder` is read through usecaseMediaOrderOf: a list keeps its string ids, anything else orders nothing. Written by hand; a case is added, an existing expectation is changed only by a ruled decision.",
+  "cases": [
+    { "name": "no mediaOrder: the first wire", "type": "tighten-episode", "wired": ["a", "b"], "sent": ["a"] },
+    { "name": "mediaOrder names the second wire: it is sent", "type": "tighten-episode", "wired": ["a", "b"], "mediaOrder": ["b"], "sent": ["b"] },
+    { "name": "mediaOrder as a string orders nothing: the first wire", "type": "episode-trailer", "wired": ["a", "b"], "mediaOrder": "b", "sent": ["a"] },
+    { "name": "mediaOrder with non-string entries keeps its string ids", "type": "clip-pack", "wired": ["a", "b"], "mediaOrder": [3, null, "b"], "sent": ["b"] },
+    { "name": "mediaOrder naming no wired node: the first wire", "type": "episode-chapters", "wired": ["a", "b"], "mediaOrder": ["gone"], "sent": ["a"] },
+    { "name": "one wire, mediaOrder naming another: that one wire", "type": "tighten-episode", "wired": ["a"], "mediaOrder": ["b"], "sent": ["a"] }
+  ]
+}

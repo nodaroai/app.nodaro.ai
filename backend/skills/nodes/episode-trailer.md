@@ -1,7 +1,7 @@
 ---
 node_type: episode-trailer
-generated_at: 2026-10-17T22:16:42.454Z
-generated_from: 085c48b9e
+generated_at: 2026-10-19T15:56:14.658Z
+generated_from: e04b2b33b
 ---
 
 # Trailer
@@ -18,6 +18,7 @@ generated_from: 085c48b9e
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `mediaOrder?: string[]`
 - `formats?: Array<"9:16" | "1:1" | "4:5" | "16:9">`
 - `reviewBeforeRender?: boolean`
 - `planTier?: "economy" | "standard" | "premium"`

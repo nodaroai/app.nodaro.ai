@@ -24,6 +24,7 @@ import {
   isUseCaseNodeType,
   usecaseDescriptor,
   usecaseMediaKindOf,
+  usecaseRecordingsOf,
   usecaseRenderNodeId,
   type UseCaseGraph,
   type UseCaseNodeType,
@@ -90,7 +91,9 @@ const chains = new WeakMap<object, { readonly key: string; readonly chain: UseCa
  * later ones) and the recording wired into the node.
  */
 function builtChain(node: GraphNode, nodes: readonly GraphNode[], edges: readonly GraphEdge[], recordingUrl: string | undefined): UseCaseGraph {
-  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "media")
+  // The recording the run reads first, in the node's order (the run's own rule).
+  const media = edges.filter((e) => e.target === node.id && e.targetHandle === "media").map((e) => ({ nodeId: e.source, edge: e }))
+  const wire = usecaseRecordingsOf(media, dataOf(node), 1)[0]?.edge
   const kind = usecaseMediaKindOf(nodes.find((n) => n.id === wire?.source), wire?.sourceHandle)
   const raw = usecaseRunSettings(dataOf(node)) ?? dataOf(node)
   const key = `${kind}\u0000${recordingUrl ?? ""}`
@@ -107,7 +110,8 @@ export function usecaseReviewSource(nodeId: string, nodes: readonly GraphNode[],
   if (!usecaseReviewable(nodeId, nodes, edges)) return null
   const node = nodes.find((n) => n.id === nodeId)!
   const d = dataOf(node)
-  const media = resolveNodeInputs(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[]).useCaseMedia?.[0]
+  // The recording the run reads first: the node's order (the run's own rule).
+  const media = usecaseRecordingsOf(resolveNodeInputs(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[]).useCaseMedia, d, 1)[0]
   const recordingUrl = media?.url || undefined
   const chain = builtChain(node, nodes, edges, recordingUrl)
   const renderId = usecaseRenderNodeId(chain.outputMap)

@@ -14,12 +14,14 @@ export interface UseCaseResolvedInputs {
   useCaseMusic?: string
   /** The intro card wired into `introCard`. */
   useCaseIntroCard?: string
+  /** The separate audio wired into `masterAudio` (a type whose descriptor takes it reads it). */
+  useCaseMasterAudio?: string
 }
 
 /**
  * Route a wire into a use-case node by the handle it lands on, ahead of any
  * source-type routing: the recording on `media`, the bed on `music`, the card
- * on `introCard`. True when
+ * on `introCard`, the master on `masterAudio`. True when
  * the wire was routed here (the resolver then moves on).
  */
 export function routeUseCaseInput(inputs: UseCaseResolvedInputs, targetHandle: string | null | undefined, sourceId: string, output: string): boolean {
@@ -33,6 +35,10 @@ export function routeUseCaseInput(inputs: UseCaseResolvedInputs, targetHandle: s
   }
   if (targetHandle === "introCard") {
     inputs.useCaseIntroCard = output
+    return true
+  }
+  if (targetHandle === "masterAudio") {
+    inputs.useCaseMasterAudio = output
     return true
   }
   return false

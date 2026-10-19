@@ -5,6 +5,7 @@ import {
   checkRefVideoDurations,
 } from "@nodaro/shared/models"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { isOwnMediaUrl } from "./fetch-own-media.js"
 
 /**
  * Reference-video ffprobe — CORE, deliberately not `ee/`.
@@ -53,6 +54,74 @@ export function refVideoCapFor(provider: string): number {
   return { ...SEEDANCE_2_REF_LIMITS, ...(VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}) }.videos
 }
 
+/** How many of ONE request's clips are probed at once — each probe downloads
+ *  part of a clip. Per request, never process-wide: a shared queue would let
+ *  one caller's slow URLs stall every other run's pre-check. */
+export const PROBE_CONCURRENCY = 4
+/** A measured clip is reused for this long (a quote, then its run). */
+const PROBE_CACHE_TTL_MS = 15 * 60_000
+const PROBE_CACHE_MAX = 1000
+
+/** The cache lives under a fixed global key so the test setup can clear it
+ *  before every test without importing this module (which would load it ahead
+ *  of a test file's mocks). */
+export const REF_VIDEO_PROBE_CACHE_KEY = Symbol.for("nodaro.refVideoProbeCache")
+const globalSlots = globalThis as unknown as Record<symbol, Map<string, { durationSec: number; at: number }> | undefined>
+const probeCache = (globalSlots[REF_VIDEO_PROBE_CACHE_KEY] ??= new Map())
+/** Probes in flight, so concurrent requests for one clip share one ffprobe. */
+const inFlight = new Map<string, Promise<number>>()
+
+/** Test seam: forget every cached measurement. */
+export function resetRefVideoProbeCache(): void {
+  probeCache.clear()
+}
+
+/**
+ * One clip's length. Only a file in this platform's OWN storage is cached
+ * ({@link isOwnMediaUrl}): its key names one upload or one job output, so the
+ * bytes behind it do not change, while any other host could serve a different
+ * clip under the same URL a minute later and be priced on the old length. Only
+ * a usable length is cached: a failed probe rejects as before (the caller turns
+ * it into NaN) and is tried again next time, so a blip is never remembered.
+ */
+async function probeDurationCached(url: string): Promise<number> {
+  if (!isOwnMediaUrl(url)) return probeMediaDuration(url)
+  const hit = probeCache.get(url)
+  if (hit && Date.now() - hit.at < PROBE_CACHE_TTL_MS) return hit.durationSec
+  const pending = inFlight.get(url)
+  if (pending) return pending
+  const probe = probeMediaDuration(url)
+    .then((durationSec) => {
+      if (Number.isFinite(durationSec) && durationSec > 0) {
+        probeCache.delete(url)
+        probeCache.set(url, { durationSec, at: Date.now() })
+        if (probeCache.size > PROBE_CACHE_MAX) probeCache.delete(probeCache.keys().next().value as string)
+      }
+      return durationSec
+    })
+    .finally(() => inFlight.delete(url))
+  inFlight.set(url, probe)
+  return probe
+}
+
+/** Settle every URL's probe, at most {@link PROBE_CONCURRENCY} at a time. */
+async function probeAllSettled(urls: readonly string[]): Promise<PromiseSettledResult<number>[]> {
+  const results: PromiseSettledResult<number>[] = new Array(urls.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < urls.length) {
+      const i = next++
+      try {
+        results[i] = { status: "fulfilled", value: await probeDurationCached(urls[i]!) }
+      } catch (reason) {
+        results[i] = { status: "rejected", reason }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, urls.length) }, worker))
+  return results
+}
+
 /**
  * ffprobe the connected reference videos and return the RAW per-URL durations,
  * in request order.
@@ -79,7 +148,7 @@ export async function probeRefVideoDurations(args: {
     .slice(0, refVideoCapFor(args.provider))
     .filter((u): u is string => typeof u === "string" && u.length > 0)
 
-  const settled = await Promise.allSettled(candidates.map((u) => probeMediaDuration(u)))
+  const settled = await probeAllSettled(candidates)
   return settled.map((r) => (r.status === "fulfilled" ? r.value : NaN))
 }
 

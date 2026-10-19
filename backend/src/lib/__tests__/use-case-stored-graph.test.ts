@@ -44,6 +44,18 @@ describe("isStoredInlineGraph: the widened gate", () => {
   it("a rendering kind without its render fails", () => {
     expect(isStoredInlineGraph(withMap({ kind: "clips", renderNodeId: undefined }))).toBe(false)
   })
+  it("a multicam run's Audio Sync and Speaker Map refs, when present, are well-formed", () => {
+    const ref = { nodeId: "uc-sync", handle: "json" }
+    expect(isStoredInlineGraph(withMap({ multicam: { sync: ref, map: { nodeId: "uc-map", handle: "json" } } }))).toBe(true)
+    expect(isStoredInlineGraph(withMap({ multicam: { sync: ref } }))).toBe(true)
+    expect(isStoredInlineGraph(withMap({ multicam: {} }))).toBe(true)
+    expect(isStoredInlineGraph(withMap({ multicam: { map: "x" } }))).toBe(false)
+    expect(isStoredInlineGraph(withMap({ multicam: "x" }))).toBe(false)
+    expect(isStoredInlineGraph(withMap({ multicam: [ref] }))).toBe(false)
+  })
+  it("a one-recording build names no multicam refs", () => {
+    expect(stored().outputMap).not.toHaveProperty("multicam")
+  })
   it("a wire's data is absent or exactly an Each mode", () => {
     expect(isStoredInlineGraph(withFirstEdgeData({ outputMode: "each" }))).toBe(true)
     expect(isStoredInlineGraph(withFirstEdgeData({ outputMode: "last" }))).toBe(false)

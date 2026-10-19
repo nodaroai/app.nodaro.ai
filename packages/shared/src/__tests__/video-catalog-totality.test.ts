@@ -5,7 +5,7 @@ import {
   aspectRatioOptionsByKind,
   durationsByMode,
 } from "../model-catalog.js"
-import { VIDEO_GEN_PROVIDERS } from "../model-constants.js"
+import { VIDEO_GEN_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "../model-constants.js"
 
 /**
  * Every video model a user can pick must have a catalog entry. The catalog is
@@ -39,6 +39,20 @@ describe("MODEL_CATALOG covers every generatable video provider", () => {
       expect(ids.length, `${p} has no pricing rows`).toBeGreaterThan(0)
       expect(new Set(ids).size, `${p} has duplicate pricing identifiers`).toBe(ids.length)
     }
+  })
+})
+
+/**
+ * Every /v1/video-to-video model is listed too, as a "v2v" video entry —
+ * `/v1/models` and MCP `list_models` read only the catalog, so a model outside
+ * it is one no client can offer (luma-modify was, until 2026-10-19).
+ */
+describe("MODEL_CATALOG covers every video-to-video provider", () => {
+  it.each([...VIDEO_TO_VIDEO_PROVIDERS])("%s has a v2v video entry", (p) => {
+    const entry = MODEL_CATALOG[p]
+    expect(entry, `Add a MODEL_CATALOG entry for ${p}`).toBeDefined()
+    expect(entry!.kind).toBe("video")
+    expect(entry!.modes).toContain("v2v")
   })
 })
 

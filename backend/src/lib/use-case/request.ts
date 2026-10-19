@@ -1,22 +1,24 @@
 /**
  * A use-case run's request (decided 2026-10-13): the continue body (the run
  * bodies are bodies.ts, one per type) and the preparation every route shares
- * — probe the recording (what streams it really carries, how long it is),
- * refuse what the chain cannot run, resolve the settings, build the type's
- * graph from its descriptor. No row, no hold.
+ * — probe every recording (what streams it really carries, how long it is)
+ * and the optional inputs, refuse what the chain cannot run, resolve the
+ * settings, build the type's graph from its descriptor. No row, no hold.
  */
 import { z } from "zod"
 import {
   TRAILER_INTRO_CARD_MAX_SEC,
   usecaseDescriptor,
+  type UseCaseDescriptor,
   type UseCaseGraph,
-  type UseCaseMediaKind,
+  type UseCaseMediaSource,
   type UseCaseNodeType,
   type UseCaseSettings,
   type UseCaseSources,
 } from "@nodaro/render-rules"
 import { probeMediaDuration, probeMediaStreams } from "../../providers/video/ffmpeg-utils.js"
 import type { UseCaseBody } from "./bodies.js"
+import { usecaseSourcesOf } from "./sources.js"
 
 /**
  * POST <the type's route>/continue: continue a run of yours — from where it
@@ -69,23 +71,50 @@ export function usecaseReviewerPresent(
   return lane.internal ? lane.forwarded === true : true
 }
 
-/** Probe the recording (and any optional input), refuse what the chain cannot run, build the type's graph. No row, no hold. */
-export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): Promise<PreparedUseCase> {
-  const d = usecaseDescriptor(type)
-  const mediaUrl = body.mediaUrls[0]!
+/**
+ * Probe one recording: what it carries, how long it is. `position` is its
+ * 1-based place when the run has several (a refusal names it), else null —
+ * one recording is refused exactly as it always was.
+ */
+async function probeRecording(d: UseCaseDescriptor, url: string, position: number | null): Promise<UseCaseMediaSource | PreparedUseCase> {
+  const which = position === null ? "The recording" : `Recording ${position}`
   let streams: { hasVideo: boolean; hasAudio: boolean }
   try {
-    streams = await probeMediaStreams(mediaUrl)
+    streams = await probeMediaStreams(url)
   } catch {
-    return refuse("media_unreadable", "The recording could not be read. Check that the link opens and is a video or audio file.")
+    return refuse("media_unreadable", `${which} could not be read. Check that the link opens and is a video or audio file.`)
   }
-  if (!streams.hasAudio) return refuse("media_has_no_audio", "The recording has no sound to transcribe.")
-  if (d.needsVideo && !streams.hasVideo) return refuse("media_needs_video", `${d.label} needs a video recording.`)
-  const durationSec = await probeMediaDuration(mediaUrl)
+  if (!streams.hasAudio) return refuse("media_has_no_audio", `${which} has no sound to transcribe.`)
+  if (d.needsVideo && !streams.hasVideo) {
+    return refuse("media_needs_video", position === null ? `${d.label} needs a video recording.` : `${which} has no picture: ${d.label} needs video recordings.`)
+  }
+  const durationSec = await probeMediaDuration(url)
     .then((s) => (Number.isFinite(s) && s > 0 ? s : undefined))
     .catch(() => undefined)
   if (durationSec !== undefined && durationSec > d.maxSourceSec) {
-    return refuse("media_too_long", `${d.label} takes recordings up to ${Math.round(d.maxSourceSec / 3600)} hours.`)
+    const limit = `${d.label} takes recordings up to ${Math.round(d.maxSourceSec / 3600)} hours.`
+    return refuse("media_too_long", position === null ? limit : `${which} is too long. ${limit}`)
+  }
+  return { url, kind: streams.hasVideo ? "video" : "audio", ...(durationSec !== undefined ? { durationSec } : {}) }
+}
+
+const isRefusal = (r: UseCaseMediaSource | PreparedUseCase): r is PreparedUseCase => "ok" in r
+
+/** Probe every recording (and any optional input), refuse what the chain cannot run, build the type's graph. No row, no hold. */
+export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): Promise<PreparedUseCase> {
+  const d = usecaseDescriptor(type)
+  const several = body.mediaUrls.length > 1
+  const recordings: UseCaseMediaSource[] = []
+  for (const [i, url] of body.mediaUrls.entries()) {
+    const probed = await probeRecording(d, url, several ? i + 1 : null)
+    if (isRefusal(probed)) return probed
+    recordings.push(probed)
+  }
+  let masterAudio: UseCaseMediaSource | undefined
+  if (body.masterAudioUrl) {
+    const master = await probeMediaStreams(body.masterAudioUrl).catch(() => null)
+    if (!master?.hasAudio) return refuse("master_audio_unreadable", "The master audio could not be read as audio.")
+    masterAudio = { url: body.masterAudioUrl, kind: "audio" }
   }
   if (body.musicUrl) {
     const music = await probeMediaStreams(body.musicUrl).catch(() => null)
@@ -106,13 +135,14 @@ export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): 
     }
     introCardSec = cardSec
   }
-  const kind: UseCaseMediaKind = streams.hasVideo ? "video" : "audio"
-  const settings = d.resolveSettings(body, kind)
-  const sources: UseCaseSources = {
-    media: { url: mediaUrl, kind, ...(durationSec !== undefined ? { durationSec } : {}) },
-    ...(body.musicUrl ? { music: { url: body.musicUrl } } : {}),
+  const { sources, shape } = usecaseSourcesOf({
+    recordings: recordings as [UseCaseMediaSource, ...UseCaseMediaSource[]],
+    ...(masterAudio ? { masterAudio } : {}),
+    ...(body.musicUrl ? { musicUrl: body.musicUrl } : {}),
     // Its probed length rides on the built card, so a quote prices Combine Videos on it.
     ...(body.introCardUrl ? { introCard: { url: body.introCardUrl, ...(introCardSec !== undefined ? { durationSec: introCardSec } : {}) } } : {}),
-  }
+  })
+  // The run's kind is its first recording's.
+  const settings = d.resolveSettings(body, sources.media.kind, shape)
   return { ok: true, settings, sources, graph: d.build(settings, sources) }
 }

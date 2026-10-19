@@ -2076,11 +2076,17 @@ const rate = frames.creditRate // { identifier: "speaker-frames", unit: "1000-fr
 const runCredits = rate && Math.ceil(Math.max(rate.minUnits, blocks) * rate.creditsPerUnit)
 ```
 
-#### `run(type, params?)`
+#### `run(type, params?, options?)`
 
 ```ts
-run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
+run(type: string, params?: Record<string, unknown>, options?: { idempotencyKey?: string }): Promise<RunNodeResult>
 ```
+
+`options.idempotencyKey` is sent as the `Idempotency-Key` header: reuse the same
+value when you retry a call that timed out, and the platform returns the run it
+already started instead of starting (and charging) a second one. Every typed
+overload takes it too, the video ones included (`text-to-video`,
+`generate-video`, `video-to-video`, `video-upscale`, `assemble-narrated-video`).
 
 Run a single node directly without wrapping it in a workflow. Posts `params`
 as the request body to the node's route — `POST /v1/<type>` for most node types
@@ -2569,9 +2575,44 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > ```
 
 > Every other node type keeps the generic `Record<string, unknown>` body —
-> `generate-image`, `generate-video`, `text-to-video`, `text-to-speech`,
-> `assemble-narrated-video`, `social-search`, `video-depth` and the 3D scene
-> nodes are currently the only ones with dedicated typed params.
+> `generate-image`, `image-to-image`, `edit-image`, `split-image`,
+> `generate-mask`, `generate-video`, `text-to-video`, `video-to-video`,
+> `video-upscale`, `text-to-speech`, `assemble-narrated-video`,
+> `social-search`, `video-depth` and the 3D scene nodes are currently the only
+> ones with dedicated typed params.
+
+`video-to-video` takes `VideoToVideoParams`: `videoUrl` (required), `prompt`,
+`provider` (`wan`, `wan-flash`, `wan-videoedit`, `luma-modify`, `runway-aleph`,
+`happyhorse-edit` or the Seedance edit model `seedance-2-5`), `duration`
+(`"5"` | `"10"`), `resolution`, `audio`, `multiShots`, `aspectRatio`, `seed`,
+`referenceImageUrl`, `negativePrompt`, `videoEditDuration`, `audioSetting`,
+`promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit is
+built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
+so you send the same body as for any other edit model.
+
+#### `quote(type, params?)`
+
+```ts
+quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
+```
+
+The price of a run before you start it (`POST /v1/quote`). Pass exactly the
+body you would pass to `run`: the platform prices it with the run route's own
+code — validation, measuring reference clips, the credit id and the amount — and
+starts nothing. Typed for `text-to-video`, `generate-video` and
+`video-to-video`; those are the types the platform can quote today (any other
+rejects with `400 quote_unsupported`). Cloud only.
+
+```ts
+const q = await client.nodes.quote("video-to-video", {
+  videoUrl, prompt: "make it black and white", provider: "seedance-2-5", resolution: "480p",
+})
+q.reserve   // credits held when the run starts
+q.expected  // what it should actually cost (the run settles to what it rendered), when known
+```
+
+`NodeQuote` is `{ identifier, reserve, expected?, adjustments, warnings }` —
+see [Run quotes](api-integration.md#run-quotes) for every field and code.
 
 #### `runAndWait(type, params?, opts?)`
 

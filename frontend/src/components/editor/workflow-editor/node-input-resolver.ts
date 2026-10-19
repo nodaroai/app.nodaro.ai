@@ -666,7 +666,8 @@ export const VIDEO_OUTPUT_NODE_TYPES = new Set(
 );
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
-/** A use-case node's recording (`useCaseMedia`) and music bed (`useCaseMusic`) — use-case-io.ts;
+/** A use-case node's recordings (`useCaseMedia`), music bed (`useCaseMusic`), intro card
+ *  (`useCaseIntroCard`) and master audio (`useCaseMasterAudio`) — use-case-io.ts;
  *  a node unit's JSON and many-wire inputs (`unitInputs`) — unit-inputs.ts. */
 export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResolvedInputs {
   /** Slideshow: transition pick from a wired transition PARAMETER node

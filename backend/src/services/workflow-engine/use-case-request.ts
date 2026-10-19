@@ -1,4 +1,4 @@
-// @registry-lookup asks the body of the one use-case type it is given (usecaseBodyTakesNull)
+// @registry-lookup asks the body of the one use-case type it is given (usecaseBodyTakesNull, usecaseBodyTakesEmpty)
 /**
  * What a use-case node (decided 2026-10-13) asks its type's route for, and
  * the one call that asks it — the request half of use-case-node.ts. The
@@ -13,9 +13,16 @@
  * node's Idempotency-Key.
  */
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED, RENDER_FINAL_ALREADY_RENDERED } from "@nodaro/shared/nodes"
-import { usecaseContinuePath, usecaseDescriptor, usecaseFanOutRefusalOf, type UseCaseNodeType } from "@nodaro/render-rules"
+import {
+  usecaseContinuePath,
+  usecaseDescriptor,
+  usecaseFanOutRefusalOf,
+  usecaseRecordingsOf,
+  usecaseSentSettings,
+  type UseCaseNodeType,
+} from "@nodaro/render-rules"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../../lib/render-final-codes.js"
-import { usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
+import { usecaseBodyTakesEmpty, usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import { syncLaneHeaders } from "./sync-lane-headers.js"
@@ -85,28 +92,32 @@ export function failedAttemptOf(
 
 /**
  * What a fresh run of the node sends its type's route, without the lane: its
- * wired recording (and music, intro card where the type takes them) and its
- * settings — the node's data as this run holds it, its input overrides merged.
- * Throws when no recording is wired. Also what a failed attempt's inputs are
- * held to before it is resumed (failed-attempt.ts `attemptRanWithInputs`).
+ * wired recordings in the node's order, as many as its type takes (one for
+ * every type before its multicam work: the first), the music, intro card and
+ * Master audio where the type takes them, and its settings — the node's data
+ * as this run holds it, its input overrides merged. Key order: the
+ * recordings, music, intro card, master, then the settings. Throws when no
+ * recording is wired. Also what a failed attempt's inputs are held to before
+ * it is resumed (failed-attempt.ts `attemptRanWithInputs`).
  */
 export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs): Record<string, unknown> {
   const type = node.type as UseCaseNodeType
   const d = usecaseDescriptor(type)
   const data = (node.data ?? {}) as Record<string, unknown>
-  const media = resolvedInputs.useCaseMedia?.[0]
-  if (!media) throw new Error(`${d.label} needs a recording wired into Media`)
-  // The type's own settings (its request body, lib/use-case/bodies.ts). An
-  // unset one is not sent; one set to None (null) is, where the body takes a
-  // null — a None is not the setting's default (decided 2026-10-16). Any
-  // other null is left out, and the route takes its default.
-  const settings = Object.fromEntries(
-    d.settingKeys.filter((k) => data[k] !== undefined && (data[k] !== null || usecaseBodyTakesNull(type, k))).map((k) => [k, data[k]]),
-  )
+  const recordings = usecaseRecordingsOf(resolvedInputs.useCaseMedia, data, d.maxRecordings)
+  if (recordings.length === 0) throw new Error(`${d.label} needs a recording wired into Media`)
+  // The type's own settings (its request body, lib/use-case/bodies.ts), by
+  // both engines' rule (usecaseSentSettings), its nulls and empty strings
+  // asked of the body itself.
+  const settings = usecaseSentSettings(type, d.settingKeys, data, {
+    null: (k) => usecaseBodyTakesNull(type, k),
+    empty: (k) => usecaseBodyTakesEmpty(type, k),
+  })
   return {
-    mediaUrls: [media.url],
+    mediaUrls: recordings.map((m) => m.url),
     ...(resolvedInputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: resolvedInputs.useCaseMusic } : {}),
     ...(resolvedInputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: resolvedInputs.useCaseIntroCard } : {}),
+    ...(resolvedInputs.useCaseMasterAudio && d.inputs.includes("masterAudio") ? { masterAudioUrl: resolvedInputs.useCaseMasterAudio } : {}),
     ...settings,
   }
 }

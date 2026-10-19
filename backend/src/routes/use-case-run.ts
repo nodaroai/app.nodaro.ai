@@ -17,6 +17,7 @@ import {
   toStoredInlineGraph,
   usecaseDescriptor,
   usecaseFeeCreditId,
+  type UseCaseMediaSource,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
@@ -47,6 +48,7 @@ import {
   usecaseUnavailable,
 } from "../lib/use-case/lanes.js"
 import { prepareUseCase, usecaseReviewerPresent, type PreparedUseCase } from "../lib/use-case/request.js"
+import { usecaseSourcesOf } from "../lib/use-case/sources.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 
 type Ready = { readonly userId: string; readonly body: UseCaseBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
@@ -95,12 +97,15 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
   // recording — the superset: an audio episode's graph has no step it lacks,
   // but a framed request's Speaker View is asked even when the recording turns
   // out to be audio (where the run would drop it), so an unconnected self-host
-  // may refuse such a request that would have run.
-  const implied = d.build(d.resolveSettings(body, "video"), {
-    media: { url: body.mediaUrls[0]!, kind: "video" },
-    ...(body.musicUrl ? { music: { url: body.musicUrl } } : {}),
+  // may refuse such a request that would have run. Its sources are built as
+  // the run builds them (usecaseSourcesOf), from the unprobed inputs.
+  const { sources: unprobed, shape } = usecaseSourcesOf({
+    recordings: body.mediaUrls.map((url) => ({ url, kind: "video" as const })) as [UseCaseMediaSource, ...UseCaseMediaSource[]],
+    ...(body.masterAudioUrl ? { masterAudio: { url: body.masterAudioUrl, kind: "audio" as const } } : {}),
+    ...(body.musicUrl ? { musicUrl: body.musicUrl } : {}),
     ...(body.introCardUrl ? { introCard: { url: body.introCardUrl } } : {}),
   })
+  const implied = d.build(d.resolveSettings(body, "video", shape), unprobed)
   const refusal = await usecasePreflight(implied)
   if (refusal) {
     reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })

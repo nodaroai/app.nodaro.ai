@@ -1,0 +1,132 @@
+{
+  "$comment": "How the wires into a use-case node land in what it runs on, on BOTH engines: the editor's resolver (frontend/src/__tests__/use-case-input-routing.test.ts) and the server's (backend/src/services/workflow-engine/__tests__/use-case-input-routing.test.ts) are each held to the values here. Each case wires `sources` into a node of `type` (`wires`, in edge-list order) and expects the use-case inputs it resolves (`expected`: useCaseMedia in wire order, useCaseMusic, useCaseIntroCard, useCaseMasterAudio; a key left out is absent) and that none of the generic slots in `absent` is filled. Written by hand against the code before the multicam work; a new input or case is added, an existing expectation is changed only by a ruled decision.",
+  "cases": [
+    {
+      "name": "Tighten Episode: the recording on media, the bed on music",
+      "type": "tighten-episode",
+      "sources": [
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } },
+        { "id": "bed", "type": "upload-audio", "data": { "url": "https://r2/bed.mp3" } }
+      ],
+      "wires": [
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" },
+        { "source": "bed", "sourceHandle": "audio", "targetHandle": "music" }
+      ],
+      "expected": { "useCaseMedia": [{ "nodeId": "rec", "url": "https://r2/ep.mp4" }], "useCaseMusic": "https://r2/bed.mp3" },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Trailer: the recording on media, the intro card on introCard",
+      "type": "episode-trailer",
+      "sources": [
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } },
+        { "id": "card", "type": "upload-video", "data": { "url": "https://r2/card.mp4" } }
+      ],
+      "wires": [
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" },
+        { "source": "card", "sourceHandle": "video", "targetHandle": "introCard" }
+      ],
+      "expected": { "useCaseMedia": [{ "nodeId": "rec", "url": "https://r2/ep.mp4" }], "useCaseIntroCard": "https://r2/card.mp4" },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Trailer: the intro card wired before the recording still lands on introCard",
+      "type": "episode-trailer",
+      "sources": [
+        { "id": "card", "type": "upload-video", "data": { "url": "https://r2/card.mp4" } },
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } }
+      ],
+      "wires": [
+        { "source": "card", "sourceHandle": "video", "targetHandle": "introCard" },
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" }
+      ],
+      "expected": { "useCaseMedia": [{ "nodeId": "rec", "url": "https://r2/ep.mp4" }], "useCaseIntroCard": "https://r2/card.mp4" },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Chapters: an audio recording on media",
+      "type": "episode-chapters",
+      "sources": [{ "id": "rec", "type": "upload-audio", "data": { "url": "https://r2/ep.m4a" } }],
+      "wires": [{ "source": "rec", "sourceHandle": "audio", "targetHandle": "media" }],
+      "expected": { "useCaseMedia": [{ "nodeId": "rec", "url": "https://r2/ep.m4a" }] },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Clip Pack: two recordings on media land in wire order (the second-listed node wired first)",
+      "type": "clip-pack",
+      "sources": [
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } },
+        { "id": "rec2", "type": "upload-video", "data": { "url": "https://r2/ep-cam2.mp4" } }
+      ],
+      "wires": [
+        { "source": "rec2", "sourceHandle": "video", "targetHandle": "media" },
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" }
+      ],
+      "expected": {
+        "useCaseMedia": [
+          { "nodeId": "rec2", "url": "https://r2/ep-cam2.mp4" },
+          { "nodeId": "rec", "url": "https://r2/ep.mp4" }
+        ]
+      },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Tighten Episode: two recordings and a bed, the recordings in wire order",
+      "type": "tighten-episode",
+      "sources": [
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } },
+        { "id": "bed", "type": "upload-audio", "data": { "url": "https://r2/bed.mp3" } },
+        { "id": "rec2", "type": "upload-video", "data": { "url": "https://r2/ep-cam2.mp4" } }
+      ],
+      "wires": [
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" },
+        { "source": "bed", "sourceHandle": "audio", "targetHandle": "music" },
+        { "source": "rec2", "sourceHandle": "video", "targetHandle": "media" }
+      ],
+      "expected": {
+        "useCaseMedia": [
+          { "nodeId": "rec", "url": "https://r2/ep.mp4" },
+          { "nodeId": "rec2", "url": "https://r2/ep-cam2.mp4" }
+        ],
+        "useCaseMusic": "https://r2/bed.mp3"
+      },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Master audio wired before the recording lands on useCaseMasterAudio only, never as a recording or a generic audio",
+      "type": "tighten-episode",
+      "sources": [
+        { "id": "mic", "type": "upload-audio", "data": { "url": "https://r2/master.wav" } },
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } }
+      ],
+      "wires": [
+        { "source": "mic", "sourceHandle": "audio", "targetHandle": "masterAudio" },
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" }
+      ],
+      "expected": { "useCaseMedia": [{ "nodeId": "rec", "url": "https://r2/ep.mp4" }], "useCaseMasterAudio": "https://r2/master.wav" },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    },
+    {
+      "name": "Clip Pack: two recordings, a master and nothing else — each lands in its own lane",
+      "type": "clip-pack",
+      "sources": [
+        { "id": "rec", "type": "upload-video", "data": { "url": "https://r2/ep.mp4" } },
+        { "id": "mic", "type": "upload-audio", "data": { "url": "https://r2/master.wav" } },
+        { "id": "rec2", "type": "upload-video", "data": { "url": "https://r2/ep-cam2.mp4" } }
+      ],
+      "wires": [
+        { "source": "rec", "sourceHandle": "video", "targetHandle": "media" },
+        { "source": "mic", "sourceHandle": "audio", "targetHandle": "masterAudio" },
+        { "source": "rec2", "sourceHandle": "video", "targetHandle": "media" }
+      ],
+      "expected": {
+        "useCaseMedia": [
+          { "nodeId": "rec", "url": "https://r2/ep.mp4" },
+          { "nodeId": "rec2", "url": "https://r2/ep-cam2.mp4" }
+        ],
+        "useCaseMasterAudio": "https://r2/master.wav"
+      },
+      "absent": ["videoUrl", "audioUrl", "videoUrls", "audioUrls"]
+    }
+  ]
+}

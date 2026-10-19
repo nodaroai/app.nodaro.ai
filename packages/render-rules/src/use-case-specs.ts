@@ -1,16 +1,18 @@
 /**
  * The use-case graph builders, keyed by builder (decided 2026-10-18): what
- * each builder needs (its source ceiling, the node data keys a run sends, the
- * built node every wired input stands for, its result kind) and how it
- * resolves settings and builds its graph. No type id, label, route, inputs or
- * review flag: a node's row (use-case-rows.ts) names its builder and provides
- * those, and use-case-registry.ts composes the two into a descriptor.
+ * each builder needs (its source ceiling, how many recordings it takes, the
+ * node data keys a run sends, the built node every wired input stands for,
+ * its result kind) and how it resolves settings and builds its graph. No type
+ * id, label, route, inputs or review flag: a node's row (use-case-rows.ts)
+ * names its builder and provides those, and use-case-registry.ts composes the
+ * two into a descriptor.
  *
  * tools/units reads this file as text (use-case-rules.mjs): a unit's
  * `execution.builder` must be a key of USE_CASE_SPECS, written as
  * `  <key>: defineUseCase<…>({`. Adding a builder = a new key here. Pure.
  */
 import type { UseCaseGraph, UseCaseMediaKind } from "./use-case-graph"
+import type { UseCaseSourcesShape } from "./use-case-cameras"
 import { editPlanRenderEstimateLength, renderLengthSec } from "./apply-edl-estimate"
 import type { UseCaseDescriptor, UseCaseSettings, UseCaseSources } from "./use-case-registry"
 import {
@@ -48,7 +50,7 @@ export type UseCaseBuilderSpec = Omit<UseCaseDescriptor, UseCaseRowFields>
 
 /** A spec as written: its builder takes the settings its own resolver makes, type-checked as such. */
 interface UseCaseSpec<S extends object> extends Omit<UseCaseBuilderSpec, "resolveSettings" | "build"> {
-  resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind): S
+  resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind, shape?: UseCaseSourcesShape): S
   build(settings: S, sources: UseCaseSources): UseCaseGraph
 }
 
@@ -60,7 +62,7 @@ interface UseCaseSpec<S extends object> extends Omit<UseCaseBuilderSpec, "resolv
 function defineUseCase<S extends object>(spec: UseCaseSpec<S>): UseCaseBuilderSpec {
   return {
     ...spec,
-    resolveSettings: (raw, kind) => spec.resolveSettings(raw, kind) as unknown as UseCaseSettings,
+    resolveSettings: (raw, kind, shape) => spec.resolveSettings(raw, kind, shape) as unknown as UseCaseSettings,
     build: (settings, sources) => spec.build(settings as unknown as S, sources),
   }
 }
@@ -68,6 +70,7 @@ function defineUseCase<S extends object>(spec: UseCaseSpec<S>): UseCaseBuilderSp
 export const USE_CASE_SPECS = {
   tighten: defineUseCase<TightenEpisodeSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+    maxRecordings: 1,
     needsVideo: false,
     inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music },
     settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount"],
@@ -80,6 +83,7 @@ export const USE_CASE_SPECS = {
   }),
   chapters: defineUseCase<EpisodeChaptersSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+    maxRecordings: 1,
     needsVideo: false,
     inputNodeIds: { media: CHAPTERS_NODE_IDS.source },
     settingKeys: ["planTier", "instructions", "styleGuide"],
@@ -89,6 +93,7 @@ export const USE_CASE_SPECS = {
   }),
   trailer: defineUseCase<EpisodeTrailerSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+    maxRecordings: 1,
     // Every format is a video (decided 2026-10-14): an audio-only recording is refused.
     needsVideo: true,
     inputNodeIds: { media: TRAILER_NODE_IDS.source, introCard: TRAILER_NODE_IDS.intro },
@@ -104,6 +109,7 @@ export const USE_CASE_SPECS = {
   }),
   clipPack: defineUseCase<ClipPackSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+    maxRecordings: 1,
     // An audio recording makes audio clips (decided 2026-10-14).
     needsVideo: false,
     inputNodeIds: { media: CLIP_PACK_NODE_IDS.source },

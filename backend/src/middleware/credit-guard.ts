@@ -92,8 +92,11 @@ export interface CreditGuardOpts {
    *  bypasses the model_pricing lookup for cost only — isEnabled and
    *  tierRestriction still come from the DB row. May be sync or async.
    *  Markup is applied inside creditGuard so checkCredits and reserveCredits
-   *  receive the same final number. */
-  computeCredits?: (parsedBody: unknown, req: FastifyRequest) => number | Promise<number>
+   *  receive the same final number. `undefined` = no override for THIS
+   *  request (the model_pricing row prices it, as without the hook) — for a
+   *  route whose pricing depends on the model (/v1/video-to-video: a Seedance
+   *  edit is priced by its clip, every other model at its flat row). */
+  computeCredits?: (parsedBody: unknown, req: FastifyRequest) => number | undefined | Promise<number | undefined>
   /** Anti-double-click dedup. Default: true. Set to false on routes whose
    *  response body shape is incompatible with `{ jobId, deduped: true }` —
    *  e.g., a route that returns a resource row (`{ id, name, ... }`) rather than a job, where
@@ -134,6 +137,23 @@ export interface CreditGuardOpts {
    *  price. An empty list is a batch with nothing left to pay for (checked at
    *  0). Mutually exclusive with `computeCredits` (this wins). */
   batchIdentifiers?: (req: FastifyRequest) => readonly string[] | undefined
+}
+
+/**
+ * A route's whole pricing chain, declared ONCE and used twice: the run route
+ * registers it as its preHandlers (`[...prechecks, creditGuard(modelResolver,
+ * opts)]`) and `POST /v1/quote`
+ * runs the very same steps on the same body without creating a job — so a
+ * quote cannot drift from what the run reserves.
+ *
+ *  - `prechecks`: the validation/probe preHandlers that run before the guard
+ *    (e.g. the reference-clip length check, whose probe the pricing reuses).
+ *  - `modelResolver` / `opts`: exactly what `creditGuard` takes.
+ */
+export interface RoutePricing {
+  readonly prechecks: readonly ((req: FastifyRequest, reply: FastifyReply) => Promise<unknown>)[]
+  readonly modelResolver: (req: FastifyRequest) => string
+  readonly opts?: CreditGuardOpts
 }
 
 /** The model ids a request names in `models` (generate-image's fan-out), for the surface deny. */

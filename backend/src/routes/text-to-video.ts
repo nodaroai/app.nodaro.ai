@@ -1,11 +1,12 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
+import { noteAutoDurationSettles, noteExtraReferenceImages, noteRefVideoPricing } from "../lib/video-price-notes.js"
 import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -15,22 +16,19 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
-import { VIDEO_DURATION_AUTO, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem } from "@nodaro/shared/video"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts/assembly"
-
-/** An editor reference token — `{image:N}` / `{video:N}` / `{audio:N}`, optionally labelled. */
-const REFERENCE_TOKEN_PROBE = /\{(?:image|video|audio):\d+/i
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, hasVideoReferenceChannels, validateRefVideoDurationPreHandler } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
@@ -99,428 +97,457 @@ export const textToVideoBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+/**
+ * Everything /v1/text-to-video prices a request with — registered as the
+ * route's preHandlers and run as-is by `POST /v1/quote` (one copy, so a quote
+ * is what the run reserves). The duration pre-check runs BEFORE creditGuard so
+ * an out-of-bounds reference clip is a 400 with nothing reserved — and its
+ * probe is what computeCredits reuses. Shared with /v1/generate-video.
+ */
+export const textToVideoPricing: RoutePricing = {
+  prechecks: [validateRefVideoDurationPreHandler],
+  modelResolver: (req) => {
+    const body = req.body as Record<string, unknown>
+    const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+    const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
+    // Placement rule: the CHECK identifier, `computeCredits` and the
+    // reservation must all be computed from the SAME normalized values.
+    // Stash them so the two later sites cannot re-derive them differently.
+    const norm = resolveVideoRequestNorm({
+      provider: sel.provider,
+      aspectRatio: body?.aspectRatio as string | undefined,
+      resolution: body?.resolution as string | undefined,
+      duration: sel.duration,
+      draft: body?.draft === true,
+    })
+    req.videoNorm = norm
+    req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
+    return buildVideoCreditModelIdentifier(
+      sel.provider,
+      norm.duration ?? sel.duration,
+      body?.sound as boolean | undefined,
+      "text-to-video",
+      body?.mode as string | undefined,
+      norm.resolution,
+      hasVideoRef,
+    )
+  },
+  opts: {
+    computeCredits: async (body, req) => {
+      const b = body as Record<string, unknown>
+      const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+      // R14: read the resolution the CHECK identifier was built from, never
+      // the raw body — normalizing in the preHandler but not here would make
+      // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
+      // the exact drift this normalizer exists to remove.
+      const normResolution = req.videoNorm?.resolution ?? (b.resolution as string | undefined)
+      // Seedance 2 reference-video runs bill unit×(input+output): ffprobe the
+      // connected reference videos and reserve the FULL scaled base up front
+      // (commit_credits only refunds — never up-charges). Core may not
+      // statically import ee/, so the helpers are loaded dynamically (the
+      // allowed escape hatch — same pattern the credit-guard shim uses).
+      if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
+        const { seedance2RefVideoBaseCreditsFromDurations } =
+          await import("../ee/billing/seedance2-ref-video-credits.js")
+        const priceArgs = {
+          provider: b.provider as string,
+          resolution: normResolution ?? "720p",
+          // The seconds this run RENDERS when the caller omitted a duration
+          // — the provider's own default, the same source the credit
+          // identifier's tier reads (#1397).
+          outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
+        }
+        // Probe once, use twice: when validateRefVideoDurationPreHandler
+        // already ffprobed this request (it runs first, for every provider
+        // with a declared duration limit), price from ITS durations rather
+        // than paying for a second uncached probe per clip. Identical
+        // arithmetic — the same worst-case rule applies to a NaN entry —
+        // so the CHECK and the DEBIT read the same probed set.
+        // A provider without a declared bound was not pre-probed: probe here
+        // and STASH it the same way, so the handler carries the probe onto
+        // the job for the settlement (which prices the input from it).
+        const durationsSec =
+          req.refVideoDurationsSec ??
+          (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
+        req.refVideoDurationsSec = durationsSec
+        await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
+        return seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec })
+      }
+      // MiniMax Hailuo 3: unit×(input+output) for ref-video runs + a
+      // surcharge for input images beyond the first 5. Predict the
+      // ASSEMBLED reference-image count the same way the handler will
+      // (connectedReferences → referenceImageUrls; t2v has no frames).
+      // The `direction` fold is not applied here and does not need to be:
+      // it is text-only, and the billed quantity is the reference count.
+      // See the same note in generate-video.ts for the guard that closes
+      // the one shape which could couple prompt text to that count.
+      if (isMinimaxH3Provider(b?.provider as string | undefined)) {
+        const { minimaxH3BaseCreditsFromUrls, minimaxH3BaseCreditsFromDurations, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
+          await import("../ee/billing/minimax-h3-credits.js")
+        const refVideos = Array.isArray(b.referenceVideoUrls) ? (b.referenceVideoUrls as unknown[]) : []
+        const assembled = assembleVideoConnectedReferences({
+          prompt: b.prompt as string | undefined,
+          provider: b.provider as string,
+          connectedReferences: (Array.isArray(b.connectedReferences) ? b.connectedReferences : []) as ConnectedReference[],
+          baseReferenceImageUrls: (Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls : undefined) as string[] | undefined,
+          referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
+          referenceVideoCount: refVideos.length,
+          referenceAudioCount: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]).length : 0,
+          // Text-only channels — they move no reference COUNT, so the price
+          // is unchanged; forwarded to keep this the handler's mirror.
+          ...(Array.isArray(b.describedReferences)
+            ? { describedReferences: b.describedReferences as DescribedReference[] }
+            : {}),
+          ...(Array.isArray(b.referenceVideoCaptions)
+            ? { referenceVideoCaptions: b.referenceVideoCaptions as string[] }
+            : {}),
+          ...(Array.isArray(b.referenceAudioCaptions)
+            ? { referenceAudioCaptions: b.referenceAudioCaptions as string[] }
+            : {}),
+        })
+        const refImageCount = minimaxH3BillableRefImageCount({
+          referenceImageUrls: assembled.referenceImageUrls,
+          referenceVideoUrls: refVideos,
+          referenceAudioUrls: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]) : undefined,
+        })
+        noteExtraReferenceImages(req, { count: refImageCount, free: MINIMAX_H3_FREE_INPUT_IMAGES })
+        if (hasVideoRef || refImageCount > MINIMAX_H3_FREE_INPUT_IMAGES) {
+          if (hasVideoRef && req.refVideoDurationsSec) {
+            await noteRefVideoPricing(req, {
+              provider: b.provider as string,
+              resolution: normResolution ?? "",
+              outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
+              rawDuration: b.duration,
+              durationsSec: req.refVideoDurationsSec,
+              settlesToActual: false,
+            })
+          }
+          const h3PriceArgs = {
+            outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
+            referenceImageCount: refImageCount,
+            resolution: normResolution,
+          }
+          // Probe once, use twice (R15) — same contract as the seedance
+          // branch above: validateRefVideoDurationPreHandler already
+          // ffprobed this request (minimax-h3 has a declared bound), so the
+          // DEBIT prices from the very array the CHECK read, NaN included.
+          const stashed = req.refVideoDurationsSec
+          if (stashed) {
+            return minimaxH3BaseCreditsFromDurations({ ...h3PriceArgs, durationsSec: stashed })
+          }
+          return minimaxH3BaseCreditsFromUrls({ ...h3PriceArgs, referenceVideoUrls: refVideos })
+        }
+        // No ref videos and ≤5 images → the seeded duration composite prices it.
+      }
+      // Non-ref / other providers: the normal base for the resolved identifier
+      // (matches how generate-video computes its non-addon base).
+      const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
+      const modelId = buildVideoCreditModelIdentifier(
+        bSel.provider,
+        req.videoNorm?.duration ?? bSel.duration,
+        b?.sound as boolean | undefined,
+        "text-to-video",
+        b?.mode as string | undefined,
+        normResolution,
+        hasVideoRef,
+      )
+      if (isSeedance2Provider(bSel.provider) && !hasVideoRef && isAutoVideoDuration(req.videoNorm?.duration ?? bSel.duration)) {
+        noteAutoDurationSettles(req)
+      }
+      const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+      const { creditCost } = await getModelCreditBaseCost(modelId)
+      return creditCost
+    },
+  },
+}
+
 export async function textToVideoRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-video", {
-    // The duration pre-check runs BEFORE creditGuard so an out-of-bounds
-    // reference clip is a 400 with nothing reserved — and its probe is what
-    // computeCredits below reuses. Shared with /v1/generate-video (one copy).
-    preHandler: [validateRefVideoDurationPreHandler, creditGuard(
-      (req) => {
-        const body = req.body as Record<string, unknown>
-        const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
-        const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
-        // Placement rule: the CHECK identifier, `computeCredits` and the
-        // reservation must all be computed from the SAME normalized values.
-        // Stash them so the two later sites cannot re-derive them differently.
-        const norm = resolveVideoRequestNorm({
-          provider: sel.provider,
-          aspectRatio: body?.aspectRatio as string | undefined,
-          resolution: body?.resolution as string | undefined,
-          duration: sel.duration,
-          draft: body?.draft === true,
-        })
-        req.videoNorm = norm
-        req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
-        return buildVideoCreditModelIdentifier(
-          sel.provider,
-          norm.duration ?? sel.duration,
-          body?.sound as boolean | undefined,
-          "text-to-video",
-          body?.mode as string | undefined,
-          norm.resolution,
-          hasVideoRef,
-        )
-      },
-      {
-        computeCredits: async (body, req) => {
-          const b = body as Record<string, unknown>
-          const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
-          // R14: read the resolution the CHECK identifier was built from, never
-          // the raw body — normalizing in the preHandler but not here would make
-          // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
-          // the exact drift this normalizer exists to remove.
-          const normResolution = req.videoNorm?.resolution ?? (b.resolution as string | undefined)
-          // Seedance 2 reference-video runs bill unit×(input+output): ffprobe the
-          // connected reference videos and reserve the FULL scaled base up front
-          // (commit_credits only refunds — never up-charges). Core may not
-          // statically import ee/, so the helpers are loaded dynamically (the
-          // allowed escape hatch — same pattern the credit-guard shim uses).
-          if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
-            const { seedance2RefVideoBaseCreditsFromDurations } =
-              await import("../ee/billing/seedance2-ref-video-credits.js")
-            const priceArgs = {
-              provider: b.provider as string,
-              resolution: normResolution ?? "720p",
-              // The seconds this run RENDERS when the caller omitted a duration
-              // — the provider's own default, the same source the credit
-              // identifier's tier reads (#1397).
-              outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
-            }
-            // Probe once, use twice: when validateRefVideoDurationPreHandler
-            // already ffprobed this request (it runs first, for every provider
-            // with a declared duration limit), price from ITS durations rather
-            // than paying for a second uncached probe per clip. Identical
-            // arithmetic — the same worst-case rule applies to a NaN entry —
-            // so the CHECK and the DEBIT read the same probed set.
-            // A provider without a declared bound was not pre-probed: probe here
-            // and STASH it the same way, so the handler carries the probe onto
-            // the job for the settlement (which prices the input from it).
-            const durationsSec =
-              req.refVideoDurationsSec ??
-              (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
-            req.refVideoDurationsSec = durationsSec
-            return seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec })
-          }
-          // MiniMax Hailuo 3: unit×(input+output) for ref-video runs + a
-          // surcharge for input images beyond the first 5. Predict the
-          // ASSEMBLED reference-image count the same way the handler will
-          // (connectedReferences → referenceImageUrls; t2v has no frames).
-          // The `direction` fold is not applied here and does not need to be:
-          // it is text-only, and the billed quantity is the reference count.
-          // See the same note in generate-video.ts for the guard that closes
-          // the one shape which could couple prompt text to that count.
-          if (isMinimaxH3Provider(b?.provider as string | undefined)) {
-            const { minimaxH3BaseCreditsFromUrls, minimaxH3BaseCreditsFromDurations, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
-              await import("../ee/billing/minimax-h3-credits.js")
-            const refVideos = Array.isArray(b.referenceVideoUrls) ? (b.referenceVideoUrls as unknown[]) : []
-            const assembled = assembleVideoConnectedReferences({
-              prompt: b.prompt as string | undefined,
-              provider: b.provider as string,
-              connectedReferences: (Array.isArray(b.connectedReferences) ? b.connectedReferences : []) as ConnectedReference[],
-              baseReferenceImageUrls: (Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls : undefined) as string[] | undefined,
-              referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
-              referenceVideoCount: refVideos.length,
-              referenceAudioCount: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]).length : 0,
-              // Text-only channels — they move no reference COUNT, so the price
-              // is unchanged; forwarded to keep this the handler's mirror.
-              ...(Array.isArray(b.describedReferences)
-                ? { describedReferences: b.describedReferences as DescribedReference[] }
-                : {}),
-              ...(Array.isArray(b.referenceVideoCaptions)
-                ? { referenceVideoCaptions: b.referenceVideoCaptions as string[] }
-                : {}),
-              ...(Array.isArray(b.referenceAudioCaptions)
-                ? { referenceAudioCaptions: b.referenceAudioCaptions as string[] }
-                : {}),
-            })
-            const refImageCount = minimaxH3BillableRefImageCount({
-              referenceImageUrls: assembled.referenceImageUrls,
-              referenceVideoUrls: refVideos,
-              referenceAudioUrls: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]) : undefined,
-            })
-            if (hasVideoRef || refImageCount > MINIMAX_H3_FREE_INPUT_IMAGES) {
-              const h3PriceArgs = {
-                outputDurationSec: pricedOutputDurationSec(b.provider as string, b.duration as number | string | undefined),
-                referenceImageCount: refImageCount,
-                resolution: normResolution,
-              }
-              // Probe once, use twice (R15) — same contract as the seedance
-              // branch above: validateRefVideoDurationPreHandler already
-              // ffprobed this request (minimax-h3 has a declared bound), so the
-              // DEBIT prices from the very array the CHECK read, NaN included.
-              const stashed = req.refVideoDurationsSec
-              if (stashed) {
-                return minimaxH3BaseCreditsFromDurations({ ...h3PriceArgs, durationsSec: stashed })
-              }
-              return minimaxH3BaseCreditsFromUrls({ ...h3PriceArgs, referenceVideoUrls: refVideos })
-            }
-            // No ref videos and ≤5 images → the seeded duration composite prices it.
-          }
-          // Non-ref / other providers: the normal base for the resolved identifier
-          // (matches how generate-video computes its non-addon base).
-          const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
-          const modelId = buildVideoCreditModelIdentifier(
-            bSel.provider,
-            req.videoNorm?.duration ?? bSel.duration,
-            b?.sound as boolean | undefined,
-            "text-to-video",
-            b?.mode as string | undefined,
-            normResolution,
-            hasVideoRef,
-          )
-          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const { creditCost } = await getModelCreditBaseCost(modelId)
-          return creditCost
-        },
-      },
-    )],
-  }, async (req, reply) => {
-    const parsed = textToVideoBody.safeParse(req.body)
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", ...formatZodError(parsed.error) },
-      })
-    }
-    // A palette / moodboard direction is generate-image's: refused, not folded into nothing.
-    const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
-    if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
+    preHandler: [...textToVideoPricing.prechecks, creditGuard(textToVideoPricing.modelResolver, textToVideoPricing.opts)],
+  }, handleTextToVideoRequest)
+}
 
-    const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, draft: rawDraft } = parsed.data
-    // Platform default when the request omits provider/duration (shared with
-    // generate-video and the DAG payload builder).
-    const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
-    // Recomputed rather than read off `req` so the handler is correct even when
-    // credits are disabled (community edition never runs the guard). Pure, so it
-    // agrees with the preHandler by construction.
-    const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration, draft: rawDraft })
-    // Recorded only where it means something: the finalize gate reads
-    // `input_data.draft === true` off this job.
-    const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
-    const normAspectRatio = normalized.aspectRatio
-    const normResolution = normalized.resolution
-    const normDuration = normalized.duration ?? duration
-    if (normalized.adjustments.length > 0) {
-      req.log.warn({ provider, adjustments: normalized.adjustments }, "[text-to-video] snapped catalog-governed params")
-    }
-    // `prompt` + `referenceImageUrls` are reassigned by the connectedReferences
-    // assembly below (when present), so they're `let`, not part of the const destructure.
-    let prompt = parsed.data.prompt
-    let referenceImageUrls = parsed.data.referenceImageUrls
-    const userId = req.userId
+/**
+ * The /v1/text-to-video handler, after its pricing preHandlers ran. Exported
+ * because /v1/video-to-video hands a Seedance edit to it (the one Seedance
+ * reference-video lane), after running this route's pricing on the edit body.
+ */
+export async function handleTextToVideoRequest(req: FastifyRequest, reply: FastifyReply) {
+  const parsed = textToVideoBody.safeParse(req.body)
+  if (!parsed.success) {
+    return reply.status(400).send({
+      error: { code: "validation_error", ...formatZodError(parsed.error) },
+    })
+  }
+  // A palette / moodboard direction is generate-image's: refused, not folded into nothing.
+  const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
+  if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
 
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
+  const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, draft: rawDraft } = parsed.data
+  // Platform default when the request omits provider/duration (shared with
+  // generate-video and the DAG payload builder).
+  const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
+  // Recomputed rather than read off `req` so the handler is correct even when
+  // credits are disabled (community edition never runs the guard). Pure, so it
+  // agrees with the preHandler by construction.
+  const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration, draft: rawDraft })
+  // Recorded only where it means something: the finalize gate reads
+  // `input_data.draft === true` off this job.
+  const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
+  const normAspectRatio = normalized.aspectRatio
+  const normResolution = normalized.resolution
+  const normDuration = normalized.duration ?? duration
+  if (normalized.adjustments.length > 0) {
+    req.log.warn({ provider, adjustments: normalized.adjustments }, "[text-to-video] snapped catalog-governed params")
+  }
+  // `prompt` + `referenceImageUrls` are reassigned by the connectedReferences
+  // assembly below (when present), so they're `let`, not part of the const destructure.
+  let prompt = parsed.data.prompt
+  let referenceImageUrls = parsed.data.referenceImageUrls
+  const userId = req.userId
 
-    // Image-to-video-only models (e.g. Grok Imagine Video 1.5) are surfaced in the
-    // T2V provider set for unified-node visibility, but KIE requires an input image.
-    // Fail fast with a clear message instead of letting the prompt-only request
-    // reach the provider. The creditGuard preHandler only checks balance — no
-    // reservation happens until reserveCreditsForJob below, so returning here is clean.
-    if (videoProviderRequiresImage(provider)) {
-      return reply.status(400).send(imageRequiredError(provider, "text-to-video"))
-    }
+  if (!userId) {
+    return reply.status(401).send({
+      error: { code: "unauthorized", message: "Authentication required" },
+    })
+  }
 
-    // Subject + cinematic direction fold — catalog IDS → prompt text,
-    // server-side. Same shape and same fold SITE as generate-video: before the
-    // reference assembly below, because the resolver frames the body. Neither
-    // channel → `composeVideoPromptText` returns `prompt` verbatim, so the flat
-    // path is byte-identical. (`prompt` is required on this route, so the composer's
-    // absent-prompt branch is dead here — the identical shape is deliberate so
-    // the two routes read the same.)
-    // The clamp's EFFECTIVE ceiling, not the raw cap: a non-native negative
-    // prompt is folded in as a "\nAvoid: …" suffix whose room the clamp reserves
-    // FIRST, so budgeting on the cap would shed too little on exactly the runs
-    // that get truncated. Same helper as generate-video, one mirror.
-    const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
+  // Image-to-video-only models (e.g. Grok Imagine Video 1.5) are surfaced in the
+  // T2V provider set for unified-node visibility, but KIE requires an input image.
+  // Fail fast with a clear message instead of letting the prompt-only request
+  // reach the provider. The creditGuard preHandler only checks balance — no
+  // reservation happens until reserveCreditsForJob below, so returning here is clean.
+  if (videoProviderRequiresImage(provider)) {
+    return reply.status(400).send(imageRequiredError(provider, "text-to-video"))
+  }
 
-    // The framing the cap is measured through — identical to generate-video's,
-    // and gated the same way as the assembly below. The resolver runs AFTER the
-    // fold and APPENDS binding text, so it must be inside the shed's budget
-    // while staying un-sheddable. Pure: safe to call once per shed iteration.
-    const framesReferences = hasVideoReferenceChannels(parsed.data)
-    const frameWithReferences = (body: string | undefined): string | undefined =>
-      framesReferences
-        ? assembleVideoConnectedReferences({
-          prompt: body,
-          provider,
-          connectedReferences: parsed.data.connectedReferences ?? [],
-          describedReferences: parsed.data.describedReferences,
-          baseReferenceImageUrls: parsed.data.referenceImageUrls,
-          referenceOrder: parsed.data.referenceOrder,
-          referenceVideoCount: parsed.data.referenceVideoUrls?.length ?? 0,
-          referenceAudioCount: parsed.data.referenceAudioUrls?.length ?? 0,
-          referenceVideoCaptions: parsed.data.referenceVideoCaptions,
-          referenceAudioCaptions: parsed.data.referenceAudioCaptions,
-        }).prompt
-        : body
+  // Subject + cinematic direction fold — catalog IDS → prompt text,
+  // server-side. Same shape and same fold SITE as generate-video: before the
+  // reference assembly below, because the resolver frames the body. Neither
+  // channel → `composeVideoPromptText` returns `prompt` verbatim, so the flat
+  // path is byte-identical. (`prompt` is required on this route, so the composer's
+  // absent-prompt branch is dead here — the identical shape is deliberate so
+  // the two routes read the same.)
+  // The clamp's EFFECTIVE ceiling, not the raw cap: a non-native negative
+  // prompt is folded in as a "\nAvoid: …" suffix whose room the clamp reserves
+  // FIRST, so budgeting on the cap would shed too little on exactly the runs
+  // that get truncated. Same helper as generate-video, one mirror.
+  const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
 
-    if (parsed.data.direction || parsed.data.subject) {
-      // TRUNCATION ORDERING: hint clauses shed last-folded-first rather than the
-      // order-blind clamp cutting whatever happens to be last. Under-cap runs
-      // are byte-identical to the capless fold. Both catalog channels ride the
-      // one sheddable list (subject ahead of direction, so direction leaves
-      // first), which is why a subject-only fold needs no second budget.
-      const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
-        ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
-        cap: promptCeiling,
-        frame: frameWithReferences,
-      })
-      if (composed !== undefined && composed !== prompt) {
-        // `input_data.userPrompt` records the SOURCE, never the render.
-        parsed.data.userPrompt ??= prompt
-        prompt = composed
-        parsed.data.prompt = prompt
-      }
-    }
-
-    // Structured references (parity with generate-video / generate-image): assemble
-    // connectedReferences server-side via the SAME shared resolver the canvas +
-    // orchestrator use, so an MCP/SDK t2v run binds inline {image:N} references
-    // identically. Absent → flat path untouched. Provider-gated by the cap map.
-    if (hasVideoReferenceChannels(parsed.data)) {
-      const assembled = assembleVideoConnectedReferences({
-        prompt,
+  // The framing the cap is measured through — identical to generate-video's,
+  // and gated the same way as the assembly below. The resolver runs AFTER the
+  // fold and APPENDS binding text, so it must be inside the shed's budget
+  // while staying un-sheddable. Pure: safe to call once per shed iteration.
+  const framesReferences = hasVideoReferenceChannels(parsed.data)
+  const frameWithReferences = (body: string | undefined): string | undefined =>
+    framesReferences
+      ? assembleVideoConnectedReferences({
+        prompt: body,
         provider,
         connectedReferences: parsed.data.connectedReferences ?? [],
         describedReferences: parsed.data.describedReferences,
+        baseReferenceImageUrls: parsed.data.referenceImageUrls,
+        referenceOrder: parsed.data.referenceOrder,
+        referenceVideoCount: parsed.data.referenceVideoUrls?.length ?? 0,
+        referenceAudioCount: parsed.data.referenceAudioUrls?.length ?? 0,
         referenceVideoCaptions: parsed.data.referenceVideoCaptions,
         referenceAudioCaptions: parsed.data.referenceAudioCaptions,
-        baseReferenceImageUrls: referenceImageUrls,
-        referenceOrder: parsed.data.referenceOrder,
-        referenceVideoCount: referenceVideoUrls?.length ?? 0,
-        referenceAudioCount: referenceAudioUrls?.length ?? 0,
-      })
-      prompt = assembled.prompt ?? prompt
-      referenceImageUrls = assembled.referenceImageUrls
-      // Mirror into parsed.data so buildJobInputData records what the worker gets.
-      parsed.data.prompt = prompt
-      parsed.data.referenceImageUrls = referenceImageUrls
-    } else if (REFERENCE_TOKEN_PROBE.test(prompt)) {
-      // Flat path (URL arrays only — the MCP `generate_video` verb, SDK callers):
-      // an editor token still has to reach the model as its wire form. A preset's
-      // pre text carries one ("edit {video:1} as follows:"), and the raw
-      // `{video:1}` means nothing to the provider. Same resolver, counted against
-      // the flat arrays; an out-of-range token degrades to its label or nothing.
-      // Gated on a token being present so an ordinary prompt is never re-spaced.
-      prompt = resolveReferenceTokens(prompt, {
-        image: referenceImageUrls?.length ?? 0,
-        video: referenceVideoUrls?.length ?? 0,
-        audio: referenceAudioUrls?.length ?? 0,
-      }) ?? ""
-      parsed.data.prompt = prompt
-    }
+      }).prompt
+      : body
 
-    // Character references — support, budget (assembled image count) and the
-    // shared rule, identical to /v1/generate-video. This lane has no start frame.
-    const characterProblem = videoCharacterRefProblem({
-      provider,
-      characterReferences: parsed.data.characterReferences,
-      imageCount: referenceImageUrls?.length ?? 0,
-      videoCount: referenceVideoUrls?.length ?? 0,
-      hasStartFrame: false,
+  if (parsed.data.direction || parsed.data.subject) {
+    // TRUNCATION ORDERING: hint clauses shed last-folded-first rather than the
+    // order-blind clamp cutting whatever happens to be last. Under-cap runs
+    // are byte-identical to the capless fold. Both catalog channels ride the
+    // one sheddable list (subject ahead of direction, so direction leaves
+    // first), which is why a subject-only fold needs no second budget.
+    const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
+      ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
+      cap: promptCeiling,
+      frame: frameWithReferences,
     })
-    if (characterProblem) {
-      return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
+    if (composed !== undefined && composed !== prompt) {
+      // `input_data.userPrompt` records the SOURCE, never the render.
+      parsed.data.userPrompt ??= prompt
+      prompt = composed
+      parsed.data.prompt = prompt
     }
-    // The description is subject text the prompt policies never see (it does not
-    // join `prompt`): police it here and mirror into parsed.data so the queued
-    // payload and the recorded input_data carry the policed text.
-    const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
-    if (characterReferences) parsed.data.characterReferences = characterReferences
+  }
 
-    // Truncation warning on the ASSEMBLED prompt — the string the shed budgeted
-    // for and the one the clamp will cut. Reaching here means the overflow was
-    // UNSHEDABLE (prose or bindings alone clear the ceiling). Mirrors
-    // generate-video, including the fold gate — EITHER catalog channel, since a
-    // subject-only fold renders text the platform is equally responsible for.
-    if ((parsed.data.direction || parsed.data.subject) && prompt.length > promptCeiling) {
-      req.log.warn(
-        { provider, promptLength: prompt.length, promptCeiling },
-        "[text-to-video] assembled prompt exceeds the provider ceiling after shedding every hint; the tail will be clamped",
-      )
-    }
-
-    // B4b: apply any registered video PromptPolicy at the server-authoritative
-    // final prompt (structured assembly + flat path). Mirror into parsed.data so
-    // buildJobInputData records what the worker receives. Inert by default.
-    prompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
-    parsed.data.prompt = prompt
-
-    // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
-    const modelIdentifier = buildVideoCreditModelIdentifier(
-      provider ?? "minimax",
-      normDuration,
-      sound,
-      "text-to-video",
-      mode,
-      normResolution,
-      (referenceVideoUrls?.length ?? 0) > 0,
-    )
-
-    const mcpClient = extractMcpClient(req.body)
-    // job_type powers the reconcile cron's correct finalization path —
-    // see lib/reconcile/replicate.ts (defaults to "generate-image" when
-    // null, which mis-uploads videos as images).
-    //
-    // Race-proof INSERT via DB UNIQUE constraint on (user_id,
-    // idempotency_key). See generate-image.ts for full rationale.
-    let insertResult: { row: { id: string }; created: boolean }
-    try {
-      insertResult = await insertJobIdempotent<{ id: string }>(
-        req,
-        {
-          workflow_id: extractWorkflowId(req.body),
-          node_id: extractNodeId(req.body),
-          force_private: extractForcePrivate(req.body) || undefined,
-          user_id: userId,
-          job_type: "text-to-video",
-          status: "pending",
-          // R26: the normalized values are passed in rather than written back
-          // onto `parsed.data` — the handler destructured above, so a mutation
-          // would be invisible to every reader AND against the no-mutation rule.
-          input_data: buildJobInputData(
-            {
-              ...parsed.data,
-              // The RESOLVED provider, not the raw (optional) one: the reconcile
-              // cron settles a worst-case reservation from `input_data` alone,
-              // and a provider-less request runs on the platform default — a
-              // Seedance model, so exactly the runs that need the settlement.
-              provider,
-              aspectRatio: normAspectRatio,
-              resolution: normResolution,
-              duration: normDuration,
-              draft,
-              // The pre-check's ffprobe of the reference clips — the
-              // settlement prices from the same numbers the reservation did.
-              ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}),
-            },
-            "text-to-video",
-          ),
-          ...(mcpClient ? { mcp_client: mcpClient } : {}),
-        },
-        req.idempotencyKey,
-      )
-    } catch (err) {
-      return sendInternalError(reply, req, err, "Failed to create video generation job")
-    }
-    const job = insertResult.row
-
-    if (!insertResult.created) {
-      reply.header("X-Dedup-Hit", "1")
-      return reply.code(200).send({ jobId: job.id, deduped: true })
-    }
-
-    // Reserve credits
-    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-    if (reply.sent) return
-    const usageLogId = reservation?.usageLogId
-
-    await videoQueue.add("text-to-video", {
-      jobId: job.id,
+  // Structured references (parity with generate-video / generate-image): assemble
+  // connectedReferences server-side via the SAME shared resolver the canvas +
+  // orchestrator use, so an MCP/SDK t2v run binds inline {image:N} references
+  // identically. Absent → flat path untouched. Provider-gated by the cap map.
+  if (hasVideoReferenceChannels(parsed.data)) {
+    const assembled = assembleVideoConnectedReferences({
       prompt,
       provider,
-      duration: normDuration,
-      mode,
-      sound,
-      negativePrompt,
-      cfgScale,
-      aspectRatio: normAspectRatio,
-      multiShot,
-      shots,
-      elements,
-      seed,
-      resolution: normResolution,
-      draft,
-      generateAudio,
-      referenceImageUrls,
-      referenceVideoUrls,
-      referenceAudioUrls,
-      characterReferences,
-      refVideoDurationsSec: req.refVideoDurationsSec,
-      webSearch,
-      nsfwChecker,
-      enableTranslation,
-      usageLogId,
+      connectedReferences: parsed.data.connectedReferences ?? [],
+      describedReferences: parsed.data.describedReferences,
+      referenceVideoCaptions: parsed.data.referenceVideoCaptions,
+      referenceAudioCaptions: parsed.data.referenceAudioCaptions,
+      baseReferenceImageUrls: referenceImageUrls,
+      referenceOrder: parsed.data.referenceOrder,
+      referenceVideoCount: referenceVideoUrls?.length ?? 0,
+      referenceAudioCount: referenceAudioUrls?.length ?? 0,
     })
+    prompt = assembled.prompt ?? prompt
+    referenceImageUrls = assembled.referenceImageUrls
+    // Mirror into parsed.data so buildJobInputData records what the worker gets.
+    parsed.data.prompt = prompt
+    parsed.data.referenceImageUrls = referenceImageUrls
+  } else if (REFERENCE_TOKEN_PROBE.test(prompt)) {
+    // Flat path (URL arrays only — the MCP `generate_video` verb, SDK callers):
+    // an editor token still has to reach the model as its wire form. A preset's
+    // pre text carries one ("edit {video:1} as follows:"), and the raw
+    // `{video:1}` means nothing to the provider. Same resolver, counted against
+    // the flat arrays; an out-of-range token degrades to its label or nothing.
+    // Gated on a token being present so an ordinary prompt is never re-spaced.
+    prompt = resolveReferenceTokens(prompt, {
+      image: referenceImageUrls?.length ?? 0,
+      video: referenceVideoUrls?.length ?? 0,
+      audio: referenceAudioUrls?.length ?? 0,
+    }) ?? ""
+    parsed.data.prompt = prompt
+  }
 
-    // Disclose any lever the caller asked for and did not get. The route has no
-    // pre-existing `warnings` vocabulary (unlike generate-video), so the
-    // structured adjustments are the disclosure.
-    return normalized.adjustments.length > 0
-      ? { jobId: job.id, adjustments: normalized.adjustments }
-      : { jobId: job.id }
+  // Character references — support, budget (assembled image count) and the
+  // shared rule, identical to /v1/generate-video. This lane has no start frame.
+  const characterProblem = videoCharacterRefProblem({
+    provider,
+    characterReferences: parsed.data.characterReferences,
+    imageCount: referenceImageUrls?.length ?? 0,
+    videoCount: referenceVideoUrls?.length ?? 0,
+    hasStartFrame: false,
   })
+  if (characterProblem) {
+    return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
+  }
+  // The description is subject text the prompt policies never see (it does not
+  // join `prompt`): police it here and mirror into parsed.data so the queued
+  // payload and the recorded input_data carry the policed text.
+  const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
+  if (characterReferences) parsed.data.characterReferences = characterReferences
+
+  // Truncation warning on the ASSEMBLED prompt — the string the shed budgeted
+  // for and the one the clamp will cut. Reaching here means the overflow was
+  // UNSHEDABLE (prose or bindings alone clear the ceiling). Mirrors
+  // generate-video, including the fold gate — EITHER catalog channel, since a
+  // subject-only fold renders text the platform is equally responsible for.
+  if ((parsed.data.direction || parsed.data.subject) && prompt.length > promptCeiling) {
+    req.log.warn(
+      { provider, promptLength: prompt.length, promptCeiling },
+      "[text-to-video] assembled prompt exceeds the provider ceiling after shedding every hint; the tail will be clamped",
+    )
+  }
+
+  // B4b: apply any registered video PromptPolicy at the server-authoritative
+  // final prompt (structured assembly + flat path). Mirror into parsed.data so
+  // buildJobInputData records what the worker receives. Inert by default.
+  prompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+  parsed.data.prompt = prompt
+
+  // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
+  const modelIdentifier = buildVideoCreditModelIdentifier(
+    provider ?? "minimax",
+    normDuration,
+    sound,
+    "text-to-video",
+    mode,
+    normResolution,
+    (referenceVideoUrls?.length ?? 0) > 0,
+  )
+
+  const mcpClient = extractMcpClient(req.body)
+  // job_type powers the reconcile cron's correct finalization path —
+  // see lib/reconcile/replicate.ts (defaults to "generate-image" when
+  // null, which mis-uploads videos as images).
+  //
+  // Race-proof INSERT via DB UNIQUE constraint on (user_id,
+  // idempotency_key). See generate-image.ts for full rationale.
+  let insertResult: { row: { id: string }; created: boolean }
+  try {
+    insertResult = await insertJobIdempotent<{ id: string }>(
+      req,
+      {
+        workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
+        user_id: userId,
+        job_type: "text-to-video",
+        status: "pending",
+        // R26: the normalized values are passed in rather than written back
+        // onto `parsed.data` — the handler destructured above, so a mutation
+        // would be invisible to every reader AND against the no-mutation rule.
+        input_data: buildJobInputData(
+          {
+            ...parsed.data,
+            // The RESOLVED provider, not the raw (optional) one: the reconcile
+            // cron settles a worst-case reservation from `input_data` alone,
+            // and a provider-less request runs on the platform default — a
+            // Seedance model, so exactly the runs that need the settlement.
+            provider,
+            aspectRatio: normAspectRatio,
+            resolution: normResolution,
+            duration: normDuration,
+            draft,
+            // The pre-check's ffprobe of the reference clips — the
+            // settlement prices from the same numbers the reservation did.
+            ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}),
+          },
+          "text-to-video",
+        ),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
+      },
+      req.idempotencyKey,
+    )
+  } catch (err) {
+    return sendInternalError(reply, req, err, "Failed to create video generation job")
+  }
+  const job = insertResult.row
+
+  if (!insertResult.created) {
+    reply.header("X-Dedup-Hit", "1")
+    return reply.code(200).send({ jobId: job.id, deduped: true })
+  }
+
+  // Reserve credits
+  const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+  if (reply.sent) return
+  const usageLogId = reservation?.usageLogId
+
+  await videoQueue.add("text-to-video", {
+    jobId: job.id,
+    prompt,
+    provider,
+    duration: normDuration,
+    mode,
+    sound,
+    negativePrompt,
+    cfgScale,
+    aspectRatio: normAspectRatio,
+    multiShot,
+    shots,
+    elements,
+    seed,
+    resolution: normResolution,
+    draft,
+    generateAudio,
+    referenceImageUrls,
+    referenceVideoUrls,
+    referenceAudioUrls,
+    characterReferences,
+    refVideoDurationsSec: req.refVideoDurationsSec,
+    webSearch,
+    nsfwChecker,
+    enableTranslation,
+    usageLogId,
+  })
+
+  // Disclose any lever the caller asked for and did not get. The route has no
+  // pre-existing `warnings` vocabulary (unlike generate-video), so the
+  // structured adjustments are the disclosure.
+  return normalized.adjustments.length > 0
+    ? { jobId: job.id, adjustments: normalized.adjustments }
+    : { jobId: job.id }
 }

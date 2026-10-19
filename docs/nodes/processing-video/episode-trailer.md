@@ -25,6 +25,8 @@ The **Trailer + Formats** template in the template marketplace is the same chain
 
 Refused before anything is charged: a longer recording (when its length can be read), one with no sound or no picture, an intro card that cannot be read as a video (`intro_card_unreadable`; a still image is refused too), and an intro card longer than 15 seconds (`intro_card_too_long`): "The intro card is too long. Use a card of 15 seconds or less."
 
+With more than one recording wired into `media`, a run reads the first one the node's `mediaOrder` setting names (a list of the wired nodes' ids). The editor does not set `mediaOrder` yet; without it, a run reads the first recording wired in.
+
 ## Outputs
 
 | Handle | Type | Description |

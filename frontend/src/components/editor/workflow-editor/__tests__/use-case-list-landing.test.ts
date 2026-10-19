@@ -60,7 +60,7 @@ beforeEach(() => {
 describe("a Trailer run lands its formats as one run's rows", () => {
   it("sends the formats and the intro card, and lands every delivery as a row of the run", async () => {
     await executeUseCase(store.nodes[0], { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }], useCaseIntroCard: "https://r2/card.mp4" } as never, ctx)
-    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", introCardUrl: "https://r2/card.mp4", settings: expect.objectContaining({ formats: ["9:16", "1:1", "4:5"] }) }))
+    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.mp4", settings: expect.objectContaining({ formats: ["9:16", "1:1", "4:5"] }) }))
     const landed = poll.landed!
     const rows = landed.generatedResults as Array<Record<string, unknown>>
     expect(rows.map((r) => [r.url, r.format, r.jobId, r.quality])).toEqual([
@@ -132,7 +132,7 @@ describe("a Clip Pack run lands its clips as one run's rows", () => {
     poll.outputOf = () => CLIPS
     store.nodes = [{ id: "cp", type: "clip-pack", position: { x: 0, y: 0 }, data: { label: "Clip Pack", fieldMappings: {}, count: 3, generatedResults: [EARLIER] } }]
     await executeUseCase(store.nodes[0], { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as never, ctx)
-    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", settings: expect.objectContaining({ count: 3 }) }))
+    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrls: ["https://r2/ep.mp4"], settings: expect.objectContaining({ count: 3 }) }))
     const landed = poll.landed!
     const rows = landed.generatedResults as Array<Record<string, unknown>>
     expect(rows.map((r) => [r.url, r.clipKey, r.title, r.jobId, r.quality, r.planBasis, r.renderBasis, r.thumbnailUrl, r.captionsFailed, r.failedClips])).toEqual([

@@ -70,9 +70,9 @@ export const EXECUTION_KINDS = ["source", "inline", "sync", "worker", "use-case"
 /**
  * The input pips a use-case node may have: `UseCaseInputHandle` of
  * packages/render-rules/src/use-case-registry.ts — what routeUseCaseInput
- * routes (into useCaseMedia / useCaseMusic / useCaseIntroCard).
+ * routes (into useCaseMedia / useCaseMusic / useCaseIntroCard / useCaseMasterAudio).
  */
-export const USE_CASE_INPUT_HANDLES = ["media", "music", "introCard"]
+export const USE_CASE_INPUT_HANDLES = ["media", "music", "introCard", "masterAudio"]
 
 /**
  * The add-node picker tabs a family can own (`NodeFamily["tab"]` of

@@ -94,7 +94,7 @@ describe("a fresh run", () => {
     api.runUseCase.mockResolvedValue({ jobId: "job-1" })
     await executeNodeFor(tightenNode({ captions: false, planTier: "premium" }), REC)
     expect(api.runUseCase.mock.calls[0]![0]).toBe("tighten-episode")
-    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", settings: expect.objectContaining({ captions: false, planTier: "premium" }) }))
+    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrls: ["https://r2/ep.mp4"], settings: expect.objectContaining({ captions: false, planTier: "premium" }) }))
     expect(store.updateNodeData).toHaveBeenCalledWith("t1", expect.objectContaining({ useCaseJobId: "job-1" }))
     expect(poll.calls[0]).toEqual({ keys: ["generatedVideoUrl", "generatedAudioUrl"], label: "Tighten Episode" })
   })

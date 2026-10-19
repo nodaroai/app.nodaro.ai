@@ -39,11 +39,25 @@ export function usecaseBodyTakesNull(type: UseCaseNodeType, key: string): boolea
   return field !== undefined && z.safeParse(field, null).success
 }
 
+/**
+ * Whether `type`'s body takes an empty string for `key` (a free-text setting:
+ * an empty instruction). Any other empty value a node holds (a cleared choice)
+ * is left out of a request: the route then takes its default, never refuses it.
+ */
+export function usecaseBodyTakesEmpty(type: UseCaseNodeType, key: string): boolean {
+  const field = USE_CASE_BODIES[type].shape[key]
+  return field !== undefined && z.safeParse(field, "").success
+}
+
 /** What every type's parsed body carries (its own settings ride as further keys). */
 export type UseCaseBody = {
   mediaUrls: string[]
   musicUrl?: string
   introCardUrl?: string
+  /** The separate audio every recording is synced to (a body that spreads usecaseMulticamRecordingShape). */
+  masterAudioUrl?: string
+  /** The Cameras settings (a body that spreads usecaseMulticamRecordingShape); its type's resolver reads them. */
+  cameras?: unknown
   reviewBeforeRender?: boolean
   componentDepth?: number
   executingComponentIds?: string[]

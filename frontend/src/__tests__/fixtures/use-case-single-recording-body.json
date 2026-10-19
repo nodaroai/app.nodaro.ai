@@ -1,0 +1,120 @@
+{
+  "bodies": [
+    {
+      "name": "tighten-episode: the defaults",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"output\":\"video\",\"captions\":true,\"captionStyle\":\"word-highlight\",\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: every setting tuned",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"output\":\"video\",\"framing\":{\"aspect\":\"9:16\",\"layout\":\"stacked\"},\"captions\":false,\"captionStyle\":\"karaoke\",\"reviewBeforeRender\":true,\"planTier\":\"premium\",\"instructions\":\"Cut the cross-talk.\",\"styleGuide\":\"Tight.\",\"musicDuckAmount\":40,\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: nothing set",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: an empty instruction and style guide",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"instructions\":\"\",\"styleGuide\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: null instructions and review",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: two recordings and every optional input wired",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"musicUrl\":\"https://r2/bed.mp3\",\"output\":\"video\",\"framing\":{\"aspect\":\"9:16\",\"layout\":\"stacked\"},\"captions\":false,\"captionStyle\":\"karaoke\",\"reviewBeforeRender\":true,\"planTier\":\"premium\",\"instructions\":\"Cut the cross-talk.\",\"styleGuide\":\"Tight.\",\"musicDuckAmount\":40,\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-chapters: the defaults",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"planTier\":\"economy\",\"instructions\":\"\",\"styleGuide\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-chapters: every setting tuned",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"planTier\":\"premium\",\"instructions\":\"Chapters per guest.\",\"styleGuide\":\"Short titles.\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-chapters: nothing set",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-chapters: an empty instruction and style guide",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"instructions\":\"\",\"styleGuide\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-chapters: null instructions and review",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-chapters: two recordings and every optional input wired",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"planTier\":\"premium\",\"instructions\":\"Chapters per guest.\",\"styleGuide\":\"Short titles.\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: the defaults",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"formats\":[\"9:16\",\"1:1\",\"4:5\"],\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: every setting tuned",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"formats\":[\"16:9\",\"9:16\"],\"reviewBeforeRender\":true,\"planTier\":\"premium\",\"instructions\":\"Lead with the guest's best line.\",\"styleGuide\":\"No spoilers.\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: nothing set",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: an empty instruction and style guide",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"instructions\":\"\",\"styleGuide\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: null instructions and review",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: two recordings and every optional input wired",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"introCardUrl\":\"https://r2/card.mp4\",\"formats\":[\"16:9\",\"9:16\"],\"reviewBeforeRender\":true,\"planTier\":\"premium\",\"instructions\":\"Lead with the guest's best line.\",\"styleGuide\":\"No spoilers.\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: the defaults",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"count\":8,\"targetDurationSec\":60,\"framing\":{\"aspect\":\"9:16\",\"layout\":\"stacked\",\"switchType\":\"pan\",\"emphasisStyle\":\"scale\"},\"captions\":true,\"captionStyle\":\"karaoke\",\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: every setting tuned",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"count\":12,\"targetDurationSec\":90,\"framing\":{\"aspect\":\"1:1\",\"layout\":\"single\",\"switchType\":\"cut\",\"emphasisStyle\":\"none\"},\"captions\":true,\"captionStyle\":\"word-highlight\",\"reviewBeforeRender\":true,\"planTier\":\"premium\",\"instructions\":\"Funny moments only.\",\"styleGuide\":\"Hook first.\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: nothing set",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: an empty instruction and style guide",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"instructions\":\"\",\"styleGuide\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: null instructions and review",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: two recordings and every optional input wired",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"count\":12,\"targetDurationSec\":90,\"framing\":{\"aspect\":\"1:1\",\"layout\":\"single\",\"switchType\":\"cut\",\"emphasisStyle\":\"none\"},\"captions\":true,\"captionStyle\":\"word-highlight\",\"reviewBeforeRender\":true,\"planTier\":\"premium\",\"instructions\":\"Funny moments only.\",\"styleGuide\":\"Hook first.\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: a music bed",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"musicUrl\":\"https://r2/bed.mp3\",\"output\":\"video\",\"captions\":true,\"captionStyle\":\"word-highlight\",\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "tighten-episode: framing None",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"output\":\"video\",\"framing\":null,\"captions\":true,\"captionStyle\":\"word-highlight\",\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "episode-trailer: an intro card",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"introCardUrl\":\"https://r2/card.mp4\",\"formats\":[\"9:16\",\"1:1\",\"4:5\"],\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: framing None",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"count\":8,\"targetDurationSec\":60,\"framing\":null,\"captions\":true,\"captionStyle\":\"karaoke\",\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "clip-pack: framing None and captions null",
+      "editor": "{\"mediaUrls\":[\"https://r2/ep.mp4\"],\"count\":8,\"targetDurationSec\":60,\"framing\":null,\"captionStyle\":\"karaoke\",\"reviewBeforeRender\":false,\"planTier\":\"standard\",\"instructions\":\"\",\"userId\":\"00000000-0000-4000-8000-000000000001\"}"
+    }
+  ]
+}

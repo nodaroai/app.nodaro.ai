@@ -9,6 +9,8 @@ export type TightenEpisodeData = {
   [key: string]: unknown
   label: string
   fieldMappings: FieldMappings
+  /** The recordings' order (their upstream node ids): the run sends and builds them in it; a wired recording it does not list follows in wire order. */
+  mediaOrder?: string[]
   output?: "video" | "audio"
   /** Frame the episode with Speaker View: an output aspect and a layout, on
    *  automatic boxes — the shipped default boxes over the speakers on screen,

@@ -1,5 +1,6 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
 import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
+import type { VideoToVideoParams, NodeQuote } from "./nodes-video-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
@@ -794,10 +795,11 @@ export class NodesResource {
   run(type: "generate-image", params: GenerateImageParams & ({ count: 2 | 3 | 4 } | { models: string[] }), options?: RunNodeOptions): Promise<GenerateImageBatchResult>
   run(type: "generate-image", params?: GenerateImageParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "text-to-speech", params: TextToSpeechParams): Promise<RunNodeResult>
-  run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
-  run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
-  run(type: "video-upscale", params: VideoUpscaleParams): Promise<RunNodeResult>
-  run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
+  run(type: "generate-video", params?: GenerateVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "text-to-video", params: TextToVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "video-to-video", params: VideoToVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "video-upscale", params: VideoUpscaleParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "image-to-image", params: ImageToImageParams, options?: RunNodeOptions): Promise<ImageJobStarted>
@@ -831,6 +833,32 @@ export class NodesResource {
         if (conventional && isRouteNotFound(err)) throw notRunnable(type, "it runs only inside a workflow (client.workflows.run)")
         throw err
       })
+  }
+
+  /**
+   * The price of a run before it starts (`POST /v1/quote`). Send exactly the
+   * body you would send to {@link run}: the platform prices it with the same
+   * code the run route reserves with — validation, measuring reference clips,
+   * the price id and the credit amount — but starts nothing and charges
+   * nothing.
+   *
+   * `reserve` is what the run will hold when it starts; `expected`, when
+   * present, is what it should actually cost (a Seedance edit renders the
+   * source clip's length). A run settles to what was generated, never above
+   * `reserve`. Rejects with the same `400` the run would answer for an
+   * invalid body. Typed for the video lanes; any other node type takes its
+   * run body as-is.
+   *
+   * @param type    Node type slug, as for {@link run}.
+   * @param params  The run body.
+   */
+  quote(type: "text-to-video", params: TextToVideoParams): Promise<NodeQuote>
+  quote(type: "generate-video", params: GenerateVideoParams): Promise<NodeQuote>
+  quote(type: "video-to-video", params: VideoToVideoParams): Promise<NodeQuote>
+  quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
+  async quote(type: string, params: Record<string, unknown> = {}): Promise<NodeQuote> {
+    const res = await this.client.request<{ data: NodeQuote }>("POST", "/v1/quote", { body: { type, params } })
+    return res.data
   }
 
   /**
@@ -868,6 +896,7 @@ export class NodesResource {
   runAndWait(type: "text-to-speech", params: TextToSpeechParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "video-to-video", params: VideoToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "video-upscale", params: VideoUpscaleParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>

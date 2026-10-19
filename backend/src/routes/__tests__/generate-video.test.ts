@@ -1555,3 +1555,43 @@ describe("assembleVideoConnectedReferences — {ref:<id>} id-addressed tokens", 
     expect(out.prompt ?? "").not.toMatch(/\{ref:/i)
   })
 })
+
+// Parity with /v1/text-to-video's flat path: a request with only the URL arrays
+// (no connectedReferences / describedReferences / captions) still binds an
+// editor token to its wire form — the raw `{video:1}` means nothing to the model.
+describe("POST /v1/generate-video — flat-path editor tokens", () => {
+  it("resolves {video:N} and {audio:N} with only referenceVideoUrls / referenceAudioUrls", async () => {
+    mockJobInsert({ data: { id: "job-flat" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "the dancer from {video:1} moves to {audio:1}",
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: "seedance-2",
+        referenceVideoUrls: ["https://cdn.nodaro.ai/uploads/clip.mp4"],
+        referenceAudioUrls: ["https://cdn.nodaro.ai/uploads/beat.mp3"],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(queued.prompt).toBe("the dancer from @video_1 moves to @audio_1")
+  })
+
+  it("leaves a prompt with no editor token byte-identical", async () => {
+    mockJobInsert({ data: { id: "job-plain" }, error: null })
+    const prompt = "a dancer  moves,  slowly"
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt,
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: "seedance-2",
+        referenceVideoUrls: ["https://cdn.nodaro.ai/uploads/clip.mp4"],
+      },
+    })
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(queued.prompt).toBe(prompt)
+  })
+})

@@ -1,6 +1,6 @@
 // @test-units-by-name looks up only the tighten-episode and episode-trailer bodies (USE_CASE_BODIES by those two types)
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { TIGHTEN_EPISODE_DEFAULTS, TRAILER_INTRO_CARD_MAX_SEC } from "@nodaro/render-rules"
+import { TIGHTEN_EPISODE_DEFAULTS, TRAILER_INTRO_CARD_MAX_SEC, usecaseDescriptor } from "@nodaro/render-rules"
 
 const probe = vi.hoisted(() => ({
   streams: vi.fn(async (_u: string) => ({ hasVideo: true, hasAudio: true })),
@@ -147,6 +147,59 @@ describe("prepareUseCase: Trailer", () => {
       return { hasVideo: true, hasAudio: true }
     })
     expect(await prepareUseCase("episode-trailer", trailer({ introCardUrl: card }))).toMatchObject({ ok: false, code: "intro_card_unreadable" })
+  })
+})
+
+/**
+ * Several recordings and a Master audio reach prepareUseCase only once a type
+ * takes them (each route's body refuses them before; none does in this phase),
+ * so these call it with a body no route would parse yet.
+ */
+describe("prepareUseCase: every recording and the master are probed", () => {
+  const a = "https://r2/a.mp4", b = "https://r2/b.mp4", master = "https://r2/master.wav"
+  const several = (over: Record<string, unknown> = {}) => ({ mediaUrls: [a, b], ...over }) as UseCaseBody
+
+  it("one recording and no master: the sources are exactly as before (no moreMedia, no masterAudio key)", async () => {
+    const r = await prepareUseCase("tighten-episode", body())
+    expect(r.ok && Object.keys(r.sources)).toEqual(["media"])
+  })
+  it("several recordings: the first is media, the rest moreMedia in order, each with its own kind and length", async () => {
+    probe.streams.mockImplementation(async (u: string) => (u === b ? { hasVideo: false, hasAudio: true } : { hasVideo: true, hasAudio: true }))
+    probe.duration.mockImplementation(async (u: string) => (u === b ? 1800 : 3600))
+    const r = await prepareUseCase("tighten-episode", several())
+    expect(r.ok && r.sources.media).toEqual({ url: a, kind: "video", durationSec: 3600 })
+    expect(r.ok && r.sources.moreMedia).toEqual([{ url: b, kind: "audio", durationSec: 1800 }])
+    expect(r.ok && r.sources).not.toHaveProperty("masterAudio")
+  })
+  it("a refusal names the recording's position when there are several; the code is unchanged", async () => {
+    probe.streams.mockImplementation(async (u: string) => (u === b ? { hasVideo: true, hasAudio: false } : { hasVideo: true, hasAudio: true }))
+    expect(await prepareUseCase("tighten-episode", several())).toMatchObject({ ok: false, status: 400, code: "media_has_no_audio", message: "Recording 2 has no sound to transcribe." })
+    probe.streams.mockImplementation(async (u: string) => {
+      if (u === b) throw new Error("403")
+      return { hasVideo: true, hasAudio: true }
+    })
+    expect(await prepareUseCase("tighten-episode", several())).toMatchObject({ ok: false, code: "media_unreadable", message: expect.stringMatching(/^Recording 2 could not be read\./) })
+    probe.streams.mockResolvedValue({ hasVideo: true, hasAudio: true })
+    probe.duration.mockImplementation(async (u: string) => (u === b ? 180 * 60 + 1 : 3600))
+    expect(await prepareUseCase("tighten-episode", several())).toMatchObject({ ok: false, code: "media_too_long", message: expect.stringMatching(/^Recording 2 is too long\./) })
+  })
+  it("a master that reads as audio rides as masterAudio; one that does not is refused", async () => {
+    const r = await prepareUseCase("tighten-episode", several({ masterAudioUrl: master }))
+    expect(r.ok && r.sources.masterAudio).toEqual({ url: master, kind: "audio" })
+    probe.streams.mockImplementation(async (u: string) => (u === master ? { hasVideo: false, hasAudio: false } : { hasVideo: true, hasAudio: true }))
+    expect(await prepareUseCase("tighten-episode", several({ masterAudioUrl: master }))).toMatchObject({
+      ok: false, status: 400, code: "master_audio_unreadable", message: "The master audio could not be read as audio.",
+    })
+  })
+  it("the settings are resolved knowing how many recordings there are and whether a master is wired", async () => {
+    const spy = vi.spyOn(usecaseDescriptor("tighten-episode"), "resolveSettings")
+    try {
+      await prepareUseCase("tighten-episode", body())
+      await prepareUseCase("tighten-episode", several({ masterAudioUrl: master }))
+      expect(spy.mock.calls.map((c) => c[2])).toEqual([{ recordings: 1, masterAudio: false }, { recordings: 2, masterAudio: true }])
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 
