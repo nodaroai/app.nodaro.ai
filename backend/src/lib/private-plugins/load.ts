@@ -1,3 +1,4 @@
+// @registry-enumerates registers plugin prices into STATIC_CREDIT_COSTS (registerStaticCreditCosts checks each id against the whole table)
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../config.js"
 import { buildToolkit } from "./toolkit.js"

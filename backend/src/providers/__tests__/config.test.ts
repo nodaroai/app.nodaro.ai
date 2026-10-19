@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the web-scrape credit rows it names
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // ---------------------------------------------------------------------------

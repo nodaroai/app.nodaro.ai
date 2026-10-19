@@ -1,3 +1,4 @@
+// @registry-enumerates prices the run by estimateRunSetCredits over whatever node types the graph holds
 /**
  * Render final for agents (decided 2026-10-06): the SERVER derives what a
  * Render final runs, so an agent never assembles the set itself. One request

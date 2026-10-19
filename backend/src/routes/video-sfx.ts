@@ -1,4 +1,5 @@
 // backend/src/routes/video-sfx.ts
+// @registry-enumerates refunds a usage log through CreditsService — by usage, not by node type, so not a @registry-lookup
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"

@@ -215,6 +215,61 @@ test("namesUsed: an import binding or an UPPER_SNAKE member read — never a loc
   assert.deepEqual([...namesUsed('import("@/lib/node-options").then(({ getNodeOptions }) => getNodeOptions())\n', names)], ["getNodeOptions"])
 })
 
+test("namesUsed: a destructured dynamic import is read as the balanced pattern before its `=`", () => {
+  const names = new Set(["NODE_OPTIONS", "nodeTypes", "getNodeOptions", "STATIC_CREDIT_COSTS"])
+  const used = (src) => [...namesUsed(src, names)].sort()
+  // An open function body before the pattern used to start the match at the
+  // body's `{`, so the pattern's first name was swallowed.
+  assert.deepEqual(used('it("x", async () => {\n  const { STATIC_CREDIT_COSTS } = await import("../credits.js")\n  expect(STATIC_CREDIT_COSTS.a).toBe(1)\n})\n'), ["STATIC_CREDIT_COSTS"], "inside a function body")
+  assert.deepEqual(used('function f() {\n  if (x) {\n    const { getNodeOptions, nodeTypes } = await import("x")\n  }\n}\n'), ["getNodeOptions", "nodeTypes"], "every name, not just the later ones")
+  assert.deepEqual(used('const {\n  getNodeOptions,\n  nodeTypes: types,\n} = await vi.importActual("x")\n'), ["getNodeOptions", "nodeTypes"], "multi-line, a renamed property")
+  assert.deepEqual(used('const { nodeTypes: { a, NODE_OPTIONS }, getNodeOptions } = await import("x")\n'), ["getNodeOptions", "nodeTypes"], "nested: only the top-level keys are exports")
+  assert.deepEqual(used('const { getNodeOptions = () => [], nodeTypes = {} } = await import("x")\n'), ["getNodeOptions", "nodeTypes"], "defaults, braces inside them included")
+  assert.deepEqual(used('const { "nodeTypes": t, [k]: v } = await import("x")\n'), ["nodeTypes"], "a quoted key; a computed key names nothing")
+  assert.deepEqual(used('const { getNodeOptions, ...rest } = await import("x")\nrest.nodeTypes\n'), ["getNodeOptions", "nodeTypes"], "the ...rest of a module object is a namespace")
+  assert.deepEqual(used('vi.mock("x", async (importOriginal) => {\n  const { nodeTypes } = await importOriginal<typeof import("x")>()\n  return { nodeTypes }\n})\n'), ["nodeTypes"], "an importOriginal() result destructured")
+  assert.deepEqual(used('const { nodeTypes } = await vi.importMock("x")\n'), ["nodeTypes"])
+  assert.deepEqual(used('if (a) { b() }\nconst m = await import("x")\n'), [], "a block before a plain binding is not a pattern")
+  assert.deepEqual(used('const { nodeTypes } = makeThing()\nconst m = await import("x")\n'), [], "a pattern bound from something else")
+  assert.deepEqual(used('import("x").then(({ nodeTypes: { a }, getNodeOptions }) => a)\n'), ["getNodeOptions", "nodeTypes"], "a nested .then pattern")
+})
+
+test("namesUsed: a bracket, quote or comma inside a comment or string in the pattern does not count", () => {
+  const names = new Set(["nodeTypes", "getNodeOptions", "STATIC_CREDIT_COSTS"])
+  const used = (src) => [...namesUsed(src, names)].sort()
+  // Each sits inside a test body (an open `{` before the pattern), where the
+  // legacy capture cannot help: the reader alone must find the names.
+  const body = (inner) => `it("x", async () => {\n${inner}\n})\n`
+  assert.deepEqual(used(body('  const {\n    STATIC_CREDIT_COSTS, // 1) legacy rows\n    nodeTypes,\n  } = await import("x")')), ["STATIC_CREDIT_COSTS", "nodeTypes"], "a `)` in a line comment")
+  assert.deepEqual(used(body('  const {\n    STATIC_CREDIT_COSTS, // see (a\n    nodeTypes,\n  } = await import("x")')), ["STATIC_CREDIT_COSTS", "nodeTypes"], "a `(` in a line comment")
+  assert.deepEqual(used(body('  const {\n    STATIC_CREDIT_COSTS, // :)\n    nodeTypes,\n  } = await import("x")')), ["STATIC_CREDIT_COSTS", "nodeTypes"], "a smiley")
+  assert.deepEqual(used(body('  const { nodeTypes, getNodeOptions = ")" } = await import("x")')), ["getNodeOptions", "nodeTypes"], "a `)` default")
+  assert.deepEqual(used(body('  const { nodeTypes, getNodeOptions = "[" } = await import("x")')), ["getNodeOptions", "nodeTypes"], "a `[` default")
+  assert.deepEqual(used(body('  const { nodeTypes, getNodeOptions = `}${a}` } = await import("x")')), ["getNodeOptions", "nodeTypes"], "a `}` in a template default")
+  assert.deepEqual(used(body('  const {\n    // the table\n    STATIC_CREDIT_COSTS,\n  } = await import("x")')), ["STATIC_CREDIT_COSTS"], "a comment line before a name")
+  assert.deepEqual(used(body('  const { /* a, b */ nodeTypes } = await import("x")')), ["nodeTypes"], "a comma in a block comment")
+  assert.deepEqual(used(body('  // const { nodeTypes } = await import("x")\n  const m = 1')), [], "a commented-out site inside a body is not read")
+  assert.deepEqual(used(body('  import("x").then(({\n    nodeTypes, // 1) a\n    getNodeOptions = ")",\n  }) => 1)')), ["getNodeOptions", "nodeTypes"], "the same in .then")
+  assert.deepEqual(used(body('  import("x").then(async ({ nodeTypes }) => 1)\n  import("y").then(({ getNodeOptions }: M) => 1)')), ["getNodeOptions", "nodeTypes"], ".then with async, and a typed parameter")
+})
+
+test("namesUsed: the legacy capture is a floor — a pattern the reader cannot walk still yields what the old regex took", () => {
+  const names = new Set(["nodeTypes", "getNodeOptions"])
+  // `/\[/` is a regex literal the blanking does not recognise: its `[` stays
+  // unbalanced, the walk fails, and the old capture still reads the names.
+  assert.deepEqual([...namesUsed('const { nodeTypes, getNodeOptions: g = /\\[/ } = await import("x")\n', names)].sort(), ["getNodeOptions", "nodeTypes"])
+})
+
+test("namesUsed: static imports — aliases, default plus named, multi-line", () => {
+  const names = new Set(["NODE_OPTIONS", "nodeTypes", "getNodeOptions"])
+  const used = (src) => [...namesUsed(src, names)].sort()
+  assert.deepEqual(used('import { nodeTypes as t, getNodeOptions as g } from "x"\n'), ["getNodeOptions", "nodeTypes"], "aliases count by the original name")
+  assert.deepEqual(used('import { a as nodeTypes } from "x"\n'), [], "an alias that only shares the local name")
+  assert.deepEqual(used('import Options, { getNodeOptions } from "x"\n'), ["getNodeOptions"], "default plus named")
+  assert.deepEqual(used('import {\n  nodeTypes,\n  type NODE_OPTIONS,\n  getNodeOptions,\n} from "x"\n'), ["getNodeOptions", "nodeTypes"], "multi-line, a type-only specifier skipped")
+  assert.deepEqual(used('function f() {\n  return 1\n}\nimport { nodeTypes } from "x"\n'), ["nodeTypes"], "an earlier block does not reach into a static import")
+})
+
 test("enumeratorsIn skips aggregates, units, pass-through composers and lookups", () => {
   const files = [R, U1, C, E, L].map((path) => ({ path, source: SRC[path] }))
   assert.deepEqual(enumeratorsIn(files, info), { executors: E })
@@ -355,9 +410,10 @@ test("load-time folds B: a descriptor edit selects node-registry-credit-rate (@t
   assert.match(selects(t, M(DESCRIPTOR)) ?? "", /^reaches backend\/src\/lib\/node-registry\.ts, which enumerates the registry registry; /)
 })
 
-test("load-time folds C: a definition edit selects sticky-note-node, which names no registry export but loads types/nodes.ts (the empty / duplicate definition throw)", () => {
+test("load-time folds C: a definition edit selects sticky-note-node (@test-units-by-name, it looks up only sticky-note), which loads types/nodes.ts (the empty / duplicate definition throw)", () => {
   const t = definitions()
-  assert.deepEqual(t.registryNames, {}, "it names nothing: rule (c) cannot select it")
+  assert.deepEqual(t.registryNames, { definitions: ["NODE_DEFINITIONS"] })
+  assert.ok(t.unitsByName, "it is waived by @test-units-by-name: rule (c) cannot select it")
   assert.match(selects(t, M(DEFINITION)) ?? "", /^reaches frontend\/src\/types\/nodes\.ts, which enumerates the definitions registry; /)
 })
 

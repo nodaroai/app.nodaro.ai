@@ -1,3 +1,4 @@
+// @registry-enumerates asks CreditsService for the run's eligibility by user, not by node type, so not a @registry-lookup
 /**
  * POST /v1/app/:slug/runs/:runId/render-final — Render final in the app runner
  * (decided 2026-10-04).
