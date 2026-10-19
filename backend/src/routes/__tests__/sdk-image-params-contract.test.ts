@@ -19,7 +19,7 @@
  *  - every lever enum the route validates is the shared tuple the SDK type is
  *    derived from, and the SDK property names that derived type.
  */
-// @test-watches packages/client/src/resources/nodes-image-params.ts packages/client/src/resources/nodes.ts
+// @test-watches packages/client/src/resources/nodes-image-params.ts packages/client/src/resources/nodes.ts packages/shared/src/generate-mask.ts
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -37,6 +37,7 @@ import {
 } from "@nodaro/shared/models"
 import { TOPAZ_UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
+import { GENERATE_MASK_LIMITS } from "@nodaro/shared/media"
 import { imageToImageBody } from "../image-to-image.js"
 import { editImageBody } from "../edit-image.js"
 import { splitImageBody } from "../split-image.js"
@@ -44,7 +45,12 @@ import { generateMaskBody } from "../generate-mask.js"
 import { generateImageBody } from "../generate-image-body.js"
 
 const SDK_RESOURCES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "packages", "client", "src", "resources")
-const SDK_FILES = ["nodes-image-params.ts", "nodes.ts"].map((f) => join(SDK_RESOURCES, f))
+const REPO = join(SDK_RESOURCES, "..", "..", "..", "..")
+// The SDK params files, plus the shared wire contract GenerateMaskParams extends.
+const SDK_FILES = [
+  ...["nodes-image-params.ts", "nodes.ts"].map((f) => join(SDK_RESOURCES, f)),
+  join(REPO, "packages", "shared", "src", "generate-mask.ts"),
+]
 
 /** The session fields the job funnel stamps from the raw body on every route. */
 const SESSION_FIELDS = ["sessionId", "origin"]
@@ -79,7 +85,7 @@ function members(list: ts.NodeArray<ts.TypeElement>): Branch {
   return branch
 }
 
-/** The branches of a type: its own members over its local bases' (a base the SDK files do not declare is not walked). */
+/** The branches of a type: its own members over its local bases' (a base the files read here do not declare is not walked). */
 function branchesOf(typeName: string): Branch[] {
   const decl = DECLS.get(typeName)
   if (!decl) throw new Error(`the SDK declares no ${typeName}`)
@@ -221,5 +227,25 @@ describe("the walker itself", () => {
     expect(isOptionalInZod(imageToImageBody.shape, "injectCharacterContext")).toBe(true)
     expect(isOptionalInZod(generateMaskBody.shape, "threshold")).toBe(true)
     expect(isOptionalInZod(generateMaskBody.shape, "prompt")).toBe(false)
+  })
+})
+
+describe("generate-mask has one wire contract (@nodaro/shared's generate-mask.ts)", () => {
+  it("GenerateMaskParams declares no field of its own: its fields are GenerateMaskRequest's", () => {
+    const own = DECLS.get("GenerateMaskParams") as ts.InterfaceDeclaration
+    expect([...members(own.members).keys()]).toEqual([])
+    const request = propertyNames("GenerateMaskRequest")
+    expect(sorted(request)).toEqual(sorted(Object.keys(generateMaskBody.shape)))
+    expect([...request].every((k) => propertyNames("GenerateMaskParams").has(k))).toBe(true)
+  })
+
+  it("the route's bounds are GENERATE_MASK_LIMITS", () => {
+    const base = { imageUrl: "https://example.com/a.png" }
+    const { PROMPT_MAX_LENGTH, THRESHOLD_MIN, THRESHOLD_MAX, THRESHOLD_DEFAULT } = GENERATE_MASK_LIMITS
+    expect(generateMaskBody.safeParse({ ...base, prompt: "x".repeat(PROMPT_MAX_LENGTH) }).success).toBe(true)
+    expect(generateMaskBody.safeParse({ ...base, prompt: "x".repeat(PROMPT_MAX_LENGTH + 1) }).success).toBe(false)
+    expect(generateMaskBody.safeParse({ ...base, prompt: "p", threshold: THRESHOLD_MAX + 0.01 }).success).toBe(false)
+    expect(generateMaskBody.safeParse({ ...base, prompt: "p", threshold: THRESHOLD_MIN - 0.01 }).success).toBe(false)
+    expect(generateMaskBody.parse({ ...base, prompt: "p" }).threshold).toBe(THRESHOLD_DEFAULT)
   })
 })

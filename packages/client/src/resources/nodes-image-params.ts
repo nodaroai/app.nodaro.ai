@@ -19,6 +19,7 @@ import type {
 } from "@nodaro/shared/models"
 import type { TopazUpscaleFactor } from "@nodaro/shared/credits"
 import type { ImageToImageAttachColumn } from "@nodaro/shared/entities"
+import type { GenerateMaskOutput, GenerateMaskRequest } from "@nodaro/shared/media"
 import type { GenerationSessionParams, NodeJobOutput, RunNodeAdjustment } from "./nodes.js"
 
 /**
@@ -191,24 +192,23 @@ export type SplitImageResult = { images: SplitImageTile[] }
 
 /**
  * Typed request body for `nodes.run("generate-mask", …)` / `runAndWait` — a
- * black-and-white mask of the subject a prompt names (`POST /v1/generate-mask`),
- * ready for `maskUrl` on the inpainting routes. The completed job writes
- * {@link GenerateMaskJobOutput}.
+ * black-and-white mask of the subject a prompt names (`POST /v1/generate-mask`,
+ * the same route as `client.media.generateMask`), ready for `maskUrl` on the
+ * inpainting routes. The completed job writes {@link GenerateMaskJobOutput}.
+ *
+ * The fields are `@nodaro/shared`'s {@link GenerateMaskRequest} — the route's
+ * one wire contract, bounds in `GENERATE_MASK_LIMITS` — plus the session
+ * fields every job-creating request takes. Any other route field passes
+ * through.
  */
-export interface GenerateMaskParams extends GenerationSessionParams {
-  /** The image to mask — a public http(s) URL. */
-  imageUrl: string
-  /** What to mask, in words ("the red car"), 1–500 characters. */
-  prompt: string
-  /** 0–1 detection confidence; lower takes in more. Default 0.3. */
-  threshold?: number
+export interface GenerateMaskParams extends GenerateMaskRequest, GenerationSessionParams {
   [k: string]: unknown
 }
 
-/** The completed `generate-mask` job's `output_data`. */
-export interface GenerateMaskJobOutput extends NodeJobOutput {
-  /** The source image, unchanged — so the pair travels together. */
-  readonly imageUrl: string
-  /** The mask, a black-and-white PNG: white = the subject, black = everything else. */
-  readonly maskUrl: string
-}
+/**
+ * The completed `generate-mask` job's `output_data`: `@nodaro/shared`'s
+ * {@link GenerateMaskOutput} — `maskUrl`, the mask PNG (white = the subject),
+ * and `imageUrl`, the source passed through unchanged — on top of the common
+ * {@link NodeJobOutput} fields.
+ */
+export type GenerateMaskJobOutput = NodeJobOutput & GenerateMaskOutput

@@ -23,7 +23,10 @@ import type {
   EditImageParams,
   GenerateImageParams,
   GenerateMaskJobOutput,
+  GenerateMaskOutput,
   GenerateMaskParams,
+  GenerateMaskRequest,
+  GenerationSessionParams,
   ImageJobStarted,
   ImageToImageParams,
   ModifyImageProvider,
@@ -83,6 +86,12 @@ describe("the typed overloads (compile-time pins)", () => {
     expectTypeOf(lazy(() => nodes.runAndWait("generate-mask", { imageUrl: "u", prompt: "the car" }))).returns.resolves.toEqualTypeOf<GenerateMaskJobOutput>()
     expectTypeOf<GenerateMaskJobOutput["maskUrl"]>().toEqualTypeOf<string>()
     expectTypeOf<GenerateMaskJobOutput["imageUrl"]>().toEqualTypeOf<string>()
+    // One source: the job output is the shared contract on top of NodeJobOutput (assignable both ways),
+    // and the params are the shared request plus the session fields.
+    expectTypeOf<GenerateMaskJobOutput>().toEqualTypeOf<NodeJobOutput & GenerateMaskOutput>()
+    expectTypeOf<GenerateMaskJobOutput>().toExtend<GenerateMaskOutput>()
+    expectTypeOf<GenerateMaskParams>().toExtend<GenerateMaskRequest & GenerationSessionParams>()
+    expectTypeOf<Pick<GenerateMaskParams, keyof GenerateMaskRequest>>().toEqualTypeOf<Pick<GenerateMaskRequest, keyof GenerateMaskRequest>>()
     // A generic caller (type only known as a type parameter) gets the mask output too.
     const generic = <T extends string>(type: T) => nodes.runAndWait(type, {})
     expectTypeOf(lazy(() => generic("generate-mask"))).returns.resolves.toEqualTypeOf<GenerateMaskJobOutput>()

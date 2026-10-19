@@ -2326,9 +2326,13 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 >   `SplitImageResult` — `{ images: { name, url }[] }`, one PNG per tile, in
 >   `names` order. `names` must hold exactly `gridCols × gridRows` entries
 >   (`gridCols` and `gridRows` each 1–6).
-> - `runAndWait("generate-mask", …)` resolves `GenerateMaskJobOutput`:
->   `{ imageUrl, maskUrl }` — the source image passed through unchanged, and the
->   mask PNG (white = the subject `prompt` names).
+> - `generate-mask` is the same route (`POST /v1/generate-mask`) as
+>   [`client.media.generateMask()`](#generatemaskinput), with the same contract:
+>   `GenerateMaskParams` is `@nodaro/shared`'s `GenerateMaskRequest` plus the
+>   session fields, and `runAndWait("generate-mask", …)` resolves
+>   `GenerateMaskJobOutput` — `NodeJobOutput & GenerateMaskOutput`: `maskUrl`,
+>   the mask PNG (white = the subject), and `imageUrl`, the source passed
+>   through unchanged.
 > - Inpaint on `generate-image`: `GenerateImageParams.baseImageUrl` +
 >   `maskUrl` (white = the area to change). Every image model can inpaint: the
 >   result's masked area is composited back over the base, and on the models
@@ -5510,7 +5514,11 @@ subject. Poll `jobs.get(jobId)`: the output (`GenerateMaskOutput`) carries
 unchanged, not the result — so an inpainting edit can take the pair. The
 request and output types (`GenerateMaskRequest`, `GenerateMaskOutput`) are
 exported from `@nodaro/sdk` and `@nodaro/shared/media`; the bounds are
-`GENERATE_MASK_LIMITS`. Price: `GET /v1/credits/model-cost?model=generate-mask`.
+`GENERATE_MASK_LIMITS`. The same route is typed on
+[`client.nodes`](#clientnodes) too: `nodes.run("generate-mask", …)` takes
+`GenerateMaskParams` (this request plus `sessionId` / `origin`), and
+`nodes.runAndWait("generate-mask", …)` waits for the job and resolves
+`GenerateMaskJobOutput` (`NodeJobOutput & GenerateMaskOutput`). Price: `GET /v1/credits/model-cost?model=generate-mask`.
 Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md).
 
 #### `videoMask(input)`
