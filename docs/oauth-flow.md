@@ -199,14 +199,14 @@ There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
 
 | Scope | What it grants | Routes gated today |
 |-------|----------------|--------------------|
-| `workflows:read` | Read the user's workflows | `GET /v1/projects/:projectId/workflows`, `GET /v1/workflows`, `GET /v1/workflows/:id`, `GET /v1/workflows/:id/export` |
-| `workflows:write` | Create and modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows` |
+| `workflows:read` | Read the user's workflows | `GET /v1/projects/:projectId/workflows`, `GET /v1/workflows`, `GET /v1/workflows/:id`, `GET /v1/workflows/:id/export`; the user's published apps: `GET /v1/apps/mine`, `GET /v1/apps/by-workflow/:workflowId`, `GET /v1/apps/favorites` and `GET /v1/apps/browse?favoritesOnly=true` (each also takes `apps:read`), `GET /v1/apps/:appId/analytics` (and `/analytics/runs`) and `GET /v1/apps/:appId/earnings`; the creator's monetization: `GET /v1/user/earnings`, `GET /v1/user/monetization-defaults` |
+| `workflows:write` | Create and modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows`; publishing and changing apps: `POST /v1/apps/publish`, `PATCH` / `DELETE /v1/apps/:appId`, `POST /v1/apps/:appId/restore`, `POST /v1/apps/favorite`; `PUT /v1/user/monetization-defaults` |
 | `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run`; running a published app and changing its run history: `POST /v1/app/:slug/run`, `POST /v1/app/:slug/runs`, `PATCH` / `DELETE /v1/app/:slug/runs/:runId`, `POST /v1/app/:slug/runs/:runId/resume`, `/render-final` and `/restore`, `DELETE /v1/app/:slug/runs/:runId/permanent`; running a published component: `POST /v1/component/execute`; reading the runs it starts (`GET /v1/app/:slug/runs`, `GET /v1/app/:slug/runs/:runId` and `GET /v1/me/archived-runs`, which also take `jobs:read` or `assets:read`); the MCP `run_app`, `delete_app_run`, `run_component` and `render_final` tools; the prompt-wizard MCP tools |
 | `jobs:read` | Read job status and results | `GET /v1/jobs/status`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs`, `POST /v1/jobs/batch-status`; `GET /v1/app/:slug/runs`, `GET /v1/app/:slug/runs/:runId` and `GET /v1/me/archived-runs` (any of this, `assets:read` or `workflows:execute`) |
 | `assets:read` | Read the user's uploaded assets | `GET /v1/saved-posts`, `POST /v1/saved-posts/lookup`, `GET /v1/competitors` (and `/:id`, `/cards`), `GET /v1/collections` (and `/:id`, `/:id/records`, `/:id/export`), `GET /v1/palettes` and `GET /v1/moodboards` (and `/:id`); `GET /v1/app/:slug/runs`, `GET /v1/app/:slug/runs/:runId` and `GET /v1/me/archived-runs` (any of this, `jobs:read` or `workflows:execute`); the MCP character / location / gallery read tools, `get_app_run`, `list_saved_posts`, `list_competitors`, `competitor_cards`, `list_collections`, `read_collection`, `list_palettes` and `list_moodboards` |
 | `assets:write` | Add, change and delete items in the user's library (uploads, characters, saved posts, collections, palettes, moodboards, node presets) | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`, `POST` / `PATCH` / `DELETE /v1/competitors`, `POST /v1/competitor-discover`, `POST` / `PATCH` / `DELETE /v1/collections` (and `/:id/records`), `POST /v1/palettes`, `PATCH` / `DELETE /v1/palettes/:id`, `POST /v1/moodboards`, `PATCH` / `DELETE /v1/moodboards/:id`; the node-preset writes (`POST /v1/node-presets`, `PATCH` / `DELETE /v1/node-presets/:id`, `POST /v1/node-presets/import` and `/reorder`, `POST` / `DELETE /v1/node-presets/favorites`, `POST /v1/node-preset-groups`, `PATCH` / `DELETE /v1/node-preset-groups/:id`); the MCP upload / entity write tools, `save_post`, `add_competitor`, `add_collection_record`, `save_palette`, `save_moodboard`, `save_node_preset`, `delete_node_preset` and `favorite_node_preset` |
 | `credits:read` | See the user's credit balance | (reserved) |
-| `apps:read` | Read published apps | (reserved) |
+| `apps:read` | Read published apps | the user's own apps: `GET /v1/apps/mine`, `GET /v1/apps/by-workflow/:workflowId`, `GET /v1/apps/favorites` and `GET /v1/apps/browse?favoritesOnly=true` (each also takes `workflows:read`); the MCP `list_apps` and `get_app_inputs` tools |
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
 | `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
@@ -220,11 +220,27 @@ scope-checked.
 
 > **Honest disclosure:** most scopes gate real routes today —
 > `workflows:read`, `workflows:write`, `workflows:execute`, `jobs:read`,
-> the three `pipelines:*` scopes, `assets:read`, `assets:write`, `presets:read`
-> and the two `workspaces:*` scopes. Only two are reserved names that future
-> routes will gate: `credits:read` and `apps:read`. The two
+> `apps:read`, the three `pipelines:*` scopes, `assets:read`, `assets:write`,
+> `presets:read` and the two `workspaces:*` scopes. Only one is a reserved name
+> that future routes will gate: `credits:read`. The two
 > `workspaces:*` scopes are never added to a grant made before they existed. Request scopes only if you actually intend to use them —
 > minimal scope sets earn user trust.
+
+**Managing published apps (`/v1/apps/*`).** With an OAuth app token,
+publishing and changing apps needs `workflows:write`: `POST /v1/apps/publish`,
+`PATCH` / `DELETE /v1/apps/:appId`, `POST /v1/apps/:appId/restore`, and the
+favorite toggle `POST /v1/apps/favorite`. Reading the user's own apps and their
+numbers needs `workflows:read`: `GET /v1/apps/mine`,
+`GET /v1/apps/by-workflow/:workflowId` and `GET /v1/apps/favorites` (these three
+also take `apps:read`, as the MCP `list_apps` tool does),
+`GET /v1/apps/:appId/analytics` (and `/analytics/runs`) and
+`GET /v1/apps/:appId/earnings`, and the creator's monetization: `GET
+/v1/user/earnings` and `GET /v1/user/monetization-defaults` need
+`workflows:read`, `PUT /v1/user/monetization-defaults` needs `workflows:write`.
+The marketplace catalog `GET /v1/apps/browse`
+and `GET /v1/apps/by-slug/:slug/latest-version` need no scope, except that
+`GET /v1/apps/browse?favoritesOnly=true` (the user's favorites) needs
+`workflows:read` or `apps:read`.
 
 The exact scope description shown to the user on the consent screen is
 defined in [`frontend/src/app/oauth/authorize/page.tsx`](https://github.com/nodaroai/app.nodaro.ai/blob/main/frontend/src/app/oauth/authorize/page.tsx).

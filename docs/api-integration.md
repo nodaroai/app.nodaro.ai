@@ -130,6 +130,21 @@ behind Webhook Output (`/v1/http-credentials`, below). They exist for the
 Nodaro web app's own session, not as an integration surface. To build
 workflows programmatically, use MCP or the SDK.
 
+**OAuth scopes for the app-management routes.** With an OAuth app token,
+`POST /v1/apps/publish`, `PATCH` / `DELETE /v1/apps/:appId`,
+`POST /v1/apps/:appId/restore` and `POST /v1/apps/favorite` need
+`workflows:write`; `GET /v1/apps/mine`, `GET /v1/apps/by-workflow/:workflowId`,
+`GET /v1/apps/favorites` and `GET /v1/apps/browse?favoritesOnly=true` need
+`workflows:read` or `apps:read`;
+`GET /v1/apps/:appId/analytics` (and `/analytics/runs`) and
+`GET /v1/apps/:appId/earnings` need `workflows:read`; so do `GET /v1/user/earnings`
+and `GET /v1/user/monetization-defaults`, while `PUT /v1/user/monetization-defaults`
+needs `workflows:write`. A token without the scope
+gets `403 insufficient_scope` with `missingScope`. The public catalog
+(`GET /v1/apps/browse`, `GET /v1/apps/by-slug/:slug/latest-version`) needs no
+scope. Session tokens and personal API tokens are not scope-checked. See
+[OAuth scope vocabulary](./oauth-flow.md#4-scope-vocabulary).
+
 ### HTTP credentials (Webhook Output)
 
 A Webhook Output node can send with a stored credential — a header name and a

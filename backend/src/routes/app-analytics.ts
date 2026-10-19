@@ -8,6 +8,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { executionBelongsToRun } from "../lib/app-run-ownership.js"
 
 const appIdParams = z.object({
@@ -21,7 +22,7 @@ const runsQuery = z.object({
 
 export async function appAnalyticsRoutes(app: FastifyInstance) {
   // --- Aggregated analytics ---
-  app.get("/v1/apps/:appId/analytics", async (req, reply) => {
+  app.get("/v1/apps/:appId/analytics", { preHandler: requireAppScope("workflows:read") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -108,7 +109,7 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
   })
 
   // --- Paginated run list (creator view) ---
-  app.get("/v1/apps/:appId/analytics/runs", async (req, reply) => {
+  app.get("/v1/apps/:appId/analytics/runs", { preHandler: requireAppScope("workflows:read") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
