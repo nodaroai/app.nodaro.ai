@@ -1,4 +1,10 @@
-import { getModel, type LabeledOption } from "@nodaro/shared/model-catalog"
+import {
+  getModel,
+  modelMakerOf,
+  type LabeledOption,
+  type ModelCatalogEntry,
+  type ModelMakerId,
+} from "@nodaro/shared/model-catalog"
 import {
   IMAGE_ASPECT_RATIOS,
   VIDEO_ASPECT_RATIOS,
@@ -23,17 +29,33 @@ import {
  */
 const BASE_ID_SUFFIXES = [".1", "_lite", "_fast", "-fast", "-i2v", "-t2v", "-i2i", "-pro"]
 
-/** Company/vendor for a provider id, with a base-id fallback for aliases. */
-function familyFor(id: string): string | undefined {
-  const direct = getModel(id)?.family
+/** The catalog entry for a provider id, with a base-id fallback for aliases. */
+function catalogEntryFor(id: string): ModelCatalogEntry | undefined {
+  const direct = getModel(id)
   if (direct) return direct
   for (const suffix of BASE_ID_SUFFIXES) {
     if (id.endsWith(suffix)) {
-      const fam = getModel(id.slice(0, -suffix.length))?.family
-      if (fam) return fam
+      const base = getModel(id.slice(0, -suffix.length))
+      if (base) return base
     }
   }
   return undefined
+}
+
+/** Company/vendor for a provider id, with a base-id fallback for aliases. */
+function familyFor(id: string): string | undefined {
+  return catalogEntryFor(id)?.family
+}
+
+/**
+ * The company that made a provider id's model (`MODEL_MAKERS`), resolved the
+ * same way as the company search, so a picker variant ("grok-i2v") gets its
+ * base model's maker. Undefined for an id the catalog does not know — the
+ * picker then draws no mark, the same soft failure as the search.
+ */
+export function modelMakerIdFor(id: string): ModelMakerId | undefined {
+  const entry = catalogEntryFor(id)
+  return entry ? modelMakerOf(entry)?.id : undefined
 }
 
 function optionValues(

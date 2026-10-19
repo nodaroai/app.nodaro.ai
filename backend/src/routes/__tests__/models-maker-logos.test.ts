@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { MODEL_CATALOG, modelMakerOf } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, MODEL_MAKERS, modelMakerOf } from "@nodaro/shared/model-catalog"
 
 /**
  * GET /v1/models — `maker` and `logoUrl` end to end: the operator's
@@ -152,5 +152,36 @@ describe("GET /v1/models — maker and logoUrl", () => {
       delete MODEL_CATALOG["no-maker-probe"]
       warn.mockRestore()
     }
+  })
+})
+
+describe("GET /v1/model-makers — every maker with its published mark", () => {
+  async function makers(): Promise<Array<{ id: string; name: string; logoUrl: string | null }>> {
+    const res = await app.inject({ method: "GET", url: "/v1/model-makers" })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["cache-control"]).toBe("public, max-age=300")
+    return res.json().makers
+  }
+
+  it("lists every registry maker once, by id and name, with no mark while none is declared", async () => {
+    const list = await makers()
+    expect(list.map((m) => m.id)).toEqual(Object.keys(MODEL_MAKERS))
+    for (const m of list) expect(m.name).toBe(MODEL_MAKERS[m.id as keyof typeof MODEL_MAKERS].name)
+    expect(list.every((m) => m.logoUrl === null)).toBe(true)
+    expect(h.head).not.toHaveBeenCalled()
+  })
+
+  it("serves the same address as GET /v1/models for a published mark", async () => {
+    h.rows = [{ key: "model_maker_logos", value: ["google"] }]
+    h.head.mockResolvedValue({
+      exists: true,
+      etag: '"0123456789abcdef0123456789abcdef"',
+      lastModified: new Date("2026-10-15T08:00:00Z"),
+      contentType: "image/svg+xml",
+    })
+    const google = (await makers()).find((m) => m.id === "google")
+    const fromModels = (await list()).find((m) => m.maker?.id === "google")!.logoUrl
+    expect(google?.logoUrl).toMatch(/^https:\/\/cdn\.example\.com\/brand\/makers\/google\.svg\?v=/)
+    expect(google?.logoUrl).toBe(fromModels)
   })
 })

@@ -68,7 +68,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "competitors", cli: ["competitors"], routePrefixes: ["/v1/competitors", "/v1/competitor-scan", "/v1/competitor-discover"], mcpFiles: ["competitors.ts"] },
   { id: "pickerCatalogs", cli: ["pickers"], routePrefixes: ["/v1/picker-catalogs"], mcpFiles: ["picker-catalogs.ts"] },
   { id: "catalogs", cli: ["catalog"], routePrefixes: ["/v1/catalogs"], mcpFiles: [] },
-  { id: "models", cli: ["models"], routePrefixes: ["/v1/models"], mcpFiles: ["models.ts"] },
+  { id: "models", cli: ["models"], routePrefixes: ["/v1/models", "/v1/model-makers"], mcpFiles: ["models.ts"] },
   { id: "shots", cli: ["shots"], routePrefixes: ["/v1/shots"], mcpFiles: ["shot-shapes.ts"] },
   { id: "recast", cli: ["recast"], routePrefixes: ["/v1/recast"], mcpFiles: ["recast.ts"] },
   { id: "studio", cli: [], routePrefixes: ["/v1/studio"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },

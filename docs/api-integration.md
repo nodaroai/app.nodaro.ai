@@ -1957,6 +1957,12 @@ Every model also names its **maker** and carries the maker's mark:
 A mark is published by the instance's operator, and the server lists its
 address only once the file is in storage — never before it is uploaded (see
 [Model maker marks](./deployment.md#model-maker-marks-logourl)).
+
+`GET /v1/model-makers` returns only the makers, for an app that draws marks
+and does not need the catalog: `{ makers: [{ id, name, logoUrl }] }`, every
+maker the platform knows (the same `id`, `name` and `logoUrl` as above, so the
+two never disagree), public and cached 5 minutes like `GET /v1/models`. It
+lists a maker even when none of its models is offered for discovery.
 The MCP `list_models` tool carries `maker` but not `logoUrl`.
 
 A speech model (`mode: tts`, and the dialogue models) lists a second

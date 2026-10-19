@@ -181,6 +181,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   { method: "GET", path: "/v1/gallery" },
   // Model catalog: public availability info (same stance as MCP list_models).
   { method: "GET", path: "/v1/models" },
+  // The model makers and their published marks: the same public facts.
+  { method: "GET", path: "/v1/model-makers" },
   // The built-in ("factory") preset catalog: the deployment's own list, the
   // same for every caller and holding no user data, so a client app can show
   // it to visitors who are not signed in and ask for a login only when they
