@@ -1,7 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-Subpath entry points: `@nodaro/sdk/<entry>` for each resource and for `client` (`createClient`, `NodaroClient`, the auth providers) and `errors` (ESM, CJS and types for each). The entries are `apps`, `audio`, `billing`, `catalogs`, `characters`, `client`, `collections`, `community`, `competitors`, `copilot`, `creatures`, `credits`, `developer-apps`, `edit`, `errors`, `executions`, `gallery`, `jobs`, `library`, `llm`, `locations`, `media`, `models`, `moodboards`, `node-presets`, `nodes`, `oauth`, `objects`, `organizations`, `palettes`, `picker-catalogs`, `pipelines`, `projects`, `prompt-helper`, `recast`, `reduce`, `saved-posts`, `scene3d`, `sessions`, `shots`, `studio`, `templates`, `tutorials`, `uploads`, `video-pro`, `voices`, `webhooks`, `workflows`, `workspaces`. Importing a subpath loads only that resource's module instead of the whole SDK. Additive: the root `@nodaro/sdk` still exports every name it did, and is the union of the subpaths; `@nodaro/sdk/supabase` and `@nodaro/sdk/signup-signals` are unchanged. The build is now split into shared chunks, so a value imported from a subpath and from the root is the same instance (`instanceof` holds across them).
-
-CJS only: because the CommonJS build is now split into chunks, its exports are defined as getters (enumerable, read-only) instead of writable data properties. Code that assigns to a `require()`d export or spies on it in place (for example `jest.spyOn` on the module object) must mock the module instead; ESM consumers are unaffected.

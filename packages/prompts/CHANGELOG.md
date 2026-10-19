@@ -1,5 +1,62 @@
 # @nodaro/prompts
 
+## 1.40.0
+
+### Minor Changes
+
+- aa97e61: One frame-slot convention for every video model whose frames share its reference-image list: the caller's own reference images come first, in order, so an image token N always means their Nth reference; a wired start (and end) frame is appended after them and bound in the prompt as the opening (closing) frame in the provider's own syntax; at the image cap the frames are kept and trailing caller references are dropped.
+
+  `@nodaro/shared`:
+
+  - New exports `videoProviderAppendsFrames()` (the model puts its frames after the caller's references in one image list), `videoProviderRefModeFrameSeats()` (how many image seats a reference run's frames take: the start frame, plus the end frame where the model takes one) and `videoProviderReferenceSyntax()` / `VideoReferenceSyntax` (`"@image_N"` | `"@image(n)"` | `"[Image N]"`), plus `VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL`. A client that budgets or cites references by ordinal (the cloud plugins) can derive from these instead of a hand-kept list.
+  - New optional catalog field `referenceSyntax`, declared on Grok Imagine 1 (`@image(n)`) and HappyHorse Ref2V (`[Image N]`).
+
+  `@nodaro/prompts`:
+
+  - New `placeFramesAfterReferences()` — the one implementation of the convention, used by the Seedance 2 resolver (byte-identical output) and by the Gemini Omni, VEO and Grok / HappyHorse assemblies.
+  - New `imageBindingFor(syntax)`; `identityRefsSentence()` takes an optional ordinal renderer.
+
+- 3e4a5cd: A new KIE video model in the catalog: **Vidu Q4** (`vidu-q4`), made by ShengShu.
+
+  `@nodaro/shared`:
+
+  - Catalog entry `vidu-q4`: one id over two provider endpoints, picked by what is wired — a start frame alone runs image-to-video (the output keeps the frame's shape, the prompt is optional); any reference image or reference audio runs reference-to-video (1–15 reference images, up to 3 reference audio clips, a prompt required, aspect `16:9` / `9:16` / `1:1` / `4:3` / `3:4`). A wired start frame joins the reference images in reference mode. 3–16 s in whole seconds (default 5), `540p` / `720p` (default) / `1080p` / `2k` / `4k`, native audio behind a boolean `audio` lever (on by default, classified `ambient`), no seed.
+  - `modes` is `["i2v"]`: the provider has no text-to-video and no start/end-frame mode, so `vidu-q4` joins `IMAGE_TO_VIDEO_PROVIDERS`, the image-required section of `TEXT_TO_VIDEO_PROVIDERS`, and the derived `VIDEO_PROVIDERS_REQUIRING_IMAGE`. No `end-frame` feature. It derives into `GVP_SUPPORTED_PROVIDERS` (keyframes only — no `video-reference`, so not `GVP_EXTEND_PROVIDERS`).
+  - A new maker, `shengshu` ("ShengShu").
+  - New exports `VIDU_Q4_PROVIDERS` / `isViduQ4Provider()`, `VIDU_Q4_DEFAULT_RESOLUTION` and `normalizeViduQ4Resolution()` — the provider's wire enum is lowercase, so the normalizer only folds case and collapses an unknown value to 720p; the credit identifier bills through the same function, so the billed tier always matches the rendered one.
+  - New exports `VIDEO_REF_AUDIO_RULES` and `checkRefAudioRules()` (types `RefAudioRule`, `RefAudioProbe`, `RefAudioCheck`): a provider's documented per-clip reference-audio contract (accepted formats, minimum and maximum length). Vidu Q4 accepts MP3 only, 3–12 s per clip; an unreadable probe field is ignored, never rejected.
+  - Credit identifiers: `vidu-q4:<N>s:<resolution>` — one per-second ladder for both endpoints and for audio on or off (no reference or audio dimension). An omitted resolution prices the 720p tier and an omitted duration the 5 s tier, matching what renders; `uiResolutionFill` / `uiDurationFill` return the same defaults.
+
+  `@nodaro/prompts`:
+
+  - A new `VIDU_Q4_DOCTRINE` entry: the two-endpoint mode pick, the start-frame fold in reference mode, the reference caps and the MP3 / 3–12 s audio rule, built from the provider's contract only.
+  - Prompt-wizard capability lines for `vidu-q4`.
+
+### Patch Changes
+
+- b60db72: The built-in ("factory") preset catalog is readable without a token: `GET /v1/node-presets/factory` is now a public route, so `client.presets.listFactory(nodeType)` works on a tokenless client (`createClient({ baseUrl, auth: { getToken: async () => null } })`) — a client app can show the catalog (names, example pictures via `previewUrl`, how many photos a preset needs via `minReferences` / `needsImage`) to visitors who are not signed in and ask for a login only when they generate. The response is cached for 5 minutes like the model catalog, and an invalid or expired token sent with the request is ignored (an OAuth app needs no scope for it). `@nodaro/prompts`: `getFactoryPresets()` and `presetMinReferences()` answer an empty catalog / zero for a node type that is not a catalog key even when it names an `Object.prototype` member (`constructor`, `toString`), instead of throwing. Your own presets, favorites and folders still need auth exactly as before. Nothing to change in an existing app. CLI: `nodaro presets list --factory --node-type <type>` no longer needs a saved profile (`--base-url <url>` asks another instance; without `--factory`, `presets list` still needs one).
+- Updated dependencies [ea9cb97]
+- Updated dependencies [641e2e9]
+- Updated dependencies [25c5f17]
+- Updated dependencies [435c134]
+- Updated dependencies [42001e0]
+- Updated dependencies [d551823]
+- Updated dependencies [b4ce8e5]
+- Updated dependencies [c645465]
+- Updated dependencies [8eacb99]
+- Updated dependencies [5cf6e9d]
+- Updated dependencies [d1bbb43]
+- Updated dependencies [b5f28a5]
+- Updated dependencies [42001e0]
+- Updated dependencies [8eacb99]
+- Updated dependencies [2f89724]
+- Updated dependencies [25c5f17]
+- Updated dependencies [3840a98]
+- Updated dependencies [aa97e61]
+- Updated dependencies [3e4a5cd]
+- Updated dependencies [3e4a5cd]
+  - @nodaro/shared@3.34.0
+
 ## 1.39.0
 
 ### Minor Changes

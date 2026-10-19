@@ -1,5 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-Typed `subject` on generate-image: `GenerateImageParams.subject` (and `TextToVideoParams.subject`, which already took one) is the new exported `Subject` type — a flat map of picker field → catalog id(s) saying who is in the shot (the Person and Styling dimension fields plus `heldProp`, `material` and `animal`; `customAge` is the one number). The platform writes the wording and folds it in after your `prompt`; the caller never writes prompt text for it. Field names and ids come from `client.pickerCatalogs.get("person")`, `get("styling")`, `get("held-prop")`, `get("material")` and `get("animal")`. Without a preset the route validates the map (an over-long key, id or list is a `400`); with `presetId` the subject replaces the preset's own and is folded into the preset's prompt, over-long values dropped rather than rejected, and is not recorded on `input_data` (as with `direction` and `structured`). The route already accepted the field, so nothing changes on the wire: an app that passed `subject` untyped keeps working and now gets it checked at compile time; `import type { Subject } from "@nodaro/sdk"` to name it.

@@ -1,5 +1,77 @@
 # @nodaro/cli
 
+## 1.33.0
+
+### Minor Changes
+
+- 994c55a: `nodaro apps run-retry <slug> <runId> [--dry-run] [--app-version <n>] [--watch] [--json]` retries a failed app run from where it stopped: only the steps the run did not complete run, and only those are charged. `--dry-run` lists the steps it would run and what it would charge, and starts nothing. When the Retry is refused because the app changed since the run, the CLI prints both ways on: start the run over with `nodaro apps run`, or continue on the run's own version with `--app-version`.
+- 8686499: CLI: `nodaro workflows render-final <workflowId> --from <executionId> [--render <nodeId>]` renders the final of a run that stopped at a Preview render (the render at Final and every node after it, continuing that run); `--render` defaults to the workflow's only render, `--estimate` quotes it and runs nothing, and `--watch` follows it. `nodaro workflows run` takes `--override nodeId.field=value` (a per-node override for that run) and `--next <json|file|->`, which sends the `next` of a `continuation_preview_pending` answer exactly as given; a `--from-failed` refused with `continuation_preview_pending` now prints the exact command that finishes the held run. `--next` refuses a body that carries `continueMode` or `renderFinal` (a `next` never does), and the printed command quotes an argument that starts with `=`, which zsh would otherwise expand.
+
+  SDK: documents that a continuation (a run of named nodes, a `renderFinal`, a `next`, or a `continueMode: "from-failed"`) its payer cannot cover throws `InsufficientCreditsError` before any execution exists.
+
+- ea9cb97: A failed run of a saved workflow can be continued from where it stopped. `client.workflows.run` takes `continueMode: "from-failed"` with `continueFromExecutionId` (the run that failed); `nodeIds` is optional with it (default: the nodes the first run of its chain was started on — every node for a run of every node — plus every node the failed run left failed or held back), and the run executes only the nodes that run did not complete — what it completed is handed on, never run or charged again (per node: a node that failed runs again in full, every list item included). When a later continuation of that run completed only part of what it left, the run builds on the newest such one, and `RunWorkflowResult.continuedFrom` names the execution it continued from. `client.workflows.run` also takes a third argument, `{ idempotencyKey }`, sent as the `Idempotency-Key` header (a retry with the same key answers the run already started, `deduped: true` on the result). A run a later continuation supersedes is refused with `continuation_superseded`: one that failed is the one to continue, and one that completed everything the run left means the work is done. The CLI's `nodaro workflows run` takes `--continue-from <executionId>`, `--from-failed` and `--idempotency-key <key>`, and says when a continuation was built on a later one. A Render final, or a run of named nodes, that continues the newest later continuation joins the chain too. When the newest later continuation stopped at a Preview review — of a render, or of a Tighten Episode with review on — the run is refused with `continuation_preview_pending`: the answer names that run, what holds it, and the one run that finishes it (`next`, to send as the body of `client.workflows.run`; for a single render it is that run's Render final). The SDK throws it as the new `ContinuationPreviewPendingError` (`@nodaro/sdk/errors`: `executionId`, `renderNodeIds`, `reviewNodeIds`, and `next`, typed `HeldFinalRun`), so `client.workflows.run(workflowId, error.next)` finishes it. A Tighten Episode or Chapters node resumes its earlier failed attempt only when its inputs and settings are still the ones that attempt ran with; otherwise it runs fresh. `@nodaro/shared`: the `continuation_not_failed` and `continuation_superseded` codes now document the saved-workflow lane too, and the new `CONTINUATION_PREVIEW_PENDING` code joins `RUN_CONTINUATION_CODES`.
+- 641e2e9: Chapters (`episode-chapters`) — list a podcast recording's chapters in one call.
+
+  - `@nodaro/shared`: its chapter list is declared a JSON output that is neither a Transcript nor an EDL, and a published app shows its show notes as text.
+  - `@nodaro/sdk`: `client.edit.episodeChapters` and `client.edit.estimateEpisodeChapters` (`EpisodeChaptersInput`); `USE_CASE_NODE_TYPES` / `UseCaseNodeType` gain `"episode-chapters"`, and `continueUseCase` continues a Chapters run on its own route. An earlier SDK knows only `"tighten-episode"`: it continues a Chapters run on the Tighten Episode route, which answers `not_found` — upgrade to continue Chapters runs.
+  - `@nodaro/cli`: `nodaro edit episode-chapters --media <url> [--plan-tier <tier>] [--instructions <text>] [--style-guide <text>] [--watch]` (with `--watch`, prints the show notes when the run completes); `nodaro edit continue-use-case --type` accepts `episode-chapters`.
+
+- 25c5f17: Trailer (`episode-trailer`) — a 20–40 second trailer of a podcast recording, delivered in each chosen social format, in one call.
+
+  - `@nodaro/shared`: `episode-trailer` joins `FAN_OUT_EACH_HANDLES` (its `media` output is one trailer per format: each on an Each wire), `VIDEO_PRODUCER_TYPES` and `REVIEW_HOLDING_USE_CASE_TYPES` (a Trailer with Review before render on holds what follows it, like Tighten Episode). Its `json` output is declared an EDL, and its `introCard` input is not a prompt lane. A client that branches on a refused review run already matches every code with `isPreviewRefusalCode`.
+  - `@nodaro/sdk`: `client.edit.episodeTrailer` and `client.edit.estimateEpisodeTrailer` (`EpisodeTrailerInput`, `TRAILER_FORMATS`, `TrailerFormat`); `USE_CASE_NODE_TYPES` / `UseCaseNodeType` gain `"episode-trailer"`, and `continueUseCase` continues a Trailer run (from where it failed, or its Render final) on its own route. An earlier SDK does not know `"episode-trailer"`: it continues a Trailer run on the Tighten Episode route, which answers `not_found` — upgrade to continue Trailer runs.
+  - `@nodaro/cli`: `nodaro edit episode-trailer --media <url> [--intro-card <url>] [--formats 9:16,1:1,4:5,16:9] [--review] [--plan-tier <tier>] [--instructions <text>] [--style-guide <text>] [--watch]` (with `--watch`, prints each format's trailer when the run completes, then the formats that could not be rendered; with `--review`, how to render it final); `nodaro edit continue-use-case --type` accepts `episode-trailer`.
+
+- d1bbb43: Generate Mask over the SDK and CLI: `client.media.generateMask({ imageUrl, prompt, threshold? })` (`POST /v1/generate-mask`, Grounded SAM) and `nodaro media generate-mask <imageUrl> <prompt> [--threshold <n>] [--watch]` select a subject described in plain text in an image and return a job whose output carries `maskUrl` (a black-and-white mask PNG, white = the subject) and `imageUrl` (the source image, passed through unchanged). `@nodaro/shared/media` adds the wire contract — `GenerateMaskRequest`, `GenerateMaskOutput` and `GENERATE_MASK_LIMITS` (prompt 1–500 characters, threshold 0–1, default 0.3) — which the route now validates against; the SDK re-exports both types.
+- a44baa3: A generation session's cover: `sessions.update(id, { coverJobId })` picks one of the session's items to lead its previews (`null` goes back to automatic), and `GenerationSession.coverJobId` reports it — `previewUrls` then starts with the cover's image. The CLI's `nodaro sessions update` gains `--cover <jobId>` and `--auto-cover`.
+- b40902e: `client.edit.continueUseCase` continues a run on its own node type's route (`POST /v1/<type>/continue`). It takes an optional `nodeType`; without one it reads the job first (`GET /v1/jobs/:id`) for the type the run records, and when that read cannot tell (a token without `jobs:read`, or a job that records no use-case type) the type must be passed as `nodeType`. New exports: `UseCaseNodeType`, `USE_CASE_NODE_TYPES`, and `UseCaseJobResult` / `UseCaseEstimate` (the `TightenEpisodeJobResult` / `TightenEpisodeEstimate` shapes, which stay as aliases). The CLI's `nodaro edit continue-use-case` takes an optional `--type <type>`, passed through so the job is not read for it.
+
+### Patch Changes
+
+- 345cabf: Import `@nodaro/sdk` by subpath entry (`@nodaro/sdk/client`, `@nodaro/sdk/errors`, …) instead of the package root. No CLI change. These subpaths exist only from the `@nodaro/sdk` minor released alongside, so this release raises the `@nodaro/sdk` dependency range to that version.
+- 87448e1: A continue-from-failed (`continueMode: "from-failed"`, `nodaro workflows run --from-failed`) counts every id in `nodeIds` / `--node` as named: a node of work no run of its chain ever ran (each only handed on its saved results) runs and is priced, while a source, trigger, parameter picker or container keeps what the run handed on and a node set to skip never runs. The SDK's `RunWorkflowParams.nodeIds` and `continueMode` docs and the CLI's `--from-failed` help say so; the `nodeIds` doc no longer says the default is every node.
+- 5d9e2cd: What a continue-from-failed (`continueMode: "from-failed"`, `nodaro workflows run --from-failed`) sent no `nodeIds` / `--node` considers: the nodes the first run of its chain was started on — a run started on named nodes (the editor's Run selected, an API `nodeIds`, a Render final) is continued on those; a run of every node, or one started before the nodes were recorded, on every node — plus every node left failed or held back by the run being continued, by a newer continuation it is built on, or by an earlier run of its chain, so a failure outside those nodes is always retried. `nodeIds` you send replace those nodes, and the run is built on the chain's newest continuation when it failed or its work is done (one held at a Preview review still answers `continuation_preview_pending`), and a node they name that is still left runs. The SDK's `RunWorkflowParams.continueMode` doc and the CLI's `--from-failed` help say so. `WorkflowExecution` gains `nodeScope` (`client.executions.get`): the nodes the first run of its chain was started on, `null` for every node.
+- b60db72: The built-in ("factory") preset catalog is readable without a token: `GET /v1/node-presets/factory` is now a public route, so `client.presets.listFactory(nodeType)` works on a tokenless client (`createClient({ baseUrl, auth: { getToken: async () => null } })`) — a client app can show the catalog (names, example pictures via `previewUrl`, how many photos a preset needs via `minReferences` / `needsImage`) to visitors who are not signed in and ask for a login only when they generate. The response is cached for 5 minutes like the model catalog, and an invalid or expired token sent with the request is ignored (an OAuth app needs no scope for it). `@nodaro/prompts`: `getFactoryPresets()` and `presetMinReferences()` answer an empty catalog / zero for a node type that is not a catalog key even when it names an `Object.prototype` member (`constructor`, `toString`), instead of throwing. Your own presets, favorites and folders still need auth exactly as before. Nothing to change in an existing app. CLI: `nodaro presets list --factory --node-type <type>` no longer needs a saved profile (`--base-url <url>` asks another instance; without `--factory`, `presets list` still needs one).
+- 3840a98: `USE_CASE_NODE_TYPES` is now `@nodaro/shared`'s list (`@nodaro/shared/nodes`), re-exported as before, and `continueUseCase` builds each continuation route from it (`POST /v1/<type>/continue`). `continueUseCase` rejects with `use_case_type_unknown` when the run's type cannot be read — pass `nodeType`: a key without the `jobs:read` scope, or a job that records no use-case type, no longer falls back to the Tighten Episode route, and nothing is posted. In the CLI, a key without `jobs:read` now needs `--type` on `nodaro edit continue-use-case`, and the error says so ("pass --type <node type>"; code `use_case_type_unknown`, kept under `--json`).
+- Updated dependencies [8686499]
+- Updated dependencies [87448e1]
+- Updated dependencies [5d9e2cd]
+- Updated dependencies [ea9cb97]
+- Updated dependencies [641e2e9]
+- Updated dependencies [25c5f17]
+- Updated dependencies [435c134]
+- Updated dependencies [42001e0]
+- Updated dependencies [447292c]
+- Updated dependencies [2caffe2]
+- Updated dependencies [8f5eec1]
+- Updated dependencies [d551823]
+- Updated dependencies [b4ce8e5]
+- Updated dependencies [c645465]
+- Updated dependencies [8eacb99]
+- Updated dependencies [5cf6e9d]
+- Updated dependencies [b60db72]
+- Updated dependencies [994c55a]
+- Updated dependencies [cdda07e]
+- Updated dependencies [4f2c840]
+- Updated dependencies [d1bbb43]
+- Updated dependencies [345cabf]
+- Updated dependencies [b5f28a5]
+- Updated dependencies [a44baa3]
+- Updated dependencies [42001e0]
+- Updated dependencies [8eacb99]
+- Updated dependencies [2f89724]
+- Updated dependencies [25c5f17]
+- Updated dependencies [3840a98]
+- Updated dependencies [3840a98]
+- Updated dependencies [b40902e]
+- Updated dependencies [aa97e61]
+- Updated dependencies [3e4a5cd]
+- Updated dependencies [3e4a5cd]
+- Updated dependencies [0541d0b]
+  - @nodaro/sdk@2.30.0
+  - @nodaro/shared@3.34.0
+  - @nodaro/prompts@1.40.0
+
 ## 1.32.0
 
 ### Minor Changes
