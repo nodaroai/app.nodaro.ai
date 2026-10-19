@@ -32,6 +32,7 @@ import { findRestrictedPickerValue, flattenItems, type PickerCardRestrictions } 
 import type { PresentationItem } from "@nodaro/shared/types"
 import { executeAppRun } from "../services/app-execution.js"
 import { appRunStamp } from "../lib/app-run-stamp.js"
+import { appRunCreditsUsed } from "../lib/app-run-credits.js"
 import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
@@ -1011,7 +1012,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           completedNodes: exec?.completed_nodes ?? 0,
           totalNodes: exec?.total_nodes ?? 0,
           completedAt: exec?.completed_at ?? null,
-          creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
+          creditsUsed: appRunCreditsUsed(run, exec),
           version: versionMap.get(run.app_id as string) ?? null,
           thumbnailUrl,
           hiddenNodes: (run as { hidden_nodes?: string[] }).hidden_nodes ?? [],
@@ -1109,7 +1110,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       name: (run as { name?: string | null }).name ?? null,
       inputValues: run.input_values ?? null,
       status: (run as { status?: string }).status ?? "draft",
-      creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
+      creditsUsed: appRunCreditsUsed(run, exec),
       createdAt: run.created_at,
       version: pubApp?.version ?? null,
       thumbnailUrl,
@@ -1236,7 +1237,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           deletedAt: run.deleted_at,
           name: (run as { name?: string | null }).name ?? null,
           status: (run as { status?: string }).status ?? "draft",
-          creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
+          creditsUsed: appRunCreditsUsed(run, exec),
           thumbnailUrl,
           completedAt: exec?.completed_at ?? null,
         }

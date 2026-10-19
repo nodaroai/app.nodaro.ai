@@ -113,12 +113,27 @@ describe("the database's own reads from an execution to its run check the runner
     expect(def, "update_app_analytics is redefined").toBeTruthy()
     const { body } = def!
     expect(body).toMatch(/from app_runs ar where ar\.execution_id = new\.id and ar\.runner_id = new\.user_id/)
-    expect(body).toMatch(/update app_runs set credits_used = [^;]* where execution_id = new\.id and runner_id = new\.user_id;/)
+    // Since 537 a run's credits are its total across its attempts, written by
+    // the run-credit triggers (next test) — never here: this one adds each
+    // ending execution's own spend to the app's daily total.
+    expect(body).not.toMatch(/update app_runs set credits_used/)
     expect(body, "the unique-runner count joins only the runner's own executions").toMatch(
       /join workflow_executions we on we\.id = ar\.execution_id and we\.user_id = ar\.runner_id/,
     )
     // CREATE OR REPLACE resets the function's settings: 050's pin must be restated.
     expect(body).toMatch(/security definer set search_path = public/)
+  })
+
+  it("the run-credit triggers total only the runner's own executions", () => {
+    const total = latestDefinitionOf("app_run_credits_total")
+    expect(total, "app_run_credits_total is defined").toBeTruthy()
+    expect(total!.body).toMatch(/v_row\.user_id is distinct from p_runner_id/)
+    const onSpend = latestDefinitionOf("app_run_credits_on_execution_spend")
+    expect(onSpend?.body).toMatch(/where ar\.runner_id = new\.user_id/)
+    expect(onSpend?.body).toMatch(/security definer set search_path = public, pg_temp/)
+    const onPointer = latestDefinitionOf("app_run_credits_on_pointer")
+    expect(onPointer?.body).toMatch(/app_run_credits_total\(new\.id, new\.runner_id, new\.execution_id\)/)
+    expect(onPointer?.body).toMatch(/security definer set search_path = public, pg_temp/)
   })
 
   it("469 clears the run rows that already point at another user's execution", () => {

@@ -994,6 +994,90 @@ describe("GET /v1/app/:slug/runs/:runId", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().execution).toBeNull()
   })
+
+  // A run's credits are its total across its attempts (decided 2026-10-19): the
+  // database keeps `app_runs.credits_used` as that total (migration 537); the
+  // execution keeps only its own attempt's spend.
+  it("after a Retry, creditsUsed is the run's total; the execution keeps its own spend", async () => {
+    const retried = {
+      ...DB_RUN_ROW,
+      credits_used: 50,
+      workflow_executions: { ...DB_RUN_ROW.workflow_executions, total_credits_used: 20 },
+    }
+    vi.mocked(supabase.from).mockImplementation(() => createChainMock({ data: retried, error: null }) as never)
+
+    const body = (await app.inject({ method: "GET", url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`, headers: { "x-user-id": TEST_USER_ID } })).json()
+    expect(body.creditsUsed).toBe(50)
+    expect(body.execution.totalCreditsUsed).toBe(20)
+  })
+
+  it("a run never retried reads the same either way", async () => {
+    const plain = { ...DB_RUN_ROW, credits_used: 5 }
+    vi.mocked(supabase.from).mockImplementation(() => createChainMock({ data: plain, error: null }) as never)
+
+    const body = (await app.inject({ method: "GET", url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`, headers: { "x-user-id": TEST_USER_ID } })).json()
+    expect(body.creditsUsed).toBe(5)
+    expect(body.execution.totalCreditsUsed).toBe(5)
+  })
+
+  it("a stale column never reads below the current attempt's own spend", async () => {
+    // Before 537 applies the column is written only when an execution ends.
+    const inFlight = {
+      ...DB_RUN_ROW,
+      credits_used: 0,
+      workflow_executions: { ...DB_RUN_ROW.workflow_executions, status: "running", total_credits_used: 12 },
+    }
+    vi.mocked(supabase.from).mockImplementation(() => createChainMock({ data: inFlight, error: null }) as never)
+
+    const body = (await app.inject({ method: "GET", url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`, headers: { "x-user-id": TEST_USER_ID } })).json()
+    expect(body.creditsUsed).toBe(12)
+  })
+
+  it("the run list reports the run's total too", async () => {
+    const listed = (id: string, creditsUsed: number, own: number) => ({
+      id,
+      app_id: TEST_APP_ID,
+      created_at: "2026-01-01T12:00:00Z",
+      execution_id: TEST_EXECUTION_ID,
+      credits_used: creditsUsed,
+      workflow_executions: { ...DB_RUN_ROW.workflow_executions, total_credits_used: own },
+    })
+    const retried = listed(TEST_RUN_ID, 50, 20)
+    const plain = listed("00000000-0000-4000-8000-0000000000d1", 5, 5)
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      if (callCount === 2) return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, thumbnail_node_id: null }], error: null }) as never
+      return createChainMock({ data: [retried, plain], error: null }) as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/app/${TEST_SLUG}/runs`, headers: { "x-user-id": TEST_USER_ID } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { id: string; creditsUsed: number }) => [r.id, r.creditsUsed])).toEqual([
+      [TEST_RUN_ID, 50],
+      ["00000000-0000-4000-8000-0000000000d1", 5],
+    ])
+  })
+
+  it("the archived runs report the run's total too", async () => {
+    const archived = {
+      id: TEST_RUN_ID,
+      app_id: TEST_APP_ID,
+      runner_id: TEST_USER_ID,
+      created_at: "2026-01-01T12:00:00Z",
+      deleted_at: "2026-01-02T12:00:00Z",
+      execution_id: TEST_EXECUTION_ID,
+      credits_used: 50,
+      published_apps: { slug: TEST_SLUG, name: "App", icon_url: null, version: 1, thumbnail_node_id: null, workflow_id: TEST_WORKFLOW_ID },
+      workflow_executions: { ...DB_RUN_ROW.workflow_executions, total_credits_used: 20 },
+    }
+    vi.mocked(supabase.from).mockImplementation(() => createChainMock({ data: [archived], error: null }) as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/me/archived-runs", headers: { "x-user-id": TEST_USER_ID } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { creditsUsed: number }) => r.creditsUsed)).toEqual([50])
+  })
 })
 
 // ---------------------------------------------------------------------------
