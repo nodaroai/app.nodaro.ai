@@ -92,6 +92,17 @@ describe("camera-switch on a canvas (B5)", () => {
     expect(() => built(g)).toThrow(/needs `sources` and `segments`/)
   })
 
+  it("a wired Speaker Map fills the speaker table under the person's choices; nothing wired changes nothing", () => {
+    const g = canvas({ data: { speakerMap: { speaker_1: "camA" } } })
+    const unwired = built(g).payload
+    g.nodes.push({ id: "map", type: "speaker-map", data: { label: "Speaker Map" } })
+    g.edges.push({ id: "e3", source: "map", target: CS, sourceHandle: "json", targetHandle: "speakerMap" })
+    g.states.map = { status: "completed", output: buildNodeOutputFromJobData({ json: { version: 1, speakerMap: { speaker_0: "camB", speaker_1: "camB", speaker_2: "" }, confidence: {}, notes: [] } }, "speaker-map") } as unknown as NodeExecutionState
+    // speaker_1's own choice wins; speaker_0 and speaker_2 come from the map (speaker_2 sent as "").
+    expect((built(g).payload as Record<string, unknown>).speakerMap).toStrictEqual({ speaker_0: "camB", speaker_1: "camA", speaker_2: "" })
+    expect((unwired as Record<string, unknown>).speakerMap).toStrictEqual({ speaker_0: "camA", speaker_1: "camA" })
+  })
+
   it("refuses a missing edit before the reserve", () => {
     const g = canvas()
     g.edges = g.edges.filter((e) => e.targetHandle !== "edl")

@@ -18,6 +18,9 @@ The **Multicam Cut** template in the template marketplace is this chain, ready t
 |--------|------|----------|-------------|
 | EDL | json | **Yes** | One edit — wire Edit Plan's EDL output (Tighten mode, or Clips mode: each clip fans out to its own Camera Switch run). A chapters plan is refused. A Transcript output cannot be wired here; the editor refuses it. |
 | Transcript | json | **Yes** | The word transcript **with speaker labels** — a Transcribe node run with speaker detection on. An EDL output cannot be wired here; the editor refuses it. |
+| Speaker map | json | No | **Not yet enabled on nodaro.ai** — the input is shown once [Speaker Map](../processing-audio/speaker-map.md) is. A Speaker Map result: which camera each speaker is on, worked out from the cameras' own microphones. It fills the Speakers table for every speaker you have not set yourself (see *Speakers and cameras* below). Wired but not run yet, or wired to something that is not a Speaker Map result, the run is refused and the panel says so. |
+
+The **Speaker map input** (a wire) and the **Speakers table** (the node's `speakerMap` setting) are two different things: the input carries what Speaker Map worked out, the table is what you set by hand, and the table wins.
 
 ## Outputs
 
@@ -29,7 +32,7 @@ The **Multicam Cut** template in the template marketplace is this chain, ready t
 ## How it switches
 
 - **A speaker's turn cuts to their camera** a moment (0.2 s) before they start, but only when the turn is at least the **shortest shot** long (2.5 s). Someone talking for less — a quick "yeah" — **never causes a cut**: the current camera holds. A listener's "mhm" in the middle of someone's long answer does not interrupt it either.
-- **Speakers and cameras.** The settings panel lists the transcript's speakers. Give each a name and a camera; the table is **pre-filled in order** (speaker 1 → the first camera, speaker 2 → the second …), so a run works without opening it. Several speakers may share one camera (a two-shot). A speaker set to *No camera of their own* — or a speaker past the last camera — is shown on the **wide** camera (a source marked *Wide* in Edit Plan), else on any camera that filmed them.
+- **Speakers and cameras.** The settings panel lists the transcript's speakers. Give each a name and a camera. Each speaker's camera is decided in this order: **a camera set on the node wins, then a wired Speaker Map, then speaker *n* → camera *n*** (speaker 1 → the first camera, speaker 2 → the second …), so a run works without opening the table. Several speakers may share one camera (a two-shot). A speaker set to *No camera of their own* — or a speaker past the last camera — is shown on the **wide** camera (a source marked *Wide* in Edit Plan), else on any camera that filmed them.
 - **Every cut names who is speaking** (the segment's `speaker`, with your names applied). When the speaker changes but the camera does not — a two-shot, the wide showing two speakers, or a fallback camera showing someone else's turn — the edit is still split there: nothing visible changes, and each piece names its own speaker. A cut held back by the shortest shot keeps the current shot's name until it lands — the name is whom the shot is for.
 - **When the speaker's camera has no picture** (it started late or stopped early), that stretch shows the wide camera if it has picture, else the first camera that does. A stretch **no camera filmed** is left out and listed in the edit's dropped cuts as `no-picture`; a gap of up to half a second right after a camera stops is held on its last frame instead.
 - **With a wide camera:** after **20 s** on one camera the edit cuts to the wide for one shortest shot, then back (*Wide break after*); *Wide every N cuts* sends every N-th cut to the wide.
@@ -40,7 +43,7 @@ The **Multicam Cut** template in the template marketplace is this chain, ready t
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Speakers | Table | pre-filled in order | Per speaker label: a display name and a camera (or *No camera of their own*). |
+| Speakers (`speakerMap`, `speakerNames`) | Table | pre-filled from a wired Speaker Map, else in order | Per speaker label: a display name and a camera (or *No camera of their own*). A camera set here wins over the Speaker map input. |
 | Shortest shot (s) | Number | 2.5 | A turn shorter than this never causes a cut. 0.5–60 s. |
 | Cut early (s) | Number | 0.2 | Cut this long before the new speaker starts. 0–5 s. |
 | Wide break after (s) | Number | 20 | With a Wide camera: break to it after this long on one camera (0 = never). Up to 600 s. |
@@ -62,7 +65,7 @@ A **flat 11 credits**<!-- credits: camera-switch --> per run, whatever the lengt
 
 ## API
 
-`POST /v1/camera-switch` with `{ edl, transcript, speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }` — `edl` is one EDL (object or JSON string; a clip set, a chapters plan or an output-clock EDL is refused, `400 invalid_edl`), `speakerMap` maps a speaker label to an EDL source id — `""` means *no camera of their own* (a speaker left out uses the source whose `speakers` list names them; either way, else the wide, else any camera with picture). The settings must be in the ranges above (`400` otherwise); `speakerNames` values are 1–80 characters. A transcript with no speaker labels is refused before charging (`422 no_speakers`). The finished job's `output_data.json` is the switched EDL and `output_data.transcript` the named transcript. SDK: `client.edit.cameraSwitch` ([SDK Reference](../../sdk-reference.md)); CLI: `nodaro edit switch-cameras` ([CLI](../../cli.md)); MCP: `switch_cameras`.
+`POST /v1/camera-switch` with `{ edl, transcript, speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }` — `edl` is one EDL (object or JSON string; a clip set, a chapters plan or an output-clock EDL is refused, `400 invalid_edl`), `speakerMap` maps a speaker label to an EDL source id — `""` means *no camera of their own* (a speaker left out uses the source whose `speakers` list names them; either way, else the wide, else any camera with picture). To use a [Speaker Map](../processing-audio/speaker-map.md) result over REST, send its `speakerMap` as `speakerMap` (with any labels of your own written over it); the SDK (`speakerMapResult`), the CLI (`--speaker-map-result <file>`) and MCP (`speaker_map_result`) take the result whole and fold it in by the canvas's order — your own labels win, then the result, then speaker *n* → camera *n*. The settings must be in the ranges above (`400` otherwise); `speakerNames` values are 1–80 characters. A transcript with no speaker labels is refused before charging (`422 no_speakers`). The finished job's `output_data.json` is the switched EDL and `output_data.transcript` the named transcript. SDK: `client.edit.cameraSwitch` ([SDK Reference](../../sdk-reference.md)); CLI: `nodaro edit switch-cameras` ([CLI](../../cli.md)); MCP: `switch_cameras`.
 
 ## Tips
 

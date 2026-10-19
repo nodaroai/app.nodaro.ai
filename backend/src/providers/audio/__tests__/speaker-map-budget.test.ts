@@ -2,6 +2,7 @@
 // per source, in order — each named here, so a step added to the job without its
 // ceiling is a visible edit to this list, not a silent undercount.
 import { describe, it, expect } from "vitest"
+import { SPEAKER_MAP_MAX_SOURCES } from "@nodaro/shared/edl"
 import { SPEAKER_MAP_BUDGET_MAX_SOURCES, SPEAKER_MAP_DECODE_TIMEOUT_MS, SPEAKER_MAP_PER_SOURCE_BUDGET_MS, speakerMapJobBudgetMs } from "../speaker-map-budget.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, DOWNLOAD_TIMEOUT_MS, FFPROBE_TIMEOUT_MS, MEDIA_PROXY_FFMPEG_TIMEOUT_MS } from "../../video/ffmpeg-timeouts.js"
 
@@ -20,6 +21,8 @@ describe("Speaker Map liveness budget", () => {
   })
   it("the source count is clamped to the limit (6), like audio-sync's", () => {
     expect(SPEAKER_MAP_BUDGET_MAX_SOURCES).toBe(6)
+    // The published contract's limit itself, never a copy of it.
+    expect(SPEAKER_MAP_BUDGET_MAX_SOURCES).toBe(SPEAKER_MAP_MAX_SOURCES)
     const many = { sources: Array.from({ length: 9 }, (_, i) => ({ id: `s${i}` })) }
     expect(speakerMapJobBudgetMs(many)).toBe(6 * SPEAKER_MAP_PER_SOURCE_BUDGET_MS + DEFAULT_FFMPEG_TIMEOUT_MS)
   })

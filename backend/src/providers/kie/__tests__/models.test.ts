@@ -13,6 +13,7 @@ import {
   KIE_SPEECH_TO_VIDEO_MODELS,
   type KieModelConfig,
 } from "../models.js"
+import { IMAGE_EDIT_PROVIDERS } from "@nodaro/shared/models"
 
 describe("seedType — honoured by the KIE image lanes only", () => {
   // `seedType` sits on the shared KieModelConfig, but only kie/image.ts reads
@@ -167,3 +168,14 @@ describe("KIE_SPEECH_TO_VIDEO_MODELS — wan-s2v", () => {
   })
 })
 
+
+describe("maskEditColor (an inpainting mask read black = edit)", () => {
+  // generateImage inverts a caller's white = change mask for such a SKU; the
+  // editImage lane forwards mask_url verbatim, so a black-edit SKU reachable
+  // there would edit everything BUT the painted area (Ideogram, 2026-10-19).
+  it("is declared on no SKU the edit-image lane can send a mask to", () => {
+    const blackEdit = Object.entries(KIE_IMAGE_MODELS).filter(([, c]) => c.maskEditColor === "black").map(([id]) => id)
+    expect(blackEdit).toContain("ideogram-edit")
+    expect(blackEdit.filter((id) => (IMAGE_EDIT_PROVIDERS as readonly string[]).includes(id))).toEqual([])
+  })
+})

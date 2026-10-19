@@ -6,6 +6,7 @@ import {
   resolveEditPlanSources,
   describeAudioSyncOffsetIssue,
   transcriptSpeakerLabels,
+  cameraSwitchSpeakerMap, speakerMapResultOf, type SpeakerMapResult,
   type Edl,
   type Transcript,
   type EditPlanMode,
@@ -15,6 +16,7 @@ import {
   type EdlTargetAspect
 } from "@nodaro/shared/edl"
 import { USE_CASE_NODE_TYPES, isUseCaseNodeType, type UseCaseNodeType } from "@nodaro/shared/nodes"
+import type { SpeakerMapInput } from "./speaker-map-inputs.js"
 import {
   chaptersBody,
   clipPackBody,
@@ -279,6 +281,9 @@ export interface CameraSwitchInput {
    *  left out shows the source whose `speakers` list names them, else the
    *  `wide` camera, else any camera that filmed them. */
   speakerMap?: Record<string, string>
+  /** A {@link EditResource.speakerMap} job's `output_data.json`: a label in `speakerMap`
+   *  wins, then this result, then the n-th speaker heard gets the n-th camera. */
+  speakerMapResult?: SpeakerMapResult | string
   /** Speaker label → display name (on the segments and the returned transcript). */
   speakerNames?: Record<string, string>
   /** The shortest shot in ms (default 2 500): a shorter turn holds the shot. */
@@ -438,6 +443,27 @@ export class EditResource {
       body: {
         sources: input.sources.map((s) => ({ id: s.id, url: s.url })),
         ...(input.reference !== undefined ? { reference: input.reference } : {}),
+        ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
+      },
+    })
+  }
+
+  /**
+   * Which camera each speaker is on, from the cameras' own microphones (`POST
+   * /v1/speaker-map`), keyless. `output_data.json` is a `SpeakerMapResult`: pass
+   * it to {@link cameraSwitch} as `speakerMapResult`. A malformed request throws
+   * a `NodaroError` (400 `validation_error`; 422 `no_speakers` for a transcript
+   * with no speaker labels) before any credits are reserved.
+   */
+  speakerMap(input: SpeakerMapInput): Promise<EditJobResult> {
+    return this.client.request("POST", "/v1/speaker-map", {
+      body: {
+        sources: input.sources.map((s) => ({ id: s.id, url: s.url, ...(s.kind ? { kind: s.kind } : {}) })),
+        transcript: input.transcript,
+        ...(input.offsets !== undefined ? { offsets: input.offsets } : {}),
+        ...(input.masterSourceId !== undefined ? { masterSourceId: input.masterSourceId } : {}),
+        ...(input.wideSourceId !== undefined ? { wideSourceId: input.wideSourceId } : {}),
+        ...(input.marginDb !== undefined ? { marginDb: input.marginDb } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
     })
@@ -680,11 +706,14 @@ export class EditResource {
         422,
       ))
     }
+    const result = input.speakerMapResult
+    if (result !== undefined && !speakerMapResultOf(result)) return Promise.reject(new NodaroError("cameraSwitch: speakerMapResult is not a Speaker Map result — pass that job's output_data.json", "not_a_speaker_map", 400))
+    const speakerMap = result !== undefined ? cameraSwitchSpeakerMap({ speakerMap: input.speakerMap }, input.edl, input.transcript, { speakerMap: result }) : input.speakerMap
     return this.client.request("POST", "/v1/camera-switch", {
       body: {
         edl: input.edl,
         transcript: input.transcript,
-        ...(input.speakerMap !== undefined ? { speakerMap: input.speakerMap } : {}),
+        ...(speakerMap !== undefined ? { speakerMap } : {}),
         ...(input.speakerNames !== undefined ? { speakerNames: input.speakerNames } : {}),
         ...(input.minShotMs !== undefined ? { minShotMs: input.minShotMs } : {}),
         ...(input.leadMs !== undefined ? { leadMs: input.leadMs } : {}),

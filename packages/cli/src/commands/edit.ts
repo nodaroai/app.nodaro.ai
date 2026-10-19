@@ -12,6 +12,7 @@ import {
   type SilenceRanges,
   type AudioSyncSource,
   type CameraSwitchInput,
+  type SpeakerMapInput,
 } from "@nodaro/sdk/edit"
 import { buildClient, handleError } from "../client.js"
 import { warn } from "../output.js"
@@ -139,6 +140,58 @@ export function editCommand(): Command {
             watch: opts.watch,
             pollInterval: opts.pollInterval,
             note: `audio-sync (${sources.length} sources)`,
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  // ── speaker-map ───────────────────────────────────────────────────────────
+  cmd
+    .command("speaker-map")
+    .description("work out which camera each speaker is on, from the cameras' own microphones (keyless)")
+    .option(
+      "--source <[id=]url>",
+      "a camera (or the master / wide) as url or id=url (repeatable, 2-6); ids are minted as source-N when omitted",
+      collectVariadic,
+    )
+    .option("--sources-file <file>", "JSON array of { id, url } rows (overrides --source)")
+    .requiredOption("--transcript <file>", "path to the transcript JSON WITH speaker labels (transcribe with speaker detection)")
+    .option("--offsets <file>", "an audio-sync result JSON (the job's output_data.json); omit when the recordings share a clock")
+    .option("--master <id>", "the master audio's id: hears everyone, so it is no one's camera")
+    .option("--wide <id>", "the wide shot's id: no one's camera; a speaker with no clear camera is shown on it")
+    .option("--margin-db <db>", "how much louder the loudest camera must be than the next (default 3)", (v) => Number(v))
+    .option("--watch", "poll the job until it finishes")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts & { source?: string[]; sourcesFile?: string; transcript: string; offsets?: string; master?: string; wide?: string; marginDb?: number },
+      ) => {
+        const sources = opts.sourcesFile ? readJsonFile(opts.sourcesFile) : (opts.source ?? []).map(parseAudioSyncSource)
+        if (!Array.isArray(sources) || sources.length < 2 || sources.length > 6) {
+          warn("speaker-map takes 2-6 recordings — pass --source <url> (repeatable) or --sources-file <file> (a JSON array of { id, url } rows)")
+          process.exit(1)
+        }
+        try {
+          const client = buildClient(opts.profile)
+          const input: SpeakerMapInput = {
+            sources: sources as SpeakerMapInput["sources"],
+            transcript: readJsonFile(opts.transcript) as Transcript,
+            ...(opts.offsets ? { offsets: readJsonFile(opts.offsets) as SpeakerMapInput["offsets"] } : {}),
+            ...(opts.master !== undefined ? { masterSourceId: opts.master } : {}),
+            ...(opts.wide !== undefined ? { wideSourceId: opts.wide } : {}),
+            ...(opts.marginDb !== undefined ? { marginDb: opts.marginDb } : {}),
+          }
+          const result = await client.edit.speakerMap(input)
+          await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: `speaker-map (${sources.length} sources)`,
           })
         } catch (err) {
           handleError(err)
@@ -328,6 +381,7 @@ export function editCommand(): Command {
     .requiredOption("--edl <file>", "path to ONE EDL JSON (an `edit plan` result)")
     .requiredOption("--transcript <file>", "path to the transcript JSON WITH speaker labels (transcribe with speaker detection)")
     .option("--speaker-map <file>", "JSON object: speaker label → EDL source id of their camera")
+    .option("--speaker-map-result <file>", "a speaker-map result JSON (the job's output_data.json); a label in --speaker-map wins over it")
     .option("--speaker-names <file>", "JSON object: speaker label → display name")
     .option("--min-shot-ms <ms>", "shortest shot (default 2500)", (v) => parseInt(v, 10))
     .option("--lead-ms <ms>", "cut this long before the new speaker (default 200)", (v) => parseInt(v, 10))
@@ -345,6 +399,7 @@ export function editCommand(): Command {
             edl: string
             transcript: string
             speakerMap?: string
+            speakerMapResult?: string
             speakerNames?: string
             minShotMs?: number
             leadMs?: number
@@ -359,6 +414,7 @@ export function editCommand(): Command {
             edl: readJsonFile(opts.edl) as CameraSwitchInput["edl"],
             transcript: readJsonFile(opts.transcript) as Transcript,
             ...(opts.speakerMap ? { speakerMap: readJsonFile(opts.speakerMap) as Record<string, string> } : {}),
+            ...(opts.speakerMapResult ? { speakerMapResult: readJsonFile(opts.speakerMapResult) as CameraSwitchInput["speakerMapResult"] } : {}),
             ...(opts.speakerNames ? { speakerNames: readJsonFile(opts.speakerNames) as Record<string, string> } : {}),
             ...(opts.minShotMs !== undefined ? { minShotMs: opts.minShotMs } : {}),
             ...(opts.leadMs !== undefined ? { leadMs: opts.leadMs } : {}),

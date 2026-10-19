@@ -267,6 +267,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Source video": "וידאו מקור",
   "EDL": "רשימת עריכה",
   "Transcript": "תמלול",
+  "Speaker map": "מפת דוברים",
   "Face tracks": "מסלולי פנים",
   "Sources": "מקורות",
   "Silence": "שקט",

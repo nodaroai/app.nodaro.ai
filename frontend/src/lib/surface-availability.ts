@@ -173,6 +173,12 @@ export function __resetSurfaceAvailabilityForTests(
   emit()
 }
 
+/** True once the viewer's availability answer has landed (false before it,
+ *  after sign-out, and for the whole session when the fetch failed). */
+export function surfaceAvailabilityLoaded(): boolean {
+  return fetched !== null
+}
+
 /** True when this deployment does not offer this node type in the picker. */
 export function isNodeUnavailable(type: string): boolean {
   if (fetched) return fetched.nodes.has(type)

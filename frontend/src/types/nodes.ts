@@ -9272,8 +9272,9 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "camera-switch",
     label: "Camera Switch",
     category: "processing",
-    // Flat per run (decided 2026-10-03, migration 448).
-    inputs: ["edl", "transcript"],
+    // Flat per run (decided 2026-10-03, migration 448). `speakerMap`: an
+    // optional Speaker Map result, under the panel's choices (decided 2026-10-17).
+    inputs: ["edl", "transcript", "speakerMap"],
     outputs: ["edl", "transcript"],
     defaultData: {
       label: "Camera Switch",

@@ -7,6 +7,7 @@ import { price as unit_episode_chapters } from "../../../nodes/episode-chapters/
 import { price as unit_episode_trailer } from "../../../nodes/episode-trailer/price.ee.js" // unit:episode-trailer
 import { price as unit_gif_to_video } from "../../../nodes/gif-to-video/price.ee.js" // unit:gif-to-video
 import { price as unit_remove_audio } from "../../../nodes/remove-audio/price.ee.js" // unit:remove-audio
+import { price as unit_speaker_map } from "../../../nodes/speaker-map/price.ee.js" // unit:speaker-map
 import { price as unit_tighten_episode } from "../../../nodes/tighten-episode/price.ee.js" // unit:tighten-episode
 
 export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Object.create(null), {
@@ -15,5 +16,6 @@ export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Ob
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "speaker-map": unit_speaker_map, // unit:speaker-map
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

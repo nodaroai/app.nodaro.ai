@@ -14,7 +14,7 @@
  * it, a Pro run served by another lane, a capabilities document that claims an
  * engine) and assert the matching contract goes FAIL.
  *
- * Scope on purpose: this file asserts the Scene3D, Video Overlay, Site Capture,
+ * Scope on purpose: this file asserts the Scene3D, Video Overlay, Speaker Map, Site Capture,
  * Tighten Episode, Chapters, Trailer and Clip Pack contracts only. The stub is faithful enough for the
  * probe to reach them, not a second implementation of the platform — the
  * other contracts are asserted against the real image by
@@ -39,6 +39,9 @@ const CAPABILITIES = "the 3D capabilities document reports Pro unavailable and n
 const OVERLAY_RENDER = "Video Overlay renders on a keyless install — no key, no credits"
 const OVERLAY_REFUSAL = "Video Overlay refuses end ≤ start with a renderable 400"
 const OVERLAY_UNREACHABLE = "a Video Overlay job whose image cannot be fetched fails with a renderable message"
+
+/** The Speaker Map contract name, spelled exactly as the probe records it. */
+const SPEAKER_MAP_REFUSAL = "Speaker Map refuses a single recording with a renderable 400, never a job"
 
 /** The Site Capture contract name, spelled exactly as the probe records it. */
 const CAPTURE = "a keyless Site Capture answers with a job id, then fails honestly"
@@ -129,6 +132,11 @@ function communityShape() {
         job_overlay_unreachable: { status: "failed", error_message: "layers[0]: image could not be fetched" },
       },
       media: { status: 200, type: "video/mp4", bytes: 4096 },
+    },
+    // Speaker Map: one recording is refused by the route's validation, before any job.
+    speakerMap: {
+      status: 400,
+      body: { error: { code: "validation_error", message: "sources: Array must contain at least 2 element(s)" } },
     },
     // Site Capture: the route answers job-id-first; the job then fails with the keyless message.
     capture: { status: 200, body: { jobId: "job_capture", status: "pending" } },
@@ -319,6 +327,7 @@ function stubServer(shape) {
         return res.end(Buffer.alloc(shape.overlay.media.bytes))
       }
 
+      if (path === "/v1/speaker-map" && req.method === "POST") return send(shape.speakerMap.status, shape.speakerMap.body)
       if (path === "/v1/site-capture" && req.method === "POST") return send(shape.capture.status, shape.capture.body)
 
       // ── Tighten Episode ───────────────────────────────────────────────────
@@ -547,6 +556,25 @@ test("an unfetchable image rendered anyway fails the unreachable-image contract"
     shape.overlay.jobs.job_overlay_unreachable = { status: "completed", output_data: { videoUrl: "/media/overlay.mp4" } }
   })
   assertContract(out, OVERLAY_UNREACHABLE, "FAIL")
+})
+
+test("the keyless community shape passes the Speaker Map refusal contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, SPEAKER_MAP_REFUSAL, "PASS")
+})
+
+test("a single recording accepted as a job fails the Speaker Map contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.speakerMap = { status: 200, body: { jobId: "job_speaker_map" } }
+  })
+  assertContract(out, SPEAKER_MAP_REFUSAL, "FAIL")
+})
+
+test("a 500 from the Speaker Map route fails its contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.speakerMap = { status: 500, body: { error: { code: "internal_error", message: "Internal server error" } } }
+  })
+  assertContract(out, SPEAKER_MAP_REFUSAL, "FAIL")
 })
 
 test("the keyless community shape passes the Site Capture contract", async () => {

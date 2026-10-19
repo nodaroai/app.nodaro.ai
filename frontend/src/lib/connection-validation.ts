@@ -115,6 +115,7 @@ import {
 } from "@nodaro/shared/ugc"
 import { isValidUgcConnection } from "./ugc-handles"
 import { unitConnectionVerdict } from "./unit-connections"
+import { isTargetHandleWithheld } from "./target-handle-availability"
 import { isUseCaseNodeType, resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
 import { usecaseHandsOnEpisode } from "./use-case-pips"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
@@ -331,6 +332,12 @@ export function isValidWorkflowConnection(
     if (wouldCreateCycle(graph, connection.source, connection.target)) {
       return false
     }
+  }
+  // An input withheld with the node it exists for (Camera Switch's Speaker map
+  // while Speaker Map is hidden from the viewer) takes no new wire; a saved
+  // one still runs (target-handle-availability.ts).
+  if (connection.target && isTargetHandleWithheld(getNodeType(connection.target), connection.targetHandle)) {
+    return false
   }
   // What the wire carries is judged at its origin: a Teleport Receive passes
   // on whatever entered its Send (@nodaro/render-rules teleport-bypass.ts).
@@ -735,7 +742,7 @@ function connectionTypesAccepted(
   }
   // apply-edl — `edl` (required) and `transcript` (optional) take json/data
   // producers; `sources` takes optional media-URL overrides (video or audio).
-  // camera-switch — `edl` and `transcript` both take json/data producers.
+  // camera-switch — `edl`, `transcript` and `speakerMap` all take json/data producers.
   // speaker-view — the same two json lanes, `edl` and `transcript`, and
   // `tracks` (P3.9): Speaker Frames' face tracks only.
   // `video` (decided 2026-10-11) takes a bare video INSTEAD of an edit.
@@ -752,7 +759,7 @@ function connectionTypesAccepted(
     return false
   }
   if (targetType === "camera-switch" && connection.targetHandle) {
-    return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
+    return (connection.targetHandle === "edl" || connection.targetHandle === "transcript" || connection.targetHandle === "speakerMap") && ACCEPTS_JSON(imageSourceType)
   }
   if (targetType === "apply-edl" && connection.targetHandle) {
     if (connection.targetHandle === "edl" || connection.targetHandle === "transcript") return ACCEPTS_JSON(imageSourceType)

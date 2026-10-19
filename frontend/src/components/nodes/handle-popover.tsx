@@ -30,6 +30,7 @@ import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed } from "@/lib/handle-limits"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { Workflow } from "lucide-react"
 import type { ReactNode } from "react"
@@ -219,6 +220,10 @@ export function HandlePopover({
   // Iteration order: REVERSE so newer nodes (appended at the end of the
   // store array) appear first — most-recently-created sources are far
   // more likely targets when the user is actively building.
+  // An input withheld with the node it exists for is never a candidate
+  // (target-handle-availability.ts), and the viewer's answer lands after first
+  // paint — the memo below re-reads it when it does.
+  const availability = useSurfaceAvailability()
   const { candidates, hasDynamicOutputCandidates } = useMemo(() => {
     const nodeTypeMap = new Map<string, string>()
     for (const n of nodes) {
@@ -407,7 +412,7 @@ export function HandlePopover({
       }
     })
     return { candidates: rendered, hasDynamicOutputCandidates }
-  }, [accepts, connections, edges, nodes, nodesById, nodeId, handleId, direction])
+  }, [accepts, connections, edges, nodes, nodesById, nodeId, handleId, direction, availability])
 
   const handleJump = useCallback(
     (otherNodeId: string) => {

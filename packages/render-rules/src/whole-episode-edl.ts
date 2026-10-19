@@ -22,7 +22,9 @@ export function wholeEpisodeEdl(input: {
   const sources: EdlSource[] = input.sources.map((s) => ({
     id: s.id, url: s.url, kind: s.id === input.masterSourceId ? "audio" : s.kind,
     ...(s.offsetMs ? { offsetMs: Math.round(s.offsetMs) } : {}),
-    role: s.id === input.masterSourceId ? "master-audio" : s.id === input.wideSourceId ? "wide" : "camera",
+    // A sound-only recording that is not the master (a separate microphone) is
+    // no one's camera, so it gets no role (decided 2026-10-19).
+    ...(s.id === input.masterSourceId ? { role: "master-audio" } : s.id === input.wideSourceId ? { role: "wide" } : s.kind === "audio" ? {} : { role: "camera" }),
     ...(s.speakers && s.speakers.length > 0 ? { speakers: [...s.speakers] } : {}),
   }))
   const picture = videos.find((v) => v.id === input.wideSourceId) ?? videos[0]!

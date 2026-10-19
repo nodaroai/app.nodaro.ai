@@ -57,7 +57,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { carriedNodeSettings } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -4660,11 +4660,14 @@ export function buildPayload(
       if (transcriptSpeakerLabels(transcript).length === 0) {
         throw new Error("camera-switch: the transcript has no speaker labels — turn on speaker detection in Transcribe so it can tell who is talking")
       }
+      // A wired Speaker Map that produced nothing, or is not one, is refused (unwired: no change).
+      const speakerMapProblem = cameraSwitchSpeakerMapProblem(resolvedInputs.speakerMapResult)
+      if (speakerMapProblem) throw new Error(cameraSwitchSpeakerMapProblemText(speakerMapProblem))
       return simpleResult("camera-switch", CAMERA_SWITCH_CREDIT_ID, {
         jobId,
         edl,
         transcript,
-        ...cameraSwitchSettingsPayload(data as CameraSwitchNodeSettings, edl, transcript),
+        ...cameraSwitchSettingsPayload(data as CameraSwitchNodeSettings, edl, transcript, { speakerMap: resolvedInputs.speakerMapResult }),
         reservedCreditId: CAMERA_SWITCH_CREDIT_ID,
         nodeId: node.id,
         usageLogId,

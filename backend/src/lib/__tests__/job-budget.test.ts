@@ -20,6 +20,7 @@ import {
 import { applyEdlRenderBudgetMs } from "../../providers/video/apply-edl-budget.js"
 import { unitDescriptorOf } from "../unit-descriptors.js"
 import { audioSyncRenderBudgetMs } from "../../providers/audio/audio-sync-budget.js"
+import { speakerMapJobBudgetMs } from "../../providers/audio/speaker-map-budget.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS, WORKFLOW_TIMEOUT_MS } from "../../services/workflow-engine/types.js"
 
 const MIN = 60_000
@@ -93,6 +94,16 @@ describe("declaredJobBudgetMs — the one per-job budget both readers call", () 
     expect(declaredJobBudgetMs("audio-sync", null)).toBeUndefined()
     expect(declaredJobBudgetMs("audio-sync", { sources: [{ id: "a", url: "https://f.test/a.wav" }] })).toBeUndefined()
     expect(declaredJobBudgetMs("audio-sync", { sources: "a,b" })).toBeUndefined()
+  })
+
+  it("speaker-map: the unit's budget.ts, composed under its type, read off the payload or a jobs row's input_data alike", () => {
+    const a = { id: "cam1", url: "https://f.test/cam1.mp4", kind: "video" }
+    const b = { id: "cam2", url: "https://f.test/cam2.mp4", kind: "video" }
+    expect(BUDGETED_JOB_NAMES).toContain("speaker-map")
+    expect(declaredJobBudgetMs("speaker-map", { sources: [a, b] })).toBe(speakerMapJobBudgetMs({ sources: [a, b] }))
+    expect(declaredJobBudgetMs("speaker-map", { sources: [a, b], transcript: {}, type: "speaker-map", node_id: "n" })).toBe(speakerMapJobBudgetMs({ sources: [a, b] }))
+    expect(declaredJobBudgetMs("speaker-map", { sources: [a, b] })).toBeGreaterThan(NODE_TIMEOUT_MS)
+    expect(declaredJobBudgetMs("speaker-map", {})).toBeUndefined()
   })
 
   it("registers exactly apply-edl, audio-sync, silence-detect, speaker-frames, speaker-view and split-media as legacy rows; every other name is a node unit's budget.ts", () => {

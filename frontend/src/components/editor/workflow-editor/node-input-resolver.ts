@@ -46,7 +46,7 @@ import { SOCIAL_POST_NODE_TYPES, socialSearchPostVideo } from "@nodaro/shared/so
 import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
 import type { ConnectedReference } from "@nodaro/shared/types"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
-import { isUseCaseNodeType } from "@nodaro/render-rules"
+import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, cameraSwitchSpeakerMapLanding, isUseCaseNodeType } from "@nodaro/render-rules"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { editPlanOutputOf, unitSourceJsonOf, usecaseJsonOf } from "@/lib/edit-plan-saved-output";
 import type {
@@ -785,6 +785,10 @@ export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResol
    *  Mirror of backend ResolvedInputs.tracks / trackAssignments. */
   tracks?: string;
   trackAssignments?: unknown;
+  /** camera-switch: a Speaker Map result wired into `speakerMap` ("" when the
+   *  wire is there but its upstream produced nothing). Mirror of backend
+   *  ResolvedInputs.speakerMapResult. */
+  speakerMapResult?: string;
   /** add-captions: a wired CaptionPlan (stringified json). Wins over text, segments and transcript.
    *  Mirrors backend ResolvedInputs.captionPlan. */
   captionPlan?: string;
@@ -1747,6 +1751,13 @@ export function resolveNodeInputs(
     // the empty-output skip, so a wired JSON input that got nothing is recorded.
     // Mirror of the backend resolver (unit-inputs.ts).
     if (routeUnitInput(inputs, node.type, srcEdge.targetHandle, src, resolvedSourceHandle, output, TEXT_PRODUCER_TYPES)) continue;
+    // camera-switch's `speakerMap`: before the empty-output skip, so a wired
+    // Speaker Map that produced nothing is recorded ("") and refused. Mirror of the backend resolver.
+    if (node.type === "camera-switch" && srcEdge.targetHandle === CAMERA_SWITCH_SPEAKER_MAP_HANDLE) {
+      const landed = cameraSwitchSpeakerMapLanding(inputs.speakerMapResult, output, { type: src.type, textSources: TEXT_PRODUCER_TYPES });
+      if (landed !== undefined) inputs.speakerMapResult = landed;
+      continue;
+    }
     // edit-plan's `offsets` wired but carrying no audio-sync result: record the
     // wire ("") so the run fails rather than plan without the sync the user
     // wired (B4). Mirror of the backend resolver.

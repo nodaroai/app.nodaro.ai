@@ -7,12 +7,14 @@ import { definition as unit_episode_chapters } from "../episode-chapters/definit
 import { definition as unit_episode_trailer } from "../episode-trailer/definition.generated" // unit:episode-trailer
 import { definition as unit_gif_to_video } from "../gif-to-video/definition.generated" // unit:gif-to-video
 import { definition as unit_remove_audio } from "../remove-audio/definition.generated" // unit:remove-audio
+import { definition as unit_speaker_map } from "../speaker-map/definition.generated" // unit:speaker-map
 import { definition as unit_tighten_episode } from "../tighten-episode/definition.generated" // unit:tighten-episode
 import type { ClipPackData as unit_clip_pack_data } from "../clip-pack/types" // unit:clip-pack
 import type { EpisodeChaptersData as unit_episode_chapters_data } from "../episode-chapters/types" // unit:episode-chapters
 import type { EpisodeTrailerData as unit_episode_trailer_data } from "../episode-trailer/types" // unit:episode-trailer
 import type { GifToVideoData as unit_gif_to_video_data } from "../gif-to-video/types" // unit:gif-to-video
 import type { RemoveAudioData as unit_remove_audio_data } from "../remove-audio/types" // unit:remove-audio
+import type { SpeakerMapData as unit_speaker_map_data } from "../speaker-map/types" // unit:speaker-map
 import type { TightenEpisodeData as unit_tighten_episode_data } from "../tighten-episode/types" // unit:tighten-episode
 
 export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
@@ -21,6 +23,7 @@ export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
   unit_episode_trailer, // unit:episode-trailer
   unit_gif_to_video, // unit:gif-to-video
   unit_remove_audio, // unit:remove-audio
+  unit_speaker_map, // unit:speaker-map
   unit_tighten_episode, // unit:tighten-episode
 ]
 
@@ -31,6 +34,7 @@ export type UnitNodeType =
   | "episode-trailer" // unit:episode-trailer
   | "gif-to-video" // unit:gif-to-video
   | "remove-audio" // unit:remove-audio
+  | "speaker-map" // unit:speaker-map
   | "tighten-episode" // unit:tighten-episode
 
 export type UnitNodeData =
@@ -40,4 +44,5 @@ export type UnitNodeData =
   | unit_episode_trailer_data // unit:episode-trailer
   | unit_gif_to_video_data // unit:gif-to-video
   | unit_remove_audio_data // unit:remove-audio
+  | unit_speaker_map_data // unit:speaker-map
   | unit_tighten_episode_data // unit:tighten-episode

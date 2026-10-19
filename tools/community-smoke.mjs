@@ -1351,6 +1351,29 @@ await check(OVERLAY_REFUSAL, async () => {
   return `400 — "${res.json.error.message}"`
 })
 
+// Speaker Map (a core, keyless node) takes 2–6 recordings: one is refused by
+// the route's own validation — a 400 a node card can show, never a 500 and
+// never a job. The URL never needs to exist (refused before any fetch).
+const SPEAKER_MAP_REFUSAL = "Speaker Map refuses a single recording with a renderable 400, never a job"
+await check(SPEAKER_MAP_REFUSAL, async () => {
+  const res = await api("/v1/speaker-map", {
+    method: "POST",
+    token: ctx.token,
+    body: {
+      sources: [{ id: "cam", url: "https://example.com/speaker-map-smoke/cam.mp4" }],
+      transcript: { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "speaker_0" }] },
+    },
+  })
+  assert(res.status === 400, `POST /v1/speaker-map expected 400, got ${res.status}: ${res.text.slice(0, 300)}`)
+  assert(
+    res.json?.error?.code === "validation_error",
+    `expected error.code "validation_error", got ${JSON.stringify(res.json?.error?.code)}`,
+  )
+  assert(res.json?.jobId === undefined, `the refusal carried a job handle: ${res.text.slice(0, 200)}`)
+  assertRenderable(res.json?.error?.message, "speaker-map refusal")
+  return `400 — "${res.json.error.message}"`
+})
+
 await check(OVERLAY_UNREACHABLE, async () => {
   if (!ctx.overlayBaseUrl) {
     return skip(OVERLAY_UNREACHABLE, "no uploaded base video — the render check failed before its upload")

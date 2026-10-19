@@ -77,6 +77,8 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   inspirationReadApi: vi.fn(() => Promise.resolve(readerRun)),
   competitorReadApi: vi.fn(() => Promise.resolve(readerRun)),
 }))
+// A node unit's run posts through its own api.ts, not @/lib/api.
+vi.mock("@/nodes/speaker-map/api", () => ({ speakerMapApi: vi.fn(startJob) }))
 vi.mock("../poll-job", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../poll-job")>()),
   getJobStatusLeanForNode: vi.fn(() => Promise.resolve({ status: "completed", output_data: job.row })),
@@ -152,6 +154,15 @@ const SCENARIOS: Record<string, Scenario> = {
     inputs: { audioSyncSources: [{ nodeId: "cam-a", url: MEDIA }, { nodeId: "cam-b", url: "https://media.example.test/b.mp4" }] },
   },
   "video-analysis": { inputs: { videoUrl: MEDIA } },
+  // Speaker Map: its cameras on the many-wire Cameras lane, the transcript on its JSON lane (unitInputs).
+  "speaker-map": {
+    inputs: {
+      unitInputs: {
+        sources: [{ id: "camA", url: "https://media.example.test/camA.mp4", kind: "video" }, { id: "camB", url: "https://media.example.test/camB.mp4", kind: "video" }],
+        transcript: JSON.stringify({ words: [{ text: "hi", startMs: 0, endMs: 500, speaker: "A" }, { text: "yo", startMs: 600, endMs: 900, speaker: "B" }] }),
+      },
+    },
+  },
   // Speaker Frames: the edit folded onto its `edl` wire (one JSON string per edit).
   "speaker-frames": {
     inputs: {

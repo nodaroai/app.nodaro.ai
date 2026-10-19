@@ -2,6 +2,8 @@
 // @registry backend/src/nodes/*/budget.ts
 // @registry-exports budgets: UNIT_BUDGETS
 import type { UnitBudget } from "../kit.js"
+import { budget as unit_speaker_map } from "../speaker-map/budget.js" // unit:speaker-map
 
 export const UNIT_BUDGETS: Readonly<Record<string, UnitBudget>> = Object.assign(Object.create(null), {
+  "speaker-map": unit_speaker_map, // unit:speaker-map
 })

@@ -222,6 +222,8 @@ export const PER_WIRE_ID_FIELDS = [
   "selectedAudioNodeId",
   "selectedImageNodeId",
   "selectedVideoNodeId",
+  "masterSourceId",
+  "wideSourceId",
 ] as const
 
 /** A consumer's settings saved as a list of entries, each naming a wired node in the given key. */

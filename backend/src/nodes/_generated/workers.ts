@@ -4,8 +4,10 @@
 import type { UnitWorker } from "../kit.js"
 import { worker as unit_gif_to_video } from "../gif-to-video/worker.js" // unit:gif-to-video
 import { worker as unit_remove_audio } from "../remove-audio/worker.js" // unit:remove-audio
+import { worker as unit_speaker_map } from "../speaker-map/worker.js" // unit:speaker-map
 
 export const UNIT_WORKERS: Readonly<Record<string, UnitWorker>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "speaker-map": unit_speaker_map, // unit:speaker-map
 })

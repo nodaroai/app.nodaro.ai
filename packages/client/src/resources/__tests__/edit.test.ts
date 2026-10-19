@@ -3,6 +3,7 @@ import { createClient, StaticTokenAuth, NodaroError, NotFoundError, ForbiddenErr
 import type { Edl, Transcript, SilenceRanges } from "../../index.js"
 import { USE_CASE_NODE_TYPES } from "../../index.js"
 import { USE_CASE_NODE_TYPES as SHARED_USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
+import type { SpeakerMapInput, SpeakerMapResult } from "../../entries/edit.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -93,6 +94,67 @@ describe("edit.audioSync", () => {
         reference: "x",
       }),
     ).rejects.toBeInstanceOf(NodaroError)
+  })
+})
+
+describe("edit.speakerMap", () => {
+  const transcript = { words: [{ text: "hi", start: 0, end: 1, speaker: "speaker_0" }] } as unknown as Transcript
+
+  it("POSTs to /v1/speaker-map with exactly the fields given (SpeakerMapInput from @nodaro/sdk/edit)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-sm" }))
+    const input: SpeakerMapInput = {
+      sources: [{ id: "a", url: "https://r2/a.mp4" }, { id: "b", url: "https://r2/b.mp4" }],
+      transcript,
+    }
+    const result = await client(fetchMock).edit.speakerMap(input)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/speaker-map")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ sources: input.sources, transcript })
+    expect(result.jobId).toBe("job-sm")
+  })
+
+  it("sends the offsets, the master and wide ids and the margin when given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
+    const offsets = { reference: "a", offsets: [{ sourceId: "b", offsetMs: 40, confidence: 0.9, driftMsPerHour: 0 }], notes: [] }
+    await client(fetchMock).edit.speakerMap({
+      sources: [{ id: "a", url: "https://r2/a.m4a", kind: "audio" }, { id: "b", url: "https://r2/b.mp4" }, { id: "w", url: "https://r2/w.mp4" }],
+      transcript,
+      offsets,
+      masterSourceId: "a",
+      wideSourceId: "w",
+      marginDb: 4,
+    })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent).toMatchObject({ offsets, masterSourceId: "a", wideSourceId: "w", marginDb: 4 })
+    expect(sent.sources).toEqual([{ id: "a", url: "https://r2/a.m4a", kind: "audio" }, { id: "b", url: "https://r2/b.mp4" }, { id: "w", url: "https://r2/w.mp4" }])
+  })
+})
+
+describe("edit.cameraSwitch — a Speaker Map result", () => {
+  const edl = {
+    version: 1,
+    master: "a",
+    sources: [{ id: "a", kind: "video", url: "https://r2/a.mp4" }, { id: "b", kind: "video", url: "https://r2/b.mp4" }],
+    segments: [{ inMs: 0, outMs: 1000, video: "a", audio: "a" }],
+  } as unknown as Edl
+  const transcript = { words: [{ text: "hi", start: 0, end: 1, speaker: "s0" }, { text: "yo", start: 1, end: 2, speaker: "s1" }] } as unknown as Transcript
+  const result: SpeakerMapResult = { version: 1, speakerMap: { s0: "b", s1: "" }, confidence: {}, notes: [] }
+
+  it("folds it into speakerMap — a label in speakerMap wins — and never sends it", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
+    await client(fetchMock).edit.cameraSwitch({ edl, transcript, speakerMap: { s1: "a" }, speakerMapResult: result })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent.speakerMap).toEqual({ s0: "b", s1: "a" })
+    expect("speakerMapResult" in sent).toBe(false)
+  })
+
+  it("rejects something that is not a Speaker Map result before any request", async () => {
+    const fetchMock = vi.fn()
+    await expect(
+      client(fetchMock).edit.cameraSwitch({ edl, transcript, speakerMapResult: JSON.stringify({ speakerMap: { s0: "b" } }) }),
+    ).rejects.toMatchObject({ code: "not_a_speaker_map" })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

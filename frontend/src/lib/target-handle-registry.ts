@@ -15,6 +15,7 @@ import { composeRecordAfter } from "./unit-compose"
 import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
 import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
 import { UGC_TARGET_HANDLES } from "./ugc-handles"
+import { isTargetHandleWithheld } from "./target-handle-availability"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -381,10 +382,12 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "combine-videos":     [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   // apply-edl: a required EDL (json), an optional Transcript (json), and
   // optional positional media-URL overrides (video or audio).
-  // camera-switch: the edit (an Edit Plan EDL) and the diarized transcript, both json.
+  // camera-switch: the edit (an Edit Plan EDL), the diarized transcript, and
+  // an optional speaker map (who is on which camera) — all json.
   "camera-switch":      [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    { handleId: "speakerMap", label: "Speaker map", accepts: ACCEPTS_JSON },
   ],
   // speaker-frames: an edit (one, or a clip pack folded into one run) OR a bare
   // video, and the renamed transcript (json).
@@ -923,10 +926,24 @@ export interface TargetCandidateMatch {
  */
 export function getTargetHandlesAccepting(sourceType: string): ReadonlyArray<TargetCandidateMatch> {
   const out: TargetCandidateMatch[] = []
-  for (const [nodeType, entries] of Object.entries(TARGET_HANDLE_ACCEPTS)) {
-    for (const entry of entries) {
+  for (const nodeType of Object.keys(TARGET_HANDLE_ACCEPTS)) {
+    for (const entry of offeredTargetHandles(nodeType)) {
       if (entry.accepts(sourceType)) out.push({ nodeType, handleId: entry.handleId })
     }
   }
   return out
+}
+
+/**
+ * A node type's typed inputs the viewer is OFFERED — its TARGET_HANDLE_ACCEPTS
+ * rows less any input withheld with the node it exists for
+ * (target-handle-availability.ts). Every surface that suggests a wire reads
+ * this, never the raw rows; a lookup of one named handle (its label, its
+ * predicate for a wire already drawn) still reads TARGET_HANDLE_ACCEPTS.
+ */
+export function offeredTargetHandles(nodeType: string): ReadonlyArray<TargetHandleEntry> {
+  const entries = TARGET_HANDLE_ACCEPTS[nodeType] ?? []
+  return entries.some((e) => isTargetHandleWithheld(nodeType, e.handleId))
+    ? entries.filter((e) => !isTargetHandleWithheld(nodeType, e.handleId))
+    : entries
 }

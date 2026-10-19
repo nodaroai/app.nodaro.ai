@@ -196,7 +196,11 @@ export function auditProject({ selection, post, base = null }) {
 // state: "audited" (merged; its final run was enforced; its post-merge run finished),
 // "unmerged" (nothing to audit, no error), "pending" (its post-merge run has
 // not finished), "shadow-final" (its final run was a shadow run, which the
-// shadow report checked), "error" (could not be audited).
+// shadow report checked), "unselected-green" (merged with no enforced run
+// finished on its final head, and its post-merge full run passed: a miss is a
+// post-merge failure, so with none there is nothing it could have missed —
+// listed so the merge-before-CI gap stays visible, never blocking Clean;
+// decided 2026-10-19), "error" (could not be audited).
 // Clean needs: no miss, no unknown re-run outside a selection, no unattributed
 // failure, nothing pending, nothing that could not be audited.
 export function aggregateEnforced(prs, unclassified = []) {
@@ -208,9 +212,10 @@ export function aggregateEnforced(prs, unclassified = []) {
   const unattributed = []
   const errors = unclassified.map((u) => ({ ...u }))
   const registry = { checked: 0, misses: [], enforced: 0, enforcedMisses: 0 }
-  const count = { audited: 0, unmerged: 0, pending: 0, "shadow-final": 0, error: 0 }
-  const runs = { final: 0, superseded: 0, unmerged: 0, pending: 0, "shadow-final": 0, error: 0 }
+  const count = { audited: 0, unmerged: 0, pending: 0, "shadow-final": 0, "unselected-green": 0, error: 0 }
+  const runs = { final: 0, superseded: 0, unmerged: 0, pending: 0, "shadow-final": 0, "unselected-green": 0, error: 0 }
   const pending = []
+  const unselectedGreen = []
   for (const p of prs) {
     count[p.state]++
     if (p.state === "audited") {
@@ -221,6 +226,7 @@ export function aggregateEnforced(prs, unclassified = []) {
     }
     const at = { pr: p.pr, url: p.mergeUrl ?? p.url }
     if (p.state === "pending") pending.push(at)
+    if (p.state === "unselected-green") unselectedGreen.push({ ...at, note: p.note })
     if (p.state === "error") errors.push({ ...at, error: p.error })
     if (p.state !== "audited") continue
     for (const project of PROJECTS) {
@@ -244,7 +250,7 @@ export function aggregateEnforced(prs, unclassified = []) {
     }
   }
   const clean = count.audited > 0 && ![misses, unknown, unattributed, pending, errors].some((l) => l.length)
-  return { prs: count, runs, misses, unknown, flaky, covered, inherited, unattributed, pending, errors, registry, clean }
+  return { prs: count, runs, misses, unknown, flaky, covered, inherited, unattributed, pending, unselectedGreen, errors, registry, clean }
 }
 
 // Which enforced run of a PR is its final selection: the newest run of the
@@ -312,7 +318,17 @@ export function collectEnforcedAudits({ repo, enforcedRuns, listedByHead, gh, re
     if (!final) {
       const kinds = (listedByHead.get(info.headSha) ?? []).map((r) => r.kind)
       if (kinds.includes("shadow")) { Object.assign(entry, { state: "shadow-final", url: runs[0].url }); continue }
-      Object.assign(entry, { state: "error", url: runs[0].url, error: `its final head ${info.headSha.slice(0, 9)} has no enforced run listed${kinds.length ? ` (listed as: ${kinds.join(", ")})` : ""}` })
+      const why = `its final head ${info.headSha.slice(0, 9)} has no enforced run listed${kinds.length ? ` (listed as: ${kinds.join(", ")})` : ""}`
+      // Nothing selected it — but a green post-merge full run leaves nothing to miss.
+      let devRuns
+      try { devRuns = devRunsOf(info.mergeSha) } catch (err) {
+        Object.assign(entry, { state: "error", url: runs[0].url, error: `${why}; its post-merge run of ${info.mergeSha.slice(0, 9)} could not be read: ${firstLine(err)}` })
+        continue
+      }
+      const done = devRuns.find((r) => r.status === "completed")
+      if (!done) { Object.assign(entry, { state: "pending", url: runs[0].url, mergeUrl: devRuns[0]?.url }); continue }
+      if (done.conclusion === "success") { Object.assign(entry, { state: "unselected-green", url: runs[0].url, mergeUrl: done.url, note: why }); continue }
+      Object.assign(entry, { state: "error", url: runs[0].url, mergeUrl: done.url, error: `${why}, and its post-merge run ${info.mergeSha.slice(0, 9)} ended ${done.conclusion || "unfinished"}` })
       continue
     }
     Object.assign(entry, { url: final.url, superseded: runs.length - 1, mergeSha: info.mergeSha })
@@ -356,6 +372,8 @@ export function renderEnforced(e) {
     `  final run in shadow mode (checked above): ${e.prs["shadow-final"]} PR(s), ${e.runs["shadow-final"]} enforced run(s)`,
     `  post-merge run not finished yet (blocks Clean): ${e.prs.pending} PR(s)`,
     ...e.pending.map((m) => `    - ${at(m)}`),
+    `  merged with no enforced run finished on its final head, post-merge full run green — nothing to miss (not blocking Clean): ${e.prs["unselected-green"]} PR(s)`,
+    ...(e.unselectedGreen ?? []).map((m) => `    - ${m.note}  ${at(m)}`),
     `  could not be audited: ${e.prs.error} PR(s)`,
     `Enforced misses (failed again on the post-merge run, not flaky, outside the PR's final selection, not failing again on its base): ${e.misses.length}`,
     ...e.misses.map((m) => `  - ${m.project}: ${m.file}  ${at(m)}${m.baseNote ? `  (${m.baseNote})` : ""}`),

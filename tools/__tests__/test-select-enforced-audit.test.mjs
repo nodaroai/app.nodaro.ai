@@ -202,8 +202,8 @@ test("enforced audit: an unmerged PR is counted and has nothing to audit; a pend
   const audited = { pr: 3, state: "audited", url: "r3", mergeUrl: "d3", runs: 3, superseded: 2, projects: { frontend: auditProject({ selection: { status: "full" }, post: { failed: [], flaky: [], unknown: [], unattributed: [] } }) } }
   const unmerged = { pr: 4, state: "unmerged", url: "r4", runs: 2 }
   const e = aggregateEnforced([audited, unmerged, { pr: 5, state: "shadow-final", url: "r5", runs: 1 }])
-  assert.deepEqual(e.prs, { audited: 1, unmerged: 1, pending: 0, "shadow-final": 1, error: 0 })
-  assert.deepEqual(e.runs, { final: 1, superseded: 2, unmerged: 2, pending: 0, "shadow-final": 1, error: 0 })
+  assert.deepEqual(e.prs, { audited: 1, unmerged: 1, pending: 0, "shadow-final": 1, "unselected-green": 0, error: 0 })
+  assert.deepEqual(e.runs, { final: 1, superseded: 2, unmerged: 2, pending: 0, "shadow-final": 1, "unselected-green": 0, error: 0 })
   assert.equal(e.errors.length, 0)
   assert.equal(e.clean, true)
   assert.equal(aggregateEnforced([audited, { pr: 6, state: "pending", url: "r6", mergeUrl: "d6", runs: 1 }]).clean, false)
@@ -288,4 +288,38 @@ test("collection: an enforced run whose PR could not be found carries the lookup
   assert.deepEqual(prs, [])
   assert.deepEqual(unclassified, [{ url: "run-1", error: "an enforced run whose PR could not be found (gh api repos/o/r/commits/a/pulls: unexpected end of JSON input)" }])
   assert.equal(aggregateEnforced(prs, unclassified).clean, false)
+})
+
+test("collection: a PR merged with no enforced run finished on its final head is clean only when its post-merge full run is green (decided 2026-10-19)", () => {
+  const cases = [
+    ["1".repeat(40), "m1", "completed\tsuccess", "unselected-green"],
+    ["2".repeat(40), "m2", "completed\tfailure", "error"],
+    ["3".repeat(40), "m3", "in_progress\t", "pending"],
+  ]
+  const gh = (...args) => {
+    const path = args.find((a, i) => i > 0 && !a.startsWith("-"))
+    for (const [head, merge, state] of cases) {
+      const pr = cases.findIndex((c) => c[0] === head) + 1
+      if (path === `repos/o/r/pulls/${pr}`) return `${head}\tdev\t2026-10-19T12:00:00Z\t${merge}`
+      if (path.startsWith(`repos/o/r/actions/workflows/ci.yml/runs?head_sha=${merge}`)) return `9${pr}\tdev-${pr}\t${state}`
+      if (path === `repos/o/r/actions/runs/9${pr}/artifacts?per_page=100`) return ""
+      if (path.startsWith(`repos/o/r/actions/runs/9${pr}/jobs`)) return ""
+    }
+    throw new Error(`unexpected gh call: ${args.join(" ")}`)
+  }
+  const { prs } = collectEnforcedAudits({
+    repo: "o/r", gh, listedByHead: new Map(cases.map(([head]) => [head, [{ id: "x", kind: "no test job finished" }]])),
+    // each PR's only enforced run is of an older head
+    enforcedRuns: cases.map((_, i) => ({ id: String(100 + i), url: `run-${i + 1}`, headSha: "e".repeat(40), pr: i + 1, jobs: [], projects: {} })),
+    readLists: () => assert.fail("nothing to read"), devFailures: () => assert.fail("no base"), baseFromJobLog: () => assert.fail("no base"),
+  })
+  assert.deepEqual(prs.map((p) => [p.pr, p.state]), [[1, "unselected-green"], [2, "error"], [3, "pending"]])
+  const green = aggregateEnforced([prs[0]])
+  assert.equal(green.clean, false) // nothing was audited: a green unselected PR is not evidence by itself
+  const withAudited = aggregateEnforced([{ pr: 9, state: "audited", url: "r", mergeUrl: "d", runs: 1, superseded: 0, projects: {} }, prs[0]])
+  assert.equal(withAudited.clean, true)
+  assert.equal(withAudited.unselectedGreen.length, 1)
+  assert.match(withAudited.unselectedGreen[0].note, /has no enforced run listed \(listed as: no test job finished\)/)
+  assert.equal(aggregateEnforced([{ pr: 9, state: "audited", url: "r", mergeUrl: "d", runs: 1, superseded: 0, projects: {} }, prs[1]]).clean, false)
+  assert.ok(renderEnforced(withAudited).some((l) => l.includes("post-merge full run green — nothing to miss (not blocking Clean): 1 PR(s)")))
 })

@@ -6,7 +6,9 @@
  * each speaker's turns (on the master clock, moved by the source's measured
  * offset) are averaged per camera, and `decideSpeakerMap` decides. The wide
  * shot and the master are no one's camera (they hear everyone). A source with
- * no audio track is no candidate, never a failure.
+ * no audio track, or a camera that heard none of the speakers (a silent
+ * track, or one that misses every turn), is no candidate and is named in a
+ * note — never a failure.
  */
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
@@ -16,7 +18,7 @@ import { cleanupWorkDir, createWorkDir, downloadFile, probeMediaDuration } from 
 import { ensureMediaProxy, MediaHasNoAudioError } from "../../services/media-proxy.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { PCM_SAMPLE_RATE, streamPcm } from "./pcm-stream.js"
-import { HopPower, SPEAKER_MAP_HOP_MS, decideSpeakerMap, speakerLevelDb, speakerTurnsOf, type SpeakerMapDecision } from "./speaker-map-levels.js"
+import { HopPower, SPEAKER_MAP_HOP_MS, decideSpeakerMap, speakerLevelDb, speakerTurnsOf, unheardCameraNotes, type SpeakerMapDecision } from "./speaker-map-levels.js"
 import { SPEAKER_MAP_DECODE_TIMEOUT_MS } from "./speaker-map-budget.js"
 
 export interface SpeakerMapJobInput {
@@ -103,7 +105,11 @@ export async function computeSpeakerMap(input: SpeakerMapJobInput): Promise<Spea
       [...hopsById].map(([id, hops]) => [id, speakerLevelDb(hops, turns.filter((t) => t.speaker === sp), offsets.get(id) ?? 0)]),
     )]))
     const decided = decideSpeakerMap({ speakers, levels, marginDb: input.marginDb })
-    const notes = [...decided.notes, ...silent.map((id) => `"${id}": has no audio track, so it cannot be matched to a speaker by sound.`)]
+    const notes = [
+      ...decided.notes,
+      ...silent.map((id) => `"${id}": has no audio track, so it cannot be matched to a speaker by sound.`),
+      ...unheardCameraNotes(hopsById, levels),
+    ]
     const byCamera = new Map<string, string[]>()
     for (const [sp, cam] of Object.entries(decided.speakerMap)) if (cam) byCamera.set(cam, [...(byCamera.get(cam) ?? []), sp])
     const whole = wholeEpisodeEdl({

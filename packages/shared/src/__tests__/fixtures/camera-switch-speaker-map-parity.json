@@ -1,0 +1,178 @@
+{
+  "$comment": "A Speaker Map wired into Camera Switch's `speakerMap` input, read by BOTH engines' resolvers off the saved upstream nodes (the `map` node stands for a saved Speaker Map: its `json` output is its generatedJson). `expectedSpeakerMap` is what the run sends; `withExplicit` adds a label the person set in the panel, which beats the wired map. `emptyWire` is the same wire from a Speaker Map that has not run: recorded as \"\" and refused before the reserve. `notAMap` wires a transcript into `speakerMap`: refused too. `unwired` drops the wire: the run sends exactly what it sent before the input existed (the order default). `withByOrder` sets the ordinal override (\"2\" = the second voice heard), which beats the wired map and loses to an explicit label. `aPicker` wires a parameter picker (Mood) into `speakerMap`: no value at all, so both engines read the input as unwired.",
+  "nodes": [
+    {
+      "id": "plan",
+      "type": "edit-plan",
+      "data": {
+        "label": "Plan",
+        "generatedJson": {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "a",
+              "url": "https://r2/a.mp4",
+              "kind": "video"
+            },
+            {
+              "id": "b",
+              "url": "https://r2/b.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "s",
+              "inMs": 0,
+              "outMs": 900,
+              "video": "a"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tx",
+      "type": "transcribe",
+      "data": {
+        "label": "T",
+        "generatedJson": {
+          "words": [
+            {
+              "text": "x",
+              "startMs": 0,
+              "endMs": 100,
+              "speaker": "s0"
+            },
+            {
+              "text": "y",
+              "startMs": 200,
+              "endMs": 300,
+              "speaker": "s1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "map",
+      "type": "speaker-map",
+      "data": {
+        "label": "M",
+        "generatedJson": {
+          "version": 1,
+          "speakerMap": {
+            "s0": "b",
+            "s1": ""
+          },
+          "confidence": {},
+          "notes": []
+        }
+      }
+    },
+    {
+      "id": "mood",
+      "type": "mood",
+      "data": {
+        "label": "Mood",
+        "mood": "melancholic"
+      }
+    },
+    {
+      "id": "sw",
+      "type": "camera-switch",
+      "data": {
+        "label": "S",
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-edl",
+      "source": "plan",
+      "sourceHandle": "edl",
+      "target": "sw",
+      "targetHandle": "edl"
+    },
+    {
+      "id": "e-tx",
+      "source": "tx",
+      "sourceHandle": "json",
+      "target": "sw",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "e-map",
+      "source": "map",
+      "sourceHandle": "json",
+      "target": "sw",
+      "targetHandle": "speakerMap"
+    }
+  ],
+  "expectedSpeakerMap": {
+    "s0": "b",
+    "s1": ""
+  },
+  "withExplicit": {
+    "data": {
+      "speakerMap": {
+        "s0": ""
+      }
+    },
+    "expectedSpeakerMap": {
+      "s0": "",
+      "s1": ""
+    }
+  },
+  "unwired": {
+    "expectedSpeakerMap": {
+      "s0": "a",
+      "s1": "b"
+    }
+  },
+  "emptyWire": {
+    "mapData": {
+      "label": "M"
+    },
+    "problem": "empty-speaker-map"
+  },
+  "notAMap": {
+    "edge": {
+      "id": "e-map",
+      "source": "tx",
+      "sourceHandle": "json",
+      "target": "sw",
+      "targetHandle": "speakerMap"
+    },
+    "problem": "not-a-speaker-map"
+  },
+  "withByOrder": {
+    "data": {
+      "speakerMapByOrder": {
+        "2": "a"
+      },
+      "speakerMap": {
+        "s0": "a"
+      }
+    },
+    "expectedSpeakerMap": {
+      "s0": "a",
+      "s1": "a"
+    }
+  },
+  "aPicker": {
+    "edge": {
+      "id": "e-map",
+      "source": "mood",
+      "sourceHandle": "out",
+      "target": "sw",
+      "targetHandle": "speakerMap"
+    },
+    "expectedSpeakerMap": {
+      "s0": "a",
+      "s1": "b"
+    }
+  }
+}

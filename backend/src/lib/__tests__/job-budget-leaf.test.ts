@@ -71,13 +71,14 @@ describe("the audio-sync budget leaf", () => {
 })
 
 // Speaker Map's runtime (`speaker-map.ts`) pulls ffmpeg-utils and the media
-// proxy; the mocks above throw on either. Its budget leaf is not composed into
-// the registry yet (the node registers it), so this proves the leaf alone loads
-// pure.
+// proxy; the mocks above throw on either. The registry composes the unit's
+// budget.ts, which re-exports this leaf, so loading the registry proves both.
 describe("the speaker-map budget leaf", () => {
-  it("loads without the ffmpeg runtime or the media proxy", async () => {
+  it("the registry reaches speaker-map's budget (its unit's budget.ts) without loading its ffmpeg runtime or the media proxy", async () => {
     const leaf = await import("../../providers/audio/speaker-map-budget.js")
+    const registry = await import("../job-budget.js")
     expect(typeof leaf.speakerMapJobBudgetMs).toBe("function")
+    expect(registry.BUDGETED_JOB_NAMES).toContain("speaker-map")
   })
 })
 

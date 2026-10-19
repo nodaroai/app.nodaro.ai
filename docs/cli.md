@@ -518,6 +518,13 @@ nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [-
                                                          # 2-6 recordings (audio or video); ids default to source-1, source-2, …
                                                          # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
                                                          # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
+nodaro edit speaker-map (--source <[id=]url> ... | --sources-file <file.json>) --transcript <file.json> [--offsets <file.json>] [--master <id>] [--wide <id>] [--margin-db <db>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # Not yet enabled on nodaro.ai. Which camera each speaker is on, from the cameras'
+                                                         # own microphones (2-6 recordings, the same --source parser as audio-sync; keyless).
+                                                         # --offsets = an audio-sync result; --master / --wide = no one's camera.
+                                                         # --sources-file rows may carry kind: "audio" (a sound-only recording, never a camera).
+                                                         # output_data.json = { version, speakerMap, confidence, notes, edl? } — hand it to
+                                                         # switch-cameras --speaker-map-result.
 nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--clip-key <inMs-outMs>] [--watch] [--poll-interval <ms>] [--json]
                                                          # --quality proxy = a Preview to review (private, lower rate); final = the delivery.
                                                          # --clip-key = "<first inMs>-<last outMs>" of the clips-mode plan clip this render cuts;
@@ -527,8 +534,9 @@ nodaro edit plan --mode tighten|clips|chapters|trailer --plan-tier economy|stand
                                                          # source ids (both commands default to source-1, source-2, …); each source's
                                                          # offset is applied before the request — refused if one was not measured or
                                                          # matched weakly (set its offsetMs in --sources-file).
-nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-map-result <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
                                                          # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
+                                                         # --speaker-map-result = a speaker-map result: a label in --speaker-map wins over it.
                                                          # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
                                                          # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
 nodaro edit tighten-episode --media <url> [--music <url>] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip]] (--layout only with --framing) [--no-captions] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--watch] [--poll-interval <ms>] [--json]

@@ -74,7 +74,15 @@ export interface KieModelConfig {
    * declares it. Each declaration cites its doc URL and fetch date.
    */
   seedType?: "string"
-  requiresDuration?: boolean               // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
+  /**
+   * SCHEMA FACT: which colour of an inpainting `mask_url` marks the area to
+   * change. Absent ⇒ white, the platform's one convention (Mask Painter,
+   * Generate Mask, every API caller). `"black"` ⇒ the model reads a mask the
+   * other way round (the Ideogram family), so `generateImage` in kie/image.ts
+   * inverts a caller's mask before sending it.
+   */
+  maskEditColor?: "black"
+  requiresDuration?: boolean              // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
 }
 
 /**
@@ -395,6 +403,10 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     cost: 0.09,  // (BALANCED default)
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string + mask_url required
+    // Ideogram reads a mask black = edit, white = keep: the reverse of ours.
+    // Production 2026-10-19: a white-painted mask repainted everything BUT the
+    // painted area, while the same mask on flux-fill changed only that area.
+    maskEditColor: "black",
     extraParams: { style: "AUTO", rendering_speed: "BALANCED" },
   },
   "ideogram-remix": {

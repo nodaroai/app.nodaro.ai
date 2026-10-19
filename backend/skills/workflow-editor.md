@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-18T09:32:17.563Z
-generated_from: 470a951f4
+generated_at: 2026-10-19T13:50:35.703Z
+generated_from: db9a8918b
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -219,6 +219,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `social-search` — Social Search
 - `sort-list` — Sort List
 - `speaker-frames` — Speaker Frames
+- `speaker-map` — Speaker Map
 - `speaker-view` — Speaker View
 - `speech-to-video` — Speech to Video
 - `speed-ramp` — Adjust Speed

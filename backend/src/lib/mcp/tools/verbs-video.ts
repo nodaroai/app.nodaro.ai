@@ -9,6 +9,7 @@ import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { registerVideoMaskVerbs } from "./verbs-video-mask.js"
 import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
+import { registerSpeakerMapVerb } from "./verbs-speaker-map.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   parseJobId,
@@ -26,7 +27,7 @@ import { widgetModelOf } from "../widget-models.js"
 import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, VIDEO_UPSCALE_PROVIDERS, resolveVideoModeForInputs, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
-import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
+import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
 import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
 import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
@@ -3266,6 +3267,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── speaker_map (podcast editing — CORE, keyless; its own module) ──
+  registerSpeakerMapVerb({ server, session, fastify })
+
   // ── apply_edl (podcast editing — CORE, ungated) ──
   // Render an edit-decision list into a finished cut — the executor half of the
   // podcast primitives. Consumes an EDL (from plan_edit, or hand-written to the
@@ -3509,12 +3513,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         description:
           "Choose which camera shows each cut of an edit by who is speaking (multicam). Pass the `edl` " +
           "(a plan_edit result) and the diarized `transcript` (transcribe with speaker detection); " +
-          "`speaker_map` maps each speaker label to a camera source id. The sound never changes. " +
+          "`speaker_map` maps each speaker label to a camera source id; `speaker_map_result` takes a `speaker_map` " +
+          "job's output_data.json whole — a label in `speaker_map` wins over it, and a speaker neither names gets " +
+          "camera n for speaker n. The sound never changes. " +
           "Returns a job_id; output_data.json is the switched EDL for apply_edl.",
         inputSchema: {
           edl: z.union([z.record(z.string(), z.unknown()), z.string()]).describe("One EDL (a plan_edit result), object or JSON string."),
           transcript: z.union([z.record(z.string(), z.unknown()), z.string()]).describe("The word transcript with speaker labels."),
-          speaker_map: z.record(z.string(), z.string()).optional().describe("Speaker label → EDL source id of their camera."),
+          speaker_map: z.record(z.string(), z.string()).optional().describe("Speaker label → EDL source id of their camera (\"\" = no camera of their own: the wide shot)."),
+          speaker_map_result: z.union([z.record(z.string(), z.unknown()), z.string()]).optional().describe("A speaker_map job's output_data.json (object or JSON string): who is on which camera, worked out from the cameras' microphones."),
           speaker_names: z.record(z.string(), z.string()).optional().describe("Speaker label → display name."),
           min_shot_ms: z.number().int().min(CAMERA_SWITCH_BOUNDS.minShotMs.min).max(CAMERA_SWITCH_BOUNDS.minShotMs.max).optional(),
           lead_ms: z.number().int().min(CAMERA_SWITCH_BOUNDS.leadMs.min).max(CAMERA_SWITCH_BOUNDS.leadMs.max).optional(),
@@ -3535,10 +3542,21 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             isError: true as const,
           }
         }
+        if (args.speaker_map_result !== undefined && speakerMapResultOf(args.speaker_map_result) === null) {
+          return {
+            content: [{ type: "text" as const, text: "switch_cameras: `speaker_map_result` is not a speaker_map result — pass that job's output_data.json" }],
+            isError: true as const,
+          }
+        }
+        // A Speaker Map result folds into the map by the canvas's own rule
+        // (cameraSwitchSpeakerMap): a label set in speaker_map wins, then the result.
+        const speakerMap = args.speaker_map_result !== undefined
+          ? cameraSwitchSpeakerMap({ speakerMap: args.speaker_map }, args.edl, args.transcript, { speakerMap: args.speaker_map_result })
+          : args.speaker_map
         const payload: Record<string, unknown> = {
           edl: args.edl,
           transcript: args.transcript,
-          ...(args.speaker_map ? { speakerMap: args.speaker_map } : {}),
+          ...(speakerMap ? { speakerMap } : {}),
           ...(args.speaker_names ? { speakerNames: cleanSpeakerNames(args.speaker_names) } : {}),
           ...(args.min_shot_ms !== undefined ? { minShotMs: args.min_shot_ms } : {}),
           ...(args.lead_ms !== undefined ? { leadMs: args.lead_ms } : {}),

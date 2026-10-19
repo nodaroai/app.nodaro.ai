@@ -14,7 +14,8 @@ export type {
   EditPlanMode,
   EditPlanTier,
   EdlClipSet,
-  ChapterSet
+  ChapterSet,
+  SpeakerMapResult
 } from "@nodaro/shared/edl"
 
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
@@ -49,3 +50,5 @@ export type {
   UseCaseNodeType,
   UseCaseRequestOptions,
 } from "../resources/edit.js"
+
+export type { SpeakerMapInput, SpeakerMapSource } from "../resources/speaker-map-inputs.js"

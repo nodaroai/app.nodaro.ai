@@ -4,7 +4,7 @@ import { LOOP_COL_ADD_HANDLE, NODE_DEF_MAP, OVERLAY_HANDLE_IDS } from "@/types/n
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
-import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
+import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS, offeredTargetHandles } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import { unitConnectionVerdict } from "./unit-connections"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS } from "@nodaro/shared/nodes"
@@ -296,6 +296,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     `offsets` (audio-sync's result) accept json producers; its
   //     `transcript` and `sources` ids are covered above.
   "silence", "offsets",
+  //   - camera-switch's `speakerMap` (a Speaker Map result) accepts json
+  //     producers. Drift mirror of the registry.
+  "speakerMap",
   //   - Tighten Episode's inputs: `media` (the recording, video or audio) and
   //     `music` (an audio bed); Trailer's `introCard` (a video card played
   //     before the trailer). Drift mirror of the registry.
@@ -406,8 +409,7 @@ export function getCompatibleNodes(
       // Skip the source node's own type — self-loops are rejected by the
       // cycle guard anyway and surfacing them in the popup is just noise.
       if (option.type === consumerNodeType) continue
-      const entries = TARGET_HANDLE_ACCEPTS[option.type]
-      if (!entries) continue
+      const entries = offeredTargetHandles(option.type)
       if (entries.some((e) => e.accepts(typedSourceType))) {
         direct.push(option)
         directTypes.add(option.type)
@@ -434,7 +436,7 @@ export function getCompatibleNodes(
     const compatible: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
-      const acceptsIdentity = TARGET_HANDLE_ACCEPTS[option.type]?.some((e) => e.accepts(identitySource)) ?? false
+      const acceptsIdentity = offeredTargetHandles(option.type).some((e) => e.accepts(identitySource))
       if (acceptsIdentity || generic.directTypes.has(option.type)) {
         direct.push(option)
         directTypes.add(option.type)
@@ -1013,7 +1015,7 @@ function ugcCompatibleNodes(
       madeFor.push(option)
       continue
     }
-    const entries = TARGET_HANDLE_ACCEPTS[option.type] ?? []
+    const entries = offeredTargetHandles(option.type)
     if (entries.some((e) => e.accepts(emitted) && dropAccepts(consumerNodeType, handleId, option.type, e.handleId))) others.push(option)
   }
   const direct = madeFor.length > 0 ? madeFor : others
@@ -1046,7 +1048,7 @@ function loosePip(
     // Generate Script's field-*), which no loose handle map knows.
     const typedSource = identityRefSourceType(sourceHandleId) ?? settingsSourceTypeForHandle(sourceHandleId)
     const accepting = typedSource
-      ? TARGET_HANDLE_ACCEPTS[nodeType]?.find((e) => e.accepts(typedSource))
+      ? offeredTargetHandles(nodeType).find((e) => e.accepts(typedSource))
       : undefined
     if (accepting) return accepting.handleId
     return def.inputs.find((h) => compatible.includes(h)) ?? "in"

@@ -1,12 +1,13 @@
 /**
  * Speaker Map's step ceilings and liveness budget (decided 2026-10-17) — PURE
- * (imports only the dependency-free ceiling leaf), like audio-sync-budget.ts,
- * so the orchestrator and the video worker's heartbeat can size a run without
- * loading the ffmpeg runtime. Each source is charged its proxy steps (the same
+ * (imports only the dependency-free ceiling leaf and the published contract's
+ * source limit), like audio-sync-budget.ts, so the orchestrator and the video
+ * worker's heartbeat can size a run without loading the ffmpeg runtime. Each source is charged its proxy steps (the same
  * ones Audio Sync charges: the original's fetch + probe + proxy encode, the
  * proxy fetch, the duration probe) and ONE whole-source decode — no windows,
  * unlike Audio Sync. A hung-detector bound, not an estimate.
  */
+import { SPEAKER_MAP_MAX_SOURCES } from "@nodaro/shared/edl"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
@@ -15,9 +16,9 @@ import {
   MEDIA_PROXY_FFMPEG_TIMEOUT_MS,
 } from "../video/ffmpeg-timeouts.js"
 
-/** The most sources one job reads (the published contract's limit; the node's
+/** The most sources one job reads: the published contract's limit (the node's
  *  route refuses more, so the budget is never sized past it). */
-export const SPEAKER_MAP_BUDGET_MAX_SOURCES = 6
+export const SPEAKER_MAP_BUDGET_MAX_SOURCES = SPEAKER_MAP_MAX_SOURCES
 /** One whole-source decode at 8 kHz mono (a 3-hour source decodes well inside it). */
 export const SPEAKER_MAP_DECODE_TIMEOUT_MS = 30 * 60_000
 /** One source: its proxy steps and its decode. */

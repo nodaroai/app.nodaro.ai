@@ -1,7 +1,10 @@
 // tools/__tests__/test-select-shadow-report.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected, baseFailures, baseFromCheckoutLog, withRetry, classifyFullReason } from "../test-select/shadow-report.mjs"
+import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected, baseFailures, baseFromCheckoutLog, withRetry, classifyFullReason, downloadArtifact } from "../test-select/shadow-report.mjs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
 
 const run = (url, frontend, backend) => ({ url, projects: { ...(frontend && { frontend }), ...(backend && { backend }) } })
 
@@ -330,13 +333,19 @@ test("gh calls: a transient GitHub 5xx is retried, anything else throws at once"
   let n = 0
   const flaky = () => { if (++n < 3) throw Object.assign(new Error("Command failed"), { stderr: "gh: Server Error (HTTP 502)\n" }); return "ok" }
   assert.equal(withRetry(flaky, { pause }), "ok")
-  assert.deepEqual(pauses, [2000, 4000])
+  assert.deepEqual(pauses, [5000, 10000])
   n = 0
   assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "gh: Not Found (HTTP 404)" }) }, { pause }), /x/)
   assert.equal(n, 1)
   n = 0
   assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "HTTP 503" }) }, { pause, tries: 3 }))
   assert.equal(n, 3)
+  // the default: six tries, the pause doubling to a 60 s cap — about two minutes of a 5xx spell
+  const waits = []
+  n = 0
+  assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "gh: Server Error (HTTP 502)" }) }, { pause: (ms) => waits.push(ms) }))
+  assert.equal(n, 6)
+  assert.deepEqual(waits, [5000, 10000, 20000, 40000, 60000])
 })
 
 test("gh calls: a dropped connection (no HTTP status) is retried like a 5xx, then thrown; a 404 download is not", () => {
@@ -358,6 +367,24 @@ test("gh calls: a dropped connection (no HTTP status) is retried like a 5xx, the
   let n = 0
   assert.throws(() => withRetry(() => { n++; throw Object.assign(new Error("x"), { stderr: "no valid artifacts found to download\n" }) }, { pause }))
   assert.equal(n, 1)
+})
+
+test("artifact download: every attempt starts from an empty directory, so a retry after a half-extracted zip is not \"file exists\"", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "dl-"))
+  const seen = []
+  let n = 0
+  const run = (args) => {
+    seen.push(existsSync(path.join(out, "selection-backend.json")))
+    mkdirSync(out, { recursive: true })
+    writeFileSync(path.join(out, "selection-backend.json"), "{}")
+    if (++n < 2) throw Object.assign(new Error("Command failed"), { stderr: "error downloading selection-backend-1: Get \"https://x.blob.core.windows.net/a.zip\": EOF\n" })
+    assert.deepEqual(args.slice(0, 3), ["run", "download", "123"])
+    return ""
+  }
+  downloadArtifact(123, "o/r", "selection-backend-1", out, run, (call) => withRetry(call, { pause: () => {} }))
+  assert.deepEqual(seen, [false, false])
+  assert.equal(n, 2)
+  rmSync(out, { recursive: true, force: true })
 })
 
 test("gh calls: an empty or cut-off response gh could not parse (\"unexpected end of JSON input\") is retried like a 5xx, then thrown", () => {

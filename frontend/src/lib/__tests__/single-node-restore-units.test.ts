@@ -37,6 +37,11 @@ describe("a node unit's restore horizon", () => {
     expect(restoreMaxAgeMs("fixture-short")).toBe(SINGLE_NODE_RESTORE_MAX_AGE_MS)
   })
 
+  it("the real units with a budget.ts are long-running (Speaker Map's whole-recording decode)", () => {
+    expect(LONG_RUNNING_NODE_TYPES.has("speaker-map")).toBe(true)
+    expect(restoreMaxAgeMs("speaker-map")).toBe(LONG_RUNNING_RESTORE_MAX_AGE_MS)
+  })
+
   it("every legacy long job keeps its place", () => {
     for (const t of ["generate-video-pro", "edit-video-pro", "apply-edl", "audio-sync", "silence-detect"]) expect(LONG_RUNNING_NODE_TYPES.has(t), t).toBe(true)
   })

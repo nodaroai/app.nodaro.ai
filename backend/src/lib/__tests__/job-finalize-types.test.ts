@@ -97,9 +97,11 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // render registry (RENDER_NODE_TYPE_IDS, spread in below) to 63. Mask Composite
   // (local ffmpeg) and Video Mask (fal with no registered task id — its RLE is
   // rendered locally, so the generic fal finalize cannot recover it) took it to 65,
-  // and pitch-tempo (a local ffmpeg lane with its own markJobCompleted) to 66.
-  it("has exactly 66 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(66)
+  // and pitch-tempo (a local ffmpeg lane with its own markJobCompleted) to 66,
+  // and Speaker Map (a worker unit declaring finalize:own-writer: a local
+  // analysis that writes its own completion, like audio-sync) to 67.
+  it("has exactly 67 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(67)
   })
 
   it("denies generate-script and no other entity handler key", () => {
