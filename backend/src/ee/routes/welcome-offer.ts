@@ -6,6 +6,7 @@ import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
 import { readFreeGrant, runSignupGrantClaim, type FreeGrantState } from "../billing/signup-grant.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
+import { consentLocaleField } from "../lib/consent-locale.js"
 import { recordConsentGrant } from "../lib/consent-record.js"
 import { syncConsentRow } from "../lib/consent-loops-sync.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
@@ -40,10 +41,13 @@ const HEX64 = /^[0-9a-f]{64}$/
 
 // Lenient by contract, per field (same reasoning as claim-signup-grant.ts):
 // a fingerprint that is missing or malformed is stored as NULL and never a
-// 400. The `sourceApp` slug grammar is the one attribution and consent use.
+// 400. The `sourceApp` slug grammar is the one attribution and consent use;
+// `locale` is the interface language the yes was given in (an id we ship, else
+// absent) and is recorded with the consent.
 const fingerprint = z.string().regex(HEX64).optional().catch(undefined)
 const claimBody = z.object({
   sourceApp: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional().catch(undefined),
+  locale: consentLocaleField,
   browserKey: fingerprint,
   deviceKey: fingerprint,
 })
@@ -91,7 +95,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
       const body = parsed.success ? parsed.data : {}
 
       try {
-        const consent = await recordConsentGrant(userId, body.sourceApp ?? null, req.log)
+        const consent = await recordConsentGrant(userId, body.sourceApp ?? null, body.locale ?? null, req.log)
         if (consent.error) {
           return sendInternalError(reply, req, new Error(consent.error), "Failed to record consent")
         }

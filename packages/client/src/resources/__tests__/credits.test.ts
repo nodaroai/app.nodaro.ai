@@ -101,6 +101,15 @@ describe("credits — welcome offer", () => {
     expect(result).toEqual(answer)
   })
 
+  it("claimWelcomeOffer() forwards the interface language the yes was given in", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ consent: "granted", grant: "granted", credits: 1500 }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.credits.claimWelcomeOffer({ sourceApp: "studio", locale: "ja" })
+
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ sourceApp: "studio", locale: "ja" })
+  })
+
   it("claimWelcomeOffer() with no input sends an empty body", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ consent: "granted", grant: "withheld", credits: 1500 }))
     const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })

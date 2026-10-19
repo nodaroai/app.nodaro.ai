@@ -33,6 +33,14 @@ export interface LoopsContactProperties {
   firstName?: string
   /** Whether the contact receives marketing email. false = unsubscribed. */
   subscribed?: boolean
+  /**
+   * The customer's language: a `@nodaro/shared` LocaleId (`en`, `ja`, `pt-BR`…).
+   * A CUSTOM property, so send it only once `languageProperty.ensure()`
+   * (loops-contact-properties.ts) has confirmed it exists, and leave the key
+   * out when the language is not known — what Loops does with an empty value
+   * is not documented, so a null or a blank is never sent.
+   */
+  language?: string
   /** Free-form custom properties (must already exist as Loops contact
    *  properties, or be created in the Loops dashboard). */
   [key: string]: string | number | boolean | undefined
@@ -130,6 +138,99 @@ export async function findContact(email: string): Promise<LoopsContactLookup> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Custom contact properties — Loops accepts a value for a custom property only
+// once the property exists in the account. What we write is made to exist first
+// (loops-contact-properties.ts); these are the two calls that takes.
+// ---------------------------------------------------------------------------
+
+/** The custom property that carries a customer's language: a `@nodaro/shared` LocaleId. */
+export const LOOPS_LANGUAGE_PROPERTY = "language"
+
+export type LoopsPropertyType = "string" | "number" | "boolean" | "date"
+
+export interface LoopsContactPropertyDef {
+  key: string
+  label: string
+  type: string
+}
+
+export interface LoopsPropertyList extends LoopsResult {
+  /** `null` unless Loops answered with a list — a failed read is never an empty account. */
+  properties: LoopsContactPropertyDef[] | null
+}
+
+/** One call to the contact-properties endpoint. Never throws; a body that is not JSON comes back as `null`. */
+async function callContactProperties(
+  method: "GET" | "POST",
+  query: string,
+  body?: Record<string, unknown>,
+): Promise<LoopsResult & { json: unknown }> {
+  if (!isLoopsConfigured()) return { ok: false, error: "loops_not_configured", json: null }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const res = await fetch(`${LOOPS_API_BASE}/contacts/properties${query}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${config.LOOPS_API_KEY}`,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+    const raw = await res.text().catch(() => "")
+    if (!res.ok) return { ok: false, status: res.status, error: raw.slice(0, 300) || `http_${res.status}`, json: null }
+    return { ok: true, status: res.status, json: parseJson(raw) }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "loops_request_failed"
+    return { ok: false, error: msg, json: null }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The account's CUSTOM contact properties. `{ ok: false }` means we could not
+ * find out (key missing, timeout, HTTP error, a body that is not a list) — the
+ * caller must treat that as "unknown", never as "the account has none".
+ */
+export async function listCustomContactProperties(): Promise<LoopsPropertyList> {
+  const r = await callContactProperties("GET", "?list=custom")
+  if (!r.ok) return { ok: false, status: r.status, error: r.error, properties: null }
+  if (!Array.isArray(r.json)) return { ok: false, status: r.status, error: "loops_unexpected_body", properties: null }
+
+  const properties = r.json.flatMap((entry): LoopsContactPropertyDef[] => {
+    if (typeof entry !== "object" || entry === null) return []
+    const { key, label, type } = entry as { key?: unknown; label?: unknown; type?: unknown }
+    if (typeof key !== "string") return []
+    return [{ key, label: typeof label === "string" ? label : key, type: typeof type === "string" ? type : "" }]
+  })
+  return { ok: true, status: r.status, properties }
+}
+
+/** Create a custom contact property. Resolves `{ ok: false }` (never throws), with Loops' own reason when it gave one. */
+export async function createContactProperty(name: string, type: LoopsPropertyType): Promise<LoopsResult> {
+  const r = await callContactProperties("POST", "", { name, type })
+  if (!r.ok) return { ok: false, status: r.status, error: r.error }
+
+  // An explicit `success: false` on a 2xx is still Loops saying no.
+  const reply = typeof r.json === "object" && r.json !== null ? (r.json as { success?: unknown; message?: unknown }) : null
+  if (reply?.success === false) {
+    return { ok: false, status: r.status, error: typeof reply.message === "string" ? reply.message : "loops_reported_failure" }
+  }
+  return { ok: true, status: r.status }
 }
 
 // ---------------------------------------------------------------------------

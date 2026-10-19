@@ -68,6 +68,14 @@ export interface WelcomeOfferClaimInput extends SignupKeys {
    * stored as absent, never refused.
    */
   sourceApp?: string
+  /**
+   * The interface language the user answered in — the id of a language Nodaro
+   * ships, such as `"en"`, `"ja"` or `"pt-BR"`. Matched exactly and
+   * case-sensitively: `"en-US"` or `"pt-br"` is stored as absent, never refused.
+   * Recorded with the consent as the language of the LATEST consent: a later
+   * "yes" in another language replaces it.
+   */
+  locale?: string
 }
 
 /** The answer of `POST /v1/credits/welcome-offer/claim`. */

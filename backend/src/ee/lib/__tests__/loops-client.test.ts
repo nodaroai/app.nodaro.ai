@@ -2,7 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("@/lib/config.js", () => ({ config: { LOOPS_API_KEY: "" } }))
 
-import { updateContact, isLoopsConfigured, sendTransactional, findContact } from "../loops-client.js"
+import {
+  updateContact,
+  isLoopsConfigured,
+  sendTransactional,
+  findContact,
+  listCustomContactProperties,
+  createContactProperty,
+  LOOPS_LANGUAGE_PROPERTY,
+} from "../loops-client.js"
 import { config } from "../../../lib/config.js"
 
 function setKey(key: string) {
@@ -35,6 +43,15 @@ describe("loops-client", () => {
     expect(opts.method).toBe("PUT")
     expect(opts.headers.Authorization).toBe("Bearer test-key")
     expect(JSON.parse(opts.body as string)).toMatchObject({ email: "a@b.com", subscribed: true, firstName: "A" })
+  })
+
+  it("carries the customer's language as a contact property", async () => {
+    setKey("test-key")
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => "" })
+    vi.stubGlobal("fetch", fetchMock)
+    await updateContact("a@b.com", { subscribed: true, language: "ja" })
+    const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(opts.body as string)).toMatchObject({ email: "a@b.com", subscribed: true, language: "ja" })
   })
 
   it("returns not-ok with the status on an HTTP error", async () => {
@@ -97,6 +114,113 @@ describe("findContact", () => {
     expect(await findContact("a@b.com")).toMatchObject({ ok: false, contact: null })
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")))
     expect(await findContact("a@b.com")).toMatchObject({ ok: false, contact: null })
+  })
+})
+
+describe("custom contact properties", () => {
+  const PROPERTIES = [
+    { key: "language", label: "Language", type: "string" },
+    { key: "plan", label: "Plan", type: "string" },
+  ]
+
+  it("names the language property 'language'", () => {
+    expect(LOOPS_LANGUAGE_PROPERTY).toBe("language")
+  })
+
+  describe("listCustomContactProperties", () => {
+    it("is not-ok without a key and never calls out", async () => {
+      const fetchMock = vi.fn()
+      vi.stubGlobal("fetch", fetchMock)
+      const r = await listCustomContactProperties()
+      expect(r).toMatchObject({ ok: false, error: "loops_not_configured", properties: null })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it("GETs the account's custom properties", async () => {
+      setKey("test-key")
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify(PROPERTIES) })
+      vi.stubGlobal("fetch", fetchMock)
+      const r = await listCustomContactProperties()
+      expect(r.ok).toBe(true)
+      expect(r.properties).toEqual(PROPERTIES)
+      const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Record<string, string> }]
+      expect(url).toBe("https://app.loops.so/api/v1/contacts/properties?list=custom")
+      expect(opts.method).toBe("GET")
+      expect(opts.headers.Authorization).toBe("Bearer test-key")
+    })
+
+    it("keeps only the entries that are properties", async () => {
+      setKey("test-key")
+      const body = JSON.stringify([PROPERTIES[0], null, "x", { label: "no key" }, { key: 7 }])
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => body }))
+      const r = await listCustomContactProperties()
+      expect(r.properties).toEqual([PROPERTIES[0]])
+    })
+
+    it("is not-ok — never an empty list — on an HTTP error, an unexpected body and a rejected fetch", async () => {
+      setKey("test-key")
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "boom" }))
+      expect(await listCustomContactProperties()).toMatchObject({ ok: false, status: 500, properties: null })
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"nope":true}' }))
+      expect(await listCustomContactProperties()).toMatchObject({ ok: false, properties: null })
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => "not json" }))
+      expect(await listCustomContactProperties()).toMatchObject({ ok: false, properties: null })
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")))
+      const r = await listCustomContactProperties()
+      expect(r).toMatchObject({ ok: false, properties: null })
+      expect(r.error).toContain("network down")
+    })
+  })
+
+  describe("createContactProperty", () => {
+    it("is not-ok without a key and never calls out", async () => {
+      const fetchMock = vi.fn()
+      vi.stubGlobal("fetch", fetchMock)
+      const r = await createContactProperty("language", "string")
+      expect(r).toMatchObject({ ok: false, error: "loops_not_configured" })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it("POSTs the property name and type", async () => {
+      setKey("test-key")
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"success":true}' })
+      vi.stubGlobal("fetch", fetchMock)
+      const r = await createContactProperty("language", "string")
+      expect(r.ok).toBe(true)
+      const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit & { headers: Record<string, string> }]
+      expect(url).toBe("https://app.loops.so/api/v1/contacts/properties")
+      expect(opts.method).toBe("POST")
+      expect(opts.headers.Authorization).toBe("Bearer test-key")
+      expect(JSON.parse(opts.body as string)).toEqual({ name: "language", type: "string" })
+    })
+
+    it("returns Loops' reason on a refusal", async () => {
+      setKey("test-key")
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ ok: false, status: 400, text: async () => '{"success":false,"message":"Property already exists."}' }),
+      )
+      const r = await createContactProperty("language", "string")
+      expect(r.ok).toBe(false)
+      expect(r.status).toBe(400)
+      expect(r.error).toContain("already exists")
+    })
+
+    it("treats an explicit success:false on a 200 as a refusal", async () => {
+      setKey("test-key")
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"success":false,"message":"nope"}' }))
+      const r = await createContactProperty("language", "string")
+      expect(r.ok).toBe(false)
+      expect(r.error).toContain("nope")
+    })
+
+    it("returns not-ok (never throws) when fetch rejects", async () => {
+      setKey("test-key")
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")))
+      const r = await createContactProperty("language", "string")
+      expect(r.ok).toBe(false)
+      expect(r.error).toContain("network down")
+    })
   })
 })
 
