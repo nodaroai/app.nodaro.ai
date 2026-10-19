@@ -103,7 +103,7 @@ describe("POST /v1/credits/welcome-offer/claim", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ consent: "granted", grant: "granted", credits: TIER_CREDITS.free })
 
-    expect(mockRecordConsent).toHaveBeenCalledWith(USER, "studio", expect.anything())
+    expect(mockRecordConsent).toHaveBeenCalledWith(USER, "studio", null, expect.anything())
     expect(mockRunClaim).toHaveBeenCalledTimes(1)
     const [params, , options] = mockRunClaim.mock.calls[0]
     expect(params).toMatchObject({ userId: USER, browserKey: HEX64, deviceKey: null })
@@ -118,8 +118,25 @@ describe("POST /v1/credits/welcome-offer/claim", () => {
   it("a malformed fingerprint or app slug is dropped, never a 400", async () => {
     const res = await claim({ sourceApp: "NOT A SLUG", browserKey: "short" })
     expect(res.statusCode).toBe(200)
-    expect(mockRecordConsent).toHaveBeenCalledWith(USER, null, expect.anything())
+    expect(mockRecordConsent).toHaveBeenCalledWith(USER, null, null, expect.anything())
     expect(mockRunClaim.mock.calls[0][0]).toMatchObject({ browserKey: null })
+  })
+
+  it("records the language the yes was given in", async () => {
+    const res = await claim({ sourceApp: "studio", locale: "ja" })
+    expect(res.statusCode).toBe(200)
+    expect(mockRecordConsent).toHaveBeenCalledWith(USER, "studio", "ja", expect.anything())
+  })
+
+  it.each([
+    ["an unknown language", { locale: "xx-XX" }],
+    ["a value that is not a string", { locale: 7 }],
+    ["no language at all — an older client", {}],
+  ])("%s is recorded as absent, and the claim still goes through", async (_label, extra) => {
+    const res = await claim({ sourceApp: "studio", ...extra })
+    expect(res.statusCode).toBe(200)
+    expect(mockRecordConsent).toHaveBeenCalledWith(USER, "studio", null, expect.anything())
+    expect(mockRunClaim).toHaveBeenCalledTimes(1)
   })
 
   it("an already-decided account only has its consent recorded (no second claim)", async () => {

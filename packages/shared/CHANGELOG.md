@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.36.0
+
+### Minor Changes
+
+- 1f772b2: `luma-modify` has a `MODEL_CATALOG` entry (video, `v2v`), made by the new `luma` maker, so `/v1/models` and `list_models` list it.
+
 ## 3.35.0
 
 ### Minor Changes

@@ -6141,7 +6141,10 @@ show the offer only when `balance().welcomeOffer` is present.
 **`WelcomeOfferClaimInput`:** `SignupKeys` (from `collectSignupKeys()`) plus
 `sourceApp?: string` — your app's slug (lowercase letters, digits and `-`, up to
 40 characters), recorded with the consent. A malformed value is stored as
-absent, never refused.
+absent, never refused — and `locale?: string`, the interface language the user
+answered in: the id of a language Nodaro ships (`"en"`, `"ja"`, `"pt-BR"`, …),
+matched exactly and case-sensitively, so `"en-US"` or `"pt-br"` is stored as
+absent. It is recorded with the consent as the language of the latest one.
 
 **`WelcomeOfferClaimResult`:**
 
@@ -6175,7 +6178,7 @@ if (welcomeOffer && !welcomeOffer.popupSeen) {
 
 // On "Yes":
 const keys = await collectSignupKeys()
-const { grant, credits } = await client.credits.claimWelcomeOffer({ ...keys, sourceApp: "my-app" })
+const { grant, credits } = await client.credits.claimWelcomeOffer({ ...keys, sourceApp: "my-app", locale: "en" })
 if (grant === "granted") showToast(`Your ${credits} free credits are ready`)  // topped up to the figure, not added on top
 ```
 

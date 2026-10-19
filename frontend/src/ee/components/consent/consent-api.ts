@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@/lib/api"
+import { consentInterfaceLocale } from "@/ee/lib/consent-locale"
 
 /** Where consent was answered (best-effort attribution). Each app that mounts
  *  the consent UI passes its own slug; this build is app.nodaro.ai. */
@@ -50,17 +51,22 @@ export async function fetchConsentStatus(): Promise<ConsentStatus> {
   }
 }
 
+/*
+ * Every answer carries the interface language it was given in, which the server
+ * records with the consent (an older server ignores the field).
+ */
+
 /** Approve — subscribe to marketing email. */
 export function grantConsent(sourceApp?: string): Promise<void> {
-  return postConsent("/v1/consent/grant", sourceApp ? { sourceApp } : {})
+  return postConsent("/v1/consent/grant", { ...(sourceApp ? { sourceApp } : {}), locale: consentInterfaceLocale() })
 }
 
 /** "No thanks" — terminal decline, never asked again. */
 export function declineConsent(): Promise<void> {
-  return postConsent("/v1/consent/decline")
+  return postConsent("/v1/consent/decline", { locale: consentInterfaceLocale() })
 }
 
 /** Opt out from Settings after having granted. */
 export function withdrawConsent(): Promise<void> {
-  return postConsent("/v1/consent/withdraw")
+  return postConsent("/v1/consent/withdraw", { locale: consentInterfaceLocale() })
 }

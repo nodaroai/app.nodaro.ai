@@ -5,7 +5,8 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { getConsentConfig } from "../lib/consent-config.js"
 import { syncConsentRow } from "../lib/consent-loops-sync.js"
-import { CONSENT_KIND, recordConsentGrant } from "../lib/consent-record.js"
+import { consentLocaleField } from "../lib/consent-locale.js"
+import { CONSENT_KIND, recordConsentGrant, recordConsentOptOut } from "../lib/consent-record.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { readFreeGrantState, readWelcomeOfferState } from "../billing/signup-grant.js"
 
@@ -38,10 +39,17 @@ async function welcomeOfferOwnsTheAsk(userId: string): Promise<boolean> {
   }
 }
 
-// Same slug grammar attribution uses; the client normalizes to it.
+// Same slug grammar attribution uses; the client normalizes to it. `locale` is
+// the interface language the answer was given in — lenient by contract, so an
+// older client (which sends none) and an unknown id are both read as "not said".
 const answerBody = z.object({
   sourceApp: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
+  locale: consentLocaleField,
 })
+
+// An opt-out carries only the language; a body that is not an object, or names
+// none we ship, records no language and the opt-out still goes through.
+const optOutBody = z.object({ locale: consentLocaleField })
 
 function requireBrowserUser(req: FastifyRequest, reply: FastifyReply): string | null {
   const userId = req.userId
@@ -136,7 +144,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
       // One helper for every grant path (this route, the welcome-offer claim):
       // the row goes to 'granted' and the extension's consent-pending mark is
       // cleared, so a "yes" from Settings unblocks creation like any other.
-      const { error } = await recordConsentGrant(userId, parsed.data.sourceApp ?? null, req.log)
+      const { error } = await recordConsentGrant(userId, parsed.data.sourceApp ?? null, parsed.data.locale ?? null, req.log)
       if (error) return sendInternalError(reply, req, new Error(error), "Failed to record consent")
 
       void syncConsentRow(userId).catch(() => {})
@@ -167,23 +175,9 @@ async function recordOptOut(
   const userId = requireBrowserUser(req, reply)
   if (!userId) return
 
-  const nowIso = new Date().toISOString()
-  const { error } = await supabase.from("user_consents").upsert(
-    {
-      user_id: userId,
-      kind: CONSENT_KIND,
-      status,
-      updated_at: nowIso,
-      // Always flag for a Loops push and let syncConsentRow decide: it no-ops
-      // when the user never had a contact (granted_at IS NULL). Deriving
-      // "was granted" here with a prior read would lose an unsubscribe to a
-      // read-then-write race against a concurrent grant in another tab.
-      loops_dirty: true,
-      ...(status === "declined" ? { declined_at: nowIso } : { withdrawn_at: nowIso }),
-    },
-    { onConflict: "user_id,kind" },
-  )
-  if (error) return sendInternalError(reply, req, new Error(error.message), "Failed to record consent")
+  const locale = optOutBody.safeParse(req.body ?? {}).data?.locale ?? null
+  const { error } = await recordConsentOptOut(userId, status, locale, req.log)
+  if (error) return sendInternalError(reply, req, new Error(error), "Failed to record consent")
 
   void syncConsentRow(userId).catch(() => {})
   return { status }

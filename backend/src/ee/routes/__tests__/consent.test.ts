@@ -205,3 +205,70 @@ describe("POST grant / decline / withdraw", () => {
     expect(upsert.mock.calls[0][0]).toMatchObject({ status: "withdrawn", withdrawn_at: expect.any(String) })
   })
 })
+
+describe("the interface language a consent is answered in", () => {
+  const post = (url: string, payload: Record<string, unknown>) =>
+    app.inject({ method: "POST", url, payload: { userId: "u1", ...payload } })
+
+  it("grant records the language it was given in", async () => {
+    const upsert = mockUpsertOk()
+    const res = await post("/v1/consent/grant", { sourceApp: "studio", locale: "ja" })
+    expect(res.statusCode).toBe(200)
+    expect(upsert.mock.calls[0][0]).toMatchObject({ source_app: "studio", consent_version: 3, locale: "ja" })
+  })
+
+  it("grant stores an unknown language as null and the request still succeeds", async () => {
+    const upsert = mockUpsertOk()
+    const res = await post("/v1/consent/grant", { locale: "xx-XX" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ status: "granted" })
+    expect(upsert.mock.calls[0][0]).toHaveProperty("locale", null)
+  })
+
+  it("grant stores null when no language is sent — an older client", async () => {
+    const upsert = mockUpsertOk()
+    const res = await post("/v1/consent/grant", { sourceApp: "app" })
+    expect(res.statusCode).toBe(200)
+    expect(upsert.mock.calls[0][0]).toHaveProperty("locale", null)
+  })
+
+  it("grant still records the consent on a database that has no locale column yet", async () => {
+    const upsert = vi
+      .fn()
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'locale' column of 'user_consents'" } })
+      .mockResolvedValueOnce({ error: null })
+    vi.mocked(supabase.from).mockReturnValue({ upsert } as never)
+
+    const res = await post("/v1/consent/grant", { sourceApp: "studio", locale: "ja" })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ status: "granted" })
+    expect(upsert).toHaveBeenCalledTimes(2)
+    expect(upsert.mock.calls[1][0]).not.toHaveProperty("locale")
+    expect(upsert.mock.calls[1][0]).toMatchObject({ status: "granted", source_app: "studio", loops_dirty: true })
+    expect(syncConsentRow).toHaveBeenCalledWith("u1")
+  })
+
+  it.each([
+    ["decline", "declined"],
+    ["withdraw", "withdrawn"],
+  ])("%s records the language it was answered in", async (path, status) => {
+    const upsert = mockUpsertOk()
+    const res = await post(`/v1/consent/${path}`, { locale: "ko" })
+    expect(res.json()).toEqual({ status })
+    expect(upsert.mock.calls[0][0]).toMatchObject({ status, locale: "ko" })
+  })
+
+  it.each([
+    ["decline", {}],
+    ["decline", { locale: "xx-XX" }],
+    ["withdraw", {}],
+    ["withdraw", { locale: 42 }],
+  ])("%s with no usable language (%j) leaves the recorded one alone", async (path, extra) => {
+    const upsert = mockUpsertOk()
+    const res = await post(`/v1/consent/${path}`, extra)
+    expect(res.statusCode).toBe(200)
+    // No `locale` key at all: an opt-out must not erase the language of the grant it ends.
+    expect(upsert.mock.calls[0][0]).not.toHaveProperty("locale")
+  })
+})
