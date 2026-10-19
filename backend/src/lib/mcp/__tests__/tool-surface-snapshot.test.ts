@@ -1042,6 +1042,19 @@ const RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES = 176
 // headroom the list had before is carried across. The refusals and the version
 // rule live in docs/api-integration.md.
 const RETRY_APP_RUN_BYTES = 1_374
+// RAISED 2026-10-19 by one NEW tool: `speaker_map` (the Speaker Map node's verb — which camera
+// each speaker is on, from the cameras' own microphones), registered in its own module beside
+// `audio_sync` and UNGATED like it (core, keyless), so BOTH the cloud/all AND the community/all
+// fixtures move by exactly that name. Measured by this suite on the same tree (switch_cameras
+// as before): 454_570 total − 451_199 before = 3_371 B, far under the per-tool budget; the 103 B
+// of headroom carry across.
+// +63 B (2026-10-19, measured on the same tree: 460_990 − 460_927): the description names the
+// result's full shape (`{ version, speakerMap, confidence, notes, edl? }`) and a source's `kind`.
+const SPEAKER_MAP_TOOL_BYTES = 3_371 + 63
+// RAISED 2026-10-19 by `switch_cameras` taking a Speaker Map result (`speaker_map_result`, folded
+// by the canvas's own rule) and saying what "" means in `speaker_map`. No tool was added, so the
+// fixture does NOT move. Measured by this suite: 455_060 total − 454_570 = 490 B.
+const SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES = 490
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
@@ -1165,7 +1178,9 @@ export const TOOL_WIRE_BUDGET = {
     RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES +
     RUN_WORKFLOW_NODE_IDS_BYTES +
     RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
-    RETRY_APP_RUN_BYTES,
+    RETRY_APP_RUN_BYTES +
+    SPEAKER_MAP_TOOL_BYTES +
+    SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

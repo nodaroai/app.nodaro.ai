@@ -7,6 +7,7 @@ import { option as unit_episode_chapters } from "../episode-chapters/option" // 
 import { option as unit_episode_trailer } from "../episode-trailer/option" // unit:episode-trailer
 import { option as unit_gif_to_video } from "../gif-to-video/option" // unit:gif-to-video
 import { option as unit_remove_audio } from "../remove-audio/option" // unit:remove-audio
+import { option as unit_speaker_map } from "../speaker-map/option" // unit:speaker-map
 import { option as unit_tighten_episode } from "../tighten-episode/option" // unit:tighten-episode
 
 export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(Object.create(null), {
@@ -15,5 +16,6 @@ export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "speaker-map": unit_speaker_map, // unit:speaker-map
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

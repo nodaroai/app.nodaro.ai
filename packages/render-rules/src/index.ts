@@ -642,6 +642,7 @@ export {
 export { wholeEpisodeEdl, type WholeEpisodeEdlSource } from "./whole-episode-edl"
 // Where a node unit's JSON and many-wire inputs land (both engines' resolvers).
 export {
+  orderSourceRows,
   unitInputHandleIn,
   unitInputLaneOf,
   unitInputLanding,
@@ -650,3 +651,22 @@ export {
   type UnitInputValue,
   type UnitSourceRow,
 } from "./unit-input-lanes"
+// What one Speaker Map run is sent, and why it is refused (both engines).
+export {
+  SPEAKER_MAP_MAX_MARGIN_DB,
+  isAudioSyncResult,
+  parseJsonInput,
+  speakerMapMarginDb,
+  speakerMapRunInputs,
+  speakerMapRunProblemText,
+  type SpeakerMapRunBody,
+  type SpeakerMapRunProblem,
+} from "./speaker-map-run-inputs"
+// Camera Switch's `speakerMap` input: how a wire is recorded, and when a run is refused (both engines).
+export {
+  CAMERA_SWITCH_SPEAKER_MAP_HANDLE,
+  cameraSwitchSpeakerMapLanding,
+  cameraSwitchSpeakerMapProblem,
+  cameraSwitchSpeakerMapProblemText,
+  type CameraSwitchSpeakerMapProblem,
+} from "./camera-switch-speaker-map"

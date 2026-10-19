@@ -718,6 +718,10 @@ export interface ResolvedInputs {
    *  applied at read time. */
   tracks?: string | null
   trackAssignments?: unknown
+  /** camera-switch: a Speaker Map result wired into the `speakerMap` handle
+   *  (stringified json; "" when the wire is there but its upstream produced
+   *  nothing — refused, never read as unwired). Absent when nothing is wired. */
+  speakerMapResult?: string
   /** edit-plan: an optional upstream silence-ranges object (json) wired into the
    *  `silence` handle — the stringified `{version, ranges}` from a silence-detect
    *  node's json output. Parsed in the payload builder. */

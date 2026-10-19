@@ -4,17 +4,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, clampCameraSwitchSetting, defaultSpeakerMap, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared/edl"
+import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, cameraSwitchSpeakerMap, clampCameraSwitchSetting, speakerMapResultOf, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared/edl"
 import { isRenderNodeType, renderTranscriptOutputOf } from "@nodaro/shared/nodes"
-import { drawnSourceId } from "@nodaro/render-rules"
+import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, cameraSwitchSpeakerMapLanding, cameraSwitchSpeakerMapProblem, drawnSourceId } from "@nodaro/render-rules"
+import { TEXT_PRODUCER_TYPES } from "@/lib/generate-image-handles"
 import type { CameraSwitchNodeData, WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { ReplaceRenderNodeAction } from "@/components/editor/replace-render-node-action"
 import { renderTypeLabel } from "@/hooks/use-replace-render-node"
 import { SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
+import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 
 /** The Select value for "no camera of their own" (stored as ""). */
 const NO_CAMERA = "__none__"
+
+const parseMaybe = (v: unknown): unknown => {
+  if (typeof v !== "string") return v
+  try { return JSON.parse(v) } catch { return undefined }
+}
 
 /** The cameras a speaker can be given, as {id, label}: the video sources of the
  *  Edit Plan wired into `edl` (its Sources edges + its per-source roles), or —
@@ -51,9 +58,31 @@ export function cameraChoices(
       })
       .map(({ id }) => ({ id, label: labelOf(id) }))
   }
-  const generated = (upstream.data as { generatedJson?: unknown }).generatedJson
-  const edl = Array.isArray(generated) ? generated[0] : generated
-  return cameraSwitchCameras(edl).map((c) => ({ id: c.id, label: labelOf(c.id) }))
+  // The EDL the wire carries (a pip of its own, e.g. Speaker Map's `edl`, or
+  // Camera Switch's), else the producer's generatedJson as before.
+  const first = (v: unknown) => (Array.isArray(v) ? v[0] : v)
+  const fromPip = cameraSwitchCameras(first(parseMaybe(extractNodeOutput(upstream, edlEdge?.sourceHandle ?? undefined))))
+  const cameras = fromPip.length > 0 ? fromPip : cameraSwitchCameras(first((upstream.data as { generatedJson?: unknown }).generatedJson))
+  return cameras.map((c) => ({ id: c.id, label: labelOf(c.id) }))
+}
+
+/** What the run reads off `speakerMap`, as the resolvers record it
+ *  (`cameraSwitchSpeakerMapLanding`): the JSON the wire's pip carries, "" when
+ *  its upstream has produced nothing yet, undefined when nothing is wired. */
+export function wiredSpeakerMap(
+  nodeId: string | undefined,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): string | undefined {
+  if (!nodeId) return undefined
+  let recorded: string | undefined
+  for (const edge of edges) {
+    if (edge.target !== nodeId || edge.targetHandle !== CAMERA_SWITCH_SPEAKER_MAP_HANDLE) continue
+    const producer = nodes.find((n) => n.id === edge.source)
+    if (!producer) continue
+    recorded = cameraSwitchSpeakerMapLanding(recorded, extractNodeOutput(producer, edge.sourceHandle ?? undefined), { type: producer.type, textSources: TEXT_PRODUCER_TYPES })
+  }
+  return recorded
 }
 
 /** The renders this Camera Switch's edit goes to directly that are not Speaker
@@ -76,10 +105,19 @@ export function speakerChoices(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): string[] {
-  if (!nodeId) return []
+  return transcriptSpeakerLabels(wiredTranscript(nodeId, nodes, edges))
+}
+
+/** The transcript wired into `transcript`, from the producer's last result. */
+export function wiredTranscript(
+  nodeId: string | undefined,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): unknown {
+  if (!nodeId) return undefined
   const edge = edges.find((e) => e.target === nodeId && e.targetHandle === "transcript")
   const producer = edge ? nodes.find((n) => n.id === edge.source) : undefined
-  if (!producer) return []
+  if (!producer) return undefined
   const d = producer.data as { generatedJson?: unknown; generatedResults?: Array<{ transcript?: unknown }>; activeResultIndex?: number }
   const results = Array.isArray(d.generatedResults) ? d.generatedResults : []
   const fromResult = results[d.activeResultIndex ?? 0]?.transcript
@@ -87,8 +125,7 @@ export function speakerChoices(
   // A Camera Switch upstream carries { edl, transcript }; a render carries its
   // transcript on the field its registry names (Speaker View's json is its EDL).
   const remapped = renderTranscriptOutputOf(producer.type)
-  const transcript = fromResult ?? (producer.type === "camera-switch" ? generated?.transcript : remapped ? (d as Record<string, unknown>)[remapped.dataField] : d.generatedJson)
-  return transcriptSpeakerLabels(transcript)
+  return fromResult ?? (producer.type === "camera-switch" ? generated?.transcript : remapped ? (d as Record<string, unknown>)[remapped.dataField] : d.generatedJson)
 }
 
 const secs = (ms: number | undefined) => (typeof ms === "number" ? String(ms / 1000) : "")
@@ -100,11 +137,25 @@ const toMs = (v: string): number | undefined => {
 export function CameraSwitchConfig({ data, onUpdate, nodes, edges = [], nodeId }: ConfigProps<CameraSwitchNodeData> & { nodeId?: string }) {
   const t = useT()
   const cameras = useMemo(() => cameraChoices(nodeId, nodes, edges), [nodeId, nodes, edges])
-  const speakers = useMemo(() => speakerChoices(nodeId, nodes, edges), [nodeId, nodes, edges])
+  const transcript = useMemo(() => wiredTranscript(nodeId, nodes, edges), [nodeId, nodes, edges])
+  const speakers = useMemo(() => transcriptSpeakerLabels(transcript), [transcript])
+  const wiredMap = useMemo(() => wiredSpeakerMap(nodeId, nodes, edges), [nodeId, nodes, edges])
   const refusing = useMemo(() => hintRefusingRenders(nodeId, nodes, edges), [nodeId, nodes, edges])
   const stored = data.speakerMap ?? {}
-  // What the run will use: the person's choices, the rest pre-filled by order.
-  const effective = defaultSpeakerMap(speakers, cameras.map((c) => c.id), stored)
+  // What the run will use — the ONE merge the run sends (cameraSwitchSpeakerMap):
+  // the person's choices, the ordinal override, a wired Speaker Map, then the
+  // order. The cameras are already the offered ones, so they stand in for the
+  // EDL (an Edit Plan that has not run has none yet).
+  const effective = cameraSwitchSpeakerMap(
+    { speakerMap: stored, speakerMapByOrder: data.speakerMapByOrder },
+    { sources: cameras.map((c) => ({ id: c.id, kind: "video" })) },
+    transcript,
+    { speakerMap: wiredMap },
+  )
+  const fromWiredMap = speakerMapResultOf(wiredMap) !== null
+  // The run's own verdict on the wire: shown here, so the table never looks
+  // like the order default while the run would refuse.
+  const wiredProblem = cameraSwitchSpeakerMapProblem(wiredMap)
   const names = data.speakerNames ?? {}
 
   const setCamera = (label: string, value: string) =>
@@ -127,6 +178,11 @@ export function CameraSwitchConfig({ data, onUpdate, nodes, edges = [], nodeId }
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("proccfg.cameraSwitchSpeakers")}</Label>
+        {wiredProblem && (
+          <p role="alert" className="text-[11px] text-amber-500">
+            {t(wiredProblem === "empty-speaker-map" ? "proccfg.cameraSwitchSpeakerMapEmpty" : "proccfg.cameraSwitchSpeakerMapNotAMap")}
+          </p>
+        )}
         {speakers.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">{t("proccfg.cameraSwitchSpeakersEmpty")}</p>
         ) : (
@@ -151,6 +207,7 @@ export function CameraSwitchConfig({ data, onUpdate, nodes, edges = [], nodeId }
               </div>
             ))}
             <p className="text-[11px] text-muted-foreground">{t("proccfg.cameraSwitchSpeakersHint")}</p>
+            {fromWiredMap && <p className="text-[11px] text-muted-foreground">{t("proccfg.cameraSwitchSpeakersFromMap")}</p>}
           </div>
         )}
       </div>

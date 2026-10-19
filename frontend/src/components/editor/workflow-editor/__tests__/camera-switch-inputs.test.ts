@@ -30,6 +30,17 @@ describe("camera-switch (editor engine)", () => {
     expect(inputs.prompt).toBeUndefined()
   })
 
+  it("routes a wired Speaker Map to speakerMapResult; nothing wired leaves no key; a Speaker Map that has not run records \"\"", () => {
+    const map = { version: 1, speakerMap: { speaker_0: "camA" }, confidence: {}, notes: [] }
+    const nodes = [node("ep", "edit-plan", { generatedJson: edl }), node("tx", "transcribe", { generatedJson: transcript }), node("sm", "speaker-map", { generatedJson: map }), node("cs", "camera-switch")]
+    const edges = [edge("ep", "cs", "edl", "edl"), edge("tx", "cs", "json", "transcript")]
+    expect("speakerMapResult" in resolveNodeInputs(nodes[3]!, nodes, edges)).toBe(false)
+    const wired = [...edges, edge("sm", "cs", "json", "speakerMap")]
+    expect(JSON.parse(resolveNodeInputs(nodes[3]!, nodes, wired).speakerMapResult!)).toEqual(map)
+    const notRun = nodes.map((n) => (n.id === "sm" ? node("sm", "speaker-map") : n))
+    expect(resolveNodeInputs(notRun[3]!, notRun, wired).speakerMapResult).toBe("")
+  })
+
   it("its `edl` handle carries the switched edit, its `transcript` handle the named transcript", () => {
     const named = { ...transcript, words: [{ ...transcript.words[0]!, speaker: "Dana" }] }
     const cs = node("cs", "camera-switch", { generatedJson: { edl, transcript: named } })

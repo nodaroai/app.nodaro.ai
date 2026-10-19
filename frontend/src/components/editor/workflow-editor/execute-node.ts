@@ -90,7 +90,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { carriedNodeSettings, isUseCaseNodeType } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, isUseCaseNodeType } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -7795,7 +7795,13 @@ function executeNodeCore(
       toast.error(nodeRunError(csData.label, "nodeRun.cameraSwitchNoSpeakers"));
       return Promise.reject(new Error("camera-switch: the transcript has no speaker labels"));
     }
-    const settings = cameraSwitchSettingsPayload(csData, edl, transcript);
+    // A wired Speaker Map that produced nothing, or is not one, is refused (unwired: no change).
+    const speakerMapProblem = cameraSwitchSpeakerMapProblem(inputs.speakerMapResult);
+    if (speakerMapProblem) {
+      toast.error(nodeRunError(csData.label, speakerMapProblem === "empty-speaker-map" ? "nodeRun.cameraSwitchSpeakerMapEmpty" : "nodeRun.cameraSwitchSpeakerMapNotAMap"));
+      return Promise.reject(new Error(cameraSwitchSpeakerMapProblemText(speakerMapProblem)));
+    }
+    const settings = cameraSwitchSettingsPayload(csData, edl, transcript, { speakerMap: inputs.speakerMapResult });
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
       ...RUN_START_RESET,

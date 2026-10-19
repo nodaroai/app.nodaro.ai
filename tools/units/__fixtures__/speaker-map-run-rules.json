@@ -1,0 +1,59 @@
+{
+  "$comment": "Speaker Map's rules that BOTH the REST route's body check and the run rules (speakerMapRunInputs, @nodaro/render-rules) apply — the route restates them for its own body shape, so one fixture holds the two to the same verdict. `problem` is the run rules' code (null = the run goes ahead); the route answers 400 exactly when it is not null. Only rules both sides share are here: a master / wide naming a recording no longer wired is a 400 on the route but dropped by a run, by design. The editor's run calls speakerMapRunInputs too, so its parity test reads this file as well.",
+  "transcript": { "words": [{ "text": "hi", "startMs": 0, "endMs": 500, "speaker": "A" }, { "text": "yo", "startMs": 600, "endMs": 900, "speaker": "B" }] },
+  "cases": [
+    {
+      "name": "two cameras, nothing named",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "problem": null
+    },
+    {
+      "name": "a sound-only master and a camera as the wide shot",
+      "sources": [{ "id": "mic", "url": "https://media.test/mic.m4a", "kind": "audio" }, { "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "masterSourceId": "mic",
+      "wideSourceId": "cam2",
+      "problem": null
+    },
+    {
+      "name": "a camera's own track as the master",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "masterSourceId": "cam1",
+      "problem": null
+    },
+    {
+      "name": "the wide shot on a sound-only recording",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "mic", "url": "https://media.test/mic.m4a", "kind": "audio" }],
+      "wideSourceId": "mic",
+      "problem": "wide-sound-only",
+      "routeField": "wideSourceId"
+    },
+    {
+      "name": "the master and the wide shot on one recording",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "masterSourceId": "cam1",
+      "wideSourceId": "cam1",
+      "problem": "wide-is-master",
+      "routeField": "wideSourceId"
+    },
+    {
+      "name": "offsets that are an Audio Sync result",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "offsets": { "version": 1, "reference": "cam1", "offsets": [{ "sourceId": "cam1", "offsetMs": 0 }, { "sourceId": "cam2", "offsetMs": 80 }] },
+      "problem": null
+    },
+    {
+      "name": "offsets that are not an Audio Sync result",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "offsets": { "text": "a transcript" },
+      "problem": "not-audio-sync",
+      "routeField": "offsets"
+    },
+    {
+      "name": "offsets that are a bare list",
+      "sources": [{ "id": "cam1", "url": "https://media.test/cam1.mp4", "kind": "video" }, { "id": "cam2", "url": "https://media.test/cam2.mp4", "kind": "video" }],
+      "offsets": [{ "sourceId": "cam1", "offsetMs": 0 }],
+      "problem": "not-audio-sync",
+      "routeField": "offsets"
+    }
+  ]
+}

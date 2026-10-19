@@ -11,6 +11,8 @@ import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 const mocks = {
   silenceDetect: vi.fn(),
   audioSync: vi.fn(),
+  speakerMap: vi.fn(),
+  cameraSwitch: vi.fn(),
   applyEdl: vi.fn(),
   editPlan: vi.fn(),
   tightenEpisode: vi.fn(),
@@ -26,6 +28,8 @@ vi.mock("../../client.js", () => ({
     edit: {
       silenceDetect: mocks.silenceDetect,
       audioSync: mocks.audioSync,
+      speakerMap: mocks.speakerMap,
+      cameraSwitch: mocks.cameraSwitch,
       applyEdl: mocks.applyEdl,
       editPlan: mocks.editPlan,
       tightenEpisode: mocks.tightenEpisode,
@@ -288,6 +292,61 @@ describe("edit audio-sync", () => {
     const args = Array.from({ length: 7 }, (_, i) => ["--source", `https://x/${i}.wav`]).flat()
     await expect(runCmd("edit", "audio-sync", ...args)).rejects.toThrow("process.exit(1)")
     expect(mocks.audioSync).not.toHaveBeenCalled()
+  })
+})
+
+describe("edit speaker-map", () => {
+  const SPEAKERS = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "speaker_0" }] }
+
+  it("sends the --source rows (the audio-sync parser), the transcript and --wide as wideSourceId", async () => {
+    mocks.speakerMap.mockResolvedValueOnce({ jobId: "j-sm" })
+    await runCmd(
+      "edit", "speaker-map",
+      "--source", "a=https://x/a.mp4",
+      "--source", "b=https://x/b.mp4",
+      "--transcript", fixture("t.json", SPEAKERS),
+      "--wide", "b", "--json",
+    )
+    expect(mocks.speakerMap).toHaveBeenCalledWith({
+      sources: [{ id: "a", url: "https://x/a.mp4" }, { id: "b", url: "https://x/b.mp4" }],
+      transcript: SPEAKERS,
+      wideSourceId: "b",
+    })
+  })
+
+  it("passes --offsets, --master and --margin-db when given", async () => {
+    mocks.speakerMap.mockResolvedValueOnce({ jobId: "j" })
+    const offsets = { reference: "a", offsets: [], notes: [] }
+    await runCmd(
+      "edit", "speaker-map",
+      "--source", "a=https://x/a.mp4", "--source", "b=https://x/b.mp4",
+      "--transcript", fixture("t.json", SPEAKERS),
+      "--offsets", fixture("o.json", offsets), "--master", "a", "--margin-db", "4", "--json",
+    )
+    expect(mocks.speakerMap).toHaveBeenCalledWith(expect.objectContaining({ offsets, masterSourceId: "a", marginDb: 4 }))
+  })
+
+  it("refuses fewer than two recordings before any request", async () => {
+    await expect(
+      runCmd("edit", "speaker-map", "--source", "https://x/a.mp4", "--transcript", fixture("t.json", SPEAKERS)),
+    ).rejects.toThrow("process.exit(1)")
+    expect(mocks.speakerMap).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls[0]?.[0]).toMatch(/2-6 recordings/)
+  })
+})
+
+describe("edit switch-cameras --speaker-map-result", () => {
+  it("hands the Speaker Map result to the SDK beside --speaker-map", async () => {
+    mocks.cameraSwitch.mockResolvedValueOnce({ jobId: "j-cs" })
+    const result = { version: 1, speakerMap: { speaker_0: "a" }, confidence: {}, notes: [] }
+    await runCmd(
+      "edit", "switch-cameras",
+      "--edl", fixture("edl.json", EDL),
+      "--transcript", fixture("t.json", TRANSCRIPT),
+      "--speaker-map", fixture("m.json", { speaker_1: "b" }),
+      "--speaker-map-result", fixture("r.json", result), "--json",
+    )
+    expect(mocks.cameraSwitch).toHaveBeenCalledWith(expect.objectContaining({ speakerMap: { speaker_1: "b" }, speakerMapResult: result }))
   })
 })
 

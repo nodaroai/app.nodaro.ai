@@ -48,6 +48,8 @@ const LEGACY_NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   tracks: ["speaker-view"],
   silence: ["edit-plan"],
   offsets: ["edit-plan"],
+  // Camera Switch's speaker map (a Speaker Map result): who is on which camera, never a prompt.
+  speakerMap: ["camera-switch"],
   qrText: ["image-overlay"],
   layerPlan: ["video-overlay"],
   captionPlan: ["add-captions"],

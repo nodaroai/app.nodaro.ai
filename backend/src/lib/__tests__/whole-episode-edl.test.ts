@@ -22,6 +22,14 @@ describe("wholeEpisodeEdl (decided 2026-10-17)", () => {
     expect(validateEdl(r.edl).issues).toEqual([])
     expect(r.edl.segments[0]).toMatchObject({ inMs: 0, outMs: 3_590_000, video: "a" })
   })
+  it("a sound-only recording that is not the master is no camera: it gets no role (decided 2026-10-19)", () => {
+    const lav = { id: "lav", url: "https://r2/lav.wav", kind: "audio" as const, durationMs: 3_600_000, offsetMs: 300 }
+    const r = wholeEpisodeEdl({ sources: [...sources, lav], masterSourceId: "m", wideSourceId: "w" })
+    if (!("edl" in r)) throw new Error(r.problem)
+    expect(validateEdl(r.edl).issues).toEqual([])
+    expect(r.edl.sources.map((s) => [s.id, s.kind, s.role])).toEqual([["m", "audio", "master-audio"], ["a", "video", "camera"], ["w", "video", "wide"], ["lav", "audio", undefined]])
+    expect("role" in r.edl.sources[3]!).toBe(false)
+  })
   it("no video source is a problem, never an edit", () => {
     expect(wholeEpisodeEdl({ sources: sources.slice(0, 1), masterSourceId: "m" })).toHaveProperty("problem")
   })

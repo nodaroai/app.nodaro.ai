@@ -7293,6 +7293,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 |--------|----------|-------|
 | `silenceDetect(input)` | `POST /v1/silence-detect` | Keyless ffmpeg silence pass over an audio **or** video source. |
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
+| `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. **Not yet enabled on nodaro.ai.** |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
@@ -7373,6 +7374,56 @@ const { jobId } = await client.edit.audioSync({
   ],
 })
 const sync = (await client.jobs.getStatus(jobId)).data.output_data.json // AudioSyncResult
+```
+
+#### `speakerMap(input)`
+
+**Not yet enabled on nodaro.ai.**
+
+```ts
+speakerMap(input: SpeakerMapInput): Promise<EditJobResult>
+```
+
+**`SpeakerMapInput`** (from `@nodaro/sdk/edit`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sources` | `SpeakerMapSource[]` | yes | 2–6 recordings: the cameras, and the master / wide when you name them. Each: `{ id, url, kind? }` — `kind: "audio"` marks a sound-only recording (never anyone's camera); `id` (1–200 chars, unique) is the camera id the map names; use the ids your EDL gives the same recordings. `url` is an audio **or** video source. |
+| `transcript` | `Transcript` | yes | The transcript WITH speaker labels. |
+| `offsets` | `AudioSyncResult` | no | An `audioSync` result over the same ids; omit when the recordings already share a clock. |
+| `masterSourceId` | `string` | no | The master audio: hears everyone, so it is no one's camera. |
+| `wideSourceId` | `string` | no | The wide shot: no one's camera; a speaker with no clear camera is shown on it. |
+| `marginDb` | `number` | no | How much louder (dB) the loudest camera must be than the next for a speaker to get it, 0–30. Default `3`. |
+| `workflowId` | `string` | no | Execution-history display. |
+
+The finished job's `output_data.json` is a `SpeakerMapResult`:
+
+```ts
+{
+  version: 1
+  speakerMap: Record<string, string>   // speaker label → camera id; "" = no clear camera (the wide shot)
+  confidence: Record<string, { camera: string; marginDb: number | null }> // the loudest camera's lead over the next
+  notes: string[]                      // no clear camera, a camera with no sound, …
+  edl?: Edl                            // the recordings as one edit (also on output_data.edl)
+}
+```
+
+and `output_data.edl` the recordings as one edit on the master clock. While a
+speaker talks, the camera that hears them loudest by at least `marginDb` is
+theirs; a camera that heard nothing is a note, never a failure. Flat 11 credits<!-- credits: speaker-map -->
+per run. A malformed request throws a `NodaroError` (400,
+`code: "validation_error"`); a transcript with no speaker labels, 422
+`no_speakers` — both before any credits are reserved.
+
+```ts
+const { jobId } = await client.edit.speakerMap({
+  sources: [{ id: "camA", url: camAUrl }, { id: "camB", url: camBUrl }, { id: "wide", url: wideUrl }],
+  transcript,
+  offsets: sync,          // an audioSync result
+  wideSourceId: "wide",
+})
+const map = (await client.jobs.getStatus(jobId)).data.output_data.json // SpeakerMapResult
+await client.edit.cameraSwitch({ edl, transcript, speakerMapResult: map })
 ```
 
 #### `applyEdl(input)`
@@ -7747,6 +7798,7 @@ cameraSwitch(input: CameraSwitchInput): Promise<EditJobResult>
 | `edl` | `Edl` | yes | One EDL — an `editPlan` result (not a clip set). |
 | `transcript` | `Transcript` | yes | The transcript WITH speaker labels. |
 | `speakerMap` | `Record<string, string>` | no | Speaker label → the EDL source id of their camera. A speaker left out uses the source whose `speakers` names them, else the `wide` source, else any camera with picture. |
+| `speakerMapResult` | `SpeakerMapResult \| string` | no | A `speakerMap` job's `output_data.json`, folded into `speakerMap` before the request: a label in `speakerMap` wins, then the result, then the n-th speaker heard gets the n-th camera. Something that is not a Speaker Map result rejects with a `NodaroError` (`code: "not_a_speaker_map"`) before any request. |
 | `speakerNames` | `Record<string, string>` | no | Speaker label → display name. |
 | `minShotMs` / `leadMs` / `maxShotMs` / `wideEvery` | `number` | no | Shortest shot (2 500), cut lead (200), wide break after (20 000, with a wide source), every N-th cut to the wide (0 = off). |
 | `layoutHints` | `boolean` | no | Overlapping speech → a layout hint (default false; Apply EDL renders cut-only edits). |

@@ -121,6 +121,8 @@ function computeOutputs(): Record<string, unknown> {
       "text-to-dialogue": fromJobRow("text-to-dialogue"),
       // Speaker Frames: the stored track file's descriptor on json (notes and stats ride on the job row only).
       "speaker-frames": fromJobRow("speaker-frames"),
+      // Speaker Map (a worker unit): the result on json, the whole-recording edit on its own edl output.
+      "speaker-map": fromJobRow("speaker-map"),
       "extract-field:text": inline("extract-field", { field: "title" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       "extract-field:list": inline("extract-field", { field: "title", outputType: "list" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       // A list of links: a lane must not add them to the node's results either.

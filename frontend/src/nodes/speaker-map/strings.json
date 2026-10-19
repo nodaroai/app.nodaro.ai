@@ -1,0 +1,26 @@
+{
+  "keys": {
+    "node.speakerMapResult": {"en": "Speaker map", "he": "מפת דוברים", "ja": "話者マップ", "ko": "화자 맵", "pt-br": "Mapa de falantes"},
+    "node.speakerMapEdit": {"en": "Edit (EDL)", "he": "עריכה (EDL)", "ja": "編集（EDL）", "ko": "편집(EDL)", "pt-br": "Edição (EDL)"},
+    "node.speakerMapLine": {"en": "Speaker {speaker} → Camera {camera}", "he": "דובר {speaker} ← מצלמה {camera}", "ja": "話者 {speaker} → カメラ {camera}", "ko": "화자 {speaker} → 카메라 {camera}", "pt-br": "Falante {speaker} → Câmera {camera}"},
+    "node.speakerMapNoCamera": {"en": "Speaker {speaker} → no clear camera", "he": "דובר {speaker} ← אין מצלמה ברורה", "ja": "話者 {speaker} → はっきりしたカメラなし", "ko": "화자 {speaker} → 뚜렷한 카메라 없음", "pt-br": "Falante {speaker} → nenhuma câmera clara"},
+    "node.speakerMapNotes": {"en": "Notes: {count} — hover to read", "he": "הערות: {count} — העבירו את העכבר כדי לקרוא", "ja": "メモ：{count} — ポインターを合わせて表示", "ko": "메모: {count} — 마우스를 올려 읽기", "pt-br": "Observações: {count} — passe o mouse para ler"},
+    "node.speakerMapConnect": {"en": "Connect 2–6 cameras and a transcript with speaker labels", "he": "חברו 2–6 מצלמות ותמלול עם זיהוי דוברים", "ja": "2〜6 台のカメラと話者ラベル付きの文字起こしを接続してください", "ko": "카메라 2~6대와 화자 라벨이 있는 대본을 연결하세요", "pt-br": "Conecte de 2 a 6 câmeras e uma transcrição com rótulos de falante"},
+    "apiErr.startSpeakerMap": {"en": "Could not start Speaker Map", "he": "לא ניתן להפעיל את מפת הדוברים", "ja": "話者マップを開始できませんでした", "ko": "화자 맵을 시작할 수 없습니다", "pt-br": "Não foi possível iniciar o Mapa de falantes"},
+    "proccfg.speakerMapHint": {"en": "Works out which camera each speaker is on from the cameras' own microphones: while someone talks, the camera that hears them loudest is theirs. Wire the result into Camera Switch's Speaker map.", "he": "מזהה איזו מצלמה מצלמת כל דובר לפי המיקרופונים של המצלמות עצמן: בזמן שמישהו מדבר, המצלמה ששומעת אותו הכי חזק היא שלו. חברו את התוצאה למפת הדוברים של החלפת המצלמות.", "ja": "各カメラ自身のマイクから、話者ごとにどのカメラに映っているかを判定します。誰かが話している間、その声を最も大きく拾うカメラがその人のカメラです。結果をカメラ切り替えの話者マップに接続してください。", "ko": "카메라 자체 마이크로 각 화자가 어느 카메라에 잡히는지 알아냅니다. 누군가 말하는 동안 그 목소리를 가장 크게 듣는 카메라가 그 사람의 카메라입니다. 결과를 카메라 전환의 화자 맵에 연결하세요.", "pt-br": "Descobre em qual câmera está cada falante pelos microfones das próprias câmeras: enquanto alguém fala, a câmera que o ouve mais alto é a dele. Conecte o resultado ao Mapa de falantes da Troca de câmera."},
+    "proccfg.speakerMapCameras": {"en": "Cameras", "he": "מצלמות", "ja": "カメラ", "ko": "카메라", "pt-br": "Câmeras"},
+    "proccfg.speakerMapCamerasEmpty": {"en": "Connect 2–6 recordings to the Cameras input.", "he": "חברו 2–6 הקלטות לכניסת המצלמות.", "ja": "カメラ入力に 2〜6 本の録画を接続してください。", "ko": "카메라 입력에 녹화 2~6개를 연결하세요.", "pt-br": "Conecte de 2 a 6 gravações à entrada Câmeras."},
+    "proccfg.speakerMapMaster": {"en": "Master recording", "he": "הקלטת מאסטר", "ja": "マスター録音", "ko": "마스터 녹음", "pt-br": "Gravação principal"},
+    "proccfg.speakerMapMasterAria": {"en": "The master recording", "he": "הקלטת המאסטר", "ja": "マスター録音", "ko": "마스터 녹음", "pt-br": "A gravação principal"},
+    "proccfg.speakerMapMasterHint": {"en": "Hears everyone, so it is no one's camera; the edit runs on its clock.", "he": "שומעת את כולם, ולכן אינה המצלמה של אף אחד; העריכה רצה לפי השעון שלה.", "ja": "全員の声を拾うため、誰のカメラにもなりません。編集はこの録音の時間軸で進みます。", "ko": "모두의 목소리를 듣기 때문에 누구의 카메라도 아닙니다. 편집은 이 녹음의 시간을 기준으로 합니다.", "pt-br": "Ouve todos, então não é a câmera de ninguém; a edição segue o relógio dela."},
+    "proccfg.speakerMapWide": {"en": "Wide shot", "he": "צילום רחב", "ja": "引きのショット", "ko": "와이드 샷", "pt-br": "Plano aberto"},
+    "proccfg.speakerMapWideAria": {"en": "The wide shot", "he": "הצילום הרחב", "ja": "引きのショット", "ko": "와이드 샷", "pt-br": "O plano aberto"},
+    "proccfg.speakerMapWideHint": {"en": "No one's camera; a speaker with no clear camera is shown on it.", "he": "אינה המצלמה של אף אחד; דובר בלי מצלמה ברורה יוצג בה.", "ja": "誰のカメラにもなりません。はっきりしたカメラがない話者はこのショットで映します。", "ko": "누구의 카메라도 아닙니다. 뚜렷한 카메라가 없는 화자는 이 샷으로 보여 줍니다.", "pt-br": "Não é a câmera de ninguém; um falante sem câmera clara aparece nele."},
+    "proccfg.speakerMapNone": {"en": "None", "he": "ללא", "ja": "なし", "ko": "없음", "pt-br": "Nenhuma"},
+    "proccfg.speakerMapMargin": {"en": "Lead needed", "he": "פער נדרש", "ja": "必要な差", "ko": "필요한 차이", "pt-br": "Vantagem necessária"},
+    "proccfg.speakerMapMarginHint": {"en": "How much louder the loudest camera must be than the next for a speaker to get it. Lower gives more speakers a camera; higher keeps only the clear ones.", "he": "בכמה המצלמה החזקה ביותר צריכה להיות חזקה מהבאה אחריה כדי שהדובר יקבל אותה. ערך נמוך נותן מצלמה ליותר דוברים; ערך גבוה משאיר רק את הברורים.", "ja": "話者にカメラを割り当てるには、最も大きいカメラが次のカメラよりどれだけ大きい必要があるか。低いほど多くの話者にカメラが付き、高いほどはっきりした話者だけになります。", "ko": "화자에게 카메라를 주려면 가장 큰 카메라가 다음 카메라보다 얼마나 더 커야 하는지입니다. 낮을수록 더 많은 화자가 카메라를 받고, 높을수록 뚜렷한 화자만 남습니다.", "pt-br": "Quanto mais alta a câmera mais forte precisa estar em relação à seguinte para o falante ficar com ela. Menor dá câmera a mais falantes; maior mantém só os claros."}
+  },
+  "labels": {
+    "Speaker Map": {"he": "מפת דוברים", "ja": "話者マップ", "ko": "화자 맵", "pt-br": "Mapa de falantes"}
+  }
+}

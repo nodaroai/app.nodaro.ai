@@ -98,3 +98,14 @@ export function unitInputLanding(
   if (input.value === "") return typeof current === "string" ? current : ""
   return input.value
 }
+
+/**
+ * A many-wire input's rows in a node's chosen order: the ids `order` lists
+ * first (each once, an id no longer wired skipped), then the rest in wire
+ * order — the Audio Sync rule, one row per upstream node. Both engines' code
+ * for a node that orders its sources calls it. Pure.
+ */
+export function orderSourceRows<T extends { readonly id: string }>(rows: readonly T[], order: readonly string[] | undefined): T[] {
+  const listed = [...new Set(order ?? [])].filter((id) => rows.some((r) => r.id === id))
+  return [...listed.map((id) => rows.find((r) => r.id === id)!), ...rows.filter((r) => !listed.includes(r.id))]
+}

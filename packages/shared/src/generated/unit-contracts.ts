@@ -28,6 +28,7 @@ export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonl
   ["episode-chapters", { "json": "other" }], // unit:episode-chapters
   ["episode-trailer", { "json": "edl" }], // unit:episode-trailer
   ["clip-pack", { "json": "edl" }], // unit:clip-pack
+  ["speaker-map", { "edl": "edl", "json": "other" }], // unit:speaker-map
 ]
 
 // Input pips that are never a prompt lane (contract.nonPromptInputs) — fan-out-rows.ts composes these.

@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useMemo } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { memo, useEffect, useMemo } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { SwitchCamera, Braces, Loader2, AlertCircle } from "lucide-react"
 import { JsonTree, type JsonValue } from "@/components/ui/json-tree"
 import { BaseNode } from "./base-node"
@@ -11,8 +11,10 @@ import { HandleWithPopover } from "./handle-with-popover"
 import { NodeJobProgress } from "./node-job-progress"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useTargetHandleShown } from "@/hooks/use-target-handle-shown"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { CAMERA_SWITCH_CREDIT_ID } from "@nodaro/shared/edl"
+import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE } from "@nodaro/render-rules"
 import { useT } from "@/lib/i18n"
 import type { CameraSwitchNodeData } from "@/types/nodes"
 
@@ -38,6 +40,12 @@ function CameraSwitchNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.executionStatus ?? "idle"
   const edl = nodeData.generatedJson?.edl
   const credits = useModelCredits(CAMERA_SWITCH_CREDIT_ID, 10)
+  // The Speaker map pip is withheld while Speaker Map is (lib/target-handle-availability.ts),
+  // and drawn whenever a wire already lands on it.
+  const showSpeakerMap = useTargetHandleShown(id, "camera-switch", CAMERA_SWITCH_SPEAKER_MAP_HANDLE)
+  // The pip comes and goes with the viewer's availability: re-measure the handles when it does.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => { updateNodeInternals(id) }, [showSpeakerMap, id, updateNodeInternals])
   // Show each camera by its canvas node's label (the EDL source id is the node id).
   const perCamera = useMemo(() => {
     const labelOf = (nodeId: string) => (nodes.find((n) => n.id === nodeId)?.data as { label?: string } | undefined)?.label ?? nodeId
@@ -65,6 +73,7 @@ function CameraSwitchNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "edl",        type: "target", position: Position.Left,  customStyle: { top: "24px", left: "-29px" },  external: true },
           { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: "52px", left: "-29px" },  external: true },
+          ...(showSpeakerMap ? [{ id: "speakerMap", type: "target" as const, position: Position.Left,  customStyle: { top: "80px", left: "-29px" },  external: true }] : []),
           { id: "edl",        type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
           { id: "transcript", type: "source", position: Position.Right, customStyle: { top: "52px", right: "-29px" }, external: true },
         ]}
@@ -121,6 +130,7 @@ function CameraSwitchNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="camera-switch" handleId="edl"        type="target" position={Position.Left}  label={t("node.cameraSwitchEdlIn")}   color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="24px" accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="camera-switch" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")}         color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="52px" accepts={ACCEPTS_JSON} />
+      {showSpeakerMap && <HandleWithPopover nodeId={id} nodeType="camera-switch" handleId="speakerMap" type="target" position={Position.Left}  label={t("node.cameraSwitchSpeakerMapIn")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="80px" accepts={ACCEPTS_JSON} />}
       <HandleWithPopover nodeId={id} nodeType="camera-switch" handleId="edl"        type="source" position={Position.Right} label={t("node.cameraSwitchEdlOut")}  color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       <HandleWithPopover nodeId={id} nodeType="camera-switch" handleId="transcript" type="source" position={Position.Right} label={t("node.cameraSwitchTranscriptOut")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="52px" />
     </div>

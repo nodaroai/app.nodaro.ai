@@ -1,0 +1,26 @@
+{
+  "$comment": "The same two recordings feed Edit Plan and Speaker Map, Camera B through a Teleport pair into both. Speaker Map's camera ids (its Cameras rows, the map's values) must be the ids Edit Plan mints into the EDL Camera Switch reads, on both engines, or a wired map names cameras the edit does not have. `expectedIds` is that one id list, in wire order.",
+  "nodes": [
+    { "id": "camA", "type": "upload-video", "data": { "label": "Camera A", "url": "https://media.test/a.mp4" } },
+    { "id": "camB", "type": "upload-video", "data": { "label": "Camera B", "url": "https://media.test/b.mp4" } },
+    { "id": "s", "type": "teleport-send", "data": { "label": "Send" } },
+    { "id": "r", "type": "teleport-receive", "data": { "label": "Receive" } },
+    { "id": "tx", "type": "transcribe", "data": { "label": "Transcribe", "generatedText": "hi yo", "generatedJson": { "words": [{ "text": "hi", "startMs": 0, "endMs": 500, "speaker": "A" }, { "text": "yo", "startMs": 600, "endMs": 900, "speaker": "B" }] } } },
+    { "id": "plan", "type": "edit-plan", "data": { "label": "Edit Plan", "mode": "tighten" } },
+    { "id": "map", "type": "speaker-map", "data": { "label": "Speaker Map" } },
+    { "id": "cs", "type": "camera-switch", "data": { "label": "Camera Switch" } }
+  ],
+  "edges": [
+    { "id": "a-plan", "source": "camA", "sourceHandle": "video", "target": "plan", "targetHandle": "sources" },
+    { "id": "a-map", "source": "camA", "sourceHandle": "video", "target": "map", "targetHandle": "sources" },
+    { "id": "b-send", "source": "camB", "sourceHandle": "video", "target": "s", "targetHandle": "in" },
+    { "id": "pair", "source": "s", "sourceHandle": "out", "target": "r", "targetHandle": "in", "data": { "teleporter": true } },
+    { "id": "r-plan", "source": "r", "sourceHandle": "out", "target": "plan", "targetHandle": "sources" },
+    { "id": "r-map", "source": "r", "sourceHandle": "out", "target": "map", "targetHandle": "sources" },
+    { "id": "tx-plan", "source": "tx", "sourceHandle": "json", "target": "plan", "targetHandle": "transcript" },
+    { "id": "tx-map", "source": "tx", "sourceHandle": "json", "target": "map", "targetHandle": "transcript" },
+    { "id": "plan-cs", "source": "plan", "sourceHandle": "edl", "target": "cs", "targetHandle": "edl" },
+    { "id": "map-cs", "source": "map", "sourceHandle": "json", "target": "cs", "targetHandle": "speakerMap" }
+  ],
+  "expectedIds": ["camA", "camB"]
+}

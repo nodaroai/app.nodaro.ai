@@ -448,6 +448,19 @@ describe("every registered budgeted job is dispatched under its node type's own 
         ],
       },
     }),
+    // Speaker Map's node (a worker unit): its recordings and transcript land in unitInputs.
+    "speaker-map": () => ({
+      node: { id: "map", type: "speaker-map", data: { label: "Speaker Map" } },
+      inputs: {
+        unitInputs: {
+          sources: [
+            { id: "cam1", url: "https://media.test/cam1.mp4", kind: "video" },
+            { id: "cam2", url: "https://media.test/cam2.mp4", kind: "video" },
+          ],
+          transcript: JSON.stringify({ words: [{ text: "hi", startMs: 0, endMs: 500, speaker: "A" }, { text: "yo", startMs: 600, endMs: 900, speaker: "B" }] }),
+        },
+      },
+    }),
     "silence-detect": () => ({
       node: { id: "silence", type: "silence-detect", data: { label: "Silence Detect" } },
       inputs: { audioUrl: "https://media.test/episode.m4a" },

@@ -259,6 +259,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Source video": "원본 동영상",
   "EDL": "EDL",
   "Transcript": "녹취록",
+  "Speaker map": "화자 맵",
   "Face tracks": "얼굴 트랙",
   "Sources": "소스",
   "Silence": "무음 구간",

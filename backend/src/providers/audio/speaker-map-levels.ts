@@ -60,7 +60,8 @@ export class HopPower {
  * source covers; null when it covers none or is silent. A turn is moved onto
  * the source's clock (sourceMs = masterMs − offsetMs) and read as every hop it
  * touches (a sub-hop turn across a boundary reads both hops; a zero-length
- * turn reads none). Each hop counts once, however many of the speaker's turns
+ * turn reads the hop it falls inside, or none when it sits exactly on a hop
+ * boundary). Each hop counts once, however many of the speaker's turns
  * overlap it.
  */
 export function speakerLevelDb(power: Float32Array, turns: readonly SpeakerTurn[], offsetMs: number): number | null {
@@ -110,4 +111,26 @@ export function decideSpeakerMap(input: {
     if (!camera) notes.push(`"${s}": no clear camera (the loudest led by ${lead} dB) — shown on the wide shot; set the map to override.`)
   }
   return { speakerMap, confidence, notes }
+}
+
+/**
+ * The cameras that heard none of the speakers — every level on them null —
+ * each named in a note: no candidate for anyone, never a failure. A camera
+ * whose hops are all zero is silent (a track of digital silence); one with
+ * sound heard none of the turns (silent through each of them, or its offset
+ * misses them). A camera never read (no hops: no audio track, noted by
+ * the caller) is not named here.
+ */
+export function unheardCameraNotes(
+  hopsById: ReadonlyMap<string, Float32Array>,
+  levels: ReadonlyMap<string, ReadonlyMap<string, number | null>>,
+): string[] {
+  const notes: string[] = []
+  for (const [id, hops] of hopsById) {
+    if ([...levels.values()].some((byCamera) => byCamera.get(id) != null)) continue
+    notes.push(hops.some((p) => p > 0)
+      ? `"${id}": heard none of the speakers' turns (silent through them, or its offset misses them), so it cannot be matched to a speaker by sound.`
+      : `"${id}": its sound is silent, so it cannot be matched to a speaker by sound.`)
+  }
+  return notes
 }

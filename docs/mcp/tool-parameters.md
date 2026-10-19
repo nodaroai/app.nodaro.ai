@@ -2653,6 +2653,22 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `subreddit` | string |  | Reddit keyword search: search inside this subreddit only. At most 100 characters. |
 | `video_kind` | string |  | YouTube: all (default), videos or shorts. One of `all`, `videos`, `shorts`. |
 
+## `speaker_map`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sources` | object[] | yes | The cameras (and the master / wide recordings), each with a unique id. From 2 to 6 items. |
+| `sources[].id` | string | yes | Your id for this recording — the camera id the map names (use the EDL's source id). From 1 to 200 characters. |
+| `sources[].url` | string (URL) | yes | Audio OR video URL — the audio track is read either way. |
+| `sources[].kind` | string |  | "audio" for a sound-only recording (never anyone's camera). Default video. One of `video`, `audio`. |
+| `transcript` | object (map of any) or string | yes | The word transcript with speaker labels, object or JSON string. |
+| `offsets` | object (map of any) or string |  | An audio_sync job's output_data.json (object or JSON string). Omit when the recordings share a clock. |
+| `master_source_id` | string |  | The id of the master audio: hears everyone, so it is no one's camera. From 1 to 200 characters. |
+| `wide_source_id` | string |  | The id of the wide shot: no one's camera; a speaker with no clear camera is shown on it. From 1 to 200 characters. |
+| `margin_db` | number |  | How much louder (dB) the loudest camera must be than the next for a speaker to get it. Default 3. From 0 to 30. |
+
 ## `speech_to_video`
 
 Needs `workflows:execute`.
@@ -2934,7 +2950,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 |---|---|---|---|
 | `edl` | object (map of any) or string | yes | One EDL (a plan_edit result), object or JSON string. |
 | `transcript` | object (map of any) or string | yes | The word transcript with speaker labels. |
-| `speaker_map` | object (map of string) |  | Speaker label → EDL source id of their camera. |
+| `speaker_map` | object (map of string) |  | Speaker label → EDL source id of their camera ("" = no camera of their own: the wide shot). |
+| `speaker_map_result` | object (map of any) or string |  | A speaker_map job's output_data.json (object or JSON string): who is on which camera, worked out from the cameras' microphones. |
 | `speaker_names` | object (map of string) |  | Speaker label → display name. |
 | `min_shot_ms` | integer |  | From 500 to 60000. |
 | `lead_ms` | integer |  | From 0 to 5000. |

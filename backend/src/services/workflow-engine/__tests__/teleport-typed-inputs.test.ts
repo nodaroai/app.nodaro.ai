@@ -148,6 +148,8 @@ describe("the orchestrator's graph through a Teleport pair", () => {
       selectedAudioNodeId: "r",
       selectedImageNodeId: "r",
       selectedVideoNodeId: "r",
+      masterSourceId: "r",
+      wideSourceId: "x",
       // entries naming a wired node
       assetInjections: [{ sourceNodeId: "r", facet: "hair" }, { sourceNodeId: "x" }],
     })
@@ -176,6 +178,8 @@ describe("the orchestrator's graph through a Teleport pair", () => {
       selectedAudioNodeId: "o",
       selectedImageNodeId: "o",
       selectedVideoNodeId: "o",
+      masterSourceId: "o",
+      wideSourceId: "x",
       assetInjections: [{ sourceNodeId: "o", facet: "hair" }, { sourceNodeId: "x" }],
     })
   })

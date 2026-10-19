@@ -68,6 +68,8 @@ describe.skipIf(!ffmpegAvailable)("computeSpeakerMap (e2e, real ffmpeg, network 
     // f2 started 2 s after the master: its t = 0 is master t = 2 (offsetMs +2000).
     await make("f2-long.wav", 3, gate(0.25, 1), 22)
     await runFfmpeg(["-y", "-ss", "2", "-i", join(fx.dir, "f2-long.wav"), join(fx.dir, "f2-late.wav")])
+    // A camera whose audio track is there but digital silence.
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", "20", join(fx.dir, "silent.wav")])
     await fs.copyFile(join(fx.dir, "f1.wav"), join(fx.dir, "picture-only.mp4")) // content never read: no audio stream
     fx.noAudio.add("picture-only.mp4")
   }, 120_000)
@@ -118,6 +120,20 @@ describe.skipIf(!ffmpegAvailable)("computeSpeakerMap (e2e, real ffmpeg, network 
     })
     expect(r.speakerMap).toEqual({ A: "f1", B: "f2" })
     expect(r.notes).toEqual(['"pic": has no audio track, so it cannot be matched to a speaker by sound.'])
+  }, 120_000)
+
+  it("a camera whose audio track is silent is no candidate and a note naming it — never a failure", async () => {
+    const r = await computeSpeakerMap({
+      sources: [
+        { id: "f1", url: url("f1.wav"), kind: "video" },
+        { id: "mute", url: url("silent.wav"), kind: "video" },
+        { id: "f2", url: url("f2.wav"), kind: "video" },
+      ],
+      transcript,
+      marginDb: 3,
+    })
+    expect(r.speakerMap).toEqual({ A: "f1", B: "f2" })
+    expect(r.notes).toEqual(['"mute": its sound is silent, so it cannot be matched to a speaker by sound.'])
   }, 120_000)
 
   it("a wide shot with no audio track was never a candidate: no note for it", async () => {

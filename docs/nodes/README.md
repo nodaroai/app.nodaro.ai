@@ -572,6 +572,9 @@ Helpers for debugging and workflow organization.
 | [Teleport Send](./utility/teleport-send.md) | Broadcast a value on a named channel without a visible wire | Declutter large canvases; share one upstream value with distant or multiple downstream nodes |
 | [Teleport Receive](./utility/teleport-receive.md) | Receive a value from a Teleport Send on the same channel | Pick up a wirelessly broadcast value anywhere on the canvas |
 <!-- gen:units start -->
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [Speaker Map](./processing-audio/speaker-map.md) | Work out which camera each speaker is on, from the cameras' own microphones: 2–6 recordings, their Audio Sync offsets and a diarized transcript. | Tell Camera Switch whose camera is whose in a multicam podcast, without filling in the speaker table by hand |
 <!-- gen:units end -->
 
 ---

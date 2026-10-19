@@ -1,11 +1,20 @@
 {
   "$comment": "Reasoned exceptions to G2 (frontend/src/__tests__/node-units-structure.test.ts): a product file outside a unit's folders that names the unit's type id as a string literal. Shape: { \"<file>\": { \"<type>\": \"<why it must stay>\" } }. It only shrinks; a new central mention of a unit is a missing seam.",
   "mentions": {
+    "backend/src/lib/mcp/tools/verbs-speaker-map.ts": {
+      "speaker-map": "the MCP verb speaker_map is Speaker Map's own public per-node interface (its deny check and price sentence name the node it serves); deriving it would still pick the node out by name (decided 2026-10-18)"
+    },
+    "frontend/src/lib/target-handle-availability.ts": {
+      "speaker-map": "Camera Switch's Speaker map input exists for Speaker Map's result alone, so the editor withholds that pip while Speaker Map is withheld from the viewer (read through isNodeUnavailable); no manifest field yet says which node another node's input exists for, so the pairing is named here (decided 2026-10-19)"
+    },
     "packages/cli/src/commands/edit-use-case.ts": {
       "clip-pack": "the published CLI's per-node command (`nodaro edit clip-pack`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "episode-chapters": "the published CLI's per-node command (`nodaro edit episode-chapters`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "episode-trailer": "the published CLI's per-node command (`nodaro edit episode-trailer`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "tighten-episode": "the published CLI's per-node command (`nodaro edit tighten-episode`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)"
+    },
+    "packages/cli/src/commands/edit.ts": {
+      "speaker-map": "the published CLI's per-node command (`nodaro edit speaker-map`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18, the kit's CLI precedent)"
     }
   }
 }

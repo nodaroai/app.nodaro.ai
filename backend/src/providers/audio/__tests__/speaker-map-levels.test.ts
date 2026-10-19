@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { HopPower, SPEAKER_MAP_HOP_MS, decideSpeakerMap, speakerLevelDb, speakerTurnsOf } from "../speaker-map-levels.js"
+import { HopPower, SPEAKER_MAP_HOP_MS, decideSpeakerMap, speakerLevelDb, speakerTurnsOf, unheardCameraNotes } from "../speaker-map-levels.js"
 
 describe("speakerTurnsOf", () => {
   const t = { words: [
@@ -108,5 +108,24 @@ describe("decideSpeakerMap", () => {
   })
   it("one camera may win several speakers (a two-shot)", () => {
     expect(decideSpeakerMap({ speakers: ["s0", "s1"], levels: lv({ s0: { a: -10, b: -30 }, s1: { a: -12, b: -30 } }), marginDb: 3 }).speakerMap).toEqual({ s0: "a", s1: "a" })
+  })
+})
+
+describe("unheardCameraNotes", () => {
+  const lv = (rows: Record<string, Record<string, number | null>>) => new Map(Object.entries(rows).map(([s, c]) => [s, new Map(Object.entries(c))]))
+  const hops = (...p: number[]) => Float32Array.from(p)
+  it("a camera that heard no speaker is named: silent throughout, or through every turn", () => {
+    const notes = unheardCameraNotes(
+      new Map([["a", hops(0.1, 0.2)], ["quiet", hops(0, 0, 0)], ["late", hops(0.3, 0.3)]]),
+      lv({ s0: { a: -20, quiet: null, late: null }, s1: { a: -25, quiet: null, late: null } }),
+    )
+    expect(notes).toEqual([
+      '"quiet": its sound is silent, so it cannot be matched to a speaker by sound.',
+      '"late": heard none of the speakers\' turns (silent through them, or its offset misses them), so it cannot be matched to a speaker by sound.',
+    ])
+  })
+  it("a camera that heard at least one speaker is not named; nor is one never read (no hops)", () => {
+    expect(unheardCameraNotes(new Map([["a", hops(0.1)], ["b", hops(0.1)]]), lv({ s0: { a: -20, b: null }, s1: { a: null, b: -22 } }))).toEqual([])
+    expect(unheardCameraNotes(new Map(), lv({ s0: { a: null } }))).toEqual([])
   })
 })

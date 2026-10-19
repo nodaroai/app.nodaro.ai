@@ -83,7 +83,7 @@ import { outputPipSourceType } from "@nodaro/shared/entities"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
-import { isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
+import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, cameraSwitchSpeakerMapLanding, isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseSavedNodeOutput } from "./use-case-output.js"
 import { routeUseCaseInput } from "./use-case-inputs.js"
 import { routeUnitInput } from "./unit-inputs.js"
@@ -594,6 +594,14 @@ export function resolveNodeInputs(
     // A node unit's JSON and many-wire inputs, by the input they land on — before
     // the empty-output skip, so a wired JSON input that got nothing is recorded.
     if (routeUnitInput(inputs, targetNode, edge, sourceNode, effectiveSourceHandle, output, TEXT_SOURCE_NODE_TYPES)) continue
+
+    // camera-switch's `speakerMap`: before the empty-output skip, so a wired
+    // Speaker Map that produced nothing is recorded ("") and refused.
+    if (targetNode.type === "camera-switch" && edge.targetHandle === CAMERA_SWITCH_SPEAKER_MAP_HANDLE) {
+      const landed = cameraSwitchSpeakerMapLanding(inputs.speakerMapResult, output, { type: sourceNode.type, textSources: TEXT_SOURCE_NODE_TYPES })
+      if (landed !== undefined) inputs.speakerMapResult = landed
+      continue
+    }
 
     // edit-plan's `offsets` wired but carrying no audio-sync result: record the
     // wire (null) so the payload builder fails the run rather than plan without
