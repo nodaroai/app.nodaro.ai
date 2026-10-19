@@ -575,6 +575,44 @@ describe("pollJobWithNodeUpdate", () => {
 // returned" even though the job completed. A key list says "take the first
 // key the job actually produced".
 
+describe("pollJobWithNodeUpdate — a JSON landing (a worker unit's look outputs)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes.length = 0
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const landing = {
+    fields: ["generatedJson", "generatedEdl"],
+    land: (od: Record<string, unknown>) => (od.json === undefined ? undefined : { patch: { generatedJson: od.json, generatedEdl: undefined }, result: JSON.stringify(od.json) }),
+  }
+  async function run(outputData: Record<string, unknown>) {
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: outputData })
+    mockNodes.push({ id: "n1", data: { generatedJson: { stale: true }, generatedEdl: { stale: true } } })
+    const promise = pollJobWithNodeUpdate("n1", vi.fn().mockResolvedValue({ jobId: "j1" }), [], "Fixture Map", makeCtx(), undefined, undefined, { jsonLanding: landing })
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    return promise
+  }
+
+  it("clears the landing's fields at the start, writes its patch on completion and resolves its result — no media key needed", async () => {
+    await expect(run({ json: { a: 1 } })).resolves.toBe('{"a":1}')
+    expect(mockUpdateNodeData.mock.calls[0]![1]).toMatchObject({ executionStatus: "running", generatedJson: undefined, generatedEdl: undefined })
+    expect(mockNodes[0]!.data).toMatchObject({ executionStatus: "completed", generatedJson: { a: 1 }, currentJobId: undefined })
+    expect(mockNodes[0]!.data.generatedEdl).toBeUndefined()
+    expect(mockNodes[0]!.data).not.toHaveProperty("generatedResults")
+  })
+
+  it("a job that wrote no result fails the node", async () => {
+    await expect(run({ videoUrl: "https://cdn.example.com/x.mp4" })).rejects.toThrow("The job returned no result")
+    expect(mockNodes[0]!.data).toMatchObject({ executionStatus: "failed", errorMessage: "The job returned no result" })
+  })
+})
+
 describe("pollJobWithNodeUpdate — media-typed completion (outputKey list)", () => {
   beforeEach(() => {
     vi.clearAllMocks()

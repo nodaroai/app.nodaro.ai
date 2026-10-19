@@ -49,8 +49,8 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     ].join("; "),
   },
   "services/workflow-engine/output-extractor.ts": {
-    count: 5,
-    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied) and, beside it, usecaseSavedNodeOutput (a use-case node's saved output, its plan read the same way); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
+    count: 6,
+    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; unitLookPipJsonFor's saved read of a node unit's look pip (only with no state — savedDataAllowed's own first case — else the state's output); editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied) and, beside it, usecaseSavedNodeOutput (a use-case node's saved output, its plan read the same way); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
   },
   "services/workflow-engine/use-case-output.ts": {
     count: 10,

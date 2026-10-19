@@ -1,0 +1,58 @@
+{
+  "$comment": "A worker unit's JSON (look) outputs, landed on every lane by both engines (decided 2026-10-18). `unit` is a JSON-only worker derived from the fixture unit fixture-echo: its manifest with these outputs, this contract and this registry.outputType (units-manifest.test.mjs validates exactly that), its type and label renamed. It has the shape of Speaker Map's outputs: `json` (on a DIRECT key of the server's node output) and `edl`. Each case is one finished job: `outputData` is the job row's output_data; `nodeOutput` what the server's buildNodeOutputFromJobData makes of it (the per-pip carrier `unitOutputs`, each value the JSON string a wire carries, and `json`, the primary output's JSON value — a JSON string parsed — for the readers that read output.json); `landing` the node-data patch every editor lane writes (the canvas run's runJsonNode over the job row, the server-run lanes over the job row or over nodeOutput), `cleared` the declared fields that patch empties (a JSON value cannot say undefined); `result` what runJsonNode resolves (the primary output as a wire carries it). A case with `landing: null` lands nothing: the canvas run fails the node, a server lane writes no result.",
+  "unit": {
+    "type": "fixture-map",
+    "label": "Fixture Map",
+    "outputs": [
+      { "id": "json", "label": "Map", "kind": "look", "from": "generatedJson" },
+      { "id": "edl", "label": "Edit (EDL)", "kind": "look", "from": "generatedEdl" }
+    ],
+    "contract": { "jsonPips": { "json": "other", "edl": "edl" } },
+    "outputType": "data"
+  },
+  "cases": [
+    {
+      "name": "both outputs land, each on its own field",
+      "outputData": { "json": { "version": 1, "speakerMap": { "s0": "a" } }, "edl": { "version": 1, "segments": [{ "id": "s", "inMs": 0, "outMs": 900 }] } },
+      "nodeOutput": {
+        "unitOutputs": { "json": "{\"version\":1,\"speakerMap\":{\"s0\":\"a\"}}", "edl": "{\"version\":1,\"segments\":[{\"id\":\"s\",\"inMs\":0,\"outMs\":900}]}" },
+        "json": { "version": 1, "speakerMap": { "s0": "a" } }
+      },
+      "landing": { "generatedJson": { "version": 1, "speakerMap": { "s0": "a" } }, "generatedEdl": { "version": 1, "segments": [{ "id": "s", "inMs": 0, "outMs": 900 }] } },
+      "cleared": [],
+      "result": "{\"version\":1,\"speakerMap\":{\"s0\":\"a\"}}"
+    },
+    {
+      "name": "an output the job did not write is cleared, never left from an earlier run",
+      "outputData": { "json": { "version": 1, "speakerMap": {} } },
+      "nodeOutput": { "unitOutputs": { "json": "{\"version\":1,\"speakerMap\":{}}" }, "json": { "version": 1, "speakerMap": {} } },
+      "landing": { "generatedJson": { "version": 1, "speakerMap": {} } },
+      "cleared": ["generatedEdl"],
+      "result": "{\"version\":1,\"speakerMap\":{}}"
+    },
+    {
+      "name": "keys that name no output are dropped; null and \"\" are no value",
+      "outputData": { "json": null, "edl": { "version": 1 }, "videoUrl": "https://r2/x.mp4", "text": "t", "plan": { "a": 1 } },
+      "nodeOutput": { "unitOutputs": { "edl": "{\"version\":1}" } },
+      "landing": { "generatedEdl": { "version": 1 } },
+      "cleared": ["generatedJson"],
+      "result": ""
+    },
+    {
+      "name": "a JSON string the job wrote lands as its value on every lane",
+      "outputData": { "json": "{\"version\":1,\"speakerMap\":{\"s1\":\"b\"}}", "edl": "" },
+      "nodeOutput": { "unitOutputs": { "json": "{\"version\":1,\"speakerMap\":{\"s1\":\"b\"}}" }, "json": { "version": 1, "speakerMap": { "s1": "b" } } },
+      "landing": { "generatedJson": { "version": 1, "speakerMap": { "s1": "b" } } },
+      "cleared": ["generatedEdl"],
+      "result": "{\"version\":1,\"speakerMap\":{\"s1\":\"b\"}}"
+    },
+    {
+      "name": "a job that wrote no output lands nothing",
+      "outputData": { "videoUrl": "https://r2/x.mp4" },
+      "nodeOutput": {},
+      "landing": null,
+      "cleared": [],
+      "result": ""
+    }
+  ]
+}

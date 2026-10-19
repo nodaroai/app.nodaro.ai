@@ -83,6 +83,9 @@ export function definitionSource(unit, priceRows) {
     // The editor's price mirror (estimates before the server answers): every
     // staticCosts row of price.ee.ts — never written by hand, never in unit.json.
     priceRows: Object.fromEntries(Object.keys(priceRows ?? {}).sort(byCodeUnit).map((k) => [k, priceRows[k]])),
+    // A worker that declares a job budget (backend budget.ts) runs long: a reload
+    // re-attaches its poll for the long horizon (single-node-restore.ts). Absent otherwise.
+    ...(unit.files.backend.includes("budget.ts") ? { longRunning: true } : {}),
   }
   return [GENERATED_HEADER, "// The projection of unit.json the editor reads: edit unit.json, then run npm run gen:units.", "", `export const definition = ${json(def)} as const`, ""].join("\n")
 }

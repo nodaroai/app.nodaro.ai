@@ -1,3 +1,4 @@
+// @registry-enumerates LONG_RUNNING_NODE_TYPES carries every node unit whose job declares a budget (longRunning)
 /**
  * Single-node in-flight restore after a page reload (Gap 3).
  *
@@ -14,6 +15,8 @@
  */
 
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeSet } from "./unit-compose"
 
 /** Stuck-job horizon for an ordinary single-node Run: 30 minutes. (It was set
  *  to mirror the backend `NODE_TIMEOUT_MS` when that was 30 minutes; the
@@ -46,14 +49,18 @@ export const SINGLE_NODE_RESTORE_MAX_AGE_MS = 30 * 60 * 1000
  *  see its sources' lengths up front), and a first run over long, uncached
  *  camera files proxies each one before correlating — a reload during that
  *  must still re-attach the poll. `silence-detect` too (Track 0.19): its media
- *  proxy may fetch a multi-gigabyte original first, and it declares ~2 h. */
-export const LONG_RUNNING_NODE_TYPES: ReadonlySet<string> = new Set([
+ *  proxy may fetch a multi-gigabyte original first, and it declares ~2 h.
+ *
+ *  Every node unit whose job declares a budget (its backend budget.ts) joins on
+ *  the same footing, with no hand list: gen:units flags its definition
+ *  `longRunning`. */
+export const LONG_RUNNING_NODE_TYPES: ReadonlySet<string> = composeSet("LONG_RUNNING_NODE_TYPES", new Set<string>([
   "generate-video-pro",
   "edit-video-pro",
   ...RENDER_NODE_TYPE_IDS,
   "audio-sync",
   "silence-detect",
-])
+]), UNIT_NODE_DEFINITIONS.filter((u) => u.longRunning === true).map((u) => u.type))
 export const LONG_RUNNING_RESTORE_MAX_AGE_MS = 6 * 60 * 60 * 1000 // 6h
 
 /** The restore age horizon for a given node type. */

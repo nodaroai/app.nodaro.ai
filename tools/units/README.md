@@ -7,7 +7,7 @@ central registration files (§5.8 option B, decided 2026-10-16):
 | Tree | Folder | Holds |
 |---|---|---|
 | frontend | `frontend/src/nodes/<type>/` | `unit.json` (**the manifest, source of truth**), `strings.json`, `types.ts`, `node.tsx`, `config.tsx`, `option.tsx`, `exec.ts`, `api.ts`, generated `definition.generated.ts` / `labels.generated.ts`, `__tests__/` |
-| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), generated `descriptor.generated.ts`, `__tests__/` |
+| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), `budget.ts` (a worker's job budget), generated `descriptor.generated.ts`, `__tests__/` |
 
 The central registries become **generated, checked-in aggregates** built from
 the manifests (`frontend/src/nodes/_generated/`, `backend/src/nodes/_generated/`,
@@ -199,6 +199,8 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | `USE_CASE_ROWS` (type → builder, label, inputs) and so `USE_CASE_DESCRIPTORS` (rows × `USE_CASE_SPECS`) | `packages/render-rules/src/use-case-rows.ts` ∪ the `use-case-rows` data file `unit-use-cases.generated.ts` |
 | `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability) | `frontend/src/lib/cloud-only-nodes.ts` and `backend/src/lib/cloud-only-nodes.ts` |
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |
+| the job budgets (`DECLARED_JOB_BUDGETS`, read through `declaredJobBudgetMs` and `BUDGETED_JOB_NAMES`: the video worker's liveness fallback, the orchestrator's ceilings, the row sweeps) | `backend/src/lib/job-budget.ts`, the legacy rows ∪ the `budgets` aggregate (`UNIT_BUDGETS`, each unit's `budget.ts` under its type) |
+| the long single-node restore horizon (`LONG_RUNNING_NODE_TYPES`: a reload re-attaches a running job's poll for 6 h instead of 30 minutes) | `frontend/src/lib/single-node-restore.ts`, the legacy rows ∪ the units whose definition is `longRunning` (through `unit-definitions.ts`) |
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
 
 The pure composition lives in `frontend/src/lib/unit-compose.ts` and
@@ -214,7 +216,8 @@ never the workflow store or a composer itself (G5).
 
 **A unit's connection rule.** A unit declares what each input takes in its
 manifest, `handles.inputs[].accepts` (kinds from `ACCEPTS_KINDS`: `video`,
-`audio`, `image`; several = any of them), and writes no predicate of its own.
+`audio`, `image`; several = any of them; or `look` alone, a JSON input that
+takes any JSON producer, `ACCEPTS_JSON`), and writes no predicate of its own.
 The canvas validator (`connectionTypesAccepted`) asks
 `frontend/src/lib/unit-connections.ts` for every wire into a unit, after the
 rules every node shares (JSON kinds, composition/lottie/picker-json pips, UGC)
@@ -236,6 +239,78 @@ media-class hint keyed by the target handle's NAME (`MEDIA_TARGET_HANDLES`:
 added together with its rule there, `ACCEPTS_KINDS` and
 `unit.schema.json` (`units-manifest.test.mjs` holds the schema to the
 vocabulary). `unit-connections.test.ts` proves it on a fixture unit.
+
+**A unit's input lanes.** An input that declares a `field` names where its
+value belongs in the node's data; the run still routes it by the source's
+type. Two kinds of input never have a `field`, and both engines route their
+wires by the input they land on, into `inputs.unitInputs[<input id>]`
+(`unitInputLanding`, `packages/render-rules/src/unit-input-lanes.ts`): a JSON
+input (`accepts: ["look"]`) holds the wired JSON string — of two real wires
+the last wins, and a wired input whose upstream produced nothing holds `""`
+so the unit refuses the run rather than read it as unwired; a many-wire input
+(`many: true`) holds one `UnitSourceRow` (`id` = the upstream node, `url`,
+`kind` video/audio) per upstream node, in the order of the workflow's edge
+list, the first wire from a node winning and a wire that carried nothing
+adding no row. A unit's `payload.ts` reads `kit.resolvedInputs.unitInputs`,
+its `exec.ts` `kit.inputs.unitInputs`. The lanes are
+`backend/src/services/workflow-engine/unit-inputs.ts` and
+`frontend/src/components/editor/workflow-editor/unit-inputs.ts`, called by
+each resolver before its empty-output skip; they ask `unitInputHandleOf`
+(both doors), which answers nothing for a use-case unit (`routeUseCaseInput`
+routes those). `unit-input-lanes-parity.test.ts` (one per engine) holds the
+two engines to the same `unitInputs` over
+`tools/units/__fixtures__/unit-input-lanes-parity.json`.
+
+**A worker unit's JSON outputs.** A worker whose outputs are JSON (`kind:
+"look"`, each with its `from`; the validator, `json-output-rules.mjs`, lets a
+look output stand only beside other look outputs) writes each output's value
+under the output's id in its job's `output_data`. On the server,
+`buildNodeOutputFromJobData` reads that row through `unitJobOutput` and
+`extractSavedNodeOutput` reads the node's fields through `unitSavedOutput`,
+both into the per-pip carrier `NodeOutput.unitOutputs` (by output id, the
+JSON string a wire carries) and `json` (the first output's value, for the
+readers of `output.json`); `getPrimaryOutput` hands a look pip its own string
+(`unitPipValue`). In the editor, `unitOutputValue` reads a look output's field
+as that string, and every lane lands a finished job through `unitJobLanding`
+(`backend/src/lib/unit-compose.ts` and `frontend/src/lib/unit-compose.ts`):
+each output's value on its `from` (a string holding a JSON object as that
+object), an output the job did not write emptied. The canvas run is
+`kit.runJsonNode(start, label)` (`pollJobWithNodeUpdate` with a JSON landing),
+which resolves the first output as a wire carries it; the server-run lanes are
+`json-run-result.ts`, whose `JSON_RUN_RESULT_TYPES` carries these units, as the
+popup's `TYPED_SOURCE_NODE_TYPES` does (`node-compatibility.ts`).
+`output-extractor-units.test.ts` and `json-run-result-units.test.ts` hold the
+two engines to `tools/units/__fixtures__/unit-json-outputs.json`, and the
+input-lanes parity fixture wires its JSON-only worker into a JSON input.
+
+The nodes that read a source's structured JSON directly — Extract Field, JSON
+Process, the list operators — and a fan-out over an Each wire read the output
+of the pip the wire leaves from, never the unit's first output: a wire from a
+unit's second look pip hands on that output (an object is one item, an array
+its items), on both engines. On the server that is `structuredJsonOf` (the
+consumers) and `unitLookPipJsonFor` (the fan-out), both through
+`unitPipJson`; in the editor `sourceJsonOf` and `extractNodeOutputAsList`,
+through the same-named `unitPipJson`. `unit-json-readers-parity.test.ts` (one
+per engine) holds them to `tools/units/__fixtures__/unit-json-readers.json`.
+
+**A worker unit's job budget.** A worker whose job can outlast the default
+ceilings (90 minutes of processing) declares its budget in `budget.ts`:
+`export const budget: UnitBudget = (data) => …`, the job's budget in ms read
+off its queue payload, or `undefined` when the payload names nothing to size
+(every reader then keeps its default). It is a pure leaf: it may not load the
+ffmpeg runtime, storage, supabase or config (`job-budget-leaf.test.ts`), so it
+usually re-exports a budget function from a `*-budget.ts` module beside the
+provider. `job-budget.ts` composes it into `DECLARED_JOB_BUDGETS` under the
+unit's type — its BullMQ job name — and throws at load on a type that also has
+a legacy row. That one registry is what every clock reads: the video worker's
+heartbeat (the unit's worker declares no `livenessBudgetMs`; the dispatch
+falls back to the registry), the orchestrator's node and workflow ceilings,
+the row sweeps and the relay's poll. gen:units also writes `"longRunning":
+true` into the unit's editor definition, and the single-node restore list
+composes from that flag, so a reload re-attaches the poll of a long job for
+6 h with no hand list. `job-budget-units.test.ts` and
+`single-node-restore-units.test.ts` prove both on the fixture unit, which
+carries a `budget.ts`.
 
 **Ordered registries.** Where a user or an agent sees a registry's order, a
 unit is placed, never appended: NODE_DEFINITIONS after its `position.after`,
@@ -277,7 +352,8 @@ which the two engines' parity tests read.)
   worker, exec, api; `sync` → route, exec, api; `inline` → exec; `source` →
   none; `use-case` → backend `use-case.ts` + `price.ee.ts`, and it refuses
   `exec.ts`, `api.ts`, a route, `payload.ts`, `worker.ts`,
-  `characterize.char.ts`, `execution.queue` and `execution.requires`. Any
+  `characterize.char.ts`, `execution.queue` and `execution.requires`.
+  `budget.ts` is only for `worker` (the video worker's liveness budget). Any
   route needs `price.ee.ts` (a zero-cost one too). `price.ee.ts`
   exports `staticCosts`, plus `creditId(data)` only when the id a run reserves
   depends on the node's data (a flat-priced unit reserves the row of its type).
@@ -319,7 +395,10 @@ which the two engines' parity tests read.)
 | Key | Rule |
 |---|---|
 | `execution.builder` | `use-case` only, required: a key of `USE_CASE_SPECS` (`packages/render-rules/src/use-case-specs.ts`), unique across units. |
-| `handles.inputs[].id` (use-case) | one of `media`, `music`, `introCard` (`USE_CASE_INPUT_HANDLES`; the run routes only these), with no `field`. |
+| `handles.inputs[].id` (use-case) | one of `media`, `music`, `introCard` (`USE_CASE_INPUT_HANDLES`; the run routes only these), with no `field`, no `many`, never accepting `look`. |
+| `handles.inputs[].accepts: ["look"]` | a JSON input: `look` is never beside another kind, and it declares no `field` (its wire lands in `unitInputs`, "A unit's input lanes"). |
+| `handles.inputs[].many: true` | the input takes every wire, in order: only `true`, only when `accepts` ⊆ `video`, `audio` (`MANY_KINDS`), never with `field`. |
+| `handles.outputs[].kind: "look"` (not a use case) | a JSON output names its `from` (the field its value lands on), and a unit with one has only `look` outputs: no lane lands a job's JSON beside its media yet ("A worker unit's JSON outputs"; `json-output-rules.mjs`). |
 | `handles.outputs[].from` (use-case) | absent: the use-case reader (`use-case-io.ts` in the editor, `use-case-output.ts` on the server) reads a use-case node's outputs, never `from`. |
 | `handles.outputs[].runtimeTyped: true` | only on an audio/video/image output with `contract.producer: "dynamic"`: the pip's kind is decided at run time, so it gets no `HANDLE_OUTPUT_TYPES` row. |
 | `picker.alsoOnTabs` | picker tabs (other than its family's own) that also list the node (`TAB_SUPERSET`). |

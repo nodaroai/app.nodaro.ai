@@ -598,3 +598,13 @@ export {
 } from "./free-video-limits"
 // The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).
 export { wholeEpisodeEdl, type WholeEpisodeEdlSource } from "./whole-episode-edl"
+// Where a node unit's JSON and many-wire inputs land (both engines' resolvers).
+export {
+  unitInputHandleIn,
+  unitInputLaneOf,
+  unitInputLanding,
+  unitLaneTakesSource,
+  type UnitInputLane,
+  type UnitInputValue,
+  type UnitSourceRow,
+} from "./unit-input-lanes"

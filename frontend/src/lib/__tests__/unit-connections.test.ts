@@ -7,18 +7,19 @@
 import { describe, expect, it, vi } from "vitest"
 import type { UnitDefinition } from "@/nodes/kit"
 
-// A unit the product does not have: one GIF-like `image` input and a video out.
+// A unit the product does not have: one GIF-like `image` input, one JSON
+// (`look`) input and a video out.
 const FIXTURE = vi.hoisted(() => ({
   type: "fixture-image-in",
   label: "Fixture Image In",
   category: "processing",
-  inputs: ["image"],
+  inputs: ["image", "plan"],
   outputs: ["video"],
   defaultData: { label: "Fixture Image In" },
   position: { after: "upload-image" },
   picker: null,
   handles: {
-    inputs: [{ id: "image", label: "Image", accepts: ["image"] }],
+    inputs: [{ id: "image", label: "Image", accepts: ["image"] }, { id: "plan", label: "Plan", accepts: ["look"] }],
     outputs: [{ id: "video", label: "Video", kind: "video" }],
   },
   execution: { kind: "inline" },
@@ -40,6 +41,7 @@ vi.mock("../unit-definitions", async (importOriginal) => {
 import { unitConnectionVerdict, unitInputConnectionAccepted } from "../unit-connections"
 import { isValidWorkflowConnection } from "../connection-validation"
 import { isValidFfmpegConnection, unitInputAccepts, ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "../ffmpeg-handles"
+import { ACCEPTS_JSON } from "../data-handles"
 import { ACCEPTS_IMAGE_OR_DYN } from "../image-producer-handles"
 import { UNIT_NODE_DEFINITIONS } from "../unit-definitions"
 import { NODE_DEFINITIONS } from "@/types/nodes"
@@ -69,6 +71,15 @@ describe("a fixture unit's declared inputs, composed into the canvas validator",
     expect(wire("text-to-speech", "image")).toBe(false)
     expect(wire("generate-image", "video")).toBe(false)
     expect(wire("generate-image", "zz-undeclared")).toBe(false)
+  })
+
+  it("takes any JSON producer into its JSON (look) input, through the rules every node shares", () => {
+    expect(wire("edit-plan", "plan", "edl")).toBe(true)
+    expect(wire("transcribe", "plan", "json")).toBe(true)
+    expect(wire("audio-sync", "plan")).toBe(true)
+    expect(wire("generate-video", "plan")).toBe(false)
+    expect(wire("generate-image", "plan")).toBe(false)
+    expect(wire("text-to-speech", "plan")).toBe(false)
   })
 
   it("judges the effective source: an entity's plain image pip is an image", () => {
@@ -119,11 +130,12 @@ describe("the seam changes no edge today", () => {
   })
 
   it("each accept kind is the legacy predicate of that media, over every node type", () => {
-    const pairs: ReadonlyArray<readonly [ReadonlyArray<"video" | "audio" | "image">, (s: string) => boolean]> = [
+    const pairs: ReadonlyArray<readonly [ReadonlyArray<"video" | "audio" | "image" | "look">, (s: string) => boolean]> = [
       [["video"], ACCEPTS_VIDEO],
       [["audio"], ACCEPTS_AUDIO],
       [["video", "audio"], ACCEPTS_MEDIA],
       [["image"], ACCEPTS_IMAGE_OR_DYN],
+      [["look"], ACCEPTS_JSON],
     ]
     for (const [kinds, legacy] of pairs) {
       const rule = unitInputAccepts(kinds)

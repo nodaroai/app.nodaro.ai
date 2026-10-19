@@ -10,7 +10,7 @@ import { LEGACY_SOURCE_HANDLE_ALIASES, listResultsServeHandle } from "@nodaro/sh
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
-import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js"
+import { getPrimaryOutput, extractSourceNodeOutput, structuredJsonOf } from "./output-extractor.js"
 import { getNodeOutput } from "./input-resolver.js"
 import { savedDataAllowed } from "./saved-data.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
@@ -188,8 +188,10 @@ export function executeExtractField(
   const state = nodeStates[src.id]
 
   let value: unknown
-  if (state?.output?.json !== undefined) {
-    value = state.output.json
+  // The JSON of the pip the wire leaves from (a node unit's look pip: its own output).
+  const json = structuredJsonOf(state?.output, src.type, incoming.sourceHandle)
+  if (json !== undefined) {
+    value = json
   } else if (state?.output?.listResults && state.output.listResults.length > 0) {
     // Treat the list as a structured array input. Parse each item so object
     // paths like "url" or "authorMeta.name" resolve per-element; non-JSON
@@ -253,8 +255,10 @@ export function executeJsonProcess(
   const state = nodeStates[src.id]
   let input: unknown
 
-  if (state?.output?.json !== undefined) {
-    input = state.output.json
+  // The JSON of the pip the wire leaves from (a node unit's look pip: its own output).
+  const json = structuredJsonOf(state?.output, src.type, incoming.sourceHandle)
+  if (json !== undefined) {
+    input = json
   } else {
     const text = state?.output?.text ?? (savedDataAllowed(state) ? extractSavedTextFallback(src) : undefined)
     if (typeof text !== "string" || text.length === 0) {
@@ -378,8 +382,9 @@ function collectItemsForEdge(
   // getPrimaryOutput (the plain text), matching the frontend collector
   // (extractNodeOutputAsList). json-only producers (web-scrape, video-analysis)
   // carry no "text" handle, so they are unaffected.
-  if (output.json !== undefined && resolvedEdge.sourceHandle !== "text") {
-    const json = output.json
+  // The JSON of the pip the wire leaves from (a node unit's look pip: its own output).
+  const json = structuredJsonOf(output, srcNode.type, resolvedEdge.sourceHandle)
+  if (json !== undefined && resolvedEdge.sourceHandle !== "text") {
     if (json !== null) {
       if (Array.isArray(json)) {
         for (const element of json) {

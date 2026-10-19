@@ -364,7 +364,7 @@ central files.
 | Folder | Holds |
 |---|---|
 | `frontend/src/nodes/<type>/` | `unit.json` (the manifest: label, category, handles, default data, how it runs, its place in the picker), `types.ts` (its data type), `node.tsx` (canvas card), `config.tsx` (config panel), `option.tsx` (picker icon), `exec.ts` (editor executor), `api.ts` (client call), `strings.json` (its translations) |
-| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row); a use-case node has `use-case.ts` (its request body) and `price.ee.ts` instead |
+| `backend/src/nodes/<type>/` | `route.ts` (Fastify route, Zod body, credit guard), `payload.ts` (server-run workflows), `worker.ts` (queue handler), `price.ee.ts` (its credit row), `budget.ts` when its job can run past the default 90-minute ceiling (its job budget, read off the job's payload); a use-case node has `use-case.ts` (its request body) and `price.ee.ts` instead |
 
 Start from the scaffold — it writes both folders from templates, checks
 them with the same validator CI runs, and regenerates:

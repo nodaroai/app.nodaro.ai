@@ -8,8 +8,9 @@
 // target-handle-registry) is never a composer (G5 forbids a unit to import one).
 // Each reader declares `@registry-enumerates` (it builds a table over every
 // unit) or `@registry-lookup` (it asks only `unitDefinitionOf(type)`).
+import { unitInputHandleIn } from "@nodaro/render-rules"
 import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"
-import type { UnitDefinition } from "@/nodes/kit"
+import type { UnitDefinition, UnitInputHandle } from "@/nodes/kit"
 
 /** Every node unit's definition (frontend/src/nodes/<type>/definition.generated.ts), sorted by type. */
 export const UNIT_NODE_DEFINITIONS: ReadonlyArray<UnitDefinition> = UNIT_DEFINITIONS
@@ -19,4 +20,13 @@ const BY_TYPE: ReadonlyMap<string, UnitDefinition> = new Map(UNIT_DEFINITIONS.ma
 /** The unit definition of `type`, or undefined when it is a legacy node (or unknown). */
 export function unitDefinitionOf(type: string | undefined): UnitDefinition | undefined {
   return type === undefined ? undefined : BY_TYPE.get(type)
+}
+
+/**
+ * The input of unit `type` a wire on target handle `handle` lands on — undefined
+ * for a legacy node, an undeclared handle, or a use-case unit (its inputs are
+ * routed by routeUseCaseInput). The input lanes read it (workflow-editor/unit-inputs.ts).
+ */
+export function unitInputHandleOf(type: string | undefined, handle: string | null | undefined): UnitInputHandle | undefined {
+  return unitInputHandleIn(unitDefinitionOf(type), handle)
 }

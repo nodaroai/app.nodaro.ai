@@ -34,6 +34,8 @@ export interface UnitInputHandle {
   readonly accepts: ReadonlyArray<UnitHandleKind>
   /** The node-data field a wired value lands in. */
   readonly field?: string
+  /** The input takes every wire, in order, each its own source (a video/audio input with no field). */
+  readonly many?: true
 }
 
 export interface UnitOutputHandle {
@@ -92,6 +94,8 @@ export interface UnitDefinition {
   readonly docs: { readonly page?: string; readonly awaiting?: string; readonly useCase?: string }
   /** The editor's price mirror before the server answers: every `staticCosts` row of price.ee.ts, projected by gen:units — never hand-written. */
   readonly priceRows: Readonly<Record<string, number>>
+  /** The unit's job declares a budget (its backend budget.ts), projected by gen:units: a reload re-attaches its poll for the long horizon (single-node-restore.ts). */
+  readonly longRunning?: true
 }
 
 /** node.tsx — the canvas component. */

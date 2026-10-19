@@ -32,6 +32,8 @@ export function useCaseProblems(unit, m, ctx) {
     for (const [i, h] of inputs.entries()) {
       if (!USE_CASE_INPUT_HANDLES.includes(h?.id)) out.push(`handles.inputs[${i}].id "${h?.id}": a use-case input is one of ${USE_CASE_INPUT_HANDLES.join(", ")} (routeUseCaseInput routes only these)`)
       if (h?.field !== undefined) out.push(`handles.inputs[${i}].field: a use-case input lands in useCaseMedia / useCaseMusic / useCaseIntroCard, never a data field — remove it`)
+      if (Array.isArray(h?.accepts) && h.accepts.includes("look")) out.push(`handles.inputs[${i}].accepts: a use-case input takes media, never JSON (routeUseCaseInput routes it into useCaseMedia / useCaseMusic / useCaseIntroCard)`)
+      if (h?.many !== undefined) out.push(`handles.inputs[${i}].many: a use-case input already takes every wire (routeUseCaseInput) — remove it`)
     }
     for (const [i, h] of outputs.entries()) if (h?.from !== undefined) out.push(`handles.outputs[${i}].from: a use-case node's outputs are read by the use-case reader (use-case-io.ts / use-case-output.ts) — remove it`)
     for (const cap of Array.isArray(m.capabilities) ? m.capabilities : []) if (cap === "ffmpeg-media" || cap === "finalize:own-writer" || String(cap).startsWith("length:")) out.push(`capability "${cap}" describes a worker; a use-case node runs none`)

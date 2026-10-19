@@ -38,7 +38,7 @@ describe("gen:skills sees node units", () => {
     // fixture-case (the use-case fixture) follows fixture-echo: a unit may follow a unit.
     expect(defs.map((d) => d.type)).toEqual(["text-prompt", "upload-video", "fixture-echo", "fixture-case", "list"])
     const echo = defs.find((d) => d.type === "fixture-echo")!
-    expect(echo).toMatchObject({ label: "Fixture Echo", category: "utility", inputs: ["in"], outputs: ["video-out"], defaultDataKeys: ["label", "fieldMappings"] })
+    expect(echo).toMatchObject({ label: "Fixture Echo", category: "utility", inputs: ["in", "sources", "plan"], outputs: ["video-out"], defaultDataKeys: ["label", "fieldMappings"] })
     expect(echo.unit?.typesFile).toBe(join(tree, "frontend/src/nodes/fixture-echo/types.ts"))
     expect(defs.find((d) => d.type === "list")!.unit).toBeUndefined()
   })

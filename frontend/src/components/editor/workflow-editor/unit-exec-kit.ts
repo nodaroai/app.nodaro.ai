@@ -5,8 +5,11 @@
 // workflow store) are INJECTED by execute-node.ts, so neither this module nor
 // a unit ever imports them — C1 (no cycle growth) and G5 (a unit imports no
 // engine module) both hold. Everything it imports at run time is a leaf.
+// @registry-lookup builds the JSON landing of the one node unit it runs (unitDefinitionOf(node.type))
 import type { UnitExecKit } from "@/nodes/exec-kit"
 import type { MessageKey } from "@/lib/i18n"
+import { unitDefinitionOf } from "@/lib/unit-definitions"
+import { unitJsonJobLanding, unitJsonWorkers, type UnitJsonLanding } from "@/lib/unit-compose"
 import type { WorkflowNode } from "@/types/nodes"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import type { OutputKeySpec } from "./poll-job"
@@ -21,6 +24,8 @@ export interface UnitExecKitDeps {
   readonly overrideMediaUrl: string | undefined
   /** poll-job's pollJobWithNodeUpdate (the legacy runProcessingNode's body). */
   readonly poll: (nodeId: string, start: () => Promise<{ jobId: string }>, outputKey: OutputKeySpec, label: string, ctx: ExecutionContext) => Promise<string>
+  /** The same poll landing a JSON result (pollJobWithNodeUpdate's `jsonLanding`). */
+  readonly pollJson: (nodeId: string, start: () => Promise<{ jobId: string }>, landing: UnitJsonLanding, label: string, ctx: ExecutionContext) => Promise<string>
   readonly setUserPromptTemplate: (template: string | undefined) => void
   readonly getNodeData: (nodeId: string) => Readonly<Record<string, unknown>> | undefined
   readonly updateNodeData: (nodeId: string, patch: Record<string, unknown>) => void
@@ -35,6 +40,11 @@ export function createUnitExecKit(deps: UnitExecKitDeps): UnitExecKit {
     overrideMediaUrl: deps.overrideMediaUrl,
     userId: ctx.userId,
     runProcessingNode: (start, resultField, jobLabel) => deps.poll(node.id, start, resultField, jobLabel, ctx),
+    runJsonNode: (start, jobLabel) => {
+      const unit = unitDefinitionOf(node.type)
+      if (!unit || unitJsonWorkers([unit]).length === 0) return Promise.reject(new Error(`${node.type}: runJsonNode needs a node unit whose outputs are JSON`))
+      return deps.pollJson(node.id, start, unitJsonJobLanding(unit), jobLabel, ctx)
+    },
     nodeRunError: (key: MessageKey, vars) => nodeRunError(label, key, vars),
     setUserPromptTemplate: deps.setUserPromptTemplate,
     nodeData: () => deps.getNodeData(node.id),

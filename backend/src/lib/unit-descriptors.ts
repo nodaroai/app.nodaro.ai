@@ -7,8 +7,9 @@
 // (mcp/widget-models.ts) — read it here, not the generated aggregate.
 // Each reader declares `@registry-enumerates` (a table over every unit) or
 // `@registry-lookup` (it asks only `unitDescriptorOf(type)`).
+import { unitInputHandleIn } from "@nodaro/render-rules"
 import { UNIT_REGISTRY } from "../nodes/_generated/registry.js"
-import type { UnitDescriptor } from "../nodes/kit.js"
+import type { UnitDescriptor, UnitInputHandle } from "../nodes/kit.js"
 
 /** Every node unit's descriptor (backend/src/nodes/<type>/descriptor.generated.ts), sorted by type. */
 export const UNIT_NODE_DESCRIPTORS: ReadonlyArray<UnitDescriptor> = Object.values(UNIT_REGISTRY)
@@ -18,4 +19,13 @@ const BY_TYPE: ReadonlyMap<string, UnitDescriptor> = new Map(UNIT_NODE_DESCRIPTO
 /** The unit descriptor of `type`, or undefined when it is a legacy node (or unknown). */
 export function unitDescriptorOf(type: string | undefined): UnitDescriptor | undefined {
   return type === undefined ? undefined : BY_TYPE.get(type)
+}
+
+/**
+ * The input of unit `type` a wire on target handle `handle` lands on — undefined
+ * for a legacy node, an undeclared handle, or a use-case unit (its inputs are
+ * routed by routeUseCaseInput). The input lanes read it (unit-inputs.ts).
+ */
+export function unitInputHandleOf(type: string | undefined, handle: string | null | undefined): UnitInputHandle | undefined {
+  return unitInputHandleIn(unitDescriptorOf(type), handle)
 }

@@ -68,6 +68,19 @@ test("every live seam produces its output; each unit line is tagged // unit:<typ
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test("a many-wire media input and a JSON input reach both projections as declared", async () => {
+  const root = tree()
+  try {
+    const r = await run(root)
+    assert.deepEqual(r.errors, [])
+    for (const p of ["frontend/src/nodes/fixture-echo/definition.generated.ts", "backend/src/nodes/fixture-echo/descriptor.generated.ts"]) {
+      const src = r.outputs.get(p)
+      assert.match(src, /"id": "sources",\n {8}"label": "Sources",\n {8}"accepts": \[\n {10}"video",\n {10}"audio"\n {8}\],\n {8}"many": true\n/, p)
+      assert.match(src, /"id": "plan",\n {8}"label": "Plan",\n {8}"accepts": \[\n {10}"look"\n {8}\]\n/, p)
+    }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test("the contract rows hold only a type id and a producer kind", async () => {
   const root = tree()
   try {
@@ -161,6 +174,28 @@ test("mcp.widgetModelFor reaches the descriptor only when declared", async () =>
     assert.deepEqual(result.errors, [])
     assert.match(result.outputs.get(DESC), /"mcp": \{\n\s+"widgetModelFor": \[\n\s+"fixture_echo"\n\s+\]\n\s+\}/)
     assert.doesNotMatch(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /widgetModelFor/, "server-only: the editor's definition does not carry it")
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("a worker's budget.ts: the budgets aggregate binds it, and the editor's definition says the node runs long", async () => {
+  const root = tree()
+  try {
+    const r = await run(root)
+    assert.deepEqual(r.errors, [])
+    const budgets = r.outputs.get("backend/src/nodes/_generated/budgets.ts")
+    assert.match(budgets, /^\/\/ @registry backend\/src\/nodes\/\*\/budget\.ts$/m)
+    assert.match(budgets, /^import type \{ UnitBudget \} from "\.\.\/kit\.js"$/m)
+    assert.match(budgets, /^import \{ budget as unit_fixture_echo \} from "\.\.\/fixture-echo\/budget\.js" \/\/ unit:fixture-echo$/m)
+    assert.match(budgets, /^export const UNIT_BUDGETS: Readonly<Record<string, UnitBudget>> = /m)
+    assert.match(budgets, /^ {2}"fixture-echo": unit_fixture_echo, \/\/ unit:fixture-echo$/m)
+    assert.match(r.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /\n {2}"longRunning": true\n/)
+    assert.doesNotMatch(r.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts"), /longRunning/, "no flag without a budget.ts")
+    assert.doesNotMatch(r.outputs.get("backend/src/nodes/fixture-echo/descriptor.generated.ts"), /longRunning/, "the server reads the budget itself")
+    // Without budget.ts the flag goes and the aggregate has no member.
+    rmSync(path.join(root, "backend/src/nodes/fixture-echo/budget.ts"))
+    const bare = await run(root)
+    assert.doesNotMatch(bare.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /longRunning/)
+    assert.doesNotMatch(bare.outputs.get("backend/src/nodes/_generated/budgets.ts"), /unit:fixture-echo/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

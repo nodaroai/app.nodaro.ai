@@ -1,3 +1,4 @@
+// @test-watches backend/src/nodes/**
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // ---------------------------------------------------------------------------
@@ -230,6 +231,7 @@ vi.mock("../../shared.js", () => ({
 import { ffmpegHandlers } from "../ffmpeg.js"
 import { applyEdlRenderBudgetMs } from "@/providers/video/apply-edl.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "@/lib/job-budget.js"
+import { unitDescriptorOf } from "@/lib/unit-descriptors.js"
 import { audioSyncRenderBudgetMs } from "@/providers/audio/audio-sync-budget.js"
 
 // ---------------------------------------------------------------------------
@@ -1014,9 +1016,12 @@ describe("handler liveness budget ⇔ job-budget registry (the orchestrator's nu
   // Listed by name, so a CORE handler for one of them still has to declare.
   const PLUGIN_HANDLED = new Set(["speaker-frames", "speaker-view"])
 
+  // A node unit's budget IS the registry's row (its budget.ts, composed under
+  // its type): its worker declares none, and the same dispatch fallback reads it.
   it("every registered job name is declared by its handler (no budget the heartbeat would not beat for)", () => {
     for (const name of BUDGETED_JOB_NAMES) {
       if (PLUGIN_HANDLED.has(name) && !ffmpegHandlers[name]) continue
+      if (unitDescriptorOf(name)) continue
       expect(typeof ffmpegHandlers[name]?.livenessBudgetMs, name).toBe("function")
     }
   })

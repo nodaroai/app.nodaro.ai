@@ -191,6 +191,55 @@ test("G6 accepts: an input that takes images, alone or with another kind (the ca
   }
 })
 
+// The inputs a test sets after the unit's first (fixture-echo's `in`, which execution.requires names).
+const inputProblems = (inputs, dir = UNIT) => {
+  const root = tree()
+  try {
+    withManifest(root, (m) => { m.handles.inputs = [m.handles.inputs[0], ...inputs] }, dir)
+    return problems(root, ctxFor(root))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+}
+
+test("a JSON input (accepts look) is valid alone, and never beside another kind", () => {
+  assert.deepEqual(inputProblems([{ id: "plan", label: "Plan", accepts: ["look"] }]), [])
+  for (const accepts of [["look", "video"], ["audio", "look"], ["look", "image"]]) {
+    assert.match(inputProblems([{ id: "x", label: "X", accepts }]).join("\n"), /handles\.inputs\[1\]: a JSON input \(accepts "look"\) accepts nothing else/, accepts.join(", "))
+  }
+})
+
+test("a JSON input declares no field: its wire lands in unitInputs (no resolver reads a field)", () => {
+  assert.match(inputProblems([{ id: "plan", label: "Plan", accepts: ["look"], field: "planJson" }]).join("\n"), /handles\.inputs\[1\]\.field: a JSON input \(accepts "look"\) lands in unitInputs, never a data field — remove field/)
+})
+
+test("many: only true, only on a video/audio input, never with a field", () => {
+  for (const accepts of [["video", "audio"], ["video"], ["audio"]]) {
+    assert.deepEqual(inputProblems([{ id: "sources", label: "Sources", accepts, many: true }]), [], accepts.join(", "))
+  }
+  for (const accepts of [["look"], ["image"], ["video", "image"]]) {
+    assert.match(inputProblems([{ id: "p", label: "P", accepts, many: true }]).join("\n"), /handles\.inputs\[1\]\.many: only on a video\/audio input/, accepts.join(", "))
+  }
+  assert.match(inputProblems([{ id: "s", label: "S", accepts: ["video"], many: true, field: "otherUrl" }]).join("\n"), /handles\.inputs\[1\]\.many: an input that takes every wire lands in unitInputs, never a data field/)
+  for (const many of ["yes", false, 1]) {
+    assert.match(inputProblems([{ id: "s", label: "S", accepts: ["video"], many }]).join("\n"), /handles\.inputs\[1\]\.many: only true/, String(many))
+  }
+})
+
+test("a use-case input is never JSON and never many (routeUseCaseInput routes media, music, introCard)", () => {
+  // Refused by id already: a use-case input is one of the vocabulary's handles.
+  assert.match(inputProblems([{ id: "plan", label: "P", accepts: ["look"] }], CASE).join("\n"), /a use-case input is one of/)
+  // Refused by kind: a media pip that would take JSON.
+  const root = tree()
+  try {
+    withManifest(root, (m) => { m.handles.inputs[0].accepts = ["look"] }, CASE)
+    assert.match(problems(root).join("\n"), /handles\.inputs\[0\]\.accepts: a use-case input takes media, never JSON/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+  const many = tree()
+  try {
+    withManifest(many, (m) => { m.handles.inputs[0].many = true }, CASE)
+    assert.match(problems(many).join("\n"), /handles\.inputs\[0\]\.many: a use-case input already takes every wire \(routeUseCaseInput\) — remove it/)
+  } finally { rmSync(many, { recursive: true, force: true }) }
+})
+
 const fileCases = [
   ["a worker without worker.ts", (root) => rmSync(path.join(root, BACKEND, "worker.ts")), /needs backend\/src\/nodes\/fixture-echo\/worker\.ts/],
   ["a route without price.ee.ts", (root) => rmSync(path.join(root, BACKEND, "price.ee.ts")), /needs backend\/src\/nodes\/fixture-echo\/price\.ee\.ts/],
@@ -412,6 +461,20 @@ test("use-case: route.ee.ts, characterize.char.ts, execution.queue and execution
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.execution.requires = { anyOf: ["videoUrl"], kind: "video", noun: "a video" } }, CASE)), /^fixture-case: execution\.requires is only for execution\.kind "worker" or "sync"$/)
 })
 
+test("budget.ts is only for a worker (the video worker's liveness budget)", () => {
+  const MSG = /^fixture-case: budget\.ts is only for execution\.kind "worker" \(the video worker's liveness budget\)$/
+  expectProblem(problemsAfter((root) => writeFileSync(path.join(root, CASE_BACKEND, "budget.ts"), "export const budget = () => 1\n")), MSG)
+  for (const kind of ["inline", "source"]) {
+    const errs = problemsAfter((root) => {
+      withManifest(root, (m) => { m.execution = { kind } }, CASE)
+      writeFileSync(path.join(root, CASE_BACKEND, "budget.ts"), "export const budget = () => 1\n")
+    })
+    expectProblem(errs, MSG)
+  }
+  // The fixture worker carries one: no problem.
+  assert.ok(!problemsAfter(() => {}).some((e) => /budget\.ts/.test(e)))
+})
+
 test("use-case: a missing or unknown execution.builder is refused", () => {
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete m.execution.builder }, CASE)), /^fixture-case: execution\.builder is required for a use-case node/)
   expectProblem(
@@ -459,6 +522,39 @@ test("jsonPips: every look output declared, every key a look output (any kind of
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete m.contract.jsonPips }, CASE)), /^fixture-case: outputs "json" is JSON \(kind "look"\) but contract\.jsonPips does not say what it carries/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.jsonPips = { "video-out": "other" } })), /^fixture-echo: contract\.jsonPips\.video-out: not a "look" output/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.jsonPips = { json: "subtitles" } }, CASE)), /contract\.jsonPips\.json: "subtitles" is not transcript \| edl \| other/)
+})
+
+// The JSON-only worker both engines' JSON-output tests derive from fixture-echo
+// (tools/units/__fixtures__/unit-json-outputs.json): it validates as a manifest.
+const JSON_WORKER = JSON.parse(readFileSync(path.join(here, "../units/__fixtures__/unit-json-outputs.json"), "utf8")).unit
+const asJsonWorker = (m) => {
+  m.handles.outputs = structuredClone(JSON_WORKER.outputs)
+  m.contract = structuredClone(JSON_WORKER.contract)
+  m.registry.outputType = JSON_WORKER.outputType
+}
+
+test("a worker's JSON (look) outputs: the engines' JSON-only worker validates", () => {
+  assert.deepEqual(problemsAfter((root) => withManifest(root, asJsonWorker)), [])
+})
+
+test("a JSON (look) output of a unit that is not a use case names the field it lands on (from)", () => {
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { asJsonWorker(m); delete m.handles.outputs[1].from })),
+    /^fixture-echo: handles\.outputs\[1\]\.from: a JSON \(look\) output names the node-data field its value lands on/,
+  )
+})
+
+test("a JSON (look) output stands only beside other look outputs (no lane lands a job's JSON and its media together yet)", () => {
+  for (const kind of ["video", "text"]) {
+    const errs = problemsAfter((root) => withManifest(root, (m) => {
+      asJsonWorker(m)
+      m.handles.outputs.push({ id: "extra", label: "Extra", kind, from: kind === "video" ? "generatedVideoUrl" : "generatedText" })
+      if (kind === "video") m.contract.producer = "video"
+    }))
+    expectProblem(errs, /^fixture-echo: handles\.outputs: a unit with a JSON \(look\) output has only look outputs/)
+  }
+  // A use-case node's outputs are read by the use-case reader: media, text and JSON together.
+  assert.deepEqual(problemsAfter(() => {}).filter((e) => /only look outputs/.test(e)), [])
 })
 
 test("contract.reviewHold, nonPromptInputs and presents", () => {

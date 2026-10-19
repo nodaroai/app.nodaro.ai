@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the budgeted job names it names (BUDGETED_JOB_NAMES)
 // The job-budget registry is read by the WORKFLOW ENGINE (node-executor sizes a
 // node's ceilings from it) and by the reconcile sweeps — so the budget it
 // reaches must stay a pure leaf. `apply-edl.ts` itself pulls `child_process`,

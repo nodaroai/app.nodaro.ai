@@ -7,7 +7,11 @@
   "position": { "after": "upload-video" },
   "picker": { "family": "fixture-family", "after": null, "pickerCategory": "Utility", "keywords": ["echo", "fixture"] },
   "handles": {
-    "inputs": [{ "id": "in", "label": "Video", "accepts": ["video"], "field": "videoUrl" }],
+    "inputs": [
+      { "id": "in", "label": "Video", "accepts": ["video"], "field": "videoUrl" },
+      { "id": "sources", "label": "Sources", "accepts": ["video", "audio"], "many": true },
+      { "id": "plan", "label": "Plan", "accepts": ["look"] }
+    ],
     "outputs": [{ "id": "video-out", "label": "Video", "kind": "video", "from": "generatedVideoUrl" }]
   },
   "defaultData": { "label": "Fixture Echo", "fieldMappings": {} },

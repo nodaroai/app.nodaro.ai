@@ -197,7 +197,6 @@
  "frontend/src/lib/edge-type-color.ts",
  "frontend/src/lib/enumerate-connection-options.ts",
  "frontend/src/lib/focused-node-media.ts",
- "frontend/src/lib/node-compatibility.ts",
  "frontend/src/lib/node-picker-i18n.ts",
  "frontend/src/lib/node-picker-sections.ts",
  "frontend/src/lib/picker-labels.ts",

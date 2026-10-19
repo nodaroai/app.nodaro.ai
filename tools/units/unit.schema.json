@@ -150,13 +150,18 @@
                   "enum": [
                     "video",
                     "audio",
-                    "image"
+                    "image",
+                    "look"
                   ]
                 }
               },
               "field": {
                 "type": "string",
-                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard)."
+                "description": "The node-data field a wired value lands in. Never on a use-case node (its inputs land in useCaseMedia / useCaseMusic / useCaseIntroCard), never with many, and never on a JSON input (accepts look: it lands in unitInputs)."
+              },
+              "many": {
+                "const": true,
+                "description": "The input takes every wire, in order, each its own source (node id + URL) in unitInputs — only on a video/audio input, never with field, never on a use-case node."
               }
             }
           }

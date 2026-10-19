@@ -1,3 +1,4 @@
+// @test-watches backend/src/nodes/**
 /**
  * The exclusive-node relay (4b): what it must guarantee on a self-host —
  *   - the enqueued payload replays on the cloud at the type's own wire path,

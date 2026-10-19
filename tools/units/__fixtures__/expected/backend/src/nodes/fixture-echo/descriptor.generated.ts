@@ -11,7 +11,9 @@ export const descriptor = {
     "after": "upload-video"
   },
   "inputs": [
-    "in"
+    "in",
+    "sources",
+    "plan"
   ],
   "outputs": [
     "video-out"
@@ -25,6 +27,22 @@ export const descriptor = {
           "video"
         ],
         "field": "videoUrl"
+      },
+      {
+        "id": "sources",
+        "label": "Sources",
+        "accepts": [
+          "video",
+          "audio"
+        ],
+        "many": true
+      },
+      {
+        "id": "plan",
+        "label": "Plan",
+        "accepts": [
+          "look"
+        ]
       }
     ],
     "outputs": [

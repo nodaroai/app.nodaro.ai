@@ -43,7 +43,7 @@ afterAll(() => { if (tree) rmSync(tree, { recursive: true, force: true }) })
 describe("gen:units on the fixture unit", () => {
   it("validates and emits", () => {
     expect(result.errors).toEqual([])
-    expect(result.outputs.size).toBe(28) // 14 aggregates, 5 projections (fixture-case has no labels), 5 dicts, the docs index, the contracts, the kept lengths, the use-case rows
+    expect(result.outputs.size).toBe(29) // 15 aggregates, 5 projections (fixture-case has no labels), 5 dicts, the docs index, the contracts, the kept lengths, the use-case rows
   })
 
   it("every output matches its golden", async () => {
@@ -53,7 +53,7 @@ describe("gen:units on the fixture unit", () => {
   })
 
   it("the price rows come from price.ee.ts through the TypeScript parser", () => {
-    expect(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts")).toMatch(/"priceRows": \{\n {4}"fixture-echo": 3\n {2}\}\n/)
+    expect(result.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts")).toMatch(/"priceRows": \{\n {4}"fixture-echo": 3\n {2}\},?\n/)
     expect(result.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts")).toMatch(/"priceRows": \{\n {4}"use-case-fee:fixture-case": 1\n {2}\}\n/)
   })
 

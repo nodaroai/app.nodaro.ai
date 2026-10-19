@@ -88,6 +88,10 @@ const UNIT_ACCEPT_RULES: Readonly<Record<string, (sourceType: string) => boolean
   // them equal), not imported: that module loads @/types/nodes, which a module
   // as low as this one must not.
   image: (sourceType: string): boolean => IMAGE_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType),
+  // A JSON input: any JSON producer (units with a look output included). The
+  // validator guarantees a look input accepts nothing else
+  // (tools/units/manifest.mjs), so this rule is never or-ed with a media rule.
+  look: ACCEPTS_JSON,
 }
 
 export function unitInputAccepts(kinds: ReadonlyArray<UnitHandleKind>): (sourceType: string) => boolean {

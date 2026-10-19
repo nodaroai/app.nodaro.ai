@@ -29,7 +29,7 @@ export const GENERATED_DIRS = ["frontend/src/nodes/_generated", "backend/src/nod
 // the layout stays the one every tool (the engine, the guards) assumes.
 export const UNIT_FILES = {
   frontend: ["unit.json", "strings.json", "definition.generated.ts", "labels.generated.ts", "types.ts", "node.tsx", "config.tsx", "option.tsx", "exec.ts", "api.ts"],
-  backend: ["descriptor.generated.ts", "route.ts", "route.ee.ts", "payload.ts", "worker.ts", "price.ee.ts", "output.ts", "inputs.ts", "characterize.char.ts", "use-case.ts"],
+  backend: ["descriptor.generated.ts", "route.ts", "route.ee.ts", "payload.ts", "worker.ts", "price.ee.ts", "output.ts", "inputs.ts", "characterize.char.ts", "use-case.ts", "budget.ts"],
 }
 
 /**
@@ -61,6 +61,12 @@ export const AGGREGATES = [
   // Enterprise by location (ee/): core never imports a price or a Cloud-only route.
   { id: "prices", kitType: "UnitPrice", tree: "backend", out: "backend/src/ee/nodes/_generated/prices.ts", member: "price.ee.ts", binding: "price", exportName: "UNIT_PRICES", composer: "backend/src/ee/billing/credits.ts", live: true },
   { id: "routes-ee", kitType: "UnitRoute", tree: "backend", out: "backend/src/ee/nodes/_generated/routes.ts", member: "route.ee.ts", binding: "route", exportName: "UNIT_EE_ROUTES", composer: "backend/src/app.ts", live: true },
+  // A worker's job budget (budget.ts, a pure leaf): job-budget.ts composes it into
+  // DECLARED_JOB_BUDGETS under the unit's type — its BullMQ job name — so the video
+  // worker's liveness, the orchestrator's ceilings and the row sweeps all read it.
+  // gen:units also flags the unit's editor definition `longRunning` (the 6 h
+  // single-node restore horizon of frontend/src/lib/single-node-restore.ts).
+  { id: "budgets", kitType: "UnitBudget", tree: "backend", out: "backend/src/nodes/_generated/budgets.ts", member: "budget.ts", binding: "budget", exportName: "UNIT_BUDGETS", composer: "backend/src/lib/job-budget.ts", live: true },
   // A use-case node's request body and /v1/nodes input schema (use-case.ts):
   // USE_CASE_BODIES composes them, and the route factory serves POST /v1/<type>.
   { id: "use-cases", kitType: "UnitUseCase", tree: "backend", out: "backend/src/nodes/_generated/use-cases.ts", member: "use-case.ts", binding: "useCase", exportName: "UNIT_USE_CASES", composer: "backend/src/lib/use-case/bodies.ts", live: true },

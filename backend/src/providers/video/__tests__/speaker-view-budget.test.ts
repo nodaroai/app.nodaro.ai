@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only speaker-view (BUDGETED_JOB_NAMES)
 // Speaker View's registered job budget (C2.0, §0.4 of its design): a plugin
 // handler cannot declare `livenessBudgetMs`, so before this its heartbeat
 // stopped at the 90-minute default and a long final was swept mid-render.

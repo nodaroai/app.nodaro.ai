@@ -1,0 +1,112 @@
+{
+  "$comment": "A node unit's JSON (accepts look) and many-wire inputs, resolved by both engines (decided 2026-10-18). The target is the fixture unit fixture-echo (tools/units/__fixtures__/expected/*/fixture-echo/*.generated.ts): `in` (video, field videoUrl), `sources` (video + audio, many), `plan` (look). The source type fixture-map is the JSON-only worker of tools/units/__fixtures__/unit-json-outputs.json (outputs `json`, `edl`). Each case's edges are in this order in the workflow's edge list; `unitInputs` is what both resolvers must produce (null = absent), `alsoExpect` other ResolvedInputs keys they must agree on. A source with `saved: false` never ran (no output on either engine). The wire order of a many input is the order of the edge list; one row per upstream node, its first wire wins.",
+  "nodes": [
+    { "id": "a", "type": "upload-video", "data": { "label": "Camera A", "url": "https://r2/a.mp4" } },
+    { "id": "b", "type": "upload-video", "data": { "label": "Camera B", "url": "https://r2/b.mp4" } },
+    { "id": "m", "type": "upload-audio", "data": { "label": "Mic", "url": "https://r2/m.wav" } },
+    { "id": "t", "type": "transcribe", "data": { "label": "Transcribe", "generatedText": "hi", "generatedJson": { "words": [{ "text": "hi", "startMs": 0, "endMs": 300, "speaker": "S1" }] } } },
+    { "id": "t2", "type": "transcribe", "data": { "label": "Transcribe 2", "generatedText": "yo", "generatedJson": { "words": [{ "text": "yo", "startMs": 0, "endMs": 200, "speaker": "S2" }] } } },
+    { "id": "te", "type": "transcribe", "data": { "label": "Transcribe (failed)" }, "saved": false },
+    { "id": "mo", "type": "mood", "data": { "label": "Mood", "mood": "melancholic" } },
+    { "id": "tp", "type": "text-prompt", "data": { "label": "Prompt", "text": "{\"cut\":1}" } },
+    { "id": "map", "type": "fixture-map", "data": { "label": "Map", "generatedJson": { "version": 1, "speakerMap": { "s0": "a" } }, "generatedEdl": "{\"version\":1,\"segments\":[]}" } },
+    { "id": "mapNone", "type": "fixture-map", "data": { "label": "Map (never ran)" }, "saved": false }
+  ],
+  "target": { "id": "echo", "type": "fixture-echo", "data": { "label": "Echo" } },
+  "cases": [
+    {
+      "name": "several wires into sources keep the edge-list order, one row per upstream node",
+      "edges": [["a", "video", "sources"], ["m", "audio", "sources"], ["b", "video", "sources"], ["a", "video", "sources"]],
+      "unitInputs": { "sources": [{ "id": "a", "url": "https://r2/a.mp4", "kind": "video" }, { "id": "m", "url": "https://r2/m.wav", "kind": "audio" }, { "id": "b", "url": "https://r2/b.mp4", "kind": "video" }] }
+    },
+    {
+      "name": "the same wires listed in another order land in that order",
+      "edges": [["b", "video", "sources"], ["m", "audio", "sources"], ["a", "video", "sources"]],
+      "unitInputs": { "sources": [{ "id": "b", "url": "https://r2/b.mp4", "kind": "video" }, { "id": "m", "url": "https://r2/m.wav", "kind": "audio" }, { "id": "a", "url": "https://r2/a.mp4", "kind": "video" }] }
+    },
+    {
+      "name": "a JSON wire into plan lands as its JSON string",
+      "edges": [["t", "json", "plan"]],
+      "unitInputs": { "plan": "{\"words\":[{\"text\":\"hi\",\"startMs\":0,\"endMs\":300,\"speaker\":\"S1\"}]}" }
+    },
+    {
+      "name": "a wired JSON input whose upstream produced nothing records \"\" (refused, never unwired)",
+      "edges": [["te", "json", "plan"]],
+      "unitInputs": { "plan": "" }
+    },
+    {
+      "name": "a real JSON wire wins over an empty one, whichever comes first",
+      "edges": [["te", "json", "plan"], ["t", "json", "plan"]],
+      "unitInputs": { "plan": "{\"words\":[{\"text\":\"hi\",\"startMs\":0,\"endMs\":300,\"speaker\":\"S1\"}]}" }
+    },
+    {
+      "name": "an empty JSON wire after a real one leaves the real one",
+      "edges": [["t", "json", "plan"], ["te", "json", "plan"]],
+      "unitInputs": { "plan": "{\"words\":[{\"text\":\"hi\",\"startMs\":0,\"endMs\":300,\"speaker\":\"S1\"}]}" }
+    },
+    {
+      "name": "of two real JSON wires the last wins",
+      "edges": [["t", "json", "plan"], ["t2", "json", "plan"]],
+      "unitInputs": { "plan": "{\"words\":[{\"text\":\"yo\",\"startMs\":0,\"endMs\":200,\"speaker\":\"S2\"}]}" }
+    },
+    {
+      "name": "both lanes together, beside the field input",
+      "edges": [["a", "video", "in"], ["a", "video", "sources"], ["m", "audio", "sources"], ["t", "json", "plan"]],
+      "unitInputs": {
+        "sources": [{ "id": "a", "url": "https://r2/a.mp4", "kind": "video" }, { "id": "m", "url": "https://r2/m.wav", "kind": "audio" }],
+        "plan": "{\"words\":[{\"text\":\"hi\",\"startMs\":0,\"endMs\":300,\"speaker\":\"S1\"}]}"
+      },
+      "alsoExpect": { "videoUrl": "https://r2/a.mp4" }
+    },
+    {
+      "name": "the field input still routes by source type, never into unitInputs",
+      "edges": [["a", "video", "in"]],
+      "unitInputs": null,
+      "alsoExpect": { "videoUrl": "https://r2/a.mp4" }
+    },
+    {
+      "name": "a parameter picker wired into a JSON input lands nothing (both resolvers skip a parameter that is not a text source)",
+      "edges": [["mo", "output", "plan"]],
+      "unitInputs": null
+    },
+    {
+      "name": "a Text Prompt (a parameter that is also a text source) still lands its text",
+      "edges": [["tp", "output", "plan"]],
+      "unitInputs": { "plan": "{\"cut\":1}" }
+    },
+    {
+      "name": "a JSON worker unit's second output, wired by its pip, lands as its own JSON string (a string saved as is)",
+      "edges": [["map", "edl", "plan"]],
+      "unitInputs": { "plan": "{\"version\":1,\"segments\":[]}" }
+    },
+    {
+      "name": "a JSON worker unit's first output, wired by its pip, lands serialised (an object saved)",
+      "edges": [["map", "json", "plan"]],
+      "unitInputs": { "plan": "{\"version\":1,\"speakerMap\":{\"s0\":\"a\"}}" }
+    },
+    {
+      "name": "a JSON worker unit that never ran records \"\" on the JSON input it is wired into",
+      "edges": [["mapNone", "edl", "plan"]],
+      "unitInputs": { "plan": "" }
+    },
+    {
+      "name": "a JSON worker unit's edl pip into a legacy node's edl input (Camera Switch) hands on that output, not the first",
+      "target": { "id": "cs", "type": "camera-switch", "data": { "label": "Switch" } },
+      "edges": [["map", "edl", "edl"]],
+      "unitInputs": null,
+      "alsoExpect": { "edl": "{\"version\":1,\"segments\":[]}" }
+    },
+    {
+      "name": "nothing wired: no unitInputs at all",
+      "edges": [],
+      "unitInputs": null
+    },
+    {
+      "name": "a use-case unit's inputs are never routed by the unit lanes (routeUseCaseInput takes them)",
+      "target": { "id": "uc", "type": "tighten-episode", "data": { "label": "Tighten" } },
+      "edges": [["a", "video", "media"]],
+      "unitInputs": null,
+      "alsoExpect": { "useCaseMedia": [{ "nodeId": "a", "url": "https://r2/a.mp4" }] }
+    }
+  ]
+}

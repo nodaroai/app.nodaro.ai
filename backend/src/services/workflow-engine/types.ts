@@ -9,6 +9,7 @@ import type { ErrorHint } from "../../lib/safety-block.js"
 import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason } from "@nodaro/shared/workflow"
 import type { VideoOverlayWarning } from "@nodaro/shared/video"
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared/nodes"
+import type { UnitInputValue } from "@nodaro/render-rules"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -203,6 +204,10 @@ export interface NodeOutput {
    * also `videoUrl`, for the readers that take any image or video.
    */
   ugcOutputs?: import("@nodaro/shared/ugc").UgcOutputs
+  /** A worker node unit's JSON (look) outputs, by output id: each the JSON
+   *  string its pip hands on (`unitPipValue`, lib/unit-compose.ts). The first
+   *  one's value also rides `json`, for the readers that read that. */
+  unitOutputs?: Readonly<Record<string, string>>
   /** UGC Script: the job's result, as the node's `result` holds it (plan, category, warnings, notes, rounds). */
   ugcResult?: Record<string, unknown>
   /** UGC Creator, a run where a person picks: the options that passed, waiting for the pick. A COMPLETED state
@@ -659,6 +664,11 @@ export interface ResolvedInputs {
   useCaseMusic?: string
   /** A use-case node's optional `introCard` video (a type whose descriptor takes one). */
   useCaseIntroCard?: string
+  /** A node unit's JSON inputs (accepts "look": the wired JSON string; "" when
+   *  wired but its upstream produced nothing — the unit refuses the run) and
+   *  many-wire inputs (one row per upstream node, in edge-list order), by
+   *  input id (`unitInputLanding`, unit-inputs.ts). Absent when none is wired. */
+  unitInputs?: Readonly<Record<string, UnitInputValue>>
   /** speaker-view (P3.9): Speaker Frames' output descriptor wired into the
    *  `tracks` handle (stringified json) — `null` when the wire is there but
    *  its Speaker Frames has no output (refused, never rendered as v1) — and

@@ -15,12 +15,17 @@ export const HANDLE_KINDS = ["text", "image", "imageRef", "endFrame", "video", "
 /**
  * The handle kinds a unit INPUT may accept today: the ones the editor has a
  * connection rule for (`unitInputAccepts` in frontend/src/lib/ffmpeg-handles.ts —
- * video, audio, image; several = any of them, video + audio = any media). The
- * canvas judges every unit input by them (frontend/src/lib/unit-connections.ts).
- * A unit needing another kind adds its rule there and its kind here in its own
- * PR (decided 2026-10-16: a node that needs a missing seam builds it).
+ * video, audio, image; several = any of them, video + audio = any media; and
+ * look, a JSON input: any JSON producer, `ACCEPTS_JSON`, never beside another
+ * kind). The canvas judges every unit input by them
+ * (frontend/src/lib/unit-connections.ts). A unit needing another kind adds its
+ * rule there and its kind here in its own PR (decided 2026-10-16: a node that
+ * needs a missing seam builds it).
  */
-export const ACCEPTS_KINDS = ["video", "audio", "image"]
+export const ACCEPTS_KINDS = ["video", "audio", "image", "look"]
+
+/** The kinds an input taking every wire (`handles.inputs[].many: true`) may accept: media streams, each wire one source row. */
+export const MANY_KINDS = ["video", "audio"]
 
 /** What `execution.requires.kind` may name: `RequiredMediaInput.kind` of the server's payload builder. */
 export const MEDIA_INPUT_KINDS = ["video", "audio", "image"]

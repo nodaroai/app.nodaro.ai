@@ -1,3 +1,4 @@
+// @registry-enumerates TYPED_SOURCE_NODE_TYPES carries every worker node unit whose outputs are JSON (look)
 import type { SceneNodeType } from "@/types/nodes"
 import { LOOP_COL_ADD_HANDLE, NODE_DEF_MAP, OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
@@ -15,6 +16,8 @@ import { ACCEPTS_SPEAKER_TRACKS, ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 import { UGC_TARGET_HANDLES, ugcInputReading, ugcOutputReadBy, ugcTargetHandle } from "./ugc-handles"
 import { isValidWorkflowConnection } from "./connection-validation"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeSet, unitJsonWorkers } from "./unit-compose"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
 // voiceId output) AND voice-character (a parameter picker — surfaced as
@@ -27,7 +30,7 @@ const VOICE_TARGET_TYPES: ReadonlySet<string> = new Set<string>([...VOICE_PERSON
  *  rather than the loose `HANDLE_COMPATIBILITY` map. Keeping these two
  *  paths in sync prevents the add-node popup from suggesting targets the
  *  drop-time validator then rejects. */
-const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
+const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = composeSet("TYPED_SOURCE_NODE_TYPES", new Set<string>([
   "list", ...SCRAPE_NODE_TYPES, "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   // silence-detect emits { version, ranges, durationMs } JSON on its `json`
@@ -56,7 +59,8 @@ const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   // only consumers are typed inputs (Settings, Generate Script's field-*), which
   // only TARGET_HANDLE_ACCEPTS knows.
   ...Object.keys(SETTINGS_SOURCE_FIELDS),
-])
+  // …and every worker node unit whose outputs are JSON (Audio Sync's rule).
+]), unitJsonWorkers(UNIT_NODE_DEFINITIONS).map((u) => u.type))
 
 /** The Generation Settings node whose output is `sourceHandleId` (`ratio` → "aspect-ratio"), else
  *  undefined. Keyed on the handle alone, like identityRefSourceType below. */

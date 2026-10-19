@@ -1468,6 +1468,7 @@ function executeNodeCore(
       inputs,
       overrideMediaUrl,
       poll: runProcessingNode,
+      pollJson: (id, start, landing, label, c) => pollJobWithNodeUpdate(id, start, [], label, c, undefined, undefined, { jsonLanding: landing }),
       setUserPromptTemplate,
       getNodeData: (id) => useWorkflowStore.getState().nodes.find((n) => n.id === id)?.data as Readonly<Record<string, unknown>> | undefined,
       updateNodeData: (id, patch) => useWorkflowStore.getState().updateNodeData(id, patch),
@@ -10034,7 +10035,7 @@ function executeNodeCore(
 
     // Prefer structured json from the source node's data (web-scrape's
     // generatedJson; an Edit Plan's plan as the person's review leaves it).
-    let value: unknown = sourceJsonOf(src);
+    let value: unknown = sourceJsonOf(src, inEdge.sourceHandle);
 
     // When upstream is a list-producing node (filter-list / deduplicate /
     // merge-lists / split-text), iterate over the FULL list so the path
@@ -10107,7 +10108,7 @@ function executeNodeCore(
       return Promise.resolve("");
     }
 
-    let input: unknown = sourceJsonOf(src);
+    let input: unknown = sourceJsonOf(src, inEdge.sourceHandle);
     if (input === undefined) {
       const text = extractNodeOutput(src, inEdge.sourceHandle ?? undefined);
       if (typeof text !== "string" || text.length === 0) {
