@@ -43,6 +43,29 @@ export function retainedOutputOfFailedJob(
 }
 
 /**
+ * The stable code a FAILED job recorded beside its sentence, so the failed node
+ * state carries it as `errorCode` and the canvas, MCP and `diagnose_run` branch
+ * on the code, never on the text. The sentence stays the job's `error_message`.
+ *
+ * Today one writer: UGC Clip, which stops a clip by name before its video
+ * renders and keeps the code in `output_data.clipError.code` (a voice too long
+ * for the video model's longest clip is `clip_voice_too_long`). Read for that
+ * node type only: `clipError` is UGC Clip's key, not a shared convention.
+ *
+ * @param outputData `jobs.output_data` of the failed row (any shape, incl. null)
+ * @param nodeType   the node's type
+ * @returns the code, or undefined when the row recorded none
+ */
+export function failedJobErrorCode(outputData: unknown, nodeType: string): string | undefined {
+  if (nodeType !== "ugc-clip") return undefined
+  if (!outputData || typeof outputData !== "object" || Array.isArray(outputData)) return undefined
+  const clipError = (outputData as { clipError?: unknown }).clipError
+  if (!clipError || typeof clipError !== "object" || Array.isArray(clipError)) return undefined
+  const code = (clipError as { code?: unknown }).code
+  return typeof code === "string" && code.trim() !== "" ? code : undefined
+}
+
+/**
  * The same answer, read off the REJECTION an executing node threw rather than
  * off a job row.
  *

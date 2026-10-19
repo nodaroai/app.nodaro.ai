@@ -147,6 +147,35 @@ describe("the UGC nodes on the sync-HTTP lane", () => {
     expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ ticket: { v: 1, index: 0, durationSec: 12 }, nonce: 0, userId: "user-1" })
     expect(r.output).toMatchObject({ videoUrl: "https://cdn.example/c.mp4", durationSec: 13, clipWarnings: ["clip_lengthened:13"] })
   })
+
+  const VOICE_TOO_LONG =
+    "Clip 1's voice runs 31.2 s, too long for one clip (the video model's longest clip is 30 s, and a clip runs a second past its voice), so the clip was not rendered. Shorten the lines in this clip and run UGC Clips again."
+
+  it("a ugc-clip job the plugin stopped by name fails with its sentence and carries its code as errorCode", async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, { jobId: "job-c" }))
+    rows.push(STAMP_ROW, {
+      status: "failed",
+      error_message: VOICE_TOO_LONG,
+      output_data: { ugcClip: { voice: { durationSec: 31.2 } }, clipError: { code: "clip_voice_too_long", clip: 1, voiceSec: 31.2, maxClipSec: 30 } },
+    })
+    const err = await run({ id: "clip", type: "ugc-clip", data: { label: "c", rerender: {} } }, { ugc: { clip: JSON.stringify({ v: 1, index: 0, durationSec: 12 }) } }).then(
+      () => { throw new Error("expected the clip to fail") },
+      (e: unknown) => e as Error & { errorCode?: string },
+    )
+    expect(err.message).toBe(VOICE_TOO_LONG)
+    expect(err.errorCode).toBe("clip_voice_too_long")
+  })
+
+  it("a failed ugc-clip job with no clipError carries no errorCode", async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, { jobId: "job-c" }))
+    rows.push(STAMP_ROW, { status: "failed", error_message: "The video model failed.", output_data: { ugcClip: {} } })
+    const err = await run({ id: "clip", type: "ugc-clip", data: { label: "c", rerender: {} } }, { ugc: { clip: JSON.stringify({ v: 1, index: 0, durationSec: 12 }) } }).then(
+      () => { throw new Error("expected the clip to fail") },
+      (e: unknown) => e as Error & { errorCode?: string },
+    )
+    expect(err.message).toBe("The video model failed.")
+    expect(err.errorCode).toBeUndefined()
+  })
 })
 
 describe("the UGC nodes on the sync-HTTP lane: the remaining rules", () => {

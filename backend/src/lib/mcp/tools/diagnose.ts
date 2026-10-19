@@ -76,6 +76,19 @@ export function classifyFailure(
   return mk("provider_error")
 }
 
+/**
+ * Failure classes for the stable codes a failed node or job records beside its
+ * sentence (`node_states[id].errorCode`, or a UGC Clip job's
+ * `output_data.clipError.code`). A known code is classed by the code, never by
+ * the sentence's wording; any other failure falls back to `classifyFailure`.
+ */
+const CODE_CLASS: Readonly<Record<string, FailureClass>> = {
+  // UGC Clip: the clip's voice runs too long for the video model's longest
+  // clip, so the clip was not rendered. Re-running the same lines fails the
+  // same way: shorter lines (a re-run of UGC Clips) are the fix.
+  clip_voice_too_long: "validation",
+}
+
 const CREDITS_NOTE =
   "Reserved credits for failed nodes are automatically refunded EXCEPT post-delivery (post_processing) failures, where the provider was already billed. creditsActual is the committed charge (null = not committed / refunded)."
 
@@ -84,6 +97,7 @@ interface NodeState {
   nodeType?: string
   jobId?: string
   error?: string
+  errorCode?: string
 }
 
 interface JobRow {
@@ -91,6 +105,14 @@ interface JobRow {
   error_message?: string | null
   input_data?: Record<string, unknown> | null
   credits_actual?: number | null
+  output_data?: Record<string, unknown> | null
+}
+
+/** The stable code a failed UGC Clip job recorded in `output_data.clipError.code`. */
+function jobErrorCode(job: JobRow | undefined): string | undefined {
+  const clipError = job?.output_data?.["clipError"]
+  const code = clipError && typeof clipError === "object" ? (clipError as { code?: unknown }).code : undefined
+  return typeof code === "string" && code.trim() !== "" ? code : undefined
 }
 
 function providerOf(input: Record<string, unknown> | null | undefined): string | null {
@@ -105,6 +127,8 @@ interface Failure {
   jobId: string | null
   provider: string | null
   error: string | null
+  /** The stable code recorded beside the error, when there is one. */
+  errorCode?: string
   class: FailureClass
   remediation: string
   creditsActual: number | null
@@ -117,9 +141,11 @@ function buildFailure(
   error: string | null,
   provider: string | null,
   creditsActual: number | null,
+  errorCode?: string,
 ): Failure {
-  const { class: cls, remediation } = classifyFailure(error)
-  return { nodeId, nodeType, jobId, provider, error, class: cls, remediation, creditsActual }
+  const coded = errorCode ? CODE_CLASS[errorCode] : undefined
+  const { class: cls, remediation } = coded ? mk(coded) : classifyFailure(error)
+  return { nodeId, nodeType, jobId, provider, error, ...(errorCode ? { errorCode } : {}), class: cls, remediation, creditsActual }
 }
 
 export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): void {
@@ -173,7 +199,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
           // the caller's own jobs (the execution is theirs, checked above).
           const { data: jobs } = await supabase
             .from("jobs")
-            .select("id, error_message, input_data, credits_actual")
+            .select("id, error_message, input_data, credits_actual, output_data")
             .in("id", jobIds)
             .eq("user_id", session.userId)
           for (const j of (jobs ?? []) as JobRow[]) {
@@ -191,6 +217,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             error,
             providerOf(job?.input_data),
             job?.credits_actual ?? null,
+            s.errorCode ?? jobErrorCode(job),
           )
         })
 
@@ -245,7 +272,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
       const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .select(
-          "id, status, error_message, input_data, credits_actual, job_type, user_id",
+          "id, status, error_message, input_data, credits_actual, output_data, job_type, user_id",
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
@@ -279,6 +306,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                 j.error_message ?? null,
                 providerOf(j.input_data),
                 j.credits_actual ?? null,
+                jobErrorCode(j),
               ),
             ]
           : []

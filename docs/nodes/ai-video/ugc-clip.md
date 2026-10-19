@@ -5,7 +5,7 @@
 
 ## Overview
 
-UGC Clip renders one clip of a UGC video: the creator saying that clip's lines. It runs once for each clip [UGC Clips](./ugc-clips.md) made. When the clip is voiced, its voice is made first, and a voice that runs longer than the clip lengthens the clip to fit.
+UGC Clip renders one clip of a UGC video: the creator saying that clip's lines. It runs once for each clip [UGC Clips](./ugc-clips.md) made. When the clip is voiced, its voice is made first, and a voice that runs longer than the clip lengthens the clip to fit, up to the video model's longest clip. A voice too long even for that stops the clip before its video renders, with "Clip N's voice runs … so the clip was not rendered. Shorten the lines in this clip and run UGC Clips again." The clip is not charged, and UGC Clip fails as a whole (see [All or nothing](#all-or-nothing)). A long English take rarely gets that far: [UGC Clips](./ugc-clips.md) splits it into two clips instead.
 
 Each render is checked: two of its frames are read beside the creator's image to catch a bad take. If the check fails, the clip is rendered once more and checked again. The new take is kept if it passes; otherwise the first one is kept, and [UGC Cards](./ugc-cards.md)' Notes say what the check found. If the check itself cannot run, the take is kept without it, and the Notes say so.
 

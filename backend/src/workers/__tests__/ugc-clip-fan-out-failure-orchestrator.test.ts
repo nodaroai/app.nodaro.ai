@@ -19,12 +19,18 @@ const mocks = vi.hoisted(() => {
   const executeNodeCalls: string[] = []
   /** The clip numbers (0-based) whose render fails. */
   let failing = new Set<number>()
+  /** The stable code the failing clip's job recorded (its `clipError.code`), carried as the rejection's errorCode. */
+  let failingCode: string | undefined
   const executeNode = vi.fn(async (node: { id: string; type: string }, _inputs: unknown, _edges: unknown, _nodes: unknown, _states: unknown, _ctx: unknown, i?: number) => {
     executeNodeCalls.push(node.id)
     if (node.type === "ugc-clips") {
       return { output: { listResults: TICKETS, ugcOutputs: { clips: TICKETS[0] } }, creditsUsed: 0 }
     }
-    if (failing.has(i ?? 0)) throw new Error(`Clip ${(i ?? 0) + 1} failed`)
+    if (failing.has(i ?? 0)) {
+      const err = new Error(`Clip ${(i ?? 0) + 1} failed`) as Error & { errorCode?: string }
+      if (failingCode) err.errorCode = failingCode
+      throw err
+    }
     return { output: { videoUrl: `https://cdn/clip-${i}.mp4` }, jobId: `job-clip-${i}`, creditsUsed: 400 }
   })
 
@@ -71,8 +77,9 @@ const mocks = vi.hoisted(() => {
     setWorkflowRow: (row: Record<string, unknown>) => {
       workflowRow = row
     },
-    setFailing: (clips: number[]) => {
+    setFailing: (clips: number[], code?: string) => {
       failing = new Set(clips)
+      failingCode = code
     },
   }
 })
@@ -154,6 +161,16 @@ describe("orchestrator — a failed UGC Clip fan-out keeps what it finished", ()
     expect(clip.output).toBeUndefined()
     // The join after it never ran on a partial list.
     expect(mocks.executeNodeCalls).not.toContain("join")
+  })
+
+  it("the failed clip's stable code (a voice too long for one clip) rides the failed state as errorCode", async () => {
+    mocks.setFailing([1], "clip_voice_too_long")
+    await processWorkflowExecution(makeJob())
+    const clip = lastStates().clip!
+    expect(clip.status).toBe("failed")
+    expect(clip.error).toBe("Clip 2 failed")
+    expect(clip.errorCode).toBe("clip_voice_too_long")
+    expect(clip.iterationCompleted).toBe(2)
   })
 
   it("a continuation still reads it as not completed: it runs again, and the node after it is never seeded with a list", async () => {

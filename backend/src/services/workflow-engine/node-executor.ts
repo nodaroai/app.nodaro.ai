@@ -62,7 +62,7 @@ import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availabilit
 import { passThroughFor } from "./pass-through.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
-import { retainedOutputOfFailedJob } from "./failed-node-output.js"
+import { failedJobErrorCode, retainedOutputOfFailedJob } from "./failed-node-output.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
@@ -2552,8 +2552,12 @@ async function cancelJobAndThrow(
     return completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed)
   }
   // Already failed (worker refunds failed jobs) or already cancelled — no
-  // double-refund. Surface the job's own error if present, else the reason.
-  throw new Error((jobRecord?.error_message as string) || reason)
+  // double-refund. Surface the job's own error if present, else the reason,
+  // and the stable code a failed row recorded beside it (as the poll does).
+  const gapErr = new Error((jobRecord?.error_message as string) || reason) as Error & { errorCode?: string }
+  const gapCode = jobRecord?.status === "failed" ? failedJobErrorCode(jobRecord.output_data, nodeType) : undefined
+  if (gapCode) gapErr.errorCode = gapCode
+  throw gapErr
 }
 
 /** Today's ceilings — what every job that declares no budget polls under. */
@@ -2703,7 +2707,7 @@ async function pollJobToCompletion(
 
     if (status === "failed" || status === "cancelled") {
       const errorMsg = (jobRecord.error_message as string) ?? `Job ${status}`
-      const err = new Error(errorMsg) as Error & { errorHint?: ErrorHint; output?: NodeOutput }
+      const err = new Error(errorMsg) as Error & { errorCode?: string; errorHint?: ErrorHint; output?: NodeOutput }
       // Mirrors the mapped-billing-refusal errorCode precedent above:
       // the caller (orchestrator-worker.ts) copies this onto
       // nodeStates[nodeId] so the editor/MCP can act on it without
@@ -2715,6 +2719,11 @@ async function pollJobToCompletion(
       if (status === "failed") {
         const retained = retainedOutputOfFailedJob(jobRecord.output_data, nodeType)
         if (retained) err.output = retained
+        // …and the stable code a failed row recorded beside its sentence (UGC
+        // Clip's `clipError.code`, e.g. `clip_voice_too_long`): the sentence
+        // stays the error the canvas shows; the code is what clients branch on.
+        const code = failedJobErrorCode(jobRecord.output_data, nodeType)
+        if (code) err.errorCode = code
       }
       throw err
     }

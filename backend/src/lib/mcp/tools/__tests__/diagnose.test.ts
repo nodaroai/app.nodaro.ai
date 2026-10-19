@@ -310,6 +310,57 @@ describe("diagnose_run tool", () => {
     expect(out.failures[0].provider).toBe("nano-banana")
   })
 
+  const VOICE_TOO_LONG =
+    "Clip 2's voice runs 31.2 s, too long for one clip (the video model's longest clip is 30 s, and a clip runs a second past its voice), so the clip was not rendered. Shorten the lines in this clip and run UGC Clips again."
+
+  it("a failed node's stable errorCode rides its failure, and a known code is classed by the code, not the wording", async () => {
+    mockSupabase({
+      execution: {
+        id: "exec1",
+        status: "failed",
+        node_states: {
+          // An all-or-nothing UGC Clip fan-out failed by one clip: no jobId of its own.
+          clip: { status: "failed", nodeType: "ugc-clip", error: VOICE_TOO_LONG, errorCode: "clip_voice_too_long" },
+          other: { status: "failed", nodeType: "generate-image", error: "429 Too Many Requests" },
+        },
+        error_message: "Execution failed",
+      },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
+    const byNode = Object.fromEntries(out.failures.map((f: { nodeId: string }) => [f.nodeId, f]))
+    expect(byNode.clip.errorCode).toBe("clip_voice_too_long")
+    expect(byNode.clip.error).toBe(VOICE_TOO_LONG)
+    expect(byNode.clip.class).toBe("validation")
+    // The sentence alone would read as a provider error, which invites a pointless retry.
+    expect(classifyFailure(VOICE_TOO_LONG).class).toBe("provider_error")
+    // A failure with no code carries no errorCode key.
+    expect("errorCode" in byNode.other).toBe(false)
+    expect(byNode.other.class).toBe("rate_limited")
+  })
+
+  it("a failed UGC Clip job's own clipError code is surfaced when diagnosed by its job id", async () => {
+    mockSupabase({
+      execution: null,
+      jobSingle: {
+        id: "job-c",
+        status: "failed",
+        error_message: VOICE_TOO_LONG,
+        input_data: {},
+        output_data: { ugcClip: { voice: { durationSec: 31.2 } }, clipError: { code: "clip_voice_too_long", clip: 2, voiceSec: 31.2, maxClipSec: 30 } },
+        credits_actual: null,
+        job_type: "ugc-clip",
+      },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "job-c" }))
+    expect(out.failures).toHaveLength(1)
+    expect(out.failures[0].errorCode).toBe("clip_voice_too_long")
+    expect(out.failures[0].class).toBe("validation")
+  })
+
   it("returns isError when neither an execution nor a job is found", async () => {
     mockSupabase({ execution: null, jobSingle: null })
     const server = buildServer()
