@@ -4,6 +4,7 @@ import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
 import { supabase } from "../lib/supabase.js"
 import { captionObject } from "../lib/object-caption.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { meterSyncLlm } from "../lib/meter-sync-llm.js"
 
@@ -54,7 +55,8 @@ export async function objectLlmCaptionRoutes(app: FastifyInstance) {
     {
       // dedup:false — this route returns { canonicalDescription }, not the
       // { jobId, deduped:true } shape the idempotency short-circuit would send.
-      preHandler: creditGuard(() => CREDIT_IDENTIFIER, { dedup: false }),
+      // Scope first: an app without assets:write is refused before any credit check.
+      preHandler: [requireAppScope("assets:write"), creditGuard(() => CREDIT_IDENTIFIER, { dedup: false })],
       config: {
         // 10 req/min/IP — `@fastify/rate-limit` must be registered globally.
         rateLimit: { max: 10, timeWindow: "1 minute" },

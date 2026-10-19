@@ -1735,6 +1735,11 @@ not in the route's own response body.
 `{ portraitUrl, canonicalDescription }` — `canonicalDescription` is `null` if
 the LLM caption sub-failed (portrait still set; retry via `llm-caption`).
 
+Both routes change the character, so an OAuth app token needs `assets:write`
+(`403 insufficient_scope` without it), the same as creating or deleting one.
+The same holds for `approve-main-image` and `llm-caption` on locations,
+objects and creatures. Your own session and API keys need no scope.
+
 ### Worked example: create → generate → approve
 
 ```bash
@@ -1868,7 +1873,7 @@ route returns `{ sourceImageUrl, canonicalDescription }` —
 `canonicalDescription` is `""` (not null) when the LLM caption sub-failed
 (main image still set; retry via `llm-caption`). The `llm-caption` route
 502s on LLM failure and 400 `main_image_required` when no main image is
-set yet.
+set yet. OAuth app tokens need `assets:write` for both routes.
 
 ### Worked example: create → generate → approve
 

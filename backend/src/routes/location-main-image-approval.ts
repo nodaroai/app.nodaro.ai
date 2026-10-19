@@ -4,6 +4,7 @@ import { expectedUpdatedAtSchema } from "../lib/optimistic-token-schema.js"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { captionLocation } from "../lib/location-caption.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 /**
@@ -55,6 +56,7 @@ export async function locationMainImageApprovalRoutes(app: FastifyInstance) {
   app.post(
     "/v1/locations/:id/approve-main-image",
     {
+      preHandler: requireAppScope("assets:write"),
       config: {
         // 10 req/min/IP — `@fastify/rate-limit` must be registered globally.
         // Mirrors `oauth-register.ts` pattern.
