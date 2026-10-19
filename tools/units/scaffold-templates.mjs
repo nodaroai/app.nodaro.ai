@@ -164,6 +164,7 @@ export function nodeTsx(o) {
   // the media rule when it takes both a video and an audio (a recording).
   const pipOf = (h) => PIP[h.kind ?? h.accepts[0]]
   const acceptsOf = (h) => (h.accepts.includes("video") && h.accepts.includes("audio") ? "ACCEPTS_MEDIA" : pipOf(h).accepts)
+  if (o.kind === "use-case") return useCaseNodeTsx(o, shape, pipOf, acceptsOf)
   const pips = [...shape.inputs, ...shape.outputs].map(pipOf)
   const icons = [...new Set(["Box", ...pips.map((p) => p.icon)])].sort()
   const usesFfmpeg = pips.some((p) => p.color.startsWith("FFMPEG_COLORS"))
@@ -176,9 +177,7 @@ export function nodeTsx(o) {
     ...shape.inputs.map((h) => `      <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="target" position={Position.Left} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="left" top="${INPUT_TOP}" accepts={${acceptsOf(h)}} />`),
     ...shape.outputs.map((h, i) => `      <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="source" position={Position.Right} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="right" top="${outputTop(i)}" />`),
   ]
-  // A use-case node's outputs have no \`from\`: the use-case reader hands on its
-  // "text" output from generatedText (use-case-io.ts usecaseSavedOutput), so the card shows that.
-  const shown = o.kind === "use-case" ? "generatedText" : out.from
+  const shown = out.from
   const body = video
     ? `        {nodeData.${shown} ? <video src={nodeData.${shown}} controls className="w-full rounded-md" /> : null}`
     : `        {nodeData.${shown} ? <p className="text-xs text-muted-foreground line-clamp-4">{nodeData.${shown}}</p> : null}`
@@ -220,6 +219,83 @@ export function nodeTsx(o) {
     "      </BaseNode>",
     ...pipLines,
     "    </div>",
+    "  )",
+    "}",
+    "",
+    `export const NodeComponent: UnitNodeComponent = memo(${P}Node)`,
+    "",
+  ].join("\n")
+}
+
+/** The two places UseCaseNodeShell puts a pip on each side (its `at`), and the `top` its pip draws at. */
+const USE_CASE_PIP_AT = [["top", "24px"], ["bottom", "calc(100% - 24px)"]]
+
+/**
+ * A use-case node's card: the frame every use-case node shares
+ * (UseCaseNodeShell — its label, run strip and fee, running / failed /
+ * empty states, Continue) around the node's own result, as Chapters' card
+ * is. The shell places a pip at the top or the bottom of each side, so the
+ * worked shape has at most two pips a side.
+ */
+function useCaseNodeTsx(o, shape, pipOf, acceptsOf) {
+  const P = pascalCase(o.type)
+  const D = dataInterfaceName(o.type)
+  const sides = [["target", shape.inputs], ["source", shape.outputs]]
+  for (const [, hs] of sides) if (hs.length > USE_CASE_PIP_AT.length) throw new Error(`${o.type}: UseCaseNodeShell places at most ${USE_CASE_PIP_AT.length} pips a side`)
+  const pips = [...shape.inputs, ...shape.outputs].map(pipOf)
+  const icons = [...new Set(["Box", ...pips.map((p) => p.icon)])].sort()
+  const colorMaps = pips.some((p) => p.color.startsWith("FFMPEG_COLORS")) ? ["FFMPEG_COLORS"] : []
+  const accepts = [...new Set(shape.inputs.map(acceptsOf).filter(Boolean))].sort()
+  const slots = sides.flatMap(([type, hs]) => hs.map((h, i) => `        { id: "${h.id}", type: "${type}", at: "${USE_CASE_PIP_AT[i][0]}" },`))
+  const pipLines = [
+    ...shape.inputs.map((h, i) => `          <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="target" position={Position.Left} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="left" top="${USE_CASE_PIP_AT[i][1]}" accepts={${acceptsOf(h)}} />`),
+    ...shape.outputs.map((h, i) => `          <HandleWithPopover nodeId={id} nodeType="${o.type}" handleId="${h.id}" type="source" position={Position.Right} label="${h.label}" color={${pipOf(h).color}} icon={<${pipOf(h).icon} />} side="right" top="${USE_CASE_PIP_AT[i][1]}" />`),
+  ]
+  return [
+    'import { memo } from "react"',
+    'import { Position, type NodeProps } from "@xyflow/react"',
+    `import { ${icons.join(", ")} } from "lucide-react"`,
+    'import { HandleWithPopover } from "@/components/nodes/handle-with-popover"',
+    'import { UseCaseNodeShell, useUseCaseNodeRun } from "@/components/nodes/use-case-node-shell"',
+    ...(colorMaps.length + accepts.length > 0 ? [`import { ${[...accepts, ...colorMaps].join(", ")} } from "@/lib/ffmpeg-handles"`] : []),
+    ...(pips.some((p) => p.color.startsWith("DATA_HANDLE_COLORS")) ? ['import { DATA_HANDLE_COLORS } from "@/lib/data-handles"'] : []),
+    ...(pips.some((p) => p.color.startsWith("HANDLE_COLORS")) ? ['import { HANDLE_COLORS } from "@/lib/handle-colors"'] : []),
+    'import { useT } from "@/lib/i18n"',
+    'import type { UnitNodeComponent } from "../kit"',
+    `import type { ${D} } from "./types"`,
+    "",
+    "// The frame every use-case node shares (components/nodes/use-case-node-shell.tsx)",
+    "// draws the run strip and fee, the running / failed / empty states and",
+    "// Continue; the node supplies its result and its pips. The use-case reader",
+    "// hands on the \"text\" output from generatedText (use-case-io.ts), so the card shows that.",
+    "// The node's type is React Flow's (NodeProps), never a literal to mistype.",
+    `function ${P}Node({ id, type, data, selected }: NodeProps) {`,
+    `  const nodeData = data as ${D}`,
+    "  const t = useT()",
+    "  const run = useUseCaseNodeRun(id, type, nodeData)",
+    '  const text = typeof nodeData.generatedText === "string" ? nodeData.generatedText : ""',
+    "  return (",
+    "    <UseCaseNodeShell",
+    "      id={id}",
+    "      data={nodeData}",
+    "      run={run}",
+    "      selected={selected}",
+    "      icon={Box}",
+    "      sizing={{ minWidth: 280, minHeight: 220 }}",
+    "      bodyMinHeight={160}",
+    "      handles={[",
+    ...slots,
+    "      ]}",
+    '      hasResult={run.status !== "running" && text !== ""}',
+    '      result={<p className="text-xs text-muted-foreground line-clamp-4">{text}</p>}',
+    "      // Tighten's \"Connect an episode recording\": replace it with this node's own string (its strings.json).",
+    '      emptyText={t("node.tightenConnectRecording")}',
+    "      pips={",
+    "        <>",
+    ...pipLines,
+    "        </>",
+    "      }",
+    "    />",
     "  )",
     "}",
     "",

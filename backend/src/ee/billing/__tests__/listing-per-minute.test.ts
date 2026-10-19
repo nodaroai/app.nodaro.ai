@@ -143,9 +143,9 @@ describe("withoutMediaLength", () => {
 })
 
 describe("a trailer's plan is per minute, its render is not", () => {
-  it("the plan's flat and the 2-minute render are fixed; the plan's rate is per minute", () => {
+  it("the plan's flat and the render at 40 seconds (one minute) are fixed; the plan's rate is per minute", () => {
     expect(listing(chain({ mode: "trailer" }))).toEqual({
-      preview: STT + PLAN_FLAT + APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE * 2,
+      preview: STT + PLAN_FLAT + APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE * 1,
       final: 0,
       previewPerMinute: PLAN_RATE,
       finalPerMinute: 0,
@@ -274,6 +274,17 @@ describe("a Tighten Episode node lists as its built chain, plus its fee in the p
     // Review off: the figure is listed as before.
     const off = CreditsService.estimateWorkflowBaseListing(graph({}).nodes, graph({}).edges, "app", opts)
     expect(off.previewPerItem).toBeGreaterThan(0)
+  })
+
+  it("an app's List feeding a Trailer (its own result is a list) lists no per-item figure, review off too: more than one item is refused", () => {
+    const list: N = { id: "L", type: "list", data: { items: "https://r2/a.mp4\nhttps://r2/b.mp4" } }
+    const opts = { exposedListNodeIds: new Set(["L"]), replaceableMediaNodeIds: new Set<string>() }
+    const nodes: N[] = [list, { id: "tr", type: "episode-trailer", data: { reviewBeforeRender: false } }]
+    const edges = [{ source: "L", target: "tr", sourceHandle: "text", targetHandle: "media" }] as E[]
+    const l = CreditsService.estimateWorkflowBaseListing(nodes, edges, "app", opts)
+    expect(l.previewPerItem).toBeUndefined()
+    expect(l.finalPerItem).toBeUndefined()
+    expect(l.preview).toBeGreaterThan(0)
   })
 
   // The figure is dropped only where the engines really run the review-on node

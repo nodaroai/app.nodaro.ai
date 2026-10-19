@@ -2,14 +2,15 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { UNIT_CONTRACTS, UNIT_JSON_PIPS, UNIT_NON_PROMPT_INPUTS, UNIT_PRESENTS, UNIT_REVIEW_HOLDS, UNIT_USE_CASE_TYPES } from "../generated/unit-contracts.js"
+import { UNIT_CONTRACTS, UNIT_FAN_OUT_EACH, UNIT_JSON_PIPS, UNIT_NON_PROMPT_INPUTS, UNIT_PRESENTS, UNIT_REVIEW_HOLDS, UNIT_USE_CASE_TYPES } from "../generated/unit-contracts.js"
 
 /**
  * What the node units may put in @nodaro/shared (decided 2026-10-16, widened
  * 2026-10-18): node type ids with closed vocabularies — the producer kind, the
  * use-case types, what a JSON pip carries, the non-prompt input pips, the
- * review holds and how a published app presents the result. Each replaces a
- * published hand-list. Never a price, a credit id, a number, prompt or
+ * review holds, how a published app presents the result and which output pips
+ * fan out item by item. Each feeds a published table beside its hand-written
+ * rows. Never a price, a credit id, a number, prompt or
  * doctrine text: every published version of this package is an irrevocable
  * Apache grant, and those live in backend/ (prices, ee/) and @nodaro/prompts
  * (FSL). gen:units writes the file; this holds it to that.
@@ -21,7 +22,7 @@ const GOLDEN = readFileSync(path.resolve(__dirname, "../../../../tools/units/__f
 const TYPE = "[a-z][a-z0-9-]*"
 const ROW_END = `, \\/\\/ unit:${TYPE}$`
 const PIP = `"[a-zA-Z][\\w-]*"`
-/** The six declarations, in order, each with the one row shape its block may hold, and how the block ends. */
+/** The seven declarations, in order, each with the one row shape its block may hold, and how the block ends. */
 const DECLARATIONS: ReadonlyArray<{ readonly head: RegExp; readonly row: RegExp; readonly end: string }> = [
   {
     head: /^export const UNIT_CONTRACTS: ReadonlyArray<readonly \[type: string, producer: "audio" \| "video" \| "image" \| "dynamic"\]> = \[$/,
@@ -45,11 +46,16 @@ const DECLARATIONS: ReadonlyArray<{ readonly head: RegExp; readonly row: RegExp;
     row: new RegExp(`^ {2}\\["${TYPE}", "(?:image|video|audio|text)"\\]${ROW_END}`),
     end: "]",
   },
+  {
+    head: /^export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly \[type: string, handles: \{ readonly each: ReadonlyArray<string>; readonly primary: string \}\]> = \[$/,
+    row: new RegExp(`^ {2}\\["${TYPE}", \\{ "each": \\[${PIP}(?:, ${PIP})*\\], "primary": ${PIP} \\}\\]${ROW_END}`),
+    end: "]",
+  },
 ]
 
 /**
  * Problems with a contracts file's code lines (`//` comments and blanks aside —
- * a `/** … *\/` line is code, and refused); [] when it holds exactly the six
+ * a `/** … *\/` line is code, and refused); [] when it holds exactly the seven
  * declarations, in order, each followed only by its own rows and its end line.
  */
 function contractProblems(source: string): string[] {
@@ -84,9 +90,17 @@ describe("generated/unit-contracts.ts carries only type ids with closed vocabula
     for (const t of [...UNIT_USE_CASE_TYPES, ...UNIT_REVIEW_HOLDS, ...UNIT_JSON_PIPS.map(([x]) => x), ...UNIT_NON_PROMPT_INPUTS.map(([x]) => x), ...UNIT_PRESENTS.map(([x]) => x)]) expect(t).toMatch(KEBAB)
     for (const [, pips] of UNIT_JSON_PIPS) for (const v of Object.values(pips)) expect(["transcript", "edl", "other"]).toContain(v)
     for (const [, p] of UNIT_PRESENTS) expect(["image", "video", "audio", "text"]).toContain(p)
+    // A fan-out row is a type id and pip ids only.
+    const PIP_ID = /^[a-zA-Z][\w-]*$/
+    for (const [t, h] of UNIT_FAN_OUT_EACH) {
+      expect(t).toMatch(KEBAB)
+      expect(Object.keys(h)).toEqual(["each", "primary"])
+      expect(h.each.length).toBeGreaterThan(0)
+      for (const pip of [...h.each, h.primary]) expect(pip).toMatch(PIP_ID)
+    }
   })
 
-  it("the file holds nothing else: the six declarations and their rows", () => {
+  it("the file holds nothing else: the seven declarations and their rows", () => {
     expect(contractProblems(SOURCE)).toEqual([])
   })
 
@@ -108,6 +122,9 @@ describe("generated/unit-contracts.ts carries only type ids with closed vocabula
       full.replace('  "fixture-case", // unit:fixture-case\n]\n\n', '  10, // unit:fixture-case\n]\n\n'),
       GOLDEN.replace('["fixture-case", "text"]', '["fixture-case", "text", 10]'),
       GOLDEN.replace("export const UNIT_USE_CASE_TYPES", "/** The use-case types. */\nexport const UNIT_USE_CASE_TYPES"),
+      GOLDEN.replace('{ "each": ["text"], "primary": "text" }', '{ "each": ["text", 10], "primary": "text" }'),
+      GOLDEN.replace('{ "each": ["text"], "primary": "text" }', '{ "each": ["text"], "primary": "text", "fee": "x" }'),
+      GOLDEN.replace('{ "each": ["text"], "primary": "text" }', '{ "each": ["Make it cinematic"], "primary": "text" }'),
     ]
     for (const [i, src] of refused.entries()) {
       expect(src, `case ${i} changed the golden`).not.toBe(GOLDEN)

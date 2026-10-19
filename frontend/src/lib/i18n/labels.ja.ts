@@ -407,6 +407,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Record": "レコード",
   "Records": "レコード",
   "Recording": "録音",
+  "Intro card": "イントロカード",
   "Item": "アイテム",
   "Reference": "リファレンス",
   "Rejected": "却下済み",

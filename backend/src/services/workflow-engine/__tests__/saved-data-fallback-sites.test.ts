@@ -53,8 +53,8 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; unitLookPipJsonFor's saved read of a node unit's look pip (only with no state — savedDataAllowed's own first case — else the state's output); editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied) and, beside it, usecaseSavedNodeOutput (a use-case node's saved output, its plan read the same way); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
   },
   "services/workflow-engine/use-case-output.ts": {
-    count: 10,
-    why: "the saved-output reader itself (usecaseSavedNodeOutput), reached only through extractSavedNodeOutput — fields: its generatedVideoUrl / generatedAudioUrl / generatedText reads; calls: editPlanSavedOutput (a use-case node's plan with the person's review applied)",
+    count: 11,
+    why: "the saved-output reader itself (usecaseSavedNodeOutput), reached only through extractSavedNodeOutput — fields: its generatedVideoUrl / generatedAudioUrl / generatedText reads, and a list-result node's saved deliveries (__listResults, Trailer's formats); calls: editPlanSavedOutput (a use-case node's plan with the person's review applied)",
   },
   "services/workflow-engine/payload-builder.ts": {
     count: 5,

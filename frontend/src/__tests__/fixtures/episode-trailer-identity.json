@@ -1,0 +1,166 @@
+{
+  "definition": {
+    "type": "episode-trailer",
+    "label": "Trailer",
+    "category": "processing",
+    "inputs": [
+      "media",
+      "introCard"
+    ],
+    "outputs": [
+      "media",
+      "json"
+    ],
+    "defaultData": {
+      "label": "Trailer",
+      "formats": [
+        "9:16",
+        "1:1",
+        "4:5"
+      ],
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "fieldMappings": {},
+      "executionStatus": "idle"
+    }
+  },
+  "definitionPredecessor": "episode-chapters",
+  "option": {
+    "type": "episode-trailer",
+    "label": "Trailer",
+    "icon": "Clapperboard",
+    "category": "Processing",
+    "group": "video-podcast",
+    "keywords": [
+      "podcast",
+      "trailer",
+      "teaser",
+      "promo",
+      "reel",
+      "story",
+      "formats",
+      "one step"
+    ]
+  },
+  "optionPredecessor": "episode-chapters",
+  "family": {
+    "id": "video-podcast",
+    "label": "Podcast",
+    "tab": "video",
+    "predecessor": "episode-chapters"
+  },
+  "tabSupersetRows": [],
+  "handleOutputTypes": {
+    "json": "look",
+    "media": "video"
+  },
+  "targetHandles": [
+    {
+      "handleId": "media",
+      "label": "Recording"
+    },
+    {
+      "handleId": "introCard",
+      "label": "Intro card"
+    }
+  ],
+  "executable": true,
+  "feeCredits": 10,
+  "nodaroExclusive": true,
+  "jsonProducer": true,
+  "scrapeJsonProducer": false,
+  "generateButton": true,
+  "configPanelLabel": "Trailer",
+  "canvasComponent": "ƒ EpisodeTrailerNodeComponent",
+  "localizedLabel": {
+    "en": "Trailer",
+    "he": "טריילר",
+    "ja": "トレーラー",
+    "ko": "트레일러",
+    "pt-BR": "Trailer do episódio"
+  },
+  "connectionsIn": {
+    "upload-video.video → episode-trailer.media": true,
+    "upload-video.video → episode-trailer.introCard": true,
+    "upload-audio.audio → episode-trailer.media": false,
+    "upload-audio.audio → episode-trailer.introCard": false,
+    "upload-image.image → episode-trailer.media": false,
+    "upload-image.image → episode-trailer.introCard": false,
+    "combine-videos.video → episode-trailer.media": true,
+    "combine-videos.video → episode-trailer.introCard": true,
+    "list.- → episode-trailer.media": true,
+    "text-prompt.prompt → episode-trailer.introCard": false
+  },
+  "connectionsOut": {
+    "episode-trailer.media → social-media-format.video": true,
+    "episode-trailer.media → json-process.in": true,
+    "episode-trailer.media → combine-videos.videos": false,
+    "episode-trailer.media → social-media-format.media": true,
+    "episode-trailer.media → combine-videos.in": true,
+    "episode-trailer.json → social-media-format.video": false,
+    "episode-trailer.json → json-process.in": true,
+    "episode-trailer.json → combine-videos.videos": false,
+    "episode-trailer.json → social-media-format.media": true,
+    "episode-trailer.json → combine-videos.in": true
+  },
+  "pick": {
+    "data": {
+      "formats": [
+        "9:16",
+        "1:1"
+      ],
+      "generatedVideoUrl": "https://r2/a.mp4",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedTranscript": {
+        "words": []
+      },
+      "generatedResults": [
+        {
+          "url": "https://r2/a.mp4",
+          "format": "9:16",
+          "generatedJson": {
+            "v": "plan"
+          },
+          "generatedTranscript": {
+            "words": []
+          }
+        },
+        {
+          "url": "https://r2/b.mp4",
+          "format": "1:1",
+          "generatedJson": {
+            "v": "plan"
+          },
+          "generatedTranscript": {
+            "words": []
+          }
+        }
+      ]
+    },
+    "first": {
+      "activeResultIndex": 0,
+      "generatedVideoUrl": "https://r2/a.mp4",
+      "generatedAudioUrl": "(undefined)",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedTranscript": {
+        "words": []
+      }
+    },
+    "second": {
+      "activeResultIndex": 1,
+      "generatedVideoUrl": "https://r2/b.mp4",
+      "generatedAudioUrl": "(undefined)",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedTranscript": {
+        "words": []
+      }
+    }
+  }
+}

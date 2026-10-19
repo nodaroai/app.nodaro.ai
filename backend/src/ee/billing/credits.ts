@@ -1918,9 +1918,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // per run of the node, reserved on its wrapper job and refunded when the run
   // fails or is cancelled. Not a node type: the node's inner steps bill at
   // their own rates. A use-case unit's row is its price.ee.ts (Tighten
-  // Episode's and Chapters'); these are the next podcast use-case nodes'
-  // (migration 531), priced ahead of their registration (decided 2026-10-14).
-  "use-case-fee:episode-trailer": 10,
+  // Episode's, Chapters' and Trailer's); this is the next podcast use-case
+  // node's (migration 531), priced ahead of its registration (decided 2026-10-14).
   "use-case-fee:clip-pack": 10,
   // speaker-view — an edit rendered with its speakers on screen (the cloud
   // plugin's renderer over core's EDL timeline). Priced PER MINUTE of output
@@ -4773,7 +4772,8 @@ function wireInputLength(
   const origin = withWiredSettings(resolved, gateNodes, gateEdges)
   if (isRenderNodeType(origin.type)) {
     const render = resolveApplyEdlEstimateLength(origin, gateNodes, gateEdges, rerunIds)
-    return { fixedSec: render.fixedMinutes * 60, perEpisodeSec: render.perEpisodeMinute * 60 }
+    // A trailer to the second (its 40 s); any other render in whole minutes.
+    return { fixedSec: render.fixedSec ?? render.fixedMinutes * 60, perEpisodeSec: render.perEpisodeMinute * 60 }
   }
   if (RECORDING_SOURCE_TYPES.has(origin.type ?? "")) {
     if (episodeIds.has(origin.id)) return { fixedSec: 0, perEpisodeSec: 60 }
@@ -5176,8 +5176,9 @@ function listingEstimate(
     const reruns = new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
     const fees = (graph: ReadonlyArray<EstimateNode>) => usecaseFeesTotal(uc.fees, (id) => usecaseFeeCredits(prices, id), graph, edges, reruns)
     // A further item of an app's List adds its chain's steps and, when it feeds a use-case node, its fee.
-    // A List that fans a review-on use-case node out lists no such figure: a
-    // run of more than one item is refused before it starts (`usecaseFanOutRefused`).
+    // A List that fans out a use-case node the engines refuse to fan out (one
+    // with review on, or one whose own result is a list) lists no such figure:
+    // a run of more than one item is refused before it starts (`usecaseFanOutRefused`).
     const refusedLists = new Set(
       [...(publishType !== "template" ? exposedListNodeIds ?? [] : [])].filter((listId) => listFansOutRefusedUseCase(listId, nodes, edges, reruns)),
     )
@@ -5236,8 +5237,8 @@ function listItemCount(data: Record<string, unknown> | undefined): number {
 }
 
 /**
- * Does List `listId` fan a review-on use-case node out — run it once per item,
- * where both engines refuse it (`usecaseFanOutRefused`)? Asked of the engines'
+ * Does List `listId` fan out a use-case node both engines refuse to run once
+ * per item (`usecaseFanOutRefused`: review on, or its own result is a list)? Asked of the engines'
  * own fan-out count (`nodeFanOut`), never of reachability: a node the List
  * reaches through a step that gathers its items (a Combine) runs once, and is
  * never refused. A frozen node never runs.

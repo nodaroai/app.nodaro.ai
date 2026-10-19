@@ -528,11 +528,20 @@ nodaro edit episode-chapters --media <url> [--plan-tier economy|standard|premium
                                                          # transcribe, then plan the chapters; nothing is rendered. With --watch the show
                                                          # notes are printed when the run completes: one "0:00 Title" line per chapter.
                                                          # Priced as its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
-nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
-                                                         # continue a Tighten Episode or Chapters run as a new job. from-failed: keep the steps that
-                                                         # finished, run the rest (the fee is held again; the failed run's was refunded).
-                                                         # render-final (Tighten Episode): the full-quality episode after a --review preview, with the
-                                                         # preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL).
+nodaro edit episode-trailer --media <url> [--intro-card <url>] [--formats 9:16,1:1,4:5,16:9] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # Trailer: one video recording (up to 3 hours) in, a 20–40 second trailer out in each
+                                                         # format of --formats (comma-separated; default 9:16,1:1,4:5), padded, never cropped;
+                                                         # --intro-card plays a short video (15 s at most) first. With --watch each format's
+                                                         # trailer is printed when the run completes ("9:16  <url>" per line), then any format
+                                                         # that could not be rendered ("Could not render: 1:1"). --review stops at
+                                                         # a preview of the trailer and prints the edit continue-use-case command that renders
+                                                         # every format. Priced as its steps plus a per-run fee (listed after this block).
+                                                         # Not yet enabled on nodaro.ai.
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # continue a Tighten Episode, Chapters or Trailer run as a new job. from-failed: keep the steps
+                                                         # that finished, run the rest (the fee is held again; the failed run's was refunded).
+                                                         # render-final (Tighten Episode, Trailer): the full-quality result after a --review preview,
+                                                         # with the preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL).
                                                          # A refusal naming another job prints its code and that job: already_running
                                                          # (follow it), continuation_superseded (continue it instead),
                                                          # render_final_already_rendered (its result is the one to use).
@@ -565,7 +574,7 @@ nodaro workspace join <code> [--json]
 nodaro workspace usage [id] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by member|model|day|none] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 ```
 
-The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, and 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
+The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, and 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
 
 ### Working in a workspace
 

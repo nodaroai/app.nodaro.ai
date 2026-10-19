@@ -7,7 +7,7 @@
  *
  * Every refusal happens before any row or credit hold. The wrapper job is the
  * unit a client retries (idempotency-key) and the thing it polls; its fee
- * (listed at 10 credits per run) is held here and committed or refunded by
+ * (its `use-case-fee:<type>` row, at the charged price) is held here and committed or refunded by
  * finalizeUseCaseWrapper when the inner run ends.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"

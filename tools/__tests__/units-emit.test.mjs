@@ -258,6 +258,8 @@ test("use-case: the shared contract and the render-rules rows, in position order
     assert.match(contracts, /^export const UNIT_USE_CASE_TYPES = \[\n {2}"fixture-case", \/\/ unit:fixture-case\n\] as const$/m)
     assert.match(contracts, /^ {2}\["fixture-case", \{ "json": "other" \}\], \/\/ unit:fixture-case$/m)
     assert.match(contracts, /^ {2}\["fixture-case", "text"\], \/\/ unit:fixture-case$/m)
+    // contract.fanOutEach: each pips first, then the primary — the shape of a FAN_OUT_EACH_HANDLES row.
+    assert.match(contracts, /^export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly \[type: string, handles: \{ readonly each: ReadonlyArray<string>; readonly primary: string \}\]> = \[\n {2}\["fixture-case", \{ "each": \["text"\], "primary": "text" \}\], \/\/ unit:fixture-case\n\]$/m)
     assert.doesNotMatch(contracts, /\/\*\*/, "line comments only: unit-contracts.test.ts holds every other line to a declaration or a row")
     assert.match(r.outputs.get("packages/render-rules/src/unit-use-cases.generated.ts"), /^ {2}\{ type: "fixture-case", builder: "fixture", label: "Fixture Case", inputs: \["media"\] \}, \/\/ unit:fixture-case$/m)
     assert.match(r.outputs.get("backend/src/nodes/_generated/use-cases.ts"), /^import \{ useCase as unit_fixture_case \} from "\.\.\/fixture-case\/use-case\.js" \/\/ unit:fixture-case$/m)

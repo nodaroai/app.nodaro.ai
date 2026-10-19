@@ -12,8 +12,10 @@
  * when a run starts writing a key nobody has classified here.
  */
 import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
-import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 import { UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared/ugc"
+import { USE_CASE_NODE_TYPES } from "./use-case-graph"
+import { usecaseDescriptor } from "./use-case-registry"
+import { USE_CASE_RESULT_KEYS } from "./use-case-result-keys"
 
 /**
  * Members of `EXECUTION_DATA_KEYS` that are NOT a run result, and why each one
@@ -153,8 +155,9 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "ugc-clips": ["quote", "result", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["result", "ugcOutputs"],
-  // A use-case node's failure code (a refused Render final): its last run's, gone with it.
-  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => [t, ["errorCode"]])),
+  // A use-case node's failure code (a refused Render final), and what a list
+  // kind could not deliver (its result kind's keys): its last run's, gone with it.
+  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => [t, ["errorCode", ...USE_CASE_RESULT_KEYS[usecaseDescriptor(t).resultKind]]])),
 }
 
 const RESULT_KEYS: ReadonlySet<string> = new Set([

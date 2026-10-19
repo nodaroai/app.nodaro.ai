@@ -40,22 +40,26 @@ describe("a review-on use-case node's remedy is its review, never a Final", () =
   it.each(SITUATIONS)("%s", (situation) => {
     const review = previewRefusalMessage(situation, "review")
     expect(review).toMatch(/Review before render/)
-    expect(review).toMatch(/Tighten Episode/)
     expect(review).not.toMatch(/Final/)
     const any = previewRefusalMessage(situation, "any")
     expect(any).toMatch(/Review before render/)
     expect(any).toMatch(/Final/)
+    // Every node that has it on holds the run the same way: no node type is named.
+    for (const text of [review, any]) {
+      expect(text).not.toMatch(/Tighten Episode|Trailer|Chapters/)
+      expect(text).toMatch(/every node (that has it on|in it must have “Review before render” off)/)
+    }
     // No kind known (a bare code, an older row): the render's words, as always.
     expect(previewRefusalMessage(situation)).toBe(previewRefusalMessage(situation, "render"))
   })
 
-  it("the copy names every review-holding use-case node by its label (a new one needs its own words)", () => {
+  it("the copy names no node type, so every review-holding type reads it alike", () => {
     expect(REVIEW_HOLDING_USE_CASE_TYPES.size).toBeGreaterThan(0)
     for (const type of REVIEW_HOLDING_USE_CASE_TYPES) {
       const label = unitDescriptorOf(type)?.label
       expect(label, `${type} is a unit with a label`).toBeTruthy()
       for (const situation of SITUATIONS) {
-        for (const kind of ["review", "any"] as const) expect(previewRefusalMessage(situation, kind), `${type} ${situation} ${kind}`).toContain(label)
+        for (const kind of ["review", "any"] as const) expect(previewRefusalMessage(situation, kind), `${type} ${situation} ${kind}`).not.toContain(label)
       }
     }
   })
@@ -66,6 +70,8 @@ describe("the kind is the holders'", () => {
     expect(previewHoldKind(["apply-edl", "speaker-view"])).toBe("render")
     expect(previewHoldKind(["tighten-episode"])).toBe("review")
     expect(previewHoldKind(["tighten-episode", "tighten-episode"])).toBe("review")
+    expect(previewHoldKind(["episode-trailer"])).toBe("review")
+    expect(previewHoldKind(["apply-edl", "episode-trailer"])).toBe("any")
     // Both remedies only when both kinds actually hold.
     expect(previewHoldKind(["apply-edl", "tighten-episode"])).toBe("any")
     expect(previewHoldKind([])).toBe("render")

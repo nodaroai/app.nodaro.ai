@@ -22,7 +22,7 @@ import { loadExecutionForWrapper } from "../execution-inline-graph.js"
 import { markJobFailed } from "../job-failure.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
+import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperKeepsPartial, usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
 
 export type FinalizeOutcome = "not_terminal" | "not_use_case" | "already_final" | "completed" | "failed"
 
@@ -104,9 +104,16 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
   // what names a continuation's generations and what a cancel stops read it.
   const backfill = typeof input._executionId === "string" ? {} : { input_data: { ...input, _executionId: exec.id } }
 
-  if (exec.status === "completed" && usecaseWrapperHasResult(exec.inlineGraph, output)) {
+  // A run that failed after delivering part of a list (a Trailer whose other
+  // formats rendered) completes with what it delivered, its fee kept.
+  const delivered = exec.status === "completed" || (exec.status === "failed" && usecaseWrapperKeepsPartial(exec.inlineGraph, output))
+  if (delivered && usecaseWrapperHasResult(exec.inlineGraph, output)) {
     const { markJobCompleted } = await loadShared()
-    const flipped = await markJobCompleted(exec.wrapperJobId, { output_data: output, credits_actual: exec.totalCreditsUsed + fee, ...backfill })
+    // `failedStep` names the step a FAILED run stopped at: a completed run
+    // that dropped a format names it on `failedFormats` instead, never as a
+    // failed step.
+    const { failedNodeId: _failedNodeId, failedStep: _failedStep, ...completed } = output
+    const flipped = await markJobCompleted(exec.wrapperJobId, { output_data: completed, credits_actual: exec.totalCreditsUsed + fee, ...backfill })
     if (!flipped) return "already_final"
     await commitReservedCreditsForJob(exec.wrapperJobId)
     return "completed"

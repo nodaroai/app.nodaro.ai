@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { isRenderNodeType, renderPlanPath } from "@nodaro/shared/nodes"
-import { buildTightenEpisodeGraph, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
+import { buildEpisodeTrailerGraph, buildTightenEpisodeGraph, resolveEpisodeTrailerSettings, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
 import { reviewViewOf, usecaseReviewSource } from "../use-case-review-source"
 import { reviewEntryOf, reviewKindOf, reviewRendersOf, reviewTargetOf } from "../review-entry"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
@@ -82,6 +82,16 @@ describe("a use-case node is its own review source", () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]!.sources).toEqual(["https://r2/ep.mp4"])
     expect(JSON.parse(rows[0]!.edl as string)).toMatchObject({ segments: [{ id: "a", inMs: 0, outMs: 4000 }] })
+  })
+
+  it("a Trailer is its own review source too: its plan, read by the cut its run renders the formats from", () => {
+    const tr = { ...t1({ formats: ["9:16", "1:1"], reviewBeforeRender: true }), id: "tr", type: "episode-trailer" }
+    const trWire = { ...wire, target: "tr" }
+    const g = buildEpisodeTrailerGraph(resolveEpisodeTrailerSettings({ formats: ["9:16", "1:1"], reviewBeforeRender: true }, "video"), { media: { url: "https://r2/ep.mp4", kind: "video" } })
+    const render = g.nodes.find((n) => n.id === g.outputMap.renderNodeId)!
+    const source = usecaseReviewSource("tr", [rec, tr], [trWire])!
+    expect(source).toMatchObject({ planId: "tr", plan, transcript, renderType: render.type, recordingUrl: "https://r2/ep.mp4" })
+    expect(reviewEntryOf("tr", [rec, tr] as never, [trWire] as never)).toEqual({ planId: "tr", kind: "edl" })
   })
 
   it("any other node is read as the canvas it is", () => {

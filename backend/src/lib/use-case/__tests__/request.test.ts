@@ -1,16 +1,17 @@
-// @test-units-by-name looks up only the tighten-episode body (USE_CASE_BODIES["tighten-episode"])
+// @test-units-by-name looks up only the tighten-episode and episode-trailer bodies (USE_CASE_BODIES by those two types)
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { TIGHTEN_EPISODE_DEFAULTS } from "@nodaro/render-rules"
+import { TIGHTEN_EPISODE_DEFAULTS, TRAILER_INTRO_CARD_MAX_SEC } from "@nodaro/render-rules"
 
 const probe = vi.hoisted(() => ({
   streams: vi.fn(async (_u: string) => ({ hasVideo: true, hasAudio: true })),
   duration: vi.fn(async (_u: string) => 3600),
 }))
 vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({ probeMediaStreams: probe.streams, probeMediaDuration: probe.duration }))
-import { prepareUseCase, usecaseReviewerPresent } from "../request.js"
+import { INTRO_CARD_MIN_SEC, prepareUseCase, usecaseReviewerPresent } from "../request.js"
 import { USE_CASE_BODIES, type UseCaseBody } from "../bodies.js"
 
 const tightenEpisodeBody = USE_CASE_BODIES["tighten-episode"]
+const episodeTrailerBody = USE_CASE_BODIES["episode-trailer"]
 
 beforeEach(() => {
   probe.streams.mockReset().mockResolvedValue({ hasVideo: true, hasAudio: true })
@@ -94,6 +95,69 @@ describe("prepareUseCase", () => {
     probe.duration.mockRejectedValue(new Error("no duration"))
     const r = await prepareUseCase("tighten-episode", body())
     expect(r.ok && r.sources.media.durationSec).toBeUndefined()
+  })
+})
+
+describe("prepareUseCase: Trailer", () => {
+  const trailer = (over: Record<string, unknown> = {}): UseCaseBody => episodeTrailerBody.parse({ mediaUrls: ["https://r2/ep.mp4"], ...over }) as UseCaseBody
+  const card = "https://r2/card.mp4"
+  it("an audio-only recording is refused: every format is a video", async () => {
+    probe.streams.mockResolvedValue({ hasVideo: false, hasAudio: true })
+    expect(await prepareUseCase("episode-trailer", trailer())).toMatchObject({
+      ok: false, status: 400, code: "media_needs_video", message: "Trailer needs a video recording.",
+    })
+  })
+  it("a video recording builds the trailer chain, its formats in the fixed order", async () => {
+    const r = await prepareUseCase("episode-trailer", trailer({ formats: ["16:9", "9:16"] }))
+    expect(r.ok && r.graph.nodeType).toBe("episode-trailer")
+    expect(r.ok && r.settings).toMatchObject({ formats: ["9:16", "16:9"] })
+  })
+  it("an intro card that is a video plays first, its probed length on the built card", async () => {
+    probe.duration.mockImplementation(async (u: string) => (u === card ? 3 : 3600))
+    const r = await prepareUseCase("episode-trailer", trailer({ introCardUrl: card }))
+    expect(r.ok && r.sources.introCard).toEqual({ url: card, durationSec: 3 })
+    expect(r.ok && r.graph.nodes.find((n) => n.id === "uc-intro")!.data).toMatchObject({ url: card, metadata: { durationSeconds: 3 } })
+    expect(r.ok && r.graph.nodes.map((n) => n.id)).toContain("uc-combine")
+  })
+  it("an intro card without a video stream is refused", async () => {
+    probe.streams.mockImplementation(async (u: string) => (u === card ? { hasVideo: false, hasAudio: true } : { hasVideo: true, hasAudio: true }))
+    expect(await prepareUseCase("episode-trailer", trailer({ introCardUrl: card }))).toMatchObject({ ok: false, status: 400, code: "intro_card_unreadable" })
+  })
+  it("a still image (a video stream with no length, or a frame's) is refused: the card is video only", async () => {
+    for (const length of [undefined, 0, 0.04, INTRO_CARD_MIN_SEC]) {
+      probe.duration.mockImplementation(async (u: string) => {
+        if (u !== card) return 3600
+        if (length === undefined) throw new Error("N/A")
+        return length
+      })
+      expect(await prepareUseCase("episode-trailer", trailer({ introCardUrl: card })), String(length)).toMatchObject({ ok: false, status: 400, code: "intro_card_unreadable" })
+    }
+  })
+  it(`an intro card longer than ${TRAILER_INTRO_CARD_MAX_SEC} seconds is refused (decided 2026-10-18); exactly ${TRAILER_INTRO_CARD_MAX_SEC} runs`, async () => {
+    probe.duration.mockImplementation(async (u: string) => (u === card ? TRAILER_INTRO_CARD_MAX_SEC + 0.5 : 3600))
+    expect(await prepareUseCase("episode-trailer", trailer({ introCardUrl: card }))).toMatchObject({
+      ok: false, status: 400, code: "intro_card_too_long", message: "The intro card is too long. Use a card of 15 seconds or less.",
+    })
+    probe.duration.mockImplementation(async (u: string) => (u === card ? TRAILER_INTRO_CARD_MAX_SEC : 3600))
+    expect((await prepareUseCase("episode-trailer", trailer({ introCardUrl: card }))).ok).toBe(true)
+  })
+  it("an unreadable intro card is refused the same way", async () => {
+    probe.streams.mockImplementation(async (u: string) => {
+      if (u === card) throw new Error("404")
+      return { hasVideo: true, hasAudio: true }
+    })
+    expect(await prepareUseCase("episode-trailer", trailer({ introCardUrl: card }))).toMatchObject({ ok: false, code: "intro_card_unreadable" })
+  })
+})
+
+describe("episodeTrailerBody", () => {
+  it("an empty format list is refused, naming the reason; an unknown format too", () => {
+    const empty = episodeTrailerBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"], formats: [] })
+    expect(empty.success).toBe(false)
+    expect(JSON.stringify(empty.error?.issues)).toContain("Choose at least one format")
+    expect(episodeTrailerBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"], formats: ["2:1"] }).success).toBe(false)
+    expect(episodeTrailerBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"], formats: ["16:9"] }).success).toBe(true)
+    expect(episodeTrailerBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"] }).success).toBe(true)
   })
 })
 

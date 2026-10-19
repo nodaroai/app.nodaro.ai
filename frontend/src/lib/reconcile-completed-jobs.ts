@@ -53,7 +53,7 @@ import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { usecaseTextRunPatch } from "@/lib/use-case-run-result"
+import { usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, ugcJobMayLand, ugcJobResultPatch } from "@/lib/ugc-run-patch"
@@ -446,7 +446,8 @@ export function buildCompletedResultPatch(
 
   const patch: Record<string, unknown> = {
     executionStatus: "completed",
-    generatedResults: [result],
+    // A list-result run (Trailer): every delivery, as the live run lands them.
+    generatedResults: usecaseRestoredResults(nodeType, output, jobId, Array.isArray(nodeData.generatedResults) ? (nodeData.generatedResults as GeneratedResult[]) : [], timestamp) ?? [result],
     activeResultIndex: 0,
     ...(overlayRun ?? {}),
   }

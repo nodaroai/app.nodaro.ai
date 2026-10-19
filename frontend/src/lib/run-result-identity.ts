@@ -13,7 +13,7 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseListsItsResult } from "@nodaro/render-rules"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -62,4 +62,13 @@ export function runResultRowIdentity(
   if (!stamp) return {}
   const jobId = str(stamp.jobId)
   return { ...(jobId ? { jobId } : {}), ...runResultIdentity(nodeType, stamp) }
+}
+
+/**
+ * Whether a node's batch rows carry stamps (its rows' quality, clip and
+ * bases, and each row's own job): a render, or a use-case node whose result
+ * is a list (Trailer's formats, each naming the run's wrapper).
+ */
+export function carriesRowStamps(nodeType: string | null | undefined): boolean {
+  return isRenderNodeType(nodeType) || usecaseListsItsResult(nodeType)
 }

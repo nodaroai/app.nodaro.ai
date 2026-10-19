@@ -1,10 +1,12 @@
+// @test-units-by-name checks only the use-case node types' labels it reads
 import { afterEach, describe, it, expect } from "vitest"
 import { RUN_CONTINUATION_CODES } from "@nodaro/shared/nodes"
 import { UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared/ugc"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
-import { USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE } from "@nodaro/render-rules"
-import { executionErrorText } from "../execution-error-text"
+import { USE_CASE_NODE_TYPES, USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE, usecaseCancelledMessage, usecaseDescriptor } from "@nodaro/render-rules"
+import { localizeNodeLabel } from "@/lib/i18n/labels"
+import { executionErrorText, nodeStateErrorText } from "../execution-error-text"
 
 describe("executionErrorText", () => {
   afterEach(() => useLocaleStore.getState().setLocale("en"))
@@ -56,6 +58,21 @@ describe("executionErrorText", () => {
     expect(executionErrorText(USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE)).toBe(he)
     // The engine's words for a run its node stopped (orchestrator-worker.ts): that node's part, localized.
     expect(executionErrorText(`Node execution failed: t1: ${USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE}; img: boom`)).toBe(`Node execution failed: t1: ${he}; img: boom`)
+  })
+
+  it("a use-case node whose engine run was cancelled reads in the reader's language, naming ITS type (each type's own sentence)", () => {
+    for (const type of USE_CASE_NODE_TYPES) {
+      const label = usecaseDescriptor(type).label
+      // The editor's English is the engine's, word for word.
+      expect(translate("en", "nodeRun.usecaseCancelled", { label })).toBe(usecaseCancelledMessage(label))
+      useLocaleStore.getState().setLocale("he")
+      const he = translate("he", "nodeRun.usecaseCancelled", { label: localizeNodeLabel(label, "he") })
+      expect(executionErrorText(usecaseCancelledMessage(label))).toBe(he)
+      expect(nodeStateErrorText({ error: usecaseCancelledMessage(label) }, type)).toBe(he)
+      useLocaleStore.getState().setLocale("en")
+    }
+    // Any other node state's error passes through as sent.
+    expect(nodeStateErrorText({ error: "Trailer was cancelled by a friend" }, "episode-trailer")).toBe("Trailer was cancelled by a friend")
   })
 
   it("passes any other message through, and nothing as null", () => {

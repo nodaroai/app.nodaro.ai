@@ -407,6 +407,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Record": "레코드",
   "Records": "레코드",
   "Recording": "녹음",
+  "Intro card": "인트로 카드",
   "Item": "항목",
   "Reference": "레퍼런스",
   "Rejected": "거부됨",

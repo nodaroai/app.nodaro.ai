@@ -3,9 +3,11 @@
 // @registry-exports use-cases: UNIT_USE_CASES
 import type { UnitUseCase } from "../kit.js"
 import { useCase as unit_episode_chapters } from "../episode-chapters/use-case.js" // unit:episode-chapters
+import { useCase as unit_episode_trailer } from "../episode-trailer/use-case.js" // unit:episode-trailer
 import { useCase as unit_tighten_episode } from "../tighten-episode/use-case.js" // unit:tighten-episode
 
 export const UNIT_USE_CASES: Readonly<Record<string, UnitUseCase>> = Object.assign(Object.create(null), {
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
+  "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

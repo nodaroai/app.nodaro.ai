@@ -39,6 +39,14 @@ export const MEDIA_INPUT_KINDS = ["video", "audio", "image"]
 export const PRODUCER_KINDS = ["audio", "video", "image", "dynamic"]
 
 /**
+ * The keys of a manifest's `contract`: the whitelist of what a unit adds to
+ * @nodaro/shared (rows of packages/shared/src/generated/unit-contracts.ts) —
+ * type ids, pip ids and closed vocabularies, never a price, prompt or doctrine.
+ * manifest.mjs refuses any other key; use-case-rules.mjs holds each one's rules.
+ */
+export const CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "reviewHold", "presents", "fanOutEach"]
+
+/**
  * The categories a unit may have today: the ones the editor's NodeCategory
  * shares with the server's (`NodeCategory` of backend/src/lib/node-registry.ts),
  * so its /v1/nodes descriptor needs no second category. A unit in another

@@ -421,6 +421,7 @@ test("unit.schema.json's enums are the validator's vocabularies", () => {
   assert.deepEqual(schema.properties.contract.properties.presents.enum, vocabulary.PRESENTS)
   assert.deepEqual(schema.properties.contract.properties.jsonPips.additionalProperties.enum, vocabulary.JSON_PIP_KINDS)
   assert.deepEqual(schema.properties.picker.oneOf[1].properties.alsoOnTabs.items.enum, vocabulary.PICKER_TABS)
+  assert.deepEqual(Object.keys(schema.properties.contract.properties), vocabulary.CONTRACT_KEYS)
 })
 
 // ── execution.kind "use-case" and the contract keys @nodaro/shared composes ──
@@ -509,7 +510,9 @@ test("use-case: an input with a field or an unknown id, and an output with from,
 
 test("use-case: a worker's capability is refused", () => {
   const capabilities = { "length:pass-video": { seams: ["lengths"], why: "t" } }
-  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["length:pass-video"] }, CASE), { capabilities }), /capability "length:pass-video" describes a worker; a use-case node runs none/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["length:pass-video"] }, CASE), { capabilities }), /capability "length:pass-video" describes a worker; a use-case node's output length is its spec's outputLength \(packages\/render-rules\/src\/use-case-specs\.ts\)/)
+  const ffmpeg = { "ffmpeg-media": { seams: ["definitions"], why: "t" } }
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.capabilities = ["ffmpeg-media"] }, CASE), { capabilities: ffmpeg }), /capability "ffmpeg-media" describes a worker; a use-case node runs none/)
 })
 
 test("runtimeTyped: only on a media output, and only with contract.producer \"dynamic\"", () => {
@@ -562,6 +565,23 @@ test("contract.reviewHold, nonPromptInputs and presents", () => {
   assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => { m.contract.reviewHold = true; m.contract.nonPromptInputs = ["media"] }, CASE)), [])
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.nonPromptInputs = ["music"] }, CASE)), /contract\.nonPromptInputs must list input handle ids/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.contract.presents = "data" }, CASE)), /contract\.presents: "data" is not image \| video \| audio \| text/)
+})
+
+test("contract.fanOutEach: the fixture's row is valid; its each pips and primary must be outputs, never a look pip, no other key", () => {
+  assert.deepEqual(problemsAfter(() => {}), [], "fixture-case declares { each: [\"text\"], primary: \"text\" }")
+  const fanOut = (v) => problemsAfter((root) => withManifest(root, (m) => { m.contract.fanOutEach = v }, CASE))
+  expectProblem(fanOut({ each: [], primary: "text" }), /^fixture-case: contract\.fanOutEach\.each: one or more output ids/)
+  expectProblem(fanOut({ each: ["nope"], primary: "text" }), /^fixture-case: contract\.fanOutEach\.each: "nope" is not an output id/)
+  expectProblem(fanOut({ each: ["text"], primary: "nope" }), /^fixture-case: contract\.fanOutEach\.primary: "nope" is not an output id/)
+  expectProblem(fanOut({ each: ["json"], primary: "json" }), /^fixture-case: contract\.fanOutEach\.each: "json" — a JSON \(kind "look"\) output never fans out$/)
+  expectProblem(fanOut({ each: ["text"], primary: "text", mode: "each" }), /^fixture-case: contract\.fanOutEach\.mode: fanOutEach is \{ each, primary \}/)
+  expectProblem(fanOut(["text"]), /^fixture-case: contract\.fanOutEach must be \{ each: <output ids>, primary: <output id> \}/)
+})
+
+test("contract.fanOutEach needs the contracts seam, and the contract whitelist knows it", () => {
+  const off = liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, id !== "contracts"])))
+  expectProblem(problemsAfter(() => {}, { live: off }), /^fixture-case: contract\.fanOutEach needs the "contracts" seam/)
+  assert.ok(vocabulary.CONTRACT_KEYS.includes("fanOutEach"))
 })
 
 test("picker.alsoOnTabs: each a picker tab", () => {

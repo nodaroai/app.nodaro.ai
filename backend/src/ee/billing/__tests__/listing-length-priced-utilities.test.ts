@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
+import { TRAILER_MAX_SEC } from "@nodaro/render-rules"
 
 /** A video utility's base price at the static rows these figures are written at: its units × its own one-unit row. */
 const staticUtilityBase = (type: string, body: Record<string, unknown>): number | undefined => {
@@ -212,7 +213,7 @@ const combineCharge = (durations: Array<number | undefined>) =>
 
 // A render's output is as long as the render's own estimate (decided
 // 2026-10-07): per minute of the episode when the render is (a Tighten), fixed
-// when it is not (a Trailer at 2 minutes). A step priced by its input's length
+// when it is not (a Trailer at its 40 seconds, to the second — decided 2026-10-18). A step priced by its input's length
 // on it lists by the same rule, never below what a run of that length charges.
 describe("on a render's output: the render's length, per minute when the render's is", () => {
   const renderGraph = (mode: string): { graph: N[]; wires: E[] } => ({
@@ -251,10 +252,10 @@ describe("on a render's output: the render's length, per minute when the render'
     for (const m of MINUTES) for (const sec of lengthsIn(m)) expect(delta(m), `${m} min (${sec}s)`).toBeGreaterThanOrEqual(charged(sec))
   })
 
-  it.each(onRender)("%s on a Trailer's render: fixed at the render's 2 minutes", (_label, op, handle, charged) => {
+  it.each(onRender)("%s on a Trailer's render: fixed at the render's 40 seconds", (_label, op, handle, charged) => {
     const { withOp, without } = withAndWithout("trailer", op, handle)
     expect(withOp.previewPerMinute).toBe(without.previewPerMinute)
-    expect(withOp.preview - without.preview).toBe(charged(2 * 60))
+    expect(withOp.preview - without.preview).toBe(charged(TRAILER_MAX_SEC))
   })
 
   it("video-sfx on a Tighten's render: the fixed 300-second row", () => {
@@ -263,14 +264,14 @@ describe("on a render's output: the render's length, per minute when the render'
     expect(withOp.preview - without.preview).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(VIDEO_SFX_PRICING.MAX_DURATION_SEC)])
   })
 
-  it("video-sfx on a Trailer's render: the render's 2-minute bucket", () => {
+  it("video-sfx on a Trailer's render: the bucket of its 40 seconds", () => {
     const { withOp, without } = withAndWithout("trailer", { id: "op", type: "video-sfx", data: {} }, "video")
     expect(withOp.previewPerMinute).toBe(without.previewPerMinute)
-    expect(withOp.preview - without.preview).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(2 * 60)])
+    expect(withOp.preview - without.preview).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(TRAILER_MAX_SEC)])
   })
 
   // Trailer + Formats: the intro card (the fallback) and the trailer render
-  // (its 2 minutes) into one Combine.
+  // (its 40 seconds) into one Combine.
   it("combine-videos on an intro card and a Trailer's render", () => {
     const { graph, wires } = renderGraph("trailer")
     const card: N = { id: "card", type: "upload-video", data: {} }
@@ -283,7 +284,7 @@ describe("on a render's output: the render's length, per minute when the render'
       replaced,
     )
     const without = CreditsService.estimateWorkflowBaseListing([...graph, card], wires, "app", replaced)
-    expect(withOp.preview - without.preview).toBe(combineCharge([undefined, 2 * 60]))
+    expect(withOp.preview - without.preview).toBe(combineCharge([undefined, TRAILER_MAX_SEC]))
     expect(withOp.previewPerMinute).toBe(without.previewPerMinute)
   })
 })

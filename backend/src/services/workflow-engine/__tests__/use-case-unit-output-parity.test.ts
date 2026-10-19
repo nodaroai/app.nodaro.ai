@@ -38,13 +38,13 @@ describe("a use-case unit's saved output is the use-case reader's (the precedenc
     describe(u.type, () => {
       for (const [shape, data] of Object.entries(SHAPES)) {
         it(shape, () => {
-          expect(extractSavedNodeOutput({ id: "n", type: u.type, data } as never)).toEqual(usecaseSavedNodeOutput(data))
+          expect(extractSavedNodeOutput({ id: "n", type: u.type, data } as never)).toEqual(usecaseSavedNodeOutput(data, u.type))
         })
       }
 
       it("some shape where the generic unit reader would save something else (the order matters)", () => {
         const differs = Object.values(SHAPES).some((data) =>
-          !isDeepStrictEqual(unitSavedOutput(u, data), usecaseSavedNodeOutput(data)))
+          !isDeepStrictEqual(unitSavedOutput(u, data), usecaseSavedNodeOutput(data, u.type)))
         expect(differs).toBe(true)
       })
     })
@@ -53,7 +53,7 @@ describe("a use-case unit's saved output is the use-case reader's (the precedenc
 
 /**
  * Concrete values, so the guard above cannot pass on two readers that agree on
- * the wrong thing: what each reader saves for two shapes of the fixture.
+ * the wrong thing: what each reader saves for some shapes of the fixture.
  */
 describe("what the two readers save (pinned values)", () => {
   const unit = (type: string) => {
@@ -78,5 +78,22 @@ describe("what the two readers save (pinned values)", () => {
       json: [{ startMs: 0, title: "Intro" }, { startMs: 62000, title: "Main" }],
     })
     expect(unitSavedOutput(unit("episode-chapters"), data)).toBeUndefined()
+  })
+
+  // A list result (Trailer's formats): the first delivery is the episode it
+  // shows, its deliveries the node's own list. A failed format is a run-result
+  // key, not a value it saves, so a partial run saves what it delivered.
+  for (const shape of ["formatsList", "formatsPartial"] as const) {
+    it(`Trailer, ${shape}: the first delivery and its list of deliveries; the generic reader has nothing`, () => {
+      const data = SHAPES[shape]
+      const saved = extractSavedNodeOutput({ id: "n", type: "episode-trailer", data } as never)
+      expect(saved).toEqual({ videoUrl: "https://r/t-9x16.mp4", listResults: ["https://r/t-9x16.mp4", "https://r/t-4x5.mp4"] })
+      expect(saved).not.toHaveProperty("failedFormats")
+      expect(unitSavedOutput(unit("episode-trailer"), data)).toBeUndefined()
+    })
+  }
+
+  it("Tighten Episode, formatsList: a type that does not list its result saves the episode only", () => {
+    expect(extractSavedNodeOutput({ id: "n", type: "tighten-episode", data: SHAPES.formatsList } as never)).toEqual({ videoUrl: "https://r/t-9x16.mp4" })
   })
 })

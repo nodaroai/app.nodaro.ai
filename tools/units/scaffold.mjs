@@ -192,11 +192,12 @@ export function nextSteps(o) {
   const seed = o.price === null ? [] : [`seed its price: a supabase/migrations/NNN_*.sql INSERT INTO model_pricing … ON CONFLICT DO NOTHING for "${creditId}" at the same ${o.price} credits as price.ee.ts`]
   const steps = useCase
     ? [
-        `its builder is written (USE_CASE_SPECS.${o.builder} in packages/render-rules/src/use-case-specs.ts): the graph a run of this node expands into`,
+        `its builder is written (USE_CASE_SPECS.${o.builder} in packages/render-rules/src/use-case-specs.ts): the graph a run of this node expands into, and the spec fields its run needs — a video output: its spec's \`outputLength\` is its length rule (never a "length:*" capability; use-case-output-length.test.ts), and \`triesEvery\` / \`audioForced\` when they apply (tools/units/README.md)`,
         `fill backend/src/nodes/${o.type}/use-case.ts's body with the node's settings, and \`settingKeys\` in its spec; its handles in unit.json and the matching fields in types.ts (${dataInterfaceName(o.type)})`,
         `its MCP verb: the REGISTER_BY_BUILDER entry for "${o.builder}" in backend/src/lib/mcp/tools/verbs-use-case.ts (the node's own tool, found by its builder; typecheck fails until it is there), and that tool's entry in docs/mcp/tools.md (gen:skills:check)`,
         `its settings table: a SETTINGS_TABLES row for "${o.type}" in backend/src/lib/__tests__/use-case-graph-validity.test.ts (every graph its builder can emit is walked; typecheck fails until it is there)`,
         strings,
+        `its card's empty-state text: node.tsx shows Tighten's "Connect an episode recording" (node.tightenConnectRecording) until it is replaced with the node's own string`,
         ...seed,
         docs,
         "a @nodaro/shared changeset (the use-case list and contract rows are published: packages/shared/src/generated/unit-contracts.ts)",

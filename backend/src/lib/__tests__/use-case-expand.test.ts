@@ -152,6 +152,44 @@ describe("expandUseCaseNodes", () => {
   })
 })
 
+describe("expandUseCaseNodes: a Trailer (one delivery per format)", () => {
+  const trailer = (data: Record<string, unknown> = {}) => ({ id: "tr", type: "episode-trailer", data: { label: "Trailer", ...data } })
+  const cap = { id: "cap", type: "add-captions", data: {} }
+  const recWire = { source: "rec", target: "tr", sourceHandle: "video", targetHandle: "media" }
+  const capWire = { source: "tr", target: "cap", sourceHandle: "media", targetHandle: "in" }
+
+  it("its deliveries leave from a stand-in List of its formats, newline-joined, on an Each wire (priced once per format)", () => {
+    const x = expandUseCaseNodes([rec, trailer(), cap], [recWire, capWire])
+    const list = x.nodes.find((n) => n.id === "tr::uc-deliveries")
+    expect(list).toEqual({ id: "tr::uc-deliveries", type: "list", data: { items: "tr::uc-format-9x16\ntr::uc-format-1x1\ntr::uc-format-4x5" } })
+    expect(x.edges).toContainEqual({ ...capWire, source: "tr::uc-deliveries", sourceHandle: "text", data: { outputMode: "each" } })
+    // The stand-in runs whenever the node does, and costs nothing (a List): one fee.
+    expect(x.members.get("tr")).toContain("tr::uc-deliveries")
+    expect(x.fees).toEqual([{ nodeId: "tr", creditId: "use-case-fee:episode-trailer" }])
+  })
+  it("one format: no stand-in, the wire leaves from that format", () => {
+    const x = expandUseCaseNodes([rec, trailer({ formats: ["16:9"] }), cap], [recWire, capWire])
+    expect(x.nodes.map((n) => n.id)).not.toContain("tr::uc-deliveries")
+    expect(x.edges).toContainEqual({ ...capWire, source: "tr::uc-format-16x9", sourceHandle: "media", data: { outputMode: "each" } })
+  })
+  it("its json leaves from the plan, one value", () => {
+    const x = expandUseCaseNodes([rec, trailer(), cap], [recWire, { ...capWire, sourceHandle: "json" }])
+    expect(x.edges).toContainEqual({ ...capWire, sourceHandle: "edl", source: "tr::uc-plan", data: { outputMode: "last" } })
+  })
+  it("review on: its consumers read the preview until its Render final", () => {
+    const x = expandUseCaseNodes([rec, trailer({ reviewBeforeRender: true }), cap], [recWire, capWire])
+    expect(x.nodes.map((n) => n.id)).not.toContain("tr::uc-format-9x16")
+    expect(x.edges).toContainEqual(expect.objectContaining({ source: "tr::uc-render", sourceHandle: "media", target: "cap" }))
+  })
+  it("a wired intro card is replaced by its real source, and Combine Videos plays it first", () => {
+    const card = { id: "card", type: "upload-video", data: { url: "https://r2/card.mp4" } }
+    const x = expandUseCaseNodes([rec, card, trailer()], [recWire, { source: "card", target: "tr", sourceHandle: "video", targetHandle: "introCard" }])
+    expect(x.nodes.map((n) => n.id)).not.toContain("tr::uc-intro")
+    expect(x.edges).toContainEqual({ source: "card", sourceHandle: "video", target: "tr::uc-combine", targetHandle: "in" })
+    expect(x.nodes.find((n) => n.id === "tr::uc-combine")!.data).toMatchObject({ clipOrder: ["card", "tr::uc-render"] })
+  })
+})
+
 describe("usecaseMediaKindOf: what the recording wired into `media` is", () => {
   const node = (type: string, data: Record<string, unknown> = {}) => ({ id: "rec", type, data })
 

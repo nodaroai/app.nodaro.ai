@@ -479,6 +479,25 @@ describe("Render final of an app run", () => {
       expect((await post({ renderNodeId: "hook", reviewer: "app" })).json().error.code).toBe("not_a_render")
     })
 
+    it("a review-on Trailer's Preview (its list empty until the final) is offered Render final: a continuation of its own run", async () => {
+      const trSettings = { formats: ["9:16", "1:1"], reviewBeforeRender: true }
+      mocks.version = {
+        ...mocks.version!,
+        snapshot_nodes: [
+          { id: "rec", type: "upload-video", data: {} },
+          { id: "t1", type: "episode-trailer", data: { reviewBeforeRender: true } },
+          { id: "hook", type: "webhook-output", data: { url: "https://creator.example/hook" } },
+        ],
+      }
+      const trPreview = { status: "completed", jobId: "job-tw", output: { videoUrl: "https://r2/p.mp4", quality: "proxy", listResults: [], useCaseSettings: trSettings } }
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates(trPreview) }))
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(202)
+      const job = mocks.queueAdd.mock.calls[0]![1]
+      expect([...job.nodeIds].sort()).toEqual(["hook", "t1"])
+      expect(job.inputOverrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "job-tw", settings: trSettings } } })
+    })
+
     // Another render's final completed first and handed the node's Preview on
     // as a seed, which names the execution it came from but not the wrapper.
     describe("a Preview handed on by an earlier final, as a seed", () => {

@@ -764,3 +764,93 @@ describe("executeUseCaseNode — an outer run continued from its failure", () =>
   })
 })
 
+
+describe("executeUseCaseNode — a Trailer (a list result)", () => {
+  const trailer = (data: Record<string, unknown> = {}) =>
+    ({ id: "tr", type: "episode-trailer", data: { label: "Trailer", formats: ["16:9", "9:16"], ...data } }) as never
+  const delivered = {
+    videoUrl: "https://r2/t-916.mp4",
+    formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "16:9", url: "https://r2/t-169.mp4" }],
+    quality: "final",
+    _executionId: "exec-in",
+  }
+
+  it("calls its own route with its formats, its intro card on introCardUrl", async () => {
+    m.rows.set("job-w", wrapper({ output_data: delivered }))
+    await executeUseCaseNode(trailer(), { ...wired(), useCaseIntroCard: "https://r2/card.mp4", useCaseMusic: "https://r2/bed.mp3" }, ctx(), undefined)
+    const [url, init] = m.fetch.mock.calls[0]!
+    expect(url).toMatch(/\/v1\/episode-trailer$/)
+    const body = JSON.parse(init.body)
+    expect(body).toMatchObject({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.mp4", formats: ["16:9", "9:16"] })
+    // Trailer takes no music bed.
+    expect(body).not.toHaveProperty("musicUrl")
+  })
+
+  it("its completed wrapper hands on the deliveries as its list, every row naming the wrapper as its job", async () => {
+    m.rows.set("job-w", wrapper({ output_data: delivered }))
+    const out = await executeUseCaseNode(trailer(), wired(), ctx(), undefined)
+    expect(out.output).toMatchObject({
+      videoUrl: "https://r2/t-916.mp4",
+      listResults: ["https://r2/t-916.mp4", "https://r2/t-169.mp4"],
+      listResultStamps: [{ quality: "final", jobId: "job-w" }, { quality: "final", jobId: "job-w" }],
+    })
+  })
+
+  it("a continued run whose recorded wrapper is done hands on its list stamped with that wrapper", async () => {
+    m.fetch.mockResolvedValueOnce(answer(409, { error: { code: "continuation_not_failed", message: "Only a run that failed can be continued from where it stopped." } }))
+    // The attempt ran with what the node runs with now (so it is continued, not run afresh).
+    const settings = usecaseDescriptor("episode-trailer").resolveSettings((trailer() as { data: Row }).data, "video")
+    m.rows.set("job-0", wrapper({ output_data: delivered, input_data: { type: "episode-trailer", mode: "run", settings, mediaUrl: "https://r2/ep.mp4", _executionId: "exec-in" } }))
+    m.graphs.set("exec-in", { nodeType: "episode-trailer", nodes: [{ id: "uc-source", type: "upload-video", data: {} }] })
+    const out = await executeUseCaseNode(trailer(), wired(), ctx({ continuedFromStates: { tr: { status: "failed", jobId: "job-0" } } }), undefined)
+    expect(out.jobId).toBe("job-0")
+    expect(out.creditsUsed).toBe(0)
+    expect(out.output.listResultStamps).toEqual([{ quality: "final", jobId: "job-0" }, { quality: "final", jobId: "job-0" }])
+  })
+})
+
+describe("executeUseCaseNode — the node's own failures name ITS type (decided 2026-10-18)", () => {
+  const chapters = () => ({ id: "c1", type: "episode-chapters", data: { label: "My chapters" } }) as never
+  const trailer = () => ({ id: "tr", type: "episode-trailer", data: { label: "My trailer", formats: ["9:16"] } }) as never
+
+  it.each([
+    ["Chapters", chapters],
+    ["Trailer", trailer],
+    ["Tighten Episode", () => tighten()],
+  ] as const)("%s: cancelled, failed with no message, and gone — each says its type's label, never another's", async (label, node) => {
+    await expect(executeUseCaseNode(node(), wired(), ctx({ cancelled: true }), undefined)).rejects.toThrow(`${label} was cancelled`)
+
+    m.rows.set("job-w", wrapper({ status: "failed", error_message: null, output_data: { _executionId: "exec-in" } }))
+    expect((await rejection(executeUseCaseNode(node(), wired(), ctx(), undefined))).message).toBe(`${label} failed`)
+
+    m.rows.set("job-w", wrapper({ status: "cancelled", error_message: null, output_data: { _executionId: "exec-in" } }))
+    expect((await rejection(executeUseCaseNode(node(), wired(), ctx(), undefined))).message).toBe(`${label} was cancelled`)
+
+    m.rows.delete("job-w")
+    expect((await rejection(executeUseCaseNode(node(), wired(), ctx(), undefined))).message).toBe(`${label} job not found`)
+  })
+
+  it("a Trailer's node output carries each delivery's format and the formats it could not render", async () => {
+    m.rows.set("job-w", wrapper({
+      output_data: {
+        videoUrl: "https://r2/t-916.mp4",
+        formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }],
+        failedFormats: ["4:5"],
+        quality: "final",
+        planBasis: "plan-b",
+        renderBasis: "render-b",
+        _executionId: "exec-in",
+      },
+    }))
+    const out = await executeUseCaseNode(trailer(), wired(), ctx(), undefined)
+    expect(out.output).toMatchObject({
+      formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }],
+      failedFormats: ["4:5"],
+    })
+    // Every row carries the run's render bases, as the canvas's own run stamps them (the review's fresh / stale check reads them).
+    expect(out.output.listResultStamps).toEqual([
+      { quality: "final", planBasis: "plan-b", renderBasis: "render-b", jobId: "job-w" },
+      { quality: "final", planBasis: "plan-b", renderBasis: "render-b", jobId: "job-w" },
+    ])
+  })
+})

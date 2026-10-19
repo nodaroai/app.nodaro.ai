@@ -11,6 +11,7 @@
  * `  <key>: defineUseCase<…>({`. Adding a builder = a new key here. Pure.
  */
 import type { UseCaseGraph, UseCaseMediaKind } from "./use-case-graph"
+import { editPlanRenderEstimateLength, renderLengthSec } from "./apply-edl-estimate"
 import type { UseCaseDescriptor, UseCaseSettings, UseCaseSources } from "./use-case-registry"
 import {
   TIGHTEN_MAX_EPISODE_SEC,
@@ -25,6 +26,13 @@ import {
   resolveEpisodeChaptersSettings,
   type EpisodeChaptersSettings,
 } from "./episode-chapters-graph"
+import {
+  TRAILER_FORMAT_SPECS,
+  TRAILER_NODE_IDS,
+  buildEpisodeTrailerGraph,
+  resolveEpisodeTrailerSettings,
+  type EpisodeTrailerSettings,
+} from "./episode-trailer-graph"
 
 /** The descriptor fields a node's row (and @nodaro/shared's review holds) provide — never a spec's. */
 type UseCaseRowFields = "type" | "label" | "route" | "inputs" | "reviewable"
@@ -58,6 +66,8 @@ export const USE_CASE_SPECS = {
     inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music },
     settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount"],
     resultKind: "episode",
+    // An audio recording makes an audio episode, with no captions (its framing is only hidden, never cleared).
+    audioForced: Object.freeze({ output: "audio", captions: false }),
     resolveSettings: (raw, kind) => resolveTightenEpisodeSettings(raw, kind),
     build: (settings, sources) =>
       buildTightenEpisodeGraph(settings, { media: sources.media, ...(sources.music ? { music: sources.music } : {}) }),
@@ -70,6 +80,21 @@ export const USE_CASE_SPECS = {
     resultKind: "chapters",
     resolveSettings: (raw, kind) => resolveEpisodeChaptersSettings(raw, kind),
     build: (settings, sources) => buildEpisodeChaptersGraph(settings, { media: sources.media }),
+  }),
+  trailer: defineUseCase<EpisodeTrailerSettings>({
+    maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+    // Every format is a video (decided 2026-10-14): an audio-only recording is refused.
+    needsVideo: true,
+    inputNodeIds: { media: TRAILER_NODE_IDS.source, introCard: TRAILER_NODE_IDS.intro },
+    settingKeys: ["formats", "reviewBeforeRender", "planTier", "instructions", "styleGuide"],
+    resultKind: "formats",
+    // Every chosen format is made, whichever one fails: a failed format refunds itself and is named.
+    triesEvery: Object.values(TRAILER_FORMAT_SPECS).map((spec) => spec.nodeId),
+    // Each format is the planned teaser at the length its render is estimated at (the longest trailer the plan cuts), after the intro card.
+    outputLength: { fixedSec: renderLengthSec(editPlanRenderEstimateLength({ mode: "trailer" }, undefined)), after: "introCard" },
+    resolveSettings: (raw, kind) => resolveEpisodeTrailerSettings(raw, kind),
+    build: (settings, sources) =>
+      buildEpisodeTrailerGraph(settings, { media: sources.media, ...(sources.introCard ? { introCard: sources.introCard } : {}) }),
   }),
 } as const
 

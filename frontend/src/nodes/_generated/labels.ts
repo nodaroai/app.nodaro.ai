@@ -3,12 +3,14 @@
 // @registry-exports labels: UNIT_LABELS
 import type { UnitLabels } from "../kit"
 import { labels as unit_episode_chapters } from "../episode-chapters/labels.generated" // unit:episode-chapters
+import { labels as unit_episode_trailer } from "../episode-trailer/labels.generated" // unit:episode-trailer
 import { labels as unit_gif_to_video } from "../gif-to-video/labels.generated" // unit:gif-to-video
 import { labels as unit_remove_audio } from "../remove-audio/labels.generated" // unit:remove-audio
 import { labels as unit_tighten_episode } from "../tighten-episode/labels.generated" // unit:tighten-episode
 
 export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(Object.create(null), {
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
+  "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode

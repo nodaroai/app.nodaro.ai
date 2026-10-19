@@ -2492,3 +2492,91 @@ describe("an Edit Plan's review when a server run's plan lands on it", () => {
     expect(data.editedEdl).toBeUndefined()
   })
 })
+
+describe("useWorkflowPersistence — a Trailer run that finished while the tab was closed (via load)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("reopens with every format landed as results (one row per format, its run's stamps), the list, and the failed format named", async () => {
+    const earlier = { url: "https://r2/old.mp4", jobId: "job-0", quality: "final", format: "9:16", timestamp: "t0" }
+    const nodes = [
+      makeNode({
+        id: "tr",
+        type: "episode-trailer",
+        data: { label: "Trailer", executionStatus: "running", currentJobId: VALID_UUID, generatedResults: [earlier] },
+      }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([
+      {
+        id: VALID_UUID,
+        status: "completed",
+        output_data: {
+          videoUrl: "https://r2/t-916.mp4",
+          formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }],
+          failedFormats: ["4:5"],
+          json: { version: 1, segments: [] },
+          quality: "final",
+          planBasis: "0123456789abcdef",
+          renderBasis: "fedcba9876543210",
+          useCaseSettings: { formats: ["9:16", "1:1", "4:5"] },
+        },
+        error_message: null,
+      },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    const results = data.generatedResults as Array<Record<string, unknown>>
+    expect(results.map((r) => [r.url, r.format, r.jobId, r.quality, r.planBasis, r.renderBasis])).toEqual([
+      ["https://r2/t-916.mp4", "9:16", VALID_UUID, "final", "0123456789abcdef", "fedcba9876543210"],
+      ["https://r2/t-11.mp4", "1:1", VALID_UUID, "final", "0123456789abcdef", "fedcba9876543210"],
+      [earlier.url, earlier.format, earlier.jobId, earlier.quality, undefined, undefined],
+    ])
+    expect(data).toMatchObject({
+      executionStatus: "completed",
+      activeResultIndex: 0,
+      generatedVideoUrl: "https://r2/t-916.mp4",
+      __listResults: ["https://r2/t-916.mp4", "https://r2/t-11.mp4"],
+      failedFormats: ["4:5"],
+    })
+    const stamp = { quality: "final", planBasis: "0123456789abcdef", renderBasis: "fedcba9876543210", jobId: VALID_UUID }
+    expect(data.__listResultStamps).toEqual([stamp, stamp])
+    expect(results[0]).toMatchObject({ failedFormats: ["4:5"] })
+  })
+})
+
+describe("applyCompletedExecutionResults — a server-run Trailer reopens with every format", () => {
+  it("one row per format, each naming the wrapper with the run's stamps and its format; the failed format named", () => {
+    const JOB = "00000000-0000-4000-8000-0000000000e1"
+    const stamp = { quality: "final", planBasis: "0123456789abcdef", renderBasis: "fedcba9876543210", jobId: JOB }
+    const nodes = [makeNode({ id: "tr", type: "episode-trailer", data: { label: "Trailer", executionStatus: "running" } })] as never
+    const [out] = applyCompletedExecutionResults(nodes, {
+      tr: {
+        status: "completed",
+        startedAt: "2026-10-18T10:00:00.000Z",
+        jobId: JOB,
+        output: {
+          videoUrl: "https://r2/t-916.mp4",
+          listResults: ["https://r2/t-916.mp4", "https://r2/t-11.mp4"],
+          listResultStamps: [stamp, stamp],
+          formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }],
+          failedFormats: ["4:5"],
+          quality: "final",
+        },
+      },
+    } as never, null)
+    const data = (out as { data: Record<string, unknown> }).data
+    const results = data.generatedResults as Array<Record<string, unknown>>
+    expect(results.map((r) => [r.url, r.format, r.jobId, r.quality, r.planBasis, r.renderBasis])).toEqual([
+      ["https://r2/t-916.mp4", "9:16", JOB, "final", "0123456789abcdef", "fedcba9876543210"],
+      ["https://r2/t-11.mp4", "1:1", JOB, "final", "0123456789abcdef", "fedcba9876543210"],
+    ])
+    expect(data).toMatchObject({ failedFormats: ["4:5"], __listResults: ["https://r2/t-916.mp4", "https://r2/t-11.mp4"] })
+  })
+})

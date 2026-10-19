@@ -106,6 +106,14 @@ test("scaffoldFiles: the files each execution.kind requires, and option.tsx only
   assert.match(useCase.get(fe("node.tsx")), /handleId="json" [^\n]*color=\{DATA_HANDLE_COLORS\.json\} icon=\{<Braces \/>\}/)
   assert.match(useCase.get(fe("node.tsx")), /nodeData\.generatedText/)
   assert.doesNotMatch(useCase.get(fe("node.tsx")), /nodeData\.undefined/)
+  // The frame every use-case node shares: its run strip, fee, states and Continue come from the shell.
+  // The type is React Flow's own (NodeProps), never a literal.
+  assert.match(useCase.get(fe("node.tsx")), /function XYNode\(\{ id, type, data, selected \}: NodeProps\)/)
+  assert.match(useCase.get(fe("node.tsx")), /const run = useUseCaseNodeRun\(id, type, nodeData\)/)
+  assert.doesNotMatch(useCase.get(fe("node.tsx")), /useUseCaseNodeRun\(id, "/)
+  assert.match(useCase.get(fe("node.tsx")), /<UseCaseNodeShell\n/)
+  assert.match(useCase.get(fe("node.tsx")), /\{ id: "media", type: "target", at: "top" \}/)
+  assert.doesNotMatch(useCase.get(fe("node.tsx")), /BaseNode|NodeQuickStrip/)
   // --characterize: the worker's ffmpeg characterization, and the ffmpeg-media capability it needs.
   const characterized = scaffoldFiles({ type: "x-y", category: "processing", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1, characterizeAfter: "op" })
   assert.match(characterized.get(be("characterize.char.ts")), /after: "op",/)
@@ -262,6 +270,11 @@ test("nextSteps for a use-case node: its builder, its body, its MCP verb, its se
   for (const re of order) assert.ok(at(re) >= 0, `${re}: ${steps.join("\n")}`)
   assert.deepEqual(order.map(at), [...order.map(at)].sort((a, b) => a - b), "in that order")
   assert.doesNotMatch(steps.join("\n"), /is not written yet/)
+  // The card's empty state is Tighten's text until the author replaces it.
+  assert.match(steps.join("\n"), /empty-state text: node\.tsx shows Tighten's "Connect an episode recording" \(node\.tightenConnectRecording\)/)
+  // Its length rule is its spec's, never a length:* capability (the worker's step).
+  assert.match(steps[at(/USE_CASE_SPECS\.clips/)], /a video output: its spec's `outputLength` is its length rule \(never a "length:\*" capability;/)
+  assert.doesNotMatch(steps.join("\n"), /capability "length:exact-video"/)
 })
 
 test("nextSteps names the deliberately central steps (the price migration only for a node with a route)", () => {

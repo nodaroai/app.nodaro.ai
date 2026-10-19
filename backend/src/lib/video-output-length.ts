@@ -48,11 +48,11 @@ import {
 import {
   extractVideoDurationFromNode,
 } from "@nodaro/shared/video"
-import { LENGTH_KEEPING_VIDEO_TYPES, utilityOutputLength } from "@nodaro/render-rules"
+import { LENGTH_KEEPING_VIDEO_TYPES, USE_CASE_NODE_TYPES, usecaseDescriptor, utilityOutputLength, type UseCaseOutputLength } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
-// @registry-enumerates VIDEO_OUTPUT_LENGTH_RULES and UNBOUNDED_LENGTH_REASONS carry every node unit with the "length:unknown" capability
+// @registry-enumerates VIDEO_OUTPUT_LENGTH_RULES and UNBOUNDED_LENGTH_REASONS carry every node unit with the "length:unknown" capability, and the rules every use-case node whose spec declares an outputLength
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeRecord, unitsWith } from "./unit-compose.js"
 import type { UnitDescriptor } from "../nodes/kit.js"
@@ -367,6 +367,28 @@ function ugcClipLength(): WireLength {
   return fixed(longestCatalogVideoSec())
 }
 
+/**
+ * A use-case node's output length (its spec's `outputLength`, use-case-specs.ts):
+ * the fixed length, after the input it names when that input is wired. An input
+ * whose length the listing does not know leaves the delivery unknown (unknown
+ * in, unknown out).
+ */
+export function usecaseLength(len: UseCaseOutputLength, inputs: readonly WireInput[]): WireLength {
+  const base = fixed(len.fixedSec)
+  const before = len.after ? inputs.find((i) => i.handle === len.after) : undefined
+  if (!before) return base
+  const beforeLength = knownLength(before.length)
+  return beforeLength ? { fixedSec: base.fixedSec + beforeLength.fixedSec, perEpisodeSec: beforeLength.perEpisodeSec } : "unknown"
+}
+
+/** The rule of every use-case node whose spec declares an `outputLength` (no type id: read off the descriptors). */
+function usecaseLengthRules(): Record<string, OutputLengthRule> {
+  return Object.fromEntries(USE_CASE_NODE_TYPES.flatMap((t) => {
+    const len = usecaseDescriptor(t).outputLength
+    return len ? [[t, { via: "rule", run: (_n: LengthNode, inputs: readonly WireInput[]) => usecaseLength(len, inputs) } satisfies OutputLengthRule]] : []
+  }))
+}
+
 /** Split into Chunks: no chunk is longer than the chunk length, nor than its input. */
 function splitMediaLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
   const chunk = num(dataOf(node).chunkDuration)
@@ -394,11 +416,12 @@ function utilityLength(node: LengthNode, inputs: readonly WireInput[]): WireLeng
  * The length rule of every node that delivers a video. Every member of
  * `VIDEO_PRODUCER_TYPES` is a key (guarded), plus the dual-mode steps that can
  * deliver one. The hand-written rules ∪ the node units with the
- * "length:unknown" capability ({@link unitUnknownLengths}); a unit with a
- * "length:pass-video" / "length:exact-video" capability arrives through
+ * "length:unknown" capability ({@link unitUnknownLengths}) ∪ the use-case
+ * nodes whose spec declares an `outputLength` ({@link usecaseLength}); a unit
+ * with a "length:pass-video" / "length:exact-video" capability arrives through
  * `LENGTH_KEEPING_VIDEO_TYPES` below.
  */
-export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = composeRecord("VIDEO_OUTPUT_LENGTH_RULES", {
+export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = composeRecord("VIDEO_OUTPUT_LENGTH_RULES", composeRecord("VIDEO_OUTPUT_LENGTH_RULES", {
   // Recordings and renders: read off the file / the render's own estimate (credits.ts).
   "upload-video": { via: "recording" },
   "youtube-video": { via: "recording" },
@@ -467,7 +490,7 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "list": { via: "rule", run: () => "unknown" },
   "sub-workflow": { via: "rule", run: () => "unknown" },
   "reduce": { via: "rule", run: () => "unknown" },
-}, UNIT_UNKNOWN_LENGTHS.rules)
+}, UNIT_UNKNOWN_LENGTHS.rules), usecaseLengthRules())
 
 /** The steps that deliver their input's video whole (pinned by the listing's chain guard). */
 export const PASS_THROUGH_VIDEO_TYPES: readonly string[] = Object.entries(VIDEO_OUTPUT_LENGTH_RULES)

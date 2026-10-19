@@ -15,6 +15,7 @@ const mocks = {
   editPlan: vi.fn(),
   tightenEpisode: vi.fn(),
   episodeChapters: vi.fn(),
+  episodeTrailer: vi.fn(),
   continueUseCase: vi.fn(),
   jobsGetStatus: vi.fn(),
 }
@@ -28,6 +29,7 @@ vi.mock("../../client.js", () => ({
       editPlan: mocks.editPlan,
       tightenEpisode: mocks.tightenEpisode,
       episodeChapters: mocks.episodeChapters,
+      episodeTrailer: mocks.episodeTrailer,
       continueUseCase: mocks.continueUseCase,
     },
     jobs: { getStatus: mocks.jobsGetStatus },
@@ -397,6 +399,108 @@ describe("edit episode-chapters", () => {
   })
 })
 
+describe("edit episode-trailer", () => {
+  it("maps flags to client.edit.episodeTrailer, the formats split on commas", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })
+    await runCmd(
+      "edit", "episode-trailer",
+      "--media", "https://r2/ep.mp4",
+      "--intro-card", "https://r2/card.mp4",
+      "--formats", "9:16, 16:9",
+      "--plan-tier", "premium",
+      "--instructions", "open on the laugh",
+      "--style-guide", "brisk",
+      "--idempotency-key", "key-t-12345",
+      "--json",
+    )
+    expect(mocks.episodeTrailer).toHaveBeenCalledWith(
+      {
+        mediaUrl: "https://r2/ep.mp4",
+        introCardUrl: "https://r2/card.mp4",
+        formats: ["9:16", "16:9"],
+        planTier: "premium",
+        instructions: "open on the laugh",
+        styleGuide: "brisk",
+      },
+      { idempotencyKey: "key-t-12345" },
+    )
+    expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "job-t" }, expect.anything())
+  })
+
+  it("sends only the recording when nothing else is given", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })
+    await runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--json")
+    expect(mocks.episodeTrailer).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4" }, undefined)
+  })
+
+  it("--review asks for the preview and prints how to render every format", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--review")
+      expect(mocks.episodeTrailer).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", reviewBeforeRender: true }, undefined)
+      expect(log.mock.calls.map((c) => String(c[0])).join("\n")).toContain("nodaro edit continue-use-case job-t --mode render-final")
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("--review with --json prints the job as JSON and nothing else", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--review", "--json")
+      expect(log).not.toHaveBeenCalled()
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("with --watch, prints each format's trailer once the run completes", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })
+    mocks.jobsGetStatus.mockResolvedValueOnce({
+      data: { id: "job-t", status: "completed", output_data: { formats: [{ format: "9:16", url: "https://r2/a.mp4" }, { format: "1:1", url: "https://r2/b.mp4" }] } },
+    })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--watch", "--poll-interval", "1")
+      expect(log).toHaveBeenCalledWith("9:16  https://r2/a.mp4")
+      expect(log).toHaveBeenCalledWith("1:1  https://r2/b.mp4")
+      expect(log.mock.calls.some(([line]) => String(line).startsWith("Could not render"))).toBe(false)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("with --watch, names the formats that could not be rendered after the ones it delivered", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })
+    mocks.jobsGetStatus.mockResolvedValueOnce({
+      data: { id: "job-t", status: "completed", output_data: { formats: [{ format: "4:5", url: "https://r2/c.mp4" }], failedFormats: ["9:16", "1:1"] } },
+    })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--watch", "--poll-interval", "1")
+      expect(log.mock.calls.map(([line]) => line)).toEqual(expect.arrayContaining(["4:5  https://r2/c.mp4", "Could not render: 9:16, 1:1"]))
+      const lines = log.mock.calls.map(([line]) => String(line))
+      expect(lines.indexOf("Could not render: 9:16, 1:1")).toBeGreaterThan(lines.indexOf("4:5  https://r2/c.mp4"))
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("refuses an unknown or empty --formats, or an unknown --plan-tier, before any request", async () => {
+    await expect(runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--formats", "9:16,21:9")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--formats", " , ")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "episode-trailer", "--media", "https://r2/ep.mp4", "--plan-tier", "gold")).rejects.toThrow("process.exit(1)")
+    expect(mocks.episodeTrailer).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/^--formats must be one or more of 9:16, 1:1, 4:5, 16:9/),
+      expect.stringMatching(/^--formats must be/),
+      expect.stringMatching(/^--plan-tier must be/),
+    ])
+  })
+})
+
 describe("edit continue-use-case", () => {
   it("continues a failed run with only the job and the mode", async () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2", executionId: "exec-2" })
@@ -429,6 +533,12 @@ describe("edit continue-use-case", () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
     await runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--type", "episode-chapters", "--json")
     expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "from-failed", nodeType: "episode-chapters" }, undefined)
+  })
+
+  it("--type episode-trailer renders a Trailer's final", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
+    await runCmd("edit", "continue-use-case", "job-1", "--mode", "render-final", "--type", "episode-trailer", "--json")
+    expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "render-final", nodeType: "episode-trailer" }, undefined)
   })
 
   it("a run whose type the key can't read asks for --type, not the SDK's nodeType", async () => {

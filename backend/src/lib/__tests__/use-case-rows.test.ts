@@ -5,11 +5,15 @@
  * names is dead); an unknown builder throws at call time; a descriptor is
  * reviewable exactly when @nodaro/shared's review holds name its type; and the
  * composition refuses two rows for one type, one builder for two types, and
- * rows that disagree with the type list.
+ * rows that disagree with the type list. And a use-case node lists its result
+ * exactly when @nodaro/shared's FAN_OUT_EACH_HANDLES has its row (its
+ * contract.fanOutEach), whose each pips are its media outputs — shared cannot
+ * read the descriptors, so this test ties the two.
  */
 import { describe, expect, it } from "vitest"
-import { REVIEW_HOLDING_USE_CASE_TYPES, USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
-import { USE_CASE_ROWS, USE_CASE_SPECS, composeUseCaseRows, usecaseDescriptor, usecaseRowOf, usecaseTypeOfBuilder, type UseCaseRow } from "@nodaro/render-rules"
+import { FAN_OUT_EACH_HANDLES, REVIEW_HOLDING_USE_CASE_TYPES, USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
+import { USE_CASE_ROWS, USE_CASE_SPECS, composeUseCaseRows, usecaseDescriptor, usecaseListsItsResult, usecaseRowOf, usecaseTypeOfBuilder, type UseCaseRow } from "@nodaro/render-rules"
+import { unitDescriptorOf } from "../unit-descriptors.js"
 
 describe("the use-case rows", () => {
   it("are one row per use-case type, in USE_CASE_NODE_TYPES order", () => {
@@ -70,3 +74,52 @@ describe("composeUseCaseRows", () => {
   })
 })
 
+type FanOutRow = { readonly each: readonly string[]; readonly primary: string }
+
+/**
+ * Each use-case type whose list result and FAN_OUT_EACH_HANDLES row disagree:
+ * a node that lists its result needs a row (or an edge after it never reads
+ * the list item by item), a row on any other node fans out a single value, and
+ * a list's each pips are exactly its media outputs.
+ */
+function fanOutEachProblems(
+  types: readonly string[],
+  listsResult: (t: string) => boolean,
+  table: Readonly<Record<string, FanOutRow>>,
+  mediaOutputsOf: (t: string) => readonly string[] | undefined,
+): string[] {
+  const out: string[] = []
+  for (const t of types) {
+    const row = Object.hasOwn(table, t) ? table[t] : undefined
+    if (listsResult(t) && !row) out.push(`${t}: lists its result but has no FAN_OUT_EACH_HANDLES row — declare contract.fanOutEach in its unit.json`)
+    else if (!listsResult(t) && row) out.push(`${t}: has a FAN_OUT_EACH_HANDLES row but its result is not a list — remove contract.fanOutEach`)
+    else if (row) {
+      const media = mediaOutputsOf(t)
+      if (!media) out.push(`${t}: is not a node unit, so its outputs are unknown`)
+      else if ([...row.each].sort().join() !== [...media].sort().join()) out.push(`${t}: contract.fanOutEach.each is [${row.each.join(", ")}], its media outputs are [${media.join(", ")}]`)
+    }
+  }
+  return out
+}
+
+const MEDIA_KINDS: readonly string[] = ["audio", "video", "image"]
+const mediaOutputsOf = (t: string): readonly string[] | undefined =>
+  unitDescriptorOf(t)?.handles.outputs.filter((h) => MEDIA_KINDS.includes(h.kind)).map((h) => h.id)
+
+describe("a use-case node's list result and its FAN_OUT_EACH_HANDLES row", () => {
+  it("agree for every use-case type", () => {
+    expect(fanOutEachProblems(USE_CASE_NODE_TYPES, usecaseListsItsResult, FAN_OUT_EACH_HANDLES, mediaOutputsOf)).toEqual([])
+  })
+
+  it("the check fails a list node that forgets its row, a row on a node that lists nothing, and each pips that are not its media outputs", () => {
+    const lists = (t: string) => t.startsWith("list-")
+    const media = (t: string) => (t === "list-plain" ? undefined : ["media"])
+    const table = { "list-wrong": { each: ["json"], primary: "json" }, "single-row": { each: ["media"], primary: "media" }, "list-ok": { each: ["media"], primary: "media" }, "list-plain": { each: ["media"], primary: "media" } }
+    expect(fanOutEachProblems(["list-forgot", "list-wrong", "single-row", "list-ok", "list-plain", "single-none"], lists, table, media)).toEqual([
+      "list-forgot: lists its result but has no FAN_OUT_EACH_HANDLES row — declare contract.fanOutEach in its unit.json",
+      "list-wrong: contract.fanOutEach.each is [json], its media outputs are [media]",
+      "single-row: has a FAN_OUT_EACH_HANDLES row but its result is not a list — remove contract.fanOutEach",
+      "list-plain: is not a node unit, so its outputs are unknown",
+    ])
+  })
+})

@@ -7,7 +7,7 @@
  * reviewable type holds; one without a review (Chapters) never does.
  */
 import { describe, it, expect } from "vitest"
-import { REVIEW_HOLDING_USE_CASE_TYPES, previewStops, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
+import { REVIEW_HOLDING_USE_CASE_TYPES, isRenderNodeType, previewStops, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { USE_CASE_NODE_TYPES, runsUseCaseRenderFinal, usecaseDescriptor, usecaseFinalRunSet, usecaseRenderFinalOverrides } from "@nodaro/render-rules"
 import { requestOf } from "../../services/workflow-engine/use-case-request.js"
 import type { OrchestratorContext, ResolvedInputs, SimpleNode } from "../../services/workflow-engine/types.js"
@@ -29,9 +29,39 @@ const graph = (type: string) => ({
 const REVIEWABLE = USE_CASE_NODE_TYPES.filter((type) => usecaseDescriptor(type).reviewable)
 const NOT_REVIEWABLE = USE_CASE_NODE_TYPES.filter((type) => !usecaseDescriptor(type).reviewable)
 
+/**
+ * Three facts about a type that are written in three different places and
+ * must agree: the hold @nodaro/shared applies after it, the review setting a
+ * run of it sends its route, and a review-on graph that renders a preview.
+ * (`reviewable` is not one of them: the registry reads it off the holding set.)
+ */
+function reviewFacts(type: (typeof USE_CASE_NODE_TYPES)[number]) {
+  const d = usecaseDescriptor(type)
+  const graph = d.build(d.resolveSettings({ reviewBeforeRender: true }, "video"), {
+    media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 600 },
+  })
+  return {
+    holds: REVIEW_HOLDING_USE_CASE_TYPES.has(type),
+    sendsReview: d.settingKeys.includes("reviewBeforeRender"),
+    rendersAPreview: graph.nodes.some((n) => isRenderNodeType(n.type) && n.data.quality === "proxy"),
+  }
+}
+
 describe("every use-case node with review holds what follows it", () => {
-  it("the holding list names exactly the reviewable types", () => {
-    expect([...REVIEW_HOLDING_USE_CASE_TYPES].sort()).toEqual([...REVIEWABLE].sort())
+  for (const type of USE_CASE_NODE_TYPES) {
+    it(`${type}: it holds what follows exactly when it sends a review and its review-on graph renders a preview`, () => {
+      const facts = reviewFacts(type)
+      expect({ sendsReview: facts.sendsReview, rendersAPreview: facts.rendersAPreview }, type).toEqual({
+        sendsReview: facts.holds,
+        rendersAPreview: facts.holds,
+      })
+    })
+  }
+
+  it("some use-case node holds and some does not (the agreement above is not vacuous)", () => {
+    const holds = USE_CASE_NODE_TYPES.map((type) => reviewFacts(type).holds)
+    expect(holds).toContain(true)
+    expect(holds).toContain(false)
   })
 
   for (const type of NOT_REVIEWABLE) {

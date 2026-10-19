@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { editPlanBasis } from "@nodaro/shared/edl"
+import { estimateRunCredits } from "../estimate-run-credits"
 import { usecaseRenderFinalOffered, usecaseRenderFinalRun, usecaseRenderFinalTarget } from "../use-case-render-final-set"
 
 /**
@@ -61,5 +63,25 @@ describe("usecaseRenderFinalRun", () => {
     const run = usecaseRenderFinalRun("t1", [rec, t1({ captions: false, generatedResults: [preview("00000000-0000-4000-8000-000000000001", { useCaseSettings: SETTINGS })] }), fmt] as never, [wire, { id: "o", source: "t1", target: "fmt", sourceHandle: "media" }] as never)!
     expect(run.overrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "00000000-0000-4000-8000-000000000001", settings: SETTINGS } } })
     expect([...run.runSet].sort()).toEqual(["fmt", "t1"])
+  })
+})
+
+describe("the editor's Render final of a Trailer is quoted on the edited cut (decided 2026-10-18)", () => {
+  const edlOf = (sec: number) => ({ version: 1, clock: "master", sources: [{ id: "rec", url: "https://r2/ep.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: sec * 1000, video: "rec" }] })
+  const PLAN = edlOf(35)
+  const tr = (data: Record<string, unknown>) => ({
+    id: "t1",
+    type: "episode-trailer",
+    position: at,
+    data: { label: "Trailer", reviewBeforeRender: true, generatedJson: PLAN, generatedResults: [preview("00000000-0000-4000-8000-000000000001")], ...data },
+  })
+  // A per-unit row's whole-run price (`<rate>:<units>u`) at 3 a unit, so a render's minutes show.
+  const quote = (data: Record<string, unknown>) => {
+    const run = usecaseRenderFinalRun("t1", [rec, tr(data)] as never, [wire] as never)!
+    return estimateRunCredits(run.executable, run.graph, [wire] as never, (id) => 3 * Number(/:(\d+)u$/.exec(id)?.[1] ?? 1))
+  }
+  it("an edit that lengthens the trailer to 150 s is quoted above the unedited 40 seconds", () => {
+    const lengthened = { v: 1, kind: "edl", basis: editPlanBasis(PLAN), edl: { segments: edlOf(150).segments, dropped: [] } }
+    expect(quote({ editedEdl: lengthened })).toBeGreaterThan(quote({}))
   })
 })

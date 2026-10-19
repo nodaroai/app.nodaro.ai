@@ -2,14 +2,12 @@
 // and of the contract keys @nodaro/shared composes (decided 2026-10-18). Called
 // by manifest.mjs (validateUnit, checkFiles, checkSeams, validateUnits);
 // built-ins only.
-import { JSON_PIP_KINDS, PICKER_TABS, PRESENTS, USE_CASE_INPUT_HANDLES } from "./vocabulary.mjs"
+import { CONTRACT_KEYS, JSON_PIP_KINDS, PICKER_TABS, PRESENTS, USE_CASE_INPUT_HANDLES } from "./vocabulary.mjs"
 
 const MEDIA = ["audio", "video", "image"]
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 /** Where a use-case node's graph builders live: USE_CASE_SPECS, read as text (repoContext). */
 export const USE_CASE_SPECS_FILE = "packages/render-rules/src/use-case-specs.ts"
-// The contract keys that become rows of packages/shared/src/generated/unit-contracts.ts.
-const SHARED_CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "reviewHold", "presents"]
 
 /** The builder keys of packages/render-rules/src/use-case-specs.ts, read as text: `  <key>: defineUseCase` lines of USE_CASE_SPECS. */
 export function useCaseBuildersFrom(source) {
@@ -36,7 +34,10 @@ export function useCaseProblems(unit, m, ctx) {
       if (h?.many !== undefined) out.push(`handles.inputs[${i}].many: a use-case input already takes every wire (routeUseCaseInput) — remove it`)
     }
     for (const [i, h] of outputs.entries()) if (h?.from !== undefined) out.push(`handles.outputs[${i}].from: a use-case node's outputs are read by the use-case reader (use-case-io.ts / use-case-output.ts) — remove it`)
-    for (const cap of Array.isArray(m.capabilities) ? m.capabilities : []) if (cap === "ffmpeg-media" || cap === "finalize:own-writer" || String(cap).startsWith("length:")) out.push(`capability "${cap}" describes a worker; a use-case node runs none`)
+    for (const cap of Array.isArray(m.capabilities) ? m.capabilities : []) {
+      if (String(cap).startsWith("length:")) out.push(`capability "${cap}" describes a worker; a use-case node's output length is its spec's outputLength (${USE_CASE_SPECS_FILE})`)
+      else if (cap === "ffmpeg-media" || cap === "finalize:own-writer") out.push(`capability "${cap}" describes a worker; a use-case node runs none`)
+    }
   } else {
     if (m.execution?.builder !== undefined) out.push("execution.builder is only for execution.kind \"use-case\"")
     if (c.reviewHold !== undefined) out.push("contract.reviewHold is only for execution.kind \"use-case\"")
@@ -63,8 +64,33 @@ export function useCaseProblems(unit, m, ctx) {
   }
   if (c.reviewHold !== undefined && c.reviewHold !== true) out.push("contract.reviewHold is true or absent")
   if (c.presents !== undefined && !PRESENTS.includes(c.presents)) out.push(`contract.presents: "${c.presents}" is not ${PRESENTS.join(" | ")}`)
+  if (c.fanOutEach !== undefined) out.push(...fanOutEachProblems(c.fanOutEach, outputs))
   const tabs = m.picker?.alsoOnTabs
   if (tabs !== undefined && !(Array.isArray(tabs) && tabs.every((t) => PICKER_TABS.includes(t)))) out.push(`picker.alsoOnTabs: each a picker tab (${PICKER_TABS.join(", ")})`)
+  return out
+}
+
+/**
+ * `contract.fanOutEach` — the row of FAN_OUT_EACH_HANDLES (@nodaro/shared
+ * producer-types.ts): the output pips an "each" edge reads one item at a time
+ * when the node ran once per item, and the pip an edge naming none reads.
+ */
+function fanOutEachProblems(f, outputs) {
+  if (!isObj(f)) return ["contract.fanOutEach must be { each: <output ids>, primary: <output id> }"]
+  const out = []
+  const ids = outputs.map((h) => h?.id)
+  for (const k of Object.keys(f)) if (k !== "each" && k !== "primary") out.push(`contract.fanOutEach.${k}: fanOutEach is { each, primary } — nothing else`)
+  if (!Array.isArray(f.each) || f.each.length === 0 || !f.each.every((h) => typeof h === "string")) out.push("contract.fanOutEach.each: one or more output ids (the pips an \"each\" edge reads item by item)")
+  else {
+    for (const h of f.each) {
+      const pip = outputs.find((o) => o?.id === h)
+      if (!pip) out.push(`contract.fanOutEach.each: "${h}" is not an output id`)
+      else if (pip.kind === "look") out.push(`contract.fanOutEach.each: "${h}" — a JSON (kind "look") output never fans out`)
+    }
+    const twice = [...new Set(f.each.filter((h, i) => f.each.indexOf(h) !== i))]
+    if (twice.length > 0) out.push(`contract.fanOutEach.each lists ${twice.map((h) => `"${h}"`).join(", ")} more than once`)
+  }
+  if (typeof f.primary !== "string" || !ids.includes(f.primary)) out.push(`contract.fanOutEach.primary: "${f.primary}" is not an output id`)
   return out
 }
 
@@ -102,7 +128,7 @@ export function useCaseSeamNeeds(m) {
   const out = []
   if (m.execution?.kind === "use-case") out.push(["use-case-rows", "execution.kind \"use-case\" (its builder row)"], ["contracts", "execution.kind \"use-case\" (UNIT_USE_CASE_TYPES)"])
   const c = isObj(m.contract) ? m.contract : {}
-  for (const k of SHARED_CONTRACT_KEYS) if (k !== "producer" && c[k] !== undefined) out.push(["contracts", `contract.${k}`])
+  for (const k of CONTRACT_KEYS) if (k !== "producer" && c[k] !== undefined) out.push(["contracts", `contract.${k}`])
   return out
 }
 

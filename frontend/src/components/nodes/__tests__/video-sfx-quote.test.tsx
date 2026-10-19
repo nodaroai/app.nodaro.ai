@@ -64,14 +64,14 @@ const credits = (versions = 1) => {
 }
 
 describe("Video SFX quick toolbar price", () => {
-  it("on a trailer render quotes the render's 2-minute row, as the estimates do", () => {
+  it("on a trailer render quotes the row of its 40 seconds, as the estimates do", () => {
     trailerRenderGraph()
-    expect(credits()).toBe(fixture.prices[videoSfxCreditId(120)])
+    expect(credits()).toBe(fixture.prices[videoSfxCreditId(40)])
     expect(credits()).not.toBe(fixture.prices[videoSfxCreditId(8)])
   })
   it("multiplies that row by the versions", () => {
     trailerRenderGraph()
-    expect(credits(3)).toBe(fixture.prices[videoSfxCreditId(120)]! * 3)
+    expect(credits(3)).toBe(fixture.prices[videoSfxCreditId(40)]! * 3)
   })
   it("keeps the upstream video's own reported length where the graph tells none", () => {
     store.state.nodes = [node("up", "upload-video", { duration: 25 }), node("sfx", "video-sfx")]

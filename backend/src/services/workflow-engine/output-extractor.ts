@@ -1477,7 +1477,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // A use-case node (legacy or a unit): the episode it shows, its plan with the
   // review applied, and its text. Ahead of the unit branch (decided 2026-10-18),
   // whose generic `from` read would save the wrong value, and of the media sets.
-  if (isUseCaseNodeType(type)) return usecaseSavedNodeOutput(data)
+  if (isUseCaseNodeType(type)) return usecaseSavedNodeOutput(data, type)
 
   // A node unit's saved output is what its manifest declares (handles.outputs[].from,
   // the active result first for media) — never a legacy type below. Mirrors the
@@ -2213,6 +2213,8 @@ function ugcJobOutput(outputData: Record<string, unknown>, nodeType: "ugc-script
 export function buildNodeOutputFromJobData(
   outputData: Record<string, unknown>,
   nodeType: string,
+  /** The job the row is, when the caller has it (a use-case node's list rows name it). */
+  jobId?: string,
 ): NodeOutput {
   // The UGC jobs read through the shared UGC wires only, ahead of the generic
   // copy below: their rows are not read for any other key (a script's plan is
@@ -2222,8 +2224,9 @@ export function buildNodeOutputFromJobData(
   // The two plugin jobs of a UGC video cut from one recorded speech — child steps of UGC Clips (the split) and
   // UGC Finish (the finish): their whole row, read by the shared UGC lane wires only.
   if (nodeType === "ugc-segments" || nodeType === "ugc-finish") return { json: outputData }
-  // A use-case wrapper's row (Tighten Episode): read by its own mapping only.
-  if (isUseCaseNodeType(nodeType)) return usecaseJobOutput(outputData)
+  // A use-case wrapper's row (Tighten Episode): read by its own mapping only,
+  // each row of a list result naming the job it was rebuilt from.
+  if (isUseCaseNodeType(nodeType)) return usecaseJobOutput(outputData, jobId)
   // Site Capture: the job's output IS the capture (its route's public shape) — on `json`, with its
   // first still on `image` and every still, in page order, as its list. A capture with no still hands
   // on its json only.

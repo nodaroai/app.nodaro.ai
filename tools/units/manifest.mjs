@@ -15,12 +15,11 @@ import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
 import { jsonOutputProblems } from "./json-output-rules.mjs"
 import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
-import { ACCEPTS_KINDS, CATEGORIES, DICT_LOCALES, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
 const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp"]
-const CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "reviewHold", "presents"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
 // backend/src/nodes/<type>/price.ee.ts (Enterprise License), prompt content in

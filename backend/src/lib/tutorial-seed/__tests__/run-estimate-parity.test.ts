@@ -305,21 +305,21 @@ describe("a step priced by the length it is given, on a render's output", () => 
   }
   const sfxRow = (sec: number): number => STATIC_CREDIT_COSTS[videoSfxCreditId(sec)]!
   const sfxOn: Array<[string, Graph, number]> = [
-    ["a trailer render (its 2 minutes)", chain("trailer", [sfx()], [wire("render", "sfx", "video")]), sfxRow(120)],
+    ["a trailer render (its 40 seconds)", chain("trailer", [sfx()], [wire("render", "sfx", "video")]), sfxRow(40)],
     ["a tighten render (the episode, capped at 300 seconds)", chain("tighten", [sfx()], [wire("render", "sfx", "video")]), sfxRow(300)],
     ["a Trim to the first 20 seconds of a tighten render", chain("tighten", [trim("t", { trimMode: "keep-first-seconds", keepFirstSeconds: 20 }), sfx()], [wire("render", "t"), wire("t", "sfx", "video")]), sfxRow(20)],
-    ["a Loop (3 copies) of a trailer render: 360 seconds, capped at 300", chain("trailer", [loop("l", { repeatCount: 3 }), sfx()], [wire("render", "l"), wire("l", "sfx", "video")]), sfxRow(300)],
-    ["a Video SFX after another (the clip passes on)", chain("trailer", [sfx("first"), sfx()], [wire("render", "first", "video"), wire("first", "sfx", "video")]), sfxRow(120)],
+    ["a Loop (8 copies) of a trailer render: 320 seconds, capped at 300", chain("trailer", [loop("l", { repeatCount: 8 }), sfx()], [wire("render", "l"), wire("l", "sfx", "video")]), sfxRow(300)],
+    ["a Video SFX after another (the clip passes on)", chain("trailer", [sfx("first"), sfx()], [wire("render", "first", "video"), wire("first", "sfx", "video")]), sfxRow(40)],
   ]
   it.each(sfxOn)("a Video SFX on %s: the run estimate prices the clip's length row", (_name, graph, row) => {
-    expect(sfxCredits(graph)).toBe(row + (graph.nodes.some((n) => n.id === "first") ? sfxRow(120) : 0))
+    expect(sfxCredits(graph)).toBe(row + (graph.nodes.some((n) => n.id === "first") ? sfxRow(40) : 0))
   })
   it.each(sfxOn.slice(0, 2))("a Video SFX on %s: the run estimate is the listing at the cap", (_name, { nodes, edges }) => {
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" })).toBe(listingAtCap({ nodes, edges }))
   })
   it("a Video SFX with its prompt wired before the video is priced by the video wire's length", () => {
     const { nodes, edges } = chain("trailer", [sfx(), { id: "txt", type: "text-prompt", data: {} }], [wire("txt", "sfx", "prompt"), wire("render", "sfx", "video")])
-    expect(sfxCredits({ nodes, edges })).toBe(sfxRow(120))
+    expect(sfxCredits({ nodes, edges })).toBe(sfxRow(40))
   })
   it("a Video SFX on a video whose length a run estimate cannot follow is quoted at the 300-second row, the most its run can be charged", () => {
     const { nodes, edges } = chain("trailer", [sfx()], [wire("rec", "sfx", "video")])

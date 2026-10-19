@@ -419,6 +419,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Record": "רשומה",
   "Records": "רשומות",
   "Recording": "הקלטה",
+  "Intro card": "כרטיס פתיחה",
   "Item": "פריט",
   "Reference": "ייחוס",
   "Rejected": "נדחים",

@@ -22,19 +22,20 @@
  *  - A run that fails keeps what it finished — its plan and transcript — on
  *    the node.
  *  - How the result lands follows the type's result kind: an episode as a
- *    take (`landEpisode`), text — Chapters' show notes and list — straight
- *    onto the node (`landText`).
+ *    take (`landEpisode`), a list (Trailer's formats) as the rows of one run
+ *    (`landList`), text — Chapters' show notes and list — straight onto the
+ *    node (`landText`).
  *  - A continue answered "already running" waits on the continuation it names;
  *    "superseded" (a newer generation failed too) continues that one; "still
  *    settling" asks again shortly. Every other refusal shows its message in
  *    the reader's language where the code has one.
  */
 import { toast } from "sonner"
-import { usecaseDescriptor, type UseCaseNodeType, type UseCaseResultKind } from "@nodaro/render-rules"
+import { usecaseDescriptor, usecaseListsItsResult, type UseCaseNodeType, type UseCaseResultKind } from "@nodaro/render-rules"
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED } from "@nodaro/shared/nodes"
 import { continueUseCase, getJobStatus, runUseCase, type UseCaseApiParams } from "@/lib/api"
 import { executionErrorText } from "@/lib/execution-error-text"
-import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseRunResultFields, usecaseTakeResultFields } from "@/lib/use-case-run-result"
+import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseListLandingFields, usecaseRunResultFields, usecaseTakeResultFields } from "@/lib/use-case-run-result"
 import { isInputWarningCode } from "@/lib/input-warning-codes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { tx } from "@/lib/i18n"
@@ -135,6 +136,32 @@ const landEpisode: Landing = (nodeId, nodeType, start, ctx) =>
     { resultFields: (od) => usecaseTakeResultFields(nodeType, od) },
   )
 
+/** What a finished list run writes: `landedFields`, then its rows and list (`usecaseListLandingFields`). */
+function landedListFields(nodeId: string, nodeType: UseCaseNodeType, od: Record<string, unknown>): Record<string, unknown> {
+  const own = landedFields(nodeId, od)
+  const rows = usecaseListLandingFields(nodeType, od, nodeDataOf(nodeId), new Date().toISOString())
+  return { ...own, ...rows }
+}
+
+/**
+ * A run whose result is a list (Trailer's formats): its deliveries land as
+ * the rows of ONE run (lib/use-case-list-result.ts) — each naming the run's
+ * wrapper (kept on the node from the moment it started) and its quality,
+ * with the plan, transcript and settings every take of the run keeps — ahead
+ * of the node's earlier results, the first on show; the node's list (what an
+ * Each wire reads) and the deliveries it could not make beside them. The
+ * poll lane's own single take is replaced by these rows.
+ */
+const landList: Landing = (nodeId, nodeType, start, ctx) =>
+  pollJobWithNodeUpdate(
+    nodeId,
+    start,
+    [...OUTPUT_KEYS],
+    usecaseDescriptor(nodeType).label,
+    ctx,
+    (od) => landedListFields(nodeId, nodeType, od),
+  )
+
 /** Stop pressed: never a failure on the node. */
 const isStop = (err: unknown, ctx: ExecutionContext): boolean =>
   (err as { name?: unknown } | null)?.name === "AbortError" || ctx.signal?.aborted === true
@@ -227,7 +254,7 @@ function runWrapper(nodeId: string, nodeType: UseCaseNodeType, start: () => Prom
     remember(nodeId, started.jobId)
     return started
   }
-  const land = LANDINGS[usecaseDescriptor(nodeType).resultKind] ?? landEpisode
+  const land = LANDINGS[usecaseDescriptor(nodeType).resultKind] ?? (usecaseListsItsResult(nodeType) ? landList : landEpisode)
   return land(nodeId, nodeType, tracked, ctx).catch(async (err: unknown) => {
     await keepFailedRunOutputs(nodeId, nodeType, jobId, err, ctx)
     throw err

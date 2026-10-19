@@ -25,11 +25,18 @@
  *    review: its show notes land on `generatedText`, its chapter list on
  *    `generatedJson` as the run reports it, and its transcript as above —
  *    each cleared when the run carries none.
+ *  - A type whose result is a list (Trailer's formats) lands the first
+ *    delivery as its episode, the deliveries as its own list (`__listResults`,
+ *    what an Each wire reads) with their stamps, and the deliveries it could
+ *    not make (`failedFormats`) — lib/use-case-list-result.ts. Each take of the
+ *    run keeps what its delivery is (its format) beside the run's plan.
  */
 import { editPlanResultPatch } from "@nodaro/shared/edl"
-import { isUseCaseNodeType, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseListsItsResult, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
 import { runResultIdentity } from "@/lib/run-result-identity"
+import { usecaseFailedDeliveriesField, usecaseListFields, usecaseListRowFields, usecaseMergeRunRows, usecaseRunFailedFormats, usecaseRunRows } from "@/lib/use-case-list-result"
 import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
+import type { GeneratedResult } from "@/types/nodes"
 
 type Output = Readonly<Record<string, unknown>>
 
@@ -112,8 +119,21 @@ export function usecaseRunResultFields(
     ...(episode?.medium === "video" ? { generatedVideoUrl: episode.url, generatedAudioUrl: undefined } : {}),
     ...(episode?.medium === "audio" ? { generatedAudioUrl: episode.url, generatedVideoUrl: undefined } : {}),
     ...usecaseJsonFields(output, data),
+    ...listResultFields(nodeType, output, jobId),
     ...wrapperOf(jobId),
   }
+}
+
+/**
+ * A list-result run's list on the node (its deliveries, their stamps, the
+ * first on show) — written only by a run that delivered, so a failed run
+ * never clears what an earlier one listed — and the deliveries it could not
+ * make. The take a lane lands is put on show by the lane itself.
+ */
+function listResultFields(nodeType: string, output: Output | null | undefined, jobId: string | null | undefined): Record<string, unknown> {
+  if (!usecaseListsItsResult(nodeType)) return {}
+  const { activeResultIndex: _shown, ...list } = usecaseListFields(nodeType, output ?? {}, jobId)
+  return { ...(list.generatedVideoUrl !== undefined ? list : {}), ...usecaseFailedDeliveriesField(nodeType, output) }
 }
 
 /** The run's wrapper job on the node, as the canvas's own run keeps it (`useCaseJobId`). */
@@ -168,7 +188,9 @@ function showTake(index: number, url: string, data: Readonly<Record<string, unkn
  * so a later pick restores them with no job read, and the settings the run was
  * built from (`useCaseSettings`): a Render final of that take renders with
  * them, and its review reads them (decided 2026-10-13). Only on the take that
- * IS the episode the output reports; `undefined` for any other node type or take.
+ * IS the episode the output reports — for a list result, on every delivery of
+ * the run, each with what it delivers (its format); `undefined` for any other
+ * node type or take.
  */
 export function usecaseTakeFields(
   nodeType: string | null | undefined,
@@ -177,13 +199,19 @@ export function usecaseTakeFields(
 ): Record<string, unknown> | undefined {
   if (!isUseCaseNodeType(nodeType)) return undefined
   const episode = usecaseEpisodeOf(output)
-  if (!episode || episode.url !== takeUrl) return undefined
+  // A list result's every delivery is a take of the run (matched by its file), with what it
+  // delivers and the formats the run could not render (what the node names under that take).
+  const delivered = usecaseListRowFields(nodeType, output, takeUrl)
+  const failed = delivered ? usecaseRunFailedFormats(output) : []
+  if (!delivered && (!episode || episode.url !== takeUrl)) return undefined
   const plan = planOf(output)
   const settings = runSettingsOf(output?.useCaseSettings)
   return {
     generatedJson: plan,
     generatedTranscript: present(output?.transcript) ? output!.transcript : undefined,
     ...(settings ? { useCaseSettings: settings } : {}),
+    ...delivered,
+    ...(failed.length > 0 ? { failedFormats: failed } : {}),
   }
 }
 
@@ -194,6 +222,52 @@ export function usecaseTakeFields(
  */
 export function usecaseTakeResultFields(nodeType: UseCaseNodeType, output: Output): Record<string, unknown> {
   return { ...runResultIdentity(nodeType, output), ...usecaseTakeFields(nodeType, output, usecaseEpisodeOf(output)?.url) }
+}
+
+/**
+ * What the canvas's own run of a list-result type (Trailer) writes beside
+ * the poll lane's take, which these rows replace: the run's deliveries as
+ * rows of ONE run — each naming the run's wrapper (kept on the node,
+ * `data.useCaseJobId`, from the moment it started), the run's render stamps,
+ * what it delivers and what every take of the run keeps (the plan,
+ * transcript and settings; the length and thumbnail only on the file they
+ * describe) — ahead of the node's earlier results, the first on show; the
+ * node's list and the deliveries it could not make beside them.
+ */
+export function usecaseListLandingFields(
+  nodeType: UseCaseNodeType,
+  output: Output,
+  data: Readonly<Record<string, unknown>> | undefined,
+  at: string,
+): Record<string, unknown> {
+  const wrapper = typeof data?.useCaseJobId === "string" ? data.useCaseJobId : undefined
+  const earlier = Array.isArray(data?.generatedResults) ? (data!.generatedResults as readonly unknown[]) : []
+  const rows = usecaseRunRows(nodeType, output, wrapper, at, (url) => usecaseTakeFields(nodeType, output, url))
+  return {
+    ...usecaseListFields(nodeType, output, wrapper),
+    ...usecaseFailedDeliveriesField(nodeType, output),
+    generatedResults: [...rows, ...earlier],
+  }
+}
+
+/**
+ * For a lane that restores a list-result run from its wrapper job (it
+ * finished while the tab was closed — the job restore, the resumed poll, the
+ * reconcile): the node's results with every delivery of that run landed as
+ * the live run lands it (`usecaseRunRows`, merged by `usecaseMergeRunRows`),
+ * in place of the lane's one take. `undefined` for any other node type, or a
+ * job that delivered nothing (the lane keeps its own rule).
+ */
+export function usecaseRestoredResults(
+  nodeType: string | null | undefined,
+  output: Output | null | undefined,
+  jobId: string,
+  prior: readonly GeneratedResult[],
+  at: string,
+): GeneratedResult[] | undefined {
+  if (!usecaseListsItsResult(nodeType) || !output) return undefined
+  const rows = usecaseRunRows(nodeType!, output, jobId, at, (url) => usecaseTakeFields(nodeType, output, url))
+  return rows.length > 0 ? usecaseMergeRunRows(prior, rows, jobId) : undefined
 }
 
 const runSettingsOf = (v: unknown): Readonly<Record<string, unknown>> | undefined =>

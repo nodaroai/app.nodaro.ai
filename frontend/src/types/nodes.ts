@@ -190,6 +190,14 @@ export interface GeneratedResult {
   readonly clipKey?: string
   readonly planBasis?: string
   readonly renderBasis?: string
+  // A use-case node whose result is a list (Trailer's formats; Clip Pack's
+  // clips): what the row delivers — its format, or its clip's title and hook
+  // (lib/use-case-list-result.ts). The node's chips and the clip cards read them.
+  readonly format?: string
+  readonly title?: string
+  readonly hook?: string
+  // Trailer: the formats the run of this take could not render (the node names them under it).
+  readonly failedFormats?: readonly string[]
   // A UGC Clip take the editor's run made: the Re-render count it was made at
   // (the `nonce` its clip job was sent). With `jobId`, what the run price reads
   // to expect the take handed back (`ugcReusedClips`, @nodaro/render-rules);

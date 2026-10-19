@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "episode-trailer",
+  "label": "Trailer",
+  "category": "processing",
+  "position": { "after": "episode-chapters" },
+  "picker": {
+    "family": "video-podcast",
+    "after": "episode-chapters",
+    "pickerCategory": "Processing",
+    "keywords": ["podcast", "trailer", "teaser", "promo", "reel", "story", "formats", "one step"]
+  },
+  "handles": {
+    "inputs": [
+      { "id": "media", "label": "Recording", "accepts": ["video"] },
+      { "id": "introCard", "label": "Intro card", "accepts": ["video"] }
+    ],
+    "outputs": [
+      { "id": "media", "label": "Trailers", "kind": "video" },
+      { "id": "json", "label": "Edit (EDL)", "kind": "look" }
+    ]
+  },
+  "defaultData": { "label": "Trailer", "formats": ["9:16", "1:1", "4:5"], "reviewBeforeRender": false, "planTier": "standard", "instructions": "", "fieldMappings": {}, "executionStatus": "idle" },
+  "execution": { "kind": "use-case", "builder": "trailer" },
+  "capabilities": ["panel:generate-button", "edition:nodaro-exclusive"],
+  "registry": {
+    "description": "Cut a 20–40 second trailer from a podcast recording in one step and deliver it in each chosen social format (9:16, 1:1, 4:5, 16:9), optionally after an intro card. Its steps are priced at their own rates, plus a per-run fee.",
+    "outputType": "video"
+  },
+  "contract": { "producer": "video", "jsonPips": { "json": "edl" }, "nonPromptInputs": ["introCard"], "reviewHold": true, "fanOutEach": { "each": ["media"], "primary": "media" } },
+  "docs": { "page": "docs/nodes/processing-video/episode-trailer.md", "index": "hand-written" }
+}

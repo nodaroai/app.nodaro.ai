@@ -24,9 +24,19 @@ export type UseCaseInputHandle = "media" | "music" | "introCard"
 export interface UseCaseSources {
   readonly media: UseCaseMediaSource
   readonly music?: { readonly url: string }
-  readonly introCard?: { readonly url: string }
+  /** The card's probed length, when known (a quote prices what follows it on that). */
+  readonly introCard?: { readonly url: string; readonly durationSec?: number }
 }
 export type UseCaseSettings = Readonly<Record<string, unknown>>
+/**
+ * How long each video a use-case node delivers is, for a listing: a fixed
+ * length, after the length of the input it names when that input is wired
+ * (unknown when that input's length is).
+ */
+export interface UseCaseOutputLength {
+  readonly fixedSec: number
+  readonly after?: UseCaseInputHandle
+}
 
 export interface UseCaseDescriptor {
   readonly type: UseCaseNodeType
@@ -43,6 +53,24 @@ export interface UseCaseDescriptor {
   readonly settingKeys: readonly string[]
   readonly reviewable: boolean
   readonly resultKind: UseCaseResultKind
+  /**
+   * The built nodes that try EVERY one of their kind (decided 2026-10-18: a
+   * Trailer makes every chosen format, whichever one fails): when a stage's
+   * nodes are all named here, one that fails never stops the others from
+   * starting. Each still checks for a Stop before it starts, so a Stop never
+   * starts a paid step. Any other stage keeps the engine's default — the
+   * first failure stops the nodes not started yet.
+   */
+  readonly triesEvery?: readonly string[]
+  /** The length of each video it delivers (video-output-length.ts makes it the node's length rule); absent for a node that is not a video producer. */
+  readonly outputLength?: UseCaseOutputLength
+  /**
+   * The node data an audio-only recording wired into `media` forces (the
+   * editor's lock writes these values; the run's resolver reads an audio
+   * recording so). Absent for a node that refuses an audio recording
+   * (`needsVideo`) and for one an audio recording changes nothing on.
+   */
+  readonly audioForced?: Readonly<Record<string, unknown>>
   resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind): UseCaseSettings
   build(settings: UseCaseSettings, sources: UseCaseSources): UseCaseGraph
 }
@@ -88,4 +116,13 @@ export function usecaseListsItsResult(type: string | null | undefined): boolean 
  */
 export function usecaseResultIsText(type: string | null | undefined): boolean {
   return isUseCaseNodeType(type) && USE_CASE_DESCRIPTORS[type].resultKind === "chapters"
+}
+
+/**
+ * The nodes of a use-case run that try every one of their kind
+ * (`triesEvery`), read from the run's type; empty for any other graph (and for
+ * a snapshot that names no use-case type).
+ */
+export function usecaseTriesEvery(graph: { readonly nodeType: unknown }): ReadonlySet<string> {
+  return new Set(isUseCaseNodeType(graph.nodeType as string) ? (USE_CASE_DESCRIPTORS[graph.nodeType as UseCaseNodeType].triesEvery ?? []) : [])
 }

@@ -823,6 +823,26 @@ const MAKE_CHAPTERS_TOOL_BYTES = 2_478
 // offered nodes that have none. No tool was added, so the fixture does NOT move. Measured by
 // this suite: 444_522 total − 444_361 before = 161 B; the 6 B of headroom carry across.
 const CHAPTERS_WORDING_BYTES = 161
+// RAISED 2026-10-18 by wording only: `continue_use_case` names the use-case nodes this deployment
+// offers, and the list gains Trailer ("Tighten Episode, Chapters or Trailer"). No tool was added,
+// so the fixture does NOT move. Measured by this suite: 444_923 total − 444_914 before = 9 B; the
+// 6 B of headroom carry across.
+const TRAILER_CONTINUE_WORDING_BYTES = 9
+// RAISED 2026-10-18 by one NEW tool and nothing else: `make_trailer` (the Trailer node's verb — a
+// 20–40 s trailer of a recording in each chosen social format: transcribe, Edit Plan in trailer
+// mode, the render, an optional intro card, one padded format per choice), registered in
+// verbs-use-case.ts beside `make_chapters` and gated the same way (workflows:execute, every
+// edition), so the fixture moves by exactly that name in cloud/all AND community/all. Measured by
+// this suite on the same tree: 448_226 total − 444_923 before = 3_303 B (its `formats` capped at
+// the four formats, as the route caps them), far under the per-tool budget; the 6 B of headroom
+// carry across.
+const MAKE_TRAILER_TOOL_BYTES = 3_303
+// RAISED 2026-10-18 by wording only: `make_trailer` says every format is tried, that a run which
+// completes without one keeps its fee and has no from-failed, and how to get the missing format
+// (render `output_data.json` yourself — Apply EDL, Combine Videos with the card first, Social Media
+// Format — or a new run). No tool was added, so the fixture does NOT move. Measured by this suite:
+// make_trailer 3_303 → 3_543 B = 240 B; the 6 B of headroom carry across.
+const MAKE_TRAILER_PARTIAL_RUN_BYTES = 240
 // RAISED 2026-10-13 by the settled charge on a job: `creditsCharged` joins the
 // one job envelope (get_job and wait_for_job declare it as their outputSchema),
 // and get_job / list_jobs say that `credits` is the hold and the charge is the
@@ -1070,6 +1090,9 @@ export const TOOL_WIRE_BUDGET = {
     USE_CASE_TOOLS_BYTES +
     MAKE_CHAPTERS_TOOL_BYTES +
     CHAPTERS_WORDING_BYTES +
+    TRAILER_CONTINUE_WORDING_BYTES +
+    MAKE_TRAILER_TOOL_BYTES +
+    MAKE_TRAILER_PARTIAL_RUN_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +

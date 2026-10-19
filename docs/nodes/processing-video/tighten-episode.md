@@ -72,7 +72,7 @@ You are charged for the rendered episode's own minutes, not for the estimate.
 
 ### What the estimate shows before you run
 
-The estimate prices the render at the recording's full length. The tightened cut is shorter, so the render is charged less than the estimate shows. A recording with no known length is estimated at the 180-minute ceiling. With framing, Speaker View is estimated at its higher rate until the edit is known; a cut with at most two speakers on screen and no zoom is charged the lower one.
+The estimate prices the render at the recording's full length. The tightened cut is shorter, so the render is charged less than the estimate shows. A recording with no known length is estimated at the 180-minute ceiling. Render final's balance check uses the length of the plan's cut (with your edit: the length it is charged for), not the full recording; the estimate shown before the run is unchanged. With framing, Speaker View is estimated at its higher rate until the edit is known; a cut with at most two speakers on screen and no zoom is charged the lower one.
 
 | Recording | Settings | Estimate |
 |---|---|---|

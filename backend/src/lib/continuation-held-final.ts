@@ -3,7 +3,7 @@
  * lineage stopped at for a Preview review (`continuation_preview_pending`,
  * decided 2026-10-18), worked out by the server so a caller never assembles
  * it: ONE run continuing that generation, of every held Apply EDL render at
- * Final and every held review-on use-case node (Tighten Episode) continuing
+ * Final and every held review-on use-case node continuing
  * the run that made its Preview — each with every node after it, as their own
  * Render finals run them (`renderFinalRunSet`, `usecaseFinalRunSet`).
  *
@@ -11,7 +11,7 @@
  * and with two Previews feeding the same node, the final of either runs that
  * node on the other's Preview and is held there again. A use-case node has
  * no `renderFinal` on `/run` at all (`render_final_not_a_render`); its own
- * continue route (`mode: "render-final"`) renders the episode but runs
+ * continue route (`mode: "render-final"`) renders its final result but runs
  * nothing after it in the workflow, so the lineage would stay held. The run
  * below continues the node's run through that same route — at Final, no fee —
  * and it joins the lineage (a subset continuation of its newest generation),

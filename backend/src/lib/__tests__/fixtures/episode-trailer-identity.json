@@ -1,0 +1,1401 @@
+{
+  "requestBody": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mediaUrls": {
+        "minItems": 1,
+        "maxItems": 1,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "introCardUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "formats": {
+        "minItems": 1,
+        "maxItems": 4,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "9:16",
+            "1:1",
+            "4:5",
+            "16:9"
+          ]
+        }
+      },
+      "reviewBeforeRender": {
+        "type": "boolean"
+      },
+      "planTier": {
+        "type": "string",
+        "enum": [
+          "economy",
+          "standard",
+          "premium"
+        ]
+      },
+      "instructions": {
+        "type": "string",
+        "maxLength": 4000
+      },
+      "styleGuide": {
+        "type": "string",
+        "maxLength": 4000
+      },
+      "componentDepth": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 5
+      },
+      "executingComponentIds": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "previewStopRule": {
+        "type": "boolean"
+      },
+      "reviewerPresent": {
+        "type": "boolean"
+      },
+      "billingContext": {},
+      "userId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "workflowId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "nodeId": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "mcp_client": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "required": [
+      "mediaUrls"
+    ],
+    "additionalProperties": false
+  },
+  "nodesEntry": {
+    "found": {
+      "type": "episode-trailer",
+      "label": "Trailer",
+      "category": "processing",
+      "description": "Cut a 20–40 second trailer from a podcast recording in one step and deliver it in each chosen social format (9:16, 1:1, 4:5, 16:9), optionally after an intro card. Its steps are priced at their own rates, plus a per-run fee.",
+      "outputType": "video",
+      "creditCost": "per-minute",
+      "inputSchema": {
+        "fields": [
+          {
+            "key": "mediaUrls",
+            "type": "video-url-array",
+            "required": true
+          },
+          {
+            "key": "introCardUrl",
+            "type": "video-url"
+          },
+          {
+            "key": "formats",
+            "type": "string-array",
+            "options": [
+              "9:16",
+              "1:1",
+              "4:5",
+              "16:9"
+            ]
+          },
+          {
+            "key": "reviewBeforeRender",
+            "type": "boolean"
+          },
+          {
+            "key": "planTier",
+            "type": "select",
+            "options": [
+              "economy",
+              "standard",
+              "premium"
+            ]
+          },
+          {
+            "key": "instructions",
+            "type": "string"
+          },
+          {
+            "key": "styleGuide",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "chargedDescription": "Cut a 20–40 second trailer from a podcast recording in one step and deliver it in each chosen social format (9:16, 1:1, 4:5, 16:9), optionally after an intro card. Its steps are priced at their own rates, plus a per-run fee of 11 credits.",
+    "registryPredecessor": "episode-chapters"
+  },
+  "descriptor": {
+    "label": "Trailer",
+    "route": "/v1/episode-trailer",
+    "maxSourceSec": 10800,
+    "needsVideo": true,
+    "inputs": [
+      "media",
+      "introCard"
+    ],
+    "inputNodeIds": {
+      "media": "uc-source",
+      "introCard": "uc-intro"
+    },
+    "settingKeys": [
+      "formats",
+      "reviewBeforeRender",
+      "planTier",
+      "instructions",
+      "styleGuide"
+    ],
+    "reviewable": true,
+    "resultKind": "formats",
+    "triesEvery": [
+      "uc-format-9x16",
+      "uc-format-1x1",
+      "uc-format-4x5",
+      "uc-format-16x9"
+    ]
+  },
+  "graphs": [
+    {
+      "name": "defaults",
+      "raw": {},
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "episode-trailer",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Trailer Plan",
+              "mode": "trailer",
+              "planTier": "standard",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Apply Cut",
+              "output": "video",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          },
+          {
+            "id": "uc-format-9x16",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Story / Reel (9:16)",
+              "platform": "instagram",
+              "contentType": "story-reel",
+              "specKey": "instagram:story-reel",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-1x1",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Square Feed (1:1)",
+              "platform": "instagram",
+              "contentType": "feed-square",
+              "specKey": "instagram:feed-square",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-4x5",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 440
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Portrait Feed (4:5)",
+              "platform": "instagram",
+              "contentType": "feed-portrait",
+              "specKey": "instagram:feed-portrait",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-9x16-media",
+            "source": "uc-render",
+            "target": "uc-format-9x16",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-1x1-media",
+            "source": "uc-render",
+            "target": "uc-format-1x1",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-4x5-media",
+            "source": "uc-render",
+            "target": "uc-format-4x5",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          }
+        ],
+        "outputMap": {
+          "kind": "formats",
+          "formats": [
+            {
+              "format": "9:16",
+              "ref": {
+                "nodeId": "uc-format-9x16",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "1:1",
+              "ref": {
+                "nodeId": "uc-format-1x1",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "4:5",
+              "ref": {
+                "nodeId": "uc-format-4x5",
+                "handle": "media"
+              }
+            }
+          ],
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "formats": [
+            "9:16",
+            "1:1",
+            "4:5"
+          ],
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "df252d230c1eef29"
+      }
+    },
+    {
+      "name": "all four formats, an 8 s intro card",
+      "raw": {
+        "formats": [
+          "9:16",
+          "1:1",
+          "4:5",
+          "16:9"
+        ]
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        },
+        "introCard": {
+          "url": "https://r2/intro.mp4",
+          "durationSec": 8
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "episode-trailer",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Trailer Plan",
+              "mode": "trailer",
+              "planTier": "standard",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Apply Cut",
+              "output": "video",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          },
+          {
+            "id": "uc-intro",
+            "type": "upload-video",
+            "position": {
+              "x": 960,
+              "y": 660
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Intro card",
+              "assetId": "",
+              "url": "https://r2/intro.mp4",
+              "metadata": {
+                "durationSeconds": 8
+              }
+            }
+          },
+          {
+            "id": "uc-combine",
+            "type": "combine-videos",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Add Intro Card",
+              "transition": "cut",
+              "transitionDuration": 0.5,
+              "audioMode": "crossfade",
+              "audioCrossfadeDuration": 0.5,
+              "trimEndFrames": 0,
+              "trimStartFrames": 0,
+              "smartCutFramesPrev": 8,
+              "smartCutFramesNext": 8,
+              "clipOrder": [
+                "uc-intro",
+                "uc-render"
+              ]
+            }
+          },
+          {
+            "id": "uc-format-9x16",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Story / Reel (9:16)",
+              "platform": "instagram",
+              "contentType": "story-reel",
+              "specKey": "instagram:story-reel",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-1x1",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Square Feed (1:1)",
+              "platform": "instagram",
+              "contentType": "feed-square",
+              "specKey": "instagram:feed-square",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-4x5",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 440
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Portrait Feed (4:5)",
+              "platform": "instagram",
+              "contentType": "feed-portrait",
+              "specKey": "instagram:feed-portrait",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-16x9",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 660
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Landscape (16:9)",
+              "platform": "x",
+              "contentType": "x-video",
+              "specKey": "x:x-video",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-intro-video-uc-combine-in",
+            "source": "uc-intro",
+            "target": "uc-combine",
+            "sourceHandle": "video",
+            "targetHandle": "in"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-combine-in",
+            "source": "uc-render",
+            "target": "uc-combine",
+            "sourceHandle": "media",
+            "targetHandle": "in"
+          },
+          {
+            "id": "uc-e-uc-combine-video-uc-format-9x16-media",
+            "source": "uc-combine",
+            "target": "uc-format-9x16",
+            "sourceHandle": "video",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-combine-video-uc-format-1x1-media",
+            "source": "uc-combine",
+            "target": "uc-format-1x1",
+            "sourceHandle": "video",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-combine-video-uc-format-4x5-media",
+            "source": "uc-combine",
+            "target": "uc-format-4x5",
+            "sourceHandle": "video",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-combine-video-uc-format-16x9-media",
+            "source": "uc-combine",
+            "target": "uc-format-16x9",
+            "sourceHandle": "video",
+            "targetHandle": "media"
+          }
+        ],
+        "outputMap": {
+          "kind": "formats",
+          "formats": [
+            {
+              "format": "9:16",
+              "ref": {
+                "nodeId": "uc-format-9x16",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "1:1",
+              "ref": {
+                "nodeId": "uc-format-1x1",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "4:5",
+              "ref": {
+                "nodeId": "uc-format-4x5",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "16:9",
+              "ref": {
+                "nodeId": "uc-format-16x9",
+                "handle": "media"
+              }
+            }
+          ],
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "formats": [
+            "9:16",
+            "1:1",
+            "4:5",
+            "16:9"
+          ],
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "8612ebb67036f0a8"
+      }
+    },
+    {
+      "name": "review on",
+      "raw": {
+        "reviewBeforeRender": true
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "episode-trailer",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Trailer Plan",
+              "mode": "trailer",
+              "planTier": "standard",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Apply Cut",
+              "output": "video",
+              "quality": "proxy",
+              "crossfadeMs": 0
+            }
+          },
+          {
+            "id": "uc-format-9x16",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Story / Reel (9:16)",
+              "platform": "instagram",
+              "contentType": "story-reel",
+              "specKey": "instagram:story-reel",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-1x1",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Square Feed (1:1)",
+              "platform": "instagram",
+              "contentType": "feed-square",
+              "specKey": "instagram:feed-square",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-4x5",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 440
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Portrait Feed (4:5)",
+              "platform": "instagram",
+              "contentType": "feed-portrait",
+              "specKey": "instagram:feed-portrait",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-9x16-media",
+            "source": "uc-render",
+            "target": "uc-format-9x16",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-1x1-media",
+            "source": "uc-render",
+            "target": "uc-format-1x1",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-4x5-media",
+            "source": "uc-render",
+            "target": "uc-format-4x5",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          }
+        ],
+        "outputMap": {
+          "kind": "formats",
+          "formats": [
+            {
+              "format": "9:16",
+              "ref": {
+                "nodeId": "uc-format-9x16",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "1:1",
+              "ref": {
+                "nodeId": "uc-format-1x1",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "4:5",
+              "ref": {
+                "nodeId": "uc-format-4x5",
+                "handle": "media"
+              }
+            }
+          ],
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "formats": [
+            "9:16",
+            "1:1",
+            "4:5"
+          ],
+          "reviewBeforeRender": true,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "e33497ffee699815"
+      }
+    },
+    {
+      "name": "plan tier, instructions and style guide set",
+      "raw": {
+        "planTier": "premium",
+        "instructions": "Open on the laugh.",
+        "styleGuide": "Keep the guest's punchlines; drop the ad reads."
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "episode-trailer",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Trailer Plan",
+              "mode": "trailer",
+              "planTier": "premium",
+              "instructions": "Open on the laugh.",
+              "styleGuide": "Keep the guest's punchlines; drop the ad reads.",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Apply Cut",
+              "output": "video",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          },
+          {
+            "id": "uc-format-9x16",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Story / Reel (9:16)",
+              "platform": "instagram",
+              "contentType": "story-reel",
+              "specKey": "instagram:story-reel",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-1x1",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Square Feed (1:1)",
+              "platform": "instagram",
+              "contentType": "feed-square",
+              "specKey": "instagram:feed-square",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          },
+          {
+            "id": "uc-format-4x5",
+            "type": "social-media-format",
+            "position": {
+              "x": 1600,
+              "y": 440
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Portrait Feed (4:5)",
+              "platform": "instagram",
+              "contentType": "feed-portrait",
+              "specKey": "instagram:feed-portrait",
+              "method": "pad",
+              "padColor": "#000000",
+              "formattedText": ""
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-9x16-media",
+            "source": "uc-render",
+            "target": "uc-format-9x16",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-1x1-media",
+            "source": "uc-render",
+            "target": "uc-format-1x1",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-format-4x5-media",
+            "source": "uc-render",
+            "target": "uc-format-4x5",
+            "sourceHandle": "media",
+            "targetHandle": "media"
+          }
+        ],
+        "outputMap": {
+          "kind": "formats",
+          "formats": [
+            {
+              "format": "9:16",
+              "ref": {
+                "nodeId": "uc-format-9x16",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "1:1",
+              "ref": {
+                "nodeId": "uc-format-1x1",
+                "handle": "media"
+              }
+            },
+            {
+              "format": "4:5",
+              "ref": {
+                "nodeId": "uc-format-4x5",
+                "handle": "media"
+              }
+            }
+          ],
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "formats": [
+            "9:16",
+            "1:1",
+            "4:5"
+          ],
+          "reviewBeforeRender": false,
+          "planTier": "premium",
+          "instructions": "Open on the laugh.",
+          "styleGuide": "Keep the guest's punchlines; drop the ad reads."
+        },
+        "hash": "ea7a708f6b27ec5d"
+      }
+    }
+  ],
+  "lengths": [
+    {
+      "name": "no card",
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        }
+      ],
+      "length": {
+        "fixedSec": 40,
+        "perEpisodeSec": 0
+      }
+    },
+    {
+      "name": "a card of fixed 10 s",
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        },
+        {
+          "sourceId": "card",
+          "handle": "introCard",
+          "kind": "video",
+          "length": {
+            "fixedSec": 10,
+            "perEpisodeSec": 0
+          }
+        }
+      ],
+      "length": {
+        "fixedSec": 50,
+        "perEpisodeSec": 0
+      }
+    },
+    {
+      "name": "a card per episode",
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        },
+        {
+          "sourceId": "card",
+          "handle": "introCard",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        }
+      ],
+      "length": {
+        "fixedSec": 40,
+        "perEpisodeSec": 1
+      }
+    },
+    {
+      "name": "a card of unknown length",
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        },
+        {
+          "sourceId": "card",
+          "handle": "introCard",
+          "kind": "video",
+          "length": "unknown"
+        }
+      ],
+      "length": "unknown"
+    }
+  ],
+  "money": {
+    "staticFee": 10,
+    "reservedCreditId": "use-case-fee:episode-trailer",
+    "creditResolver": {
+      "defaults": "use-case-fee:episode-trailer",
+      "tuned": "use-case-fee:episode-trailer"
+    }
+  },
+  "membership": {
+    "runResultTypeKeys": [
+      "errorCode",
+      "failedFormats"
+    ],
+    "fanOutEachHandles": {
+      "each": [
+        "media"
+      ],
+      "primary": "media"
+    },
+    "reviewHolding": true,
+    "videoProducer": true,
+    "dynamicProducer": false,
+    "declaredJsonOutput": "edl",
+    "introCardIsNonPromptLane": true,
+    "textFeedsPrompt": {
+      "media": true,
+      "introCard": false
+    },
+    "outputType": "video",
+    "nodaroExclusive": true,
+    "fanOutRefusal": {
+      "code": "use_case_list_driven",
+      "message": "Trailer takes one recording. Use a separate workflow run for each recording."
+    },
+    "useCaseTypesPredecessor": "episode-chapters"
+  },
+  "mcpHandles": {
+    "inputs": [
+      "media",
+      "introCard"
+    ],
+    "outputs": [
+      "media",
+      "json"
+    ]
+  }
+}

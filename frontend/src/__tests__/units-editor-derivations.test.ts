@@ -103,9 +103,14 @@ describe("the derived editor registries carry a unit from its manifest", () => {
   })
 
   it("the tab superset loads with a unit on picker.alsoOnTabs and lists it in family order", () => {
-    expect(NODE_FAMILIES.find((f) => f.id === "video-podcast")?.types).toEqual(["tighten-episode", "episode-chapters", "fixture-case", "fixture-notes"])
-    // Units naming the same picker.after keep type order (Chapters, a unit, before fixture-notes),
-    // and a unit may follow a unit (fixture-case after Chapters). The superset lists them in family order.
+    // The family's real members (read off the tree, so a later podcast unit needs no edit here) come
+    // first, in their own order, and the fixtures after them: units naming the same picker.after keep
+    // type order (Chapters, a unit, before fixture-notes), and a unit may follow a unit (fixture-case
+    // after Chapters, behind the real units that also follow it). The superset lists them in family order.
+    const types: readonly string[] = NODE_FAMILIES.find((f) => f.id === "video-podcast")?.types ?? []
+    const real = types.filter((t) => t !== "fixture-case" && t !== "fixture-notes")
+    expect(real.slice(0, 2)).toEqual(["tighten-episode", "episode-chapters"])
+    expect(types).toEqual([...real, "fixture-case", "fixture-notes"])
     expect(TAB_SUPERSET.audio?.["video-podcast"]).toEqual(["tighten-episode", "episode-chapters", "fixture-notes"])
     // The other rows are untouched (a type from another family keeps its slot).
     expect(TAB_SUPERSET.video?.["video-add-your-own"]).toEqual(["youtube-video", "text-prompt"])

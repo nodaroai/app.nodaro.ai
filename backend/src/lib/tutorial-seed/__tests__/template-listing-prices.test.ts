@@ -99,9 +99,10 @@ describe("built-in template listing prices", () => {
 
 // The four podcast templates (decided 2026-10-07). At the 180-minute cap a
 // per-minute listing is the figure the ceiling listing quoted before
-// (Tighten 2602, Multicam 2582), so splitting it dropped nothing; Trailer was
-// its old 882 plus its Combine Videos on the trailer render's 2 minutes rather
-// than the 8-second fallback (1102); Clip Pack its old 832 plus 4 more renders
+// (Tighten 2602, Multicam 2582), so splitting it dropped nothing; Trailer is
+// its plan, its render and its Combine Videos at 40 seconds, the longest trailer
+// the plan cuts (decided 2026-10-18; 1102 at the 2-minute headroom before): 932;
+// Clip Pack its old 832 plus 4 more renders
 // of 2 minutes and 4 more caption runs (1112).
 //
 // Each now renders a Preview first (decided 2026-10-08), so its listing is in
@@ -136,7 +137,7 @@ describe("the podcast templates per minute", () => {
   it.each([
     ["podcast-tighten-episode.json", 2602, 180, ["tighten-captions"]],
     ["podcast-multicam-cut.json", 2582, 180, ["multicam-switch"]],
-    ["podcast-trailer-formats.json", 1102, 2, ["trailer-combine", "trailer-format-story", "trailer-format-square", "trailer-format-portrait"]],
+    ["podcast-trailer-formats.json", 932, 1, ["trailer-combine", "trailer-format-story", "trailer-format-square", "trailer-format-portrait"]],
     ["podcast-clip-pack.json", 1112, 5 * 2, ["clips-captions"]],
   ] as const)("%s: its old price with the render at Preview (%i before), plus its Render final", (file, before, minutes, after) => {
     const { preview, final } = parts(file)
@@ -151,6 +152,6 @@ describe("the podcast templates per minute", () => {
       multicam: atCap("podcast-multicam-cut.json"),
       trailer: atCap("podcast-trailer-formats.json"),
       clipPack: atCap("podcast-clip-pack.json"),
-    }).toEqual({ tighten: 2832, multicam: 2772, trailer: 1424, clipPack: 1372 })
+    }).toEqual({ tighten: 2832, multicam: 2772, trailer: 1093, clipPack: 1372 })
   })
 })

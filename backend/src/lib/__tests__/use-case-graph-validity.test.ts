@@ -19,6 +19,7 @@ import {
   EXTRA_NODE_SETTINGS,
   NODE_DATA_FIELDS,
   TIGHTEN_EPISODE_DEFAULTS,
+  TRAILER_FORMATS,
   UNIVERSAL_NODE_SETTINGS,
   USE_CASE_NODE_TYPES,
   buildTightenEpisodeGraph,
@@ -79,6 +80,22 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
                 sources: { media: { url: "https://r2/ep", kind, ...(durationSec ? { durationSec } : {}) } },
               }
             }
+  },
+  // Video only (an audio-only recording is refused before anything is built).
+  "episode-trailer": function* () {
+    for (const formats of [["9:16"], ["9:16", "1:1", "4:5"], [...TRAILER_FORMATS]])
+      for (const reviewBeforeRender of [false, true])
+        for (const introCard of [undefined, { url: "https://r2/card.mp4" }, { url: "https://r2/card.mp4", durationSec: 6 }])
+          for (const durationSec of [undefined, 3600]) {
+            yield {
+              raw: { formats, reviewBeforeRender },
+              kind: "video",
+              sources: {
+                media: { url: "https://r2/ep", kind: "video", ...(durationSec ? { durationSec } : {}) },
+                ...(introCard ? { introCard } : {}),
+              },
+            }
+          }
   },
 }
 

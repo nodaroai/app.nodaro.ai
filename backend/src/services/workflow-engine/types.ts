@@ -134,6 +134,10 @@ export interface NodeOutput {
   useCaseSettings?: Readonly<Record<string, unknown>>
   /** A use-case node's refused Render final: the final already under way or made, which it names. */
   useCaseFinalJobId?: string
+  /** A use-case node whose result is a list (Trailer): each delivery's file and its format, in delivery order — what the editor's per-row chips read. */
+  formats?: ReadonlyArray<{ readonly format: string; readonly url: string }>
+  /** Trailer: the formats whose render failed (the others were delivered). */
+  failedFormats?: readonly string[]
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -747,6 +751,12 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
+  /** The nodes that try every one of their kind: a stage whose nodes are all
+   *  named here runs every one, whichever fails, each checking for a Stop
+   *  before it starts (a Trailer's formats, `usecaseTriesEvery`). Absent, or
+   *  a stage with any node not named: the default — the first failure stops
+   *  the nodes not started yet. */
+  triesEvery?: ReadonlySet<string>
   /** A continued run (`continueFromExecutionId`): the node states of the run it
    *  continues. A use-case node that failed there continues its own inner run
    *  rather than starting a new one (use-case-node.ts). */

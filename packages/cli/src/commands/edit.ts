@@ -15,9 +15,12 @@ import {
   type SilenceRanges,
   type AudioSyncSource,
   type CameraSwitchInput,
+  TRAILER_FORMATS,
   USE_CASE_NODE_TYPES,
   type EpisodeChaptersInput,
+  type EpisodeTrailerInput,
   type TightenEpisodeInput,
+  type TrailerFormat,
   type UseCaseNodeType,
 } from "@nodaro/sdk/edit"
 import { ContinuationRefusedError, NodaroError } from "@nodaro/sdk/errors"
@@ -383,10 +386,87 @@ export function editCommand(): Command {
       },
     )
 
+  // ── episode-trailer (podcast use-case node) ─────────────────────────────
+  cmd
+    .command("episode-trailer")
+    .description("cut a 20–40 second trailer of a recording and deliver it in each chosen social format, in one step")
+    .requiredOption("--media <url>", "the recording (a video URL, up to 3 hours)")
+    .option("--intro-card <url>", "an optional short video (15 s at most) played before the trailer")
+    .option("--formats <list>", `comma-separated, at least one: ${TRAILER_FORMATS.join(",")} (default 9:16,1:1,4:5)`)
+    .option("--review", "stop at a preview to review (render every format with `nodaro edit continue-use-case <jobId> --mode render-final`)")
+    .option("--plan-tier <tier>", EDIT_PLAN_TIERS.join(" | "))
+    .option("--instructions <text>", "instructions for the trailer")
+    .option("--style-guide <text>", "a style guide for the plan")
+    .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--watch", "poll the job until it finishes, then print each format's URL")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts & {
+            media: string
+            introCard?: string
+            formats?: string
+            review?: boolean
+            planTier?: string
+            instructions?: string
+            styleGuide?: string
+            idempotencyKey?: string
+          },
+      ) => {
+        const formats = opts.formats?.split(",").map((f) => f.trim()).filter((f) => f.length > 0)
+        if (formats !== undefined && (formats.length === 0 || formats.some((f) => !(TRAILER_FORMATS as readonly string[]).includes(f)))) {
+          warn(`--formats must be one or more of ${TRAILER_FORMATS.join(", ")}, comma-separated (got "${opts.formats}")`)
+          process.exit(1)
+        }
+        if (opts.planTier !== undefined && !(EDIT_PLAN_TIERS as readonly string[]).includes(opts.planTier)) {
+          warn(`--plan-tier must be ${EDIT_PLAN_TIERS.join(", ")} (got "${opts.planTier}")`)
+          process.exit(1)
+        }
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.edit.episodeTrailer(
+            {
+              mediaUrl: opts.media,
+              ...(opts.introCard ? { introCardUrl: opts.introCard } : {}),
+              ...(formats ? { formats: formats as TrailerFormat[] } : {}),
+              ...(opts.review ? { reviewBeforeRender: true } : {}),
+              ...(opts.planTier ? { planTier: opts.planTier as NonNullable<EpisodeTrailerInput["planTier"]> } : {}),
+              ...(opts.instructions ? { instructions: opts.instructions } : {}),
+              ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
+            },
+            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
+          )
+          const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: "episode-trailer",
+          })
+          if (opts.json) return
+          // The trailers, one line per format, then the formats that could not be rendered (the
+          // node's wording); --json already printed the whole job.
+          const out = done?.data.output_data as { formats?: unknown; failedFormats?: unknown } | null | undefined
+          if (done?.data.status === "completed" && Array.isArray(out?.formats)) {
+            for (const f of out.formats as { format?: unknown; url?: unknown }[]) {
+              if (typeof f?.format === "string" && typeof f.url === "string") console.log(`${f.format}  ${f.url}`)
+            }
+            const failed = Array.isArray(out.failedFormats) ? out.failedFormats.filter((f): f is string => typeof f === "string") : []
+            if (failed.length > 0) console.log(`Could not render: ${failed.join(", ")}`)
+          }
+          if (opts.review) console.log(pc.dim(`  render every format after your review: nodaro edit continue-use-case ${result.jobId} --mode render-final`))
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
   // ── continue-use-case (podcast use-case runs) ───────────────────────────
   cmd
     .command("continue-use-case <jobId>")
-    .description("continue a Tighten Episode or Chapters run as a new job: from where it failed, or its Render final after a review")
+    .description("continue a Tighten Episode, Chapters or Trailer run as a new job: from where it failed, or its Render final after a review")
     .requiredOption("--mode <mode>", "from-failed | render-final")
     .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
     .option(

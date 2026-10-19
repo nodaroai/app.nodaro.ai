@@ -49,6 +49,7 @@ export {
   rendersOfPlan,
   usecaseFinalRunSet,
   usecasePreviewTarget,
+  usecaseRunPlan,
   usecaseRenderFinalOverrides,
   type RenderFinalGraphEdge,
   type RenderFinalGraphNode,
@@ -68,6 +69,7 @@ export {
   persistedEdlPlan,
   inlineEdlMinutes,
   renderLengthCeilingMinutes,
+  renderLengthSec,
   resolveApplyEdlEstimateLength,
   resolveApplyEdlEstimateMinutes,
   resolveEditPlanEpisodeSec,
@@ -303,6 +305,7 @@ export {
 } from "./ugc-estimate-input"
 export { ugcClipTicketQuote, ugcReusedClips, type UgcClipTicketQuote, type UgcReuseClaim } from "./ugc-clip-reuse"
 export { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS, isRunResultKey } from "./run-result-keys"
+export { USE_CASE_RESULT_KEYS } from "./use-case-result-keys"
 export { ugcFinishNodeIds } from "./ugc-finish-nodes"
 export {
   UGC_COMPOSED_MAX_PARTS,
@@ -514,8 +517,10 @@ export {
   usecaseDescriptor,
   usecaseListsItsResult,
   usecaseResultIsText,
+  usecaseTriesEvery,
   type UseCaseDescriptor,
   type UseCaseInputHandle,
+  type UseCaseOutputLength,
   type UseCaseSettings,
   type UseCaseSources,
 } from "./use-case-registry"
@@ -530,10 +535,14 @@ export {
   type PreviewRefusalFamily,
 } from "./preview-hold-kind"
 export {
+  USE_CASE_LIST_DRIVEN,
   USE_CASE_REVIEW_LIST_DRIVEN,
   USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
+  usecaseFanOutRefusalOf,
   usecaseFanOutRefused,
+  usecaseListDrivenMessage,
 } from "./use-case-fan-out"
+export { usecaseCancelledMessage } from "./use-case-messages"
 export {
   expandUseCaseNodes,
   runsUseCaseRenderFinal,
@@ -571,6 +580,19 @@ export {
   type EpisodeChaptersSettings,
   type EpisodeChaptersSources,
 } from "./episode-chapters-graph"
+export {
+  EPISODE_TRAILER_DEFAULTS,
+  TRAILER_FORMATS,
+  TRAILER_FORMAT_SPECS,
+  TRAILER_INTRO_CARD_MAX_SEC,
+  TRAILER_NODE_IDS,
+  buildEpisodeTrailerGraph,
+  resolveEpisodeTrailerSettings,
+  type EpisodeTrailerGraph,
+  type EpisodeTrailerSettings,
+  type EpisodeTrailerSources,
+  type TrailerFormat,
+} from "./episode-trailer-graph"
 export { chapterRowsOf, chapterTimestamp, formatChapterListText, type ChapterRow } from "./chapter-list-text"
 export { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
 export {

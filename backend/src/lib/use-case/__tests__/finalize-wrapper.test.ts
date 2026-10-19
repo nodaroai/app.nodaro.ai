@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   EPISODE_CHAPTERS_DEFAULTS,
+  EPISODE_TRAILER_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
   buildEpisodeChaptersGraph,
+  buildEpisodeTrailerGraph,
   buildTightenEpisodeGraph,
   toStoredInlineGraph,
   type TightenEpisodeSettings,
@@ -13,6 +15,10 @@ const graph = toStoredInlineGraph(buildTightenEpisodeGraph(settings, { media: { 
 const chaptersStored = toStoredInlineGraph(
   buildEpisodeChaptersGraph(EPISODE_CHAPTERS_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }),
   EPISODE_CHAPTERS_DEFAULTS,
+)
+const trailerStored = toStoredInlineGraph(
+  buildEpisodeTrailerGraph(EPISODE_TRAILER_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }),
+  EPISODE_TRAILER_DEFAULTS,
 )
 const m = vi.hoisted(() => ({
   exec: null as Record<string, unknown> | null,
@@ -195,6 +201,98 @@ describe("finalizeUseCaseWrapper", () => {
     expect(m.refund.mock.calls).toEqual([["job-w"]])
     expect(m.completed).not.toHaveBeenCalled()
     expect(m.commit).not.toHaveBeenCalled()
+  })
+  it("a completed Trailer run completes its wrapper with its formats and commits the fee", async () => {
+    m.exec = exec({
+      inlineGraph: trailerStored,
+      nodeStates: {
+        "uc-render": { status: "completed", output: { videoUrl: "https://r2/t.mp4", quality: "final" } },
+        "uc-format-9x16": { status: "completed", output: { videoUrl: "https://r2/t-916.mp4" } },
+        "uc-format-1x1": { status: "completed", output: { videoUrl: "https://r2/t-11.mp4" } },
+        "uc-format-4x5": { status: "completed", output: { videoUrl: "https://r2/t-45.mp4" } },
+      },
+    })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+    expect(m.completed.mock.calls[0]![1]).toMatchObject({
+      output_data: {
+        videoUrl: "https://r2/t-916.mp4",
+        formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }, { format: "4:5", url: "https://r2/t-45.mp4" }],
+      },
+    })
+    expect(m.commit.mock.calls).toEqual([["job-w"]])
+    expect(m.refund).not.toHaveBeenCalled()
+  })
+  it("a completed Trailer run that delivered no format fails and refunds the fee", async () => {
+    m.exec = exec({ inlineGraph: trailerStored, nodeStates: { "uc-render": { status: "completed", output: { videoUrl: "https://r2/t.mp4", quality: "final" } } } })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.failed.mock.calls[0]![1]).toMatchObject({ error_message: "The run finished without a result" })
+    expect(m.refund.mock.calls).toEqual([["job-w"]])
+    expect(m.completed).not.toHaveBeenCalled()
+    expect(m.commit).not.toHaveBeenCalled()
+  })
+  it("one of three formats failed (the run failed on it): the wrapper completes with the two that rendered, names the failed one, keeps the fee", async () => {
+    m.exec = exec({
+      status: "failed",
+      errorMessage: "Node execution failed: uc-format-1x1: render failed",
+      totalCreditsUsed: 500,
+      inlineGraph: trailerStored,
+      nodeStates: {
+        "uc-render": { status: "completed", output: { videoUrl: "https://r2/t.mp4", quality: "final" } },
+        "uc-format-9x16": { status: "completed", output: { videoUrl: "https://r2/t-916.mp4" } },
+        "uc-format-1x1": { status: "failed", error: "render failed" },
+        "uc-format-4x5": { status: "completed", output: { videoUrl: "https://r2/t-45.mp4" } },
+      },
+    })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+    expect(m.completed.mock.calls[0]![1]).toMatchObject({
+      output_data: {
+        videoUrl: "https://r2/t-916.mp4",
+        formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "4:5", url: "https://r2/t-45.mp4" }],
+        failedFormats: ["1:1"],
+      },
+      // The failed format's own job refunded itself: it is not in the run's credits.
+      credits_actual: 500 + 10,
+    })
+    // A completed run names no failed step: `failedStep` is a failed run's (failedFormats names the format).
+    const kept = (m.completed.mock.calls[0]![1] as { output_data: Record<string, unknown> }).output_data
+    expect(kept).not.toHaveProperty("failedStep")
+    expect(kept).not.toHaveProperty("failedNodeId")
+    expect(m.commit.mock.calls).toEqual([["job-w"]])
+    expect(m.refund).not.toHaveBeenCalled()
+    expect(m.failed).not.toHaveBeenCalled()
+  })
+  it("every format failed: the run fails and the fee is refunded", async () => {
+    m.exec = exec({
+      status: "failed",
+      errorMessage: "Node execution failed: uc-format-9x16: render failed",
+      inlineGraph: trailerStored,
+      nodeStates: {
+        "uc-render": { status: "completed", output: { videoUrl: "https://r2/t.mp4", quality: "final" } },
+        "uc-format-9x16": { status: "failed", error: "render failed" },
+        "uc-format-1x1": { status: "failed", error: "render failed" },
+        "uc-format-4x5": { status: "failed", error: "render failed" },
+      },
+    })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.failed.mock.calls[0]![1]).toMatchObject({ extra: { output_data: { formats: [], failedFormats: ["9:16", "1:1", "4:5"] } } })
+    expect(m.refund.mock.calls).toEqual([["job-w"]])
+    expect(m.completed).not.toHaveBeenCalled()
+    expect(m.commit).not.toHaveBeenCalled()
+  })
+  it("a cancelled run keeps nothing, even with formats rendered", async () => {
+    m.exec = exec({
+      status: "cancelled",
+      inlineGraph: trailerStored,
+      nodeStates: { "uc-format-9x16": { status: "completed", output: { videoUrl: "https://r2/t-916.mp4" } } },
+    })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.completed).not.toHaveBeenCalled()
+    expect(m.refund.mock.calls).toEqual([["job-w"]])
+  })
+  it("a failed Tighten run is still a failure (only a list keeps what it delivered)", async () => {
+    m.exec = exec({ status: "failed", errorMessage: "Node execution failed: uc-captions: boom", nodeStates: { "uc-render": { status: "completed", output: { videoUrl: "https://r2/cut.mp4", quality: "final" } }, "uc-captions": { status: "failed", error: "boom" } } })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.completed).not.toHaveBeenCalled()
   })
   it("a run whose snapshot was erased still settles its wrapper (failed, refunded) — never left processing", async () => {
     m.exec = exec({ inlineGraph: null })

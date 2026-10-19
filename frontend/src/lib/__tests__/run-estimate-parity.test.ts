@@ -237,17 +237,17 @@ describe("a step priced by the length it is given, on a render's output", () => 
   const sfxRow = (sec: number): number => fixture.prices[videoSfxCreditId(sec)]!
   const sfxOn = (nodes: WorkflowNode[], edges: WorkflowEdge[]): number => stepCredits(nodes, edges, "sfx")
   const sfx = node("sfx", "video-sfx")
-  it("a Video SFX on a trailer render is the render's 2-minute row", () => {
+  it("a Video SFX on a trailer render is the row of its 40 seconds", () => {
     const { nodes, edges } = render("trailer")
-    expect(sfxOn([...nodes, sfx], [...edges, wire("render", "sfx", "video")])).toBe(sfxRow(120))
+    expect(sfxOn([...nodes, sfx], [...edges, wire("render", "sfx", "video")])).toBe(sfxRow(40))
   })
   it("a Video SFX on a tighten render is the 300-second row, the most a run accepts", () => {
     const { nodes, edges } = render("tighten")
     expect(sfxOn([...nodes, sfx], [...edges, wire("render", "sfx", "video")])).toBe(sfxRow(300))
   })
-  it("a chain: a Loop of 3 copies of a trailer render is 360 seconds, capped at the 300-second row", () => {
+  it("a chain: a Loop of 8 copies of a trailer render is 320 seconds, capped at the 300-second row", () => {
     const { nodes, edges } = render("trailer")
-    const loop = node("l", "loop-video", { repeatCount: 3 })
+    const loop = node("l", "loop-video", { repeatCount: 8 })
     expect(sfxOn([...nodes, loop, sfx], [...edges, wire("render", "l"), wire("l", "sfx", "video")])).toBe(sfxRow(300))
   })
   it("a chain: a Trim to the first 20 seconds hands the Video SFX 20 seconds", () => {
@@ -257,7 +257,7 @@ describe("a step priced by the length it is given, on a render's output", () => 
   })
   it("its prompt wired before the video does not move the video wire's length", () => {
     const { nodes, edges } = render("trailer")
-    expect(sfxOn([...nodes, sfx, node("txt", "text-prompt")], [...edges, wire("txt", "sfx", "prompt"), wire("render", "sfx", "video")])).toBe(sfxRow(120))
+    expect(sfxOn([...nodes, sfx, node("txt", "text-prompt")], [...edges, wire("txt", "sfx", "prompt"), wire("render", "sfx", "video")])).toBe(sfxRow(40))
   })
   it("a video whose length it cannot follow is quoted at the 300-second row, the most its run can be charged", () => {
     const { nodes, edges } = render("trailer")
@@ -267,7 +267,7 @@ describe("a step priced by the length it is given, on a render's output", () => 
     const { nodes, edges } = render("trailer")
     const all = [...nodes, sfx]
     const ids = runModelIds(all.filter(isExecutableNode), all, [...edges, wire("render", "sfx", "video")])
-    expect(ids).toContain(videoSfxCreditId(120))
+    expect(ids).toContain(videoSfxCreditId(40))
   })
 
 })

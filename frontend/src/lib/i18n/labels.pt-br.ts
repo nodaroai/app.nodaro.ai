@@ -407,6 +407,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Record": "Registro",
   "Records": "Registros",
   "Recording": "Gravação",
+  "Intro card": "Cartão de abertura",
   "Item": "Item",
   "Reference": "Referência",
   "Rejected": "Rejeitados",

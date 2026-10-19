@@ -543,6 +543,17 @@ const chapters = await client.edit.episodeChapters({ mediaUrl: masterUrl })
 const listed = await client.jobs.getStatus(chapters.jobId) // output_data.text: "0:00 Intro\n4:05 …"; output_data.json: [{ startMs, title }]
 ```
 
+A trailer for social media is one call as well: `client.edit.episodeTrailer`
+cuts a 20–40 second trailer from the recording and pads it to each format you
+choose (default 9:16, 1:1 and 4:5; also 16:9), optionally after an intro card.
+Its fee is 11 credits<!-- credits: use-case-fee:episode-trailer --> per run, on top of its steps (quote it with
+`estimateEpisodeTrailer`). Not yet enabled on nodaro.ai.
+
+```ts
+const trailer = await client.edit.episodeTrailer({ mediaUrl: masterUrl, formats: ["9:16", "1:1"] })
+const cut = await client.jobs.getStatus(trailer.jobId) // output_data.formats: [{ format: "9:16", url }, { format: "1:1", url }]
+```
+
 ### Improve a prompt with the Prompt Wizard
 
 `client.promptHelper` is AI assistance for writing prompts for generation

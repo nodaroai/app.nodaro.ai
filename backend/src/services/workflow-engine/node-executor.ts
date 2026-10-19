@@ -2386,7 +2386,7 @@ function completedJobResult(
   creditsUsed: number | undefined,
 ): ExecuteNodeResult {
   const outputData = (jobRecord.output_data as Record<string, unknown>) ?? {}
-  const output = buildNodeOutputFromJobData(outputData, nodeType)
+  const output = buildNodeOutputFromJobData(outputData, nodeType, jobId)
   const hasOutput = Object.values(output).some((v) => v != null)
   if (!hasOutput) {
     throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)

@@ -586,3 +586,67 @@ describe("edit.episodeChapters / estimateEpisodeChapters", () => {
     expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/episode-chapters/continue")
   })
 })
+
+describe("edit.episodeTrailer / estimateEpisodeTrailer", () => {
+  it("episodeTrailer posts the recording and the formats", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-t", executionId: "exec-t" }))
+    const out = await client(fetchMock).edit.episodeTrailer({ mediaUrl: "https://r2/ep.mp4", formats: ["9:16"] })
+    expect(out).toMatchObject({ jobId: "job-t", executionId: "exec-t" })
+    const [url, init] = fetchMock.mock.calls[0]! as [string, { method: string; body: string; headers: Record<string, string> }]
+    expect(url).toBe("https://api.example.com/v1/episode-trailer")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], formats: ["9:16"] })
+    expect(init.headers["Idempotency-Key"]).toBeUndefined()
+  })
+
+  it("episodeTrailer sends the intro card, the review, the plan settings and an Idempotency-Key when asked", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-t" }))
+    await client(fetchMock).edit.episodeTrailer(
+      {
+        mediaUrl: "https://r2/ep.mp4",
+        introCardUrl: "https://r2/card.mp4",
+        formats: ["1:1", "16:9"],
+        reviewBeforeRender: true,
+        planTier: "premium",
+        instructions: "Open on the laugh",
+        styleGuide: "Brisk",
+      },
+      { idempotencyKey: "retry-t" },
+    )
+    const init = fetchMock.mock.calls[0]![1] as { body: string; headers: Record<string, string> }
+    expect(init.headers["Idempotency-Key"]).toBe("retry-t")
+    expect(JSON.parse(init.body)).toEqual({
+      mediaUrls: ["https://r2/ep.mp4"],
+      introCardUrl: "https://r2/card.mp4",
+      formats: ["1:1", "16:9"],
+      reviewBeforeRender: true,
+      planTier: "premium",
+      instructions: "Open on the laugh",
+      styleGuide: "Brisk",
+    })
+  })
+
+  it("an empty format list reaches the route, which refuses it", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(400, { error: { code: "validation_error", message: "Choose at least one format" } }))
+    await expect(client(fetchMock).edit.episodeTrailer({ mediaUrl: "https://r2/ep.mp4", formats: [] })).rejects.toBeInstanceOf(NodaroError)
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], formats: [] })
+  })
+
+  it("estimateEpisodeTrailer posts the same body to its estimate route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 400, stepsCredits: 389, feeCredits: 11, durationSec: 3600 } }))
+    const out = await client(fetchMock).edit.estimateEpisodeTrailer({ mediaUrl: "https://r2/ep.mp4", introCardUrl: "https://r2/card.mp4" })
+    expect(out.data.feeCredits).toBe(11)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/episode-trailer/estimate")
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.mp4" })
+  })
+
+  it("continueUseCase renders a Trailer's final on its own route, read from the job", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-t", job_type: "episode-trailer", input_data: { type: "episode-trailer", mode: "run" } } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-t2" }))
+    const out = await client(fetchMock).edit.continueUseCase({ jobId: "job-t", mode: "render-final" })
+    expect(out.jobId).toBe("job-t2")
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/episode-trailer/continue")
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ jobId: "job-t", mode: "render-final" })
+  })
+})

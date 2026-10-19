@@ -81,12 +81,11 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
   "apply-edl:proxy": 1,
-  // The flat per-run fee of the podcast use-case nodes still to come (their
-  // steps bill at their own rows): written here because their nodes are not
-  // units yet — a use-case unit's fee comes from its price.ee.ts. Pinned to
+  // The flat per-run fee of the podcast use-case node still to come (its
+  // steps bill at their own rows): written here because its node is not a
+  // unit yet — a use-case unit's fee comes from its price.ee.ts. Pinned to
   // STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
-  "use-case-fee:episode-trailer": 10,
   "use-case-fee:clip-pack": 10,
   // speaker-view: per-minute RATES, one row per quality × price tier
   // (speakerViewCreditId, decided 2026-10-10) — up to two speakers on screen

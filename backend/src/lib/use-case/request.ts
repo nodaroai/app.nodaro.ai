@@ -7,6 +7,7 @@
  */
 import { z } from "zod"
 import {
+  TRAILER_INTRO_CARD_MAX_SEC,
   usecaseDescriptor,
   type UseCaseGraph,
   type UseCaseMediaKind,
@@ -50,6 +51,9 @@ export type PreparedUseCase =
 
 const refuse = (code: string, message: string): PreparedUseCase => ({ ok: false, status: 400, code, message })
 
+/** An intro card no longer than this (a still image's frame) is not a video. */
+export const INTRO_CARD_MIN_SEC = 0.1
+
 /**
  * Whether someone can review this run's preview (decided 2026-10-13) — the
  * one place a use-case route derives it, for any type's resolved settings. A
@@ -87,16 +91,28 @@ export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): 
     const music = await probeMediaStreams(body.musicUrl).catch(() => null)
     if (!music?.hasAudio) return refuse("music_has_no_audio", "The music file could not be read as audio.")
   }
+  let introCardSec: number | undefined
   if (body.introCardUrl) {
+    // A video that plays (decided 2026-10-14: no still image). A still probes
+    // as a video stream, so its length tells it apart: none, or a frame's.
     const card = await probeMediaStreams(body.introCardUrl).catch(() => null)
-    if (!card?.hasVideo) return refuse("intro_card_unreadable", "The intro card could not be read as a video.")
+    const cardSec = card?.hasVideo ? await probeMediaDuration(body.introCardUrl).catch(() => undefined) : undefined
+    if (!card?.hasVideo || !(typeof cardSec === "number" && Number.isFinite(cardSec) && cardSec > INTRO_CARD_MIN_SEC)) {
+      return refuse("intro_card_unreadable", "The intro card could not be read as a video.")
+    }
+    // A short title card, never a second episode (decided 2026-10-18).
+    if (cardSec > TRAILER_INTRO_CARD_MAX_SEC) {
+      return refuse("intro_card_too_long", `The intro card is too long. Use a card of ${TRAILER_INTRO_CARD_MAX_SEC} seconds or less.`)
+    }
+    introCardSec = cardSec
   }
   const kind: UseCaseMediaKind = streams.hasVideo ? "video" : "audio"
   const settings = d.resolveSettings(body, kind)
   const sources: UseCaseSources = {
     media: { url: mediaUrl, kind, ...(durationSec !== undefined ? { durationSec } : {}) },
     ...(body.musicUrl ? { music: { url: body.musicUrl } } : {}),
-    ...(body.introCardUrl ? { introCard: { url: body.introCardUrl } } : {}),
+    // Its probed length rides on the built card, so a quote prices Combine Videos on it.
+    ...(body.introCardUrl ? { introCard: { url: body.introCardUrl, ...(introCardSec !== undefined ? { durationSec: introCardSec } : {}) } } : {}),
   }
   return { ok: true, settings, sources, graph: d.build(settings, sources) }
 }

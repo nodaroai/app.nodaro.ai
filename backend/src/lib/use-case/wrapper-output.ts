@@ -31,7 +31,7 @@ import {
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 import { listOutput } from "./wrapper-output-lists.js"
 
-export { usecaseNoResultMessage } from "./wrapper-output-lists.js"
+export { usecaseNoResultMessage, usecaseWrapperKeepsPartial } from "./wrapper-output-lists.js"
 
 export type { UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 

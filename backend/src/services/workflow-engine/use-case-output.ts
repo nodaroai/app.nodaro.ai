@@ -12,17 +12,28 @@
  *    executor (completed and failed) and every rebuild of a node output from a
  *    job row (`buildNodeOutputFromJobData`) share. The wrapper's `plan` is the
  *    same value as its `json` and is not copied (`NodeOutput.plan` is another
- *    node's field).
+ *    node's field). A list result (Trailer's formats) is the node's own list:
+ *    its deliveries' URLs on `listResults` (what an Each wire after the node
+ *    runs once per), each row stamped with the take's quality and its
+ *    render's bases (the same stamps the canvas's own run puts on each row);
+ *    `videoUrl` stays the first. The deliveries themselves ride on `formats`
+ *    (each file with its format, what the editor names each row by), and the
+ *    formats that could not be rendered on `failedFormats`.
  *  - `usecaseSavedNodeOutput`: the saved-data reader, read off what the node
  *    holds — the use-case branch of `extractSavedNodeOutput`, ahead of its
  *    unit branch.
  */
 import { editPlanSavedOutput } from "@nodaro/shared/edl"
+import { usecaseListsItsResult } from "@nodaro/render-rules"
 import type { NodeOutput } from "./types.js"
 
 const url = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
 
-export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>): NodeOutput {
+export function usecaseJobOutput(
+  outputData: Readonly<Record<string, unknown>>,
+  /** The wrapper job the row is: every row of a list result names it as its job (a Render final of a take needs a real run to name). */
+  jobId?: string,
+): NodeOutput {
   const videoUrl = url(outputData.videoUrl)
   const audioUrl = videoUrl ? undefined : url(outputData.audioUrl)
   // The quality is the take's: no take, no quality.
@@ -38,6 +49,17 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
     : undefined
   // Chapters: the show notes on `text`, the chapter list on `json`.
   const text = typeof outputData.text === "string" && outputData.text.length > 0 ? outputData.text : undefined
+  // A list result (Trailer's formats): the deliveries are the node's own list.
+  const delivered = Array.isArray(outputData.formats)
+    ? (outputData.formats as Array<{ url?: unknown; format?: unknown } | null>).flatMap((r) => {
+        const u = url(r?.url)
+        return u ? [{ format: typeof r?.format === "string" ? r.format : "", url: u }] : []
+      })
+    : []
+  const rows = delivered.map((r) => r.url)
+  const failedFormats = Array.isArray(outputData.failedFormats)
+    ? (outputData.failedFormats as unknown[]).filter((f): f is string => typeof f === "string" && f.length > 0)
+    : []
   return {
     ...(videoUrl ? { videoUrl } : {}),
     ...(audioUrl ? { audioUrl } : {}),
@@ -49,6 +71,11 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
     ...(useCaseSettings ? { useCaseSettings } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
     ...(text ? { text } : {}),
+    // Every row is a take of the run: its quality and its render's bases (the cut every format is made from).
+    ...(rows.length > 0
+      ? { listResults: rows, listResultStamps: rows.map(() => ({ ...(quality ? { quality } : {}), ...(planBasis ? { planBasis } : {}), ...(renderBasis ? { renderBasis } : {}), ...(jobId ? { jobId } : {}) })), formats: delivered }
+      : {}),
+    ...(failedFormats.length > 0 ? { failedFormats } : {}),
   }
 }
 
@@ -60,11 +87,14 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
  * holds none of them. The server twin of the editor's `usecaseSavedOutput`
  * (use-case-io.ts).
  */
-export function usecaseSavedNodeOutput(data: Record<string, unknown>): NodeOutput | undefined {
+export function usecaseSavedNodeOutput(data: Record<string, unknown>, type: string): NodeOutput | undefined {
   const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
   const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
   const json = editPlanSavedOutput(data)?.json
   const text = typeof data.generatedText === "string" && data.generatedText ? data.generatedText : undefined
-  const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}), ...(text ? { text } : {}) }
-  return out.videoUrl || out.audioUrl || out.json !== undefined || out.text ? out : undefined
+  // A list result (Trailer's formats): its last run's deliveries, the node's own list (as UGC Finish's).
+  const saved = usecaseListsItsResult(type) ? data.__listResults : undefined
+  const list = Array.isArray(saved) ? saved.filter((v): v is string => typeof v === "string") : undefined
+  const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}), ...(text ? { text } : {}), ...(list && list.length > 0 ? { listResults: list } : {}) }
+  return out.videoUrl || out.audioUrl || out.json !== undefined || out.text || out.listResults ? out : undefined
 }

@@ -331,7 +331,7 @@ export { USE_CASE_NODE_TYPES, type UseCaseNodeType }
 /** The route that continues a run of `type`. */
 const continuePathOf = (type: UseCaseNodeType): `/v1/${UseCaseNodeType}/continue` => `/v1/${type}/continue`
 
-/** What a use-case run (`tightenEpisode`, `episodeChapters`) and `continueUseCase` answer: the run's job to poll. */
+/** What a use-case run (`tightenEpisode`, `episodeChapters`, `episodeTrailer`) and `continueUseCase` answer: the run's job to poll. */
 export interface UseCaseJobResult extends EditJobResult {
   /** The run's execution (absent on a deduplicated retry). */
   executionId?: string
@@ -378,13 +378,40 @@ export interface EpisodeChaptersInput {
   styleGuide?: string
 }
 
+/** The formats a Trailer is delivered in, in delivery order (16:9 is a 1920×1080 landscape). */
+export const TRAILER_FORMATS = ["9:16", "1:1", "4:5", "16:9"] as const
+/** One Trailer format (see {@link TRAILER_FORMATS}). */
+export type TrailerFormat = (typeof TRAILER_FORMATS)[number]
+
+/**
+ * Input for {@link EditResource.episodeTrailer} and
+ * {@link EditResource.estimateEpisodeTrailer}: one video recording in, a
+ * 20–40 s trailer out in each chosen format. Only `mediaUrl` is required.
+ */
+export interface EpisodeTrailerInput {
+  /** The recording — a video URL, up to 3 hours (an audio-only recording is refused). */
+  mediaUrl: string
+  /** An optional intro card: a short video (15 s at most) played before the trailer. */
+  introCardUrl?: string
+  /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list is refused). */
+  formats?: TrailerFormat[]
+  /** Stop at a preview of the trailer; render every format with {@link EditResource.continueUseCase} (`mode: "render-final"`). */
+  reviewBeforeRender?: boolean
+  /** The planner's tier (default `"standard"`). */
+  planTier?: EditPlanTier
+  /** Instructions for the trailer (up to 4 000 characters). */
+  instructions?: string
+  /** A style guide for the planner (up to 4 000 characters). */
+  styleGuide?: string
+}
+
 /** Input for {@link EditResource.continueUseCase}. */
 export interface UseCaseContinueInput {
-  /** The run to continue: the job `tightenEpisode` or `episodeChapters` (or an earlier continuation) answered. */
+  /** The run to continue: the job `tightenEpisode`, `episodeChapters` or `episodeTrailer` (or an earlier continuation) answered. */
   jobId: string
   /**
    * `"from-failed"` re-runs what did not finish of a failed run;
-   * `"render-final"` renders the full-quality episode after a review-on preview
+   * `"render-final"` renders the full-quality result after a review-on preview
    * (a Chapters run has no preview: it is refused `render_final_not_preview`).
    */
   mode: "from-failed" | "render-final"
@@ -400,7 +427,7 @@ export interface UseCaseContinueInput {
   nodeType?: UseCaseNodeType
 }
 
-/** Per-call options for the use-case requests (Tighten Episode, Chapters, and their continuations). */
+/** Per-call options for the use-case requests (Tighten Episode, Chapters, Trailer, and their continuations). */
 export interface UseCaseRequestOptions {
   /**
    * Sent as the `Idempotency-Key` header. Reuse the same value when retrying
@@ -418,6 +445,19 @@ function tightenBody(input: TightenEpisodeInput): Record<string, unknown> {
 function chaptersBody(input: EpisodeChaptersInput): Record<string, unknown> {
   return {
     mediaUrls: [input.mediaUrl],
+    ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
+    ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
+    ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
+  }
+}
+
+function trailerBody(input: EpisodeTrailerInput): Record<string, unknown> {
+  return {
+    mediaUrls: [input.mediaUrl],
+    ...(input.introCardUrl !== undefined ? { introCardUrl: input.introCardUrl } : {}),
+    // An empty list is sent as is: the route refuses it (at least one format).
+    ...(input.formats !== undefined ? { formats: input.formats } : {}),
+    ...(input.reviewBeforeRender !== undefined ? { reviewBeforeRender: input.reviewBeforeRender } : {}),
     ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
     ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
     ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
@@ -448,12 +488,14 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  * - {@link episodeChapters} lists a recording's chapters (transcribe, then the
  *   plan in chapters mode) in one call; nothing renders. Like
  *   {@link tightenEpisode}, a self-hosted install needs a nodaro.ai connection.
+ * - {@link episodeTrailer} cuts a 20–40 s trailer of a recording and delivers
+ *   it in each chosen format in one call; the same connection applies.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
  *
  * Every request method except the estimates ({@link estimateTightenEpisode},
- * {@link estimateEpisodeChapters}: a quote, `{ data }`) returns
+ * {@link estimateEpisodeChapters}, {@link estimateEpisodeTrailer}: a quote, `{ data }`) returns
  * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}); poll the
  * `jobId` with `client.jobs.getStatus(jobId)`.
  */
@@ -561,6 +603,31 @@ export class EditResource {
    */
   estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEstimate }> {
     return this.client.request("POST", "/v1/episode-chapters/estimate", { body: chaptersBody(input) })
+  }
+
+  /**
+   * Trailer (`POST /v1/episode-trailer`): cut a 20–40 s trailer of a recording
+   * and deliver it in each chosen format (padded, never cropped), optionally
+   * after an intro card, in one call. The finished job's `output_data.formats`
+   * is `{ format, url }[]` in format order, the first also `output_data.videoUrl`;
+   * a format that failed is named in `output_data.failedFormats` (the run keeps
+   * the others). With `reviewBeforeRender` the run stops at a preview
+   * (`videoUrl`, no formats yet). Priced as its steps at their own rates plus
+   * the listed per-run fee; quote it first with {@link estimateEpisodeTrailer}.
+   */
+  episodeTrailer(input: EpisodeTrailerInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
+    return this.client.request("POST", "/v1/episode-trailer", { body: trailerBody(input), ...idempotencyHeaders(options) })
+  }
+
+  /**
+   * What a Trailer run is estimated at (`POST /v1/episode-trailer/estimate`):
+   * its steps at their own rates plus its per-run fee. Nothing is created or
+   * charged. The trailer is quoted at 40 seconds, the longest trailer the
+   * plan cuts; a Render final is quoted on the trailer the run cut (with the
+   * review's edits), plus the intro card.
+   */
+  estimateEpisodeTrailer(input: EpisodeTrailerInput): Promise<{ data: UseCaseEstimate }> {
+    return this.client.request("POST", "/v1/episode-trailer/estimate", { body: trailerBody(input) })
   }
 
   /**

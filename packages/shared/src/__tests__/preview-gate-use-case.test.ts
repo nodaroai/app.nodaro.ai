@@ -30,6 +30,7 @@ describe("a review-on use-case node holds what follows it until its Render final
   it("is a preview-holding type without joining the render set", () => {
     expect(REVIEW_HOLDING_USE_CASE_TYPES.has("tighten-episode")).toBe(true)
     expect(isPreviewHoldingType("tighten-episode")).toBe(true)
+    expect(isPreviewHoldingType("episode-trailer")).toBe(true)
     expect(isPreviewHoldingType("apply-edl")).toBe(true)
     expect(isPreviewHoldingType("speaker-view")).toBe(true)
     expect(isPreviewHoldingType("social-media-format")).toBe(false)
@@ -58,6 +59,18 @@ describe("a review-on use-case node holds what follows it until its Render final
     const node = t1({ reviewBeforeRender: true, useCaseContinue: { mode: "render-final", jobId: "job-1" } })
     expect(rendersAsPreview(node)).toBe(false)
     expect(previewStops([rec, node, fmt, post], edges).gatedNodeIds.size).toBe(0)
+  })
+
+  it("a review-on Trailer holds what follows it; its Render final override releases it", () => {
+    const tr = (data: Record<string, unknown>) => ({ id: "t1", type: "episode-trailer", data })
+    const held = previewStops([rec, tr({ reviewBeforeRender: true }), fmt, post], edges)
+    expect(held.previewRenderIds).toEqual(["t1"])
+    expect([...held.gatedNodeIds].sort()).toEqual(["fmt", "post"])
+    expect(previewStops([rec, tr({}), fmt, post], edges).gatedNodeIds.size).toBe(0)
+    const released = withRunOverrides([rec, tr({ reviewBeforeRender: true }), fmt, post], {
+      t1: { useCaseContinue: { mode: "render-final", jobId: "00000000-0000-4000-8000-000000000007" } },
+    })
+    expect(previewStops(released, edges).gatedNodeIds.size).toBe(0)
   })
 
   it("the continuation set as a run override releases them too", () => {

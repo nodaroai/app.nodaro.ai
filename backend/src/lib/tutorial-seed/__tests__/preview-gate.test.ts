@@ -116,7 +116,7 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
     })
   })
 
-  it("pins the four: the listing they stored before they rendered a Preview first", () => {
+  it("pins the four with the rule off: their listing at Final (the Trailer + Formats one on its 40-second trailer, decided 2026-10-18)", () => {
     const off = (slug: string) => {
       const doc = templateForPreviewStopRule(load(`${slug}.json`), false)
       return [doc.estimatedCredits, doc.estimatedPerMinuteCredits ?? 0]
@@ -125,7 +125,7 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
       "podcast-clip-pack": [392, 4],
       "podcast-multicam-cut": [62, 14],
       "podcast-tighten-episode": [82, 14],
-      "podcast-trailer-formats": [382, 4],
+      "podcast-trailer-formats": [212, 4],
     })
   })
 

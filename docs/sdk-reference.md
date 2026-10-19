@@ -478,8 +478,8 @@ try {
 
 ### `class ContinuationRefusedError extends NodaroError`
 
-HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode
-or Chapters run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode,
+Chapters or Trailer run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
 `already_running` (a continuation is under way, or one that already
 completed — follow `jobId`), `continuation_superseded` (a later continuation
 of that run failed too —
@@ -764,8 +764,8 @@ sets the render to Final
 await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
 
-A Tighten Episode node with Review before render on is refused the same way (turn its
-review off for such runs). A failed execution records what held it:
+A node with Review before render on (Tighten Episode, Trailer) is refused the same way
+(turn its review off for such runs). A failed execution records what held it:
 `preview_review_required` / `preview_render_nested` for a render,
 `preview_review_required_review_on` / `preview_render_nested_review_on` for a review-on
 node, `preview_review_required_mixed` / `preview_render_nested_mixed` for both. Match them
@@ -773,7 +773,8 @@ with `isPreviewRefusalCode(code)` from `@nodaro/shared`, never one code. Where t
 off, such a run is not refused up front: the nodes before the review-on node run and are
 charged, and the node then fails with `preview_review_required` (nothing charged for it).
 Whatever the flag, a review-on Tighten Episode fed by a List is refused with
-`use_case_review_list_driven`.
+`use_case_review_list_driven`, and a Trailer fed by a List (review on or off) with
+`use_case_list_driven`.
 
 `continueFromExecutionId` continues an earlier execution of the workflow — your
 own, `completed`, of the workflow itself — instead of starting over: the run
@@ -7103,10 +7104,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Eight
+Editorial primitives for podcast / long-form video editing. Nine
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus two quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`) and one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus three quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -7119,7 +7120,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
 | `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`) | Continue a Tighten Episode or Chapters run as a new job: from where it failed, or (Tighten Episode) its Render final after a review. The route is the run's own type. |
+| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in, a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`) | Continue a Tighten Episode, Chapters or Trailer run as a new job: from where it failed, or (Tighten Episode, Trailer) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7311,6 +7314,56 @@ A recording whose length cannot be read is estimated at the 180-minute
 ceiling. Both refuse before anything is created or charged, with the codes
 `tightenEpisode` lists (less the music ones).
 
+#### `episodeTrailer(input, options?)` / `estimateEpisodeTrailer(input)`
+
+```ts
+episodeTrailer(input: EpisodeTrailerInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
+estimateEpisodeTrailer(input: EpisodeTrailerInput): Promise<{ data: UseCaseEstimate }>
+```
+
+Cut a 20–40 second trailer from a podcast recording in one call and deliver
+it in each chosen social format: the run transcribes the recording, plans the
+trailer from its strongest moments (the plan picks the length and joins the
+moments with its own short crossfades; neither is a setting), renders it,
+plays an optional intro card first, and pads it to every format — never
+cropped. Only `mediaUrl` is required; a field left out takes the node's
+default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
+
+**`EpisodeTrailerInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video URL, up to 3 hours (an audio-only recording is refused `media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
+| `introCardUrl` | `string` | no | A short video, 15 s at most, played before the trailer. Make it the recording's size and shape, or one of the two is letterboxed. |
+| `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one: an empty list is sent as is and refused `400 validation_error`. |
+| `reviewBeforeRender` | `boolean` | no | Stop at a quick preview of the trailer for a person to review; render every format afterwards with `continueUseCase({ mode: "render-final" })`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` (default) \| `"premium"`. |
+| `instructions` | `string` | no | Instructions for the trailer (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
+
+`options.idempotencyKey` works as on `tightenEpisode`.
+
+`episodeTrailer` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data.formats` is `[{ format, url }]`,
+one trailer per chosen format in format order, and `output_data.videoUrl` the
+trailer of the first chosen format that rendered (`formats[0]`); `output_data.json` is the trailer's EDL and `quality`
+is `"proxy"` for a review-on run's preview (`videoUrl` is then the preview, and
+`formats` is `[]` until the Render final), `"final"` otherwise. A format that
+could not be rendered is named in `output_data.failedFormats`: the run
+completes with the others, keeps its fee and is not charged for that format.
+A run with no format rendered fails, and its fee is refunded.
+
+`estimateEpisodeTrailer` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-trailer --> per run.
+The trailer is quoted at 40 seconds, the longest trailer the plan cuts (its
+render, and Combine Videos with an intro card); a Render final
+(`continueUseCase`) is quoted on the trailer the run cut (with the review's
+edits), plus the intro card. Both refuse before anything is created
+or charged, with the codes `tightenEpisode` lists (less the music ones), plus
+`400 media_needs_video` (an audio-only recording), `400 intro_card_unreadable`
+(an intro card that is not a playable video) and `400 intro_card_too_long`
+(longer than 15 s).
+
 #### `continueUseCase(input, options?)`
 
 ```ts
@@ -7319,10 +7372,10 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` or `episodeChapters` (or an earlier continuation) answered. |
-| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on Tighten Episode preview, with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters` or `episodeTrailer` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
 | `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
-| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
 
 **Which route.** With `nodeType`, the continuation goes straight to that
 type's route. Without it, `continueUseCase` first reads the job
@@ -7336,6 +7389,11 @@ route is guessed for the run. Any other refusal of the read is thrown as is.
 Pass `nodeType` to skip the read. A version of the SDK from before Chapters
 knows only `"tighten-episode"`, so it continues a Chapters run on the Tighten
 Episode route, which answers `not_found`: upgrade to continue Chapters runs.
+A version from before Trailer cannot continue a Trailer run either. One whose
+type list is written into the SDK continues it on the Tighten Episode route.
+One that reads the list from `@nodaro/shared` throws `use_case_type_unknown`
+when the installed `@nodaro/shared` is from before Trailer too, since
+`"episode-trailer"` is not in that list. Upgrade to continue Trailer runs.
 Earlier versions also continued on the Tighten Episode route whenever the type
 could not be read; this version throws instead.
 

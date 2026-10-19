@@ -17,7 +17,7 @@
  * - it COMPLETED having run ALL that its source left (`all` on its stamp):
  *   the work is done, and its results are on that run — refused, naming it;
  * - it COMPLETED by stopping at a Preview review — of an Apply EDL render, or
- *   of a use-case node with review on (Tighten Episode); its stamp names them,
+ *   of a review-on use-case node; its stamp names them,
  *   `previewRenders` and `reviewHolds`: continuing would only stop at the same
  *   Preview again, so it is refused, naming that run and what holds it — the
  *   next step is the run that finishes them (`heldFinalRun`, the renders at
@@ -123,7 +123,7 @@ export interface ContinueFromFailedStamp {
    */
   readonly previewRenders?: readonly string[]
   /**
-   * The use-case nodes with review on (Tighten Episode) this run stops at for
+   * The review-on use-case nodes this run stops at for
    * their Preview review, decided as `previewRenders` is, and carried the same
    * way. Absent: none (or a stamp from before the field).
    */
@@ -449,7 +449,7 @@ export function previewPendingMessage(
     `each render at Final, each use-case node continuing the run that made its Preview, and every node after them) to POST /v1/workflows/:id/run. ` +
     (reviewNodeIds.length > 0
       ? `For ${quoted(reviewNodeIds)} that run calls its continue route (${[...new Set(reviewContinuePaths)].map((p) => `POST ${p}`).join(", ") || "its type's continue route"}, ` +
-        `"mode": "render-final", no fee) inside the workflow, so the nodes after it run too; calling that route on its own first renders the episode ` +
+        `"mode": "render-final", no fee) inside the workflow, so the nodes after it run too; calling that route on its own first renders its final result ` +
         `but leaves this chain held, and the same final in "next" is then refused render_final_already_rendered. `
       : "") +
     `A continue-from-failed after that builds on it.`

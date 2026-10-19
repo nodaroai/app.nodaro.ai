@@ -12,7 +12,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
-import { EPISODE_CHAPTERS_DEFAULTS, TIGHTEN_EPISODE_DEFAULTS, buildEpisodeChaptersGraph, buildTightenEpisodeGraph } from "@nodaro/render-rules"
+import {
+  EPISODE_CHAPTERS_DEFAULTS,
+  TIGHTEN_EPISODE_DEFAULTS,
+  buildEpisodeChaptersGraph,
+  buildTightenEpisodeGraph,
+  usecaseDescriptor,
+  type UseCaseNodeType,
+} from "@nodaro/render-rules"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const graph = buildTightenEpisodeGraph(TIGHTEN_EPISODE_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } })
@@ -558,6 +565,76 @@ describe("Chapters through the same factory", () => {
     expect(m.estimatedTypes).toEqual(["episode-chapters"])
     expect(res.json()).toEqual({ data: { totalCredits: 932, stepsCredits: 922, feeCredits: 10, durationSec: 3600 } })
     expect(m.insertJob).not.toHaveBeenCalled()
+  })
+})
+
+describe("Trailer through the same factory", () => {
+  const postTrailer = async (payload: Record<string, unknown>) =>
+    (await makeApp()).inject({ method: "POST", url: "/v1/episode-trailer", payload })
+  // The probe's verdicts are prepareUseCase's (request.test.ts); here the
+  // route hands its answer on and writes nothing.
+  const refusedWith = (code: string, message: string) => () => {
+    m.prepared = { ok: false, status: 400, code, message }
+  }
+  beforeEach(() => {
+    // The real settings and graph, as prepareUseCase would build them for a video recording.
+    m.prepare.mockImplementation(async (type: UseCaseNodeType, body: Record<string, unknown>) => {
+      if (m.prepared && (m.prepared as { ok?: boolean }).ok === false) return m.prepared
+      const d = usecaseDescriptor(type)
+      const settings = d.resolveSettings(body, "video")
+      const sources = { media, ...(typeof body.introCardUrl === "string" ? { introCard: { url: body.introCardUrl } } : {}) }
+      return { ok: true, settings, sources, graph: d.build(settings, sources as never) }
+    })
+  })
+
+  it("an audio-only recording: 400 media_needs_video, no row", async () => {
+    refusedWith("media_needs_video", "Trailer needs a video recording.")()
+    const res = await postTrailer({ mediaUrls: ["https://r2/ep.mp3"] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "media_needs_video", message: "Trailer needs a video recording." })
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+  })
+
+  it("formats: [] is a 400 naming the reason, before anything is probed or written", async () => {
+    const res = await postTrailer({ mediaUrls: ["https://r2/ep.mp4"], formats: [] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(JSON.stringify(res.json().error)).toContain("Choose at least one format")
+    expect(m.prepare).not.toHaveBeenCalled()
+    expect(m.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("an intro card that probes without video: 400 intro_card_unreadable, no row", async () => {
+    refusedWith("intro_card_unreadable", "The intro card could not be read as a video.")()
+    const res = await postTrailer({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.png" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("intro_card_unreadable")
+    expect(m.prepare.mock.calls[0]![1]).toMatchObject({ introCardUrl: "https://r2/card.png" })
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+  })
+
+  it("an intro card over 15 seconds: 400 intro_card_too_long, nothing written or held", async () => {
+    refusedWith("intro_card_too_long", "The intro card is too long. Use a card of 15 seconds or less.")()
+    const res = await postTrailer({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/long-card.mp4" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "intro_card_too_long", message: "The intro card is too long. Use a card of 15 seconds or less." })
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.insertIdem).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+  })
+
+  it("a run with formats [16:9, 9:16] stores its settings with the formats in delivery order; its own fee", async () => {
+    const res = await postTrailer({ mediaUrls: ["https://r2/ep.mp4"], formats: ["16:9", "9:16"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.insertJob.mock.calls[0]![1]).toMatchObject({ job_type: "episode-trailer", input_data: expect.objectContaining({ type: "episode-trailer" }) })
+    expect(m.reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "use-case-fee:episode-trailer")
+    const run = m.execute.mock.calls[0]![0] as { graph: { nodeType: string; settings: { formats: string[] }; outputMap: { formats: Array<{ format: string }> } } }
+    expect(run.graph.nodeType).toBe("episode-trailer")
+    expect(run.graph.settings.formats).toEqual(["9:16", "16:9"])
+    expect(run.graph.outputMap.formats.map((f) => f.format)).toEqual(["9:16", "16:9"])
   })
 })
 
