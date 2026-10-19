@@ -170,7 +170,7 @@ const CLEANED_AT_JOB_END: Readonly<Record<string, string>> = {
  * job's id. A new call site fails this census until someone checks which.
  */
 const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
-  "providers/kie/image.ts :: \"resized-mask\"": "Ideogram edit's resized mask: the KIE image provider runs only inside a video-worker job (the running job's id)",
+  "providers/kie/image.ts :: \"prepared-mask\"": "Ideogram edit's prepared mask (resized to the image, inverted to Ideogram's black = edit): the KIE image provider runs only inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"lip-sync-trimmed\"": "KIE lip-sync's trimmed audio: the KIE video provider runs only inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"motion-trimmed\"": "KIE motion control's trimmed video: inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"provider-converted\"": "KIE's format-converted input frames (both conversions): inside a video-worker job (the running job's id)",

@@ -2312,8 +2312,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > - `run("image-to-image" | "edit-image" | "generate-mask", …)` answers
 >   `ImageJobStarted` — `{ jobId: string; adjustments? }` — so `result.jobId`
 >   needs no cast. `ImageToImageParams` requires `imageUrl` and `prompt`; its
->   `maskUrl` is sent to the model as its own mask, so only `ideogram-edit` and
->   `flux-fill` use it.
+>   `maskUrl` (white = the area to change, on both models) is sent to the model
+>   as its own mask, so only `ideogram-edit` and `flux-fill` use it.
 > - `EditImageParams` is one of two forms: `imageUrl` for every provider except
 >   the Grok task ops, or `taskId` plus `provider: "grok-upscale" | "grok-2-edit"
 >   | "grok-2-segment"` (a prior Grok generation's task id, its job's

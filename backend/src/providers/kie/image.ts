@@ -121,33 +121,43 @@ async function downloadAndMeasure(url: string): Promise<{ buffer: Buffer; width:
 }
 
 /**
- * Ensure mask dimensions match the source image. If they differ, resize
- * the mask, store it in the running job's scratch folder, and return its URL.
+ * Fit an inpainting mask to the model: resize it to the source image when the
+ * sizes differ, and invert it when `invert` is set (a model whose
+ * `maskEditColor` is "black" reads the mask the other way round), so every
+ * caller keeps the platform's one convention, white = the area to change.
+ * Returns the URL unchanged when neither applies; otherwise stores the
+ * prepared mask in the running job's scratch folder and returns its URL.
  */
-async function ensureMaskDimensions(
+export async function prepareMask(
   imageUrl: string,
   maskUrl: string,
+  opts: { invert: boolean },
 ): Promise<string> {
   const [img, mask] = await Promise.all([
     downloadAndMeasure(imageUrl),
     downloadAndMeasure(maskUrl),
   ])
 
-  if (img.width === mask.width && img.height === mask.height) {
+  const resize = img.width !== mask.width || img.height !== mask.height
+  if (!resize && !opts.invert) {
     return maskUrl
   }
 
-  console.log(
-    `[KIE.ai] Mask size (${mask.width}x${mask.height}) differs from image (${img.width}x${img.height}) — resizing mask`
-  )
+  if (resize) {
+    console.log(
+      `[KIE.ai] Mask size (${mask.width}x${mask.height}) differs from image (${img.width}x${img.height}) — resizing mask`
+    )
+  }
 
-  const resized = await sharp(mask.buffer)
-    .resize(img.width, img.height, { fit: "fill" })
-    .png()
-    .toBuffer()
+  let pipeline = sharp(mask.buffer)
+  if (resize) pipeline = pipeline.resize(img.width, img.height, { fit: "fill" })
+  // Read the mask's grey level the way the inpaint composite does (alpha
+  // ignored), then flip it: the painted area becomes black.
+  if (opts.invert) pipeline = pipeline.removeAlpha().greyscale().negate()
+  const prepared = await pipeline.png().toBuffer()
 
   // A provider input: the running job's scratch folder, emptied when the job ends.
-  return uploadJobScratchBuffer(resized, "resized-mask", "png", "image/png")
+  return uploadJobScratchBuffer(prepared, "prepared-mask", "png", "image/png")
 }
 
 /**
@@ -374,11 +384,16 @@ export class KieImageProvider
       }
     }
 
-    // Ideogram character-edit: ensure mask matches source image dimensions
+    // Ideogram character-edit: the mask must match the source image's size,
+    // and a caller's mask (white = change) is inverted for a model that reads
+    // black as the area to change. The source-image stand-in set above when
+    // no mask was sent is not a painted mask, so it is never inverted.
     if (provider === "ideogram-edit" && input.mask_url && input.image_url) {
-      input.mask_url = await ensureMaskDimensions(
+      const callerMask = typeof extraParams?.mask_url === "string" && extraParams.mask_url === input.mask_url
+      input.mask_url = await prepareMask(
         input.image_url as string,
         input.mask_url as string,
+        { invert: callerMask && modelConfig.maskEditColor === "black" },
       )
     }
 
@@ -601,7 +616,8 @@ export class KieImageProvider
           // SKU accepts it; JPEG only as the over-the-cap fallback.
           preferLossless: true,
           // A supplied inpainting mask is aligned to the SOURCE dimensions and
-          // is forwarded verbatim (no ensureMaskDimensions on this path), so
+          // is forwarded verbatim (no prepareMask on this path: no edit SKU
+          // declares `maskEditColor`, guarded in models.test.ts), so
           // the over-cap fallback downscale must not move the pixel grid under
           // it — that would edit the wrong region and look like a model bug.
           preserveGeometry: typeof input.mask_url === "string" && input.mask_url.length > 0,

@@ -22,7 +22,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Quality | select | varies | Available for gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (select providers) |
-| Mask | image/canvas | -- | Inpainting mask (ideogram-edit only). Painted via a mask editor modal. |
+| Mask | image/canvas | -- | Inpainting mask for the mask models (ideogram-edit, flux-fill). White = the area to change, black = keep — the same on every model. Painted via a mask editor modal. |
 | Reference Image | image | -- | Additional reference for style guidance |
 
 ## Inputs & Outputs

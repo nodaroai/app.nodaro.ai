@@ -50,7 +50,8 @@ vi.mock("../models.js", async (importOriginal) => {
       "recraft-upscale": { model: "recraft/crisp-upscale", cost: 0.04, inputType: "image-to-image", imageParam: "image", extraParams: {} },
       "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
       "nano-banana-edit": { model: "google/nano-banana-edit", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
-      "ideogram-edit": { model: "ideogram/character-edit", cost: 0.09, inputType: "image-to-image", imageParam: "image_url", extraParams: { rendering_speed: "BALANCED", style: "AUTO" } },
+      // The REAL config, so its `maskEditColor: "black"` declaration is what is tested.
+      "ideogram-edit": actual.KIE_IMAGE_MODELS["ideogram-edit"],
       // SKUs whose KIE schema types `seed` as a STRING (google/imagen4 and
       // imagen4-ultra are the real ones). One per lane, so both input builders
       // are shown to honour the declaration — not a model name.
@@ -76,6 +77,7 @@ import sharp from "sharp"
 import { KieError } from "../client.js"
 import { KieImageProvider } from "../image.js"
 import { getMaxImagePromptChars } from "@nodaro/shared/models"
+import { KIE_IMAGE_MODELS } from "../models.js"
 
 let provider: KieImageProvider
 let pngFixture: Buffer
@@ -427,5 +429,57 @@ describe("Seedream 5 Flash — resolution goes out as `size`", () => {
     expect(lastInput()).toMatchObject({ prompt: "make it winter", image_urls: ["https://src.png"], size: "2K" })
     expect(lastInput()).not.toHaveProperty("resolution")
     expect(lastOpts().dimensions).toMatchObject({ resolution: "2K" })
+  })
+})
+
+describe("ideogram-edit mask polarity (models.ts `maskEditColor`)", () => {
+  // Production 2026-10-19: a mask painted white over the trees (the platform's
+  // white = change) recolored everything BUT the trees on Ideogram, which
+  // reads black as the area to edit. The same mask on flux-fill was right.
+  let maskFixture: Buffer // left half white (change), right half black (keep)
+
+  beforeAll(async () => {
+    const half = await sharp({ create: { width: 4, height: 8, channels: 3, background: "#fff" } }).png().toBuffer()
+    maskFixture = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#000" } })
+      .composite([{ input: half, left: 0, top: 0 }])
+      .png()
+      .toBuffer()
+  })
+
+  beforeEach(() => {
+    mocks.mockSafeFetch.mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => (url.includes("mask") ? maskFixture : pngFixture),
+    }))
+    mocks.mockUploadBufferToR2.mockResolvedValue("https://cdn.example.com/prepared-mask.png")
+  })
+
+  const sentInput = () => mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
+  const greyAt = async (png: Buffer, x: number, y: number) => {
+    const { data, info } = await sharp(png).greyscale().raw().toBuffer({ resolveWithObject: true })
+    return data[y * info.width + x]
+  }
+
+  it("declares Ideogram's mask black = edit", () => {
+    expect(KIE_IMAGE_MODELS["ideogram-edit"]?.maskEditColor).toBe("black")
+  })
+
+  it("inverts a caller's mask, so the painted area is the one Ideogram edits", async () => {
+    await provider.generateImage("recolor the trees", ["https://src.png"], "ideogram-edit", { mask_url: "https://x/mask.png" })
+
+    const [buffer, key] = mocks.mockUploadBufferToR2.mock.calls[0]! as [Buffer, string]
+    expect(key).toContain("prepared-mask")
+    expect(await greyAt(buffer, 0, 0)).toBe(0) // painted (white) → black: edit
+    expect(await greyAt(buffer, 7, 7)).toBe(255) // unpainted (black) → white: keep
+    expect(sentInput().mask_url).toBe("https://cdn.example.com/prepared-mask.png")
+    expect(sentInput().image_url).toBe("https://src.png")
+  })
+
+  it("never inverts the source-image stand-in sent when the caller gave no mask", async () => {
+    await provider.generateImage("restyle", ["https://src.png"], "ideogram-edit")
+
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+    expect(sentInput().mask_url).toBe("https://src.png")
   })
 })
