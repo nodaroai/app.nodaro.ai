@@ -1,19 +1,30 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
+import { LLM_MODELS, getLlmModel, type LlmModelDef } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../../../lib/pricing/llm-cost.js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
 import {
   LLM_CONTENT_REFUSAL_MESSAGE,
   LlmContentRefusalError,
+  LlmLaneError,
+  LlmOutputTruncatedError,
   LlmPlatformExhaustedError,
+  LlmStreamResponseError,
+  billedProviderCost,
   toPlatformExhausted,
 } from "../../../lib/llm-errors.js"
+import { exhaustionSignalOf } from "../../../lib/llm-platform-exhaustion.js"
 import { getPipelineSignal } from "../pipeline-context.js"
 import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
 import { anthropicStructuredTool } from "../../../lib/llm/message-builders.js"
 import { extractJsonFromAIResponse } from "../../../lib/json-utils.js"
+import { anthropicKeySet, kieKeySet, pickClaudeLane, type ClaudeLane } from "../../../lib/llm/anthropic-availability.js"
+import { callKie } from "../../../lib/llm/kie-lane.js"
+import { inlineImagesForClaudeKie } from "../../../lib/llm/claude-kie-images.js"
+import { kieCostUsd, requestChars } from "../../../lib/llm/kie-cost.js"
+import type { LlmContentBlock, LlmRequest } from "../../../lib/llm/types.js"
+import { kieRetryable } from "../../copilot/lane.js"
 
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
@@ -50,6 +61,38 @@ const THINKING_DEFAULT_ON_MODELS = new Set<string>(
  *  else keeps the long-standing 8192. */
 const STAGE_MAX_TOKENS = 8192
 const STAGE_MAX_TOKENS_THINKING = 32768
+
+/** A KIE attempt's deadline — the direct client's own (`lib/anthropic.ts`); the Showrunner takes minutes. */
+export const PIPELINE_KIE_TIMEOUT_MS = 600_000
+
+/**
+ * KIE's failures come in bursts of a minute or two, longer than `callKie`'s own
+ * transport ladder. A KIE try that failed transiently (429, 5xx, KIE's 400
+ * "Internal error", a connection error) before any charge is tried again after
+ * `pauseMs`, as long as the next try starts within `windowMs` of the attempt's
+ * FIRST KIE call and before its 600 s KIE deadline — so the busy sentence comes
+ * about 3 minutes in at worst. Those tries are single shots (no transport
+ * ladder of their own: the pauses are the ladder), are not validation retries
+ * and write no row of their own. Mutable so tests can run them without
+ * waiting.
+ */
+export const PIPELINE_KIE_BURST = {
+  pauseMs: 20_000,
+  windowMs: 180_000,
+  now: (): number => Date.now(),
+}
+
+/** What a stage stores when its KIE attempt failed for good. */
+export const PIPELINE_KIE_BUSY_MESSAGE =
+  "The AI service is busy right now — try again in a few minutes. Your credits were not charged."
+
+/** The models the stages ask by default; any other `modelId` reaching callLLM is a pipeline's pinned script model. */
+const PIPELINE_DEFAULT_MODEL_IDS = new Set(["claude-sonnet-5-5", "claude-haiku-5-5"])
+
+/** What a stage stores when KIE could not serve a pinned script model — no substitute is tried. */
+export function pinnedModelUnavailableMessage(displayName: string): string {
+  return `${displayName} isn't available right now — switch the script model to Claude Sonnet 5.5 or try again later`
+}
 
 // Accept any Zod schema whose PARSED OUTPUT is T. The schema's INPUT type may
 // diverge from T (e.g. ZodDefault makes input optional but output required),
@@ -138,7 +181,11 @@ export function buildStageRequest(opts: {
   systemPrompt: string
   schema: z.ZodType<unknown, unknown>
   cacheSystemPrompt?: boolean
-}): { request: Omit<Anthropic.Messages.MessageCreateParamsNonStreaming, "messages">; autoTool: boolean } {
+}): {
+  request: Omit<Anthropic.Messages.MessageCreateParamsNonStreaming, "messages">
+  autoTool: boolean
+  jsonSchema: Record<string, unknown>
+} {
   const { modelId, task, temperature = 0.3, systemPrompt, schema, cacheSystemPrompt = true } = opts
   // Use draft-7 (JSON Schema) not OpenAPI 3.0. Anthropic's Messages API
   // requires tool input_schema to match JSON Schema draft 2020-12 strictly —
@@ -151,6 +198,11 @@ export function buildStageRequest(opts: {
     z.toJSONSchema(schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>,
   )
   delete jsonSchema.$schema
+
+  // The schema as the caller wrote it (draft-7, before any lane's rewrite) —
+  // what a KIE attempt pastes into its system prompt. A copy: the strict-tool
+  // rewrite below must never reach it.
+  const promptJsonSchema = structuredClone(jsonSchema)
 
   // A model that refuses a forced `tool_choice` (registry
   // `supportsForcedToolChoice: false` — Sonnet 5.5 / Opus 5.5 answer one with a
@@ -198,30 +250,43 @@ export function buildStageRequest(opts: {
       tool_choice: toolChoice,
     },
     autoTool: autoTool !== null,
+    jsonSchema: promptJsonSchema,
   }
 }
 
 /**
- * Structured output via the Anthropic tools API (direct SDK) + Zod schema
- * validation + llm_calls audit insert + retry-on-invalid loop. Used by every
- * pipeline LLM. The `emit` tool is FORCED (`tool_choice: tool`) for every model
- * that accepts that; a model whose registry entry says
- * `supportsForcedToolChoice: false` is asked with `tool_choice: auto`, a strict
- * tool and a system-prompt line naming it, and a JSON answer it writes as text
- * is read too.
+ * Structured output for a pipeline stage + Zod validation + the llm_calls
+ * audit row + the retry-on-invalid loop. Used by every pipeline LLM.
  *
- * Two stop reasons end the loop early, on either path: `refusal` fails at once
+ * Each attempt picks its lane (`pickClaudeLane`): the platform's Anthropic
+ * account while it is usable, else KIE. On the direct lane the `emit` tool is
+ * FORCED (`tool_choice: tool`) for every model that accepts that; a model
+ * whose registry entry says `supportsForcedToolChoice: false` is asked with
+ * `tool_choice: auto`, a strict tool and a system-prompt line naming it, and a
+ * JSON answer it writes as text is read too. A direct attempt the account
+ * refuses (balance or key — which also latches the lane) or whose tool schema
+ * the API rejects runs again at once on KIE. On KIE the attempt is
+ * prompt-JSON (`callKie`: the schema in the system prompt, no tool), its
+ * images inlined, under the direct client's deadline and the pipeline's
+ * cancel.
+ *
+ * KIE fails in bursts, so a transient KIE failure that cost nothing is not
+ * final ({@link PIPELINE_KIE_BURST}): it is tried again every 20 s for up to
+ * about 3 minutes from the attempt's first KIE call, and only then fails with
+ * the busy sentence.
+ *
+ * Two stop reasons end the loop early, on either lane: a refusal fails at once
  * with {@link CallLLMRefusalError} (re-asking the same request is routing
- * around a content decision), and `max_tokens` with no usable answer is
- * retried once, then fails with {@link CallLLMTruncatedError}. Every failure
- * still writes its llm_calls row with the tokens and cost spent.
+ * around a content decision), and a cut-off answer with nothing usable is
+ * retried once, then fails with {@link CallLLMTruncatedError}. A retry carries
+ * the validation error, for a text prompt and a block prompt alike. Every
+ * failure writes its llm_calls row with the tokens and cost spent.
  */
 export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>> {
   const {
     supabase,
     pipelineId,
     stageId,
-    sceneId,
     userId,
     role,
     task,
@@ -236,10 +301,9 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     progressMinIntervalMs = 750,
   } = args
 
-  const anthropic = getAnthropicClient()
   const retries = Math.max(0, maxRetries)
 
-  const { request: stageRequest, autoTool } = buildStageRequest({
+  const { request: stageRequest, autoTool, jsonSchema } = buildStageRequest({
     modelId,
     task,
     temperature,
@@ -247,139 +311,159 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     schema,
     cacheSystemPrompt,
   })
+  // The registry entry a KIE attempt asks for. An id the registry does not
+  // know has no KIE twin, so its stage stays on the direct lane.
+  const registryModel = getLlmModel(normalizeModelId(modelId))
 
   let lastError: string | null = null
   let totalIn = 0
   let totalOut = 0
   let cacheCreate = 0
   let cacheRead = 0
+  let totalCost = 0
+  let lane: ClaudeLane = "direct"
+  let kieBaseBlocks: LlmContentBlock[] | null = null
   const t0 = Date.now()
   let truncations = 0
+
+  const callRow = (extra: Record<string, unknown>): Record<string, unknown> => ({
+    pipeline_id: pipelineId,
+    stage_id: stageId,
+    user_id: userId,
+    role,
+    task,
+    model_id: modelId,
+    input_tokens: totalIn,
+    output_tokens: totalOut,
+    cache_creation_input_tokens: cacheCreate,
+    cache_read_input_tokens: cacheRead,
+    cost_usd: totalCost,
+    duration_ms: Date.now() - t0,
+    lane,
+    ...extra,
+  })
 
   // The llm_calls row of a call that ends without an answer — the tokens and
   // cost were spent all the same.
   const recordFailure = async (errorText: string): Promise<void> => {
-    const { error: auditError } = await supabase.from("llm_calls").insert({
-      pipeline_id: pipelineId,
-      stage_id: stageId,
-      user_id: userId,
-      role,
-      task,
-      model_id: modelId,
-      input_tokens: totalIn,
-      output_tokens: totalOut,
-      cache_creation_input_tokens: cacheCreate,
-      cache_read_input_tokens: cacheRead,
-      cost_usd: estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead),
-      duration_ms: Date.now() - t0,
-      success: false,
-      error: errorText,
-    })
-    if (auditError) {
+    const { error } = await insertLlmCallRow(supabase, callRow({ success: false, error: errorText }), false)
+    if (error) {
       // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
-      console.error("[callLLM] Failed to write llm_calls failure row:", auditError.message)
+      console.error("[callLLM] Failed to write llm_calls failure row:", error)
     }
   }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const userContent =
-      typeof userPrompt === "string"
-        ? [
-            {
-              type: "text" as const,
-              text:
-                attempt === 0
-                  ? userPrompt
-                  : `${userPrompt}\n\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION:\n${lastError}\n\nRetry, honoring the schema strictly.`,
-            },
-          ]
-        : userPrompt
-
-    const createParams: Anthropic.Messages.MessageCreateParamsNonStreaming = {
-      ...stageRequest,
-      messages: [{ role: "user" as const, content: userContent }],
-    }
-    // Streaming path: only when the caller wants progress events. The non-
-    // streaming path stays as the default so the dozens of other LLM helpers
-    // keep their existing 2 fewer hops + no event-emitter overhead.
-    //
-    // Fallback behavior: if `stream()` throws (network blip, SDK
-    // regression), we re-throw to the outer retry loop — same as the
-    // non-streaming path. We do NOT silently fall back to `create()`
-    // because that would mask streaming bugs behind a working pipeline.
-    // Pluck the in-flight pipeline's abort signal from AsyncLocalStorage
-    // (set by pipeline-worker on each BullMQ job). When the user hits
-    // Cancel, the worker calls ctrl.abort() and this signal fires —
-    // the Anthropic SDK rejects the in-flight request with an
-    // AbortError that propagates out, exiting drivePipeline cleanly
-    // instead of burning 1-3 min on a now-irrelevant Showrunner
-    // generation. Outside the pipeline-worker (other callers, tests)
-    // signal is undefined and Anthropic gets the createParams unchanged.
+    const feedback = attempt === 0 || lastError === null ? null : retryFeedback(lastError)
+    // The in-flight pipeline's abort signal (AsyncLocalStorage, set by the
+    // pipeline worker per job): a user's Cancel ends the request at once.
+    // Undefined outside a pipeline.
     const signal = getPipelineSignal()
-    let resp: Anthropic.Messages.Message
-    try {
-      if (onProgress) {
-        resp = await runStreamingMessage(
-          anthropic,
-          createParams,
+    lane = registryModel ? pickClaudeLane() : "direct"
+    let laneReason = lane === "kie" ? (anthropicKeySet() ? "the Anthropic direct lane is latched" : "no Anthropic key") : ""
+    let outcome: AttemptOutcome | undefined
+
+    if (lane === "direct") {
+      try {
+        outcome = await runDirectAttempt({
+          stageRequest,
+          userContent: withRetryFeedback(userPrompt, feedback),
           onProgress,
           progressMinIntervalMs,
           signal,
-        )
-      } else {
-        resp = await anthropic.messages.create(
-          createParams,
-          signal ? { signal } : undefined,
-        )
+          autoTool,
+          modelId,
+        })
+      } catch (err) {
+        laneReason = directFailureToKie(err, { modelId, task, kieAvailable: Boolean(registryModel) && kieKeySet() })
+        lane = "kie"
       }
-    } catch (err) {
-      // The platform's own account refusing (balance gone, key refused) is
-      // never the vendor's reply on a stage's error: every stage stores
-      // `err.message` as it is. The raw reply stays in `internalDetails`
-      // (error_detail) and the [ALERT] log line.
-      const typed = toPlatformExhausted(err, { lane: "direct", provider: "anthropic", modelId })
-      if (typed instanceof LlmPlatformExhaustedError) {
-        throw Object.assign(new Error(typed.userMessage, { cause: typed }), { internalDetails: typed.internalDetails })
-      }
-      throw err
     }
 
-    totalIn += resp.usage.input_tokens
-    totalOut += resp.usage.output_tokens
-    cacheCreate += resp.usage.cache_creation_input_tokens ?? 0
-    cacheRead += resp.usage.cache_read_input_tokens ?? 0
+    if (lane === "kie") {
+      const model = registryModel!
+      // No key is said once per process (`pickClaudeLane`'s K2 line); a latch or a refusal is said per attempt.
+      if (laneReason !== "no Anthropic key") {
+        // eslint-disable-next-line no-console -- the lane is the operator's only signal until llm_calls.lane exists everywhere
+        console.warn(`[callLLM] ${task}: ${modelId} served from KIE — ${laneReason}`)
+      }
+      kieBaseBlocks ??= typeof userPrompt === "string" ? [] : await inlineImagesForClaudeKie(userPrompt)
+      const blocks = kieUserBlocks(userPrompt, kieBaseBlocks, feedback)
+      // One deadline for this attempt's KIE tries, however many a burst takes.
+      const deadline = AbortSignal.timeout(PIPELINE_KIE_TIMEOUT_MS)
+      const firstCallAt = PIPELINE_KIE_BURST.now()
+      const deadlineAt = firstCallAt + PIPELINE_KIE_TIMEOUT_MS
+      let burstTry = false
+      while (outcome === undefined) {
+        try {
+          outcome = await runKieAttempt({
+            model,
+            systemPrompt,
+            blocks,
+            jsonSchema,
+            maxTokens: stageRequest.max_tokens,
+            temperature,
+            onProgress,
+            signal,
+            deadline,
+            singleShot: burstTry,
+          })
+        } catch (err) {
+          if (signal?.aborted) throw err
+          if (kieBurstRetryable(err, deadline)) {
+            const nextTryAt = PIPELINE_KIE_BURST.now() + PIPELINE_KIE_BURST.pauseMs
+            if (nextTryAt < firstCallAt + PIPELINE_KIE_BURST.windowMs && nextTryAt < deadlineAt) {
+              // eslint-disable-next-line no-console -- the operator's view of a burst being ridden out
+              console.warn(
+                `[callLLM] ${task}: KIE ${model.id} failed before any charge — trying again in ${PIPELINE_KIE_BURST.pauseMs} ms: ` +
+                  String(err).slice(0, 160),
+              )
+              // A cancel during the pause ends the call at once, as a cancel.
+              await pauseUnlessCancelled(PIPELINE_KIE_BURST.pauseMs, signal)
+              burstTry = true
+              continue
+            }
+          }
+          const failure = pipelineKieFailure(err, modelId, model)
+          await recordFailure(`kie: ${failure.internalDetails}`)
+          throw failure
+        }
+      }
+    }
+
+    const result = outcome!
+    totalIn += result.inputTokens
+    totalOut += result.outputTokens
+    cacheCreate += result.cacheCreate
+    cacheRead += result.cacheRead
+    totalCost += result.costUsd
 
     // A content refusal is the model's answer about this request: asking the
     // same request again is routing around it, so it ends the call at once.
-    if (resp.stop_reason === "refusal") {
-      const detail = `direct ${modelId} stopped with refusal on ${task} (in ${totalIn} / out ${totalOut} tokens)`
+    if (result.stop === "refusal") {
+      const detail = `${lane} ${modelId} stopped with refusal on ${task} (in ${totalIn} / out ${totalOut} tokens)`
       await recordFailure(`refusal: ${detail}`)
       throw new CallLLMRefusalError(detail, {
         inputTokens: totalIn,
         outputTokens: totalOut,
-        providerCost: estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead),
+        providerCost: totalCost,
         complete: true,
       })
     }
-    const truncated = resp.stop_reason === "max_tokens"
 
-    const toolUse = resp.content.find((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
-    // Under `tool_choice: auto` a model may answer with the JSON as plain text
-    // instead of a tool call — read it there before spending a retry.
-    const rawOutput = toolUse ? toolUse.input : autoTool ? jsonFromText(resp.content) : undefined
     // Optional preprocess (e.g., truncateCriticFields) runs before Zod so
     // recoverable overshoots don't trigger needless retries.
     const parsed =
-      rawOutput === undefined ? undefined : schema.safeParse(args.preprocess ? args.preprocess(rawOutput) : rawOutput)
+      result.raw === undefined ? undefined : schema.safeParse(args.preprocess ? args.preprocess(result.raw) : result.raw)
     if (!parsed?.success) {
       // Cut off at the output cap with nothing usable: one more try (the
       // reasoning differs run to run), then a failure that says so instead of
       // a schema complaint about a fragment.
-      if (truncated) {
+      if (result.stop === "truncated") {
         truncations++
         if (truncations > 1 || attempt === retries) {
-          await recordFailure(`max_tokens: ${task} cut off at ${createParams.max_tokens} output tokens`)
-          throw new CallLLMTruncatedError(task, createParams.max_tokens)
+          await recordFailure(`max_tokens: ${task} cut off at ${stageRequest.max_tokens} output tokens`)
+          throw new CallLLMTruncatedError(task, stageRequest.max_tokens)
         }
         lastError = "Your answer was cut off at the output token cap before the emit call finished. Be more concise."
         continue
@@ -389,46 +473,20 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
             .slice(0, 5)
             .map((i) => `${i.path.join(".")}: ${i.message}`)
             .join("; ")
-        : "Model did not call the emit tool."
+        : result.noAnswerReason
       continue
     }
-    // Success — write llm_calls row.
-    const costUsd = estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead)
-    const { data: llmCall, error } = await supabase
-      .from("llm_calls")
-      .insert({
-        pipeline_id: pipelineId,
-        stage_id: stageId,
-        user_id: userId,
-        role,
-        task,
-        model_id: modelId,
-        input_tokens: totalIn,
-        output_tokens: totalOut,
-        cache_creation_input_tokens: cacheCreate,
-        cache_read_input_tokens: cacheRead,
-        cost_usd: costUsd,
-        duration_ms: Date.now() - t0,
-        success: true,
-      })
-      .select("id")
-      .single()
-    if (error || !llmCall) {
+
+    // Success — write the llm_calls row. An audit gap is accepted: the caller needs the output.
+    const { id, error } = await insertLlmCallRow(supabase, callRow({ success: true }), true)
+    if (error || !id) {
       // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
-      console.error("[callLLM] Failed to write llm_calls success row:", error?.message ?? "unknown")
-      // Don't throw — the LLM call succeeded and the caller needs the output. Audit gap accepted.
-      return {
-        output: parsed.data,
-        llmCallId: "unrecorded",
-        costUsd,
-        inputTokens: totalIn,
-        outputTokens: totalOut,
-      }
+      console.error("[callLLM] Failed to write llm_calls success row:", error ?? "unknown")
     }
     return {
       output: parsed.data,
-      llmCallId: llmCall.id,
-      costUsd,
+      llmCallId: id ?? "unrecorded",
+      costUsd: totalCost,
       inputTokens: totalIn,
       outputTokens: totalOut,
     }
@@ -437,6 +495,296 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
   // All retries exhausted — record failure + throw.
   await recordFailure(lastError ?? "unknown")
   throw new CallLLMValidationError(`${task} validation failed after ${retries + 1} attempts: ${lastError}`)
+}
+
+/** What one attempt produced, on either lane — the loop above reads only this. */
+interface AttemptOutcome {
+  /** The structured answer as the model wrote it (tool input or parsed JSON), or undefined when there is none. */
+  raw: unknown
+  stop: "answer" | "refusal" | "truncated"
+  inputTokens: number
+  outputTokens: number
+  cacheCreate: number
+  cacheRead: number
+  /** This attempt's provider cost, at the rates of the lane that served it. */
+  costUsd: number
+  /** The retry feedback when `raw` is missing. */
+  noAnswerReason: string
+}
+
+/** One attempt on the direct SDK — exactly the request this path has always sent. */
+async function runDirectAttempt(opts: {
+  stageRequest: Omit<Anthropic.Messages.MessageCreateParamsNonStreaming, "messages">
+  userContent: Anthropic.Messages.ContentBlockParam[]
+  onProgress: ((update: ProgressUpdate) => void) | undefined
+  progressMinIntervalMs: number
+  signal: AbortSignal | undefined
+  autoTool: boolean
+  modelId: string
+}): Promise<AttemptOutcome> {
+  const anthropic = getAnthropicClient()
+  const createParams: Anthropic.Messages.MessageCreateParamsNonStreaming = {
+    ...opts.stageRequest,
+    messages: [{ role: "user" as const, content: opts.userContent }],
+  }
+  // Streaming only when the caller wants progress events; the non-streaming
+  // call stays the default. A `stream()` failure is re-thrown to the loop, as
+  // a `create()` one is — never a silent fall back to `create()`, which would
+  // mask streaming bugs behind a working pipeline. Outside a pipeline the
+  // signal is undefined and `create` gets the params unchanged.
+  const resp = opts.onProgress
+    ? await runStreamingMessage(anthropic, createParams, opts.onProgress, opts.progressMinIntervalMs, opts.signal)
+    : await anthropic.messages.create(createParams, opts.signal ? { signal: opts.signal } : undefined)
+
+  const inputTokens = resp.usage.input_tokens
+  const outputTokens = resp.usage.output_tokens
+  const cacheCreate = resp.usage.cache_creation_input_tokens ?? 0
+  const cacheRead = resp.usage.cache_read_input_tokens ?? 0
+  const toolUse = resp.content.find((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
+  return {
+    // Under `tool_choice: auto` a model may answer with the JSON as plain text
+    // instead of a tool call — read it there before spending a retry.
+    raw: toolUse ? toolUse.input : opts.autoTool ? jsonFromText(resp.content) : undefined,
+    stop: resp.stop_reason === "refusal" ? "refusal" : resp.stop_reason === "max_tokens" ? "truncated" : "answer",
+    inputTokens,
+    outputTokens,
+    cacheCreate,
+    cacheRead,
+    costUsd: estimateCost(opts.modelId, inputTokens, outputTokens, cacheCreate, cacheRead),
+    noAnswerReason: "Model did not call the emit tool.",
+  }
+}
+
+/**
+ * One attempt on KIE as prompt-JSON: the stage's own system prompt (KIE's
+ * prompt-JSON suffix asks for bare JSON, which overrides the stage prompts'
+ * "via the emit tool" wording), the draft-7 schema, images already inlined,
+ * the direct client's deadline combined with the pipeline's cancel. A
+ * refusal or a cut-off answer comes back as an outcome, like the direct
+ * lane's stop reasons; any other failure is thrown.
+ */
+async function runKieAttempt(opts: {
+  model: LlmModelDef
+  systemPrompt: string
+  blocks: LlmContentBlock[]
+  jsonSchema: Record<string, unknown>
+  maxTokens: number
+  temperature: number
+  onProgress: ((update: ProgressUpdate) => void) | undefined
+  signal: AbortSignal | undefined
+  /** The attempt's 600 s KIE deadline, shared by every try of a burst. */
+  deadline: AbortSignal
+  /** A burst try: no transport ladder inside `callKie` — the burst's own pauses replace it. */
+  singleShot: boolean
+}): Promise<AttemptOutcome> {
+  const req: LlmRequest = {
+    modelId: opts.model.id,
+    system: opts.systemPrompt,
+    messages: [{ role: "user", content: opts.blocks }],
+    jsonSchema: { name: "emit", schema: opts.jsonSchema },
+    maxTokens: opts.maxTokens,
+    temperature: opts.temperature,
+    failOnRefusal: true,
+    timeoutMs: PIPELINE_KIE_TIMEOUT_MS,
+    // A model that thinks by default on the direct lane thinks on KIE only when flagged.
+    ...(opts.model.thinkingDefaultOn ? { thinkingFlag: true } : {}),
+    ...(opts.singleShot ? { retryStreamOnError: false } : {}),
+  }
+  const signal = opts.signal ? AbortSignal.any([opts.signal, opts.deadline]) : opts.deadline
+  const promptChars = requestChars(req)
+  // KIE answers in one piece, so a progress caller sees the call start and end.
+  if (opts.onProgress) safeCall(opts.onProgress, { phase: "starting" })
+  try {
+    const resp = await callKie(opts.model, req, signal)
+    if (opts.onProgress) safeCall(opts.onProgress, { phase: "finalizing", bytesSoFar: resp.text.length })
+    return {
+      raw: parseJsonOrUndefined(resp.text),
+      stop: "answer",
+      inputTokens: resp.usage?.inputTokens ?? 0,
+      outputTokens: resp.usage?.outputTokens ?? 0,
+      cacheCreate: 0,
+      cacheRead: 0,
+      costUsd: kieCostUsd(opts.model.id, { creditsUsd: resp.creditsUsd, promptChars, answerChars: resp.text.length }),
+      noAnswerReason: "Your answer was not one valid JSON object matching the schema.",
+    }
+  } catch (err) {
+    if (err instanceof LlmContentRefusalError || err instanceof LlmOutputTruncatedError) {
+      return {
+        raw: undefined,
+        stop: err instanceof LlmContentRefusalError ? "refusal" : "truncated",
+        inputTokens: err.usage.inputTokens,
+        outputTokens: err.usage.outputTokens,
+        cacheCreate: 0,
+        cacheRead: 0,
+        costUsd: err.usage.providerCost ?? 0,
+        noAnswerReason: "",
+      }
+    }
+    throw err
+  }
+}
+
+/**
+ * A failed direct attempt that KIE answers instead — returns why, for the log
+ * line — or a throw:
+ * - the platform account refused (balance or key; typed, alerted and latched
+ *   by `toPlatformExhausted`): KIE, or the capacity sentence when there is no
+ *   KIE leg;
+ * - a 400 rejecting the stage's tool schema: KIE, with an `[ALERT]` naming
+ *   it — so a schema the direct API stops accepting degrades instead of
+ *   failing every stage;
+ * - anything else (a pipeline cancel included) is thrown as it is.
+ * The account check runs first: a drained balance is a 400 too.
+ */
+function directFailureToKie(err: unknown, ctx: { modelId: string; task: string; kieAvailable: boolean }): string {
+  const typed = toPlatformExhausted(err, { lane: "direct", provider: "anthropic", modelId: ctx.modelId, latchAuth: true })
+  if (typed instanceof LlmPlatformExhaustedError) {
+    // The platform's own account refusing is never the vendor's reply on a
+    // stage's error: the raw reply stays in internalDetails and the [ALERT] line.
+    if (!ctx.kieAvailable) {
+      throw Object.assign(new Error(typed.userMessage, { cause: typed }), { internalDetails: typed.internalDetails })
+    }
+    return `the Anthropic account refused (${typed.exhaustion})`
+  }
+  if (ctx.kieAvailable && isToolSchemaRejection(err)) {
+    const detail = err instanceof Error ? err.message : String(err)
+    // eslint-disable-next-line no-console -- an operator alert, same marker as the platform-exhaustion alert
+    console.error(
+      `[ALERT] pipeline ${ctx.task}: direct ${ctx.modelId} rejected the emit tool schema — this attempt runs on KIE prompt-JSON — ` +
+        detail.replace(/\s+/g, " ").slice(0, 400),
+    )
+    return "the direct API rejected the tool schema"
+  }
+  throw err
+}
+
+/**
+ * May a failed KIE try be tried again within a burst? Only a transient failure
+ * that cost nothing — the Copilot's own rule (`kieRetryable`: 429, 5xx, KIE's
+ * 400 `api_error` "Internal error", a connection error with no status) — and
+ * never one that reported usage, KIE's own account refusing, KIE having no
+ * account for the model (`no_available_account`, K14), or the attempt's 600 s
+ * deadline. None of those clears in a few minutes. A refusal or a cut-off
+ * answer never gets here — they come back as outcomes.
+ */
+function kieBurstRetryable(err: unknown, deadline: AbortSignal): boolean {
+  if (deadline.aborted || (err as { name?: unknown } | null)?.name === "TimeoutError") return false
+  if (err instanceof LlmPlatformExhaustedError || err instanceof LlmStreamResponseError) return false
+  if (billedProviderCost(err) !== null) return false
+  if (/no_available_account/i.test(exhaustionSignalOf(err)?.text ?? "")) return false
+  return kieRetryable(err)
+}
+
+/** Wait `ms`, or reject the moment the pipeline's cancel fires, with its reason as a cancel. */
+function pauseUnlessCancelled(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  const cancelReason = (s: AbortSignal): Error =>
+    s.reason instanceof Error ? s.reason : Object.assign(new Error("This operation was aborted"), { name: "AbortError" })
+  if (signal?.aborted) return Promise.reject(cancelReason(signal))
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(cancelReason(signal!))
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener("abort", onAbort, { once: true })
+  })
+}
+
+/** A direct 400 `invalid_request_error` that names the tool schema (`tools`, `input_schema`, `strict`). */
+function isToolSchemaRejection(err: unknown): boolean {
+  const signal = exhaustionSignalOf(err)
+  if (!signal || signal.status !== 400) return false
+  const text = signal.text.toLowerCase()
+  return text.includes("invalid_request_error") && /\b(tools|input_schema|strict)\b/.test(text)
+}
+
+/**
+ * A KIE attempt's failure as a stage stores it (`err.message` verbatim): the
+ * capacity sentence for KIE's own account refusing, the busy sentence for any
+ * other failure — or, for a pinned script model, a sentence naming it and the
+ * model to switch to. The raw text stays in `internalDetails`, never on the
+ * user's screen.
+ */
+function pipelineKieFailure(err: unknown, modelId: string, model: LlmModelDef): Error & { internalDetails: string } {
+  const raw = err instanceof LlmLaneError ? err.internalDetails : err instanceof Error ? err.message : String(err)
+  const message =
+    err instanceof LlmPlatformExhaustedError
+      ? err.userMessage
+      : PIPELINE_DEFAULT_MODEL_IDS.has(normalizeModelId(modelId))
+        ? PIPELINE_KIE_BUSY_MESSAGE
+        : pinnedModelUnavailableMessage(model.displayName)
+  return Object.assign(new Error(message, { cause: err }), { internalDetails: `kie ${model.id}: ${raw}` })
+}
+
+function retryFeedback(lastError: string): string {
+  return `YOUR PREVIOUS ATTEMPT FAILED VALIDATION:\n${lastError}\n\nRetry, honoring the schema strictly.`
+}
+
+/** The direct lane's user turn: a text prompt with the feedback appended, a block prompt with it as a final text block. */
+function withRetryFeedback(
+  userPrompt: string | Anthropic.Messages.ContentBlockParam[],
+  feedback: string | null,
+): Anthropic.Messages.ContentBlockParam[] {
+  if (typeof userPrompt === "string") {
+    return [{ type: "text" as const, text: feedback ? `${userPrompt}\n\n${feedback}` : userPrompt }]
+  }
+  return feedback ? [...userPrompt, { type: "text" as const, text: feedback }] : userPrompt
+}
+
+/** The same user turn on the KIE wire, its images inlined once per call (`base`). */
+function kieUserBlocks(
+  userPrompt: string | Anthropic.Messages.ContentBlockParam[],
+  base: LlmContentBlock[],
+  feedback: string | null,
+): LlmContentBlock[] {
+  if (typeof userPrompt === "string") {
+    return [{ type: "text", text: feedback ? `${userPrompt}\n\n${feedback}` : userPrompt }]
+  }
+  return feedback ? [...base, { type: "text", text: feedback }] : base
+}
+
+function parseJsonOrUndefined(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Write one llm_calls row. Staging runs dev's code against production's
+ * database, and migrations reach that database only with the dev→main release
+ * — so for that window the `lane` column may not exist, and PostgREST refuses
+ * the WHOLE insert. The row is then written again without it rather than lost.
+ */
+async function insertLlmCallRow(
+  supabase: SupabaseClient,
+  row: Record<string, unknown>,
+  withId: boolean,
+): Promise<{ id: string | null; error: string | null }> {
+  type Written = { id: string | null; error: { code?: string; message: string } | null }
+  const write = async (values: Record<string, unknown>): Promise<Written> => {
+    if (withId) {
+      const { data, error } = await supabase.from("llm_calls").insert(values).select("id").single()
+      return { id: (data as { id: string } | null)?.id ?? null, error }
+    }
+    const { error } = await supabase.from("llm_calls").insert(values)
+    return { id: null, error }
+  }
+  let written = await write(row)
+  if (written.error && laneColumnMissing(written.error)) {
+    const withoutLane = { ...row }
+    delete withoutLane.lane
+    written = await write(withoutLane)
+  }
+  return { id: written.id, error: written.error?.message ?? null }
+}
+
+function laneColumnMissing(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST204" || /'lane' column/.test(error.message ?? "")
 }
 
 export class CallLLMValidationError extends Error {
@@ -476,12 +824,11 @@ export class CallLLMTruncatedError extends Error {
 }
 
 /**
- * Provider cost of one pipeline call, from the ONE rate table the rest of the
- * platform uses (`calculateLlmCost`, lib/pricing/llm-cost.ts) on the DIRECT
- * lane — this wrapper only ever calls the Anthropic SDK. It used to keep its own
- * table, which went stale (Opus 4.7 at $15/$75 against a $5/$25 list; decided
- * 2026-10-08: every call is costed at the rates of the lane that served it).
- * An id the registry does not know costs 0, as before.
+ * Provider cost of one DIRECT pipeline attempt, from the ONE rate table the
+ * rest of the platform uses (`calculateLlmCost`, lib/pricing/llm-cost.ts) at
+ * the direct lane's rates. A KIE attempt is costed by `kieCostUsd` instead —
+ * every attempt is costed at the rates of the lane that served it. An id the
+ * registry does not know costs 0, as before.
  */
 function estimateCost(
   modelId: string,

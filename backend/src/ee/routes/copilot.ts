@@ -49,6 +49,7 @@ import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { deleteMemory, listMemories } from "../copilot/memories.js"
 import { toDisplayMessages } from "../copilot/display.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
+import { claudeLaneConfigured } from "../../lib/llm/anthropic-availability.js"
 
 /**
  * STRIP mode, deliberately — `z.object` and never `.strict()`.
@@ -478,7 +479,8 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", message: "Invalid body" } })
       }
-      if (!config.ANTHROPIC_API_KEY) {
+      // The turn runs on the Anthropic account or, without one, on KIE: refuse only when neither is configured.
+      if (!claudeLaneConfigured()) {
         return reply.status(503).send({ error: { code: "provider_unavailable", message: "The assistant is not configured." } })
       }
 

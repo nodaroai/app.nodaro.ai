@@ -139,7 +139,7 @@ export function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<s
     // (probed 2026-10-16). The flag is binary, so the effort LEVEL is still not
     // honoured here — which is why routing and billing keep treating an
     // effort-bearing Claude call as direct (KIE_CLAUDE_EFFORT_VERIFIED).
-    ...(eff !== undefined && eff !== "none" ? { thinkingFlag: true } : {}),
+    ...((eff !== undefined && eff !== "none") || req.thinkingFlag === true ? { thinkingFlag: true } : {}),
     // A structured call carries its schema in the system prompt, never as a
     // tool (kieClaudePromptJson says why).
     system: req.jsonSchema && kieClaudePromptJson(model, req) ? kiePromptJsonSystem(req.system, req.jsonSchema) : req.system,

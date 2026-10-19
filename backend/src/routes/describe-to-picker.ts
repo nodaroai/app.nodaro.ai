@@ -22,11 +22,11 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { insertAppReport, type AppReportInput } from "../lib/app-reports.js"
 import { commitReservedCreditsForJob, commitReservedCreditsForJobAtPrice, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 // From their own modules, not the client facade a route test replaces.
 import { LLM_STRUCTURED_DEFAULT_ATTEMPTS, StructuredLlmError } from "../lib/llm/structured.js"
 import { LLM_MAX_LANES_PER_CALL } from "../lib/llm/router.js"
-import { billedContentRefusal, describeErrorChain, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError } from "../lib/llm-errors.js"
+import { billedContentRefusal, describeErrorChain, LlmAdvancedModeUnavailableError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 
@@ -314,6 +314,13 @@ export function pickerFallbackReason(requested: LlmModelDef, err: unknown): stri
   let kieFailure: string | undefined
   let cur: unknown = err
   for (let depth = 0; cur !== null && cur !== undefined && depth < 8; depth++) {
+    if (cur instanceof LlmAdvancedModeUnavailableError) {
+      // Advanced mode is withheld from KIE only; Gemini may still answer (describe-to-picker's own fallback).
+      if (cur.cause instanceof LlmPlatformExhaustedError) {
+        return `the ${cur.cause.provider} platform account refused (${cur.cause.exhaustion})`
+      }
+      return "the Anthropic account can't serve Advanced mode right now"
+    }
     if (cur instanceof LlmStreamResponseError) return undefined
     if (cur instanceof LlmPlatformExhaustedError) return `the ${cur.provider} platform account refused (${cur.exhaustion})`
     if (cur instanceof LlmLaneError) {
@@ -503,7 +510,7 @@ async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<
   } catch (err) {
     // Nothing written yet: fail the job and answer as the JSON path does.
     const message = await failAnalysis(analysis, err)
-    reply.status(502).send({ error: { code: "llm_error", message } })
+    reply.status(502).send({ error: { code: llmErrorCode(err), message } })
     return
   }
   try {
@@ -516,7 +523,7 @@ async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<
       body = await completeAnalysis(analysis, await analyze(analysis, (partialJson) => fields.push(partialJson)))
     } catch (err) {
       const message = await failAnalysis(analysis, err)
-      sse.sendEvent({ type: "error", data: { code: "llm_error", message } })
+      sse.sendEvent({ type: "error", data: { code: llmErrorCode(err), message } })
       return
     }
     sse.sendEvent({ type: "done", data: body })
@@ -584,7 +591,10 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       if (!model || !STRUCTURED_VISION_MODEL_IDS.has(model.id)) {
         return reply.status(400).send({ error: { code: "validation_error", message: "describe-to-picker requires a vision-capable model with structured output (Anthropic or Gemini)" } })
       }
-      const advancedError = advancedModeError(parsed.data, model.id)
+      // A latched-out Anthropic account is not refused here: the client refuses the
+      // Advanced call mid-flight, and the Gemini fallback answers (analyze). A
+      // missing key is still a 400.
+      const advancedError = advancedModeError(parsed.data, model.id, { ignoreLatch: true })
       if (advancedError) return reply.status(400).send({ error: advancedError })
       // No effort sent: the default model runs at its default effort (Opus 5.5
       // at high, decided 2026-10-09); any other model keeps its Auto. Resolved
@@ -619,7 +629,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
         return reply.send(await completeAnalysis(analysis, await analyze(analysis)))
       } catch (err) {
         const message = await failAnalysis(analysis, err)
-        return reply.status(502).send({ error: { code: "llm_error", message } })
+        return reply.status(502).send({ error: { code: llmErrorCode(err), message } })
       }
     },
   )

@@ -19,7 +19,7 @@ import {
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { billedContentRefusal } from "../lib/llm-errors.js"
-import { userFacingMessage } from "../lib/user-facing-error.js"
+import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 
 /**
  * The pre-flight, the body schema and the completion live in
@@ -118,7 +118,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
         // A content refusal the provider billed is a paid answer: committed, not refunded.
         if (billedContentRefusal(err)) await commitReservedCreditsForJob(job.id)
         else await refundReservedCreditsForJob(job.id)
-        return reply.status(502).send({ error: { code: "llm_error", message } })
+        return reply.status(502).send({ error: { code: llmErrorCode(err), message } })
       }
     },
   )

@@ -10,7 +10,7 @@
 import { creditsToUsd } from "@nodaro/shared/credits"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
-import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"
+import { calculateLlmCost, type LlmServingLane } from "../../lib/pricing/llm-cost.js"
 import { COPILOT_FEATURE, TURN_CAPS } from "./constants.js"
 
 export interface TurnBudget {
@@ -46,13 +46,16 @@ export async function resolveTurnBudget(reservedCredits: number): Promise<TurnBu
  * `cached` prices the prompt at the cache-read rate — from the second
  * iteration on, the prefix is a cache hit, and charging it at the full input
  * rate would end turns early for money that is never spent.
+ *
+ * `lane` picks the rate table: a turn on KIE is priced at KIE's rates, and is
+ * never passed `cached` — our cache breakpoints are not known to reach KIE.
  */
 const TYPICAL_REPLY_TOKENS = 3_000
 
-export function estimateNextCallUsd(modelId: string, promptChars: number, cached = false): number {
+export function estimateNextCallUsd(modelId: string, promptChars: number, cached = false, lane: LlmServingLane = "direct"): number {
   const promptTokens = Math.ceil(promptChars / 4)
   const prompt = cached ? { inputTokens: 0, cacheReadTokens: promptTokens } : { inputTokens: promptTokens }
-  return calculateLlmCost(modelId, { ...prompt, outputTokens: TYPICAL_REPLY_TOKENS }, "direct")
+  return calculateLlmCost(modelId, { ...prompt, outputTokens: TYPICAL_REPLY_TOKENS }, lane)
 }
 
 /** True when spending `nextCallUsd` on top of `spentUsd` would break the budget. */

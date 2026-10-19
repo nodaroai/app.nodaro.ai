@@ -2891,7 +2891,13 @@ while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
 where those levers take effect, and therefore bills **one credit rung up** (a premium model moves to its premium-direct price);
 asking for it on a model with no direct lane is a 400
-`advanced_mode_unsupported`. The call is
+`advanced_mode_unsupported`.
+When the model's own provider cannot take requests at that moment, an
+Advanced-mode request is refused rather than run on the default lane, where
+its levers would not take effect: `400 advanced_mode_unavailable` before
+anything is charged, or `502 advanced_mode_unavailable` if the refusal arrives
+mid-call (the reserved credits are refunded). Turn Advanced mode off to run
+the model on its default lane. The call is
 **synchronous and a single call may run several minutes**: each attempt is
 allowed up to 240 seconds *per provider lane*, and a call that cannot reach its
 primary lane falls back to one alternate, so the ceiling is
@@ -2899,8 +2905,8 @@ primary lane falls back to one alternate, so the ceiling is
 the maximum. Give your HTTP client a timeout sized against that, or use the
 asynchronous twin below and stop holding a connection open.
 Errors: 400 `validation_error`, 401, 402 (credits), 500 `internal_error` (the
-job row could not be created), 502 `llm_error` once the retries are spent, 503
-`provider_unavailable`. SDK: `client.llm.structured(body)` — mind the client's
+job row could not be created), 502 `llm_error` once the retries are spent, 502
+`advanced_mode_unavailable`, 503 `provider_unavailable`. SDK: `client.llm.structured(body)` — mind the client's
 `timeoutMs`: the default 60 s is far shorter than this call can run, and even
 `timeoutMs: 300_000` only covers a fast draft, not the ceiling above. Size it
 against your own `maxRetries`, or use the asynchronous twin below.

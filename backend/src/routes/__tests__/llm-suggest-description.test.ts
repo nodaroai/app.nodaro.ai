@@ -221,6 +221,42 @@ describe("POST /v1/llm-suggest-description", () => {
     vi.resetModules()
   })
 
+  it("serves with only KIE configured (the Anthropic key undefined)", async () => {
+    vi.doMock("../../lib/config.js", () => ({
+      config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: undefined },
+      hasCredits: () => true,
+      isCloud: () => true,
+      isCommunity: () => false,
+      isBusiness: () => false,
+      hasAdmin: () => true,
+    }))
+    vi.resetModules()
+    const { llmComplete: freshComplete } = await import("../../lib/llm-client.js")
+    vi.mocked(freshComplete).mockResolvedValue({ text: "a soft smile", model: "claude-sonnet-4.6" } as Awaited<ReturnType<typeof freshComplete>>)
+    const { reserveCreditsForJob: freshReserve } = await import("../../middleware/credit-guard.js")
+    vi.mocked(freshReserve).mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 2, watermark: false } as Awaited<ReturnType<typeof freshReserve>>)
+    const { llmSuggestDescriptionRoutes: routesModule } = await import("../llm-suggest-description.js")
+    const localApp = Fastify({ logger: false })
+    localApp.addHook("preHandler", async (req) => {
+      const header = req.headers["x-user-id"]
+      if (typeof header === "string") req.userId = header
+    })
+    await localApp.register(async (i) => { await routesModule(i) })
+    await localApp.ready()
+
+    const res = await localApp.inject({
+      method: "POST",
+      url: "/v1/llm-suggest-description",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: okPayload,
+    })
+    expect(res.statusCode).toBe(200)
+
+    await localApp.close()
+    vi.doUnmock("../../lib/config.js")
+    vi.resetModules()
+  })
+
   it("returns 502 llm_empty_response when llmComplete returns empty text", async () => {
     vi.mocked(llmComplete).mockResolvedValue({
       text: "   ",

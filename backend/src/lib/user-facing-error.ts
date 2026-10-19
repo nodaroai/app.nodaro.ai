@@ -1,4 +1,4 @@
-import { LlmLaneError, LlmStreamResponseError } from "./llm-errors.js"
+import { LlmAdvancedModeUnavailableError, LlmLaneError, LlmStreamResponseError } from "./llm-errors.js"
 
 /**
  * The message a person sees for a failed job or request.
@@ -29,4 +29,19 @@ export function laneUserMessage(err: unknown): string | undefined {
     cur = (cur as { cause?: unknown }).cause
   }
   return undefined
+}
+
+/**
+ * The wire code for a failed model call: `advanced_mode_unavailable` when
+ * Advanced mode could not run on the model's own provider (anywhere on the
+ * `cause` chain), else `fallback`. The message is `userFacingMessage`'s, and a
+ * route refunds either way.
+ */
+export function llmErrorCode(err: unknown, fallback = "llm_error"): string {
+  let cur: unknown = err
+  for (let depth = 0; cur !== null && cur !== undefined && depth < 8; depth++) {
+    if (cur instanceof LlmAdvancedModeUnavailableError) return cur.code
+    cur = (cur as { cause?: unknown }).cause
+  }
+  return fallback
 }

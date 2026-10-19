@@ -24,6 +24,8 @@
 import { z } from "zod"
 import { getLlmModel, supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON } from "@nodaro/shared/llm-models"
 import { config } from "./config.js"
+import { ADVANCED_MODE_UNAVAILABLE_MESSAGE } from "./llm-errors.js"
+import { anthropicDirectUsable, anthropicKeySet } from "./llm/anthropic-availability.js"
 import type { LlmServingLane } from "./pricing/llm-cost.js"
 
 /**
@@ -50,6 +52,8 @@ export interface LlmAdvancedInput {
  *  / `llmStream` / `llmCompleteStructured` request object. */
 export interface ResolvedLlmParams {
   requireLane?: LlmServingLane
+  /** Advanced mode is on: the call is never served from KIE (`LlmRequest.advancedMode`). */
+  advancedMode?: true
   temperature?: number
   maxTokens?: number
 }
@@ -61,26 +65,34 @@ export interface ResolvedLlmParams {
  * Returned rather than thrown so each route sends it with its own `reply`, and
  * worded from the shared constant so the 400 and the config panel's disabled
  * hint can't drift apart.
+ *
+ * `ignoreLatch` skips only the latched-out-account refusal (a missing key is
+ * still refused): for a route with its own non-KIE fallback that must stay
+ * reachable while the latch is open — describe-to-picker, whose Gemini
+ * fallback answers when the client refuses the Advanced call mid-flight.
  */
 export function advancedModeError(
   input: LlmAdvancedInput,
   llmModel: string | undefined,
+  opts: { ignoreLatch?: boolean } = {},
 ): { code: string; message: string } | null {
   if (!input.advancedMode) return null
   if (!supportsAdvancedMode(llmModel)) {
     return { code: "advanced_mode_unsupported", message: ADVANCED_MODE_UNAVAILABLE_REASON }
   }
   // The model HAS a direct lane, but this install may hold no key for it (a
-  // self-hosted install with no ANTHROPIC_API_KEY / GEMINI_API_KEY). Refuse up
-  // front, before any credit reservation, instead of failing inside the call.
-  const model = getLlmModel(llmModel!)
-  const keyed = model?.directGeminiModel ? Boolean(config.GEMINI_API_KEY) : Boolean(config.ANTHROPIC_API_KEY)
-  if (!keyed) {
-    return {
-      code: "advanced_mode_unavailable",
-      message: "Advanced mode needs this provider's own API key, which this installation does not have — turn Advanced mode off to run the model.",
-    }
+  // self-hosted install with no ANTHROPIC_API_KEY / GEMINI_API_KEY) — or, for
+  // Claude, the account may be refusing (this process saw it and latched the
+  // lane): Claude would then run on KIE, which ignores what Advanced mode
+  // unlocks. Refuse up front, before any credit reservation.
+  const noKey = {
+    code: "advanced_mode_unavailable",
+    message: "Advanced mode needs this provider's own API key, which this installation does not have — turn Advanced mode off to run the model.",
   }
+  const model = getLlmModel(llmModel!)
+  if (model?.directGeminiModel) return config.GEMINI_API_KEY ? null : noKey
+  if (!anthropicKeySet()) return noKey
+  if (!opts.ignoreLatch && !anthropicDirectUsable()) return { code: "advanced_mode_unavailable", message: ADVANCED_MODE_UNAVAILABLE_MESSAGE }
   return null
 }
 
@@ -101,6 +113,7 @@ export function resolveLlmParams(
   }
   return {
     requireLane: "direct",
+    advancedMode: true,
     temperature: input.temperature ?? defaults.temperature,
     maxTokens: input.maxTokens ?? defaults.maxTokens,
   }

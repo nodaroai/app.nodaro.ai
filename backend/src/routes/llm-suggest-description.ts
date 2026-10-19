@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
-import { config } from "../lib/config.js"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
+import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId } from "../lib/request-helpers.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -107,13 +107,13 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
       }
-      // llmComplete is called with modelId="claude-sonnet-4.6" which routes
-      // through Anthropic specifically. Without ANTHROPIC_API_KEY the LLM call
-      // 502s mid-request — gate it here with a clean 503 instead. (Checked
-      // before reserving credits so a misconfigured server never charges.)
-      if (!config.ANTHROPIC_API_KEY) {
+      // llmComplete is called with modelId="claude-sonnet-4.6", which the
+      // router serves on KIE or on the Anthropic account — refuse only when
+      // neither is configured. (Checked before reserving credits so a
+      // misconfigured server never charges.)
+      if (!claudeLaneConfigured()) {
         return reply.status(503).send({
-          error: { code: "provider_unavailable", message: "Anthropic API key not configured" },
+          error: { code: "provider_unavailable", message: "No AI provider key is configured" },
         })
       }
 

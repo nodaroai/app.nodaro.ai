@@ -8,13 +8,13 @@ import { LlmLaneError, assertNotContentRefusal, assertNotOutputCapped, type Repl
 import type { LlmRequest, LlmResponse } from "./types.js"
 
 /**
- * KIE's non-stream responses carry `credits_consumed` (KIE credits; 1 credit
- * = $0.005) — the ACTUAL provider charge for that call, which can drift from
- * our per-token rate table as KIE repriced models. Returns undefined when the
- * field is absent/non-positive/non-numeric so callers fall back to the table
- * estimate. KIE's SSE stream responses don't reliably carry this field, so
- * streaming call sites never pass data through this helper (table estimate
- * only — see {@link parseSseStream}).
+ * KIE's replies carry `credits_consumed` (KIE credits) — the ACTUAL provider
+ * charge for that call, which can drift from our per-token rate table as KIE
+ * reprices models. The non-stream bodies carry it, and so do KIE's Claude
+ * streams on whichever event states it (`parseSseStream` reads every event;
+ * the Copilot reads the `/anthropic` wire's `message_delta` through
+ * `kieCreditsUsdOf`). Returns undefined when the field is absent,
+ * non-positive or non-numeric, so callers fall back to an estimate.
  */
 const KIE_CREDIT_USD = 0.005
 
@@ -94,6 +94,7 @@ export function buildResponse(
     usage,
     model: model.id,
     providerCost,
+    ...(actualUsd !== undefined ? { creditsUsd: actualUsd } : {}),
     lane: lane === "direct" ? "direct-anthropic" : "kie",
   }
 }

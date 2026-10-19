@@ -25,6 +25,7 @@ import { config } from "../lib/config.js"
 import { createClient } from "@supabase/supabase-js"
 import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { runScriptCritic } from "../ee/pipelines/llms/script-critic.js"
+import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
 
 const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY)
 
@@ -254,6 +255,9 @@ async function probe(
 }
 
 async function main() {
+  // The stage prompts are private (the pipeline prompt registry): load them,
+  // or runScriptCritic throws before any model call is made.
+  await loadPrivatePlugins()
   console.log("[probe] loading FK triple from DB…")
   const fk = await loadFkTriple()
   console.log(

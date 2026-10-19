@@ -64,9 +64,15 @@ export function assertKieServable(model: LlmModelDef): void {
 }
 
 // Guarded entry points (see the lane-guard note in ./router.ts).
-export function callKie(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
+/**
+ * `signal` is honoured on the Claude (`messages`) wire — the one a caller that
+ * moves a Claude call to KIE itself passes it on (the film pipelines: their
+ * cancel combined with their own deadline). It also stops the transport-retry
+ * ladder: no attempt starts once it has fired.
+ */
+export function callKie(model: LlmModelDef, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   assertKieServable(model)
-  return guardLaneAccount({ lane: "kie", provider: "kie", modelId: model.id }, () => callKieUnguarded(model, req))
+  return guardLaneAccount({ lane: "kie", provider: "kie", modelId: model.id }, () => callKieUnguarded(model, req, signal))
 }
 
 export function streamKie(
@@ -91,7 +97,7 @@ export function streamKieMessages(
 // KIE.ai adapters
 // ---------------------------------------------------------------------------
 
-async function callKieUnguarded(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
+async function callKieUnguarded(model: LlmModelDef, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   switch (model.kieFormat) {
     case "chat-completions":
       // Images go inline on this format, never as URLs — fetched and fitted
@@ -111,7 +117,7 @@ async function callKieUnguarded(model: LlmModelDef, req: LlmRequest): Promise<Ll
       // to a single response is the only shape that can actually be served.
       return KIE_CLAUDE_NONSTREAM_VERIFIED
         ? callKieMessages(model, req)
-        : callKieMessagesCollapsed(model, req)
+        : callKieMessagesCollapsed(model, req, signal)
     case "responses":
       // Per MODEL, not per lane — the opposite of the Claude switch above.
       // KIE's non-streaming responses endpoint serves gpt-5.4/5.5/5.6 fine and
@@ -352,7 +358,7 @@ function kiePromptJsonPayload(model: LlmModelDef, streamed: LlmResponse): LlmRes
  * clean `input_json_delta` fragments — not the malformed `<tool_calls>`
  * pseudo-tag the non-streaming path has to reverse-engineer.
  */
-async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
+async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest, signal?: AbortSignal): Promise<LlmResponse> {
   // No caller wants the tokens — this is the non-streaming entry point.
   //
   // KIE's Claude stream fails transiently roughly 1 call in 5 (measured 2026-08-06: 3/4, 5/6,
@@ -361,7 +367,15 @@ async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest): Pr
   // attempt is the difference between ~80% and ~96% availability during an Anthropic incident.
   // An error frame that arrives AFTER `message_delta` reported usage is a billed answer and is
   // not retried; `withTransportRetry` makes that call, not this lane.
-  return withTransportRetry(model.id, req, () => streamKieMessages(model, req, () => {}))
+  // A caller's signal reaches each attempt, and once it has fired no further attempt starts:
+  // a cancel during a back-off pause ends the pause at once (the signal's reason is thrown).
+  return withTransportRetry(
+    model.id,
+    req,
+    () => streamKieMessages(model, req, () => {}, signal),
+    () => signal?.aborted === true,
+    signal,
+  )
 }
 
 // -- Responses format (GPT family + Grok) --

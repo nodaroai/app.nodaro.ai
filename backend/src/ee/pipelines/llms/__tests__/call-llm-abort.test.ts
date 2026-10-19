@@ -15,6 +15,8 @@ vi.mock("../../../../lib/anthropic.js", () => ({
 
 import { callLLM } from "../call-llm.js"
 import { pipelineContext } from "../../pipeline-context.js"
+import { config } from "../../../../lib/config.js"
+import { __resetPlatformExhaustionAlerts } from "../../../../lib/llm-platform-exhaustion.js"
 
 function fakeSupabase() {
   return {
@@ -36,7 +38,11 @@ const successResp = {
   usage: { input_tokens: 10, output_tokens: 5 },
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  config.ANTHROPIC_API_KEY = "sk-ant-test"
+  __resetPlatformExhaustionAlerts()
+})
 
 describe("callLLM — AbortSignal threading from pipeline-context", () => {
   it("passes the pipeline signal to messages.create when set", async () => {

@@ -2415,13 +2415,23 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > field on their node `data` (`reasoningEffort?: LlmReasoningEffort`), and
 > `client.promptHelper.*` accepts it directly in its request body.
 
-> **Advanced mode.** The same routes accept `advancedMode: true` (Gemini models
-> only), which runs the request on the provider's own API rather than through
+> **Advanced mode.** The same routes accept `advancedMode: true` (Gemini and
+> Claude models), which runs the request on the provider's own API rather than through
 > the aggregator. That is the only lane where `temperature`, `maxTokens` and the
 > full reasoning-effort range actually take effect — on the default lane those
 > levers are not reliably honoured. It bills **one credit rung up** (a premium model moves to its premium-direct price), and this
 > bump is independent of the effort bump above. A model with no direct lane
-> returns `400 advanced_mode_unsupported`. Canvas LLM nodes carry the same field
+> returns `400 advanced_mode_unsupported`.
+> While the model's own provider is not taking requests, an Advanced-mode
+> request answers `advanced_mode_unavailable` (400 up front, or 502 mid-call,
+> refunded) instead of running on the default lane — turn Advanced mode off to
+> run the model. Describe to Picker is the exception: a Claude run there that
+> Claude's provider refuses falls back to Gemini 3.8 Flash, as it does with
+> Advanced mode off (see
+> [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost)); an
+> installation with no Anthropic key of its own still answers
+> `400 advanced_mode_unavailable`.
+> Canvas LLM nodes carry the same field
 > on their node `data` (`advancedMode?: boolean`), and the CLI exposes it as
 > `--advanced`.
 >

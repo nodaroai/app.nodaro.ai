@@ -71,18 +71,18 @@ describe("resolveLlmParams", () => {
 
   it("advanced ON pins the direct lane and honours caller values", () => {
     expect(resolveLlmParams({ advancedMode: true, temperature: 1.5, maxTokens: 8192 }, { temperature: 0.3, maxTokens: 2048 }))
-      .toEqual({ requireLane: "direct", temperature: 1.5, maxTokens: 8192 })
+      .toEqual({ requireLane: "direct", advancedMode: true, temperature: 1.5, maxTokens: 8192 })
   })
 
   it("advanced ON with untouched sliders changes only the lane", () => {
     expect(resolveLlmParams({ advancedMode: true }, { temperature: 0.3, maxTokens: 2048 }))
-      .toEqual({ requireLane: "direct", temperature: 0.3, maxTokens: 2048 })
+      .toEqual({ requireLane: "direct", advancedMode: true, temperature: 0.3, maxTokens: 2048 })
   })
 
   it("handles a route that has no defaults at all", () => {
     expect(resolveLlmParams({})).toEqual({ temperature: undefined, maxTokens: undefined })
     expect(resolveLlmParams({ advancedMode: true }))
-      .toEqual({ requireLane: "direct", temperature: undefined, maxTokens: undefined })
+      .toEqual({ requireLane: "direct", advancedMode: true, temperature: undefined, maxTokens: undefined })
   })
 
   it("temperature 0 survives — it is a real value, not a missing one", () => {
