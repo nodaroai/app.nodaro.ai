@@ -29,7 +29,7 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | User Input | `string` | `""` | The main prompt. Can include references to upstream nodes via field mappings |
 | Model | `string` | `gemini-3.6-flash` | LLM model picked via the model selector — drives both capability and credit cost (see [Credit pricing](#credit-pricing)) |
 | Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative). Ignored by models that reject the parameter (Claude Opus 4.7, GPT-5.5, the GPT-5.6 and GPT-6 families, Grok 4.6 and 4.7, Claude Sonnet 5 and 5.5, Claude Opus 4.8, 5 and 5.5, Claude Fable 5, Kimi K3, and DeepSeek V4.1 Flash) |
-| Max Tokens | `number` | `8192` | Maximum output length in tokens. A model's reasoning counts toward it, so the cap has a floor: at `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default — it is raised to 32768 (Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash, Gemini 4 Argon), 16384 (Gemini 3.8 Flash, Gemini 3.1 Pro) or 8192 (Gemini 3 Flash, Gemini 3.6 Flash, Gemini 3.7 Flash). If the model still reaches the cap before it finishes, the run **fails** with a *cut off* error and its credits are refunded — a partial answer is never saved or passed to the next node. DeepSeek V4.1 Flash does not accept an output cap at all, so Max Tokens does not limit its answer |
+| Max Tokens | `number` | `8192` | Maximum output length in tokens. A model's reasoning counts toward it, so the cap has a floor: at `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default — it is raised to 32768 (Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash, Gemini 4 Argon), 16384 (Gemini 3.8 Flash, Gemini 3.1 Pro) or 8192 (Gemini 3 Flash, Gemini 3.6 Flash). If the model still reaches the cap before it finishes, the run **fails** with a *cut off* error and its credits are refunded — a partial answer is never saved or passed to the next node. DeepSeek V4.1 Flash does not accept an output cap at all, so Max Tokens does not limit its answer |
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
 | Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** (above the model's reasoning floor — see Max Tokens) and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit rung up (a premium model moves to premium-direct); the node's cost badge updates immediately. Disabled with an inline reason on other models |
@@ -43,7 +43,6 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 |-------|------|--------------------------|
 | Gemini 3 Flash | Economy | image + video + audio |
 | Gemini 3.6 Flash | Economy | image + video + audio |
-| Gemini 3.7 Flash | Economy | image only |
 | Gemini 3.8 Flash | Economy | image only |
 | Claude Haiku 4.5 | Economy | image only |
 | Claude Haiku 5.5 | Economy | image only |
@@ -72,9 +71,11 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 | Claude Fable 5 | Premium | image only |
 | Kimi K3 | Premium | image only |
 
+**Gemini 3.7 Flash is retired.** The selector no longer offers it, but a node or API call that already names `gemini-3.7-flash` keeps running at the same price. On the standard route it is usually answered by Gemini 3.8 Flash; with **Advanced mode** on, Gemini 3.7 Flash itself answers. Its Max Tokens floor stays at 8192. Pick Gemini 3.8 Flash for new work.
+
 The default model is Gemini 3.6 Flash (economy tier). Most models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever — though the two Gemini models gain one under **Advanced mode**, which reaches the provider's fuller range) — see [Reasoning effort](#reasoning-effort).
 
-Gemini 3.7 Flash, Gemini 3.8 Flash and Gemini 4 Argon currently accept **image references only** — video/audio references for them are not yet enabled (use Gemini 3.6 Flash or Gemini 3.1 Pro for those).
+Gemini 3.8 Flash and Gemini 4 Argon currently accept **image references only** — video/audio references for them are not yet enabled (use Gemini 3.6 Flash or Gemini 3.1 Pro for those).
 
 ## Canvas controls
 
@@ -103,7 +104,7 @@ Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2
 ### Multimodal inputs
 
 - **Image reference** — supported by every model. Useful for "describe this image", "write a caption", or generating prompts from a connected image.
-- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, or Gemini 3.1 Pro — Gemini 3.7 Flash, Gemini 3.8 Flash and Gemini 4 Argon are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
+- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, or Gemini 3.1 Pro — Gemini 3.8 Flash and Gemini 4 Argon are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
 
 ## Presets
 
@@ -185,7 +186,7 @@ Examples (LLM Chat: 2 cr<!-- credits: llm-chat:economy --> economy / 3 cr<!-- cr
 - DeepSeek V4.1 Flash at `xhigh` → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
 - GPT-6.1 Sol has no `none` level (its ladder is low…max): a `none` request runs at the vendor default
 - Kimi K3 exposes `low`/`medium`/`high` only — requests above `high` clamp down to it, so it always bills premium (7 credits<!-- credits: llm-chat:premium -->)
-- Gemini 3.6 Flash, Gemini 3.7 Flash, and Gemini 3.8 Flash expose `low`/`high` only — none of them changes the price (requests above `high` clamp down to it)
+- Gemini 3.6 Flash and Gemini 3.8 Flash expose `low`/`high` only — none of them changes the price (requests above `high` clamp down to it)
 - Gemini 4 Argon exposes `low`/`medium`/`high` (no `none`: its provider has no minimal level for it, so a `none` request runs at Auto). Every level bills 17 credits<!-- credits: llm-chat:premium-direct --> — see above
 
 ## Best Practices
@@ -193,12 +194,12 @@ Examples (LLM Chat: 2 cr<!-- credits: llm-chat:economy --> economy / 3 cr<!-- cr
 - Use the Instructions (System Prompt) to define output format, tone, and constraints — good instructions dramatically improve consistency.
 - Reference upstream nodes in the User Input via field mappings for dynamic, context-aware prompts.
 - Keep Temperature at 0.7 for a balance of creativity and coherence. Lower it for factual or structured output; raise it for brainstorming.
-- For long-form content, raise Max Tokens. The default (8192) handles most cases, but an answer that reaches the cap fails the run (credits refunded) rather than being saved cut off. At `xhigh`/`max` effort the cap is automatically floored — and so it is at **every** effort, including `Auto`, on the models that reason by default, whose reasoning tokens share the output budget on every call: 32768 for Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash and Gemini 4 Argon; 16384 for Gemini 3.8 Flash and Gemini 3.1 Pro; 8192 for Gemini 3 Flash, Gemini 3.6 Flash and Gemini 3.7 Flash. A small Max Tokens on those models is raised to the floor, so it cannot starve the answer.
+- For long-form content, raise Max Tokens. The default (8192) handles most cases, but an answer that reaches the cap fails the run (credits refunded) rather than being saved cut off. At `xhigh`/`max` effort the cap is automatically floored — and so it is at **every** effort, including `Auto`, on the models that reason by default, whose reasoning tokens share the output budget on every call: 32768 for Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash and Gemini 4 Argon; 16384 for Gemini 3.8 Flash and Gemini 3.1 Pro; 8192 for Gemini 3 Flash and Gemini 3.6 Flash. A small Max Tokens on those models is raised to the floor, so it cannot starve the answer.
 - If a run fails with *The answer was cut off*, ask for a shorter answer in the instructions, lower **Effort**, or raise Max Tokens.
 - If a run fails with *Content policy violation*, the provider's safety or recitation filter withheld the answer (on a Gemini model running on Google's own API this includes a reply stopped for reciting existing text). Nothing is saved, the credits are refunded, and the run is not retried on another model — rephrase the request, or ask for an original answer rather than reproduced text.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
 - Pick the cheapest model that meets your quality bar — economy (2 cr<!-- credits: llm-chat:economy -->) is plenty for rewriting and captioning; reserve premium (7 cr<!-- credits: llm-chat:premium -->) for complex reasoning.
-- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.7 Flash, Gemini 3.8 Flash and Gemini 4 Argon are image-only for now).
+- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.8 Flash and Gemini 4 Argon are image-only for now).
 
 ## Common Use Cases
 

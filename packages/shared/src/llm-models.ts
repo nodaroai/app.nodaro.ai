@@ -33,6 +33,24 @@ export interface LlmModelDef {
    *  For messages: the model id sent in the body (e.g. "claude-haiku-4-5-v1messages").
    *  For responses: the model id sent in the body (e.g. "gpt-5-4"). */
   kieSlugOrModel: string
+  /**
+   * The registry id of the model the aggregator ACTUALLY answers this id's KIE
+   * lane with, when that is a different model. Set together with borrowing
+   * that model's `kieSlugOrModel`, so the wire names what really runs. Only
+   * the KIE lane is affected: the direct lane still serves `directGeminiModel`.
+   * The KIE lane is costed on that model's KIE rate row. A lookup by the
+   * borrowed slug ({@link getLlmModel}) always resolves to its owner, never
+   * to the borrower. Absent = KIE serves this id as itself.
+   */
+  kieServedAs?: string
+  /**
+   * true = no longer offered: every model menu and advertised list leaves it
+   * out ({@link PICKABLE_LLM_MODELS}, {@link groupLlmModelsByVendor}), while
+   * the id stays in {@link LLM_MODEL_IDS}, so a saved node or API call that
+   * names it keeps validating, resolving and running exactly as before. No
+   * default may point at a retired model (registry test).
+   */
+  retired?: true
   vendor: LlmVendor
   supportsImages: boolean
   maxOutputTokens: number
@@ -279,10 +297,14 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     desc: "Fast Gemini, agentic-tuned",
     tier: "economy",
     kieFormat: "chat-completions",
-    // KIE serves it on the OpenAI-compatible dialect under this slug
-    // (docs.kie.ai/market/gemini/gemini-3-7-flash-openai.md) — same
-    // chat-completions path shape as gemini-3.6-flash.
-    kieSlugOrModel: "gemini-3-7-flash-openai",
+    // Retired 2026-10-19: the aggregator answers this model's own endpoint
+    // (`gemini-3-7-flash-openai`) with 3.8, so the KIE lane now names 3.8's
+    // endpoint outright and says so. The direct Google lane below still serves
+    // real 3.7, Advanced mode included. The entry leaves every picker; saved
+    // nodes and API callers that name the id keep running unchanged.
+    kieSlugOrModel: "gemini-3-8-flash-openai",
+    kieServedAs: "gemini-3.8-flash",
+    retired: true,
     vendor: "google",
     structuredOutputMode: "kie-response-format",
     supportsImages: true,
@@ -1011,6 +1033,24 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
 
 export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 
+/** True when the model is registered but retired (see `LlmModelDef.retired`). */
+export function isLlmModelRetired(id: string): boolean {
+  return getLlmModel(id)?.retired === true
+}
+
+/** The models a picker may OFFER: the registry minus retired entries. The
+ *  accepted set is still {@link LLM_MODEL_IDS}. */
+export const PICKABLE_LLM_MODELS: readonly LlmModelDef[] = LLM_MODELS.filter((m) => !m.retired)
+
+/**
+ * {@link PICKABLE_LLM_MODELS}, plus `currentId`'s own entry when it is a
+ * retired model — for a plain select that has to keep showing a saved node's
+ * value as selected. Registry order either way.
+ */
+export function pickableLlmModels(currentId?: string): LlmModelDef[] {
+  return LLM_MODELS.filter((m) => !m.retired || m.id === currentId)
+}
+
 /** Vision models that can return GUARANTEED structured output — the
  *  describe-to-picker analyzer forces a schema over an image, so its model
  *  pickers AND the backend route gate offer exactly these: Anthropic (forced
@@ -1054,12 +1094,14 @@ export interface LlmModelGroup {
  * A flat registry-order dump was genuinely hard to scan at 17 models — every
  * picker (config panel, quick strips, quick toolbar) derives from this so the
  * menus can't drift apart. Groups with no models (after `filter`) are omitted.
+ * Retired models are never listed, whatever list is passed in: a menu offers
+ * only what can be picked (a saved retired value is labelled by the caller).
  */
 export function groupLlmModelsByVendor(models: readonly LlmModelDef[] = LLM_MODELS): LlmModelGroup[] {
   const groups: LlmModelGroup[] = []
   for (const vendor of LLM_VENDOR_ORDER) {
     const members = models
-      .filter((m) => m.vendor === vendor)
+      .filter((m) => m.vendor === vendor && !m.retired)
       .sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier])
     if (members.length > 0) groups.push({ vendor, label: LLM_VENDOR_LABELS[vendor], models: members })
   }
@@ -1283,6 +1325,15 @@ function dashAliasToCanonical(id: string): string {
   return id.replace(/-(\d+)-(\d+)$/, "-$1.$2")
 }
 
+/**
+ * Retired provider slugs that still name a registered model — a model whose KIE
+ * lane moved to another model's endpoint (`kieServedAs`) no longer carries its
+ * old slug, but stored configs and job rows may.
+ */
+const LEGACY_PROVIDER_SLUGS: Readonly<Record<string, string>> = {
+  "gemini-3-7-flash-openai": "gemini-3.7-flash",
+}
+
 export function getLlmModel(id: string): LlmModelDef | undefined {
   const exact = LLM_MODELS.find((m) => m.id === id)
   if (exact) return exact
@@ -1291,11 +1342,18 @@ export function getLlmModel(id: string): LlmModelDef | undefined {
     const aliased = LLM_MODELS.find((m) => m.id === canonical)
     if (aliased) return aliased
   }
+  const legacy = LEGACY_PROVIDER_SLUGS[id]
+  if (legacy) return LLM_MODELS.find((m) => m.id === legacy)
   // Last resort: provider slugs double as historical aliases (e.g. the
   // dated Anthropic slugs, the `-preview`-suffixed Google ids) — accept any
-  // model whose slug matches exactly, on either lane.
+  // model whose slug matches exactly, on either lane. A KIE slug borrowed
+  // through `kieServedAs` belongs to the model that answers it, so the
+  // borrower never matches on it — whatever the registry order.
   return LLM_MODELS.find(
-    (m) => m.kieSlugOrModel === id || m.directFallbackModel === id || m.directGeminiModel === id,
+    (m) =>
+      (m.kieSlugOrModel === id && !m.kieServedAs) ||
+      m.directFallbackModel === id ||
+      m.directGeminiModel === id,
   )
 }
 

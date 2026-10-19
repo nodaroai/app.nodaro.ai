@@ -277,7 +277,8 @@ export function LlmChatQuickToolbar({
             <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
-                  <SelectValue />
+                  {/* Named explicitly: a retired model a saved node keeps has no menu item to label it. */}
+                  <SelectValue>{modelLabel}</SelectValue>
                 </SelectTrigger>
                 {modelItems}
               </Select>

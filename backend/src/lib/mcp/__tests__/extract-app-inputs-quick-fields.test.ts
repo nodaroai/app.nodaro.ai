@@ -83,6 +83,17 @@ describe("quickFieldRefusal — what an app run holds a strip-derived field to",
     expect(quickFieldRefusal("generate-3d-scene", "durationSeconds", spec.max! + 1)).toMatch(/between/)
   })
 
+  it("accepts a retired model a saved node or caller still names, without advertising it", () => {
+    const spec = EXPOSABLE_QUICK_FIELDS["image-to-text"]!.llmModel!
+    expect(spec.fixed).toBe(true)
+    expect(spec.values).not.toContain("gemini-3.7-flash")
+    expect(spec.retained).toContain("gemini-3.7-flash")
+    expect(quickFieldRefusal("image-to-text", "llmModel", "gemini-3.7-flash")).toBeNull()
+    expect(quickFieldRefusal("image-to-text", "llmModel", "gemini-3.8-flash")).toBeNull()
+    expect(quickFieldRefusal("image-to-text", "llmModel", "not-a-model")).toMatch(/Allowed/)
+    expect(quickFieldRefusal("image-to-text", "llmModel", "not-a-model")).not.toMatch(/gemini-3\.7-flash/)
+  })
+
   it("never refuses a clear (null)", () => {
     expect(quickFieldRefusal("video-to-video", "provider", null)).toBeNull()
   })

@@ -21,7 +21,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { REDUCE_STRATEGIES } from "@nodaro/shared/workflow"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
+import { LLM_FEATURE_DEFAULTS, getLlmModel, pickableLlmModels } from "@nodaro/shared/llm-models"
 import { REDUCE_INPUT_KIND_OPTIONS, reduceInputKindLabel } from "@/components/editor/config-panels/reduce-strategy-forms"
 import type { ReduceNodeData } from "@/types/nodes"
 
@@ -220,7 +220,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                   <SelectValue>{judgeModelLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className="node-menu-surface">
-                  {LLM_MODELS.map((m) => (
+                  {pickableLlmModels(judgeModelId).map((m) => (
                     <SelectItem key={m.id} value={m.id} className="text-xs">
                       <span className="flex flex-col gap-0.5">
                         <span>{m.displayName}</span>

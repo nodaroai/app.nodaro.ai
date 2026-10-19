@@ -1287,7 +1287,7 @@ not by a global switch:
 |-------|--------------|-----------------------|
 | `gemini-3-flash` | KIE | KIE fails |
 | `gemini-3.6-flash` | KIE | KIE fails |
-| `gemini-3.7-flash` | KIE | KIE fails |
+| `gemini-3.7-flash` (retired) | KIE, on `gemini-3.8-flash`'s endpoint (KIE answers 3.7 with 3.8) | KIE fails — the direct lane is real 3.7 |
 | `gemini-3.8-flash` | KIE | KIE fails |
 | `gemini-3.1-pro` | Direct Google | always (KIE is the fallback) |
 | `gemini-4-argon` | Direct Google — ONLY | always; it has no KIE lane, so without the key it fails as provider-unavailable |

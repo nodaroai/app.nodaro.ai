@@ -249,6 +249,47 @@ describe("KIE-first Gemini models keep their existing routing", () => {
   })
 })
 
+describe("gemini-3.7-flash (retired) still runs: KIE lane on 3.8's endpoint, direct lane real 3.7", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.resetModules()
+    callGeminiDirect.mockReset()
+    configMock.KIE_API_KEY = "test-kie-key"
+    configMock.GEMINI_API_KEY = "test-gemini-key"
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("sends the KIE call to 3.8's endpoint — the model KIE answers it with", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    fetchMock.mockResolvedValue(kieOk())
+
+    const res = await llmComplete({ modelId: "gemini-3.7-flash", ...baseReq })
+
+    expect(res.text).toBe("from-kie")
+    expect(String(fetchMock.mock.calls[0]![0])).toMatch(/\/gemini-3-8-flash-openai\/v1\/chat\/completions$/)
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+    expect(body.model).toBe("gemini-3-8-flash-openai")
+    // The registry cap is 3.7's own, unchanged.
+    expect(body.max_tokens).toBe(8192)
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+  })
+
+  it("serves the direct pin (Advanced mode's lane) with real gemini-3.7-flash", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    callGeminiDirect.mockResolvedValue(directOk())
+
+    await llmComplete({ modelId: "gemini-3.7-flash", ...baseReq, requireLane: "direct" })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    const model = callGeminiDirect.mock.calls[0]![0] as { id: string; directGeminiModel: string }
+    expect(model.id).toBe("gemini-3.7-flash")
+    expect(model.directGeminiModel).toBe("gemini-3.7-flash")
+  })
+})
+
 describe("without GEMINI_API_KEY the direct lane does not exist", () => {
   let fetchMock: ReturnType<typeof vi.fn>
 

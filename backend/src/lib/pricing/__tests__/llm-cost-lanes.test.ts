@@ -64,16 +64,33 @@ describe("serving lane selects the rate band", () => {
     // The Gemini gap is the entire reason lane routing is a per-model
     // decision. If a copy-paste ever made these equal, the cost case for
     // KIE-first routing would vanish and nothing else would catch it.
-    // gemini-3.7-flash is deliberately NOT here: KIE never published a list
-    // price for it, so its KIE row is pinned to Google's own intro rate and the
-    // two bands are equal BY CONSTRUCTION. gemini-3.8-flash does have a
-    // published KIE price (45/225 credits per M), so the gap is real again.
-    for (const id of ["gemini-3-flash", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.1-pro"]) {
+    // gemini-3.7-flash's KIE lane is answered by 3.8 and costed as 3.8 (see
+    // the KIE-redirect block below), so its gap is 3.8's.
+    for (const id of ["gemini-3-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.1-pro"]) {
       const usage = { inputTokens: 10_000, outputTokens: 2_000 }
       expect(
         calculateLlmCost(id, usage, "direct"),
         `${id} direct must exceed KIE`,
       ).toBeGreaterThan(calculateLlmCost(id, usage, "kie"))
+    }
+  })
+})
+
+describe("KIE-redirected models", () => {
+  const usage = { inputTokens: 10_000, outputTokens: 2_000 }
+
+  it("costs gemini-3.7-flash's KIE lane exactly as 3.8 — the model that answers it", () => {
+    expect(calculateLlmCost("gemini-3.7-flash", usage, "kie")).toBe(calculateLlmCost("gemini-3.8-flash", usage, "kie"))
+  })
+
+  it("leaves gemini-3.7-flash's direct lane on its own Google row", () => {
+    // Its own direct row, exactly as before the KIE remap.
+    expect(calculateLlmCost("gemini-3.7-flash", { inputTokens: 1000, outputTokens: 500 }, "direct")).toBeCloseTo(0.002625, 10)
+  })
+
+  it("every model whose KIE lane another model answers is costed on that model's KIE row", () => {
+    for (const m of LLM_MODELS.filter((x) => x.kieServedAs)) {
+      expect(calculateLlmCost(m.id, usage, "kie"), m.id).toBe(calculateLlmCost(m.kieServedAs!, usage, "kie"))
     }
   })
 })

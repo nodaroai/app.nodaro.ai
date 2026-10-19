@@ -77,6 +77,31 @@ describe("QuickFieldCard", () => {
   })
 })
 
+describe("QuickFieldCard keeps a retired model a saved node still runs", () => {
+  // gemini-3.7-flash is retired: no menu offers it, but a node that stored it keeps running it.
+  const llm = () => control("image-to-text", "llmModel")
+  const saved = { llmModel: "gemini-3.7-flash" }
+
+  it("never rewrites it, and labels it, when the publisher set no restriction", () => {
+    const onPatch = vi.fn()
+    render(<QuickFieldCard control={llm()} nodeData={saved} onPatch={onPatch} />)
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(screen.getByRole("combobox", { name: llm().ariaLabel })).toHaveTextContent("Gemini 3.7 Flash")
+  })
+
+  it("never rewrites it when the restriction allows it", () => {
+    const onPatch = vi.fn()
+    render(<QuickFieldCard control={llm()} nodeData={saved} allowedValues={["gemini-3.7-flash", "gemini-3.8-flash"]} onPatch={onPatch} />)
+    expect(onPatch).not.toHaveBeenCalled()
+  })
+
+  it("snaps it like any stale value when the restriction rules it out", () => {
+    const onPatch = vi.fn()
+    render(<QuickFieldCard control={llm()} nodeData={saved} allowedValues={["gemini-3.8-flash"]} onPatch={onPatch} />)
+    expect(onPatch).toHaveBeenCalledWith({ llmModel: "gemini-3.8-flash" })
+  })
+})
+
 describe("ConfigFieldRenderer renders a derived field with the quick card", () => {
   it("Video to Video's Draft field writes both fields through onPatch", async () => {
     const onPatch = vi.fn()

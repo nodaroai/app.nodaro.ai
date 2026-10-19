@@ -4,6 +4,7 @@ import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   getQuickConfigs,
   isInQuickConfigRange,
+  quickConfigRetainedOption,
   quickConfigOptionValue,
   readQuickConfigValue,
   resolveQuickConfigOptions,
@@ -132,7 +133,7 @@ export function quickFieldValueLabel(field: ResolvedExposableField, nodeData: Re
   const stored = readQuickConfigValue(control, nodeData)
   const value = stored !== "" ? stored : (control.defaultValue ?? "")
   if (value === "") return undefined
-  const option = resolveQuickConfigOptions(control, nodeData).find((o) => o.value === value)
+  const option = resolveQuickConfigOptions(control, nodeData).find((o) => o.value === value) ?? quickConfigRetainedOption(control, value)
   if (option) return option.label
   return isInQuickConfigRange(control, value) ? `${value}${control.customRange?.unit ?? ""}` : undefined
 }

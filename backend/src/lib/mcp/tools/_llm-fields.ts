@@ -14,14 +14,18 @@
  * place instead of hunting every tool that should have carried it.
  */
 import { z } from "zod"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, PICKABLE_LLM_MODELS } from "@nodaro/shared/llm-models"
 
 /** MCP-facing schema fragment. Snake_case for the advanced trio matches the
  *  surrounding MCP convention; `llmModel` keeps its existing camelCase spelling
  *  because renaming it would break callers already passing it. */
 export const LLM_MCP_FIELDS = {
+  // Accepts every registered id (a caller naming a retired model keeps working,
+  // as the routes do) but ADVERTISES only the pickable ones: the `enum` meta
+  // replaces the list in the published JSON schema and the generated docs.
   llmModel: z
     .enum(LLM_MODEL_IDS as [string, ...string[]])
+    .meta({ enum: PICKABLE_LLM_MODELS.map((m) => m.id) })
     .optional()
     .describe("LLM model id. Defaults to this feature's configured model."),
   reasoning_effort: z

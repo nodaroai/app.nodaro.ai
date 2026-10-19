@@ -21,6 +21,9 @@ import {
   LLM_VENDOR_LABELS,
   groupLlmModelsByVendor,
   orderedLlmModels,
+  PICKABLE_LLM_MODELS,
+  pickableLlmModels,
+  isLlmModelRetired,
   REASONING_OUTPUT_FLOOR,
   reasoningOutputFloor,
   llmServesDirect,
@@ -802,7 +805,8 @@ describe("gemini-3.7-flash exposure", () => {
     expect(m?.tier).toBe("economy")
     expect(m?.vendor).toBe("google")
     expect(m?.kieFormat).toBe("chat-completions")
-    expect(m?.kieSlugOrModel).toBe("gemini-3-7-flash-openai")
+    // Its KIE lane is served by 3.8's endpoint (see the retirement block below).
+    expect(m?.kieSlugOrModel).toBe("gemini-3-8-flash-openai")
     // KIE-first on purpose (no preferDirect): the cheap lane serves Generate
     // Text; the direct lane is Advanced mode + the reliability fallback.
     expect(m?.preferDirect).toBeUndefined()
@@ -821,6 +825,81 @@ describe("gemini-3.7-flash exposure", () => {
     // valid TOGETHER with the VA-side tier/pricing decision.
     expect(getLlmModalityCaps("gemini-3.7-flash")).toEqual({ image: true, video: false, audio: false })
     expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-3.7-flash")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// gemini-3.7-flash retirement (2026-10-19): the aggregator answers 3.7's own
+// endpoint with 3.8, so the KIE lane says so explicitly, and the id leaves the
+// pickers while every saved node / API call that names it keeps running.
+// ---------------------------------------------------------------------------
+describe("gemini-3.7-flash retirement", () => {
+  it("its KIE lane sends 3.8's slug and declares that 3.8 answers it", () => {
+    const m37 = getLlmModel("gemini-3.7-flash")
+    const m38 = getLlmModel("gemini-3.8-flash")
+    expect(m37?.kieSlugOrModel).toBe(m38?.kieSlugOrModel)
+    expect(m37?.kieServedAs).toBe("gemini-3.8-flash")
+  })
+
+  it("the direct Google lane is unchanged — real 3.7, Advanced mode included", () => {
+    const m = getLlmModel("gemini-3.7-flash")
+    expect(m?.directGeminiModel).toBe("gemini-3.7-flash")
+    expect(supportsAdvancedMode("gemini-3.7-flash")).toBe(true)
+    expect(llmServesDirect("gemini-3.7-flash", undefined, true)).toBe(true)
+    expect(availableReasoningEfforts("gemini-3.7-flash", true)).toEqual(["none", "low", "medium", "high"])
+  })
+
+  it("a lookup by 3.8's KIE slug resolves to 3.8, never to the retired id registered before it", () => {
+    expect(getLlmModel("gemini-3-8-flash-openai")?.id).toBe("gemini-3.8-flash")
+  })
+
+  it("3.7's old KIE slug still resolves to 3.7 (stored configs and job rows carry it)", () => {
+    expect(getLlmModel("gemini-3-7-flash-openai")?.id).toBe("gemini-3.7-flash")
+  })
+
+  it("is retired: still registered, accepted and resolvable, but never offered", () => {
+    expect(isLlmModelRetired("gemini-3.7-flash")).toBe(true)
+    expect(isLlmModelRetired("gemini-3.8-flash")).toBe(false)
+    expect(LLM_MODEL_IDS).toContain("gemini-3.7-flash")
+    // The structured-vision list doubles as a backend route gate.
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("gemini-3.7-flash")
+    expect(getLlmModel("gemini-3.7-flash")?.id).toBe("gemini-3.7-flash")
+    expect(PICKABLE_LLM_MODELS.map((m) => m.id)).not.toContain("gemini-3.7-flash")
+    expect(orderedLlmModels().map((m) => m.id)).not.toContain("gemini-3.7-flash")
+    expect(orderedLlmModels(STRUCTURED_VISION_MODELS).map((m) => m.id)).not.toContain("gemini-3.7-flash")
+    expect(groupLlmModelsByVendor(LLM_MODELS).flatMap((g) => g.models.map((m) => m.id))).not.toContain("gemini-3.7-flash")
+  })
+
+  it("bills exactly as before — same rung as 3.8, no credit-id change", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gemini-3.7-flash")).toBe(buildLlmCreditIdentifier("llm-chat", "gemini-3.8-flash"))
+  })
+
+  it("a stored value keeps its slot in a picker that must show it selected", () => {
+    expect(pickableLlmModels("gemini-3.7-flash").map((m) => m.id)).toContain("gemini-3.7-flash")
+    expect(pickableLlmModels("gemini-3.8-flash").map((m) => m.id)).not.toContain("gemini-3.7-flash")
+    expect(pickableLlmModels().map((m) => m.id)).toEqual(PICKABLE_LLM_MODELS.map((m) => m.id))
+  })
+})
+
+describe("retired / KIE-redirect invariants", () => {
+  it("a KIE redirect names a registered, live model that owns the slug it borrows", () => {
+    for (const m of LLM_MODELS.filter((x) => x.kieServedAs)) {
+      const target = LLM_MODELS.find((x) => x.id === m.kieServedAs)
+      expect(target, `${m.id} → ${m.kieServedAs}`).toBeDefined()
+      expect(target!.kieSlugOrModel, m.id).toBe(m.kieSlugOrModel)
+      expect(target!.kieServedAs, m.id).toBeUndefined()
+      expect(target!.retired, m.id).toBeUndefined()
+      // Every lookup by the borrowed slug lands on its owner.
+      expect(getLlmModel(m.kieSlugOrModel)?.id, m.id).toBe(target!.id)
+    }
+  })
+
+  it("no default points at a retired model", () => {
+    const retired = new Set(LLM_MODELS.filter((m) => m.retired).map((m) => m.id))
+    for (const [feature, id] of Object.entries(LLM_FEATURE_DEFAULTS)) {
+      expect(retired.has(id), `LLM_FEATURE_DEFAULTS["${feature}"]`).toBe(false)
+    }
+    expect(retired.has(DESCRIBE_TO_PICKER_FALLBACK_MODEL)).toBe(false)
   })
 })
 
@@ -1247,10 +1326,10 @@ describe("groupLlmModelsByVendor / orderedLlmModels", () => {
     }
   })
 
-  it("covers every model exactly once, in vendor order", () => {
+  it("covers every model a picker may offer exactly once, in vendor order — retired ones never", () => {
     const groups = groupLlmModelsByVendor()
     const flattened = groups.flatMap((g) => g.models.map((m) => m.id))
-    expect(flattened.sort()).toEqual(LLM_MODELS.map((m) => m.id).sort())
+    expect(flattened.sort()).toEqual(LLM_MODELS.filter((m) => !m.retired).map((m) => m.id).sort())
     expect(new Set(flattened).size).toBe(flattened.length)
     const groupVendors = groups.map((g) => g.vendor)
     expect(groupVendors).toEqual(LLM_VENDOR_ORDER.filter((v) => groupVendors.includes(v)))

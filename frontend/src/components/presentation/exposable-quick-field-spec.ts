@@ -27,6 +27,11 @@ export interface ExposableQuickFieldSpec {
    * the route's and the payload normalizer's to decide.
    */
   readonly fixed: boolean
+  /**
+   * Values the field still TAKES but no longer offers (the strip's `retainedOptions` — a retired model a saved
+   * node or caller still names): a run naming one is accepted, and nothing advertises it. Absent when none.
+   */
+  readonly retained?: ReadonlyArray<ExposableQuickValue>
   /** A numeric field that also takes any value in this range (the strip's "Custom…"). */
   readonly min?: number
   readonly max?: number
@@ -113,10 +118,15 @@ function specOf(control: QuickConfigControl, raw: Set<string> | undefined): Expo
       : list.every((v) => typeof v === "boolean")
         ? "boolean"
         : "string"
+  const offered = new Set(list.map(keyOf))
+  const retained = (control.retainedOptions ?? [])
+    .map((o) => quickConfigOptionValue(control, o.value) as ExposableQuickValue)
+    .filter((v) => v !== undefined && !offered.has(keyOf(v)))
   return {
     valueType,
     values: [...list].sort(compareValues),
     fixed: dataIndependentOptions(control) !== undefined,
+    ...(retained.length > 0 ? { retained: [...retained].sort(compareValues) } : {}),
     ...(range ? { min: range.min, max: range.max } : {}),
   }
 }
@@ -154,6 +164,8 @@ export function renderExposableQuickFieldsModule(specs: Record<string, Record<st
     "  readonly values: ReadonlyArray<string | number | boolean>",
     "  /** The same list whatever else the node is set to: a run is held to it. A provider-aware list is not. */",
     "  readonly fixed: boolean",
+    "  /** Values the field still takes but no longer offers (a retired model): a run naming one is accepted, nothing advertises it. */",
+    "  readonly retained?: ReadonlyArray<string | number | boolean>",
     "  /** A numeric field that also takes any value in this range. */",
     "  readonly min?: number",
     "  readonly max?: number",
@@ -166,7 +178,8 @@ export function renderExposableQuickFieldsModule(specs: Record<string, Record<st
     lines.push(`  ${JSON.stringify(type)}: {`)
     for (const [key, s] of Object.entries(fields)) {
       const range = s.min !== undefined ? `, min: ${s.min}, max: ${s.max}` : ""
-      lines.push(`    ${JSON.stringify(key)}: { valueType: ${JSON.stringify(s.valueType)}, fixed: ${s.fixed}${range}, values: ${JSON.stringify(s.values)} },`)
+      const retained = s.retained ? `, retained: ${JSON.stringify(s.retained)}` : ""
+      lines.push(`    ${JSON.stringify(key)}: { valueType: ${JSON.stringify(s.valueType)}, fixed: ${s.fixed}${range}, values: ${JSON.stringify(s.values)}${retained} },`)
     }
     lines.push("  },")
   }
