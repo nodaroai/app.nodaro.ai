@@ -33,6 +33,12 @@ import {
   resolveEpisodeTrailerSettings,
   type EpisodeTrailerSettings,
 } from "./episode-trailer-graph"
+import {
+  CLIP_PACK_NODE_IDS,
+  buildClipPackGraph,
+  resolveClipPackSettings,
+  type ClipPackSettings,
+} from "./clip-pack-graph"
 
 /** The descriptor fields a node's row (and @nodaro/shared's review holds) provide — never a spec's. */
 type UseCaseRowFields = "type" | "label" | "route" | "inputs" | "reviewable"
@@ -95,6 +101,20 @@ export const USE_CASE_SPECS = {
     resolveSettings: (raw, kind) => resolveEpisodeTrailerSettings(raw, kind),
     build: (settings, sources) =>
       buildEpisodeTrailerGraph(settings, { media: sources.media, ...(sources.introCard ? { introCard: sources.introCard } : {}) }),
+  }),
+  clipPack: defineUseCase<ClipPackSettings>({
+    maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
+    // An audio recording makes audio clips (decided 2026-10-14).
+    needsVideo: false,
+    inputNodeIds: { media: CLIP_PACK_NODE_IDS.source },
+    settingKeys: ["count", "targetDurationSec", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide"],
+    resultKind: "clips",
+    // Every clip is rendered and captioned, whichever one fails: each failed clip refunds itself and is named.
+    triesEvery: [CLIP_PACK_NODE_IDS.render, CLIP_PACK_NODE_IDS.captions],
+    // An audio recording makes audio clips: no framing (null, the recording's shape) and no captions.
+    audioForced: Object.freeze({ framing: null, captions: false }),
+    resolveSettings: (raw, kind) => resolveClipPackSettings(raw, kind),
+    build: (settings, sources) => buildClipPackGraph(settings, { media: sources.media }),
   }),
 } as const
 

@@ -479,7 +479,7 @@ try {
 ### `class ContinuationRefusedError extends NodaroError`
 
 HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode,
-Chapters or Trailer run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+Chapters, Trailer or Clip Pack run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
 `already_running` (a continuation is under way, or one that already
 completed — follow `jobId`), `continuation_superseded` (a later continuation
 of that run failed too —
@@ -800,7 +800,7 @@ sets the render to Final
 await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
 
-A node with Review before render on (Tighten Episode, Trailer) is refused the same way
+A node with Review before render on (Tighten Episode, Trailer, Clip Pack) is refused the same way
 (turn its review off for such runs). A failed execution records what held it:
 `preview_review_required` / `preview_render_nested` for a render,
 `preview_review_required_review_on` / `preview_render_nested_review_on` for a review-on
@@ -809,7 +809,7 @@ with `isPreviewRefusalCode(code)` from `@nodaro/shared`, never one code. Where t
 off, such a run is not refused up front: the nodes before the review-on node run and are
 charged, and the node then fails with `preview_review_required` (nothing charged for it).
 Whatever the flag, a review-on Tighten Episode fed by a List is refused with
-`use_case_review_list_driven`, and a Trailer fed by a List (review on or off) with
+`use_case_review_list_driven`, and a Trailer or a Clip Pack fed by a List (review on or off) with
 `use_case_list_driven`.
 
 `continueFromExecutionId` continues an earlier execution of the workflow — your
@@ -7309,10 +7309,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Nine
+Editorial primitives for podcast / long-form video editing. Ten
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus three quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`) and one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus four quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -7327,7 +7327,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
 | `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in, a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`) | Continue a Tighten Episode, Chapters or Trailer run as a new job: from where it failed, or (Tighten Episode, Trailer) its Render final after a review. The route is the run's own type. |
+| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in, a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`) | Continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7569,6 +7571,61 @@ or charged, with the codes `tightenEpisode` lists (less the music ones), plus
 (an intro card that is not a playable video) and `400 intro_card_too_long`
 (longer than 15 s).
 
+#### `clipPack(input, options?)` / `estimateClipPack(input)`
+
+```ts
+clipPack(input: ClipPackInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
+estimateClipPack(input: ClipPackInput): Promise<{ data: UseCaseEstimate }>
+```
+
+Cut a podcast recording into a pack of short clips in one call: the run
+transcribes the recording, plans the clips (each with a title and a hook),
+renders each as its own clip — framed with Speaker View on automatic boxes
+by default, every clip boxed alike over the episode's speakers — and
+captions each on its own transcription. An audio recording makes audio
+clips, with no framing or captions. Only `mediaUrl` is required; a field
+left out takes the node's default. **Not yet enabled on nodaro.ai** (see the
+[node page](./nodes/processing-video/clip-pack.md)).
+
+**`ClipPackInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `count` | `number` | no | How many clips to find, 1–50 (default 8). The plan may find fewer. |
+| `targetDurationSec` | `number` | no | Each clip's target length in seconds, 5–180 (default 60; the bounds are exported as `CLIP_PACK_MIN_TARGET_SEC` / `CLIP_PACK_MAX_TARGET_SEC`). |
+| `framing` | `{ aspect, layout?, switchType?, emphasisStyle? } \| null` | no | Frame each video clip with Speaker View: `aspect` (`"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`), `layout` (default `"stacked"`; one the shape does not draw is snapped), `switchType` (`SpeakerSwitchId` from `@nodaro/shared/edl`: `"cut"`, `"pan"`, `"zoom"` or `"xfade:<transition>"`, listed in `SPEAKER_SWITCH_IDS`; default `"pan"`), `emphasisStyle` (`ClipPackEmphasis`, default `"scale"`; `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`, each once — any other is refused `400 validation_error`). Left out: 9:16, stacked, pan, scale. `null`: no framing (the recording's shape). |
+| `captions` | `boolean` | no | Caption each video clip (default `true`). |
+| `captionStyle` | `CaptionStyle` | no | The captions' look (default `"karaoke"`). |
+| `reviewBeforeRender` | `boolean` | no | Stop at quick previews of the clips for a person to review; render the kept clips afterwards with `continueUseCase({ mode: "render-final", editedEdl })`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` (default) \| `"premium"`. |
+| `instructions` | `string` | no | Instructions for picking the clips (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
+
+`options.idempotencyKey` works as on `tightenEpisode`.
+
+`clipPack` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data.clips` is
+`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]`, one
+entry per clip in the plan's order (`thumbnailUrl` on each video clip), and
+`output_data.videoUrl` the first clip (`audioUrl` for audio clips);
+`output_data.json` is the plan's clip set and `quality` is `"proxy"` for a
+review-on run's previews, `"final"` otherwise. Every clip is tried: a clip
+that could not be rendered is skipped and not charged, and counted in
+`output_data.failedClips`; the run completes with the others and keeps its
+fee. A clip whose captions could not be added comes uncaptioned, marked
+`captionsFailed: true` and counted in `output_data.failedCaptions`; those
+captions are not charged. A run with no clip rendered fails, and its fee is
+refunded.
+
+`estimateClipPack` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:clip-pack --> per run.
+Each clip is quoted at twice the target length (the charge follows each
+clip's real length); a Render final (`continueUseCase`) is quoted on the
+clips the run cut that the review keeps. Both refuse before anything is
+created or charged, with the codes `tightenEpisode` lists (less the music
+ones).
+
 #### `continueUseCase(input, options?)`
 
 ```ts
@@ -7577,10 +7634,10 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters` or `episodeTrailer` (or an earlier continuation) answered. |
-| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
-| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
-| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters`, `episodeTrailer` or `clipPack` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format; Clip Pack's kept clips, each captioned), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
+| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL; for a Clip Pack, `{ v: 1, kind: "clips", basis, clips: [{ keep, hook? }] }`, which keeps or drops each clip — one that drops every clip is refused `use_case_nothing_kept`, 409, before anything is held). |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"` \| `"clip-pack"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
 
 **Which route.** With `nodeType`, the continuation goes straight to that
 type's route. Without it, `continueUseCase` first reads the job
@@ -7599,6 +7656,8 @@ type list is written into the SDK continues it on the Tighten Episode route.
 One that reads the list from `@nodaro/shared` throws `use_case_type_unknown`
 when the installed `@nodaro/shared` is from before Trailer too, since
 `"episode-trailer"` is not in that list. Upgrade to continue Trailer runs.
+The same holds for a version from before Clip Pack and a Clip Pack run
+(`"clip-pack"`): upgrade to continue Clip Pack runs.
 Earlier versions also continued on the Tighten Episode route whenever the type
 could not be read; this version throws instead.
 
@@ -7611,8 +7670,9 @@ again is refused. Refusals throw before any run exists, with the
 `continuation_not_found` (`NotFoundError`, 404: the run behind it is missing
 or not yours), `continuation_workflow_mismatch` (400),
 `continuation_version_mismatch` (400), `continuation_subset_required` (400), `continuation_not_failed`,
-`continuation_not_completed`, `continuation_settling` (try again in a moment)
-and `render_final_not_preview` (409). A refusal that names another job throws a
+`continuation_not_completed`, `continuation_settling` (try again in a moment),
+`render_final_not_preview` (409) and `use_case_nothing_kept` (409: a Clip Pack
+review that keeps no clip). A refusal that names another job throws a
 `ContinuationRefusedError` (a `NodaroError`, status 409) whose `jobId` is that
 job: `already_running` (a continuation under way, or one that already
 completed — follow it), `continuation_superseded` (a later

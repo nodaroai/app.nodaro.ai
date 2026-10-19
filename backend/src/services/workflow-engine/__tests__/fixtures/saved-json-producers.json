@@ -2,6 +2,7 @@
   "apply-edl": "generatedJson",
   "audio-sync": "generatedJson",
   "camera-switch": "generatedJson",
+  "clip-pack": "generatedJson",
   "collection-read": "generatedJson",
   "collection-write": "generatedJson",
   "competitor-read": "generatedJson",

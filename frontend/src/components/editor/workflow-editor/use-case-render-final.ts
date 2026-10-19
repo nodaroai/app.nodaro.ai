@@ -18,6 +18,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { runWorkflow, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api"
 import { generateIdempotencyKey } from "@/lib/idempotency-key"
 import { flushPendingReviews } from "@/lib/edl-review/write-review"
+import { usecaseKeepsNothing } from "@/lib/use-case-render-final-target"
 import { tx } from "@/lib/i18n"
 import type { ExecutionContext } from "./types"
 import { collapseExpandedClones } from "./execution-graph"
@@ -63,6 +64,11 @@ export async function runUseCaseRenderFinal(
   const workflowId = st.workflowId
   if (!workflowId) {
     toast.error(tx("run.saveBeforeRunning"))
+    return
+  }
+  // A clip set whose review keeps no clip: nothing to render (the server would refuse it), so nothing starts.
+  if (usecaseKeepsNothing(st.nodes.find((n) => n.id === nodeId))) {
+    toast.error(tx("renderFinal.keepOneClip"))
     return
   }
   {

@@ -132,6 +132,16 @@ describe("extractPresetData", () => {
   })
 })
 
+describe("an audio-locked use-case node's memory is never a preset setting", () => {
+  it("a preset saved from an audio-locked Clip Pack or Tighten Episode carries no settingsBeforeAudio", () => {
+    const clipPack = extractPresetData({ label: "Clip Pack", count: 6, framing: null, captions: false, settingsBeforeAudio: { framing: { aspect: "16:9", layout: "grid" }, captions: true } }, "clip-pack")
+    expect(clipPack).toEqual({ count: 6, framing: null, captions: false })
+    const tighten = extractPresetData({ label: "T", output: "audio", captions: false, settingsBeforeAudio: { output: "video", captions: true } }, "tighten-episode")
+    expect(tighten).not.toHaveProperty("settingsBeforeAudio")
+    expect(PRESET_EXCLUDED_KEYS.has("settingsBeforeAudio")).toBe(true)
+  })
+})
+
 describe("PRESET_EXCLUDED_KEYS ⊇ PRESET_APPLY_CLEAR_KEYS", () => {
   it("every clear-on-apply key is also capture-excluded (one source covers save + import + override)", () => {
     for (const k of PRESET_APPLY_CLEAR_KEYS) {

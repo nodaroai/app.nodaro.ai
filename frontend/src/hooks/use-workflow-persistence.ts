@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { adoptedAsStored } from "./workflow-store-adopted"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
@@ -30,7 +31,7 @@ import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields 
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { usecaseFailedRunFields, usecaseRestoredResults } from "@/lib/use-case-run-result"
+import { usecaseFailedRunFields, usecaseRefusedBeforeWorkPatch, usecaseRestoredResults } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
@@ -656,6 +657,9 @@ export function applyBackendExecutionState(
       // A UGC Creator already showing this run: nothing at all (status, error,
       // options), so a pick made after its credits stop stays.
       if (showsRun) return node
+      // A use-case continuation refused before any work is no failed run: the node as it was, with its Preview.
+      const refused = usecaseRefusedBeforeWorkPatch(node.type, state.errorCode, data)
+      if (refused) return { ...node, data: { ...data, ...refused } as SceneNodeData }
       data.executionStatus = "failed"
       // A use-case node keeps what its run finished and its wrapper, for Continue.
       Object.assign(data, usecaseFailedRunFields(node.type, state.output as Record<string, unknown> | undefined, data, state.jobId, state.errorCode))
@@ -1231,7 +1235,8 @@ export function useWorkflowPersistence(projectId?: string) {
           const contested = findContestedNodes(delta, snapshot, freshGraph)
           const merged = applyDeltaToGraph(freshGraph, delta)
           const freshSettings = freshRow.settings ?? {}
-          useWorkflowStore.setState({
+          // The stored row with this tab's edits on it: taken as it is (the audio lock reads no edit in it).
+          useWorkflowStore.setState(adoptedAsStored({
             nodes: merged.nodes,
             edges: merged.edges,
             loadedVersion: freshRow.version ?? null,
@@ -1246,7 +1251,7 @@ export function useWorkflowPersistence(projectId?: string) {
               presentationSettings: (freshSettings.presentationSettings ?? st.presentationSettings) as typeof st.presentationSettings,
               savedViewport: (freshSettings.viewport ?? st.savedViewport) as typeof st.savedViewport,
             },
-          })
+          }))
           if (contested.length > 0) {
             toast.warning(
               tx("toastMsg.keptYourEditsTo", {

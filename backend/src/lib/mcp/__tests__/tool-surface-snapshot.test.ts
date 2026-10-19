@@ -837,6 +837,30 @@ const TRAILER_CONTINUE_WORDING_BYTES = 9
 // the four formats, as the route caps them), far under the per-tool budget; the 6 B of headroom
 // carry across.
 const MAKE_TRAILER_TOOL_BYTES = 3_303
+// RAISED 2026-10-18 by wording only: `continue_use_case` names the use-case nodes this deployment
+// offers, and the list gains Clip Pack ("Tighten Episode, Chapters, Trailer or Clip Pack"). No tool
+// was added, so the fixture does NOT move. Measured by this suite: 448_314 total − 448_303 before =
+// 11 B; the 6 B of headroom carry across.
+const CLIP_PACK_CONTINUE_WORDING_BYTES = 11
+// RAISED 2026-10-18 by one NEW tool and nothing else: `make_clip_pack` (the Clip Pack node's verb —
+// a recording cut into a pack of short clips: transcribe, Edit Plan in clips mode, one render per
+// clip, framed with Speaker View or at the recording's shape, captions per clip), registered in
+// verbs-use-case.ts beside `make_trailer` and gated the same way (workflows:execute, every
+// edition), so the fixture moves by exactly that name in cloud/all AND community/all. Measured by
+// this suite on the same tree: 453_912 total − 448_314 before = 5_598 B (its framing's switch
+// enumerates every Speaker View switch, the xfade transitions included), far under the per-tool
+// budget; the 6 B of headroom carry across.
+const MAKE_CLIP_PACK_TOOL_BYTES = 5_598
+// RAISED 2026-10-18 by wording only: `make_clip_pack`'s `framing.emphasis` description names the
+// values it takes ("none", or scale, border, dim joined with "+", each once), as its refusal
+// already did. No tool was added, so the fixture does NOT move. Measured by this suite: 453_975
+// total − 453_912 before = 63 B; the 6 B of headroom carry across.
+const CLIP_PACK_EMPHASIS_VALUES_BYTES = 63
+// RAISED 2026-10-18 by wording only: `make_clip_pack` says a pack that completes without a clip
+// keeps its fee and has no from-failed, and how to get the missing clip (render its EDL from
+// `output_data.json` yourself, or a new run). No tool was added, so the fixture does NOT move.
+// Measured by this suite: 454_349 total − 454_154 before = 195 B; the 6 B of headroom carry across.
+const MAKE_CLIP_PACK_PARTIAL_RUN_BYTES = 195
 // RAISED 2026-10-18 by wording only: `make_trailer` says every format is tried, that a run which
 // completes without one keeps its fee and has no from-failed, and how to get the missing format
 // (render `output_data.json` yourself — Apply EDL, Combine Videos with the card first, Social Media
@@ -1116,6 +1140,10 @@ export const TOOL_WIRE_BUDGET = {
     CHAPTERS_WORDING_BYTES +
     TRAILER_CONTINUE_WORDING_BYTES +
     MAKE_TRAILER_TOOL_BYTES +
+    CLIP_PACK_CONTINUE_WORDING_BYTES +
+    MAKE_CLIP_PACK_TOOL_BYTES +
+    CLIP_PACK_EMPHASIS_VALUES_BYTES +
+    MAKE_CLIP_PACK_PARTIAL_RUN_BYTES +
     MAKE_TRAILER_PARTIAL_RUN_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +

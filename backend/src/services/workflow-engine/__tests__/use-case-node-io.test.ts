@@ -4,7 +4,8 @@
  * and what it hands on (its episode as the medium it made, its plan on
  * `json`) — live, from saved data, and rebuilt from its wrapper's row. And
  * what a Chapters node hands on: its show notes on `text`, its chapter list
- * on `json`.
+ * on `json`. And what a Clip Pack hands on: its clips as its list, each row
+ * its own clip's take.
  */
 import { describe, it, expect } from "vitest"
 import { planFanOut } from "@nodaro/shared/workflow"
@@ -211,5 +212,69 @@ describe("what a Trailer node hands on", () => {
     // A single-result node never reads a saved list as its own.
     expect(extractSavedNodeOutput(node("t1", "tighten-episode", { generatedVideoUrl: "https://r2/ep.mp4", __listResults: ["https://r2/x.mp4"] }))).toEqual({ videoUrl: "https://r2/ep.mp4" })
     expect(extractSavedNodeOutput(node("tr", "episode-trailer"))).toBeUndefined()
+  })
+})
+
+describe("what a Clip Pack node hands on", () => {
+  const pack = node("cp", "clip-pack")
+  const clips = [
+    { url: "https://r2/c0.mp4", quality: "proxy", clipKey: "k0", planBasis: "pb0", renderBasis: "rb0", title: "The pivot" },
+    { url: "https://r2/c1.mp4", quality: "proxy", clipKey: "k1" },
+  ]
+
+  it("a Clip Pack wrapper hands on its clips as its list, each row stamped with its own clip's take", () => {
+    expect(usecaseJobOutput({ clips: [{ url: "https://r2/c0.mp4", quality: "proxy", clipKey: "k0" }], videoUrl: "https://r2/c0.mp4", quality: "proxy" })).toMatchObject({
+      videoUrl: "https://r2/c0.mp4",
+      listResults: ["https://r2/c0.mp4"],
+      listResultStamps: [{ quality: "proxy", clipKey: "k0" }],
+      quality: "proxy",
+    })
+    const out = usecaseJobOutput({ clips, videoUrl: "https://r2/c0.mp4", quality: "proxy", failedClips: 1 }, "job-w")
+    expect(out.listResultStamps).toEqual([
+      { quality: "proxy", clipKey: "k0", planBasis: "pb0", renderBasis: "rb0", jobId: "job-w" },
+      { quality: "proxy", clipKey: "k1", jobId: "job-w" },
+    ])
+    expect(out.clips).toEqual(clips)
+    expect(out.failedClips).toBe(1)
+    // A clip whose captions could not be added says so, and the run counts them.
+    const uncaptioned = usecaseJobOutput({ clips: [{ url: "https://r2/r0.mp4", quality: "final", captionsFailed: true }], failedCaptions: 1, videoUrl: "https://r2/r0.mp4", quality: "final" })
+    expect(uncaptioned).toMatchObject({ clips: [{ url: "https://r2/r0.mp4", captionsFailed: true }], failedCaptions: 1, listResults: ["https://r2/r0.mp4"] })
+    // No clip came back: no list, no clips.
+    expect(usecaseJobOutput({ clips: [], failedClips: 3, quality: "final" })).not.toHaveProperty("listResults")
+  })
+
+  it("each clip's still rides its clip and its row stamp, like its file; an audio clip has none", () => {
+    const withStill = [{ ...clips[0]!, thumbnailUrl: "https://r2/c0.png" }, clips[1]!]
+    const out = usecaseJobOutput({ clips: withStill, videoUrl: "https://r2/c0.mp4", quality: "proxy" }, "job-w")
+    expect(out.clips![0]!.thumbnailUrl).toBe("https://r2/c0.png")
+    expect(out.listResultStamps).toEqual([
+      { quality: "proxy", clipKey: "k0", planBasis: "pb0", renderBasis: "rb0", thumbnailUrl: "https://r2/c0.png", jobId: "job-w" },
+      { quality: "proxy", clipKey: "k1", jobId: "job-w" },
+    ])
+    expect(buildNodeOutputFromJobData({ clips: withStill, videoUrl: "https://r2/c0.mp4", quality: "proxy", _executionId: "e" }, "clip-pack", "job-w").listResultStamps![0]).toMatchObject({ thumbnailUrl: "https://r2/c0.png" })
+  })
+
+  it("rebuilt from its wrapper's row: the same list, each row naming the wrapper", () => {
+    expect(buildNodeOutputFromJobData({ clips, videoUrl: "https://r2/c0.mp4", quality: "proxy", _executionId: "e" }, "clip-pack", "job-w")).toMatchObject({
+      videoUrl: "https://r2/c0.mp4",
+      listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"],
+      listResultStamps: [{ clipKey: "k0", jobId: "job-w" }, { clipKey: "k1", jobId: "job-w" }],
+    })
+  })
+
+  it("a node after it, on its clips pip (or none), runs once per clip; its json pip is one value", () => {
+    const fmt = node("fmt", "social-media-format")
+    const states = { cp: done({ ...usecaseJobOutput({ clips, videoUrl: "https://r2/c0.mp4", json: [{ v: 1 }], quality: "final" }) }) }
+    for (const handle of ["clips", null]) {
+      const each = planFanOut(getListFanOutForNode(fmt, [edge("cp", "fmt", handle, "media")], states, [pack, fmt]), fmt.type, fmt.data)
+      expect(each?.items, String(handle)).toEqual(["https://r2/c0.mp4", "https://r2/c1.mp4"])
+    }
+    const extract = node("x", "extract-field")
+    expect(planFanOut(getListFanOutForNode(extract, [edge("cp", "x", "json", "in")], states, [pack, extract]), extract.type, extract.data)).toBeNull()
+  })
+
+  it("saved: its last run's clips are its own list", () => {
+    expect(extractSavedNodeOutput(node("cp", "clip-pack", { generatedVideoUrl: "https://r2/c0.mp4", __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"] })))
+      .toEqual({ videoUrl: "https://r2/c0.mp4", listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"] })
   })
 })

@@ -77,7 +77,7 @@ describe("the editor's refusals read the graph", () => {
 })
 
 describe("a node's preview refusal", () => {
-  it.each(["tighten-episode", "episode-trailer"])("on a %s node: its own review", (type) => {
+  it.each(["tighten-episode", "episode-trailer", "clip-pack"])("on a %s node: its own review", (type) => {
     expect(nodeErrorCodeText("preview_review_required", type)).toBe(previewRefusalText("headless", "review"))
     expect(nodeStateErrorText({ error: "sent", errorCode: "preview_review_required" }, type)).toBe(previewRefusalText("headless", "review"))
   })
@@ -86,10 +86,12 @@ describe("a node's preview refusal", () => {
     for (const locale of ["he", "ja", "ko", "pt-BR"] as const) {
       const tighten = localizeNodeLabel("Tighten Episode", locale)
       const trailer = localizeNodeLabel("Trailer", locale)
+      const pack = localizeNodeLabel("Clip Pack", locale)
       for (const key of REVIEW_HELD_KEYS) {
         const text = translate(locale, key)
         expect(text, `${locale} ${key}`).not.toContain(tighten)
         expect(text, `${locale} ${key}`).not.toContain(trailer)
+        expect(text, `${locale} ${key}`).not.toContain(pack)
       }
     }
   })

@@ -78,8 +78,13 @@ export function speakerSwitchOverlaps(type: string): boolean {
   return typeof type === "string" && type.startsWith(XFADE_SWITCH_PREFIX)
 }
 
+/** A Speaker View switch id: `cut`, `pan`, `zoom`, or `xfade:<combine transition id>`
+ *  (one per real ffmpeg xfade transition — `SPEAKER_SWITCH_IDS` lists them). Every
+ *  sheet below is built from one, so a new switch outside this shape fails to compile. */
+export type SpeakerSwitchId = "cut" | "pan" | "zoom" | `${typeof XFADE_SWITCH_PREFIX}${string}`
+
 export interface SpeakerSwitchSheet {
-  /** "cut" | "pan" | "zoom" | `xfade:${combine id}` */
+  /** "cut" | "pan" | "zoom" | `xfade:${combine id}` (a `SpeakerSwitchId`) */
   readonly id: string
   /** = `speakerSwitchOverlaps(id)`, derived, never hand-set. */
   readonly overlaps: boolean
@@ -87,7 +92,7 @@ export interface SpeakerSwitchSheet {
   readonly requiresSameSource: boolean
 }
 
-const switchSheet = (id: string, requiresSameSource: boolean): SpeakerSwitchSheet => ({
+const switchSheet = (id: SpeakerSwitchId, requiresSameSource: boolean): SpeakerSwitchSheet => ({
   id,
   overlaps: speakerSwitchOverlaps(id),
   requiresSameSource,
@@ -101,7 +106,7 @@ export const SPEAKER_SWITCHES: readonly SpeakerSwitchSheet[] = [
   switchSheet("cut", false),
   switchSheet("pan", true),
   switchSheet("zoom", false),
-  ...COMBINE_TRANSITIONS.filter((t) => t.xfade !== null).map((t) => switchSheet(XFADE_SWITCH_PREFIX + t.id, false)),
+  ...COMBINE_TRANSITIONS.filter((t) => t.xfade !== null).map((t) => switchSheet(`${XFADE_SWITCH_PREFIX}${t.id}`, false)),
 ]
 
 export const SPEAKER_SWITCH_IDS: readonly string[] = SPEAKER_SWITCHES.map((s) => s.id)

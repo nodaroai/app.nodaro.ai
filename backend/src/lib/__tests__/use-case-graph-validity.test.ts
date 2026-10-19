@@ -97,6 +97,21 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
             }
           }
   },
+  // An audio recording makes audio clips: no framing, no captions (the resolver forces both).
+  "clip-pack": function* () {
+    for (const kind of ["video", "audio"] as const)
+      for (const captions of [true, false])
+        for (const framing of [null, undefined, { aspect: "1:1", layout: "side-by-side" }])
+          for (const reviewBeforeRender of [false, true])
+            for (const count of [1, 8, 50])
+              for (const durationSec of [undefined, 3600]) {
+                yield {
+                  raw: { captions, reviewBeforeRender, count, ...(framing !== undefined ? { framing } : {}) },
+                  kind,
+                  sources: { media: { url: "https://r2/ep", kind, ...(durationSec ? { durationSec } : {}) } },
+                }
+              }
+  },
 }
 
 /** Every graph `type`'s descriptor builds over its settings table, with the case it was built from. */

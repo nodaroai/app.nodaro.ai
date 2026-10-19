@@ -241,9 +241,12 @@ export {
   autoSpeakerRegions,
   speakerViewAutoFraming,
   speakerViewAutoRegions,
+  speakerViewAutoSpeakers,
   type AutoSpeakerRegion,
   type SpeakerViewAutoFraming,
+  type SpeakerViewAutoSpeakers,
 } from "./speaker-view-auto-regions"
+export { AUTO_REGIONS_PACK_MIN_TALK_MS, AUTO_REGIONS_PACK_MIN_TALK_SHARE, speakerViewPackSpeakers } from "./speaker-view-pack-speakers"
 export {
   speakerViewCameraSpeakers,
   speakerViewOnScreen,
@@ -544,7 +547,7 @@ export {
   usecaseFanOutRefused,
   usecaseListDrivenMessage,
 } from "./use-case-fan-out"
-export { usecaseCancelledMessage } from "./use-case-messages"
+export { clipPackNoneRenderedMessage, parseClipPackNoneRendered, usecaseCancelledMessage } from "./use-case-messages"
 export {
   expandUseCaseNodes,
   runsUseCaseRenderFinal,
@@ -595,6 +598,21 @@ export {
   type EpisodeTrailerSources,
   type TrailerFormat,
 } from "./episode-trailer-graph"
+export {
+  CLIP_PACK_DEFAULTS,
+  CLIP_PACK_EMPHASIS_REFUSAL,
+  CLIP_PACK_DEFAULT_FRAMING,
+  CLIP_PACK_MAX_TARGET_SEC,
+  CLIP_PACK_MIN_TARGET_SEC,
+  CLIP_PACK_NODE_IDS,
+  buildClipPackGraph,
+  isClipPackEmphasis,
+  resolveClipPackSettings,
+  type ClipPackFraming,
+  type ClipPackGraph,
+  type ClipPackSettings,
+  type ClipPackSources,
+} from "./clip-pack-graph"
 export { chapterRowsOf, chapterTimestamp, formatChapterListText, type ChapterRow } from "./chapter-list-text"
 export { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
 export {

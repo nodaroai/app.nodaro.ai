@@ -1914,13 +1914,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // reads these code values, not the admin rows, so the two model_pricing rows
   // are retuned together (the node docs say so).
   "apply-edl:proxy": APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,
-  // The use-case convenience fee (podcast use-case nodes): a flat 10 credits
-  // per run of the node, reserved on its wrapper job and refunded when the run
-  // fails or is cancelled. Not a node type: the node's inner steps bill at
-  // their own rates. A use-case unit's row is its price.ee.ts (Tighten
-  // Episode's, Chapters' and Trailer's); this is the next podcast use-case
-  // node's (migration 531), priced ahead of its registration (decided 2026-10-14).
-  "use-case-fee:clip-pack": 10,
   // speaker-view — an edit rendered with its speakers on screen (the cloud
   // plugin's renderer over core's EDL timeline). Priced PER MINUTE of output
   // in two tiers by how many speakers it composites at once, decided

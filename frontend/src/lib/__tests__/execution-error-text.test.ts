@@ -1,10 +1,10 @@
 // @test-units-by-name checks only the use-case node types' labels it reads
 import { afterEach, describe, it, expect } from "vitest"
-import { RUN_CONTINUATION_CODES } from "@nodaro/shared/nodes"
+import { RUN_CONTINUATION_CODES, USE_CASE_NOTHING_KEPT, USE_CASE_NOTHING_KEPT_MESSAGE } from "@nodaro/shared/nodes"
 import { UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared/ugc"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
-import { USE_CASE_NODE_TYPES, USE_CASE_REVIEW_LIST_DRIVEN, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE, usecaseCancelledMessage, usecaseDescriptor } from "@nodaro/render-rules"
+import { USE_CASE_NODE_TYPES, USE_CASE_REVIEW_LIST_DRIVEN, clipPackNoneRenderedMessage, USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE, usecaseCancelledMessage, usecaseDescriptor } from "@nodaro/render-rules"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 import { executionErrorText, nodeStateErrorText } from "../execution-error-text"
 
@@ -41,6 +41,27 @@ describe("executionErrorText", () => {
       expect(text, code).toMatch(/run/)
     }
     expect(executionErrorText("continuation_version_mismatch")).toMatch(/another version of this workflow/)
+  })
+
+  it("a clip set's Render final with every clip dropped reads as its copy, the server's words in English", () => {
+    expect(translate("en", "runContinuation.nothingKept")).toBe(USE_CASE_NOTHING_KEPT_MESSAGE)
+    expect(executionErrorText(USE_CASE_NOTHING_KEPT)).toBe(USE_CASE_NOTHING_KEPT_MESSAGE)
+    useLocaleStore.getState().setLocale("he")
+    expect(executionErrorText(USE_CASE_NOTHING_KEPT)).toBe(translate("he", "runContinuation.nothingKept"))
+    expect(executionErrorText(USE_CASE_NOTHING_KEPT)).not.toBe(USE_CASE_NOTHING_KEPT_MESSAGE)
+  })
+
+  it("a clip set none of whose clips rendered: the count and the render's reason, in the reader's language (a known reason localized too)", () => {
+    const many = clipPackNoneRenderedMessage(3, "Speaker View could not read the recording")
+    expect(executionErrorText(many)).toBe(many)
+    expect(translate("en", "nodeRun.clipPackNoneRendered", { count: 3, reason: "x" })).toBe(clipPackNoneRenderedMessage(3, "x"))
+    expect(translate("en", "nodeRun.clipPackOneNotRendered", { reason: "x" })).toBe(clipPackNoneRenderedMessage(1, "x"))
+    useLocaleStore.getState().setLocale("he")
+    expect(executionErrorText(many)).toBe(translate("he", "nodeRun.clipPackNoneRendered", { count: 3, reason: "Speaker View could not read the recording" }))
+    // A reason that is itself a known code reads in the reader's language.
+    expect(executionErrorText(clipPackNoneRenderedMessage(1, "continuation_not_found"))).toBe(
+      translate("he", "nodeRun.clipPackOneNotRendered", { reason: translate("he", "runContinuation.notFound") }),
+    )
   })
 
   it("shows the server's refusal of a run with a UGC Creator still to pick as the editor's own words", () => {

@@ -2221,7 +2221,8 @@ async function executeNodeForList(
     return { index: i, result, resultValue }
   })
 
-  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef)
+  // Fail-fast unless this node tries every item (a Clip Pack's clips).
+  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef, !ctx.triesEvery?.has(node.id))
 
   // Assemble per-iteration results + apply failure propagation. Throws the
   // first genuine failure when NOTHING succeeded (so the orchestrator marks

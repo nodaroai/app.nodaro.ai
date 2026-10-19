@@ -131,11 +131,12 @@ describe("every enqueue producer answers reviewerPresent", () => {
   describe("who forwards a reviewer to the use-case routes on the internal lane", () => {
     const FORWARDERS: Record<string, readonly RegExp[]> = {
       "services/workflow-engine/use-case-request.ts": [/reviewerPresent: ctx\.reviewerPresent === true,/],
-      // Each verb that takes a review (tighten_episode, make_trailer) forwards the
+      // Each verb that takes a review (tighten_episode, make_trailer, make_clip_pack) forwards the
       // caller's own ask; continue_use_case is the run's own reviewer.
       "lib/mcp/tools/verbs-use-case.ts": [
         /\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),/,
         /\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),[\s\S]*\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),/,
+        /(?:\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),[\s\S]*){3}/,
         /reviewerPresent: true,\n\s*mcp_client: session\.clientName,/,
       ],
     }

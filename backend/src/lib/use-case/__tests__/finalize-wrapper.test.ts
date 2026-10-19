@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
+  CLIP_PACK_DEFAULTS,
   EPISODE_CHAPTERS_DEFAULTS,
   EPISODE_TRAILER_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
+  buildClipPackGraph,
   buildEpisodeChaptersGraph,
   buildEpisodeTrailerGraph,
   buildTightenEpisodeGraph,
@@ -19,6 +21,10 @@ const chaptersStored = toStoredInlineGraph(
 const trailerStored = toStoredInlineGraph(
   buildEpisodeTrailerGraph(EPISODE_TRAILER_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }),
   EPISODE_TRAILER_DEFAULTS,
+)
+const clipPackStored = toStoredInlineGraph(
+  buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }),
+  CLIP_PACK_DEFAULTS,
 )
 const m = vi.hoisted(() => ({
   exec: null as Record<string, unknown> | null,
@@ -288,6 +294,121 @@ describe("finalizeUseCaseWrapper", () => {
     expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
     expect(m.completed).not.toHaveBeenCalled()
     expect(m.refund.mock.calls).toEqual([["job-w"]])
+  })
+  describe("a Clip Pack run", () => {
+    const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
+    const clip = (inMs: number) => ({ version: 1, sources: [CAM], segments: [{ id: `s${inMs}`, video: "cam", inMs, outMs: inMs + 30_000 }] })
+    const plan = [clip(0), clip(60_000), clip(120_000)]
+    it("one clip failed inside the render (the run completed): the wrapper completes with the clips that came back, names how many failed, keeps the fee", async () => {
+      m.exec = exec({
+        inlineGraph: clipPackStored,
+        // The failed clip's own job refunded itself: the run's total holds the two that rendered.
+        totalCreditsUsed: 400,
+        nodeStates: {
+          "uc-plan": { status: "completed", output: { json: plan } },
+          "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", quality: "final", listResults: ["https://r2/r0.mp4", "", "https://r2/r2.mp4"], listResultStamps: [{ quality: "final" }, { quality: "final" }, { quality: "final" }] } },
+          "uc-captions": { status: "completed", output: { videoUrl: "https://r2/c0.mp4", listResults: ["https://r2/c0.mp4", "https://r2/c2.mp4"] } },
+        },
+      })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+      expect(m.completed.mock.calls[0]![1]).toMatchObject({
+        output_data: { videoUrl: "https://r2/c0.mp4", clips: [{ url: "https://r2/c0.mp4" }, { url: "https://r2/c2.mp4" }], failedClips: 1 },
+        credits_actual: 400 + 10,
+      })
+      expect(m.commit.mock.calls).toEqual([["job-w"]])
+      expect(m.refund).not.toHaveBeenCalled()
+    })
+    it("every clip failed (the render failed, so the run did): the wrapper fails saying how many, and the fee is refunded", async () => {
+      m.exec = exec({
+        status: "failed",
+        errorMessage: "Node execution failed: uc-render: render failed",
+        inlineGraph: clipPackStored,
+        nodeStates: { "uc-plan": { status: "completed", output: { json: plan } }, "uc-render": { status: "failed", error: "render failed" } },
+      })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect(m.failed.mock.calls[0]![1]).toMatchObject({ error_message: "None of the 3 clips could be rendered: render failed.", extra: { output_data: { clips: [], failedClips: 3 } } })
+      expect(m.refund.mock.calls).toEqual([["job-w"]])
+      expect(m.completed).not.toHaveBeenCalled()
+      expect(m.commit).not.toHaveBeenCalled()
+    })
+    it("a plan with no clips: the wrapper fails in the kind's words, and the fee is refunded", async () => {
+      m.exec = exec({ inlineGraph: clipPackStored, nodeStates: { "uc-plan": { status: "completed", output: { json: [] } } } })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect(m.failed.mock.calls[0]![1]).toMatchObject({ error_message: "The plan found no clips in this recording." })
+      expect(m.refund.mock.calls).toEqual([["job-w"]])
+      expect(m.completed).not.toHaveBeenCalled()
+    })
+    it("a failed run that still delivered clips keeps them (the same keep as a Trailer's formats)", async () => {
+      m.exec = exec({
+        status: "failed",
+        errorMessage: "Node execution failed: uc-x: boom",
+        totalCreditsUsed: 200,
+        inlineGraph: clipPackStored,
+        nodeStates: {
+          "uc-plan": { status: "completed", output: { json: plan.slice(0, 1) } },
+          "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", quality: "final" } },
+          "uc-captions": { status: "completed", output: { videoUrl: "https://r2/c0.mp4" } },
+        },
+      })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+      expect(m.completed.mock.calls[0]![1]).toMatchObject({ output_data: { clips: [{ url: "https://r2/c0.mp4" }] }, credits_actual: 210 })
+      expect(m.commit.mock.calls).toEqual([["job-w"]])
+    })
+    it("every clip rendered but the captions step failed (so the run did): the wrapper completes with the clips uncaptioned, names them, keeps the fee", async () => {
+      m.exec = exec({
+        status: "failed",
+        errorMessage: "Node execution failed: uc-captions: captions failed",
+        totalCreditsUsed: 300,
+        inlineGraph: clipPackStored,
+        nodeStates: {
+          "uc-plan": { status: "completed", output: { json: plan } },
+          "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", quality: "final", listResults: ["https://r2/r0.mp4", "https://r2/r1.mp4", "https://r2/r2.mp4"] } },
+          "uc-captions": { status: "failed", error: "captions failed" },
+        },
+      })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+      expect(m.completed.mock.calls[0]![1]).toMatchObject({
+        output_data: {
+          videoUrl: "https://r2/r0.mp4",
+          clips: [{ url: "https://r2/r0.mp4", captionsFailed: true }, { url: "https://r2/r1.mp4", captionsFailed: true }, { url: "https://r2/r2.mp4", captionsFailed: true }],
+          failedCaptions: 3,
+        },
+        // The failed captions refunded themselves: the run's total holds the renders.
+        credits_actual: 300 + 10,
+      })
+      expect(m.commit.mock.calls).toEqual([["job-w"]])
+      expect(m.refund).not.toHaveBeenCalled()
+      expect(m.failed).not.toHaveBeenCalled()
+    })
+    it("the clips rendered but the run stopped before captioning them (a time cap): the wrapper fails, the fee is refunded, nothing kept", async () => {
+      m.exec = exec({
+        status: "failed",
+        errorMessage: "Execution exceeded the time limit",
+        inlineGraph: clipPackStored,
+        nodeStates: {
+          "uc-plan": { status: "completed", output: { json: plan } },
+          "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", quality: "final", listResults: ["https://r2/r0.mp4", "https://r2/r1.mp4", "https://r2/r2.mp4"] } },
+          "uc-captions": { status: "pending" },
+        },
+      })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect(m.failed.mock.calls[0]![1]).toMatchObject({ error_message: "Execution exceeded the time limit", extra: { output_data: { clips: [] } } })
+      // The engine's own flag decided the keep; it is never part of the job's output.
+      expect((m.failed.mock.calls[0]![1] as { extra: { output_data: Record<string, unknown> } }).extra.output_data).not.toHaveProperty("captionsNotRun")
+      expect(m.refund.mock.calls).toEqual([["job-w"]])
+      expect(m.completed).not.toHaveBeenCalled()
+      expect(m.commit).not.toHaveBeenCalled()
+    })
+    it("a cancelled run keeps nothing, even with clips rendered", async () => {
+      m.exec = exec({
+        status: "cancelled",
+        inlineGraph: clipPackStored,
+        nodeStates: { "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", quality: "final" } }, "uc-captions": { status: "completed", output: { videoUrl: "https://r2/c0.mp4" } } },
+      })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect(m.completed).not.toHaveBeenCalled()
+      expect(m.refund.mock.calls).toEqual([["job-w"]])
+    })
   })
   it("a failed Tighten run is still a failure (only a list keeps what it delivered)", async () => {
     m.exec = exec({ status: "failed", errorMessage: "Node execution failed: uc-captions: boom", nodeStates: { "uc-render": { status: "completed", output: { videoUrl: "https://r2/cut.mp4", quality: "final" } }, "uc-captions": { status: "failed", error: "boom" } } })

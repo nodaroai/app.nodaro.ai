@@ -15,7 +15,7 @@
  * engine) and assert the matching contract goes FAIL.
  *
  * Scope on purpose: this file asserts the Scene3D, Video Overlay, Site Capture,
- * Tighten Episode, Chapters and Trailer contracts only. The stub is faithful enough for the
+ * Tighten Episode, Chapters, Trailer and Clip Pack contracts only. The stub is faithful enough for the
  * probe to reach them, not a second implementation of the platform — the
  * other contracts are asserted against the real image by
  * `.github/workflows/community-e2e.yml`.
@@ -51,6 +51,9 @@ const CHAPTERS = "Chapters on an unconnected install: hidden from discovery, ref
 
 /** The Trailer contract name, spelled exactly as the probe records it. */
 const TRAILER = "Trailer on an unconnected install: hidden from discovery, refused 503 before any job"
+
+/** The Clip Pack contract name, spelled exactly as the probe records it. */
+const CLIP_PACK = "Clip Pack on an unconnected install: hidden from discovery, refused 503 before any job"
 
 /** The entity search contract name, spelled exactly as the probe records it. */
 const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
@@ -132,6 +135,17 @@ function communityShape() {
     // Tighten Episode, unconnected: refused before any job. `createsJob` puts a
     // row in the job list (what a wrapper inserted before the refusal leaves).
     tighten: {
+      status: 503,
+      body: {
+        error: {
+          code: "nodaro_connection_required",
+          message: "This node runs on nodaro.ai. Connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API) and run again.",
+        },
+      },
+      createsJob: false,
+    },
+    // Clip Pack, unconnected: the same refusal, before any job.
+    clipPack: {
       status: 503,
       body: {
         error: {
@@ -320,6 +334,12 @@ function stubServer(shape) {
           state.jobs = [{ id: "job_chapters", status: "processing", input_data: { type: "episode-chapters" } }, ...state.jobs]
         }
         return send(shape.chapters.status, shape.chapters.body)
+      }
+      if (path === "/v1/clip-pack" && req.method === "POST") {
+        if (shape.clipPack.createsJob) {
+          state.jobs = [{ id: "job_clip_pack", status: "processing", input_data: { type: "clip-pack" } }, ...state.jobs]
+        }
+        return send(shape.clipPack.status, shape.clipPack.body)
       }
       if (path === "/v1/episode-trailer" && req.method === "POST") {
         if (shape.trailer.createsJob) {
@@ -637,6 +657,35 @@ test("a Trailer refusal that left a job row behind fails the Trailer contract", 
     shape.trailer = { ...shape.trailer, createsJob: true }
   })
   assertContract(out, TRAILER, "FAIL")
+})
+
+test("the keyless community shape passes the Clip Pack contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, CLIP_PACK, "PASS")
+})
+
+test("advertising clip-pack on an unconnected install fails the Clip Pack contract (and only it)", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.nodes.push({ type: "clip-pack", label: "Clip Pack", category: "processing", description: "d", outputType: "video" })
+  })
+  assertContract(out, CLIP_PACK, "FAIL")
+  assertContract(out, TRAILER, "PASS")
+  assertContract(out, CHAPTERS, "PASS")
+  assertContract(out, TIGHTEN, "PASS")
+})
+
+test("a Clip Pack run accepted with a job handle fails the Clip Pack contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.clipPack = { status: 202, body: { jobId: "job_clip_pack", executionId: "exec_1" }, createsJob: true }
+  })
+  assertContract(out, CLIP_PACK, "FAIL")
+})
+
+test("a Clip Pack refusal that left a job row behind fails the Clip Pack contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.clipPack = { ...shape.clipPack, createsJob: true }
+  })
+  assertContract(out, CLIP_PACK, "FAIL")
 })
 
 test("a refusal with another code fails the Tighten Episode contract", async () => {

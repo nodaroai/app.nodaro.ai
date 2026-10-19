@@ -33,8 +33,9 @@ const D = TIGHTEN_EPISODE_DEFAULTS
  * so the panel never shows a setting the run quietly overrides:
  *  - the recording wired into `media` is read by the estimate's rule
  *    (`usecaseMediaKindOf`, from the wire) — an audio one makes an audio
- *    episode, with no captions and no framing. The run itself decides by
- *    probing the file;
+ *    episode, with no captions and no framing (the person's Output and
+ *    Captions are remembered, and come back when a video is wired again —
+ *    lib/use-case-audio-lock.ts). The run itself decides by probing the file;
  *  - framing offers only the layouts Speaker View draws at the chosen shape,
  *    and a stored layout it does not draw is snapped as the run snaps it;
  *  - a stored framing the run would not read at all (a shape it has no

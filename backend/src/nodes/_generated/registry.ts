@@ -2,6 +2,7 @@
 // @registry backend/src/nodes/*/descriptor.generated.ts
 // @registry-exports registry: UNIT_REGISTRY
 import type { UnitDescriptor } from "../kit.js"
+import { descriptor as unit_clip_pack } from "../clip-pack/descriptor.generated.js" // unit:clip-pack
 import { descriptor as unit_episode_chapters } from "../episode-chapters/descriptor.generated.js" // unit:episode-chapters
 import { descriptor as unit_episode_trailer } from "../episode-trailer/descriptor.generated.js" // unit:episode-trailer
 import { descriptor as unit_gif_to_video } from "../gif-to-video/descriptor.generated.js" // unit:gif-to-video
@@ -9,6 +10,7 @@ import { descriptor as unit_remove_audio } from "../remove-audio/descriptor.gene
 import { descriptor as unit_tighten_episode } from "../tighten-episode/descriptor.generated.js" // unit:tighten-episode
 
 export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.assign(Object.create(null), {
+  "clip-pack": unit_clip_pack, // unit:clip-pack
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video

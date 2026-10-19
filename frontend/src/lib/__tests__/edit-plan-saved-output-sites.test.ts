@@ -232,6 +232,8 @@ describe("editor reads of an Edit Plan's saved output", () => {
       "components/nodes/edit-plan-node.tsx": 1,
       // Speaker View's panel, strip and badge: the edit(s) wired into its `edl` handle
       "lib/speaker-view-context.ts": 1,
+      // a Clip Pack whose saved review keeps no clip: its bar's Render final is held (decided 2026-10-18)
+      "lib/use-case-render-final-target.ts": 1,
       // the reader itself (its cache), sourceJsonOf (Extract Field and
       // JSON Process read a source's JSON through it), and usecaseJsonOf (a
       // use-case node's json pip — extractNodeOutput's branch and sourceJsonOf)

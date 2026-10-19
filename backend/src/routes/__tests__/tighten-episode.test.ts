@@ -638,6 +638,78 @@ describe("Trailer through the same factory", () => {
   })
 })
 
+describe("Clip Pack through the same factory", () => {
+  const postPack = async (payload: Record<string, unknown>) =>
+    (await makeApp()).inject({ method: "POST", url: "/v1/clip-pack", payload })
+  beforeEach(() => {
+    // The real settings and graph, as prepareUseCase would build them (an .m4a probes as audio only).
+    m.prepare.mockImplementation(async (type: UseCaseNodeType, body: Record<string, unknown>) => {
+      const url = (body.mediaUrls as string[])[0]!
+      const kind = url.endsWith(".m4a") ? "audio" : "video"
+      const d = usecaseDescriptor(type)
+      const settings = d.resolveSettings(body, kind)
+      const sources = { media: { url, kind, durationSec: 3600 } }
+      return { ok: true, settings, sources, graph: d.build(settings, sources as never) }
+    })
+  })
+  const refusedBeforeAnything = async (payload: Record<string, unknown>) => {
+    const res = await postPack(payload)
+    expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(m.prepare).not.toHaveBeenCalled()
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+    return res
+  }
+
+  it("a pack with the defaults: a Clip Pack wrapper, its own fee held, its built graph run", async () => {
+    const res = await postPack({ mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.prepare.mock.calls[0]![0]).toBe("clip-pack")
+    expect(m.insertJob.mock.calls[0]![1]).toMatchObject({ job_type: "clip-pack", provider: "use-case", input_data: expect.objectContaining({ type: "clip-pack", _feeCredits: 10 }) })
+    expect(m.reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "use-case-fee:clip-pack")
+    const run = m.execute.mock.calls[0]![0] as { graph: { nodeType: string; settings: Record<string, unknown>; outputMap: { kind: string } } }
+    expect(run.graph).toMatchObject({ nodeType: "clip-pack", outputMap: { kind: "clips" }, settings: { count: 8, targetDurationSec: 60, captions: true } })
+  })
+
+  it("count 51, count 0 and a length of 4 or 181 seconds are a 400 before anything is probed or written", async () => {
+    await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], count: 51 })
+    await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], count: 0 })
+    await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], targetDurationSec: 4 })
+    await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], targetDurationSec: 181 })
+  })
+
+  it("an emphasis this version does not draw is a 400 naming it, never swapped for the default", async () => {
+    const res = await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "9:16", layout: "stacked", emphasisStyle: "glow" } })
+    expect(JSON.stringify(res.json().error)).toContain('emphasisStyle is \\"none\\", or \\"scale\\", \\"border\\" and \\"dim\\" joined with \\"+\\" (each once)')
+    await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "9:16", emphasisStyle: "scale+scale" } })
+    await refusedBeforeAnything({ mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "9:16", switchType: "warp" } })
+  })
+
+  it("a framing with no layout runs, stacked (snapped as Speaker View draws it at the aspect)", async () => {
+    const res = await postPack({ mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "1:1", emphasisStyle: "border+dim" } })
+    expect(res.statusCode).toBe(202)
+    const run = m.execute.mock.calls[0]![0] as { graph: { settings: { framing: unknown } } }
+    expect(run.graph.settings.framing).toEqual({ aspect: "1:1", layout: "stacked", switchType: "pan", emphasisStyle: "border+dim" })
+  })
+
+  it("framing: null runs at the recording's shape", async () => {
+    const res = await postPack({ mediaUrls: ["https://r2/ep.mp4"], framing: null })
+    expect(res.statusCode).toBe(202)
+    const run = m.execute.mock.calls[0]![0] as { graph: { settings: { framing: unknown }; nodes: Array<{ id: string; type: string }> } }
+    expect(run.graph.settings.framing).toBeNull()
+    expect(run.graph.nodes.find((n) => n.id === "uc-render")!.type).toBe("apply-edl")
+  })
+
+  it("an audio recording runs: audio clips, stored with no framing and no captions", async () => {
+    const res = await postPack({ mediaUrls: ["https://r2/ep.m4a"], captions: true, framing: { aspect: "9:16", layout: "stacked" } })
+    expect(res.statusCode).toBe(202)
+    const run = m.execute.mock.calls[0]![0] as { graph: { settings: { framing: unknown; captions: unknown } } }
+    expect(run.graph.settings.framing).toBeNull()
+    expect(run.graph.settings.captions).toBe(false)
+  })
+})
+
 // The MCP lane (decided 2026-10-14): an MCP verb is injected on the INTERNAL
 // lane (`mcpInject` sends the orchestrator secret), where the route counts a
 // reviewer only when one is forwarded. The agent that asks for a review is

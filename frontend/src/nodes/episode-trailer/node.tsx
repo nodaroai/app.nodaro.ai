@@ -15,7 +15,7 @@ import { resultsGalleryPickPatch } from "@/components/editor/config-panels/resul
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { usecaseRenderFinalOffered } from "@/components/editor/workflow-editor/use-case-render-final-set"
-import type { GeneratedResult } from "@/types/nodes"
+import { trailerRowKey, usecaseRunRowsOnShow } from "@/components/nodes/use-case-run-rows"
 import type { EpisodeTrailerData } from "./types"
 
 /**
@@ -47,7 +47,8 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
   const hasResult = status !== "running" && !!activeUrl && !mediaError
   const refusedFinal = errorCode !== undefined && USE_CASE_REFUSED_FINAL_CODES.has(errorCode)
   const canRenderFinal = !listDriven && usecaseRenderFinalOffered({ type: "episode-trailer", data: nodeData as unknown as Record<string, unknown> })
-  const formats = formatChipsOf(results, activeResult)
+  // A chip per format of the run on show (each format once, in delivery order).
+  const formats = usecaseRunRowsOnShow(results, activeResult, trailerRowKey)
   // The formats the run of the take on show could not render — that take's own, never a later run's.
   const failed = (activeResult?.failedFormats ?? []).filter((f) => typeof f === "string" && f !== "")
 
@@ -92,15 +93,15 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   className={cn(
                     "nodrag rounded px-1.5 py-0.5 text-[10px] font-medium border",
-                    chip.format === activeResult?.format ? "border-primary bg-primary/10 text-primary" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted",
+                    chip.key === activeResult?.format ? "border-primary bg-primary/10 text-primary" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted",
                   )}
-                  aria-pressed={chip.format === activeResult?.format}
+                  aria-pressed={chip.key === activeResult?.format}
                   onClick={(e) => {
                     e.stopPropagation()
                     show(chip.index, chip.url)
                   }}
                 >
-                  {chip.format}
+                  {chip.key}
                 </button>
               ))}
             </div>
@@ -132,30 +133,6 @@ function EpisodeTrailerNodeComponent({ id, data, selected }: NodeProps) {
       }
     />
   )
-}
-
-/** One format of the run on show: its row in the results, its file and its format. */
-interface FormatChip {
-  readonly index: number
-  readonly url: string
-  readonly format: string
-}
-
-/**
- * The formats of the run whose take is on show: every row of that run (the
- * same wrapper job) that names its format, each format once (the first row
- * holding it — a run landed twice never shows a format twice), in the order the run delivered
- * them. None for a take that names no run or no format (a Preview, an older
- * take).
- */
-function formatChipsOf(results: readonly GeneratedResult[], onShow: GeneratedResult | undefined): FormatChip[] {
-  if (!onShow?.jobId || !onShow.format) return []
-  const seen = new Set<string>()
-  return results.flatMap((r, index) => {
-    if (r.jobId !== onShow.jobId || typeof r.format !== "string" || r.format === "" || seen.has(r.format)) return []
-    seen.add(r.format)
-    return [{ index, url: r.url, format: r.format }]
-  })
 }
 
 export const NodeComponent = memo(EpisodeTrailerNodeComponent)

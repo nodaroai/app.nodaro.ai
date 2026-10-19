@@ -64,6 +64,7 @@ import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { toastBackendRunCompleted, toastBackendRunFailed } from "./run-ended-toast";
+import { usecaseRefusalOnCanvas } from "./use-case-refusal";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListFanOutForNode } from "./node-input-resolver";
@@ -2673,6 +2674,12 @@ function syncNodeStatesToStore(
     ) {
       patchMap.set(node.id, { executionStatus: "pending", ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}) });
     } else if (state.status === "failed" && currentStatus !== "failed") {
+      // A use-case continuation refused before any work is no failed run: the node is put back, said once.
+      const refused = usecaseRefusalOnCanvas(node, state, data, runId);
+      if (refused !== undefined) {
+        if (refused) patchMap.set(node.id, refused);
+        continue;
+      }
       // A UGC Creator already showing this run (stamped when its failure first
       // landed): a pick made since is never undone by a repaint — no status,
       // no error, no options.

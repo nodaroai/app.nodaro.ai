@@ -1,0 +1,28 @@
+{
+  "keys": {
+    "proccfg.clipPackHint": {"en": "Finds the best moments and renders each as its own clip. With framing, each clip shows the speakers in the chosen shape.", "he": "מוצא את הרגעים הטובים ביותר ומרנדר כל אחד כקליפ נפרד. עם מסגור, כל קליפ מציג את הדוברים בצורה שנבחרה.", "ja": "最も良い場面を見つけ、それぞれを個別のクリップとしてレンダリングします。フレーミングを使うと、各クリップで話者が選んだ形に収まります。", "ko": "가장 좋은 순간을 찾아 각각을 별도의 클립으로 렌더링합니다. 프레이밍을 사용하면 각 클립에 화자가 선택한 비율로 표시됩니다.", "pt-br": "Encontra os melhores momentos e renderiza cada um como um clipe próprio. Com enquadramento, cada clipe mostra quem fala no formato escolhido."},
+    "proccfg.clipPackCount": {"en": "Clips", "he": "קליפים", "ja": "クリップ数", "ko": "클립 수", "pt-br": "Clipes"},
+    "proccfg.clipPackLength": {"en": "Target length (seconds)", "he": "אורך יעד (שניות)", "ja": "目標の長さ（秒）", "ko": "목표 길이(초)", "pt-br": "Duração desejada (segundos)"},
+    "proccfg.clipPackFramingNone": {"en": "None — the recording's shape", "he": "ללא — בצורת ההקלטה", "ja": "なし — 収録時の形のまま", "ko": "없음 — 녹화된 비율 그대로", "pt-br": "Nenhum — o formato da gravação"},
+    "proccfg.clipPackSwitch": {"en": "Switch", "he": "מעבר", "ja": "切り替え", "ko": "전환", "pt-br": "Transição"},
+    "proccfg.clipPackEmphasis": {"en": "Emphasis", "he": "הדגשה", "ja": "強調", "ko": "강조", "pt-br": "Destaque"},
+    "proccfg.clipPackAudioForced": {"en": "An audio recording makes audio clips", "he": "הקלטת שמע יוצרת קליפי שמע", "ja": "音声のみの収録からは音声クリップが作られます", "ko": "오디오 녹음으로는 오디오 클립이 만들어집니다", "pt-br": "Uma gravação de áudio gera clipes de áudio"},
+    "proccfg.clipPackReviewHint": {"en": "Stops at quick previews of the clips you can review and edit; Render final makes the full-quality clips", "he": "עוצר בתצוגות מקדימות מהירות של הקליפים לסקירה ועריכה; רינדור סופי יוצר את הקליפים באיכות מלאה", "ja": "確認・編集できるクリップの簡易プレビューで止まります。「最終レンダリング」でフル品質のクリップを作成します", "ko": "검토하고 편집할 수 있는 클립의 빠른 미리보기에서 멈춥니다. “최종 렌더링”으로 최고 품질의 클립을 만듭니다", "pt-br": "Para em prévias rápidas dos clipes que você pode revisar e editar; “Renderização final” gera os clipes em qualidade total"},
+    "proccfg.clipPackFraming": {"en": "Framing", "he": "מסגור", "ja": "フレーミング", "ko": "프레이밍", "pt-br": "Enquadramento"},
+    "proccfg.clipPackFramingLayout": {"en": "Layout", "he": "פריסה", "ja": "レイアウト", "ko": "레이아웃", "pt-br": "Layout"},
+    "proccfg.clipPackCaptions": {"en": "Captions", "he": "כתוביות", "ja": "字幕", "ko": "자막", "pt-br": "Legendas"},
+    "proccfg.clipPackCaptionStyle": {"en": "Caption style", "he": "סגנון כתוביות", "ja": "字幕のスタイル", "ko": "자막 스타일", "pt-br": "Estilo das legendas"},
+    "proccfg.clipPackReview": {"en": "Review before render", "he": "סקירה לפני רינדור", "ja": "レンダリング前に確認", "ko": "렌더링 전에 검토", "pt-br": "Revisar antes de renderizar"},
+    "proccfg.clipPackPlanTier": {"en": "Editing quality", "he": "איכות העריכה", "ja": "編集の品質", "ko": "편집 품질", "pt-br": "Qualidade da edição"},
+    "node.clipPackClips": {"en": "Clips", "he": "קליפים", "ja": "クリップ", "ko": "클립", "pt-br": "Clipes"},
+    "node.clipPackClip": {"en": "Clip {n}", "he": "קליפ {n}", "ja": "クリップ {n}", "ko": "클립 {n}", "pt-br": "Clipe {n}"},
+    "node.clipPackFailedOne": {"en": "1 clip could not be rendered.", "he": "קליפ אחד לא רונדר.", "ja": "1 本のクリップをレンダリングできませんでした。", "ko": "클립 1개를 렌더링하지 못했습니다.", "pt-br": "1 clipe não pôde ser renderizado."},
+    "node.clipPackFailedMany": {"en": "{count} clips could not be rendered.", "he": "{count} קליפים לא רונדרו.", "ja": "{count} 本のクリップをレンダリングできませんでした。", "ko": "클립 {count}개를 렌더링하지 못했습니다.", "pt-br": "{count} clipes não puderam ser renderizados."},
+    "node.clipPackCaptionsFailed": {"en": "Captions could not be added to these clips.", "he": "לא ניתן היה להוסיף כתוביות לקליפים האלה.", "ja": "これらのクリップには字幕を追加できませんでした。", "ko": "이 클립에는 자막을 추가하지 못했습니다.", "pt-br": "Não foi possível adicionar legendas a estes clipes."},
+    "node.clipPackNoCaptions": {"en": "No captions", "he": "ללא כתוביות", "ja": "字幕なし", "ko": "자막 없음", "pt-br": "Sem legendas"},
+    "node.clipPackPlan": {"en": "Clip set (EDLs)", "he": "סט קליפים (EDL)", "ja": "クリップセット（EDL）", "ko": "클립 세트(EDL)", "pt-br": "Conjunto de clipes (EDLs)"}
+  },
+  "labels": {
+    "Clip Pack": {"he": "חבילת קליפים", "ja": "クリップパック", "ko": "클립 세트", "pt-br": "Pacote de clipes"}
+  }
+}

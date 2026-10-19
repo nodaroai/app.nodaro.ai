@@ -124,6 +124,23 @@ describe("RegionEditorDialog — what it lists and draws", () => {
 })
 
 describe("RegionEditorDialog — editing and saving", () => {
+  it("nothing changed, nothing to save: with Split the camera by speaker drawing exactly what is shown, Save is off (the render basis cannot move)", () => {
+    const ONE_CAMERA = {
+      version: 1, clock: "master",
+      sources: [{ id: "wide", url: "https://cdn/wide.mp4", kind: "video" }],
+      segments: [{ id: "s1", inMs: 0, outMs: 5000, video: "wide", speaker: "Host" }, { id: "s2", inMs: 5000, outMs: 12_000, video: "wide", speaker: "Guest" }],
+    }
+    const saveButton = () => screen.getByRole("button", { name: t("speakerView.framing.save") }) as HTMLButtonElement
+    seed({ autoRegions: true }, { edl: ONE_CAMERA })
+    open()
+    expect(saveButton().disabled).toBe(true)
+    cleanup()
+    // The flag off: the defaults on screen are not drawn yet — an unsaved change, so Save is on.
+    seed({}, { edl: ONE_CAMERA })
+    open()
+    expect(saveButton().disabled).toBe(false)
+  })
+
   it("saves every box shown, as tidy fractions; a close-up stays full frame", () => {
     let closed = false
     open(() => { closed = true })

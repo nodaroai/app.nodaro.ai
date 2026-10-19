@@ -21,6 +21,8 @@ export type TightenEpisodeData = {
   instructions?: string
   styleGuide?: string
   musicDuckAmount?: number
+  /** Editor-only: the Output and Captions an audio recording turned off, given back when a video is wired again (lib/use-case-audio-lock.ts). The run never reads it. */
+  settingsBeforeAudio?: { output?: "video" | "audio"; captions?: boolean }
   /** The run's wrapper job (Continue / Render final address it). */
   useCaseJobId?: string
   useCaseExecutionId?: string

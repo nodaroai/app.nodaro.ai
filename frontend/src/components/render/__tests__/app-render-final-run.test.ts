@@ -128,6 +128,40 @@ describe("an app's Render final of a use-case node", () => {
     expect(t1.useCaseContinue).toEqual({ mode: "render-final", jobId: "00000000-0000-4000-8000-0000000000bb", settings: trSettings })
   })
 
+  it("a review-on Clip Pack's Preview batch (its own list of clips) is offered Render final: every clip at final, no edit, no fee", () => {
+    const cpSettings = { count: 3, captions: true, reviewBeforeRender: true }
+    const clip = (i: number) => ({
+      version: 1, clock: "master", sources: [{ id: "rec", url: "https://r2/ep.mp4", kind: "video" }],
+      segments: [{ id: `c${i}`, inMs: i * 100_000, outMs: i * 100_000 + 60_000, video: "rec" }], dropped: [], meta: { title: `Clip ${i}` },
+    })
+    const plan = [clip(0), clip(1), clip(2)]
+    const urls = plan.map((_, i) => `https://r2/c${i}.mp4`)
+    const WRAPPER = "00000000-0000-4000-8000-0000000000cc"
+    const snapshotCp = { id: "t1", type: "clip-pack", position: at, data: { label: "Clip Pack", fieldMappings: {}, reviewBeforeRender: true } }
+    const cpState = {
+      status: "completed", jobId: WRAPPER,
+      output: { videoUrl: urls[0], quality: "proxy", listResults: urls, listResultStamps: urls.map(() => ({ quality: "proxy" })), useCaseSettings: cpSettings, json: plan },
+    }
+    const cpEdges = [edges[0]!] as unknown as WorkflowEdge[]
+    const states = { rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" } }, t1: cpState }
+    const graph = runEstimateGraph([rec, snapshotCp] as unknown as WorkflowNode[], states as never)
+    expect(appUseCaseFinalTarget("t1", graph, cpEdges, states)).toEqual({ jobId: WRAPPER, settings: cpSettings })
+    const run = appRenderFinalRun("t1", graph, cpEdges, states)
+    expect(run.executable.map((n) => n.id)).toEqual(["t1"])
+    const t1 = run.nodes.find((n) => n.id === "t1")!.data as Record<string, unknown>
+    expect(t1.useCaseContinue).toEqual({ mode: "render-final", jobId: WRAPPER, settings: cpSettings })
+    // No review in the app: no edit is sent, so every clip renders.
+    expect(t1.editedEdl).toBeUndefined()
+    // Quoted as the editor quotes the same take: the three clips at final, no fee.
+    const canvasCp = { ...snapshotCp, data: { ...snapshotCp.data, generatedJson: plan, generatedResults: urls.map((url) => ({ url, quality: "proxy", jobId: WRAPPER, useCaseSettings: cpSettings })) } }
+    const canvas = usecaseRenderFinalRun("t1", [rec, canvasCp] as unknown as WorkflowNode[], cpEdges)!
+    const appCredits = estimateRunCredits(run.executable, run.nodes, cpEdges, cached)
+    // 3 one-minute clips × (Speaker View at 3 a minute + captions at 3).
+    expect(appCredits).toBe(3 * (3 + 3))
+    expect(appCredits).toBe(estimateRunCredits(canvas.executable, canvas.graph, cpEdges, cached))
+    expect(runModelIds(run.executable, run.nodes, cpEdges)).not.toContain("use-case-fee:clip-pack")
+  })
+
   it("a render's Render final is unchanged: its set, the render at Final", () => {
     const nodes = [
       { id: "plan", type: "edit-plan", position: at, data: {} },

@@ -13,5 +13,7 @@
   "scalarPlan": { "generatedJson": "a plan held as text" },
   "nullPlan": { "generatedVideoUrl": "https://r/g.mp4", "generatedJson": null },
   "formatsList": { "generatedVideoUrl": "https://r/t-9x16.mp4", "__listResults": ["https://r/t-9x16.mp4", "https://r/t-4x5.mp4"] },
-  "formatsPartial": { "generatedVideoUrl": "https://r/t-9x16.mp4", "__listResults": ["https://r/t-9x16.mp4", "https://r/t-4x5.mp4"], "failedFormats": ["1:1"] }
+  "formatsPartial": { "generatedVideoUrl": "https://r/t-9x16.mp4", "__listResults": ["https://r/t-9x16.mp4", "https://r/t-4x5.mp4"], "failedFormats": ["1:1"] },
+  "clipsList": { "generatedVideoUrl": "https://r/c0.mp4", "__listResults": ["https://r/c0.mp4", "https://r/c1.mp4"] },
+  "clipsPartial": { "generatedVideoUrl": "https://r/c0.mp4", "__listResults": ["https://r/c0.mp4", "https://r/c1.mp4"], "failedClips": 1 }
 }

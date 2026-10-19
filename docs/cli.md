@@ -550,11 +550,27 @@ nodaro edit episode-trailer --media <url> [--intro-card <url>] [--formats 9:16,1
                                                          # a preview of the trailer and prints the edit continue-use-case command that renders
                                                          # every format. Priced as its steps plus a per-run fee (listed after this block).
                                                          # Not yet enabled on nodaro.ai.
-nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
-                                                         # continue a Tighten Episode, Chapters or Trailer run as a new job. from-failed: keep the steps
+nodaro edit clip-pack --media <url> [--count <n>] [--length <sec>] [--framing 16:9|9:16|1:1|4:5|none [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>]] (--layout, --switch and --emphasis only with --framing <aspect>) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # Clip Pack: one recording (video or audio, up to 3 hours) in, a pack of short clips
+                                                         # out — --count clips (1–50, default 8; the plan may find fewer) of about --length
+                                                         # seconds each (5–180, default 60), framed for 9:16 with the speakers stacked and
+                                                         # captioned by default (--framing none: the recording's shape; an audio recording makes
+                                                         # audio clips). --switch is the switch at each speaker change (cut, pan, zoom, or
+                                                         # xfade:<transition>, e.g. xfade:fade; default pan); --emphasis how the speaker talking is
+                                                         # emphasised (none, or scale, border, dim joined with "+", each once; default scale);
+                                                         # --caption-style the captions' look (default karaoke). Every flag is checked before any
+                                                         # request. With --watch each
+                                                         # clip is printed when the run completes ("1  <url>  <title>" per line, "(no captions)"
+                                                         # after the title of a clip whose captions could not be added), then "N clips could not
+                                                         # be rendered." when some could not. --review stops at previews of the clips
+                                                         # and prints the edit continue-use-case command that renders the kept clips. Priced as
+                                                         # its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer|clip-pack] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job. from-failed: keep the steps
                                                          # that finished, run the rest (the fee is held again; the failed run's was refunded).
-                                                         # render-final (Tighten Episode, Trailer): the full-quality result after a --review preview,
-                                                         # with the preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL).
+                                                         # render-final (Tighten Episode, Trailer, Clip Pack): the full-quality result after a --review preview,
+                                                         # with the preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL;
+                                                         # for a Clip Pack, the clips to keep — one that keeps none is refused use_case_nothing_kept).
                                                          # A refusal naming another job prints its code and that job: already_running
                                                          # (follow it), continuation_superseded (continue it instead),
                                                          # render_final_already_rendered (its result is the one to use).
@@ -587,7 +603,7 @@ nodaro workspace join <code> [--json]
 nodaro workspace usage [id] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by member|model|day|none] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 ```
 
-The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, and 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
+The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`, and 11 credits<!-- credits: use-case-fee:clip-pack --> for `edit clip-pack`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
 
 ### Working in a workspace
 

@@ -9,6 +9,7 @@
 export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "audio" | "video" | "image" | "dynamic"]> = [
   ["tighten-episode", "dynamic"], // unit:tighten-episode
   ["episode-trailer", "video"], // unit:episode-trailer
+  ["clip-pack", "dynamic"], // unit:clip-pack
   ["remove-audio", "video"], // unit:remove-audio
   ["gif-to-video", "video"], // unit:gif-to-video
 ]
@@ -18,6 +19,7 @@ export const UNIT_USE_CASE_TYPES = [
   "tighten-episode", // unit:tighten-episode
   "episode-chapters", // unit:episode-chapters
   "episode-trailer", // unit:episode-trailer
+  "clip-pack", // unit:clip-pack
 ] as const
 
 // What each JSON (look) output pip carries (contract.jsonPips) — json-kinds.ts composes these.
@@ -25,6 +27,7 @@ export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonl
   ["tighten-episode", { "json": "edl" }], // unit:tighten-episode
   ["episode-chapters", { "json": "other" }], // unit:episode-chapters
   ["episode-trailer", { "json": "edl" }], // unit:episode-trailer
+  ["clip-pack", { "json": "edl" }], // unit:clip-pack
 ]
 
 // Input pips that are never a prompt lane (contract.nonPromptInputs) — fan-out-rows.ts composes these.
@@ -37,15 +40,18 @@ export const UNIT_NON_PROMPT_INPUTS: ReadonlyArray<readonly [type: string, handl
 export const UNIT_REVIEW_HOLDS: ReadonlyArray<string> = [
   "tighten-episode", // unit:tighten-episode
   "episode-trailer", // unit:episode-trailer
+  "clip-pack", // unit:clip-pack
 ]
 
 // How a published app shows each unit's result where the producer sets do not decide it (contract.presents) — presentation-utils.ts.
 export const UNIT_PRESENTS: ReadonlyArray<readonly [type: string, presents: "image" | "video" | "audio" | "text"]> = [
   ["tighten-episode", "video"], // unit:tighten-episode
   ["episode-chapters", "text"], // unit:episode-chapters
+  ["clip-pack", "video"], // unit:clip-pack
 ]
 
 // The outputs an "each" edge reads item by item when the unit ran once per item, and the pip an edge naming none reads (contract.fanOutEach) — producer-types.ts.
 export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly [type: string, handles: { readonly each: ReadonlyArray<string>; readonly primary: string }]> = [
   ["episode-trailer", { "each": ["media"], "primary": "media" }], // unit:episode-trailer
+  ["clip-pack", { "each": ["clips"], "primary": "clips" }], // unit:clip-pack
 ]

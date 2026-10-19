@@ -349,6 +349,17 @@ describe("SpeakerViewConfig: framing and advanced", () => {
     expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.full"))
   })
 
+  it("with Split the camera by speaker on over a clip pack, says every clip is boxed alike over the episode's speakers (decided 2026-10-14)", () => {
+    const clip = (inS: number, speaker: string) => JSON.stringify({ version: 1, clock: "master", sources: [src("a")], segments: [seg(`s${inS}`, inS, "a", speaker)] })
+    const pack = { producer: "camera-switch" as const, producerData: { __listResults: [clip(0, "Host"), clip(5, "Guest")] }, transcript: words("Host", "Guest") }
+    panel({ autoRegions: true, targetAspect: "9:16" }, pack)
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.autoPack"))
+    cleanup()
+    // No transcript: nothing to deal the pack's boxes over.
+    panel({ autoRegions: true, targetAspect: "9:16" }, { ...pack, transcript: undefined })
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.full"))
+  })
+
   it("with Split the camera by speaker on and face tracks wired, says who is followed and who gets their default framing (faces win)", () => {
     const ONE_CAMERA = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
     const named = (id: string, speaker: string) => ({ id, boxCount: 3, speaker, attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: speaker } })

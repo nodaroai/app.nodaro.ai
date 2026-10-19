@@ -63,7 +63,8 @@ export function useUseCaseNodeRun(id: string, nodeType: string, data: UseCaseShe
   const errorCode = typeof raw === "string" ? raw : undefined
   // A refusal on this node names its own remedy (its review, its one recording), in the reader's language.
   const coded = errorCode !== undefined ? (nodeErrorCodeText(errorCode, nodeType) ?? executionErrorText(errorCode)) : null
-  const shownError = coded && coded !== errorCode ? coded : data.errorMessage
+  // A known sentence of the run (a clip set none of whose clips rendered, …) reads in the reader's language too.
+  const shownError = coded && coded !== errorCode ? coded : data.errorMessage ? (executionErrorText(data.errorMessage) ?? data.errorMessage) : data.errorMessage
   return { credits, status: data.executionStatus ?? "idle", listDriven, errorCode, shownError }
 }
 

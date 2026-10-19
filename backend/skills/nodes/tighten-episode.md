@@ -1,7 +1,7 @@
 ---
 node_type: tighten-episode
-generated_at: 2026-10-14T09:49:17.769Z
-generated_from: 2c6fb981c
+generated_at: 2026-10-18T10:07:00.696Z
+generated_from: 79c6cdc25
 ---
 
 # Tighten Episode
@@ -27,6 +27,7 @@ generated_from: 2c6fb981c
 - `instructions?: string`
 - `styleGuide?: string`
 - `musicDuckAmount?: number`
+- `settingsBeforeAudio?: { output?: "video" | "audio"; captions?: boolean }`
 - `useCaseJobId?: string`
 - `useCaseExecutionId?: string`
 - `useCaseContinue?: { mode: "from-failed" | "render-final"; jobId: string }`

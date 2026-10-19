@@ -18,7 +18,14 @@
  *    render's bases (the same stamps the canvas's own run puts on each row);
  *    `videoUrl` stays the first. The deliveries themselves ride on `formats`
  *    (each file with its format, what the editor names each row by), and the
- *    formats that could not be rendered on `failedFormats`.
+ *    formats that could not be rendered on `failedFormats`. A clip set (Clip
+ *    Pack) is the node's own list the same way: its clips' URLs on
+ *    `listResults`, each row stamped with ITS clip's take — its quality, its
+ *    clip key, its render's bases (every clip is its own render) and its
+ *    still — and the wrapper job. The clips themselves (with each one's title
+ *    and hook) ride on `clips`, how many could not be rendered on
+ *    `failedClips`, and how many came uncaptioned (their captions could not
+ *    be added) on `failedCaptions`.
  *  - `usecaseSavedNodeOutput`: the saved-data reader, read off what the node
  *    holds — the use-case branch of `extractSavedNodeOutput`, ahead of its
  *    unit branch.
@@ -57,6 +64,13 @@ export function usecaseJobOutput(
       })
     : []
   const rows = delivered.map((r) => r.url)
+  const clips = Array.isArray(outputData.clips) ? clipRowsOf(outputData.clips as unknown[]) : []
+  const failedClips = typeof outputData.failedClips === "number" && Number.isInteger(outputData.failedClips) && outputData.failedClips > 0
+    ? outputData.failedClips
+    : undefined
+  const failedCaptions = typeof outputData.failedCaptions === "number" && Number.isInteger(outputData.failedCaptions) && outputData.failedCaptions > 0
+    ? outputData.failedCaptions
+    : undefined
   const failedFormats = Array.isArray(outputData.failedFormats)
     ? (outputData.failedFormats as unknown[]).filter((f): f is string => typeof f === "string" && f.length > 0)
     : []
@@ -76,7 +90,48 @@ export function usecaseJobOutput(
       ? { listResults: rows, listResultStamps: rows.map(() => ({ ...(quality ? { quality } : {}), ...(planBasis ? { planBasis } : {}), ...(renderBasis ? { renderBasis } : {}), ...(jobId ? { jobId } : {}) })), formats: delivered }
       : {}),
     ...(failedFormats.length > 0 ? { failedFormats } : {}),
+    // Every row is its own clip's take: its own quality, clip key and render's bases.
+    ...(clips.length > 0
+      ? {
+          listResults: clips.map((c) => c.url),
+          listResultStamps: clips.map((c) => ({
+            ...(c.quality ? { quality: c.quality } : {}),
+            ...(c.clipKey ? { clipKey: c.clipKey } : {}),
+            ...(c.planBasis ? { planBasis: c.planBasis } : {}),
+            ...(c.renderBasis ? { renderBasis: c.renderBasis } : {}),
+            ...(c.thumbnailUrl ? { thumbnailUrl: c.thumbnailUrl } : {}),
+            ...(jobId ? { jobId } : {}),
+          })),
+          clips,
+        }
+      : {}),
+    ...(failedClips !== undefined ? { failedClips } : {}),
+    ...(failedCaptions !== undefined ? { failedCaptions } : {}),
   }
+}
+
+type ClipRow = NonNullable<NodeOutput["clips"]>[number]
+
+/** The wrapper's clips, each with what it carries (a row with no file is no clip). */
+function clipRowsOf(raw: readonly unknown[]): ClipRow[] {
+  return raw.flatMap((r): ClipRow[] => {
+    if (!r || typeof r !== "object" || Array.isArray(r)) return []
+    const row = r as Record<string, unknown>
+    const u = url(row.url)
+    if (!u) return []
+    const quality = row.quality === "proxy" || row.quality === "final" ? row.quality : undefined
+    return [{
+      url: u,
+      ...(quality ? { quality } : {}),
+      ...(url(row.clipKey) ? { clipKey: url(row.clipKey) } : {}),
+      ...(url(row.planBasis) ? { planBasis: url(row.planBasis) } : {}),
+      ...(url(row.renderBasis) ? { renderBasis: url(row.renderBasis) } : {}),
+      ...(url(row.title) ? { title: url(row.title) } : {}),
+      ...(url(row.hook) ? { hook: url(row.hook) } : {}),
+      ...(url(row.thumbnailUrl) ? { thumbnailUrl: url(row.thumbnailUrl) } : {}),
+      ...(row.captionsFailed === true ? { captionsFailed: true as const } : {}),
+    }]
+  })
 }
 
 /**

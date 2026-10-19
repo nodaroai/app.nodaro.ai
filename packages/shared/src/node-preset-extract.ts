@@ -134,6 +134,12 @@ export function presetLeverClearKeys(
  *  - `__promptFinalView`: field keys currently showing the final-prompt view (Edit ⇄ Final
  *    per-field toggle). Node-local UI state, never part of a preset's own config.
  *
+ *  Editor-only memory:
+ *  - `settingsBeforeAudio`: the picture settings an audio recording turned off on a use-case node
+ *    (Tighten Episode, Clip Pack), kept to give back when a video is wired again. It belongs to
+ *    THIS node's wiring, never a reusable configuration — a preset applied elsewhere would hand
+ *    another node values to restore on its next video wire.
+ *
  *  NOTE: manual reference image urls (`referenceImageUrl` / `referenceImageUrls`) are deliberately
  *  KEPT — they are self-contained R2 urls a user set as input, and portable across nodes.
  *
@@ -157,6 +163,8 @@ export const PRESET_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
   "suppressedCanonicalLocationIds",
   "identityMeta",
   "extraRefs",
+  // editor-only memory of the node's own wiring (an audio recording's lock)
+  "settingsBeforeAudio",
   // structural identifiers
   "routes",
   "routeId",

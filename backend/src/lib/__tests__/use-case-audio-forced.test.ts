@@ -54,6 +54,12 @@ describe("audioForced: what an audio recording forces is declared on the spec", 
     expect(forcing.map(([k]) => k)).toContain("tighten")
   })
 
+  it("Clip Pack declares it: no framing and no captions, the framing a null as its resolver writes it", () => {
+    expect(USE_CASE_SPECS.clipPack.audioForced).toEqual({ framing: null, captions: false })
+    expect(USE_CASE_SPECS.clipPack.audioForced!.framing).toBeNull()
+    expect(forcing.map(([k]) => k)).toContain("clipPack")
+  })
+
   it("a spec that refuses an audio recording forces nothing on one", () => {
     for (const [key, spec] of specs) {
       if (spec.needsVideo) expect(spec.audioForced, key).toBeUndefined()
@@ -84,6 +90,17 @@ describe("audioForced: what an audio recording forces is declared on the spec", 
   it("the opposite raw is a framing the video side keeps (so the framing exemption is not vacuous)", () => {
     expect(USE_CASE_SPECS.tighten.resolveSettings(OPPOSITE, "video").framing).not.toBeNull()
     expect(USE_CASE_SPECS.tighten.resolveSettings(OPPOSITE, "audio").framing).toBeNull()
+  })
+
+  // The two-way check above only sees a forced key whose video reading differs
+  // from the forced value, so the opposite raw must hold, for every forced key
+  // of every spec, a value the video side reads as something else.
+  it.each(forcing)("%s: from the opposite, the video side reads no forced value (so the two-way check is not vacuous)", (_key, spec) => {
+    const video = spec.resolveSettings(OPPOSITE, "video")
+    for (const [k, v] of Object.entries(spec.audioForced!)) {
+      expect(k in OPPOSITE, `OPPOSITE has no value for the forced key ${k}`).toBe(true)
+      expect(JSON.stringify(video[k]) === JSON.stringify(v), `${k}: the video side reads the forced ${JSON.stringify(v)}`).toBe(false)
+    }
   })
 
   it("every use-case type's descriptor carries its spec's audioForced", () => {

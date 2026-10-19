@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { usecaseFailedDeliveriesField, usecaseListFields, usecaseListRowFields, usecaseListRows } from "@/lib/use-case-list-result"
-import { usecaseRunResultFields, usecaseTakeFields } from "@/lib/use-case-run-result"
+import { usecaseRunResultFields, usecaseTakeFields, usecaseTakeMedium } from "@/lib/use-case-run-result"
 
 const out = { formats: [{ format: "9:16", url: "https://r2/a.mp4" }, { format: "1:1", url: "https://r2/b.mp4" }], videoUrl: "https://r2/a.mp4", quality: "final", useCaseSettings: { formats: ["9:16", "1:1"] } }
 
@@ -86,5 +86,93 @@ describe("every lane lands the list through the one run-result mapping", () => {
     expect("__listResults" in fields).toBe(false)
     expect("generatedVideoUrl" in fields).toBe(false)
     expect(fields.failedFormats).toBeUndefined()
+  })
+})
+
+describe("a Clip Pack's clips land as rows of one run", () => {
+  const clips = {
+    videoUrl: "https://r2/c0.mp4",
+    clips: [
+      { url: "https://r2/c0.mp4", quality: "final", clipKey: "k0", title: "The pivot", hook: "Why we changed course", planBasis: "p0", renderBasis: "r0" },
+      { url: "https://r2/c1.mp4", quality: "final", clipKey: "k1", title: "The money", planBasis: "p1", renderBasis: "r1", captionsFailed: true },
+    ],
+    failedClips: 1,
+    failedCaptions: 1,
+    quality: "final",
+    json: [{ version: 1 }, { version: 1 }],
+    useCaseSettings: { count: 3 },
+  }
+
+  it("one row per clip, each with its clip key, title and hook, its own stamps, and whether its captions failed", () => {
+    const rows = usecaseListRows("clip-pack", clips, "job-c", "t")
+    expect(rows.map((r) => [r.url, r.clipKey, r.title, r.planBasis, r.renderBasis, r.quality, r.jobId])).toEqual([
+      ["https://r2/c0.mp4", "k0", "The pivot", "p0", "r0", "final", "job-c"],
+      ["https://r2/c1.mp4", "k1", "The money", "p1", "r1", "final", "job-c"],
+    ])
+    expect(rows[0]!.hook).toBe("Why we changed course")
+    expect(rows[0]!.captionsFailed).toBeUndefined()
+    expect(rows[1]!.captionsFailed).toBe(true)
+  })
+
+  it("writes each clip's key in the node's row stamps, with its own bases and the wrapper", () => {
+    expect(usecaseListFields("clip-pack", clips, "job-c")).toEqual({
+      __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"],
+      __listResultStamps: [
+        { quality: "final", clipKey: "k0", planBasis: "p0", renderBasis: "r0", jobId: "job-c" },
+        { quality: "final", clipKey: "k1", planBasis: "p1", renderBasis: "r1", jobId: "job-c" },
+      ],
+      generatedVideoUrl: "https://r2/c0.mp4",
+      activeResultIndex: 0,
+    })
+  })
+
+  it("a row's own take quality wins over the run's", () => {
+    const mixed = { ...clips, quality: "final", clips: [{ ...clips.clips[0]!, quality: "proxy" }] }
+    expect(usecaseListRows("clip-pack", mixed, "j", "t")[0]!.quality).toBe("proxy")
+    expect((usecaseListFields("clip-pack", mixed).__listResultStamps as Array<Record<string, unknown>>)[0]!.quality).toBe("proxy")
+  })
+
+  it("every clip of a run that could not render one says how many — and the uncaptioned clip keeps its mark (what every lane spreads)", () => {
+    expect(usecaseTakeFields("clip-pack", clips, "https://r2/c1.mp4")).toMatchObject({ clipKey: "k1", title: "The money", captionsFailed: true, failedClips: 1, generatedJson: clips.json })
+    expect(usecaseTakeFields("clip-pack", clips, "https://r2/c0.mp4")).toMatchObject({ clipKey: "k0", failedClips: 1 })
+    expect(usecaseTakeFields("clip-pack", clips, "https://r2/c0.mp4")!.captionsFailed).toBeUndefined()
+    expect(usecaseListRowFields("clip-pack", clips, "https://r2/c1.mp4")).toEqual({ quality: "final", clipKey: "k1", title: "The money", planBasis: "p1", renderBasis: "r1", captionsFailed: true })
+  })
+
+  it("on the node: how many clips the run could not render, only on a run that delivered — and never a format field", () => {
+    expect(usecaseFailedDeliveriesField("clip-pack", clips)).toEqual({ failedClips: 1 })
+    expect(usecaseFailedDeliveriesField("clip-pack", { ...clips, failedClips: undefined })).toEqual({ failedClips: undefined })
+    expect(usecaseFailedDeliveriesField("clip-pack", { failedClips: 3 })).toEqual({ failedClips: undefined })
+    expect("failedFormats" in usecaseFailedDeliveriesField("clip-pack", clips)).toBe(false)
+    expect("failedClips" in usecaseFailedDeliveriesField("episode-trailer", { ...out, failedClips: 2 })).toBe(false)
+  })
+
+  it("an audio recording's clips land as the node's audio, never its video", () => {
+    const audio = { audioUrl: "https://r2/c0.m4a", clips: [{ url: "https://r2/c0.m4a", quality: "final", clipKey: "k0" }], quality: "final" }
+    const list = usecaseListFields("clip-pack", audio)
+    expect(list.generatedAudioUrl).toBe("https://r2/c0.m4a")
+    expect("generatedVideoUrl" in list && list.generatedVideoUrl === undefined).toBe(true)
+    const fields = usecaseRunResultFields("clip-pack", audio, {}, "job-a")!
+    expect(fields).toMatchObject({ generatedAudioUrl: "https://r2/c0.m4a", __listResults: ["https://r2/c0.m4a"] })
+    expect(fields.generatedVideoUrl).toBeUndefined()
+    // Every row of an audio run is marked audio by the run, whatever its file is named.
+    const bare = { audioUrl: "https://r2/a0", clips: [{ url: "https://r2/a0", clipKey: "k0" }, { url: "https://r2/a1", clipKey: "k1" }], quality: "final" }
+    expect(usecaseListRows("clip-pack", bare, "j", "t").map((r) => r.medium)).toEqual(["audio", "audio"])
+    expect(usecaseListRowFields("clip-pack", bare, "https://r2/a1")).toMatchObject({ medium: "audio" })
+    expect(usecaseTakeMedium("https://r2/a1", { generatedResults: usecaseListRows("clip-pack", bare, "j", "t") })).toBe("audio")
+    // A video run's rows carry no medium mark (Trailer's included).
+    expect(usecaseListRows("clip-pack", clips, "j", "t")[0]!.medium).toBeUndefined()
+  })
+
+  it("each clip's still rides its row and its row stamp, like its file", () => {
+    const still = { ...clips, clips: [{ ...clips.clips[0]!, thumbnailUrl: "https://r2/c0.png" }, clips.clips[1]!] }
+    expect(usecaseListRows("clip-pack", still, "j", "t").map((r) => r.thumbnailUrl)).toEqual(["https://r2/c0.png", undefined])
+    expect((usecaseListFields("clip-pack", still, "j").__listResultStamps as Array<Record<string, unknown>>).map((s) => s.thumbnailUrl)).toEqual(["https://r2/c0.png", undefined])
+    expect(usecaseTakeFields("clip-pack", still, "https://r2/c0.mp4")).toMatchObject({ thumbnailUrl: "https://r2/c0.png" })
+  })
+
+  it("a review run lands each clip's preview as its own row", () => {
+    const review = { videoUrl: "https://r2/p0.mp4", clips: [{ url: "https://r2/p0.mp4", quality: "proxy", clipKey: "k0" }, { url: "https://r2/p1.mp4", quality: "proxy", clipKey: "k1" }], quality: "proxy" }
+    expect(usecaseListRows("clip-pack", review, "j", "t").map((r) => [r.url, r.quality])).toEqual([["https://r2/p0.mp4", "proxy"], ["https://r2/p1.mp4", "proxy"]])
   })
 })

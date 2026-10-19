@@ -17,8 +17,10 @@ import type { Job } from "bullmq"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+  CLIP_PACK_DEFAULTS,
   EPISODE_TRAILER_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
+  buildClipPackGraph,
   buildEpisodeTrailerGraph,
   renderFinalRunSet,
   renderRunOverrides,
@@ -32,6 +34,8 @@ import {
   type TightenEpisodeSettings,
 } from "@nodaro/render-rules"
 import type { NodeExecutionState, OrchestratorContext, WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
+import { edlSpanKey } from "@nodaro/shared/nodes"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import { usecaseWrapperKeepsPartial, usecaseWrapperOutput } from "../../lib/use-case/wrapper-output.js"
 
 const mocks = vi.hoisted(() => {
@@ -646,6 +650,268 @@ describe("a review-on Tighten Episode fed by a list is refused where it would fa
     expect(ran()).toEqual([])
     expect(states().t1).toMatchObject({ status: "failed", errorCode: USE_CASE_LIST_DRIVEN, error: "Trailer takes one recording. Use a separate workflow run for each recording." })
     expect(states().fmt?.status).not.toBe("completed")
+  })
+})
+
+describe("a Clip Pack inline run whose middle clip fails to render (the fan-out keeps the others)", () => {
+  const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
+  const clip = (inMs: number, title: string) => ({ version: 1, sources: [CAM], segments: [{ id: `s${inMs}`, video: "cam", inMs, outMs: inMs + 30_000 }], meta: { title } })
+  const plan = [clip(0, "One"), clip(60_000, "Two"), clip(120_000, "Three")]
+  const RENDER_CREDITS = 30
+  const CAPTION_CREDITS = 5
+  type Call = { id: string; data?: Record<string, unknown> }
+
+  /**
+   * Each step's output; the render's clip `failRow` throws (its own job refunds
+   * itself: no charge), and so do the captions of the render file `failCaptionsOf`.
+   */
+  function steps(failRow: number | null, failCaptionsOf?: string) {
+    mocks.executeNode.mockImplementation((async (node: Call, inputs: Record<string, unknown>, ...rest: unknown[]) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      const row = rest[5] as number | undefined
+      switch (node.id) {
+        case "uc-transcribe":
+          return { output: { json: { words: [] } }, creditsUsed: 1 }
+        case "uc-plan":
+          return { output: { json: plan, listResults: plan.map((c) => JSON.stringify(c)) }, creditsUsed: 1 }
+        case "uc-render": {
+          if (row === failRow) throw new Error("render failed")
+          // No clip key on the job's output: each row's clip comes from what the run sent it for (its row stamp).
+          return { output: { videoUrl: `https://r2/r${row}.mp4`, quality: node.data?.quality }, creditsUsed: RENDER_CREDITS, jobId: `job-r${row}` }
+        }
+        case "uc-captions": {
+          const src = String(inputs.videoUrl ?? inputs.video ?? "")
+          if (failCaptionsOf !== undefined && src === failCaptionsOf) throw new Error("captions failed")
+          return { output: { videoUrl: `https://r2/captioned-${src.split("/").pop()}` }, creditsUsed: CAPTION_CREDITS }
+        }
+        default:
+          return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 0 }
+      }
+    }) as never)
+  }
+  const restore = () => {
+    mocks.executeNode.mockReset()
+    mocks.executeNode.mockImplementation(async (node: Call, inputs: Record<string, unknown>) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 1 }
+    })
+  }
+
+  it("completes; the failed clip is not charged; the captions run on the two that rendered; the wrapper reads two clips and one failed", async () => {
+    const g = toStoredInlineGraph(buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), CLIP_PACK_DEFAULTS)
+    inline.graph = g
+    steps(1)
+    try {
+      await processWorkflowExecution(inlineJob())
+    } finally {
+      mocks.executeNode.mockReset()
+      mocks.executeNode.mockImplementation(async (node: Call, inputs: Record<string, unknown>) => {
+        mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+        return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 1 }
+      })
+    }
+    expect(failedWrite()).toBeUndefined()
+    const done = completedWrite()!
+    // Three renders tried, two captions: the hole is skipped.
+    expect(mocks.executeNodeCalls.filter((c) => c.id === "uc-render")).toHaveLength(3)
+    expect(mocks.executeNodeCalls.filter((c) => c.id === "uc-captions")).toHaveLength(2)
+    // The run's total: transcribe + plan + the two renders that came back + their captions — never the failed clip.
+    expect(done.total_credits_used).toBe(1 + 1 + 2 * RENDER_CREDITS + 2 * CAPTION_CREDITS)
+    const states = done.node_states as Record<string, NodeExecutionState>
+    expect(states["uc-render"]!.status).toBe("completed")
+    // The failed row still names its clip (what it was sent for), and is no skipped row.
+    const failedRow = (states["uc-render"]!.output as { listResultStamps?: Array<Record<string, unknown>> }).listResultStamps![1]
+    expect(failedRow).toMatchObject({ quality: "final", clipKey: edlSpanKey(plan[1]) })
+    expect(failedRow).not.toHaveProperty("cancelled")
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-1")
+    expect(out.clips!.map((c) => [c.clipKey, c.title])).toEqual([[edlSpanKey(plan[0]), "One"], [edlSpanKey(plan[2]), "Three"]])
+    // Each clip is paired with its OWN file: Three is row 2's render, captioned — never row 1's hole.
+    expect(out.clips!.map((c) => c.url)).toEqual(["https://r2/captioned-r0.mp4", "https://r2/captioned-r2.mp4"])
+    expect(out.failedClips).toBe(1)
+  })
+
+  it("a render hole AND a caption failure: each clip keeps its own file and title (Three comes uncaptioned, from its own render)", async () => {
+    const g = toStoredInlineGraph(buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), CLIP_PACK_DEFAULTS)
+    inline.graph = g
+    // Clip Two's render fails; clip Three's captions fail.
+    steps(1, "https://r2/r2.mp4")
+    try {
+      await processWorkflowExecution(inlineJob())
+    } finally {
+      restore()
+    }
+    expect(failedWrite()).toBeUndefined()
+    const done = completedWrite()!
+    expect(done.total_credits_used).toBe(1 + 1 + 2 * RENDER_CREDITS + 1 * CAPTION_CREDITS)
+    const out = usecaseWrapperOutput(g, done.node_states as Record<string, unknown>, "exec-1")
+    expect(out.clips!.map((c) => [c.clipKey, c.title, c.url, c.captionsFailed ?? false])).toEqual([
+      [edlSpanKey(plan[0]), "One", "https://r2/captioned-r0.mp4", false],
+      [edlSpanKey(plan[2]), "Three", "https://r2/r2.mp4", true],
+    ])
+    expect(out).toMatchObject({ failedClips: 1, failedCaptions: 1 })
+  })
+
+  it("a Render final: the plan the run holds is the review applied (the kept clips), so the wrapper's json is too", async () => {
+    const review = { ...CLIP_PACK_DEFAULTS, reviewBeforeRender: true }
+    const g = toStoredInlineGraph(buildClipPackGraph(review, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), review)
+    inline.graph = g
+    const done = (nodeType: string, output: Record<string, unknown>) => ({ status: "completed", nodeType, jobId: `j-${nodeType}`, output, completedAt: at })
+    mocks.executions.set("exec-0", {
+      id: "exec-0", user_id: OWNER, workflow_id: null, status: "completed", inline_graph: g,
+      node_states: {
+        "uc-source": { status: "completed", output: { videoUrl: "https://r2/ep.mp4" }, completedAt: at, fromSavedData: true },
+        "uc-transcribe": done("transcribe", { json: { words: [] } }),
+        "uc-plan": done("edit-plan", { json: plan, listResults: plan.map((c) => JSON.stringify(c)) }),
+        "uc-render": done("speaker-view", { videoUrl: "https://r2/p0.mp4", quality: "proxy", listResults: ["https://r2/p0.mp4", "https://r2/p1.mp4", "https://r2/p2.mp4"] }),
+      },
+    })
+    const edit = { v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis(plan), clips: [{ keep: true }, { keep: false }, { keep: true, hook: "Edited." }] }
+    steps(null)
+    try {
+      await processWorkflowExecution(inlineJob({
+        executionId: "exec-2", continueFromExecutionId: "exec-0", reviewerPresent: false,
+        nodeIds: ["uc-render", "uc-captions"], inputOverrides: { "uc-render": { quality: "final" }, "uc-plan": { editedEdl: edit } },
+      }))
+    } finally {
+      mocks.executeNode.mockReset()
+      mocks.executeNode.mockImplementation(async (node: Call, inputs: Record<string, unknown>) => {
+        mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+        return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 1 }
+      })
+    }
+    expect(failedWrite()).toBeUndefined()
+    // Only the kept clips render at Final.
+    expect(mocks.executeNodeCalls.filter((c) => c.id === "uc-render")).toHaveLength(2)
+    const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-2")
+    expect((out.json as unknown[]).map((c) => edlSpanKey(c))).toEqual([edlSpanKey(plan[0]), edlSpanKey(plan[2])])
+    expect(out.clips!.map((c) => c.hook ?? null)).toEqual([null, "Edited."])
+    expect(out).not.toHaveProperty("failedClips")
+  })
+})
+
+describe("a Clip Pack tries every clip (decided 2026-10-18): one failure never stops the rest", () => {
+  const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
+  const plan = Array.from({ length: 8 }, (_, i) => ({ version: 1, sources: [CAM], segments: [{ id: `s${i}`, video: "cam", inMs: i * 60_000, outMs: i * 60_000 + 30_000 }], meta: { title: `Clip ${i + 1}` } }))
+  type Call = { id: string; data?: Record<string, unknown> }
+  const reset = () => {
+    mocks.executeNode.mockReset()
+    mocks.executeNode.mockImplementation(async (node: Call, inputs: Record<string, unknown>) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 1 }
+    })
+  }
+  /** Clip #2 (row 1) fails at once while clip #1 is still rendering; clip #5's captions fail. Two at a time. */
+  function steps() {
+    mocks.executeNode.mockImplementation((async (node: Call, inputs: Record<string, unknown>, ...rest: unknown[]) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      const row = rest[5] as number | undefined
+      switch (node.id) {
+        case "uc-transcribe":
+          return { output: { json: { words: [] } }, creditsUsed: 1 }
+        case "uc-plan":
+          return { output: { json: plan, listResults: plan.map((c) => JSON.stringify(c)) }, creditsUsed: 1 }
+        case "uc-render":
+          if (row === 1) throw new Error("render failed")
+          await new Promise((r) => setTimeout(r, 5))
+          return { output: { videoUrl: `https://r2/r${row}.mp4`, quality: node.data?.quality }, creditsUsed: 30 }
+        case "uc-captions": {
+          const src = String(inputs.videoUrl ?? inputs.video ?? "")
+          if (src.endsWith("/r4.mp4")) throw new Error("captions failed")
+          await new Promise((r) => setTimeout(r, 5))
+          return { output: { videoUrl: src.replace("/r", "/c") }, creditsUsed: 5 }
+        }
+        default:
+          return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 0 }
+      }
+    }) as never)
+  }
+  const twoAtATime = { userId: OWNER, payer: "deployment", entitlements: { parallelism: 2 } }
+  const g = toStoredInlineGraph(buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), CLIP_PACK_DEFAULTS)
+
+  it("8 clips, #2 fails: every clip is started, 7 are delivered, 1 is named failed; #5's captions fail and it comes uncaptioned; the failures are not charged", async () => {
+    inline.graph = g
+    steps()
+    try {
+      await processWorkflowExecution(inlineJob({ billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(failedWrite()).toBeUndefined()
+    expect(mocks.executeNodeCalls.filter((c) => c.id === "uc-render")).toHaveLength(8)
+    expect(mocks.executeNodeCalls.filter((c) => c.id === "uc-captions")).toHaveLength(7)
+    const done = completedWrite()!
+    expect(done.total_credits_used).toBe(1 + 1 + 7 * 30 + 6 * 5)
+    const out = usecaseWrapperOutput(g, done.node_states as Record<string, unknown>, "exec-1")
+    expect(out.clips).toHaveLength(7)
+    expect(out.clips!.map((c) => c.title)).toEqual(["Clip 1", "Clip 3", "Clip 4", "Clip 5", "Clip 6", "Clip 7", "Clip 8"])
+    expect(out.clips!.filter((c) => c.captionsFailed).map((c) => [c.title, c.url])).toEqual([["Clip 5", "https://r2/r4.mp4"]])
+    expect(out).toMatchObject({ failedClips: 1, failedCaptions: 1 })
+  })
+
+  it("the switch is the Clip Pack's own: the same chain as a saved workflow keeps the engine's default (the first failure stops what has not started)", async () => {
+    mocks.workflows.set("wf-1", { nodes: g.nodes, edges: g.edges, settings: {}, user_id: OWNER })
+    steps()
+    try {
+      await processWorkflowExecution(inlineJob({ inlineGraph: undefined, wrapperJobId: undefined, workflowId: "wf-1", triggerType: "manual", billingContext: twoAtATime as never }))
+    } finally {
+      reset()
+    }
+    expect(mocks.executeNodeCalls.filter((c) => c.id === "uc-render").length).toBeLessThan(8)
+  })
+})
+
+describe("a Clip Pack that stopped before captioning its clips, continued from where it failed (decided 2026-10-18)", () => {
+  const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
+  const plan = [0, 1].map((i) => ({ version: 1, sources: [CAM], segments: [{ id: `s${i}`, video: "cam", inMs: i * 60_000, outMs: i * 60_000 + 30_000 }], meta: { title: `Clip ${i + 1}` } }))
+  const keys = plan.map((c) => edlSpanKey(c))
+  type Call = { id: string; data?: Record<string, unknown> }
+
+  it("runs only the captions on the clips the run rendered (nothing renders again) and delivers the pack", async () => {
+    const g = toStoredInlineGraph(buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), CLIP_PACK_DEFAULTS)
+    inline.graph = g
+    const done = (nodeType: string, output: Record<string, unknown>) => ({ status: "completed", nodeType, jobId: `j-${nodeType}`, output, completedAt: at })
+    const renderOut = {
+      videoUrl: "https://r2/r0.mp4", quality: "final", listResults: ["https://r2/r0.mp4", "https://r2/r1.mp4"],
+      listResultStamps: keys.map((clipKey) => ({ quality: "final", clipKey })),
+    }
+    const source = {
+      id: "exec-0", user_id: OWNER, workflow_id: null, status: "failed", inline_graph: g,
+      node_states: {
+        "uc-source": { status: "completed", output: { videoUrl: "https://r2/ep.mp4" }, completedAt: at, fromSavedData: true },
+        "uc-transcribe": done("transcribe", { json: { words: [] } }),
+        "uc-plan": done("edit-plan", { json: plan, listResults: plan.map((c) => JSON.stringify(c)) }),
+        "uc-render": done("speaker-view", renderOut),
+        // The time cap struck before captioning started.
+        "uc-captions": { status: "pending", nodeType: "add-captions" },
+      },
+    }
+    mocks.executions.set("exec-0", source)
+    // The stopped run itself keeps nothing: its wrapper fails (and refunds).
+    const stopped = usecaseWrapperOutput(g, source.node_states as Record<string, unknown>, "exec-0")
+    expect(stopped).toMatchObject({ clips: [], captionsNotRun: true })
+    mocks.executeNode.mockImplementation((async (node: Call, inputs: Record<string, unknown>) => {
+      mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+      const src = String(inputs.videoUrl ?? inputs.video ?? "")
+      return { output: { videoUrl: src.replace("/r2/r", "/r2/c") }, creditsUsed: 5 }
+    }) as never)
+    try {
+      await processWorkflowExecution(inlineJob({ executionId: "exec-1", continueFromExecutionId: "exec-0", continueMode: "from-failed", nodeIds: ["uc-captions"] }))
+    } finally {
+      mocks.executeNode.mockReset()
+      mocks.executeNode.mockImplementation(async (node: Call, inputs: Record<string, unknown>) => {
+        mocks.executeNodeCalls.push({ id: node.id, inputs, data: { ...(node.data ?? {}) } })
+        return { output: { videoUrl: `https://r2/${node.id}.mp4` }, creditsUsed: 1 }
+      })
+    }
+    expect(failedWrite()).toBeUndefined()
+    expect(ran()).toEqual(["uc-captions", "uc-captions"])
+    const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+    expect(states["uc-render"]).toMatchObject({ status: "completed", seededFromExecution: "exec-0" })
+    const out = usecaseWrapperOutput(g, states as Record<string, unknown>, "exec-1")
+    expect(out.clips!.map((c) => [c.url, c.clipKey, c.title])).toEqual([["https://r2/c0.mp4", keys[0], "Clip 1"], ["https://r2/c1.mp4", keys[1], "Clip 2"]])
+    expect(out).not.toHaveProperty("captionsNotRun")
+    expect(out).not.toHaveProperty("failedCaptions")
   })
 })
 

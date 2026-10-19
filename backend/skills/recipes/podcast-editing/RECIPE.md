@@ -25,25 +25,32 @@ This recipe covers:
 Each of them ends the same way: **render a Preview, review it with the user, then render
 the final.**
 
-## One step: Tighten Episode, Chapters, Trailer
+## One step: Tighten Episode, Clip Pack, Trailer, Chapters
 
 Each podcast use-case has a one-node verb. Reach for it first when it is in your tool list:
 
 - **`tighten_episode`** — a plain "tighten this episode" is one call: pass the recording's `media_url` — it runs the whole
   chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job.
   Set `review_before_render: true` to stop at a preview; then `continue_use_case` with `mode: "render-final"`.
-- **`make_chapters`** — "chapters for this episode" is one call: pass the recording's `media_url` (transcribe → plan
-  in `chapters` mode; nothing renders). The show notes are `output_data.text` (one `0:00 Title` line per chapter),
-  the list is `output_data.json` (`[{ startMs, title }]`). A run that finds no chapters fails, and its fee is refunded.
+- **`make_clip_pack`** — "make clips from this episode" is one call: pass the recording's `media_url` and, optionally,
+  `count` (default 8) and `target_length_sec` (default 60). It runs transcribe → plan in `clips` mode → one render per
+  clip (framed 9:16 with the speakers stacked by default; `framing: null` keeps the recording's shape) → captions per
+  clip. An audio recording makes audio clips. The clips are `output_data.clips` (`[{ url, title?, hook?, clipKey,
+  thumbnailUrl?, captionsFailed? }]`); a clip that could not be rendered is skipped and counted in `output_data.failedClips`. Set
+  `review_before_render: true` to stop at previews; then `continue_use_case` with `mode: "render-final"` and an
+  `edited_edl` that keeps the clips the user wants (at least one) renders only those.
 - **`make_trailer`** — "a trailer for this episode" is one call: pass the recording's `media_url` (a video) and,
   optionally, `formats` (default 9:16, 1:1, 4:5; also 16:9) and an `intro_card_url` (a short video, 15 s at most). It
   runs transcribe → plan in `trailer` mode (20–40 s) → render → one padded format per choice. The trailers are
   `output_data.formats` (`[{ format, url }]`), the first also `output_data.videoUrl`. Set `review_before_render: true`
   to stop at a preview of the trailer; then `continue_use_case` with `mode: "render-final"` makes every format.
+- **`make_chapters`** — "chapters for this episode" is one call: pass the recording's `media_url` (transcribe → plan
+  in `chapters` mode; nothing renders). The show notes are `output_data.text` (one `0:00 Title` line per chapter),
+  the list is `output_data.json` (`[{ startMs, title }]`). A run that finds no chapters fails, and its fee is refunded.
 
-A failed run of any of them continues with `continue_use_case` and `mode: "from-failed"` — finished steps are kept. Use the
-primitives below when you need control the one-node verbs do not give (several cameras, hand-edited EDLs, clips), or
-when the verb is not in your tool list.
+A failed run of any of them continues with `continue_use_case` and `mode: "from-failed"` — finished steps are kept. The
+primitive chains below are the advanced path: use them when you need control the one-node verbs do not give (several
+cameras, hand-edited EDLs, renders of your own), or when the verb is not in your tool list.
 
 ## The tools (and where each one runs)
 
@@ -94,6 +101,8 @@ job result.
    recording.
 
 ## Clip pack
+
+The one call is `make_clip_pack` (above); these are the steps it runs, for when you need to drive them yourself.
 
 1. **Transcribe** the recording the same way (step 1 above).
 2. **Plan the clips.** Call `plan_edit` with `mode: "clips"`, the `transcript`, the

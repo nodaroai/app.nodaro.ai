@@ -147,6 +147,16 @@ describe("defaultEdgeOutputMode / listResultsServeHandle", () => {
     expect(listResultsServeHandle("episode-trailer", "json")).toBe(false)
     expect(VIDEO_PRODUCER_TYPES.has("episode-trailer")).toBe(true)
   })
+  it("Clip Pack: its clips (clips, and no handle) are each; its plan is one value; video or audio, decided at run time", () => {
+    expect(FAN_OUT_EACH_HANDLES["clip-pack"]).toEqual({ each: ["clips"], primary: "clips" })
+    expect(defaultEdgeOutputMode("clip-pack", "clips")).toBe("each")
+    expect(defaultEdgeOutputMode("clip-pack", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("clip-pack", "json")).toBe("last")
+    expect(listResultsServeHandle("clip-pack", "clips")).toBe(true)
+    expect(listResultsServeHandle("clip-pack", "json")).toBe(false)
+    expect(DYNAMIC_PRODUCER_TYPES.has("clip-pack")).toBe(true)
+    expect(VIDEO_PRODUCER_TYPES.has("clip-pack")).toBe(false)
+  })
   it("only the each handles read the per-iteration results", () => {
     expect(listResultsServeHandle("camera-switch", "edl")).toBe(true)
     expect(listResultsServeHandle("camera-switch", undefined)).toBe(true)

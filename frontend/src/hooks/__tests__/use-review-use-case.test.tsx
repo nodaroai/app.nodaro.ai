@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, renderHook } from "@testing-library/react"
 import { editPlanBasis, normalizeEdl } from "@nodaro/shared/edl"
-import { buildTightenEpisodeGraph, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
+import { edlSpanKey, renderReadBasis } from "@nodaro/shared/nodes"
+import { CLIP_PACK_DEFAULTS, buildTightenEpisodeGraph, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),
@@ -14,6 +15,14 @@ vi.mock("@/hooks/use-model-credit-cost", async (importOriginal) => ({
   getCachedModelCredits: () => undefined,
   prefetchModelCreditCosts: async () => undefined,
 }))
+const mockRunWorkflow = vi.fn(async (..._args: unknown[]) => ({ executionId: "exec-1" }))
+vi.mock("@/lib/api", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runWorkflow: (...a: unknown[]) => mockRunWorkflow(...a),
+  streamWorkflowExecution: vi.fn(() => new Promise(() => {})),
+  getWorkflowExecution: vi.fn(async () => ({ triggerType: "manual", nodeStates: {} })),
+  listWorkflowExecutions: vi.fn(async () => ({ data: [] })),
+}))
 vi.mock("@/components/editor/workflow-editor/newer-run-check", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   newerRunOnServer: vi.fn(async () => null),
@@ -25,6 +34,8 @@ import { useReviewModel } from "../use-review-model"
 import { useReviewEdits } from "../use-review-edits"
 import { useReviewChecks, REVIEW_CHECK_DEBOUNCE_MS } from "../use-review-checks"
 import { useReviewRuns } from "../use-review-runs"
+import { useClipCardInputs, useClipCards } from "../use-clip-cards"
+import { useClipDecisions } from "../use-clip-decisions"
 import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
 import { REVIEW_WRITE_IDLE_MS, reviewOf as editOf } from "@/lib/edl-review/write-review"
 import { keptSetOf } from "@/lib/edl-review/kept-set"
@@ -32,6 +43,8 @@ import { reviewViewOf } from "@/lib/edl-review/use-case-review-source"
 import { reviewKindOf } from "@/lib/edl-review/review-entry"
 import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
+import { handleRenderFinal } from "@/components/editor/workflow-editor/render-final-handler"
+import { detachActiveWorkflowStream } from "@/components/editor/workflow-editor/run-handlers"
 
 /**
  * The review of a Tighten Episode node (decided 2026-10-13) is the review of
@@ -138,6 +151,9 @@ beforeEach(() => {
   resetUndoStacks()
 })
 afterEach(() => {
+  detachActiveWorkflowStream()
+  mockRunWorkflow.mockClear()
+  useWorkflowStore.setState({ renderFinal: null })
   vi.useRealTimers()
 })
 
@@ -326,6 +342,171 @@ describe("a review-on Trailer reviews through the cut review (decided 2026-10-14
     })
     const data = useWorkflowStore.getState().nodes.find((n) => n.id === "tr")!.data as Record<string, unknown>
     expect(data.editedEdl).toMatchObject({ kind: "edl", basis: editPlanBasis(PLAN) })
+    hook.unmount()
+  })
+})
+
+describe("a Clip Pack node reviews in the Clip Pack inspector", () => {
+  const WRAPPER = "00000000-0000-4000-8000-0000000000c1"
+  /** A one-clip EDL titled `title`, cut from the recording at `inMs`. */
+  const clipEdl = (id: string, title: string, inMs: number) => ({
+    version: 1,
+    clock: "master",
+    sources: [{ id: "uc-source", url: URL, kind: "video" }],
+    segments: [{ id, inMs, outMs: inMs + 30_000, video: "uc-source" }],
+    dropped: [],
+    meta: { title },
+  })
+  const CLIPS = [clipEdl("a", "The pivot", 0), clipEdl("b", "The fix", 60_000)]
+  const keyOf = (i: number) => edlSpanKey(CLIPS[i])!
+  const SETTINGS = { ...CLIP_PACK_DEFAULTS, reviewBeforeRender: true }
+
+  /** A completed review-on Clip Pack holding its plan and one Preview per clip. */
+  function loadClipPack(extra: Record<string, unknown> = {}) {
+    useWorkflowStore.setState({
+      nodes: [REC, node("cp", "clip-pack", {
+        label: "Clip Pack", executionStatus: "completed", useCaseJobId: WRAPPER,
+        generatedJson: CLIPS, generatedTranscript: TRANSCRIPT,
+        generatedResults: [
+          { url: "https://r2/p0.mp4", jobId: WRAPPER, quality: "proxy", clipKey: keyOf(0), useCaseSettings: SETTINGS },
+          { url: "https://r2/p1.mp4", jobId: WRAPPER, quality: "proxy", clipKey: keyOf(1), useCaseSettings: SETTINGS },
+        ],
+        activeResultIndex: 0,
+        generatedVideoUrl: "https://r2/p0.mp4",
+        __listResults: ["https://r2/p0.mp4", "https://r2/p1.mp4"],
+        __listResultStamps: [{ quality: "proxy", clipKey: keyOf(0) }, { quality: "proxy", clipKey: keyOf(1) }],
+        ...SETTINGS,
+        ...extra,
+      })] as never,
+      edges: [edge("rec", "video", "cp", "media")] as never,
+      isReadOnly: false,
+      workflowId: null,
+    })
+  }
+  const graph = () => useWorkflowStore.getState()
+  const cpData = () => graph().nodes.find((n) => n.id === "cp")!.data as Record<string, unknown>
+
+  it("opens the clips inspector, one card per planned clip, matched to the node's rows by clip", () => {
+    loadClipPack()
+    expect(reviewKindOf("cp", graph().nodes as never, graph().edges as never)).toBe("clips")
+    const { result } = renderHook(() => {
+      const model = useReviewModel("cp")
+      return useClipCards(useClipCardInputs(model, null))
+    })
+    expect(result.current?.cards.map((c) => [c.title, c.preview?.url])).toEqual([["The pivot", "https://r2/p0.mp4"], ["The fix", "https://r2/p1.mp4"]])
+    expect(result.current?.keptCount).toBe(2)
+  })
+
+  it("the render-side reads are the run's own render's: a Final stamped with what that run rendered reads unchanged", () => {
+    loadClipPack()
+    // What each clip's render in the node's run stamps (its Speaker View, on the pair the run is).
+    const { nodes, edges } = graph()
+    const view = reviewViewOf("cp", nodes as never, edges as never)
+    const render = view.nodes.find((n) => n.id === view.renderId)! as never
+    expect((render as { type: string }).type).toBe("speaker-view")
+    const rows = renderRowsOf(render, view.nodes as never, view.edges as never)
+    expect(rows).toHaveLength(2)
+    const finals = CLIPS.map((clip, i) => ({
+      url: `https://r2/f${i}.mp4`, jobId: "00000000-0000-4000-8000-0000000000f1", quality: "final", clipKey: keyOf(i),
+      planBasis: renderReadBasis(clip), renderBasis: renderSettingsBasisFor(render, rows[i]),
+    }))
+    expect(finals.every((f) => typeof f.renderBasis === "string" && f.renderBasis.length > 0)).toBe(true)
+    loadClipPack({ generatedResults: [...finals, ...(cpData().generatedResults as unknown[])] })
+
+    const { result } = renderHook(() => {
+      const model = useReviewModel("cp")
+      const decisions = useClipDecisions({ planId: model.planId, plan: model.plan, editedEdl: model.editedEdl, locked: model.locked })
+      return useClipCards(useClipCardInputs(model, decisions.decisions))
+    })
+    expect(result.current?.cards.map((c) => [c.final?.url, c.unchanged])).toEqual([["https://r2/f0.mp4", true], ["https://r2/f1.mp4", true]])
+    expect(result.current?.unchangedKept).toBe(2)
+  })
+
+  it("dropping a clip writes the decision to the node, and the review's Render final continues the node's run with it", async () => {
+    loadClipPack()
+    useWorkflowStore.setState({ workflowId: "wf-1" })
+    // What the save sends: the node's edit as it stands when the save is made.
+    let savedEdit: unknown = "not saved"
+    const save = vi.fn(async () => {
+      savedEdit = cpData().editedEdl
+      return { success: true }
+    })
+    const ctx = {
+      userId: "u1", projectId: "p1",
+      trackInterval: (i: unknown) => i, untrackInterval: vi.fn(),
+      save: vi.fn(), setIsRunning: vi.fn(),
+      isWorkflowStale: () => false, isStorageError: () => false,
+      setShowStorageExceeded: vi.fn(), setStorageExceededData: vi.fn(),
+      setShowInsufficientCredits: vi.fn(), setInsufficientCreditsData: vi.fn(),
+    }
+    const renderFinal = vi.fn((id: string, kind: "final" | "proxy") => handleRenderFinal(id, kind, ctx as never, "p1", save, vi.fn()))
+    useWorkflowStore.setState({ renderFinal })
+
+    const hook = renderHook(() => {
+      const model = useReviewModel("cp")
+      const decisions = useClipDecisions({ planId: model.planId, plan: model.plan, editedEdl: model.editedEdl, locked: model.locked })
+      const inputs = useClipCardInputs(model, decisions.decisions)
+      const cards = useClipCards(inputs)
+      const keptCount = decisions.decisions && cards ? cards.keptCount : null
+      const edits = { keptCount, pendingReview: decisions.pendingReview, flush: decisions.flush }
+      const checks = useReviewChecks(model, edits)
+      const runs = useReviewRuns(model, edits, checks)
+      return { decisions, cards, runs }
+    })
+    act(() => hook.result.current.decisions.setKeep(1, false))
+    expect(cpData().editedEdl).toMatchObject({ kind: "clips", basis: editPlanBasis(CLIPS), clips: [{ keep: true }, { keep: false }] })
+    expect(hook.result.current.cards?.keptCount).toBe(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REVIEW_CHECK_DEBOUNCE_MS + 1)
+    })
+    expect(hook.result.current.runs.gate).toMatchObject({ mode: "ready", hold: null })
+    expect(hook.result.current.runs.canRenderFinal).toBe(true)
+
+    await act(async () => {
+      hook.result.current.runs.renderFinal()
+      await vi.advanceTimersByTimeAsync(10)
+    })
+    expect(renderFinal).toHaveBeenCalledWith("cp", "final")
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    const [workflowId, ids, , opts] = mockRunWorkflow.mock.calls[0]!
+    expect(workflowId).toBe("wf-1")
+    expect(ids).toEqual(["cp"])
+    // A continuation of the node's own run (no fee), with the settings of the run that made the Preview.
+    expect(opts).toEqual({ inputOverrides: { cp: { useCaseContinue: { mode: "render-final", jobId: WRAPPER, settings: SETTINGS } } } })
+    // The edit is the node's own, SAVED before the run (the server sends the node's saved edit), never an override.
+    expect(save).toHaveBeenCalledWith("p1")
+    expect(save.mock.invocationCallOrder[0]!).toBeLessThan(mockRunWorkflow.mock.invocationCallOrder[0]!)
+    expect(savedEdit).toEqual(cpData().editedEdl)
+    expect(savedEdit).toMatchObject({ kind: "clips", clips: [{ keep: true }, { keep: false }] })
+    hook.unmount()
+  })
+
+  it("with every clip dropped the footer's gate is nothing-kept, and Render final sends nothing", async () => {
+    loadClipPack()
+    useWorkflowStore.setState({ workflowId: "wf-1" })
+    const renderFinal = vi.fn()
+    useWorkflowStore.setState({ renderFinal })
+    const hook = renderHook(() => {
+      const model = useReviewModel("cp")
+      const decisions = useClipDecisions({ planId: model.planId, plan: model.plan, editedEdl: model.editedEdl, locked: model.locked })
+      const cards = useClipCards(useClipCardInputs(model, decisions.decisions))
+      const keptCount = decisions.decisions && cards ? cards.keptCount : null
+      const edits = { keptCount, pendingReview: decisions.pendingReview, flush: decisions.flush }
+      const checks = useReviewChecks(model, edits)
+      return { decisions, cards, runs: useReviewRuns(model, edits, checks) }
+    })
+    act(() => hook.result.current.decisions.setKeepFor([0, 1], false))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REVIEW_CHECK_DEBOUNCE_MS + 1)
+    })
+    expect(hook.result.current.cards?.keptCount).toBe(0)
+    expect(hook.result.current.runs.gate).toMatchObject({ mode: "ready", hold: { kind: "nothing-kept" } })
+    await act(async () => {
+      hook.result.current.runs.renderFinal()
+      await vi.advanceTimersByTimeAsync(10)
+    })
+    expect(renderFinal).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
     hook.unmount()
   })
 })

@@ -12,6 +12,9 @@
  *    (a pure overlay, no store write): a hook edit changes neither a clip's
  *    render nor its basis (renderers never read `meta`, R2 a), so typing does
  *    not recompute them.
+ *    A use-case node (Clip Pack) is read as the pair its run is
+ *    (`reviewViewOf`): the render-side reads are its run's render's; the takes
+ *    are the node's own (it holds its clips).
  *  - `useClipCards`: the cards, and `useLiveClipCards` the same cards while a
  *    run that includes the render is live (`clipLiveRun`): each kept clip whose
  *    take has not landed reads "rendering". The live render data is read from the
@@ -26,6 +29,7 @@ import { clipRenderBasesBy } from "@/lib/edl-review/clip-render-bases"
 import { clipReviewOf, withPendingReview } from "@/lib/edl-review/write-review"
 import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { planOutputOf } from "@/components/editor/workflow-editor/apply-edl-stamps"
+import { reviewViewOf } from "@/lib/edl-review/use-case-review-source"
 import { showsARunInFlight } from "./workflow-access-mode"
 import { useReviewGraph } from "./use-review-graph"
 import { ignoringEditOn, type ReviewModel } from "./use-review-model"
@@ -39,21 +43,25 @@ export function useClipCardInputs(model: ReviewModel, decisions: readonly Edited
   // the decisions' keeps below, so a hook write changes nothing this reads.
   const ignoreEdit = useMemo(() => ignoringEditOn(planId), [planId])
   const canvas = useReviewGraph(renderId, ignoreEdit)
+  // What the render-side reads read (use-case-review-source.ts): the canvas as
+  // it is for a render; for a use-case node the pair its run is.
+  const view = useMemo(() => reviewViewOf(renderId, canvas.nodes, canvas.edges), [renderId, canvas])
   const keeps = decisions ? decisions.map((d) => (d.keep ? "1" : "0")).join("") : null
 
   // The render-side reads, with the keeps in place: not recomputed by a hook edit.
   const bases = useMemo(() => {
     if (!planId || keeps === null || !path) return undefined
     const keepsOnly = clipReviewOf(plan, [...keeps].map((k) => ({ keep: k === "1" })))
-    const nodes = withPendingReview(canvas.nodes, planId, keepsOnly)
-    const render = nodes.find((n) => n.id === renderId)
+    const nodes = withPendingReview(view.nodes, planId, keepsOnly)
+    const render = nodes.find((n) => n.id === view.renderId)
     const planNode = nodes.find((n) => n.id === planId)
     if (!render || !planNode) return undefined
-    // The anchored render's own rows and basis (render-review-adapter.ts).
-    const renders = renderRowsOf(render, nodes, canvas.edges)
+    // The render's own rows and basis (render-review-adapter.ts).
+    const renders = renderRowsOf(render, nodes, view.edges)
     return clipRenderBasesBy(renders, (row) => renderSettingsBasisFor(render, row), planOutputOf(planNode), path.hops)
-  }, [canvas, renderId, planId, plan, path, keeps])
+  }, [view, planId, plan, path, keeps])
 
+  // The takes: the anchored node's own data — a canvas render's, or the use-case node's (it holds its clips).
   const renderData = canvas.nodes.find((n) => n.id === renderId)?.data as Readonly<Record<string, unknown>> | undefined
 
   return useMemo(() => {

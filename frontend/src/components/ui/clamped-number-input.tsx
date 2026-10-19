@@ -22,6 +22,15 @@ interface ClampedNumberInputProps
   readonly allowEmpty?: boolean
 }
 
+/** Plain decimal text, optionally signed: what the field reads as a number. */
+const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)$/
+
+/** The number typed, or `undefined` for text that is no plain decimal ("1e", "0x10", "Infinity"). */
+export function readTypedNumber(text: string): number | undefined {
+  const trimmed = text.trim()
+  return DECIMAL.test(trimmed) ? Number(trimmed) : undefined
+}
+
 /**
  * A bounded numeric input that clamps on COMMIT, not on every keystroke.
  *
@@ -33,6 +42,12 @@ interface ClampedNumberInputProps
  * the stored value on Escape or garbage input, and adopts an externally changed
  * value (a slider next to it, a preset, a mapping) only while NOT focused so a
  * concurrent write can't erase what the user is typing.
+ *
+ * It is a text field with the spinbutton role (its bounds as `aria-valuemin` /
+ * `aria-valuemax`, ArrowUp / ArrowDown step it), not `type="number"`: a number
+ * field reports half-typed text such as "1e" as an EMPTY value, which
+ * `allowEmpty` would then commit as a clear. Only plain decimal text is read
+ * (`readTypedNumber`): "1e", "0x10" or "Infinity" restore the stored value.
  */
 export function ClampedNumberInput({
   value,
@@ -75,8 +90,8 @@ export function ClampedNumberInput({
       setDraft(toDraft(value))
       return
     }
-    const parsed = Number(trimmed)
-    if (!Number.isFinite(parsed)) {
+    const parsed = readTypedNumber(trimmed)
+    if (parsed === undefined) {
       setDraft(toDraft(value))
       return
     }
@@ -87,10 +102,12 @@ export function ClampedNumberInput({
 
   return (
     <Input
-      type="number"
-      min={min}
-      max={max}
-      step={step}
+      type="text"
+      inputMode={Number.isInteger(step) && (min === undefined || min >= 0) ? "numeric" : "decimal"}
+      role="spinbutton"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
       value={draft}
       onFocus={(e) => {
         focusedRef.current = true
@@ -109,7 +126,12 @@ export function ClampedNumberInput({
       onKeyDown={(e) => {
         onKeyDown?.(e)
         if (e.defaultPrevented) return
-        if (e.key === "Enter") {
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          // Step from what is typed (else the stored value), within the bounds.
+          e.preventDefault()
+          const from = readTypedNumber(draft) ?? value ?? min ?? 0
+          setDraft(String(Number(clamp(from + (e.key === "ArrowUp" ? step : -step)).toFixed(10))))
+        } else if (e.key === "Enter") {
           e.preventDefault()
           skipBlurCommitRef.current = true
           commit()

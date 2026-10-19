@@ -1929,6 +1929,28 @@ Needs `workflows:execute`.
 | `style_guide` | string |  | Style guide for the chapter titles. At most 4000 characters. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `make_clip_pack`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) | yes | The recording (video or audio URL). |
+| `count` | integer |  | How many clips to find, 1–50 (default 8); the plan may find fewer. From 1 to 50. |
+| `target_length_sec` | integer |  | Each clip's target length in seconds, 5–180 (default 60). From 5 to 180. |
+| `framing` | object or null |  | Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default 9:16, stacked). null: the recording's shape. |
+| `framing.aspect` | string | yes | The clips' shape. One of `16:9`, `9:16`, `1:1`, `4:5`. |
+| `framing.layout` | string |  | How the speakers are laid out (default stacked; one the shape does not draw is snapped). One of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`. |
+| `framing.switch_type` | string |  | The switch at each speaker change (default pan). One of `cut`, `pan`, `zoom`, `xfade:fade`, `xfade:dissolve`, `xfade:dip-to-black`, `xfade:dip-to-white`, `xfade:fadegrays`, `xfade:wipe-left`, `xfade:wipe-right`, `xfade:wipe-up`, `xfade:wipe-down`, `xfade:wipe-tl`, `xfade:wipe-tr`, `xfade:wipe-bl`, `xfade:wipe-br`, `xfade:slide-left`, `xfade:slide-right`, `xfade:slide-up`, `xfade:slide-down`, `xfade:smooth-left`, `xfade:smooth-right`, `xfade:smooth-up`, `xfade:smooth-down`, `xfade:circle-open`, `xfade:circle-close`, `xfade:circle-crop`, `xfade:rect-crop`, `xfade:horz-open`, `xfade:horz-close`, `xfade:vert-open`, `xfade:vert-close`, `xfade:diag-tl`, `xfade:diag-tr`, `xfade:diag-bl`, `xfade:diag-br`, `xfade:hl-slice`, `xfade:hr-slice`, `xfade:vu-slice`, `xfade:vd-slice`, `xfade:reveal-left`, `xfade:reveal-right`, `xfade:reveal-up`, `xfade:reveal-down`, `xfade:cover-left`, `xfade:cover-right`, `xfade:cover-up`, `xfade:cover-down`, `xfade:pixelize`, `xfade:radial`, `xfade:hblur`, `xfade:distance`, `xfade:zoom-in`, `xfade:squeeze-h`, `xfade:squeeze-v`. |
+| `framing.emphasis` | string |  | How the speaker talking is emphasised (default scale): "none", or scale, border, dim joined with "+" (each once). At most 40 characters. |
+| `captions` | boolean |  | Caption each video clip (default true). |
+| `caption_style` | string |  | Caption style (default karaoke). One of `subtitle`, `word-highlight`, `karaoke`, `tiktok-words`, `word-pop`, `bouncy`. |
+| `review_before_render` | boolean |  | Stop at proxy previews for review (default false). |
+| `plan_tier` | string |  | Editing quality (default standard). One of `economy`, `standard`, `premium`. |
+| `instructions` | string |  | Instructions for picking the clips ("the funniest moments"). At most 4000 characters. |
+| `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `make_trailer`
 
 Needs `workflows:execute`.

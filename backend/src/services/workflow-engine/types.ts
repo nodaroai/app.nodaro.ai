@@ -138,6 +138,24 @@ export interface NodeOutput {
   formats?: ReadonlyArray<{ readonly format: string; readonly url: string }>
   /** Trailer: the formats whose render failed (the others were delivered). */
   failedFormats?: readonly string[]
+  /** A use-case node whose result is a clip set (Clip Pack): each clip's file and take stamps, with its title and hook, in plan order. */
+  clips?: ReadonlyArray<{
+    readonly url: string
+    readonly quality?: RenderQuality
+    readonly clipKey?: string
+    readonly planBasis?: string
+    readonly renderBasis?: string
+    readonly title?: string
+    readonly hook?: string
+    /** The still of the file it delivers (none for an audio clip). */
+    readonly thumbnailUrl?: string
+    /** Its captions could not be added: the clip is its render, uncaptioned. */
+    readonly captionsFailed?: true
+  }>
+  /** Clip Pack: how many planned clips could not be rendered (the others were delivered). */
+  failedClips?: number
+  /** Clip Pack: how many delivered clips came without captions. */
+  failedCaptions?: number
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -771,11 +789,12 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
-  /** The nodes that try every one of their kind: a stage whose nodes are all
-   *  named here runs every one, whichever fails, each checking for a Stop
-   *  before it starts (a Trailer's formats, `usecaseTriesEvery`). Absent, or
-   *  a stage with any node not named: the default — the first failure stops
-   *  the nodes not started yet. */
+  /** The nodes that try every one of their kind (`usecaseTriesEvery`): a
+   *  node named here that runs over a list tries every item (a Clip Pack's
+   *  render and captions), and a stage whose nodes are all named here runs
+   *  every one, each checking for a Stop before it starts (a Trailer's
+   *  formats) — whichever fails. Absent, or a node not named: the default —
+   *  the first failure stops what has not started yet. */
   triesEvery?: ReadonlySet<string>
   /** A continued run (`continueFromExecutionId`): the node states of the run it
    *  continues. A use-case node that failed there continues its own inner run

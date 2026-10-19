@@ -1,4 +1,4 @@
-// @test-watches backend/src/lib/tutorial-seed/templates/podcast-trailer-formats.json
+// @test-watches backend/src/lib/tutorial-seed/templates/podcast-trailer-formats.json backend/src/lib/tutorial-seed/templates/podcast-clip-pack.json
 /**
  * A use-case node's estimate is its built chain, wired to its real source and
  * priced by the ordinary rules, plus its per-run fee (decided 2026-10-13).
@@ -6,14 +6,15 @@
  * Speaker View at its complex rate before the edit is known.
  *
  * The engine is tested at its static rows. The public docs state the CHARGED
- * price (docs/nodes/processing-video/tighten-episode.md, episode-chapters.md and
- * episode-trailer.md, "What the estimate shows"), so each worked example there is pinned in this file:
+ * price (docs/nodes/processing-video/tighten-episode.md, episode-chapters.md,
+ * episode-trailer.md and clip-pack.md, "What the estimate shows"), so each worked example there is pinned in this file:
  * its steps, as price ids, sum to the engine's figure at the static rows, and
  * the same steps priced by `statedPrices()` (the rule the docs census holds
  * every figure to) sum to the figure the page states.
  *
  * Trailer's parity reference is the shipped `podcast-trailer-formats` template
  * itself (`templateTwin`): the chain the builder emits, priced as hand-built.
+ * Clip Pack's is the shipped `podcast-clip-pack` template (`clipPackTemplateTwin`).
  */
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -473,4 +474,138 @@ describe("Trailer is quoted at 40 seconds; its Render final on the cut the run m
     expect(unedited).toBe(steps([["apply-edl", 1], ["combine-videos", Math.ceil((35 + 10) / 5)], ["social-media-format", 3]]))
     expect(final).toBeLessThan(unedited)
   })
+})
+
+const CLIP_PACK_TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib", "tutorial-seed", "templates", "podcast-clip-pack.json")
+
+/**
+ * The shipped `podcast-clip-pack` template as the chain an unframed Clip Pack
+ * builds: its notes dropped, its upload holding the recording's URL and
+ * length, Find Clips asked for `count` clips of `targetDurationSec`, Render
+ * Clip at final (review off).
+ */
+function clipPackTemplateTwin({ durationSec, count, targetDurationSec }: { readonly durationSec: number; readonly count: number; readonly targetDurationSec: number }): [TemplateNode[], TemplateEdge[]] {
+  const t = JSON.parse(readFileSync(CLIP_PACK_TEMPLATE, "utf8")) as { nodes: TemplateNode[]; edges: TemplateEdge[] }
+  const notes = new Set(t.nodes.filter((n) => n.type === "sticky-note").map((n) => n.id))
+  const nodes = t.nodes
+    .filter((n) => !notes.has(n.id))
+    .map((n) => {
+      if (n.type === "upload-video") return { ...n, data: { ...n.data, url: "https://r2/ep.mp4", metadata: { durationSeconds: durationSec } } }
+      if (n.type === "edit-plan") return { ...n, data: { ...n.data, count, targetDurationSec } }
+      if (n.type === "apply-edl") return { ...n, data: { ...n.data, quality: "final" } }
+      return { ...n, data: { ...n.data } }
+    })
+  return [nodes, t.edges.filter((e) => !notes.has(e.source) && !notes.has(e.target)).map((e) => ({ ...e }))]
+}
+
+const pack = (data: Record<string, unknown>) => ({ id: "cp", type: "clip-pack", data: { label: "Clip Pack", ...data } })
+const packWire = { source: "rec", target: "cp", sourceHandle: "video", targetHandle: "media" }
+const CLIP_MINUTES = editPlanRenderEstimateLength({ mode: "clips", targetDurationSec: 60 }, 3600).fixedMinutes
+
+describe("Clip Pack estimate = its chain + 10", () => {
+  it("the template twin is the chain the builder emits without framing", () => {
+    const [nodes, edges] = clipPackTemplateTwin({ durationSec: 3600, count: 8, targetDurationSec: 60 })
+    expect(nodes.map((n) => n.type)).toEqual(["upload-video", "transcribe", "edit-plan", "apply-edl", "add-captions"])
+    expect(edges.find((e) => e.target === "clips-captions")).toMatchObject({ source: "clips-apply", sourceHandle: "media", data: { outputMode: "each" } })
+  })
+  it("without framing it is the hand-built clip-pack template, priced the same, plus the fee", async () => {
+    const [nodes, edges] = clipPackTemplateTwin({ durationSec: 3600, count: 8, targetDurationSec: 60 })
+    expect(await estimateWorkflowCredits([video(3600), pack({ framing: null })], [packWire])).toBe(
+      (await estimateWorkflowCredits(nodes, edges)) + STATIC_CREDIT_COSTS["use-case-fee:clip-pack"]!,
+    )
+  })
+  it("8 clips with the default framing: Speaker View and captions run once per clip", async () => {
+    expect(await estimateWorkflowCredits([video(3600), pack({})], [packWire])).toBe(listOf([
+      ["elevenlabs-stt"], ["edit-plan:clips:standard:per-minute", 60], ["edit-plan:clips:standard:flat"],
+      ...Array.from({ length: 8 }, (): Step => ["speaker-view:complex", CLIP_MINUTES]),
+      ...Array.from({ length: 8 }, (): Step => ["add-captions:kinetic"]),
+      ["use-case-fee:clip-pack"],
+    ]))
+  })
+  it("review on: the preview run is the per-clip proxy renders and the fee", async () => {
+    expect(await estimateWorkflowCredits([video(3600), pack({ reviewBeforeRender: true })], [packWire])).toBe(listOf([
+      ["elevenlabs-stt"], ["edit-plan:clips:standard:per-minute", 60], ["edit-plan:clips:standard:flat"],
+      ...Array.from({ length: 8 }, (): Step => ["speaker-view:complex:proxy", CLIP_MINUTES]),
+      ["use-case-fee:clip-pack"],
+    ]))
+  })
+  it("a node after the pack's clips runs once per clip", async () => {
+    const after = { id: "fmt", type: "social-media-format", data: { specKey: "instagram:story-reel", method: "pad" } }
+    const base = await estimateWorkflowCredits([video(3600), pack({})], [packWire])
+    expect(await estimateWorkflowCredits([video(3600), pack({}), after], [packWire, { source: "cp", target: "fmt", sourceHandle: "clips", targetHandle: "media" }]))
+      .toBe(base + 8 * STATIC_CREDIT_COSTS["social-media-format"]!)
+  })
+  it("its own charge is its fee", () => expect(CREDIT_COSTS["clip-pack"]!({})).toBe("use-case-fee:clip-pack"))
+})
+
+/** A Clip Pack plan of `count` clips, each one cut of `sec` seconds from the recording. */
+const clipPlan = (count: number, sec: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    version: 1,
+    clock: "master",
+    sources: [{ id: "rec", url: "https://r2/ep.mp4", kind: "video" }],
+    segments: [{ id: `clip-${i}`, inMs: i * 300_000, outMs: i * 300_000 + sec * 1000, video: "rec" }],
+    dropped: [],
+    meta: { title: `Clip ${i + 1}` },
+  }))
+
+describe("the docs' worked examples, at the charged price (clip-pack.md, What the estimate shows)", () => {
+  const head: Step[] = [["elevenlabs-stt"], ["edit-plan:clips:standard:per-minute", 60], ["edit-plan:clips:standard:flat"]]
+  const fee: Step = ["use-case-fee:clip-pack"]
+  // Each clip is its own render, its minutes rounded on their own: n steps, never one step of n × minutes.
+  const each = (n: number, step: Step): Step[] => Array.from({ length: n }, () => step)
+  // The plan the review-on run made: 8 clips of 55 seconds (one started minute each).
+  const PLAN = clipPlan(8, 55)
+  const preview = pack({ reviewBeforeRender: true })
+  const finalNode = { ...preview, data: { ...preview.data, generatedJson: PLAN, useCaseContinue: { mode: "render-final", jobId: "job-0" } } }
+  const keep = [true, true, false, true, false, true, false, true]
+  const fiveKept = {
+    ...finalNode,
+    data: { ...finalNode.data, editedEdl: { v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis(PLAN), clips: keep.map((k) => ({ keep: k })) } },
+  }
+  const packCases: ReadonlyArray<{ name: string; steps: Step[]; engine: () => Promise<number>; docs: number }> = [
+    {
+      name: "60-min video, 8 clips of 60 s, the default framing and captions (each clip quoted at 2 minutes)",
+      steps: [...head, ...each(8, ["speaker-view:complex", CLIP_MINUTES]), ...each(8, ["add-captions:kinetic"]), fee],
+      engine: () => estimateWorkflowCredits([video(3600), pack({})], [packWire]),
+      docs: 978,
+    },
+    {
+      name: "60-min video, 8 clips of 60 s, framing None (the template's chain), captions on",
+      steps: [...head, ...each(8, ["apply-edl", CLIP_MINUTES]), ...each(8, ["add-captions:kinetic"]), fee],
+      engine: () => estimateWorkflowCredits([video(3600), pack({ framing: null })], [packWire]),
+      docs: 938,
+    },
+    {
+      name: "review on: the preview (the per-clip Speaker View previews and the fee)",
+      steps: [...head, ...each(8, ["speaker-view:complex:proxy", CLIP_MINUTES]), fee],
+      engine: () => estimateWorkflowCredits([video(3600), preview], [packWire]),
+      docs: 378,
+    },
+    {
+      name: "review on: Render final of the 8 kept 55-second clips, each at its own minute, captioned, no fee",
+      steps: [...each(8, ["speaker-view:complex", 1]), ...each(8, ["add-captions:kinetic"])],
+      engine: () => estimateRunSetCredits([video(3600), finalNode], [packWire], new Set(["cp"])),
+      docs: 552,
+    },
+    {
+      name: "review on: Render final with 5 of the 8 clips kept: only the kept clips, no fee",
+      steps: [...each(5, ["speaker-view:complex", 1]), ...each(5, ["add-captions:kinetic"])],
+      engine: () => estimateRunSetCredits([video(3600), fiveKept], [packWire], new Set(["cp"])),
+      docs: 345,
+    },
+  ]
+  it("the estimate quotes each clip at twice its target length", () => expect(CLIP_MINUTES).toBe(2))
+  it("unknown length: Edit Plan at its 180-minute ceiling, each clip still at twice its target", async () => {
+    expect(await estimateWorkflowCredits([pack({})], [])).toBe(listOf([
+      ["elevenlabs-stt"], ["edit-plan:clips:standard:per-minute", 180], ["edit-plan:clips:standard:flat"],
+      ...each(8, ["speaker-view:complex", CLIP_MINUTES]), ...each(8, ["add-captions:kinetic"]), fee,
+    ]))
+  })
+  for (const c of packCases) {
+    it(`${c.name}: the engine's steps, charged = ${c.docs}`, async () => {
+      expect(listOf(c.steps)).toBe(await c.engine())
+      expect(chargedOf(c.steps)).toBe(c.docs)
+    })
+  }
 })

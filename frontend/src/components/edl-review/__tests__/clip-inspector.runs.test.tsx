@@ -188,3 +188,40 @@ describe("edits lock while a run includes the render (R9 a)", () => {
     expect(footer().textContent).toContain("View only")
   })
 })
+
+describe("on a review-on Clip Pack node (its clips are its own run's)", () => {
+  const WRAPPER = "00000000-0000-4000-8000-0000000000c1"
+  const SETTINGS = { reviewBeforeRender: true, captions: true }
+  const PACK = CLIPS.slice(0, 2)
+  const loadPack = (quality: "proxy" | "final") =>
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "rec", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://cdn.test/cam.mp4" } },
+        {
+          id: "cp", type: "clip-pack", position: { x: 0, y: 0 },
+          data: {
+            label: "Clip Pack", executionStatus: "completed", generatedJson: PACK, ...SETTINGS,
+            generatedResults: [0, 1].map((i) => ({ url: `https://cdn.test/${quality}${i}.mp4`, quality, jobId: WRAPPER, useCaseSettings: SETTINGS })),
+          },
+        },
+      ] as never,
+      edges: [{ id: "w", source: "rec", sourceHandle: "video", target: "cp", targetHandle: "media" }] as never,
+      isReadOnly: false,
+      workflowId: null,
+    })
+
+  it("a Preview on show: one card per clip, its chain, and Render final", async () => {
+    loadPack("proxy")
+    mountClipInspector("cp")
+    expect(screen.getByTestId("clip-chain").textContent).toBe("Render final: Render Clip ×2 → Caption Clip ×2.")
+    await ready()
+    expect(finalButton().textContent).toContain("Render final · 2 clips")
+  })
+
+  it("a Final on show (its Render final done): no Render final to offer, as the cut review", () => {
+    loadPack("final")
+    mountClipInspector("cp")
+    expect(within(footer()).queryByRole("button", { name: /^Render final/ })).toBeNull()
+    expect(within(footer()).getByRole("button", { name: "Close" })).toBeTruthy()
+  })
+})

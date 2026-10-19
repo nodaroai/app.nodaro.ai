@@ -17,7 +17,7 @@
  * person moves it.
  */
 import { useCallback, useMemo, useReducer, useState } from "react"
-import { defaultSpeakerRegions, isWholeClipEdl, speakerViewAspectOf, speakerViewTrackedOn, speakerViewWireSettings, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
+import { defaultSpeakerRegions, isWholeClipEdl, speakerViewAspectOf, speakerViewAutoSpeakers, speakerViewTrackedOn, speakerViewWireSettings, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speakerViewContextOf, speakerViewEdits, speakerViewEdlProducer, speakerViewTranscript, speakerViewVideoFed } from "@/lib/speaker-view-context"
 import type { SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
@@ -147,6 +147,25 @@ export function useRegionEditor(nodeId: string, stagedTracks?: Pick<SpeakerTrack
     [data.defaultRegionKeys],
   )
 
+  /**
+   * Whom "Split the camera by speaker" deals its boxes over, on which camera
+   * (`speakerViewAutoSpeakers`, the run's own rule and inputs) — undefined
+   * while it frames nothing. On a clip pack that is every speaker of the
+   * episode's transcript, first heard first (decided 2026-10-14), not the
+   * pairs on screen in the clips: the editor's defaults are dealt over the
+   * same list, so it never shows a box the run will not draw, nor in another
+   * order.
+   */
+  const autoDeal = useMemo(() => speakerViewAutoSpeakers(data, ctx), [data, ctx])
+  /** The speakers camera `c`'s default boxes are dealt over, in order. */
+  const dealtOn = useCallback(
+    (c: FramingCamera): readonly string[] => (autoDeal && autoDeal.camera === c.id ? autoDeal.speakers : c.pairs.map((p) => p.speaker)),
+    [autoDeal],
+  )
+  /** A camera whose boxes are shared out: several pairs on screen, or — on a
+   *  pack — several speakers in the episode, though one is on screen in the clips. */
+  const shared = useCallback((c: FramingCamera): boolean => cameraIsShared(c) || dealtOn(c).length >= 2, [dealtOn])
+
   /** The box a pair shows: set, else its default; null = full frame, no box. */
   const regionOf = useCallback(
     (c: FramingCamera, speaker: string): Region | null => {
@@ -161,15 +180,15 @@ export function useRegionEditor(nodeId: string, stagedTracks?: Pick<SpeakerTrack
         return untouchedDefault && trackedOn(c, speaker) ? null : set
       }
       const size = frameOf(c).size
-      if (!cameraIsShared(c) || !size) return null
+      if (!shared(c) || !size) return null
       // Dealt over every speaker on the camera first, so a speaker no track
       // names keeps the very third the run sends them; then a tracked one gets none.
       if (trackedOn(c, speaker)) return null
       const slot = speakerViewCanvas(aspect)
-      const def = defaultSpeakerRegions(c.pairs.map((p) => p.speaker), slot.width / slot.height, size.width / size.height)
+      const def = defaultSpeakerRegions(dealtOn(c), slot.width / slot.height, size.width / size.height)
       return def.find((d) => d.speaker === speaker)?.region ?? null
     },
-    [history.present, history.initial, storedDefaults, frameOf, aspect, trackedOn],
+    [history.present, history.initial, storedDefaults, frameOf, aspect, trackedOn, shared, dealtOn],
   )
 
   /**
@@ -227,8 +246,8 @@ export function useRegionEditor(nodeId: string, stagedTracks?: Pick<SpeakerTrack
   /** "▢ Full" / F: the selected speaker shown full frame. */
   const fullFrame = useCallback(() => {
     if (!camera || !selectedKey) return
-    setBox(selectedKey, cameraIsShared(camera) ? FULL_FRAME : null)
-  }, [camera, selectedKey, setBox])
+    setBox(selectedKey, shared(camera) ? FULL_FRAME : null)
+  }, [camera, selectedKey, setBox, shared])
 
   /** "⇄ Swap" is offered on a two-speaker camera where no speaker is tracked:
    *  a tracked speaker has no box to trade (it is followed), and taking the

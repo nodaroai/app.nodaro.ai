@@ -198,6 +198,14 @@ export interface GeneratedResult {
   readonly hook?: string
   // Trailer: the formats the run of this take could not render (the node names them under it).
   readonly failedFormats?: readonly string[]
+  // Clip Pack: this clip's captions could not be added (it is delivered
+  // uncaptioned), and how many clips the run of this take could not render
+  // (the node names them under it).
+  readonly captionsFailed?: boolean
+  readonly failedClips?: number
+  // A use-case list row of an audio run (a Clip Pack of an audio recording):
+  // the run says it is audio, whatever its file is named.
+  readonly medium?: "audio"
   // A UGC Clip take the editor's run made: the Re-render count it was made at
   // (the `nonce` its clip job was sent). With `jobId`, what the run price reads
   // to expect the take handed back (`ugcReusedClips`, @nodaro/render-rules);
@@ -3878,8 +3886,10 @@ export type SpeakerViewData = {
   speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>
   /** Opt-in (decided 2026-10-13): with no `speakerRegions` drawn, the 2–6
    *  speakers sharing the edit's one camera get the default thirds the region
-   *  editor starts from (`speakerViewAutoRegions`, @nodaro/render-rules).
-   *  Drawn regions always win. */
+   *  editor starts from (`speakerViewAutoRegions`, @nodaro/render-rules). On
+   *  a clip pack every clip gets the same boxes, dealt over the episode
+   *  transcript's speakers who talk at least 10 s or 5% of the episode, first
+   *  heard first (decided 2026-10-14, 2026-10-18). Drawn regions always win. */
   autoRegions?: boolean
   /** The `speakerRegions` rows the region editor saved as untouched default
    *  thirds (their `speakerRegionKey`s). Default thirds frame but never label

@@ -14,8 +14,20 @@ import {
   type ChapterSet,
   type EdlTargetAspect
 } from "@nodaro/shared/edl"
-import type { CaptionStyle } from "@nodaro/shared/captions"
 import { USE_CASE_NODE_TYPES, isUseCaseNodeType, type UseCaseNodeType } from "@nodaro/shared/nodes"
+import {
+  chaptersBody,
+  clipPackBody,
+  tightenBody,
+  trailerBody,
+  type ClipPackInput,
+  type EpisodeChaptersInput,
+  type EpisodeTrailerInput,
+  type TightenEpisodeInput,
+} from "./edit-use-case-inputs.js"
+
+export { CLIP_PACK_MAX_TARGET_SEC, CLIP_PACK_MIN_TARGET_SEC, TRAILER_FORMATS } from "./edit-use-case-inputs.js"
+export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, TightenEpisodeInput, TrailerFormat } from "./edit-use-case-inputs.js"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -284,54 +296,15 @@ export interface CameraSwitchInput {
 }
 
 /**
- * Input for {@link EditResource.tightenEpisode} and
- * {@link EditResource.estimateTightenEpisode}: one recording in, the tightened
- * episode out. Only `mediaUrl` is required; every other field left out takes
- * the node's default.
+ * The podcast use-case node types, each one a route (`POST /v1/<type>`, and
+ * `POST /v1/<type>/continue` to continue one of its runs).
  */
-export interface TightenEpisodeInput {
-  /** The recording — a video or audio URL, up to 3 hours. */
-  mediaUrl: string
-  /** Optional music bed, ducked under the voice and ending with the episode. */
-  musicUrl?: string
-  /** `"video"` or `"audio"`; an audio recording always makes an audio episode. */
-  output?: "video" | "audio"
-  /**
-   * Frame a video episode with Speaker View: an output aspect and a layout,
-   * over automatic boxes on the speakers on screen. A layout the aspect does
-   * not draw is snapped to one it does. `null` or absent: no framing.
-   */
-  framing?: {
-    aspect: EdlTargetAspect
-    layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip"
-  } | null
-  /** Captions on a video episode (on by default). */
-  captions?: boolean
-  /** The captions' look. */
-  captionStyle?: CaptionStyle
-  /**
-   * Stop at a quick preview for a person to review; render the full-quality
-   * episode afterwards with {@link EditResource.continueUseCase}
-   * (`mode: "render-final"`).
-   */
-  reviewBeforeRender?: boolean
-  /** The planner's tier. */
-  planTier?: EditPlanTier
-  /** Editing instructions for the planner (up to 4 000 characters). */
-  instructions?: string
-  /** A style guide for the planner (up to 4 000 characters). */
-  styleGuide?: string
-  /** How far the music dips under the voice, 0–100 (default 75). */
-  musicDuckAmount?: number
-}
-
-/** The podcast use-case node types, each one a route (`POST /v1/<type>`, and `POST /v1/<type>/continue` to continue one of its runs). */
 export { USE_CASE_NODE_TYPES, type UseCaseNodeType }
 
 /** The route that continues a run of `type`. */
 const continuePathOf = (type: UseCaseNodeType): `/v1/${UseCaseNodeType}/continue` => `/v1/${type}/continue`
 
-/** What a use-case run (`tightenEpisode`, `episodeChapters`, `episodeTrailer`) and `continueUseCase` answer: the run's job to poll. */
+/** What a use-case run (`tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack`) and `continueUseCase` answer: the run's job to poll. */
 export interface UseCaseJobResult extends EditJobResult {
   /** The run's execution (absent on a deduplicated retry). */
   executionId?: string
@@ -361,58 +334,15 @@ export interface UseCaseEstimate {
 /** What a Tighten Episode run is estimated at (a {@link UseCaseEstimate}). */
 export type TightenEpisodeEstimate = UseCaseEstimate
 
-/**
- * Input for {@link EditResource.episodeChapters} and
- * {@link EditResource.estimateEpisodeChapters}: one recording in, its chapters
- * out. Only `mediaUrl` is required; every other field left out takes the
- * node's default.
- */
-export interface EpisodeChaptersInput {
-  /** The recording — a video or audio URL, up to 3 hours. */
-  mediaUrl: string
-  /** The planner's tier (default `"economy"`). */
-  planTier?: EditPlanTier
-  /** Instructions for the chapters, e.g. "5 to 8 chapters" (up to 4 000 characters). */
-  instructions?: string
-  /** A style guide for the chapter titles (up to 4 000 characters). */
-  styleGuide?: string
-}
-
-/** The formats a Trailer is delivered in, in delivery order (16:9 is a 1920×1080 landscape). */
-export const TRAILER_FORMATS = ["9:16", "1:1", "4:5", "16:9"] as const
-/** One Trailer format (see {@link TRAILER_FORMATS}). */
-export type TrailerFormat = (typeof TRAILER_FORMATS)[number]
-
-/**
- * Input for {@link EditResource.episodeTrailer} and
- * {@link EditResource.estimateEpisodeTrailer}: one video recording in, a
- * 20–40 s trailer out in each chosen format. Only `mediaUrl` is required.
- */
-export interface EpisodeTrailerInput {
-  /** The recording — a video URL, up to 3 hours (an audio-only recording is refused). */
-  mediaUrl: string
-  /** An optional intro card: a short video (15 s at most) played before the trailer. */
-  introCardUrl?: string
-  /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list is refused). */
-  formats?: TrailerFormat[]
-  /** Stop at a preview of the trailer; render every format with {@link EditResource.continueUseCase} (`mode: "render-final"`). */
-  reviewBeforeRender?: boolean
-  /** The planner's tier (default `"standard"`). */
-  planTier?: EditPlanTier
-  /** Instructions for the trailer (up to 4 000 characters). */
-  instructions?: string
-  /** A style guide for the planner (up to 4 000 characters). */
-  styleGuide?: string
-}
-
 /** Input for {@link EditResource.continueUseCase}. */
 export interface UseCaseContinueInput {
-  /** The run to continue: the job `tightenEpisode`, `episodeChapters` or `episodeTrailer` (or an earlier continuation) answered. */
+  /** The run to continue: the job `tightenEpisode`, `episodeChapters`, `episodeTrailer` or `clipPack` (or an earlier continuation) answered. */
   jobId: string
   /**
    * `"from-failed"` re-runs what did not finish of a failed run;
    * `"render-final"` renders the full-quality result after a review-on preview
-   * (a Chapters run has no preview: it is refused `render_final_not_preview`).
+   * (a Chapters run has no preview: it is refused `render_final_not_preview`;
+   * a Clip Pack edit that drops every clip is refused `use_case_nothing_kept`).
    */
   mode: "from-failed" | "render-final"
   /** Render final only: the reviewer's edit of the plan (an EDL). */
@@ -427,7 +357,7 @@ export interface UseCaseContinueInput {
   nodeType?: UseCaseNodeType
 }
 
-/** Per-call options for the use-case requests (Tighten Episode, Chapters, Trailer, and their continuations). */
+/** Per-call options for the use-case requests (Tighten Episode, Chapters, Trailer, Clip Pack, and their continuations). */
 export interface UseCaseRequestOptions {
   /**
    * Sent as the `Idempotency-Key` header. Reuse the same value when retrying
@@ -435,33 +365,6 @@ export interface UseCaseRequestOptions {
    * (`deduped: true`) instead of starting a second one.
    */
   idempotencyKey?: string
-}
-
-function tightenBody(input: TightenEpisodeInput): Record<string, unknown> {
-  const { mediaUrl, ...rest } = input
-  return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) }
-}
-
-function chaptersBody(input: EpisodeChaptersInput): Record<string, unknown> {
-  return {
-    mediaUrls: [input.mediaUrl],
-    ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
-    ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
-    ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
-  }
-}
-
-function trailerBody(input: EpisodeTrailerInput): Record<string, unknown> {
-  return {
-    mediaUrls: [input.mediaUrl],
-    ...(input.introCardUrl !== undefined ? { introCardUrl: input.introCardUrl } : {}),
-    // An empty list is sent as is: the route refuses it (at least one format).
-    ...(input.formats !== undefined ? { formats: input.formats } : {}),
-    ...(input.reviewBeforeRender !== undefined ? { reviewBeforeRender: input.reviewBeforeRender } : {}),
-    ...(input.planTier !== undefined ? { planTier: input.planTier } : {}),
-    ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
-    ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}),
-  }
 }
 
 function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record<string, string> } {
@@ -490,12 +393,15 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  *   {@link tightenEpisode}, a self-hosted install needs a nodaro.ai connection.
  * - {@link episodeTrailer} cuts a 20–40 s trailer of a recording and delivers
  *   it in each chosen format in one call; the same connection applies.
+ * - {@link clipPack} cuts a recording into a pack of short clips (framed and
+ *   captioned by default) in one call; the same connection applies.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
  *
  * Every request method except the estimates ({@link estimateTightenEpisode},
- * {@link estimateEpisodeChapters}, {@link estimateEpisodeTrailer}: a quote, `{ data }`) returns
+ * {@link estimateEpisodeChapters}, {@link estimateEpisodeTrailer},
+ * {@link estimateClipPack}: a quote, `{ data }`) returns
  * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}); poll the
  * `jobId` with `client.jobs.getStatus(jobId)`.
  */
@@ -628,6 +534,38 @@ export class EditResource {
    */
   estimateEpisodeTrailer(input: EpisodeTrailerInput): Promise<{ data: UseCaseEstimate }> {
     return this.client.request("POST", "/v1/episode-trailer/estimate", { body: trailerBody(input) })
+  }
+
+  /**
+   * Clip Pack (`POST /v1/clip-pack`): cut a recording into a pack of short
+   * clips in one call — the plan finds the best moments (`count`, default 8,
+   * of about `targetDurationSec`, default 60), each is rendered (framed 9:16
+   * with the speakers stacked by default; `framing: null` keeps the
+   * recording's shape) and captioned. An audio recording makes audio clips.
+   * The finished job's `output_data.clips` is `{ url, title?, hook?, clipKey,
+   * thumbnailUrl?, captionsFailed? }[]` in plan order, the first also
+   * `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried:
+   * one that cannot be rendered is skipped, not charged and counted on
+   * `failedClips` (the pack keeps the others and its fee); a clip whose
+   * captions failed comes uncaptioned (`captionsFailed`, counted on
+   * `failedCaptions`). When no clip renders the run fails and its fee is
+   * refunded. With `reviewBeforeRender` the run stops at previews; Render
+   * final ({@link continueUseCase}) renders only the clips the edit keeps.
+   * Priced as its steps at their own rates plus the listed per-run fee;
+   * quote it first with {@link estimateClipPack}.
+   */
+  clipPack(input: ClipPackInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
+    return this.client.request("POST", "/v1/clip-pack", { body: clipPackBody(input), ...idempotencyHeaders(options) })
+  }
+
+  /**
+   * What a Clip Pack run is estimated at (`POST /v1/clip-pack/estimate`): its
+   * steps at their own rates plus its per-run fee. Nothing is created or
+   * charged. Each clip is quoted at twice the target length (the plan may cut
+   * a clip longer than asked); the charge follows each clip's real length.
+   */
+  estimateClipPack(input: ClipPackInput): Promise<{ data: UseCaseEstimate }> {
+    return this.client.request("POST", "/v1/clip-pack/estimate", { body: clipPackBody(input) })
   }
 
   /**

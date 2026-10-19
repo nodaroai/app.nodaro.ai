@@ -276,11 +276,12 @@ describe("G2 — no central mention of a unit's type id", () => {
 })
 
 describe("G2b — unit-owned i18n keys", () => {
+  // It reads every product file for every unit-owned key (~3 s alone, more under a full suite's load): 20 s, not vitest's 5 s.
   it("the real tree", () => {
     const owned = units.map((u) => ({ type: u.type, keys: Object.keys(u.strings?.keys ?? {}) })).filter((u) => u.keys.length)
     const files = owned.length ? products.map((p) => ({ path: p, source: read(p) })) : []
     expect(unitStringProblems(ts, owned, owned.length ? DICTS.map((p) => ({ path: p, source: read(p) })) : [], files, inUnit)).toEqual([])
-  })
+  }, 20_000)
 
   it("fixtures: a key that is also hand-written, or used outside the unit, stays central", () => {
     const dicts = [{ path: "frontend/src/lib/i18n/en.ts", source: 'export const en = {\n  "node.fixtureEcho": "x",\n  // gen:units start\n  "fixtureEcho.help": "y",\n  // gen:units end\n}\n' }]

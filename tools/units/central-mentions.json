@@ -1,7 +1,8 @@
 {
   "$comment": "Reasoned exceptions to G2 (frontend/src/__tests__/node-units-structure.test.ts): a product file outside a unit's folders that names the unit's type id as a string literal. Shape: { \"<file>\": { \"<type>\": \"<why it must stay>\" } }. It only shrinks; a new central mention of a unit is a missing seam.",
   "mentions": {
-    "packages/cli/src/commands/edit.ts": {
+    "packages/cli/src/commands/edit-use-case.ts": {
+      "clip-pack": "the published CLI's per-node command (`nodaro edit clip-pack`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "episode-chapters": "the published CLI's per-node command (`nodaro edit episode-chapters`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "episode-trailer": "the published CLI's per-node command (`nodaro edit episode-trailer`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "tighten-episode": "the published CLI's per-node command (`nodaro edit tighten-episode`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)"

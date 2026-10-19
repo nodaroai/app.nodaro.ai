@@ -61,6 +61,12 @@ export const CONTINUATION_SETTLING = "continuation_settling"
 export const RENDER_FINAL_ALREADY_RENDERED = "render_final_already_rendered"
 export const RENDER_FINAL_ALREADY_RENDERED_MESSAGE = "Already rendered with this edit."
 
+/** A Render final (use-case nodes) of a clip pack whose review dropped every
+ *  clip: there is nothing to render, so nothing runs and nothing is charged.
+ *  A refusal of the request, outside `RUN_CONTINUATION_CODES`. */
+export const USE_CASE_NOTHING_KEPT = "use_case_nothing_kept"
+export const USE_CASE_NOTHING_KEPT_MESSAGE = "Every clip was dropped in the review: keep at least one clip to render the final."
+
 /** Every continuation refusal code. */
 export const RUN_CONTINUATION_CODES = [
   CONTINUATION_NOT_FOUND,

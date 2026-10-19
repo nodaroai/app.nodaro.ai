@@ -650,3 +650,80 @@ describe("edit.episodeTrailer / estimateEpisodeTrailer", () => {
     expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ jobId: "job-t", mode: "render-final" })
   })
 })
+
+describe("edit.clipPack / estimateClipPack", () => {
+  it("clipPack posts the recording, the count and framing: null (no framing)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c", executionId: "exec-c" }))
+    const out = await client(fetchMock).edit.clipPack({ mediaUrl: "https://r2/ep.mp4", count: 5, framing: null })
+    expect(out).toMatchObject({ jobId: "job-c", executionId: "exec-c" })
+    const [url, init] = fetchMock.mock.calls[0]! as [string, { method: string; body: string; headers: Record<string, string> }]
+    expect(url).toBe("https://api.example.com/v1/clip-pack")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], count: 5, framing: null })
+    expect(init.headers["Idempotency-Key"]).toBeUndefined()
+  })
+
+  it("clipPack sends only what the caller set: a framing with an aspect alone leaves the layout to the route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c" }))
+    await client(fetchMock).edit.clipPack({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "4:5" } })
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "4:5" } })
+  })
+
+  it("clipPack sends every setting and an Idempotency-Key when asked", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c" }))
+    await client(fetchMock).edit.clipPack(
+      {
+        mediaUrl: "https://r2/ep.mp4",
+        count: 12,
+        targetDurationSec: 30,
+        framing: { aspect: "1:1", layout: "side-by-side", switchType: "cut", emphasisStyle: "border" },
+        captions: false,
+        captionStyle: "word-highlight",
+        reviewBeforeRender: true,
+        planTier: "premium",
+        instructions: "The funniest moments",
+        styleGuide: "Brisk",
+      },
+      { idempotencyKey: "retry-c" },
+    )
+    const init = fetchMock.mock.calls[0]![1] as { body: string; headers: Record<string, string> }
+    expect(init.headers["Idempotency-Key"]).toBe("retry-c")
+    expect(JSON.parse(init.body)).toEqual({
+      mediaUrls: ["https://r2/ep.mp4"],
+      count: 12,
+      targetDurationSec: 30,
+      framing: { aspect: "1:1", layout: "side-by-side", switchType: "cut", emphasisStyle: "border" },
+      captions: false,
+      captionStyle: "word-highlight",
+      reviewBeforeRender: true,
+      planTier: "premium",
+      instructions: "The funniest moments",
+      styleGuide: "Brisk",
+    })
+  })
+
+  it("estimateClipPack posts the same body to its estimate route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 900, stepsCredits: 889, feeCredits: 11, durationSec: 3600 } }))
+    const out = await client(fetchMock).edit.estimateClipPack({ mediaUrl: "https://r2/ep.mp4", count: 3 })
+    expect(out.data.feeCredits).toBe(11)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/clip-pack/estimate")
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], count: 3 })
+  })
+
+  it("continueUseCase renders a Clip Pack's final on its own route, read from the job", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-c", job_type: "clip-pack", input_data: { type: "clip-pack", mode: "run" } } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-c2" }))
+    const out = await client(fetchMock).edit.continueUseCase({ jobId: "job-c", mode: "render-final", editedEdl: { v: 1 } })
+    expect(out.jobId).toBe("job-c2")
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/clip-pack/continue")
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ jobId: "job-c", mode: "render-final", editedEdl: { v: 1 } })
+  })
+
+  it("continueUseCase with nodeType clip-pack skips the job read", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c2" }))
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-c", mode: "from-failed", nodeType: "clip-pack" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/clip-pack/continue")
+  })
+})

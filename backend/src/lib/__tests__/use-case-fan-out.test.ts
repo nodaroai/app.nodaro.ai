@@ -51,6 +51,14 @@ describe("a use-case node whose own result is a list is never fanned out over a 
     expect(err?.errorCode).toBe(USE_CASE_LIST_DRIVEN)
     expect(err?.message).toBe(TRAILER_LIST_DRIVEN)
   })
+  it("a Clip Pack (a clip set) is refused the same way, in its own words", () => {
+    const words = "Clip Pack takes one recording. Use a separate workflow run for each recording."
+    expect(usecaseFanOutRefusalOf({ type: "clip-pack", data: {} })).toEqual({ code: USE_CASE_LIST_DRIVEN, message: words })
+    expect(usecaseFanOutRefusalOf({ type: "clip-pack", data: { reviewBeforeRender: true } })?.code).toBe(USE_CASE_LIST_DRIVEN)
+    const err = usecaseFanOutRefusal({ id: "cp", type: "clip-pack", data: {} })
+    expect(err?.errorCode).toBe(USE_CASE_LIST_DRIVEN)
+    expect(err?.message).toBe(words)
+  })
   it("the copy names the node's own type, never another node", () => {
     expect(usecaseListDrivenMessage("Trailer")).toBe(TRAILER_LIST_DRIVEN)
     expect(TRAILER_LIST_DRIVEN).not.toMatch(/Tighten/)

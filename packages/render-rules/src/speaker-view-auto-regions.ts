@@ -15,8 +15,15 @@
  * each be the whole frame (a 16:9 canvas over the assumed 16:9 camera) — the
  * same picture as no boxes, without changing what the render is stamped
  * with. Drawn regions always win. Nothing is filled for an edit with several
- * cameras, or for one clip of several the node runs over (a list row: the
- * panel frames a pack as one, so a clip's own boxes could not be shown).
+ * cameras.
+ *
+ * A clip pack (decided 2026-10-14) — one clip of several the node runs over (a
+ * list row, `ctx.packClip`), or the pack judged whole (the panel's view of a
+ * batch) — is framed as one: the boxes are dealt ONCE over the speakers of the
+ * episode's transcript who really talk, first heard first
+ * (`speakerViewPackSpeakers`: 10 s, or 5% of the talk — decided 2026-10-18),
+ * so every clip gets the same boxes, whoever is on screen in it. Every clip
+ * must show the same one camera; with no transcript nothing is filled.
  *
  * The canvas is read exactly as the region editor reads it: the node's
  * aspect, else the edit's (`speakerViewAspectOf`), at its render size
@@ -26,11 +33,12 @@
  * (`AUTO_REGIONS_SOURCE_ASPECT`).
  */
 import { speakerViewTrackedOn } from "./speaker-view-attribution.js"
-import type { SpeakerViewContext } from "./speaker-view-context.js"
+import type { SpeakerViewClip, SpeakerViewContext } from "./speaker-view-context.js"
 import { defaultSpeakerRegions } from "./speaker-view-default-regions.js"
 import { normalizeSpeakerViewData, speakerViewAspectOf, type SpeakerViewNodeSettings } from "./speaker-view-options.js"
 import { speakerViewCameraSpeakers, speakerViewOnScreen } from "./speaker-view-on-screen.js"
 import { cleanSpeakerRegions } from "./speaker-view-region-rows.js"
+import { speakerViewPackSpeakers } from "./speaker-view-pack-speakers.js"
 import { coerceSpeakerViewEdl } from "./speaker-view-rule.js"
 import { speakerViewCanvas } from "./speaker-view-source-fit.js"
 
@@ -67,45 +75,101 @@ export function autoSpeakerRegions(
 
 /**
  * The automatic boxes a node with `autoRegions: true` renders with, or `[]`:
- * none while any region is drawn (drawn regions always win), and only for
- * exactly one clip that is not one row of several, whose edit has exactly one
- * camera. Every reader of "what does the flag frame" asks this — the wire,
- * the panel, the region editor and the framing note.
+ * none while any region is drawn (drawn regions always win). One edit: over
+ * the speakers on screen on its one camera. A clip pack (a list row, or the
+ * batch the panel reads): over the episode's speakers, the same on every clip
+ * (decided 2026-10-14). Every reader of "what does the flag frame" asks this —
+ * the wire, the panel, the region editor, the framing note, the review and
+ * pricing.
  *
  * With face tracks wired (`ctx.tracks`), faces win (decided 2026-10-13): the
  * boxes are only the fallback for the speakers no track names
  * (`speakerViewTrackedOn`, the same test the "Which face is …?" question uses).
  */
 export function speakerViewAutoRegions(data: SpeakerViewNodeSettings, ctx: SpeakerViewContext | undefined): AutoSpeakerRegion[] {
-  if (data.autoRegions !== true || cleanSpeakerRegions(data.speakerRegions) || !ctx || ctx.packClip || ctx.clips.length !== 1) return []
-  const clip = ctx.clips[0]!
-  if (clip.cameraIds.length !== 1) return []
-  const coerced = coerceSpeakerViewEdl(clip.edl)
-  if ("problem" in coerced) return []
-  const camera = clip.cameraIds[0]!
-  const speakers = speakerViewCameraSpeakers(speakerViewOnScreen(coerced.edl, ctx.transcript, normalizeSpeakerViewData(data, ctx).data), camera)
-  const canvas = speakerViewCanvas(speakerViewAspectOf(data, ctx))
-  const rows = autoSpeakerRegions(speakers, camera, canvas.width / canvas.height, AUTO_REGIONS_SOURCE_ASPECT)
+  const dealt = autoDeal(data, ctx)
+  if (!dealt || !ctx) return []
+  const { camera, rows } = dealt
   if (!ctx.tracks) return rows
   // Faces win (decided 2026-10-13): a speaker a face track names is followed by
   // it, and a box sent for them would be the plugin's static fallback and its
-  // zoom floor. The boxes are dealt over every speaker on screen FIRST, so a
-  // speaker no track names keeps the very third the panel shows them in.
+  // zoom floor. The boxes are dealt over every speaker FIRST, so a speaker no
+  // track names keeps the very third the panel shows them in.
   const tracked = speakerViewTrackedOn(ctx.tracks, camera, ctx.transcript)
   return rows.filter((r) => !tracked(r.speaker))
+}
+
+/** The camera the automatic boxes frame and the speakers they are dealt over, in order. */
+export interface SpeakerViewAutoSpeakers { readonly camera: string; readonly speakers: readonly string[] }
+
+/**
+ * Whom "Split the camera by speaker" deals its boxes over, and on which
+ * camera, or `undefined` when it draws no box at all (flag off, drawn
+ * regions, no edit, several cameras, a pack with no transcript, one speaker,
+ * more than `AUTO_REGIONS_MAX_SPEAKERS`, a set that would be all whole frame).
+ * One edit: the speakers on screen on its one camera. A clip pack (a list
+ * row, or the batch the panel and the region editor read): the episode's
+ * speakers who really talk, first heard first (`speakerViewPackSpeakers`).
+ * The region editor deals its own default boxes over this very list, so it
+ * never shows a box the run will not draw, nor in another order. Face tracks
+ * are applied after (`speakerViewAutoRegions`): a tracked speaker keeps their
+ * place in the deal.
+ */
+export function speakerViewAutoSpeakers(data: SpeakerViewNodeSettings, ctx: SpeakerViewContext | undefined): SpeakerViewAutoSpeakers | undefined {
+  const dealt = autoDeal(data, ctx)
+  return dealt ? { camera: dealt.camera, speakers: dealt.speakers } : undefined
+}
+
+/** The deal and the boxes it makes, before the face tracks; undefined when it makes none. */
+function autoDeal(data: SpeakerViewNodeSettings, ctx: SpeakerViewContext | undefined): (SpeakerViewAutoSpeakers & { readonly rows: AutoSpeakerRegion[] }) | undefined {
+  if (data.autoRegions !== true || cleanSpeakerRegions(data.speakerRegions) || !ctx) return undefined
+  const framed = ctx.packClip === true || ctx.clips.length > 1 ? packFraming(ctx) : editFraming(data, ctx)
+  if (!framed) return undefined
+  const canvas = speakerViewCanvas(speakerViewAspectOf(data, ctx))
+  const rows = autoSpeakerRegions(framed.speakers, framed.camera, canvas.width / canvas.height, AUTO_REGIONS_SOURCE_ASPECT)
+  return rows.length === 0 ? undefined : { ...framed, rows }
+}
+
+/** The one camera of a clip whose edit reads, if it has exactly one. */
+function onlyCamera(clip: SpeakerViewClip): string | undefined {
+  return clip.cameraIds.length === 1 && !("problem" in coerceSpeakerViewEdl(clip.edl)) ? clip.cameraIds[0] : undefined
+}
+
+/** One edit: the speakers on screen on its one camera once the node's layout is applied. */
+function editFraming(data: SpeakerViewNodeSettings, ctx: SpeakerViewContext): SpeakerViewAutoSpeakers | undefined {
+  const clip = ctx.clips[0]!
+  if (clip.cameraIds.length !== 1) return undefined
+  const coerced = coerceSpeakerViewEdl(clip.edl)
+  if ("problem" in coerced) return undefined
+  const camera = clip.cameraIds[0]!
+  return { camera, speakers: speakerViewCameraSpeakers(speakerViewOnScreen(coerced.edl, ctx.transcript, normalizeSpeakerViewData(data, ctx).data), camera) }
+}
+
+/**
+ * A clip pack (decided 2026-10-14): the episode's speakers who really talk,
+ * first heard first, on the one camera every clip shows — so each clip is
+ * framed alike, the way the panel frames the pack as one.
+ */
+function packFraming(ctx: SpeakerViewContext): SpeakerViewAutoSpeakers | undefined {
+  const cameras = new Set(ctx.clips.map(onlyCamera))
+  const camera = cameras.size === 1 ? [...cameras][0] : undefined
+  if (camera === undefined) return undefined
+  return { camera, speakers: speakerViewPackSpeakers(ctx.transcript) }
 }
 
 /**
  * What "Split the camera by speaker" does for this node, for the panel's
  * summary line (decided 2026-10-13) — read off the very rows the run sends
  * (`speakerViewAutoRegions`), with and without the face tracks:
- *  - `off`: it frames nothing here (flag off, drawn regions, several cameras
- *    or clips, one speaker, more than six, a whole-frame set);
+ *  - `off`: it frames nothing here (flag off, drawn regions, several cameras,
+ *    one speaker, more than six, a whole-frame set, a pack with no transcript);
  *  - `boxes`: every speaker on the camera gets their default box;
+ *  - `pack-boxes`: a clip pack — every clip gets the same boxes, dealt over
+ *    the episode's speakers (decided 2026-10-14);
  *  - `some-tracked`: the tracked speakers are followed, the others boxed;
  *  - `all-tracked`: every speaker is followed by face tracking.
  */
-export type SpeakerViewAutoFraming = "off" | "boxes" | "some-tracked" | "all-tracked"
+export type SpeakerViewAutoFraming = "off" | "boxes" | "pack-boxes" | "some-tracked" | "all-tracked"
 
 export function speakerViewAutoFraming(data: SpeakerViewNodeSettings, ctx: SpeakerViewContext | undefined): SpeakerViewAutoFraming {
   if (!ctx) return "off"
@@ -113,6 +177,6 @@ export function speakerViewAutoFraming(data: SpeakerViewNodeSettings, ctx: Speak
   const all = speakerViewAutoRegions(data, untracked)
   if (all.length === 0) return "off"
   const sent = speakerViewAutoRegions(data, ctx)
-  if (sent.length === all.length) return "boxes"
+  if (sent.length === all.length) return ctx.packClip === true || ctx.clips.length > 1 ? "pack-boxes" : "boxes"
   return sent.length === 0 ? "all-tracked" : "some-tracked"
 }

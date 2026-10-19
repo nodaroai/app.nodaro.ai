@@ -8,8 +8,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
-  ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, makeApp, nothingWritten, p1StoredRun, post, previewSource, src,
+  ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, makeApp, nothingWritten, p1StoredRun, post, postContinue, previewSource,
+  seedCaptionsNotRunClipPack, seedPreviewClipPackRun, src,
 } from "./helpers/use-case-continue-harness.js"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import {
   EPISODE_CHAPTERS_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
@@ -20,6 +22,7 @@ import {
   usecaseGraphHash,
 } from "@nodaro/render-rules"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
+import { usecaseNothingKeptRefusal } from "@/lib/use-case/continuation.js"
 
 describe("from-failed", () => {
   it("a new wrapper, fee reserved again, the inner run continues from the failed one over what did not finish", async () => {
@@ -460,5 +463,109 @@ describe("Chapters on its own continue route", () => {
     expect(res.json().error.code).toBe("render_final_not_preview")
     nothingWritten()
     expect(src.writes).toEqual({})
+  })
+})
+
+describe("a Clip Pack's Render final (a clip set)", () => {
+  const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
+  const clip = (inMs: number) => ({ version: 1, sources: [CAM], segments: [{ id: `s${inMs}`, video: "cam", inMs, outMs: inMs + 30_000 }] })
+  const clipA = clip(0)
+  const clipB = clip(60_000)
+  const reviewOf = (plan: readonly unknown[], keep: readonly boolean[]) =>
+    ({ v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis(plan), clips: keep.map((k) => ({ keep: k })) })
+  const dropAll = (plan: readonly unknown[]) => reviewOf(plan, plan.map(() => false))
+
+  it("whose review dropped every clip is refused before any hold or job: nothing charged", async () => {
+    seedPreviewClipPackRun({ plan: [clipA, clipB] })
+    const res = await postContinue("clip-pack", { jobId: ID, mode: "render-final", editedEdl: dropAll([clipA, clipB]) })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toEqual({ code: "use_case_nothing_kept", message: "Every clip was dropped in the review: keep at least one clip to render the final." })
+    nothingWritten()
+    // Not even quoted: the refusal comes before the balance check.
+    expect(src.finalCreditsArgs).toEqual([])
+  })
+
+  it("one clip kept: the final runs (no fee), with the review on the plan", async () => {
+    seedPreviewClipPackRun({ plan: [clipA, clipB] })
+    const edit = reviewOf([clipA, clipB], [false, true])
+    const res = await postContinue("clip-pack", { jobId: ID, mode: "render-final", editedEdl: edit })
+    expect(res.statusCode).toBe(202)
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ nodeIds: ["uc-render", "uc-captions"], inputOverrides: { "uc-plan": { editedEdl: edit } } })
+  })
+
+  it("the edit is judged on the plan as planned (a seed whose review was applied), as the run's seed and quote read it", async () => {
+    // The state holds an older review applied; the new edit, made on the plan as planned, drops both.
+    seedPreviewClipPackRun({ plan: [clipA, clipB], applied: [clipB] })
+    const res = await postContinue("clip-pack", { jobId: ID, mode: "render-final", editedEdl: dropAll([clipA, clipB]) })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("use_case_nothing_kept")
+  })
+
+  it("an edit made on another plan (stale) applies to nothing: not refused, the plan renders as planned", async () => {
+    seedPreviewClipPackRun({ plan: [clipA, clipB] })
+    const res = await postContinue("clip-pack", { jobId: ID, mode: "render-final", editedEdl: dropAll([clipA]) })
+    expect(res.statusCode).toBe(202)
+  })
+
+  it("a Tighten Render final is never asked (only a clip set can keep nothing)", async () => {
+    src.wrapper = completedPreviewWrapper
+    src.source = previewSource
+    const res = await post({ jobId: ID, mode: "render-final", editedEdl: { v: EDITED_EDL_VERSION, kind: "edl", basis: "x", edl: { segments: [], dropped: [] } } })
+    expect(res.statusCode).toBe(202)
+  })
+})
+
+describe("usecaseNothingKeptRefusal: the same refusal, asked up front by an app run's Render final", () => {
+  const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
+  const clip = (inMs: number) => ({ version: 1, sources: [CAM], segments: [{ id: `s${inMs}`, video: "cam", inMs, outMs: inMs + 30_000 }] })
+  const plan = [clip(0), clip(60_000)]
+  const reviewOf = (keep: readonly boolean[]) => ({ v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis(plan), clips: keep.map((k) => ({ keep: k })) })
+  const ask = (editedEdl: unknown, nodeType: "clip-pack" | "tighten-episode" = "clip-pack") => usecaseNothingKeptRefusal({ nodeType, jobId: ID, userId: USER, editedEdl })
+
+  it("a review that drops every clip: the continue route's 409, word for word", async () => {
+    seedPreviewClipPackRun({ plan })
+    expect(await ask(reviewOf([false, false]))).toEqual({
+      ok: false, status: 409, code: "use_case_nothing_kept", message: "Every clip was dropped in the review: keep at least one clip to render the final.",
+    })
+    nothingWritten()
+  })
+  it("judged on the plan as planned, as the continue route judges it (a seed whose review was applied)", async () => {
+    seedPreviewClipPackRun({ plan, applied: [plan[1]] })
+    expect((await ask(reviewOf([false, false])))?.code).toBe("use_case_nothing_kept")
+  })
+  it("a review that keeps a clip, no review, a stale one, another user's run or another type's: nothing to refuse", async () => {
+    seedPreviewClipPackRun({ plan })
+    expect(await ask(reviewOf([false, true]))).toBeNull()
+    expect(await ask(undefined)).toBeNull()
+    expect(await ask({ v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis([clip(0)]), clips: [{ keep: false }] })).toBeNull()
+    expect(await ask(reviewOf([false, false]), "tighten-episode")).toBeNull()
+    expect(await usecaseNothingKeptRefusal({ nodeType: "clip-pack", jobId: ID, userId: "someone-else", editedEdl: reviewOf([false, false]) })).toBeNull()
+  })
+  it("a node that is no clip set is answered from its type alone: its run is never read", async () => {
+    // A Tighten Episode run held at its Preview, with a review edit: the run a read would find.
+    src.wrapper = completedPreviewWrapper
+    src.source = previewSource
+    const reads = src.graphReads.length
+    const tightenEdit = { v: EDITED_EDL_VERSION, kind: "edl", basis: "x", edl: { segments: [], dropped: [] } }
+    for (const nodeType of ["tighten-episode", "episode-chapters", "episode-trailer"] as const) {
+      expect(await usecaseNothingKeptRefusal({ nodeType, jobId: ID, userId: USER, editedEdl: tightenEdit })).toBeNull()
+    }
+    expect(src.graphReads.length).toBe(reads)
+    // A clip set is still read, and still refused when its review keeps no clip.
+    seedPreviewClipPackRun({ plan })
+    const before = src.graphReads.length
+    expect((await ask(reviewOf([false, false])))?.code).toBe("use_case_nothing_kept")
+    expect(src.graphReads.length).toBeGreaterThan(before)
+  })
+})
+
+describe("a Clip Pack that stopped before captioning its rendered clips", () => {
+  it("Continue from where it failed runs only the captions (the rendered clips are reused, nothing renders again), holding the fee again", async () => {
+    seedCaptionsNotRunClipPack()
+    const res = await postContinue("clip-pack", { jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(202)
+    expect(m.reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "use-case-fee:clip-pack")
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ continueFromExecutionId: "exec-0", continueMode: "from-failed", nodeIds: ["uc-captions"] })
   })
 })

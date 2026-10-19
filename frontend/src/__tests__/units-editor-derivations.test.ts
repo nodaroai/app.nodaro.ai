@@ -11,6 +11,7 @@ import { NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import { NODE_FAMILIES, TAB_SUPERSET } from "@/lib/node-families"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
 
 /**
  * The editor registries a node unit's manifest reaches, loaded for real with
@@ -111,7 +112,15 @@ describe("the derived editor registries carry a unit from its manifest", () => {
     const real = types.filter((t) => t !== "fixture-case" && t !== "fixture-notes")
     expect(real.slice(0, 2)).toEqual(["tighten-episode", "episode-chapters"])
     expect(types).toEqual([...real, "fixture-case", "fixture-notes"])
-    expect(TAB_SUPERSET.audio?.["video-podcast"]).toEqual(["tighten-episode", "episode-chapters", "fixture-notes"])
+    // The audio row: the family's members that declare the audio tab (read off the manifests, real
+    // and fixture alike), in family order — Tighten Episode and Chapters first, fixture-notes last,
+    // fixture-case (no audio tab) left out.
+    const onAudio = new Set(UNIT_NODE_DEFINITIONS.filter((u) => u.picker?.alsoOnTabs?.includes("audio")).map((u) => u.type as string))
+    const audioRow = TAB_SUPERSET.audio?.["video-podcast"] ?? []
+    expect(audioRow).toEqual(types.filter((t) => onAudio.has(t)))
+    expect(audioRow.slice(0, 2)).toEqual(["tighten-episode", "episode-chapters"])
+    expect(audioRow.at(-1)).toBe("fixture-notes")
+    expect(audioRow).not.toContain("fixture-case")
     // The other rows are untouched (a type from another family keeps its slot).
     expect(TAB_SUPERSET.video?.["video-add-your-own"]).toEqual(["youtube-video", "text-prompt"])
   })

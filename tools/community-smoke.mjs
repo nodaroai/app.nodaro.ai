@@ -1038,7 +1038,7 @@ await check("Edit Plan is a Nodaro-exclusive: omitted from discovery, run refuse
   return "edit-plan absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
-// The podcast use-case nodes (Tighten Episode, Chapters, Trailer) each build and run a
+// The podcast use-case nodes (Tighten Episode, Chapters, Trailer, Clip Pack) each build and run a
 // chain whose planning step is Nodaro-EXCLUSIVE. Unconnected, discovery omits
 // them and a run is refused 503 nodaro_connection_required BEFORE its wrapper
 // job, its fee hold or any inner job exists — and before the recording is
@@ -1047,6 +1047,7 @@ for (const [type, label] of [
   ["tighten-episode", "Tighten Episode"],
   ["episode-chapters", "Chapters"],
   ["episode-trailer", "Trailer"],
+  ["clip-pack", "Clip Pack"],
 ]) {
   const name = `${label} on an unconnected install: hidden from discovery, refused 503 before any job`
   await check(name, async () => {

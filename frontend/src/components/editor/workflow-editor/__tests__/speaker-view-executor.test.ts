@@ -90,7 +90,38 @@ describe("executeSpeakerView", () => {
     expect(settings).not.toHaveProperty("autoRegions")
   })
 
-  it("autoRegions on a list row (one clip of several): nothing is filled — the server's payload says the same", async () => {
+  it("autoRegions on a list row (one clip of a pack, decided 2026-10-14): the boxes of every speaker in the episode's transcript — the rows the server's payload carries", async () => {
+    flag.priced = true
+    // Only speaker_1 is on screen in this clip; the episode's transcript names speaker_0 first.
+    const guestOnly = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s1", 5, "a", "speaker_1")] }
+    const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "speaker_0" }, { text: "yo", startMs: 5_000, endMs: 5_400, speaker: "speaker_1" }] }
+    await executeSpeakerView(node({ layout: "single", targetAspect: "9:16", autoRegions: true }), { edl: JSON.stringify(guestOnly), transcript: JSON.stringify(transcript) }, ctx, 0)
+    await polls[0]!.call()
+    const settings = (speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }).settings
+    expect(settings.speakerRegions).toEqual([
+      { source: "a", speaker: "speaker_0", region: { x: 0.0918, y: 0, w: 0.3164, h: 1 } },
+      { source: "a", speaker: "speaker_1", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } },
+    ])
+  })
+
+  it("autoRegions on a list row: a stray one-word label gets no share (decided 2026-10-18) — halves, the rows the server's payload carries", async () => {
+    flag.priced = true
+    const guestOnly = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s1", 70, "a", "speaker_1")] }
+    const stray = { version: 1, words: [
+      { text: "hi", startMs: 0, endMs: 60_000, speaker: "speaker_0" },
+      { text: "um", startMs: 60_000, endMs: 60_300, speaker: "speaker_2" },
+      { text: "yo", startMs: 61_000, endMs: 121_000, speaker: "speaker_1" },
+    ] }
+    await executeSpeakerView(node({ layout: "single", targetAspect: "9:16", autoRegions: true }), { edl: JSON.stringify(guestOnly), transcript: JSON.stringify(stray) }, ctx, 0)
+    await polls[0]!.call()
+    const settings = (speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }).settings
+    expect(settings.speakerRegions).toEqual([
+      { source: "a", speaker: "speaker_0", region: { x: 0.0918, y: 0, w: 0.3164, h: 1 } },
+      { source: "a", speaker: "speaker_1", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } },
+    ])
+  })
+
+  it("autoRegions on a list row with no transcript: nothing is filled — the server's payload says the same", async () => {
     flag.priced = true
     const oneCamera = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
     await executeSpeakerView(node({ layout: "single", targetAspect: "9:16", autoRegions: true }), { edl: JSON.stringify(oneCamera) }, ctx, 0)

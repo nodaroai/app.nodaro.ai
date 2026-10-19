@@ -1,0 +1,4624 @@
+{
+  "requestBody": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mediaUrls": {
+        "minItems": 1,
+        "maxItems": 1,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50
+      },
+      "targetDurationSec": {
+        "type": "integer",
+        "minimum": 5,
+        "maximum": 180
+      },
+      "framing": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "aspect": {
+                "type": "string",
+                "enum": [
+                  "16:9",
+                  "9:16",
+                  "1:1",
+                  "4:5"
+                ]
+              },
+              "layout": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "single",
+                  "side-by-side",
+                  "stacked",
+                  "grid",
+                  "pip"
+                ]
+              },
+              "switchType": {
+                "type": "string",
+                "enum": [
+                  "cut",
+                  "pan",
+                  "zoom",
+                  "xfade:fade",
+                  "xfade:dissolve",
+                  "xfade:dip-to-black",
+                  "xfade:dip-to-white",
+                  "xfade:fadegrays",
+                  "xfade:wipe-left",
+                  "xfade:wipe-right",
+                  "xfade:wipe-up",
+                  "xfade:wipe-down",
+                  "xfade:wipe-tl",
+                  "xfade:wipe-tr",
+                  "xfade:wipe-bl",
+                  "xfade:wipe-br",
+                  "xfade:slide-left",
+                  "xfade:slide-right",
+                  "xfade:slide-up",
+                  "xfade:slide-down",
+                  "xfade:smooth-left",
+                  "xfade:smooth-right",
+                  "xfade:smooth-up",
+                  "xfade:smooth-down",
+                  "xfade:circle-open",
+                  "xfade:circle-close",
+                  "xfade:circle-crop",
+                  "xfade:rect-crop",
+                  "xfade:horz-open",
+                  "xfade:horz-close",
+                  "xfade:vert-open",
+                  "xfade:vert-close",
+                  "xfade:diag-tl",
+                  "xfade:diag-tr",
+                  "xfade:diag-bl",
+                  "xfade:diag-br",
+                  "xfade:hl-slice",
+                  "xfade:hr-slice",
+                  "xfade:vu-slice",
+                  "xfade:vd-slice",
+                  "xfade:reveal-left",
+                  "xfade:reveal-right",
+                  "xfade:reveal-up",
+                  "xfade:reveal-down",
+                  "xfade:cover-left",
+                  "xfade:cover-right",
+                  "xfade:cover-up",
+                  "xfade:cover-down",
+                  "xfade:pixelize",
+                  "xfade:radial",
+                  "xfade:hblur",
+                  "xfade:distance",
+                  "xfade:zoom-in",
+                  "xfade:squeeze-h",
+                  "xfade:squeeze-v"
+                ]
+              },
+              "emphasisStyle": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "aspect"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "captions": {
+        "type": "boolean"
+      },
+      "captionStyle": {
+        "type": "string",
+        "enum": [
+          "subtitle",
+          "word-highlight",
+          "karaoke",
+          "tiktok-words",
+          "word-pop",
+          "bouncy"
+        ]
+      },
+      "reviewBeforeRender": {
+        "type": "boolean"
+      },
+      "planTier": {
+        "type": "string",
+        "enum": [
+          "economy",
+          "standard",
+          "premium"
+        ]
+      },
+      "instructions": {
+        "type": "string",
+        "maxLength": 4000
+      },
+      "styleGuide": {
+        "type": "string",
+        "maxLength": 4000
+      },
+      "componentDepth": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 5
+      },
+      "executingComponentIds": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "previewStopRule": {
+        "type": "boolean"
+      },
+      "reviewerPresent": {
+        "type": "boolean"
+      },
+      "billingContext": {},
+      "userId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "workflowId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "nodeId": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "mcp_client": {
+        "type": "string",
+        "maxLength": 200
+      }
+    },
+    "required": [
+      "mediaUrls"
+    ],
+    "additionalProperties": false
+  },
+  "nodesEntry": {
+    "found": {
+      "type": "clip-pack",
+      "label": "Clip Pack",
+      "category": "processing",
+      "description": "Cut a podcast recording into a pack of short clips in one step: finds the best moments, renders each (framed for 9:16 by default) with captions. Each clip is a separate result. Its steps are priced at their own rates, plus a per-run fee.",
+      "outputType": "video",
+      "creditCost": "per-minute",
+      "inputSchema": {
+        "fields": [
+          {
+            "key": "mediaUrls",
+            "type": "video-url-array",
+            "required": true
+          },
+          {
+            "key": "count",
+            "type": "number"
+          },
+          {
+            "key": "targetDurationSec",
+            "type": "number"
+          },
+          {
+            "key": "framing",
+            "type": "object"
+          },
+          {
+            "key": "captions",
+            "type": "boolean"
+          },
+          {
+            "key": "captionStyle",
+            "type": "select",
+            "options": [
+              "subtitle",
+              "word-highlight",
+              "karaoke",
+              "tiktok-words",
+              "word-pop",
+              "bouncy"
+            ]
+          },
+          {
+            "key": "reviewBeforeRender",
+            "type": "boolean"
+          },
+          {
+            "key": "planTier",
+            "type": "select",
+            "options": [
+              "economy",
+              "standard",
+              "premium"
+            ]
+          },
+          {
+            "key": "instructions",
+            "type": "string"
+          },
+          {
+            "key": "styleGuide",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "chargedDescription": "Cut a podcast recording into a pack of short clips in one step: finds the best moments, renders each (framed for 9:16 by default) with captions. Each clip is a separate result. Its steps are priced at their own rates, plus a per-run fee of 11 credits.",
+    "registryPredecessor": "episode-trailer"
+  },
+  "descriptor": {
+    "label": "Clip Pack",
+    "route": "/v1/clip-pack",
+    "maxSourceSec": 10800,
+    "needsVideo": false,
+    "inputs": [
+      "media"
+    ],
+    "inputNodeIds": {
+      "media": "uc-source"
+    },
+    "settingKeys": [
+      "count",
+      "targetDurationSec",
+      "framing",
+      "captions",
+      "captionStyle",
+      "reviewBeforeRender",
+      "planTier",
+      "instructions",
+      "styleGuide"
+    ],
+    "reviewable": true,
+    "resultKind": "clips",
+    "triesEvery": [
+      "uc-render",
+      "uc-captions"
+    ],
+    "continuePath": "/v1/clip-pack/continue",
+    "listsItsResult": true,
+    "resultIsText": false
+  },
+  "graphs": [
+    {
+      "name": "defaults",
+      "raw": {},
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "04886ff55ae3e917"
+      }
+    },
+    {
+      "name": "framing None (null)",
+      "raw": {
+        "framing": null
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "output": "video",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "media",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": null,
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "f151f35e28461f28"
+      }
+    },
+    {
+      "name": "captions off",
+      "raw": {
+        "captions": false
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": false,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "36680f3e4b127e90"
+      }
+    },
+    {
+      "name": "framing None and captions off",
+      "raw": {
+        "framing": null,
+        "captions": false
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "output": "video",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": null,
+          "captions": false,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "802b0d961de4a530"
+      }
+    },
+    {
+      "name": "a custom framing (16:9 side by side, cut, border+dim)",
+      "raw": {
+        "framing": {
+          "aspect": "16:9",
+          "layout": "side-by-side",
+          "switchType": "cut",
+          "emphasisStyle": "border+dim"
+        }
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "16:9",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "16:9",
+              "layout": "side-by-side",
+              "switchType": "cut",
+              "emphasisStyle": "border+dim",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "16:9",
+            "layout": "side-by-side",
+            "switchType": "cut",
+            "emphasisStyle": "border+dim"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "1cbe31f94832535f"
+      }
+    },
+    {
+      "name": "framing 1:1 grid, emphasis none",
+      "raw": {
+        "framing": {
+          "aspect": "1:1",
+          "layout": "grid",
+          "switchType": "zoom",
+          "emphasisStyle": "none"
+        }
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "1:1",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "1:1",
+              "layout": "grid",
+              "switchType": "zoom",
+              "emphasisStyle": "none",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "1:1",
+            "layout": "grid",
+            "switchType": "zoom",
+            "emphasisStyle": "none"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "2fcd91c8f1a602b6"
+      }
+    },
+    {
+      "name": "framing 4:5 pip",
+      "raw": {
+        "framing": {
+          "aspect": "4:5",
+          "layout": "pip",
+          "switchType": "pan",
+          "emphasisStyle": "scale"
+        }
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "4:5",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "4:5",
+              "layout": "pip",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "4:5",
+            "layout": "pip",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "ebf1ab9f8903131d"
+      }
+    },
+    {
+      "name": "framing 9:16 auto layout",
+      "raw": {
+        "framing": {
+          "aspect": "9:16",
+          "layout": "auto"
+        }
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "auto",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "auto",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "26599fd90fbe6f27"
+      }
+    },
+    {
+      "name": "framing with only an aspect (the rest defaults)",
+      "raw": {
+        "framing": {
+          "aspect": "16:9"
+        }
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "16:9",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "16:9",
+              "layout": "side-by-side",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "16:9",
+            "layout": "side-by-side",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "0009028f55b2594d"
+      }
+    },
+    {
+      "name": "framing partly invalid (each bad field falls back alone)",
+      "raw": {
+        "framing": {
+          "aspect": "21:9",
+          "layout": "single",
+          "switchType": "warp",
+          "emphasisStyle": "none+scale"
+        }
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "single",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "single",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "879453c0c46d089e"
+      }
+    },
+    {
+      "name": "framing not an object (the default framing)",
+      "raw": {
+        "framing": "wide"
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "04886ff55ae3e917"
+      }
+    },
+    {
+      "name": "caption style word-highlight",
+      "raw": {
+        "captionStyle": "word-highlight"
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "word-highlight",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "word-highlight",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "7cc21bf296e2c7ac"
+      }
+    },
+    {
+      "name": "caption style subtitle",
+      "raw": {
+        "captionStyle": "subtitle"
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "subtitle",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "subtitle",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "4c43f441e51e9d6f"
+      }
+    },
+    {
+      "name": "caption style unknown (the default)",
+      "raw": {
+        "captionStyle": "comic-sans"
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "04886ff55ae3e917"
+      }
+    },
+    {
+      "name": "count 8, 30 s clips",
+      "raw": {
+        "count": 8,
+        "targetDurationSec": 30
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 30,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 30,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "4c98f04a11451964"
+      }
+    },
+    {
+      "name": "count and length clamped low",
+      "raw": {
+        "count": 0,
+        "targetDurationSec": 2
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 5,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 5,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "0732e90615b501d8"
+      }
+    },
+    {
+      "name": "count and length clamped high",
+      "raw": {
+        "count": 99,
+        "targetDurationSec": 999
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 50,
+              "targetDurationSec": 180,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 50,
+          "targetDurationSec": 180,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "70856bc96f338177"
+      }
+    },
+    {
+      "name": "review on",
+      "raw": {
+        "reviewBeforeRender": true
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "proxy",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": true,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "430437192fc1c30b"
+      }
+    },
+    {
+      "name": "review on, framing None",
+      "raw": {
+        "reviewBeforeRender": true,
+        "framing": null
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "output": "video",
+              "quality": "proxy",
+              "crossfadeMs": 0
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-render-media-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "media",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": null,
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": true,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "68b43ef618caabe8"
+      }
+    },
+    {
+      "name": "plan tier, instructions and style guide set",
+      "raw": {
+        "planTier": "premium",
+        "instructions": "Only the jokes.",
+        "styleGuide": "Keep the guest's punchlines; drop the ad reads."
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp4",
+          "kind": "video"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-video",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp4"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "premium",
+              "count": 8,
+              "targetDurationSec": 60,
+              "targetAspect": "9:16",
+              "instructions": "Only the jokes.",
+              "styleGuide": "Keep the guest's punchlines; drop the ad reads.",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "speaker-view",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "quality": "final",
+              "targetAspect": "9:16",
+              "layout": "stacked",
+              "switchType": "pan",
+              "emphasisStyle": "scale",
+              "autoRegions": true
+            }
+          },
+          {
+            "id": "uc-captions",
+            "type": "add-captions",
+            "position": {
+              "x": 1280,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Caption Clip",
+              "style": "karaoke",
+              "wordLevel": true,
+              "autoTranscribe": true,
+              "position": "bottom",
+              "fontSize": 28,
+              "color": "#ffffff"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-video-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "video",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-video-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "video",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-render-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-render",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-render-video-uc-captions-in",
+            "source": "uc-render",
+            "target": "uc-captions",
+            "sourceHandle": "video",
+            "targetHandle": "in",
+            "data": {
+              "outputMode": "each"
+            }
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-captions",
+            "handle": "video-out"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "video"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": {
+            "aspect": "9:16",
+            "layout": "stacked",
+            "switchType": "pan",
+            "emphasisStyle": "scale"
+          },
+          "captions": true,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "premium",
+          "instructions": "Only the jokes.",
+          "styleGuide": "Keep the guest's punchlines; drop the ad reads."
+        },
+        "hash": "8d3ae84dd2217f0f"
+      }
+    },
+    {
+      "name": "an audio recording, defaults",
+      "raw": {},
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp3",
+          "kind": "audio"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-audio",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp3"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "output": "audio",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-audio-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "audio",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-audio-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "audio",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-audio-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "audio",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": null,
+          "captions": false,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "e35ad061f6b27807"
+      }
+    },
+    {
+      "name": "an audio recording, framing and captions set (forced off)",
+      "raw": {
+        "framing": {
+          "aspect": "16:9",
+          "layout": "side-by-side",
+          "switchType": "cut",
+          "emphasisStyle": "border+dim"
+        },
+        "captions": true,
+        "captionStyle": "bouncy",
+        "count": 4
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp3",
+          "kind": "audio"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-audio",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp3"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 4,
+              "targetDurationSec": 60,
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "output": "audio",
+              "quality": "final",
+              "crossfadeMs": 0
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-audio-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "audio",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-audio-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "audio",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-audio-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "audio",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 4,
+          "targetDurationSec": 60,
+          "framing": null,
+          "captions": false,
+          "captionStyle": "bouncy",
+          "reviewBeforeRender": false,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "2cc15f4529684103"
+      }
+    },
+    {
+      "name": "an audio recording, review on",
+      "raw": {
+        "reviewBeforeRender": true
+      },
+      "sources": {
+        "media": {
+          "url": "https://r2/ep.mp3",
+          "kind": "audio"
+        }
+      },
+      "stored": {
+        "version": 1,
+        "nodeType": "clip-pack",
+        "nodes": [
+          {
+            "id": "uc-source",
+            "type": "upload-audio",
+            "position": {
+              "x": 0,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Episode recording",
+              "assetId": "",
+              "url": "https://r2/ep.mp3"
+            }
+          },
+          {
+            "id": "uc-transcribe",
+            "type": "transcribe",
+            "position": {
+              "x": 320,
+              "y": 0
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Transcribe",
+              "provider": "elevenlabs-stt",
+              "language": "auto",
+              "diarize": true
+            }
+          },
+          {
+            "id": "uc-plan",
+            "type": "edit-plan",
+            "position": {
+              "x": 640,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Find Clips",
+              "mode": "clips",
+              "planTier": "standard",
+              "count": 8,
+              "targetDurationSec": 60,
+              "instructions": "",
+              "sourceOrder": [
+                "uc-source"
+              ],
+              "sourceConfig": {}
+            }
+          },
+          {
+            "id": "uc-render",
+            "type": "apply-edl",
+            "position": {
+              "x": 960,
+              "y": 220
+            },
+            "data": {
+              "fieldMappings": {},
+              "label": "Render Clip",
+              "output": "audio",
+              "quality": "proxy",
+              "crossfadeMs": 0
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "uc-e-uc-source-audio-uc-transcribe-audio",
+            "source": "uc-source",
+            "target": "uc-transcribe",
+            "sourceHandle": "audio",
+            "targetHandle": "audio"
+          },
+          {
+            "id": "uc-e-uc-source-audio-uc-plan-sources",
+            "source": "uc-source",
+            "target": "uc-plan",
+            "sourceHandle": "audio",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-source-audio-uc-render-sources",
+            "source": "uc-source",
+            "target": "uc-render",
+            "sourceHandle": "audio",
+            "targetHandle": "sources"
+          },
+          {
+            "id": "uc-e-uc-transcribe-json-uc-plan-transcript",
+            "source": "uc-transcribe",
+            "target": "uc-plan",
+            "sourceHandle": "json",
+            "targetHandle": "transcript"
+          },
+          {
+            "id": "uc-e-uc-plan-edl-uc-render-edl",
+            "source": "uc-plan",
+            "target": "uc-render",
+            "sourceHandle": "edl",
+            "targetHandle": "edl"
+          }
+        ],
+        "outputMap": {
+          "kind": "clips",
+          "media": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "preview": {
+            "nodeId": "uc-render",
+            "handle": "media"
+          },
+          "json": {
+            "nodeId": "uc-plan",
+            "handle": "edl"
+          },
+          "transcript": {
+            "nodeId": "uc-transcribe",
+            "handle": "json"
+          },
+          "planNodeId": "uc-plan",
+          "renderNodeId": "uc-render"
+        },
+        "settings": {
+          "count": 8,
+          "targetDurationSec": 60,
+          "framing": null,
+          "captions": false,
+          "captionStyle": "karaoke",
+          "reviewBeforeRender": true,
+          "planTier": "standard",
+          "instructions": "",
+          "styleGuide": ""
+        },
+        "hash": "33692d3d117a2c83"
+      }
+    }
+  ],
+  "lengthRule": "(undefined)",
+  "lengths": [
+    {
+      "name": "a video recording, defaults",
+      "data": {},
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        }
+      ],
+      "length": "no-rule"
+    },
+    {
+      "name": "an audio recording",
+      "data": {},
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "audio",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        }
+      ],
+      "length": "no-rule"
+    },
+    {
+      "name": "a video recording, 8 clips of 30 s",
+      "data": {
+        "count": 8,
+        "targetDurationSec": 30
+      },
+      "inputs": [
+        {
+          "sourceId": "rec",
+          "handle": "media",
+          "kind": "video",
+          "length": {
+            "fixedSec": 0,
+            "perEpisodeSec": 1
+          }
+        }
+      ],
+      "length": "no-rule"
+    }
+  ],
+  "money": {
+    "staticFee": 10,
+    "reservedCreditId": "use-case-fee:clip-pack",
+    "creditResolver": {
+      "defaults": "use-case-fee:clip-pack",
+      "tuned": "use-case-fee:clip-pack"
+    }
+  },
+  "membership": {
+    "runResultTypeKeys": [
+      "errorCode",
+      "failedClips"
+    ],
+    "runResultHasFailedClips": true,
+    "runResultHasFailedCaptions": false,
+    "fanOutEachHandles": {
+      "each": [
+        "clips"
+      ],
+      "primary": "clips"
+    },
+    "reviewHolding": true,
+    "videoProducer": false,
+    "audioProducer": false,
+    "dynamicProducer": true,
+    "declaredJsonOutput": "edl",
+    "declaredJsonOutputOnClips": "(undefined)",
+    "nonPromptLanes": [],
+    "textFeedsPrompt": {
+      "media": true
+    },
+    "outputType": "video",
+    "nodaroExclusive": true,
+    "fanOutRefusal": {
+      "code": "use_case_list_driven",
+      "message": "Clip Pack takes one recording. Use a separate workflow run for each recording."
+    },
+    "fanOutRefusalReviewOn": {
+      "code": "use_case_list_driven",
+      "message": "Clip Pack takes one recording. Use a separate workflow run for each recording."
+    },
+    "useCaseTypesPredecessor": "episode-trailer"
+  },
+  "mcpHandles": {
+    "inputs": [
+      "media"
+    ],
+    "outputs": [
+      "clips",
+      "json"
+    ]
+  }
+}

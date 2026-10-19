@@ -2,6 +2,7 @@
 // @registry frontend/src/nodes/*/node.tsx
 // @registry-exports components: UNIT_COMPONENTS
 import type { UnitNodeComponent } from "../kit"
+import { NodeComponent as unit_clip_pack } from "../clip-pack/node" // unit:clip-pack
 import { NodeComponent as unit_episode_chapters } from "../episode-chapters/node" // unit:episode-chapters
 import { NodeComponent as unit_episode_trailer } from "../episode-trailer/node" // unit:episode-trailer
 import { NodeComponent as unit_gif_to_video } from "../gif-to-video/node" // unit:gif-to-video
@@ -9,6 +10,7 @@ import { NodeComponent as unit_remove_audio } from "../remove-audio/node" // uni
 import { NodeComponent as unit_tighten_episode } from "../tighten-episode/node" // unit:tighten-episode
 
 export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Object.assign(Object.create(null), {
+  "clip-pack": unit_clip_pack, // unit:clip-pack
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video

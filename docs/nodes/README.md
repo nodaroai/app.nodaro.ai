@@ -59,7 +59,7 @@ the foot of the list.
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
 | **Analyze** | Video Analysis · AI Audit · Content Recipe |
 | **UGC Video** | UGC Creator · UGC Script · UGC Clips · UGC Clip · UGC Cards |
-| **Podcast** | Tighten Episode · Chapters · Trailer |
+| **Podcast** | Tighten Episode · Chapters · Trailer · Clip Pack |
 
 ### Audio
 
@@ -74,7 +74,7 @@ the foot of the list.
 | **Analyze** | Silence Detect · Audio Sync |
 | **Edit Audio** | Trim Audio · Combine Audio · Mix Audio · Adjust Volume · Audio FX |
 | **Transcribe** | Transcribe · Forced Alignment |
-| **Podcast** | Tighten Episode · Chapters (listed on the Video tab too) |
+| **Podcast** | Tighten Episode · Chapters · Clip Pack (listed on the Video tab too) |
 
 ### Models
 
@@ -413,6 +413,7 @@ FFmpeg-based video manipulation.
 | [Tighten Episode](./processing-video/tighten-episode.md) | Tighten a podcast recording in one step — transcribe, remove silences and filler, cut, and optionally add captions and a music bed (Cloud; its steps' credits + a per-run fee of 11 credits<!-- credits: use-case-fee:tighten-episode -->) | One recording → the tightened episode (video or audio), with an optional review before the full-quality render; the individual nodes when you need several cameras or a hand-edited EDL |
 | [Chapters](./processing-video/episode-chapters.md) | List a recording's chapters in one step — transcribe, then plan the chapters, each with a title and a start time; nothing is rendered (Cloud; its steps' credits + a per-run fee of 11 credits<!-- credits: use-case-fee:episode-chapters -->). **Not yet enabled on nodaro.ai.** | One recording → show notes (`0:00 Title` per line) and the chapter list as JSON; Edit Plan in Chapters mode when you already have a transcript |
 | [Trailer](./processing-video/episode-trailer.md) | Cut a 20–40 second trailer from a recording in one step and deliver it in each chosen social format (9:16, 1:1, 4:5, 16:9), padded, never cropped, optionally after an intro card (Cloud; its steps' credits + a per-run fee of 11 credits<!-- credits: use-case-fee:episode-trailer -->). **Not yet enabled on nodaro.ai.** | One video recording → a trailer per format, with an optional review before every format is rendered; the Trailer + Formats template when you want to build the chain by hand |
+| [Clip Pack](./processing-video/clip-pack.md) | Cut a recording into a pack of short clips in one step — find the best moments, render each as its own clip, framed for 9:16 with the speakers stacked and captioned by default (Cloud; its steps' credits + a per-run fee of 11 credits<!-- credits: use-case-fee:clip-pack -->). **Not yet enabled on nodaro.ai.** | One recording → a list of clips (audio clips for an audio recording), each with a title and a hook, with an optional review that keeps or drops clips before the full-quality render; the Clip Pack template when you want to build the chain by hand |
 | [Reframe](./processing-video/reframe.md) | Follow the speaker — an add-node entry that drops Transcribe (speakers), Speaker Frames and Speaker View, wired and grouped (Cloud; the sum of its three nodes' credits) | A vertical clip that shows whoever is talking: a video → Transcribe → Speaker Frames → Speaker View at 9:16 |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |

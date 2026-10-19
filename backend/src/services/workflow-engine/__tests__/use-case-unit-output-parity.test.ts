@@ -93,6 +93,18 @@ describe("what the two readers save (pinned values)", () => {
     })
   }
 
+  // Clip Pack's clips are its list the same way; how many failed is a
+  // run-result key, not a value it saves.
+  for (const shape of ["clipsList", "clipsPartial"] as const) {
+    it(`Clip Pack, ${shape}: the first clip and its list of clips; the generic reader has nothing`, () => {
+      const data = SHAPES[shape]
+      const saved = extractSavedNodeOutput({ id: "n", type: "clip-pack", data } as never)
+      expect(saved).toEqual({ videoUrl: "https://r/c0.mp4", listResults: ["https://r/c0.mp4", "https://r/c1.mp4"] })
+      expect(saved).not.toHaveProperty("failedClips")
+      expect(unitSavedOutput(unit("clip-pack"), data)).toBeUndefined()
+    })
+  }
+
   it("Tighten Episode, formatsList: a type that does not list its result saves the episode only", () => {
     expect(extractSavedNodeOutput({ id: "n", type: "tighten-episode", data: SHAPES.formatsList } as never)).toEqual({ videoUrl: "https://r/t-9x16.mp4" })
   })

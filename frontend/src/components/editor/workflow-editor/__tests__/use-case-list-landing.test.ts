@@ -111,3 +111,40 @@ describe("a second Render final, after a further edit, is a run of its own", () 
     expect(new Set(onShow).size).toBe(onShow.length)
   })
 })
+
+describe("a Clip Pack run lands its clips as one run's rows", () => {
+  const CLIPS = {
+    videoUrl: "https://r2/c0.mp4",
+    clips: [
+      { url: "https://r2/c0.mp4", quality: "final", clipKey: "k0", title: "The pivot", planBasis: "p0", renderBasis: "r0", thumbnailUrl: "https://r2/c0.png" },
+      { url: "https://r2/c1.mp4", quality: "final", clipKey: "k1", title: "The money", planBasis: "p1", renderBasis: "r1", thumbnailUrl: "https://r2/c1.png", captionsFailed: true },
+    ],
+    failedClips: 1,
+    failedCaptions: 1,
+    json: [{ version: 1 }, { version: 1 }],
+    transcript: { version: 1, words: [] },
+    quality: "final",
+    useCaseSettings: { count: 3 },
+    _executionId: "exec-cp",
+  }
+
+  it("one row per clip, each with its own stamps and the run's wrapper; one clip not rendered and one uncaptioned, named on every row", async () => {
+    poll.outputOf = () => CLIPS
+    store.nodes = [{ id: "cp", type: "clip-pack", position: { x: 0, y: 0 }, data: { label: "Clip Pack", fieldMappings: {}, count: 3, generatedResults: [EARLIER] } }]
+    await executeUseCase(store.nodes[0], { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as never, ctx)
+    expect(api.runUseCase.mock.calls[0]![1]).toEqual(expect.objectContaining({ mediaUrl: "https://r2/ep.mp4", settings: expect.objectContaining({ count: 3 }) }))
+    const landed = poll.landed!
+    const rows = landed.generatedResults as Array<Record<string, unknown>>
+    expect(rows.map((r) => [r.url, r.clipKey, r.title, r.jobId, r.quality, r.planBasis, r.renderBasis, r.thumbnailUrl, r.captionsFailed, r.failedClips])).toEqual([
+      ["https://r2/c0.mp4", "k0", "The pivot", "job-w", "final", "p0", "r0", "https://r2/c0.png", undefined, 1],
+      ["https://r2/c1.mp4", "k1", "The money", "job-w", "final", "p1", "r1", "https://r2/c1.png", true, 1],
+      [EARLIER.url, undefined, undefined, EARLIER.jobId, EARLIER.quality, undefined, undefined, undefined, undefined, undefined],
+    ])
+    expect(rows[1]).toMatchObject({ generatedJson: CLIPS.json, useCaseSettings: CLIPS.useCaseSettings })
+    expect(landed.__listResultStamps).toEqual([
+      { quality: "final", clipKey: "k0", planBasis: "p0", renderBasis: "r0", thumbnailUrl: "https://r2/c0.png", jobId: "job-w" },
+      { quality: "final", clipKey: "k1", planBasis: "p1", renderBasis: "r1", thumbnailUrl: "https://r2/c1.png", jobId: "job-w" },
+    ])
+    expect(landed).toMatchObject({ __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"], generatedVideoUrl: "https://r2/c0.mp4", activeResultIndex: 0, failedClips: 1 })
+  })
+})

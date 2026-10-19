@@ -7,6 +7,7 @@
  */
 import {
   RENDER_FINAL_ALREADY_RENDERED,
+  USE_CASE_NOTHING_KEPT,
   REVIEW_HOLDING_USE_CASE_TYPES,
   CONTINUATION_NOT_COMPLETED,
   CONTINUATION_SETTLING,
@@ -29,6 +30,7 @@ import {
   USE_CASE_REVIEW_LIST_DRIVEN,
   USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
   isUseCaseNodeType,
+  parseClipPackNoneRendered,
   previewRefusalOfCode,
   usecaseCancelledMessage,
   usecaseDescriptor,
@@ -66,6 +68,8 @@ const CODE_TEXT: Readonly<Record<string, MessageKey>> = {
   // already rendered, and one asked while another of it is under way.
   [RENDER_FINAL_ALREADY_RENDERED]: "runContinuation.alreadyRendered",
   [RENDER_FINAL_ALREADY_RUNNING]: "runContinuation.finalInProgress",
+  // A Render final of a clip set whose review dropped every clip: nothing to render.
+  [USE_CASE_NOTHING_KEPT]: "runContinuation.nothingKept",
   // Not a code: the server refuses an editor run that would execute a UGC Creator still waiting
   // for a pick with this English sentence, word for word the editor's own refusal
   // (`run.ugcPickFirst`, pinned equal in ugc-nodes-locales.test.ts), so both read alike.
@@ -101,7 +105,14 @@ function knownText(message: string): string | null {
   const listDriven = LIST_DRIVEN_TYPE_BY_MESSAGE.get(message)
   if (listDriven) return tx("nodeRun.usecaseListDriven", usecaseLabelVars(listDriven))
   const cancelled = CANCELLED_TYPE_BY_MESSAGE.get(message)
-  return cancelled ? tx("nodeRun.usecaseCancelled", usecaseLabelVars(cancelled)) : null
+  if (cancelled) return tx("nodeRun.usecaseCancelled", usecaseLabelVars(cancelled))
+  // A clip set none of whose clips rendered: the count, and the render's own reason (itself localized when known).
+  const noneRendered = parseClipPackNoneRendered(message)
+  if (!noneRendered) return null
+  const reason = knownText(noneRendered.reason) ?? noneRendered.reason
+  return noneRendered.count === 1
+    ? tx("nodeRun.clipPackOneNotRendered", { reason })
+    : tx("nodeRun.clipPackNoneRendered", { count: noneRendered.count, reason })
 }
 
 export function executionErrorText(message: string | null | undefined): string | null {

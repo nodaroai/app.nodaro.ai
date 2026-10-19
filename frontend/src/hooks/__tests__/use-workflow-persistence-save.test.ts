@@ -1781,9 +1781,9 @@ describe("useWorkflowPersistence — save", () => {
       // retry CAS'd on the FRESH version
       const retryArgs = mockSupabaseRpc.mock.calls[1]![1] as Record<string, unknown>
       expect(retryArgs.p_base_version).toBe(43)
-      // store rebased: merged graph adopted + tokens advanced to fresh
+      // store rebased: merged graph adopted as stored (the audio lock takes it as it is) + tokens advanced to fresh
       expect(mockStoreSetState).toHaveBeenCalledWith(
-        expect.objectContaining({ loadedVersion: 43 }),
+        expect.objectContaining({ loadedVersion: 43, adoptedAsStored: true }),
       )
     } finally {
       vi.unstubAllEnvs()
