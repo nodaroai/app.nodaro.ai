@@ -12,7 +12,7 @@
 // --run limits the report to those runs (still listed from --since) — to re-check one run.
 // Needs an authenticated `gh` (GH_TOKEN works too).
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, readFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -241,8 +241,9 @@ export function shadowExpected({ base, hasArtifacts, expected }) {
 }
 
 // GitHub's own transient errors (a 5xx) are retried, a few times, with a
-// pause: a report reads hundreds of runs over half an hour, and one 502 used to
-// end it with nothing printed. So is a response gh could not parse because it
+// pause that doubles (5 s … 60 s, about 2 min in all — a GitHub 502 spell
+// outlasted the old 12 s): a report reads hundreds of runs over half an hour,
+// and one 502 used to end it with nothing printed. So is a response gh could not parse because it
 // was empty or cut off. gh then prints Go's "unexpected end of JSON input" or
 // "unexpected EOF", with no HTTP status. So is a dropped connection: gh's "error
 // connecting to api.github.com" / "check your internet connection", a reset,
@@ -252,14 +253,14 @@ export function shadowExpected({ base, hasArtifacts, expected }) {
 // where it is used. Any other failure is the caller's to judge.
 const TRANSIENT = /HTTP 5\d\d|unexpected end of JSON input|unexpected EOF|error connecting to|check your internet connection|connection reset by peer|i\/o timeout|TLS handshake timeout|error downloading [^:]+: Get "/
 
-export function withRetry(call, { tries = 4, pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
+export function withRetry(call, { tries = 6, pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
   for (let attempt = 1; ; attempt++) {
     try {
       return call()
     } catch (err) {
       const transient = TRANSIENT.test(`${err?.stderr ?? ""} ${err?.message ?? ""}`)
       if (!transient || attempt >= tries) throw err
-      pause(2000 * attempt)
+      pause(Math.min(60_000, 5000 * 2 ** (attempt - 1)))
     }
   }
 }
@@ -277,6 +278,18 @@ export function ghError(args, err) {
 function gh(...args) {
   try {
     return withRetry(() => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "pipe"] })).trim()
+  } catch (err) {
+    throw ghError(args, err)
+  }
+}
+
+// One artifact into its own directory, emptied before every attempt: a download
+// that died mid-extract leaves files behind, and gh refuses to overwrite them
+// ("openat …: file exists"), so a retry into the same directory always failed.
+export function downloadArtifact(runId, repo, name, out, run = (args) => execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "pipe"] }), retry = withRetry) {
+  const args = ["run", "download", String(runId), "--repo", repo, "--name", name, "--dir", out]
+  try {
+    return retry(() => { rmSync(out, { recursive: true, force: true }); return run(args) })
   } catch (err) {
     throw ghError(args, err)
   }
@@ -425,7 +438,7 @@ function collectRuns({ repo, since, only = [] }) {
   // (an absent list is empty — run-suite.sh writes all three, empty or not).
   const readLists = (runId, name, project) => {
     const out = path.join(dir, `dev-${runId}`, name)
-    gh("run", "download", runId, "--repo", repo, "--name", name, "--dir", out)
+    downloadArtifact(runId, repo, name, out)
     const list = (suffix) => { try { return readFileSync(path.join(out, `failed-${project}.txt${suffix}`), "utf8").split("\n").map((l) => l.trim()).filter(Boolean) } catch { return [] } }
     return { failed: list(""), flaky: list(".flaky"), unknown: list(".unknown") }
   }
@@ -507,7 +520,7 @@ function collectRuns({ repo, since, only = [] }) {
       selectionParts[project].push(part)
       const out = path.join(dir, id, name)
       try {
-        gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
+        downloadArtifact(id, repo, name, out)
       } catch (err) {
         part.error = `${name}: ${why(err)}`
         registryErrors.push({ project, url, error: part.error })
@@ -584,7 +597,7 @@ function collectRuns({ repo, since, only = [] }) {
       parts[project].push(part)
       const out = path.join(dir, id, name)
       try {
-        gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
+        downloadArtifact(id, repo, name, out)
         part.shadow = readJson(path.join(out, `shadow-${project}.json`))
       } catch (err) {
         // an artifact that cannot be read is an error in the report, never skipped
