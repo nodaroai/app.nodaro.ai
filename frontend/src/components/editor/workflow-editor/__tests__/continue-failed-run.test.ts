@@ -143,6 +143,37 @@ describe("expectedFromFailed", () => {
   })
 })
 
+describe("expectedFromFailed agrees with the server on a node no run ever ran (a placeholder)", () => {
+  const ids = (nodes: TestNode[]) => nodes.map((x) => x.id)
+  // llm → jp → ct; the first run was started on [llm, jp], failed at jp, and
+  // handed ct on from its saved data (no start, no job): the server's default
+  // never runs ct — only a run that NAMES it does, and the editor names none.
+  const nodes = [n("llm", "llm-chat"), n("jp", "generate-image"), n("ct", "image-to-video")]
+  const edges = [{ id: "e1", source: "llm", target: "jp" }, { id: "e2", source: "jp", target: "ct" }]
+  const run1 = {
+    llm: { status: "completed", startedAt: "t", jobId: "j1" },
+    jp: { status: "failed", startedAt: "t" },
+    ct: { status: "completed", fromSavedData: true },
+  }
+
+  it("the default (the run's scope): jp only — ct, a placeholder outside it, is not run", () => {
+    expect(ids(expectedFromFailed(nodes as never, edges as never, { scope: ["llm", "jp"], states: run1 }) as never)).toEqual(["jp"])
+  })
+
+  it("built on a later continuation that seeded ct as a placeholder (carriedPlaceholder): still not run", () => {
+    const run2 = {
+      llm: { status: "completed", seededFromExecution: "r1" },
+      jp: { status: "completed", startedAt: "t", jobId: "j2" },
+      ct: { status: "completed", seededFromExecution: "r1", carriedPlaceholder: true },
+    }
+    expect(ids(expectedFromFailed(nodes as never, edges as never, { scope: ["llm", "jp"], states: run1 }, run2) as never)).toEqual([])
+  })
+
+  it("with no scope (every node), a placeholder still counts as completed: nothing the server would not run", () => {
+    expect(ids(expectedFromFailed(nodes as never, edges as never, { scope: null, states: run1 }) as never)).toEqual(["jp"])
+  })
+})
+
 describe("Continue from failed", () => {
   it("continues the failed run from where it stopped, and follows the run (202)", async () => {
     const d = deps()

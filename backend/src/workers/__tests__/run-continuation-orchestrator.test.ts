@@ -783,6 +783,124 @@ describe("continue-from-failed of a saved workflow's run", () => {
     expect(persisted.cut?.carriedUnfinished).toBeUndefined()
   })
 
+  // A node named in nodeIds that no run of the chain ever ran (a placeholder:
+  // each run handed it on from its saved data) runs. The route names the ids
+  // it was sent (`namedNodeIds`); the worker narrows the run set by the same
+  // rule (`fromFailedRunSet`'s `named`) and never guesses which were sent.
+  describe("a named node no run of the chain ever ran (llm → jp → ct, the first run on [llm, jp])", () => {
+    const line = () => ({
+      nodes: [
+        { id: "llm", type: "add-captions", data: {} },
+        { id: "jp", type: "add-captions", data: {} },
+        { id: "ct", type: "add-captions", data: {} },
+      ],
+      edges: [
+        { id: "e1", source: "llm", target: "jp", sourceHandle: null, targetHandle: null },
+        { id: "e2", source: "jp", target: "ct", sourceHandle: null, targetHandle: null },
+      ],
+    })
+    const run1States = (): Record<string, NodeExecutionState> => ({
+      llm: { status: "completed", nodeType: "add-captions", jobId: "job-llm", startedAt: at, completedAt: at, output: { videoUrl: "https://r2/llm.mp4" } },
+      jp: { status: "failed", nodeType: "add-captions", jobId: "job-jp", startedAt: at, completedAt: at, error: "boom" },
+      // Outside run 1's nodeIds: handed on from its saved data.
+      ct: { status: "completed", completedAt: at, output: { videoUrl: "https://r2/ct-saved.mp4" }, fromSavedData: true },
+    })
+    /** Run 2, the plain resume: ran jp, every other node seeded from run 1 by the real seeds. */
+    const run2 = (): Record<string, unknown> => {
+      const seeds = Object.fromEntries(
+        continuationSeeds(line().nodes, { id: "exec-0", userId: OWNER, workflowId: "wf-1", status: "failed", appVersionId: null, nodeStates: run1States() }, new Set(["jp"])),
+      )
+      return {
+        id: "exec-b",
+        user_id: OWNER,
+        workflow_id: "wf-1",
+        status: "completed",
+        started_at: at,
+        trigger_type: "manual",
+        trigger_data: { continueFromFailed: { from: "exec-0", root: "exec-0", seededFrom: "exec-0", all: true, scope: ["llm", "jp"] } },
+        node_states: {
+          ...seeds,
+          jp: { status: "completed", nodeType: "add-captions", jobId: "job-jp-2", startedAt: at, completedAt: at, output: { videoUrl: "https://r2/jp-2.mp4" } },
+        },
+      }
+    }
+    const run3 = (data: Partial<WorkflowExecutionJob> = {}) =>
+      job({ continueMode: "from-failed", seedFromExecutionId: "exec-b", reopenHead: "done", nodeIds: ["ct"], namedNodeIds: ["ct"], inputOverrides: undefined, ...data })
+
+    beforeEach(() => {
+      mocks.workflows.set("wf-1", { ...line(), settings: {}, user_id: OWNER })
+      mocks.executions.set("exec-0", { id: "exec-0", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, node_states: run1States() })
+      mocks.executions.set("exec-b", run2())
+    })
+
+    it("run 3 (named ct, built on run 2): ct runs on run 2's jp; llm and jp are seeded from run 2, never run again", async () => {
+      await processWorkflowExecution(run3())
+      expect(failedWrite()).toBeUndefined()
+      expect(ran()).toEqual(["ct"])
+      expect(JSON.stringify(inputsOf("ct"))).toContain("https://r2/jp-2.mp4")
+      const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+      expect(states.llm).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/llm.mp4" }, seededFromExecution: "exec-b" })
+      expect(states.jp).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/jp-2.mp4" }, seededFromExecution: "exec-b" })
+      // ct ran in this run: a state of its own, no longer a placeholder.
+      expect(states.ct).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/ct.mp4" } })
+      expect(states.ct!.startedAt).toBeTruthy()
+      expect(states.ct!.seededFromExecution).toBeUndefined()
+    })
+
+    it("the same job without namedNodeIds (one queued before the field) reads ct as completed: refused, nothing runs", async () => {
+      await processWorkflowExecution(run3({ namedNodeIds: undefined }))
+      expect(ran()).toEqual([])
+      expect(failedWrite()?.error_message).toBe(CONTINUATION_SUBSET_REQUIRED)
+    })
+
+    it("a named node that really ran is never run again: jp named beside ct is seeded from run 2", async () => {
+      await processWorkflowExecution(run3({ nodeIds: ["jp", "ct"], namedNodeIds: ["jp", "ct"] }))
+      expect(ran()).toEqual(["ct"])
+    })
+
+    it("a plain resume of run 1 (no later run, none named) runs jp only: ct is handed on from its saved data as before", async () => {
+      await processWorkflowExecution(job({ continueMode: "from-failed", nodeIds: ["llm", "jp"], inputOverrides: undefined }))
+      expect(failedWrite()).toBeUndefined()
+      expect(ran()).toEqual(["jp"])
+      const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+      expect(states.ct).toMatchObject({ status: "completed", seededFromExecution: "exec-0", carriedPlaceholder: true })
+    })
+  })
+
+  // Naming a node the engine never executes changes nothing: a webhook trigger
+  // (a source) is handed on, every run. Named with the rest ("take on
+  // everything"), it keeps the earlier run's output as its seed — the job of a
+  // continuation carries no trigger payload, so without the seed it would hand
+  // on nothing and jp would run without its input.
+  describe("a named source keeps its seed (webhook trigger wh → jp, the run failed at jp)", () => {
+    const hookGraph = () => ({
+      nodes: [
+        { id: "wh", type: "webhook-trigger", data: { params: [{ id: "p1", name: "clip", type: "videoUrl" }] } },
+        { id: "jp", type: "add-captions", data: {} },
+      ],
+      edges: [{ id: "e1", source: "wh", target: "jp", sourceHandle: null, targetHandle: null }],
+    })
+    const hookStates = (): Record<string, NodeExecutionState> => ({
+      // What the webhook handed on in that run: a source is never executed, so it is a placeholder.
+      wh: { status: "completed", completedAt: at, output: { videoUrl: "https://r2/hook.mp4", paramOutputs: { p1: "https://r2/hook.mp4" } }, fromSavedData: true },
+      jp: { status: "failed", nodeType: "add-captions", jobId: "job-jp", startedAt: at, completedAt: at, error: "boom" },
+    })
+
+    beforeEach(() => {
+      mocks.workflows.set("wf-1", { ...hookGraph(), settings: {}, user_id: OWNER })
+      mocks.executions.set("exec-0", { id: "exec-0", user_id: OWNER, workflow_id: "wf-1", status: "failed", started_at: at, trigger_type: "webhook", node_states: hookStates() })
+    })
+
+    it("every node named (namedNodeIds unfiltered, as an older route sent it): only jp runs, on the webhook's earlier output", async () => {
+      await processWorkflowExecution(job({ continueMode: "from-failed", nodeIds: ["wh", "jp"], namedNodeIds: ["wh", "jp"], inputOverrides: undefined }))
+      expect(failedWrite()).toBeUndefined()
+      expect(ran()).toEqual(["jp"])
+      expect(JSON.stringify(inputsOf("jp"))).toContain("https://r2/hook.mp4")
+      const states = completedWrite()!.node_states as Record<string, NodeExecutionState>
+      expect(states.wh).toMatchObject({ status: "completed", output: { videoUrl: "https://r2/hook.mp4" }, seededFromExecution: "exec-0" })
+    })
+  })
+
   // Review round 3, I1: A failed on two branches, a Tighten Episode (T, its
   // inner steps already paid) and an image (G). A narrow continuation B
   // (`nodeIds: ["g"]`) ran only G and completed, so B holds T as a seed. A

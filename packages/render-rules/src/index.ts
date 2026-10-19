@@ -477,9 +477,11 @@ export {
 export { ancestorsOf, descendantsOf, type WalkEdge } from "./graph-walk"
 // What a continue-from-failed considers and runs: the server's set, and the editor's prediction of it.
 export {
+  completedFor,
   fromFailedClosedRunSet,
   fromFailedConsidered,
   fromFailedRunSet,
+  isPlaceholder,
   isUnfinished,
   leftUnfinishedBy,
   type FromFailedNodeState,

@@ -988,12 +988,12 @@ export function registerWorkflows({
           from_failed: z
             .boolean()
             .optional()
-            .describe("With continue_from_execution_id: run only the nodes that run did not complete."),
+            .describe("With continue_from_execution_id: run only the nodes that run did not complete, plus any node_ids no run of its chain ever ran."),
           node_ids: z
             .array(z.string())
             .optional()
             .describe(
-              "Run only these nodes. With from_failed, the nodes to consider. With continue_from_execution_id alone, the nodes the continuation runs (required then).",
+              "Run only these nodes. With from_failed, the nodes to consider; a named node of work that no run of its chain ever ran then runs too, and is charged (never a source, trigger or skipped node). With continue_from_execution_id alone, the nodes the continuation runs (required then).",
             ),
         },
         outputSchema: {

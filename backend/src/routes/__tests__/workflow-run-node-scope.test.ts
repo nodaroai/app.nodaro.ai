@@ -257,7 +257,7 @@ const SELECTION = ["a", "b", "c"]
 
 /** The states a run of a, b, c that failed at b writes: d outside it seeded from its saved data; n has none (added since). */
 const failedSubsetStates = () => ({
-  a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" } },
+  a: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" } },
   b: { status: "failed", nodeType: "add-captions", error: "boom" },
   c: { status: "skipped", nodeType: "webhook-output" },
   d: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/d.mp4" }, fromSavedData: true },
@@ -339,7 +339,7 @@ describe("a continue-from-failed sent no nodeIds defaults to the lineage's node 
       failedRoot(["cut", "cap"], {
         nodeStates: {
           plan: { status: "completed", nodeType: "edit-plan", output: { json: {} }, seededFromExecution: NEWER },
-          cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" } },
+          cut: { status: "completed", startedAt: at, nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" } },
           cap: { status: "failed", nodeType: "add-captions", error: "boom" },
           hook: { status: "skipped", nodeType: "webhook-output", seededFromExecution: NEWER },
         },
@@ -421,8 +421,8 @@ describe("explicit nodeIds reopen a chain judged done against its default set", 
       nodeStates: {
         ...failedSubsetStates(),
         a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" }, seededFromExecution: PRIOR },
-        b: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
-        c: { status: "completed", nodeType: "webhook-output", output: {} },
+        b: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
+        c: { status: "completed", startedAt: at, nodeType: "webhook-output", output: {} },
       },
     })
 
@@ -481,7 +481,7 @@ describe("explicit nodeIds reopen a chain judged done against its default set", 
         nodeStates: {
           ...failedSubsetStates(),
           a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" }, seededFromExecution: PRIOR },
-          b: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
+          b: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
           c: { status: "failed", nodeType: "webhook-output", error: "boom" },
         },
       })
@@ -565,7 +565,7 @@ describe("across hops the scope stays the root's", () => {
       nodeStates: {
         ...failedSubsetStates(),
         a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" }, seededFromExecution: PRIOR },
-        b: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
+        b: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
         c: { status: "skipped", nodeType: "webhook-output", seededFromExecution: PRIOR },
       },
       ...over,
@@ -594,7 +594,7 @@ describe("across hops the scope stays the root's", () => {
     byId({
       [HOP]: hop({
         status: "failed",
-        nodeStates: { ...failedSubsetStates(), b: { status: "completed", nodeType: "add-captions", output: {} }, c: { status: "failed", nodeType: "webhook-output", error: "boom" } },
+        nodeStates: { ...failedSubsetStates(), b: { status: "completed", startedAt: at, nodeType: "add-captions", output: {} }, c: { status: "failed", nodeType: "webhook-output", error: "boom" } },
       }),
     })
     mocks.executions.push(row(HOP, HOP_STAMP, { status: "failed" }))
@@ -641,8 +641,8 @@ describe("the run in `next` finishes a scoped chain", () => {
       nodeSelection: null,
       inputOverrides: null,
       nodeStates: {
-        plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } },
-        cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/p.mp4", quality: "proxy" } },
+        plan: { status: "completed", startedAt: at, nodeType: "edit-plan", output: { json: {} } },
+        cut: { status: "completed", startedAt: at, nodeType: "apply-edl", output: { video: "https://r2.example/p.mp4", quality: "proxy" } },
         cap: { status: "skipped", nodeType: "add-captions" },
         extra: { status: "completed", nodeType: "add-captions", output: {}, fromSavedData: true },
       },
@@ -651,7 +651,7 @@ describe("the run in `next` finishes a scoped chain", () => {
   beforeEach(() => {
     mocks.graphOverride = heldGraph()
     byId({
-      [PRIOR]: failedRoot(ROOT_SELECTION, { nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } } } }),
+      [PRIOR]: failedRoot(ROOT_SELECTION, { nodeStates: { plan: { status: "completed", startedAt: at, nodeType: "edit-plan", output: { json: {} } } } }),
       [HOP]: held(),
     })
     mocks.executions.push(row(HOP, HELD))
@@ -680,7 +680,7 @@ describe("the run in `next` finishes a scoped chain", () => {
     const stamp = stampOf()!
     // That run completed cut and cap, and failed at extra.
     byId({
-      [PRIOR]: failedRoot(ROOT_SELECTION, { nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } } } }),
+      [PRIOR]: failedRoot(ROOT_SELECTION, { nodeStates: { plan: { status: "completed", startedAt: at, nodeType: "edit-plan", output: { json: {} } } } }),
       [HOP]: held(),
       [NEWER]: source({
         id: NEWER,
@@ -691,8 +691,8 @@ describe("the run in `next` finishes a scoped chain", () => {
         inputOverrides: null,
         nodeStates: {
           plan: { status: "completed", nodeType: "edit-plan", output: { json: {} }, seededFromExecution: HOP },
-          cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/f.mp4", quality: "final" } },
-          cap: { status: "completed", nodeType: "add-captions", output: {} },
+          cut: { status: "completed", startedAt: at, nodeType: "apply-edl", output: { video: "https://r2.example/f.mp4", quality: "final" } },
+          cap: { status: "completed", startedAt: at, nodeType: "add-captions", output: {} },
           extra: { status: "failed", nodeType: "add-captions", error: "boom" },
         },
       }),
@@ -737,7 +737,7 @@ describe("a failure outside the scope survives a narrower hop (seed provenance)"
     const { continuationSeeds } = await import("../../services/workflow-engine/run-continuation.js")
     const root = failedRoot(ROOT_SCOPE, {
       nodeStates: {
-        a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" } },
+        a: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" } },
         b: { status: "failed", nodeType: "add-captions", error: "boom" },
       },
     })
@@ -751,7 +751,7 @@ describe("a failure outside the scope survives a narrower hop (seed provenance)"
       inputOverrides: null,
       nodeStates: {
         a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" }, seededFromExecution: PRIOR },
-        b: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
+        b: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
         x: { status: "failed", nodeType: "add-captions", error: "boom" },
         z: { status: "pending", nodeType: "add-captions" },
       },
@@ -767,7 +767,7 @@ describe("a failure outside the scope survives a narrower hop (seed provenance)"
       inputOverrides: null,
       nodeStates: {
         ...Object.fromEntries(seeds),
-        x: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/x.mp4" } },
+        x: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/x.mp4" } },
       },
     })
     return { root, g1, g2 }
@@ -835,7 +835,7 @@ describe("the credit check prices exactly what the run executes", () => {
       nodeStates: {
         ...failedSubsetStates(),
         a: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/a.mp4" }, seededFromExecution: PRIOR },
-        b: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
+        b: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/b.mp4" } },
         n: { status: "failed", nodeType: "add-captions", error: "boom" },
       },
     })
@@ -910,8 +910,8 @@ describe("the credit check prices exactly what the run executes", () => {
       continueFromFailed: DONE_STAMP,
       nodeStates: {
         ...(wideHop() as unknown as { nodeStates: Record<string, unknown> }).nodeStates,
-        c: { status: "completed", nodeType: "webhook-output", output: {} },
-        n: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/n.mp4" } },
+        c: { status: "completed", startedAt: at, nodeType: "webhook-output", output: {} },
+        n: { status: "completed", startedAt: at, nodeType: "add-captions", output: { video: "https://r2.example/n.mp4" } },
       },
     })
     byId({ [PRIOR]: failedRoot(SELECTION), [HOP]: done })
@@ -926,6 +926,257 @@ describe("the credit check prices exactly what the run executes", () => {
     expect(job().nodeIds).toEqual(["m"])
     expect(asked().runNodeIds).toEqual(["m"])
     expect((await asked().continuation!.source())?.id).toBe(HOP)
+  })
+})
+
+// A node named in nodeIds that never ran anywhere in the chain: each run only
+// handed it on from its saved data (a placeholder). It runs, and is priced —
+// explicit nodeIds always win. One that really ran is still refused as done.
+describe("a named node no run of the chain ever ran (the staging case: llm → jp → ct, run on [llm, jp])", () => {
+  const LINE = ["llm", "jp"]
+  const lineGraph = () => ({
+    nodes: [
+      { id: "llm", type: "add-captions", data: {} },
+      { id: "jp", type: "add-captions", data: {} },
+      { id: "ct", type: "add-captions", data: {} },
+    ],
+    edges: [
+      { id: "e1", source: "llm", target: "jp" },
+      { id: "e2", source: "jp", target: "ct" },
+    ],
+  })
+  /** Run 1, on [llm, jp], failed at jp: ct, outside it, handed on from its saved data (no start, no job, not seeded). */
+  const run1 = () =>
+    failedRoot(LINE, {
+      nodeStates: {
+        llm: { status: "completed", nodeType: "add-captions", jobId: "job-llm", startedAt: at, output: { video: "https://r2.example/llm.mp4" } },
+        jp: { status: "failed", nodeType: "add-captions", jobId: "job-jp", startedAt: at, error: "boom" },
+        ct: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/ct-saved.mp4" }, fromSavedData: true },
+      },
+    })
+  const DONE_STAMP = { from: PRIOR, root: PRIOR, seededFrom: PRIOR, all: true, scope: LINE }
+  /** Run 2, the plain resume of run 1: ran jp only, every other node seeded from run 1 by the real seeds. */
+  const run2 = async (strip?: (states: Record<string, Record<string, unknown>>) => void) => {
+    const { continuationSeeds } = await vi.importActual<typeof import("@/services/workflow-engine/run-continuation.js")>(
+      "@/services/workflow-engine/run-continuation.js",
+    )
+    const seeds = continuationSeeds(lineGraph().nodes as never, run1() as never, new Set(["jp"]))
+    const states = Object.fromEntries(seeds) as unknown as Record<string, Record<string, unknown>>
+    states.jp = { status: "completed", nodeType: "add-captions", jobId: "job-jp-2", startedAt: at, output: { video: "https://r2.example/jp.mp4" } }
+    strip?.(states)
+    return source({ id: NEWER, status: "completed", startedAt: at, continueFromFailed: DONE_STAMP, nodeSelection: null, inputOverrides: null, nodeStates: states })
+  }
+  const withRun2 = async (strip?: Parameters<typeof run2>[0]) => {
+    byId({ [PRIOR]: run1(), [NEWER]: await run2(strip) })
+    mocks.executions.push(row(NEWER, DONE_STAMP))
+  }
+
+  beforeEach(() => {
+    mocks.graphOverride = lineGraph()
+  })
+
+  it("the seeds the fixture builds on are the real ones: run 2 hands ct on completed, marked as never run, and llm unmarked", async () => {
+    const states = ((await run2()) as unknown as { nodeStates: Record<string, Record<string, unknown>> }).nodeStates
+    expect(states.ct).toMatchObject({ status: "completed", seededFromExecution: PRIOR, carriedPlaceholder: true })
+    expect(states.ct!.startedAt).toBeUndefined()
+    expect(states.ct!.jobId).toBeUndefined()
+    expect(states.llm).toMatchObject({ status: "completed", seededFromExecution: PRIOR })
+    expect(states.llm!.carriedPlaceholder).toBeUndefined()
+  })
+
+  it("run 3 names ct: it runs, built on run 2 (llm and jp seeded from it), and the chain stays done", async () => {
+    await withRun2()
+    const res = await fromFailed({ nodeIds: ["ct"] })
+    expect(res.statusCode).toBe(202)
+    expect(job().nodeIds).toEqual(["ct"])
+    expect(job().namedNodeIds).toEqual(["ct"])
+    expect(job().seedFromExecutionId).toBe(NEWER)
+    expect(job().reopenHead).toBe("done")
+    expect(res.json().continuedFrom).toBe(NEWER)
+    expect(stampOf()).toEqual({ from: PRIOR, root: PRIOR, seededFrom: NEWER, all: true, scope: LINE })
+  })
+
+  it("without the carried mark (a seed written before it existed) ct reads as completed: refused as done, as before", async () => {
+    await withRun2((states) => {
+      delete states.ct!.carriedPlaceholder
+    })
+    const res = await fromFailed({ nodeIds: ["ct"] })
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toMatchObject({ error: { code: "continuation_superseded" }, supersededBy: { executionId: NEWER, status: "completed" } })
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("the documented way round a seed without the mark: continue the newest completed run with nodeIds alone, and ct runs", async () => {
+    await withRun2((states) => {
+      delete states.ct!.carriedPlaceholder
+    })
+    const res = await run({ continueFromExecutionId: NEWER, nodeIds: ["ct"] })
+    expect(res.statusCode).toBe(202)
+    expect(job().nodeIds).toEqual(["ct"])
+    expect(job().continueMode).toBeUndefined()
+    expect(stampOf()).toMatchObject({ from: NEWER, root: PRIOR, seededFrom: NEWER, via: "subset" })
+  })
+
+  it("a named node that really completed is still refused as done: jp (run 2 ran it), llm (seeded from run 1, which ran it)", async () => {
+    await withRun2()
+    for (const named of [["jp"], ["llm"], ["llm", "jp"]]) {
+      const res = await fromFailed({ nodeIds: named })
+      expect(res.statusCode).toBe(409)
+      expect(res.json()).toMatchObject({ error: { code: "continuation_superseded" }, supersededBy: { executionId: NEWER, status: "completed" } })
+    }
+    expect(mocks.inserts).toEqual([])
+  })
+
+  it("a plain resume is unchanged: refused as done, ct never run", async () => {
+    await withRun2()
+    const res = await fromFailed()
+    expect(res.statusCode).toBe(409)
+    expect(res.json().supersededBy).toEqual({ executionId: NEWER, status: "completed" })
+    expect(mocks.inserts).toEqual([])
+  })
+
+  it("on run 1 itself (no later run): a plain resume runs only jp; naming ct runs jp (it needs it) and ct", async () => {
+    byId({ [PRIOR]: run1() })
+    const plain = await fromFailed()
+    expect(plain.statusCode).toBe(202)
+    expect(job().nodeIds).toEqual(["jp"])
+    expect(job().namedNodeIds).toBeUndefined()
+    expect(stampOf()!.all).toBe(true)
+
+    mocks.queueAdd.mockClear()
+    mocks.inserts.length = 0
+    const named = await fromFailed({ nodeIds: ["ct"] })
+    expect(named.statusCode).toBe(202)
+    expect(job().nodeIds).toEqual(["jp", "ct"])
+    expect(job().namedNodeIds).toEqual(["ct"])
+    expect(job().seedFromExecutionId).toBeUndefined()
+  })
+
+  it("a frozen node is never run by being named: it stays handed on, and nothing is left", async () => {
+    const g = lineGraph()
+    mocks.graphOverride = { nodes: g.nodes.map((n) => (n.id === "ct" ? { ...n, data: { skipped: true } } : n)), edges: g.edges }
+    await withRun2()
+    const res = await fromFailed({ nodeIds: ["ct"] })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("continuation_superseded")
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a node the run's own overrides freeze is judged as the orchestrator judges it: no work, never priced", async () => {
+    await withRun2()
+    const res = await fromFailed({ nodeIds: ["ct"], inputOverrides: { ct: { skipped: true } } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("continuation_superseded")
+    expect(renderFinalCredits).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  describe("the credit check prices the node that now runs", () => {
+    const asked = () => vi.mocked(renderFinalCredits).mock.calls[0]![0]
+    const priceOf = async (ids: readonly string[]) => {
+      const { CreditsService } = await vi.importActual<typeof import("@/ee/billing/credits.js")>("@/ee/billing/credits.js")
+      const g = lineGraph()
+      return CreditsService.estimateWorkflowBaseCredits(g.nodes as never, g.edges as never, { runNodeIds: new Set(ids) })
+    }
+    beforeEach(() => {
+      vi.mocked(renderFinalCredits).mockImplementation(mocks.realCredits)
+    })
+    afterEach(() => {
+      vi.mocked(renderFinalCredits).mockImplementation(async () => null)
+    })
+
+    it("ct is priced: a payer one credit short is refused with 402 before any row exists; with enough, it runs", async () => {
+      await withRun2()
+      const exact = await priceOf(["ct"])
+      expect(exact).toBeGreaterThan(0)
+      mocks.balance = exact - 1
+      const short = await fromFailed({ nodeIds: ["ct"] })
+      expect(short.statusCode).toBe(402)
+      expect(short.json().error).toMatchObject({ code: "insufficient_credits", required: exact })
+      expect(asked().runNodeIds).toEqual(["ct"])
+      expect(mocks.inserts).toEqual([])
+
+      vi.mocked(renderFinalCredits).mockClear()
+      mocks.balance = exact
+      const res = await fromFailed({ nodeIds: ["ct"] })
+      expect(res.statusCode).toBe(202)
+      expect(asked().runNodeIds).toEqual(job().nodeIds)
+      // Priced on the states the run is seeded from.
+      expect((await asked().continuation!.source())?.id).toBe(NEWER)
+    })
+  })
+})
+
+// Every id sent counts as named, but only a node the engine executes can be
+// run by being named. A source, a trigger or a parameter node is handed on in
+// every run (a placeholder by construction): named, it keeps its seed from
+// the earlier execution. A lottie node frozen by its `motionPlan` override is
+// seeded from that plan whatever the run set: named alone, nothing is left.
+describe("a named node the engine never executes is not taken for work", () => {
+  it("from_failed naming every node of a webhook run: only jp runs; the webhook and the picker stay seeded", async () => {
+    mocks.graphOverride = {
+      nodes: [
+        { id: "wh", type: "webhook-trigger", data: { params: [{ id: "p1", name: "clip", type: "videoUrl" }] } },
+        { id: "md", type: "mood", data: { mood: "calm" } },
+        { id: "jp", type: "add-captions", data: {} },
+      ],
+      edges: [
+        { id: "e1", source: "wh", target: "jp" },
+        { id: "e2", source: "md", target: "jp" },
+      ],
+    }
+    byId({
+      [PRIOR]: failedRoot(null, {
+        nodeStates: {
+          wh: { status: "completed", output: { videoUrl: "https://r2.example/hook.mp4" }, fromSavedData: true },
+          md: { status: "completed", output: { text: "calm" }, fromSavedData: true },
+          jp: { status: "failed", nodeType: "add-captions", jobId: "job-jp", startedAt: at, error: "boom" },
+        },
+      }),
+    })
+    const res = await fromFailed({ nodeIds: ["wh", "md", "jp"] })
+    expect(res.statusCode).toBe(202)
+    expect(job().nodeIds).toEqual(["jp"])
+    expect(job().namedNodeIds).toEqual(["jp"])
+  })
+
+  describe("a lottie node frozen by the earlier run's pinned motionPlan override", () => {
+    const lottieGraph = () => ({
+      nodes: [
+        { id: "mg", type: "motion-graphics", data: { motionPlan: { planType: "lottie-graphic" } } },
+        { id: "jp", type: "add-captions", data: {} },
+      ],
+      edges: [],
+    })
+    const root = (pin: Record<string, unknown> | null) =>
+      failedRoot(null, {
+        inputOverrides: pin,
+        nodeStates: {
+          // Seeded from its overridden plan, never generated: a placeholder.
+          mg: { status: "completed", output: { plan: { planType: "lottie-graphic" } }, fromSavedData: true },
+          jp: { status: "failed", nodeType: "add-captions", jobId: "job-jp", startedAt: at, error: "boom" },
+        },
+      })
+    beforeEach(() => {
+      mocks.graphOverride = lottieGraph()
+    })
+
+    it("naming only it leaves nothing to run: 409, never priced, no row", async () => {
+      byId({ [PRIOR]: root({ mg: { motionPlan: { planType: "lottie-graphic", slotValues: { title: "Hi" } } } }) })
+      const res = await fromFailed({ nodeIds: ["mg"] })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("continuation_subset_required")
+      expect(renderFinalCredits).not.toHaveBeenCalled()
+      expect(mocks.inserts).toEqual([])
+    })
+
+    it("without the override it is a node of work no run ever ran: named, it runs", async () => {
+      byId({ [PRIOR]: root(null) })
+      const res = await fromFailed({ nodeIds: ["mg"] })
+      expect(res.statusCode).toBe(202)
+      expect(job().nodeIds).toEqual(["mg"])
+      expect(job().namedNodeIds).toEqual(["mg"])
+    })
   })
 })
 

@@ -82,8 +82,13 @@ export interface UpdateWorkflowInput {
 export interface RunWorkflowParams {
   /**
    * Optional subset of node IDs to execute. Omit to run the full workflow.
-   * With `continueMode: "from-failed"`, the nodes to consider (default: every
-   * node); the run executes only those the failed run did not complete.
+   * With `continueMode: "from-failed"`, the nodes to consider (default: the
+   * nodes the run's chain was first started on, plus every node left failed or
+   * held back; see `continueMode`); the run executes only those the failed run
+   * did not complete. Every id sent counts as named: a node of work no run of
+   * the chain ever ran (each only handed on its saved results) runs and is
+   * priced, while a source, trigger, parameter picker or container keeps what
+   * the run handed on and a node set to skip never runs.
    */
   nodeIds?: string[]
   /**
@@ -131,7 +136,9 @@ export interface RunWorkflowParams {
    * again in full, every list item included. When a later continuation of it
    * completed only part of what it left (a narrower `nodeIds`), the run builds
    * on the newest such one: it is seeded from that run and runs only what is
-   * still left ({@link RunWorkflowResult.continuedFrom} names it). A Render
+   * still left ({@link RunWorkflowResult.continuedFrom} names it). A node
+   * `nodeIds` names that no run of the chain ever ran runs too, and is priced
+   * (see `nodeIds`). A Render
    * final, or a run of named nodes, continuing the newest of those counts as
    * one of them too. Not combinable with {@link renderFinal}. Refused with
    * `continuation_not_failed` (409) for a run that did not fail,

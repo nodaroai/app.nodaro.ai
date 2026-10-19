@@ -285,7 +285,7 @@ export function workflowsCommand(): Command {
     )
     .option(
       "--from-failed",
-      "with --continue-from: resume that FAILED run from where it stopped — runs only what it did not complete (of --node; default: the nodes its chain was first started on, every node for a full run, plus what it left failed)",
+      "with --continue-from: resume that FAILED run from where it stopped — runs only what it did not complete (of --node; default: the nodes its chain was first started on, every node for a full run, plus what it left failed), and each --node no run of its chain ever ran (charged; never a source, trigger or skipped node)",
     )
     .option(
       "--override <pairs...>",

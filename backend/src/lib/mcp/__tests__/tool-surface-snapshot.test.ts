@@ -995,6 +995,16 @@ const RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES = 776
 // before is carried across. The rules live in docs/api-integration.md.
 const RUN_WORKFLOW_NODE_IDS_BYTES = 427
 
+// RAISED 2026-10-19 by run_workflow's node list, and nothing else. No tool was
+// added, so the fixture does NOT move. `node_ids`'s description gains one clause
+// (with from_failed, a named node of work no run of its chain ever ran runs too,
+// and is charged; never a source, trigger or skipped node), and `from_failed`'s
+// one more (plus any node_ids no run of its chain ever ran). Measured by this
+// suite on the same tree with and without the change: 446_349 total − 446_173 =
+// 176 B; the 27 B of headroom the list had before is carried across. The rules
+// live in docs/api-integration.md.
+const RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES = 176
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1111,7 +1121,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDU_Q4_MODEL_ENUM_BYTES +
     GEMINI_4_ARGON_ID_BYTES +
     RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES +
-    RUN_WORKFLOW_NODE_IDS_BYTES,
+    RUN_WORKFLOW_NODE_IDS_BYTES +
+    RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

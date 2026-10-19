@@ -814,10 +814,25 @@ plus every node left failed or held back (by the run, by a newer continuation it
 is built on, or by an earlier run of its chain). `nodeIds` you send replace
 those nodes, and the run is built on the chain's newest continuation when it
 failed or is done (one held at a Preview review still throws
-`continuation_preview_pending`, below). `client.executions.get(id)` names the nodes the chain's first run was
-started on in `nodeScope` (`null`: every node). The run executes only the nodes
-that run did not complete — what it completed is handed on, never run or
-charged again. That is per node: a node that failed runs again in full, every list item
+`continuation_preview_pending`, below). Every id in `nodeIds` counts as
+named: a node you name that no run of the chain ever ran (each only handed on
+its saved results, the node being outside its `nodeIds`) runs and is priced,
+and one that ran in any of them is never run again by naming it. A node no run
+executes is the exception: a source or upload, a trigger, a parameter picker
+or a Group / Collect container hands on what the run handed on, and a node set
+to skip (in the workflow or by `inputOverrides`) is never run, nor is a Lottie
+Motion Graphics node whose plan the overrides set. A chain one of
+whose continuations ran before this rule was recorded hands such a node on as
+completed, so naming it there still counts it as done: naming only such nodes
+is refused as done, and one named next to a node that failed is left out of the
+run. To run it, continue the chain's newest run with `nodeIds` alone (no
+`continueMode`) — only when that run completed, and then exactly those nodes
+run. When the newest run failed, finish the chain first (continue from the
+failure without that node), then continue that completed run with `nodeIds`
+alone. `client.executions.get(id)` names the nodes the chain's first run was
+started on in `nodeScope` (`null`: every node). Of the rest, the run executes
+only the nodes that run did not complete — what it completed is handed on,
+never run or charged again. That is per node: a node that failed runs again in full, every list item
 included (a few nodes reuse an identical item they already made). Not combinable
 with `renderFinal`.
 
