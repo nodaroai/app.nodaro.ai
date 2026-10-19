@@ -118,6 +118,22 @@ describe("never served from KIE", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it("the stream twin refuses up front too: an open latch or an empty key — no SDK stream, no KIE request", async () => {
+    const { llmStream } = await import("../llm-client.js")
+    latchDirectLaneExhausted({ provider: "anthropic", kind: "billing", detail: "refused" })
+    const onToken = vi.fn()
+    const err = await llmStream(advanced(), onToken).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(LlmAdvancedModeUnavailableError)
+    expect(llmErrorCode(err)).toBe("advanced_mode_unavailable")
+    __resetPlatformExhaustionAlerts()
+    cfg.ANTHROPIC_API_KEY = "  "
+    await expect(llmStream(advanced(), onToken)).rejects.toBeInstanceOf(LlmAdvancedModeUnavailableError)
+    expect(sdk.stream).not.toHaveBeenCalled()
+    expect(sdk.create).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(onToken).not.toHaveBeenCalled()
+  })
+
   it("the streamed structured attempt refuses too", async () => {
     sdk.stream.mockImplementation(() => {
       throw drained()

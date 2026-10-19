@@ -11,6 +11,8 @@ export interface ExposableQuickFieldSpec {
   readonly values: ReadonlyArray<string | number | boolean>
   /** The same list whatever else the node is set to: a run is held to it. A provider-aware list is not. */
   readonly fixed: boolean
+  /** Values the field still takes but no longer offers (a retired model): a run naming one is accepted, nothing advertises it. */
+  readonly retained?: ReadonlyArray<string | number | boolean>
   /** A numeric field that also takes any value in this range. */
   readonly min?: number
   readonly max?: number
@@ -19,7 +21,7 @@ export interface ExposableQuickFieldSpec {
 /** Node type → app field derived from a quick-strip control → what it takes. */
 export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<string, ExposableQuickFieldSpec>>>> = {
   "3d-title": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "ai-avatar": {
@@ -39,20 +41,20 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "duration": { valueType: "number", fixed: false, values: [4,5,6,7,8,9,10,11,12,13,14,15] },
   },
   "content-ideas": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
   },
   "content-recipe": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
   },
   "describe-to-picker": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "dubbing": {
     "targetLanguage": { valueType: "string", fixed: true, values: ["af","ar","bg","bn","ca","cs","da","de","el","en","es","et","fa","fi","fil","fr","he","hi","hr","hu","id","is","it","ja","ka","ko","lt","lv","ms","nl","no","pl","pt","ro","ru","sk","sr","sv","sw","ta","th","tr","uk","ur","vi","zh"] },
   },
   "edit-3d-scene": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "face-swap": {
@@ -61,7 +63,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
   "generate-3d-scene": {
     "aspectRatio": { valueType: "string", fixed: true, values: ["16:9","1:1","4:5","9:16"] },
     "durationSeconds": { valueType: "number", fixed: true, min: 1, max: 60, values: [2,4,6,8,10,15,20,30] },
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "generate-image": {
@@ -74,7 +76,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "provider": { valueType: "string", fixed: true, values: ["minimax"] },
   },
   "generate-script": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "generate-video": {
@@ -89,11 +91,11 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "resolution": { valueType: "string", fixed: true, values: ["2K","4K"] },
   },
   "image-critic": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "image-to-text": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "mask-composite": {
@@ -101,14 +103,14 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "backgroundFit": { valueType: "string", fixed: true, values: ["contain","cover","stretch"] },
   },
   "motion-graphics": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "motion-transfer": {
     "provider": { valueType: "string", fixed: true, values: ["kling","kling-3.0","wan-animate-move","wan-animate-replace"] },
   },
   "qa-check": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "reference-board": {

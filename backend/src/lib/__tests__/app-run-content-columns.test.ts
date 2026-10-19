@@ -48,6 +48,13 @@ const KEPT_RUN_RECORD_COLUMNS = [
   // The run's Render final (473): the id of a server-written execution, whose
   // media the harvest reaches through it, not content the runner supplied.
   "final_execution_id",
+  // What the run is counted as in its app's analytics (538): a day, an
+  // outcome, a server-written execution id and a credit figure, none of it
+  // content the runner supplied.
+  "analytics_counted_on",
+  "analytics_outcome",
+  "analytics_execution_id",
+  "analytics_execution_credits",
 ]
 
 describe("migration column reader", () => {

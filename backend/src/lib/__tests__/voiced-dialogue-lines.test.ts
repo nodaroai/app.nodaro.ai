@@ -1,3 +1,4 @@
+// @test-units-by-name asserts only the dialogue credit ids it names (getModelCreditBaseCost is mocked)
 /**
  * One reading of "which lines will a voiced-video run voice, and on which
  * model" for the generate-video route's reservation and the worker's synthesis

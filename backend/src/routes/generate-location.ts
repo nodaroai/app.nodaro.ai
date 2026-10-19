@@ -1,3 +1,4 @@
+// @registry-enumerates prices the model identifiers it is given (getModelCreditBaseCost, CreditsService) — credit ids, not node types, so not a @registry-lookup
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"

@@ -30,7 +30,7 @@ Refused before anything is charged: a longer recording (when its length can be r
 | Handle | Type | Description |
 |---|---|---|
 | Trailers (`media`) | Video (a list) | One trailer per chosen format, in the order 9:16, 1:1, 4:5, 16:9. On an **Each** wire (the default) the next node runs once per format; on a **Last** wire it reads the first chosen format that rendered. |
-| Edit (EDL) (`json`) | EDL | The trailer's edit plan: the EDL the trailer was cut from, with your review edits applied. |
+| Edit (EDL) (`json`) | EDL | The trailer's edit plan: the EDL the trailer was cut from, with your review edits applied. Wired into a text or prompt input, it lands there as its JSON text, in the editor as in a server run. It is JSON, not media: it does not connect to an input that takes only audio, video or images (wire **Trailers** there). |
 
 The node shows one chip per format; click a chip to show that format's trailer.
 

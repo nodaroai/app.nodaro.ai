@@ -9572,8 +9572,11 @@ export interface AppRunResumePlan {
   readonly estimatedCredits: number | null
   /** Clips the failed run finished that the Retry hands back at no cost. */
   readonly reusedClips: number
+  /** Whether the balance and the runner's app credits cover it; null without credits. */
   readonly sufficient: boolean | null
   readonly available: number | null
+  /** Present only when the runner's app credits are what stops it. */
+  readonly appCreditsAllowance?: number
 }
 
 /**

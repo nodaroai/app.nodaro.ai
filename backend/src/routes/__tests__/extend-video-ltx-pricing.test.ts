@@ -1,3 +1,4 @@
+// @test-units-by-name prices only the extend-video and video-retake nodes it names
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 

@@ -70,6 +70,15 @@ off, they run on the preview in the run itself, and are charged, and run
 again at Render final, as after an Apply EDL preview. A Tighten Episode that
 runs once per list item has no Render final.
 
+A [Clip Pack](./nodes/processing-video/clip-pack.md#review-before-render) with
+**Review before render** on works the same way: a run on the app's page
+stops at a preview of each clip, its card shows the previews with a
+**Render final** button, whatever the flag, and Render final renders every
+clip at full quality and captions each, with the settings the previews were
+made with, then runs the nodes after it. The app's page has no review
+inspector, so every clip is rendered. It is not charged the Clip Pack fee
+again.
+
 - **The render's card** shows the preview with the **Preview** label, and a
   **Render final** button with its price. Render final asks before it starts
   (`Render final · ≈530 credits`). It renders the cut at full quality and then

@@ -202,6 +202,7 @@ gen:skills could not get past that throw to rewrite the table itself.
 | `central-mentions.json` | Reasoned exceptions to G2 (a unit's type id named outside its folders) — only shrinks. |
 | `__fixtures__/tree/` | The fixture units `fixture-echo` (every optional file, every seam) and `fixture-case` (a use-case unit, with its own `use-case-specs.ts`), used by the generator and guard tests. |
 | `__fixtures__/use-case-output-shapes.json` | The saved shapes a use-case node's output is read from; both engines' `use-case-unit-output-parity` tests walk them. |
+| `__fixtures__/use-case-engine-parity.json` | What a use-case node hands on from those shapes — its pips, a plan wire into text inputs, the JSON consumers, the Each fan-out and the item modes — pinned once and held on both engines by the `use-case-engine-parity` tests. |
 
 ## Seams go live one at a time
 

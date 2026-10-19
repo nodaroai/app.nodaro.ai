@@ -2,6 +2,7 @@
 // @registry frontend/src/nodes/*/option.tsx
 // @registry-exports options: UNIT_OPTIONS
 import type { UnitOption } from "../kit"
+import { option as unit_clip_pack } from "../clip-pack/option" // unit:clip-pack
 import { option as unit_episode_chapters } from "../episode-chapters/option" // unit:episode-chapters
 import { option as unit_episode_trailer } from "../episode-trailer/option" // unit:episode-trailer
 import { option as unit_gif_to_video } from "../gif-to-video/option" // unit:gif-to-video
@@ -9,6 +10,7 @@ import { option as unit_remove_audio } from "../remove-audio/option" // unit:rem
 import { option as unit_tighten_episode } from "../tighten-episode/option" // unit:tighten-episode
 
 export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(Object.create(null), {
+  "clip-pack": unit_clip_pack, // unit:clip-pack
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video

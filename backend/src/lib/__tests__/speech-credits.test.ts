@@ -1,3 +1,4 @@
+// @test-units-by-name asserts only the speech credit ids it names (getModelCreditBaseCost is mocked)
 /**
  * One character count for every speech seam: what the worker SENDS — clamped
  * to the cap of the model the request runs as (the route clamps first,

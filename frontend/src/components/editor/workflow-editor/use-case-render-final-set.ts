@@ -22,12 +22,14 @@
  * app runner's Render final, so the two cannot send different runs.
  */
 import { withRunOverrides } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, usecaseFinalRunSet, usecaseRenderFinalOverrides, type UseCaseRenderFinalTarget } from "@nodaro/render-rules"
-import { usecaseRunSettings, usecaseTakeOnShow } from "@/lib/use-case-run-result"
-import { isValidUuid } from "@/lib/uuid"
+import { usecaseFinalRunSet, usecaseRenderFinalOverrides } from "@nodaro/render-rules"
+import { usecaseRenderFinalTarget } from "@/lib/use-case-render-final-target"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { getListFanOutForNode } from "./node-input-resolver"
 import { liveExecutable } from "./run-from-here-set"
+
+// Which run a Render final continues is decided below the UI (the review's footer reads it too).
+export { usecaseRenderFinalOffered, usecaseRenderFinalTarget } from "@/lib/use-case-render-final-target"
 
 type Overrides = Readonly<Record<string, Readonly<Record<string, unknown>>>>
 
@@ -45,36 +47,6 @@ export interface UseCaseRenderFinalRun {
 /** A use-case node fed by a list (one run per item): Continue and Render final cannot name one run. */
 export function usecaseListDriven(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): boolean {
   return getListFanOutForNode(node, nodes, edges) !== undefined
-}
-
-/** A node status in which a run of the node is under way: Render final waits for it. */
-const BUSY: ReadonlySet<string> = new Set(["running", "pending", "stopping"])
-
-/** The Preview on show's own run (a real wrapper job, never a synthetic `exec-…` id) and its settings. */
-function previewTakeRun(node: Pick<WorkflowNode, "type" | "data"> | undefined): UseCaseRenderFinalTarget | undefined {
-  if (!node || !isUseCaseNodeType(node.type)) return undefined
-  const data = (node.data ?? {}) as Readonly<Record<string, unknown>>
-  // A failed node offers Continue instead — never both.
-  if (data.executionStatus === "failed") return undefined
-  const take = usecaseTakeOnShow(data)
-  if (take?.quality !== "proxy" || typeof take.jobId !== "string" || !isValidUuid(take.jobId)) return undefined
-  const settings = usecaseRunSettings(data)
-  return { jobId: take.jobId, ...(settings ? { settings } : {}) }
-}
-
-/** Render final is offered on `node` (it may still wait for a run under way: the bar shows it busy). */
-export function usecaseRenderFinalOffered(node: Pick<WorkflowNode, "type" | "data"> | undefined): boolean {
-  return previewTakeRun(node) !== undefined
-}
-
-/**
- * The run a Render final of `node` continues NOW: the wrapper of the take on
- * show when that take is a Preview, with the settings that run was built from.
- * Undefined when there is none to continue, or while a run of the node is under way.
- */
-export function usecaseRenderFinalTarget(node: Pick<WorkflowNode, "type" | "data"> | undefined): UseCaseRenderFinalTarget | undefined {
-  if (BUSY.has(String((node?.data as { executionStatus?: unknown } | undefined)?.executionStatus ?? ""))) return undefined
-  return previewTakeRun(node)
 }
 
 /** Render final of use-case node `nodeId`, as it would run now; null when it has none. */

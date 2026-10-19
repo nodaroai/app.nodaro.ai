@@ -11,6 +11,14 @@
  * 2. The nodes it RUNS (`fromFailedClosedRunSet`): those of (1) the run it is
  *    seeded from did not complete, closed over the incomplete nodes they need
  *    upstream.
+ *
+ * What counts as completed (`completedFor`) is one rule too: a `completed`
+ * state, except — for a node the caller NAMED in `nodeIds` — one that is only
+ * a placeholder (`isPlaceholder`): a node no run of the chain ever ran, which
+ * each run only handed on from its saved data. A named node like that runs
+ * (explicit `nodeIds` always win). Unnamed, a placeholder still counts as
+ * completed, so a run sent no `nodeIds`, and every node a run reads from
+ * saved data upstream of the ones it runs, behaves as before.
  */
 import { ancestorsOf, type WalkEdge } from "./graph-walk"
 import { bypassTeleports } from "./teleport-bypass"
@@ -20,6 +28,14 @@ export interface FromFailedNodeState {
   readonly status?: unknown
   /** A seed of a node the run it was seeded from left unfinished (`continuationSeeds`). */
   readonly carriedUnfinished?: unknown
+  /** When the run started the node: only a node it ran has one. */
+  readonly startedAt?: unknown
+  /** The job the run ran for the node, when it ran one. */
+  readonly jobId?: unknown
+  /** The state is a seed: the execution it was handed on from. */
+  readonly seededFromExecution?: unknown
+  /** A seed of a placeholder (`isPlaceholder`): the run it was seeded from never ran the node either (`continuationSeeds`). */
+  readonly carriedPlaceholder?: unknown
 }
 
 /** A run's `node_states`, as the rule reads them. */
@@ -50,6 +66,31 @@ export function isUnfinished(state: FromFailedNodeState | undefined): boolean {
 }
 
 /**
+ * Is this state only a placeholder — `completed` without the node ever having
+ * run anywhere in the chain? A run writes such a state for a node it hands on
+ * from its saved data (one outside its `nodeIds`, a frozen one, a source):
+ * it has no start time and no job. A seed has neither either, so a seed is a
+ * placeholder only when it carries the mark (`carriedPlaceholder`) that the
+ * state it was seeded from was one. A seed written before the mark existed
+ * reads as a node that ran.
+ */
+export function isPlaceholder(state: FromFailedNodeState | undefined): boolean {
+  if (state?.status !== "completed") return false
+  if (state.startedAt || state.jobId) return false
+  return !state.seededFromExecution || state.carriedPlaceholder === true
+}
+
+/**
+ * Does a continue-from-failed count this node as completed — handed on, never
+ * run or charged again? A `completed` state does, unless the caller named the
+ * node (`named`) and the state is only a placeholder (`isPlaceholder`): then
+ * it runs.
+ */
+export function completedFor(state: FromFailedNodeState | undefined, named: boolean): boolean {
+  return state?.status === "completed" && !(named && isPlaceholder(state))
+}
+
+/**
  * The nodes a continue-from-failed sent no `nodeIds` considers, in `order`:
  * every node when the lineage has no scope (`null`), otherwise the scope plus
  * what each of `runs` — the run asked for, and the newer one it builds on —
@@ -69,10 +110,17 @@ export function fromFailedConsidered(
 
 /**
  * The nodes a continue-from-failed run executes: every one of `nodeIds` the
- * run it is seeded from did not complete, in the order given.
+ * run it is seeded from did not complete (`completedFor`: a node of `named`,
+ * the ids the caller sent, that was only ever a placeholder is not complete),
+ * in the order given.
  */
-export function fromFailedRunSet(nodeIds: readonly string[], source: FromFailedRun): string[] {
-  return nodeIds.filter((id) => source.nodeStates?.[id]?.status !== "completed")
+export function fromFailedRunSet(
+  nodeIds: readonly string[],
+  source: FromFailedRun,
+  named: Iterable<string> = [],
+): string[] {
+  const ids = new Set(named)
+  return nodeIds.filter((id) => !completedFor(source.nodeStates?.[id], ids.has(id)))
 }
 
 /**
@@ -82,7 +130,9 @@ export function fromFailedRunSet(nodeIds: readonly string[], source: FromFailedR
  * either, reached through such nodes only (a completed node hands on its seed,
  * so nothing above it is needed). Without the closure a narrow `nodeIds` would
  * run a node on an upstream that never produced anything. Wires as the
- * orchestrator reads them (a Teleport pair bypassed). In `order`.
+ * orchestrator reads them (a Teleport pair bypassed). In `order`. `named`: the
+ * ids the caller sent (`fromFailedRunSet`); a placeholder upstream that is not
+ * among them hands on its saved data, as it did, and is never added.
  */
 export function fromFailedClosedRunSet(
   order: readonly string[],
@@ -92,9 +142,11 @@ export function fromFailedClosedRunSet(
     readonly edges: ReadonlyArray<WalkEdge>
   },
   source: FromFailedRun,
+  named: Iterable<string> = [],
 ): string[] {
-  const remaining = fromFailedRunSet(nodeIds, source)
-  const completed = (id: string) => source.nodeStates?.[id]?.status === "completed"
+  const ids = new Set(named)
+  const remaining = fromFailedRunSet(nodeIds, source, ids)
+  const completed = (id: string) => completedFor(source.nodeStates?.[id], ids.has(id))
   // Only wires out of a node that did not complete lead further up.
   const open = bypassTeleports(graph.nodes, graph.edges).filter((e) => !completed(e.source))
   const run = new Set(remaining)

@@ -146,4 +146,15 @@ describe("TightenEpisodeConfig", () => {
     await userEvent.click(screen.getByRole("switch", { name: t("proccfg.tightenReview") }))
     expect(onUpdate).toHaveBeenCalledWith({ reviewBeforeRender: true })
   })
+
+  it("the panel only snaps an audio-wired node, in one write; giving settings back is the store's (lib/__tests__/use-case-audio-lock.test.ts)", () => {
+    const onUpdate = vi.fn()
+    renderConfig({
+      data: { output: "audio", captions: false, settingsBeforeAudio: { output: "video", captions: true } },
+      onUpdate,
+      nodes: [{ id: "rec", type: "upload-video", data: {} }],
+      edges: [{ id: "e", source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" }],
+    })
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
 })

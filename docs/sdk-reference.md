@@ -479,7 +479,7 @@ try {
 ### `class ContinuationRefusedError extends NodaroError`
 
 HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode,
-Chapters or Trailer run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+Chapters, Trailer or Clip Pack run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
 `already_running` (a continuation is under way, or one that already
 completed — follow `jobId`), `continuation_superseded` (a later continuation
 of that run failed too —
@@ -492,6 +492,39 @@ with this very edit already completed — `jobId` holds its result).
 
 Selected for exactly those three codes when the 409 carries a top-level
 `jobId` string; every other 409 stays a plain `NodaroError`.
+
+### `class AlreadyRunningError extends NodaroError`
+
+HTTP 409 `already_running` that names the execution under way: the run you
+asked to start or continue is still running. Follow `executionId`
+(`client.executions.get`) instead of starting it again. Sent by
+`workflows.run` and by an app run's Retry
+([`apps.resume`](#resumeslug-runid-opts)).
+
+- `executionId: string` — the execution under way
+- `code = "already_running"`; `status = 409`
+- **Constructor:** `new AlreadyRunningError(message: string, executionId: string)`
+
+Selected when the 409 carries a top-level `executionId` string. One that
+names a job (`jobId`) is a [`ContinuationRefusedError`](#class-continuationrefusederror-extends-nodaroerror);
+one that names nothing stays a plain `NodaroError`.
+
+### `class AppRunVersionChangedError extends NodaroError`
+
+HTTP 409 `app_run_version_changed`: a Retry of a failed app run
+([`apps.resume`](#resumeslug-runid-opts)) was refused because the app is on
+another version than the one the run ran, and continuing would mix the two.
+Nothing was written or billed. Start the run over with `apps.run` to run the
+app's version, or send `{ version: err.runVersion }` to continue on the run's
+own version.
+
+- `runVersion?: number` — the version the run ran
+- `appVersion?: number` — the version you are on (the `version` you sent, else the app's latest)
+- `code = "app_run_version_changed"`; `status = 409`
+- **Constructor:** `new AppRunVersionChangedError(message: string, runVersion?: number, appVersion?: number)`
+
+Selected by code; the two numbers are `undefined` when the answer does not
+carry them.
 
 ### `class StudioPreviewUnavailable extends NodaroError`
 
@@ -743,7 +776,10 @@ Starts an execution and returns immediately with `{ executionId, status }`.
 `options.idempotencyKey` is sent as the `Idempotency-Key` header (at least 8
 characters; a shorter one is ignored): retry a request with the same key and it
 answers the run it already started (`deduped: true`) instead of starting a
-second one.
+second one. While a run of this workflow is still under way, a new one is
+refused with `409 already_running`, thrown as an
+[`AlreadyRunningError`](#class-alreadyrunningerror-extends-nodaroerror) whose
+`executionId` is the run to follow.
 Optionally restrict to a subset of node IDs, and pass `inputOverrides` —
 nested `{ nodeId: { field: value } }` node data for THIS run, shallow-merged
 over each node's saved data (the overridden node's saved results are not
@@ -764,7 +800,7 @@ sets the render to Final
 await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
 
-A node with Review before render on (Tighten Episode, Trailer) is refused the same way
+A node with Review before render on (Tighten Episode, Trailer, Clip Pack) is refused the same way
 (turn its review off for such runs). A failed execution records what held it:
 `preview_review_required` / `preview_render_nested` for a render,
 `preview_review_required_review_on` / `preview_render_nested_review_on` for a review-on
@@ -773,7 +809,7 @@ with `isPreviewRefusalCode(code)` from `@nodaro/shared`, never one code. Where t
 off, such a run is not refused up front: the nodes before the review-on node run and are
 charged, and the node then fails with `preview_review_required` (nothing charged for it).
 Whatever the flag, a review-on Tighten Episode fed by a List is refused with
-`use_case_review_list_driven`, and a Trailer fed by a List (review on or off) with
+`use_case_review_list_driven`, and a Trailer or a Clip Pack fed by a List (review on or off) with
 `use_case_list_driven`.
 
 `continueFromExecutionId` continues an earlier execution of the workflow — your
@@ -814,10 +850,25 @@ plus every node left failed or held back (by the run, by a newer continuation it
 is built on, or by an earlier run of its chain). `nodeIds` you send replace
 those nodes, and the run is built on the chain's newest continuation when it
 failed or is done (one held at a Preview review still throws
-`continuation_preview_pending`, below). `client.executions.get(id)` names the nodes the chain's first run was
-started on in `nodeScope` (`null`: every node). The run executes only the nodes
-that run did not complete — what it completed is handed on, never run or
-charged again. That is per node: a node that failed runs again in full, every list item
+`continuation_preview_pending`, below). Every id in `nodeIds` counts as
+named: a node you name that no run of the chain ever ran (each only handed on
+its saved results, the node being outside its `nodeIds`) runs and is priced,
+and one that ran in any of them is never run again by naming it. A node no run
+executes is the exception: a source or upload, a trigger, a parameter picker
+or a Group / Collect container hands on what the run handed on, and a node set
+to skip (in the workflow or by `inputOverrides`) is never run, nor is a Lottie
+Motion Graphics node whose plan the overrides set. A chain one of
+whose continuations ran before this rule was recorded hands such a node on as
+completed, so naming it there still counts it as done: naming only such nodes
+is refused as done, and one named next to a node that failed is left out of the
+run. To run it, continue the chain's newest run with `nodeIds` alone (no
+`continueMode`) — only when that run completed, and then exactly those nodes
+run. When the newest run failed, finish the chain first (continue from the
+failure without that node), then continue that completed run with `nodeIds`
+alone. `client.executions.get(id)` names the nodes the chain's first run was
+started on in `nodeScope` (`null`: every node). Of the rest, the run executes
+only the nodes that run did not complete — what it completed is handed on,
+never run or charged again. That is per node: a node that failed runs again in full, every list item
 included (a few nodes reuse an identical item they already made). Not combinable
 with `renderFinal`.
 
@@ -1130,7 +1181,8 @@ session there, then `removeItem` from the old one. `sessionId` and `origin`
 the platform stamps them on the job whatever the route — and are typed on every
 generation params type: `GenerateImageParams`, `GenerateVideoParams`,
 `TextToVideoParams`, `TextToSpeechParams`, `VideoUpscaleParams`,
-`VideoDepthParams`, `AssembleNarratedVideoParams`, the 3D scene params and the
+`VideoDepthParams`, `AssembleNarratedVideoParams`, `ImageToImageParams`,
+`EditImageParams`, `GenerateMaskParams`, the 3D scene params and the
 character / object / location / creature `generate*` inputs. An `origin` that
 is not a slug (lowercase letters, digits and dashes, at most 40) is refused with
 a `400 validation_error` on every route. `GenerateImageParams` also types
@@ -2239,6 +2291,60 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > assembles in the hybrid reference format. See the
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
 > model.
+
+> **Typed image routes.** `image-to-image`, `edit-image`, `split-image` and
+> `generate-mask` have typed overloads on `run` (and, for the three that start a
+> job, on `runAndWait`), with the params types `ImageToImageParams`,
+> `EditImageParams`, `SplitImageParams` and `GenerateMaskParams`. Each takes
+> the platform's own vocabularies (`ModifyImageProvider`, `ImageEditProvider`,
+> `ImageAspectRatio`, `ImageResolution`, …, re-exported from the SDK); any
+> other route field still passes through.
+>
+> The compile-time check applies when the body is typed as the params type —
+> `const params: EditImageParams = …`, or `{ … } satisfies EditImageParams`
+> inline. A body written straight into the call that the typed overload rejects
+> (a missing `prompt`, an unknown `resolution`, `taskId` on `recraft-upscale`)
+> still compiles: it falls through to the untyped `run(type: string, …)`
+> overload and resolves the untyped `RunNodeResult` (on `runAndWait`, the
+> generic overload's output), and the route answers `400`. Use `satisfies` to
+> get the check.
+>
+> - `run("image-to-image" | "edit-image" | "generate-mask", …)` answers
+>   `ImageJobStarted` — `{ jobId: string; adjustments? }` — so `result.jobId`
+>   needs no cast. `ImageToImageParams` requires `imageUrl` and `prompt`; its
+>   `maskUrl` is sent to the model as its own mask, so only `ideogram-edit` and
+>   `flux-fill` use it.
+> - `EditImageParams` is one of two forms: `imageUrl` for every provider except
+>   the Grok task ops, or `taskId` plus `provider: "grok-upscale" | "grok-2-edit"
+>   | "grok-2-segment"` (a prior Grok generation's task id, its job's
+>   `output_data.kieTaskId`). A body typed as `EditImageParams` that sends both,
+>   or a `taskId` on another provider, does not compile. The provider defaults
+>   to `recraft-upscale`; `prompt` is required for `nano-banana-edit` and
+>   `grok-2-edit` (a `400` without one); `maskIndexes` is for `grok-2-edit` only.
+> - `split-image` is free and synchronous: it creates no job, so `runAndWait`
+>   does not apply (it would throw — the answer has no `jobId`). `run` answers
+>   `SplitImageResult` — `{ images: { name, url }[] }`, one PNG per tile, in
+>   `names` order. `names` must hold exactly `gridCols × gridRows` entries
+>   (`gridCols` and `gridRows` each 1–6).
+> - `generate-mask` (`POST /v1/generate-mask`) is the SDK's one way to start a
+>   Generate Mask job: `GenerateMaskParams` is `@nodaro/shared`'s `GenerateMaskRequest` plus the
+>   session fields, and `runAndWait("generate-mask", …)` resolves
+>   `GenerateMaskJobOutput` — `NodeJobOutput & GenerateMaskOutput`: `maskUrl`,
+>   the mask PNG (white = the subject), and `imageUrl`, the source passed
+>   through unchanged.
+> - Inpaint on `generate-image`: `GenerateImageParams.baseImageUrl` +
+>   `maskUrl` (white = the area to change). Every image model can inpaint: the
+>   result's masked area is composited back over the base, and on the models
+>   whose `IMAGE_MASK_MODE` is `"prompt"` the area's position is also written
+>   into the prompt. `strength` and `guidanceScale` are typed there too.
+>
+> ```ts
+> import type { EditImageParams, GenerateImageParams, GenerateMaskParams } from "@nodaro/sdk"
+>
+> const { maskUrl } = await client.nodes.runAndWait("generate-mask", { imageUrl, prompt: "the red car" } satisfies GenerateMaskParams)
+> await client.nodes.runAndWait("generate-image", { prompt: "a blue car", baseImageUrl: imageUrl, maskUrl } satisfies GenerateImageParams)
+> const { jobId } = await client.nodes.run("edit-image", { imageUrl, provider: "topaz-image-upscale", upscaleFactor: "4" } satisfies EditImageParams)
+> ```
 
 > **Seedance 2.5 Draft.** `GenerateVideoParams` and `TextToVideoParams` take
 > `draft?: boolean`: on `seedance-2-5` the run is a 480p draft (any `resolution`
@@ -4226,6 +4332,80 @@ getRun(slug: string, runId: string): Promise<{ data: AppRun }>
 ```
 
 List past runs for an app, or fetch one run by id.
+
+#### `resume(slug, runId, opts?)`
+
+```ts
+resume(slug: string, runId: string, opts: { dryRun: true; version?: number }): Promise<{ data: AppRunResumePlan }>
+resume(slug: string, runId: string, opts?: { dryRun?: false; version?: number }): Promise<AppRunResumeResult>
+```
+
+Retries a **failed** run from where it stopped — the app page's **Retry**. Only
+the steps the run did not complete run, and only those are charged; every step
+it completed hands on its result, and a
+[UGC Clip](./nodes/ai-video/ugc-clip.md) that failed renders only the clips it
+did not finish. The Retry runs the app version the run ran, with the inputs the
+run applied: it takes none of its own. The run's execution moves to the
+Retry's, so `getRun` then shows it, and a Retry of a Retry continues from what
+the latest one completed. A second call made while that Retry is pending is
+refused with `already_running` (an `AlreadyRunningError` naming its
+execution); only a concurrent double press reaches the same Retry, answered
+with `deduped: true`.
+
+- `opts.dryRun` — answer what the Retry would do and start nothing:
+  `{ data: AppRunResumePlan }` with `runId`, `continuesExecutionId`,
+  `appVersion`, `nodeIds`, `steps` (`{ nodeId, type, label }` — the steps that
+  run again), `estimatedCredits` (what it is expected to charge, the creator's
+  fee on the app included; `null` without credits), `reusedClips` (clips handed
+  back at no cost), `sufficient` (whether your balance and your app credits
+  cover it), `available`, and `appCreditsAllowance` — present only when your
+  app credits are what stops it (the Retry would be refused
+  `insufficient_app_credits`). Show it before a Retry.
+- `opts.version` — the app version you expect it to run, the one starting over
+  would run (default: the app's latest).
+
+Without `dryRun` it returns `AppRunResumeResult`:
+`{ executionId, runId, status: "pending", nodeIds, deduped? }` — poll via
+`client.executions.get(executionId)`.
+
+Refusals (nothing is written or billed) carry a code from
+`AppRunResumeRefusalCode`:
+
+| `code` | Thrown as | When |
+|---|---|---|
+| `not_found` | `NotFoundError` | no such run of yours under this app |
+| `continuation_not_found` | `NotFoundError` (its `code` reads `not_found`) | the run's execution is not yours |
+| `validation_error` | `NodaroError` (400) | a malformed run id or body, or a component's run (it is continued by the run that called it) |
+| `app_run_version_unavailable` | `NodaroError` (409) | the version the run ran is gone: start the run over |
+| `app_run_version_changed` | `AppRunVersionChangedError` | the app is on another version than the run ran: start over, or send `version: err.runVersion` |
+| `continuation_workflow_mismatch` / `continuation_version_mismatch` | `NodaroError` (400) | the run's execution ran another workflow, or another version of it (rare): start the run over |
+| `continuation_not_failed` | `NodaroError` (409) | the run completed or was stopped: start it over |
+| `already_running` | `AlreadyRunningError` (409, `executionId`) | the run is still running, or a Retry of it is pending: follow `executionId`. Started again elsewhere meanwhile: a plain `NodaroError` |
+| `continuation_subset_required` | `NodaroError` (409, or 400) | nothing is left to retry: every step completed (409), or the app runs no step (400) |
+| `locked_field` | `NodaroError` (400) | an input the run applied sets a field the app does not let a runner set |
+| `preview_review_required` | `NodaroError` (400) | the Retry would stop at a Preview with nobody to review it: retry it from the app page, where a person can review it |
+| `insufficient_app_credits` / `insufficient_credits` | `InsufficientCreditsError` (its `code` reads `insufficient_credits`; the message says which) | your app credits, or balance, cannot cover it |
+| `billing_unavailable` | `NodaroError` (503) | billing is briefly unavailable for a workspace run: try again shortly |
+
+To run with other inputs or on the app's current version, start the run over
+with `run(slug, inputs)` instead: every step runs, and is charged, again. See
+[Retry of a failed app run](./api-integration.md#retry-of-a-failed-app-run).
+
+```ts
+import { AppRunVersionChangedError } from "@nodaro/sdk/errors"
+
+const { data: plan } = await client.apps.resume("pro-headshot", runId, { dryRun: true })
+console.log(`${plan.steps.length} step(s) again, about ${plan.estimatedCredits} credits`)
+
+try {
+  const { executionId } = await client.apps.resume("pro-headshot", runId)
+} catch (err) {
+  if (err instanceof AppRunVersionChangedError && err.runVersion !== undefined) {
+    // Continue on the run's own version anyway (or start over with apps.run).
+    await client.apps.resume("pro-headshot", runId, { version: err.runVersion })
+  }
+}
+```
 
 #### `deleteRun(slug, runId)`
 
@@ -7104,10 +7284,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Nine
+Editorial primitives for podcast / long-form video editing. Ten
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus three quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`) and one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus four quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -7122,7 +7302,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
 | `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in, a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`) | Continue a Tighten Episode, Chapters or Trailer run as a new job: from where it failed, or (Tighten Episode, Trailer) its Render final after a review. The route is the run's own type. |
+| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in, a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`) | Continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7364,6 +7546,61 @@ or charged, with the codes `tightenEpisode` lists (less the music ones), plus
 (an intro card that is not a playable video) and `400 intro_card_too_long`
 (longer than 15 s).
 
+#### `clipPack(input, options?)` / `estimateClipPack(input)`
+
+```ts
+clipPack(input: ClipPackInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
+estimateClipPack(input: ClipPackInput): Promise<{ data: UseCaseEstimate }>
+```
+
+Cut a podcast recording into a pack of short clips in one call: the run
+transcribes the recording, plans the clips (each with a title and a hook),
+renders each as its own clip — framed with Speaker View on automatic boxes
+by default, every clip boxed alike over the episode's speakers — and
+captions each on its own transcription. An audio recording makes audio
+clips, with no framing or captions. Only `mediaUrl` is required; a field
+left out takes the node's default. **Not yet enabled on nodaro.ai** (see the
+[node page](./nodes/processing-video/clip-pack.md)).
+
+**`ClipPackInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `count` | `number` | no | How many clips to find, 1–50 (default 8). The plan may find fewer. |
+| `targetDurationSec` | `number` | no | Each clip's target length in seconds, 5–180 (default 60; the bounds are exported as `CLIP_PACK_MIN_TARGET_SEC` / `CLIP_PACK_MAX_TARGET_SEC`). |
+| `framing` | `{ aspect, layout?, switchType?, emphasisStyle? } \| null` | no | Frame each video clip with Speaker View: `aspect` (`"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`), `layout` (default `"stacked"`; one the shape does not draw is snapped), `switchType` (`SpeakerSwitchId` from `@nodaro/shared/edl`: `"cut"`, `"pan"`, `"zoom"` or `"xfade:<transition>"`, listed in `SPEAKER_SWITCH_IDS`; default `"pan"`), `emphasisStyle` (`ClipPackEmphasis`, default `"scale"`; `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`, each once — any other is refused `400 validation_error`). Left out: 9:16, stacked, pan, scale. `null`: no framing (the recording's shape). |
+| `captions` | `boolean` | no | Caption each video clip (default `true`). |
+| `captionStyle` | `CaptionStyle` | no | The captions' look (default `"karaoke"`). |
+| `reviewBeforeRender` | `boolean` | no | Stop at quick previews of the clips for a person to review; render the kept clips afterwards with `continueUseCase({ mode: "render-final", editedEdl })`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` (default) \| `"premium"`. |
+| `instructions` | `string` | no | Instructions for picking the clips (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
+
+`options.idempotencyKey` works as on `tightenEpisode`.
+
+`clipPack` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data.clips` is
+`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]`, one
+entry per clip in the plan's order (`thumbnailUrl` on each video clip), and
+`output_data.videoUrl` the first clip (`audioUrl` for audio clips);
+`output_data.json` is the plan's clip set and `quality` is `"proxy"` for a
+review-on run's previews, `"final"` otherwise. Every clip is tried: a clip
+that could not be rendered is skipped and not charged, and counted in
+`output_data.failedClips`; the run completes with the others and keeps its
+fee. A clip whose captions could not be added comes uncaptioned, marked
+`captionsFailed: true` and counted in `output_data.failedCaptions`; those
+captions are not charged. A run with no clip rendered fails, and its fee is
+refunded.
+
+`estimateClipPack` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:clip-pack --> per run.
+Each clip is quoted at twice the target length (the charge follows each
+clip's real length); a Render final (`continueUseCase`) is quoted on the
+clips the run cut that the review keeps. Both refuse before anything is
+created or charged, with the codes `tightenEpisode` lists (less the music
+ones).
+
 #### `continueUseCase(input, options?)`
 
 ```ts
@@ -7372,10 +7609,10 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters` or `episodeTrailer` (or an earlier continuation) answered. |
-| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
-| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
-| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters`, `episodeTrailer` or `clipPack` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format; Clip Pack's kept clips, each captioned), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
+| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL; for a Clip Pack, `{ v: 1, kind: "clips", basis, clips: [{ keep, hook? }] }`, which keeps or drops each clip — one that drops every clip is refused `use_case_nothing_kept`, 409, before anything is held). |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"` \| `"clip-pack"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
 
 **Which route.** With `nodeType`, the continuation goes straight to that
 type's route. Without it, `continueUseCase` first reads the job
@@ -7394,6 +7631,8 @@ type list is written into the SDK continues it on the Tighten Episode route.
 One that reads the list from `@nodaro/shared` throws `use_case_type_unknown`
 when the installed `@nodaro/shared` is from before Trailer too, since
 `"episode-trailer"` is not in that list. Upgrade to continue Trailer runs.
+The same holds for a version from before Clip Pack and a Clip Pack run
+(`"clip-pack"`): upgrade to continue Clip Pack runs.
 Earlier versions also continued on the Tighten Episode route whenever the type
 could not be read; this version throws instead.
 
@@ -7406,8 +7645,9 @@ again is refused. Refusals throw before any run exists, with the
 `continuation_not_found` (`NotFoundError`, 404: the run behind it is missing
 or not yours), `continuation_workflow_mismatch` (400),
 `continuation_version_mismatch` (400), `continuation_subset_required` (400), `continuation_not_failed`,
-`continuation_not_completed`, `continuation_settling` (try again in a moment)
-and `render_final_not_preview` (409). A refusal that names another job throws a
+`continuation_not_completed`, `continuation_settling` (try again in a moment),
+`render_final_not_preview` (409) and `use_case_nothing_kept` (409: a Clip Pack
+review that keeps no clip). A refusal that names another job throws a
 `ContinuationRefusedError` (a `NodaroError`, status 409) whose `jobId` is that
 job: `already_running` (a continuation under way, or one that already
 completed — follow it), `continuation_superseded` (a later
@@ -7813,6 +8053,10 @@ not two.
 - `AppRun` — a single app-run record
 - `ListAppRunsParams` — query params for `listRuns()`
 - `DeleteAppRunResult` — `{ success }`-style delete response
+- `ResumeAppRunOptions` — third argument to `resume()`: `{ dryRun?, version? }`
+- `AppRunResumePlan`, `AppRunResumeStep` — what `resume(…, { dryRun: true })` answers
+- `AppRunResumeResult` — the started Retry: `{ executionId, runId, status, nodeIds, deduped? }`
+- `AppRunResumeRefusalCode` — the codes a `resume()` refusal carries
 
 ### Community
 

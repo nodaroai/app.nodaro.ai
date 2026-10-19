@@ -1227,7 +1227,7 @@ export function getPrimaryOutput(
   // its text (Chapters' show notes — also what an unnamed pip of such a type
   // reads), any other pip the episode — video or audio.
   if (isUseCaseNodeType(sourceType)) {
-    if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    if (sourceHandle === "json") return output.json === undefined || output.json === null ? undefined : JSON.stringify(output.json)
     if (sourceHandle === "text" || (sourceHandle == null && usecaseResultIsText(sourceType))) return output.text
     return output.videoUrl || output.audioUrl
   }

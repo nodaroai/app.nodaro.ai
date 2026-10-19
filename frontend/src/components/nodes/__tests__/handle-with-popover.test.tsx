@@ -363,3 +363,72 @@ describe("HandleWithPopover — a UGC pip lights exactly where a drop connects (
     expect(lit()).toBe(drop(s, sh, t, th))
   })
 })
+
+describe("HandleWithPopover — a use-case node's json drag does not light an audio-only pip (drag-glow)", () => {
+  beforeEach(() => {
+    vi.mocked(useConnection).mockReset()
+  })
+
+  const audioIn = TARGET_HANDLE_ACCEPTS["trim-audio"]!.find((e) => e.handleId === "in")!.accepts
+
+  const renderTrimAudioIn = () =>
+    render(
+      <HandleWithPopover
+        nodeId="trim1"
+        nodeType="trim-audio"
+        handleId="in"
+        type="target"
+        position={Position.Left}
+        label="Audio"
+        color="#F59E0B"
+        icon={<span />}
+        side="left"
+        top="0px"
+        accepts={audioIn}
+      />,
+    )
+
+  const dragFrom = (handleId: string) =>
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId: "te1", id: handleId, type: "source" },
+      fromNode: { type: "tighten-episode" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+
+  it("target-direction: dragging Tighten Episode's json leaves Trim Audio's in dark, as the drop refuses it", () => {
+    dragFrom("json")
+    renderTrimAudioIn()
+    expect(screen.getByRole("button", { name: /Audio/i }).className).not.toContain("valid-candidate")
+  })
+
+  it("target-direction: its episode still lights it", () => {
+    dragFrom("media")
+    renderTrimAudioIn()
+    expect(screen.getByRole("button", { name: /Audio/i }).className).toContain("valid-candidate")
+  })
+
+  it("source-direction: dragging back from Trim Audio's in leaves the json pip dark", () => {
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId: "trim1", id: "in", type: "target" },
+      fromNode: { type: "trim-audio" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    render(
+      <HandleWithPopover
+        nodeId="te1"
+        nodeType="tighten-episode"
+        handleId="json"
+        type="source"
+        position={Position.Right}
+        label="Edit (EDL)"
+        color="#818CF8"
+        icon={<span />}
+        side="right"
+        top="0px"
+      />,
+    )
+    expect(screen.getByRole("button", { name: /Edit \(EDL\)/i }).className).not.toContain("valid-candidate")
+  })
+})

@@ -32,7 +32,7 @@
  * once the server has started it, and only on the nodes it runs: the expected
  * refusals start nothing and must leave the canvas as it was.
  */
-import { fromFailedClosedRunSet, fromFailedConsidered, type FromFailedNodeState } from "@nodaro/render-rules"
+import { completedFor, fromFailedClosedRunSet, fromFailedConsidered, type FromFailedNodeState } from "@nodaro/render-rules"
 import { CONTINUATION_SUBSET_REQUIRED, withRunOverrides } from "@nodaro/shared/nodes"
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -98,7 +98,8 @@ let continuing = false
 /** The node states of a run, as `getWorkflowExecution` returns them. */
 type StatesOf = Readonly<Record<string, FromFailedNodeState | undefined>>
 
-const completedIn = (states: StatesOf) => (id: string) => states[id]?.status === "completed"
+// The editor's Continue from failed names no nodes: a placeholder counts as completed, as on the server.
+const completedIn = (states: StatesOf) => (id: string) => completedFor(states[id], false)
 
 /** The run a continue-from-failed is asked of, as the prediction reads it. */
 export interface FromFailedRequest {

@@ -552,7 +552,8 @@ async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): P
       if (res.usage) {
         throw new LlmStreamResponseError(detail, {
           inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens,
-          providerCost: res.providerCost, complete: res.providerCost !== undefined,
+          providerCost: res.providerCost, ...(res.creditsUsd !== undefined ? { creditsUsd: res.creditsUsd } : {}),
+          complete: res.providerCost !== undefined,
         })
       }
       throw new Error(detail)

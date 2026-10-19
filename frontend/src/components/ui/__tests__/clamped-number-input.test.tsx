@@ -124,4 +124,44 @@ describe("ClampedNumberInput", () => {
     fireEvent.click(screen.getByText("slider→46"))
     expect(el.value).toBe("1")
   })
+
+  it("half-typed text (\"1e\") is not a clear, even with allowEmpty: the stored value stays", async () => {
+    const onCommit = vi.fn()
+    render(<Host initial={45} min={5} max={180} allowEmpty onCommit={onCommit} />)
+    const el = input()
+    await userEvent.clear(el)
+    await userEvent.type(el, "1e")
+    expect(el.value).toBe("1e")
+    fireEvent.blur(el)
+    expect(onCommit).not.toHaveBeenCalled()
+    expect(el.value).toBe("45")
+  })
+
+  it("only plain decimal text is read: hex (\"0x10\") and \"Infinity\" restore the stored value", async () => {
+    const onCommit = vi.fn()
+    render(<Host initial={8} min={1} max={50} onCommit={onCommit} />)
+    const el = input()
+    for (const text of ["0x10", "Infinity", "1e3"]) {
+      await userEvent.clear(el)
+      await userEvent.type(el, text)
+      fireEvent.blur(el)
+      expect(el.value).toBe("8")
+    }
+    expect(onCommit).not.toHaveBeenCalled()
+  })
+
+  it("is a spinbutton with its bounds, and the arrow keys step it within them", async () => {
+    const onCommit = vi.fn()
+    render(<Host initial={49} min={1} max={50} onCommit={onCommit} />)
+    const el = screen.getByRole("spinbutton", { name: "Duration" }) as HTMLInputElement
+    expect(el.getAttribute("aria-valuemin")).toBe("1")
+    expect(el.getAttribute("aria-valuemax")).toBe("50")
+    el.focus()
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}")
+    expect(el.value).toBe("50")
+    await userEvent.keyboard("{ArrowDown}")
+    expect(el.value).toBe("49")
+    fireEvent.blur(el)
+    expect(onCommit).not.toHaveBeenCalled()
+  })
 })

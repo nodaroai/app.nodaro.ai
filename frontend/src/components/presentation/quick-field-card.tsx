@@ -3,6 +3,7 @@ import { AutoCorrectContext } from "./auto-correct-context"
 import {
   isInQuickConfigRange,
   quickConfigChoicePatch,
+  quickConfigRetainedOption,
   quickConfigSnapPatch,
   quickConfigSnapWrite,
   readQuickConfigValue,
@@ -63,9 +64,14 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
 
   const autoCorrect = useContext(AutoCorrectContext)
 
+  // A retired value the node keeps (not listed, still runs) stays put — unless
+  // the publisher's restriction rules it out, when it snaps like any other.
+  const retained = quickConfigRetainedOption(control, stored)
+  const keepRetained = retained !== undefined && (!allowedValues || allowedValues.some((av) => String(av) === stored))
+
   useEffect(() => {
     if (readOnly || !autoCorrect) return
-    const snap = quickConfigSnapPatch(control, stored, options, nodeData)
+    const snap = quickConfigSnapPatch(keepRetained ? control : { ...control, retainedOptions: undefined }, stored, options, nodeData)
     if (snap) {
       onPatchRef.current(snap)
       return
@@ -73,7 +79,7 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
     if (stored === "" && allowedValues && options.length > 0 && !options.some((o) => o.value === effective)) {
       onPatchRef.current(quickConfigSnapWrite(control, options[0]!.value))
     }
-  }, [control, stored, effective, options, nodeData, allowedValues, readOnly, autoCorrect])
+  }, [control, stored, effective, options, nodeData, allowedValues, readOnly, autoCorrect, keepRetained])
 
   if (options.length === 0) return null
 
@@ -84,6 +90,8 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
       ? [...options, { value: effective, label: `${effective}${control.customRange?.unit ?? ""}` }]
       : options
   const current = shown.find((o) => o.value === effective)
+  // Labels the trigger only; the menu still never lists it.
+  const shownCurrent = current ?? (keepRetained ? retained : undefined)
   const label = customLabel ?? control.ariaLabel
   const range = control.customRange
   // The strip's "Custom…": any in-range number, through the same slider + clamped input pair.
@@ -107,8 +115,9 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
         disabled={readOnly}
       >
         <SelectTrigger className={cn("w-full", readOnly && "opacity-70 cursor-default")} aria-label={label}>
-          <SelectValue placeholder={t("present.selectFieldPlaceholder", { label: label.toLowerCase() })}>
-            {current ? localizeOption(current.label) : undefined}
+          {/* An unlisted retained value leaves the Select without a value, so Radix shows the placeholder: name it there. */}
+          <SelectValue placeholder={shownCurrent && !current ? localizeOption(shownCurrent.label) : t("present.selectFieldPlaceholder", { label: label.toLowerCase() })}>
+            {shownCurrent ? localizeOption(shownCurrent.label) : undefined}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>

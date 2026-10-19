@@ -1,0 +1,638 @@
+{
+  "definition": {
+    "type": "clip-pack",
+    "label": "Clip Pack",
+    "category": "processing",
+    "inputs": [
+      "media"
+    ],
+    "outputs": [
+      "clips",
+      "json"
+    ],
+    "defaultData": {
+      "label": "Clip Pack",
+      "count": 8,
+      "targetDurationSec": 60,
+      "framing": {
+        "aspect": "9:16",
+        "layout": "stacked",
+        "switchType": "pan",
+        "emphasisStyle": "scale"
+      },
+      "captions": true,
+      "captionStyle": "karaoke",
+      "reviewBeforeRender": false,
+      "planTier": "standard",
+      "instructions": "",
+      "fieldMappings": {},
+      "executionStatus": "idle"
+    }
+  },
+  "definitionPredecessor": "episode-trailer",
+  "option": {
+    "type": "clip-pack",
+    "label": "Clip Pack",
+    "icon": "LayoutGrid",
+    "category": "Processing",
+    "group": "video-podcast",
+    "keywords": [
+      "podcast",
+      "clips",
+      "shorts",
+      "reels",
+      "highlights",
+      "social",
+      "vertical",
+      "captions",
+      "one step"
+    ]
+  },
+  "optionPredecessor": "episode-trailer",
+  "family": {
+    "id": "video-podcast",
+    "label": "Podcast",
+    "tab": "video",
+    "predecessor": "episode-trailer"
+  },
+  "tabSupersetRows": [
+    {
+      "row": "audio video-podcast",
+      "predecessor": "episode-chapters"
+    }
+  ],
+  "handleOutputTypes": {
+    "json": "look"
+  },
+  "targetHandles": [
+    {
+      "handleId": "media",
+      "label": "Recording"
+    }
+  ],
+  "executable": true,
+  "feeCredits": 10,
+  "nodaroExclusive": true,
+  "jsonProducer": true,
+  "scrapeJsonProducer": false,
+  "generateButton": true,
+  "configPanelLabel": "Clip Pack",
+  "canvasComponent": "ƒ ClipPackNodeComponent",
+  "localizedLabel": {
+    "en": "Clip Pack",
+    "he": "חבילת קליפים",
+    "ja": "クリップパック",
+    "ko": "클립 세트",
+    "pt-BR": "Pacote de clipes"
+  },
+  "connectionsIn": {
+    "upload-video.video → clip-pack.media": true,
+    "upload-video.video → clip-pack.introCard": false,
+    "upload-audio.audio → clip-pack.media": true,
+    "upload-audio.audio → clip-pack.introCard": false,
+    "upload-image.image → clip-pack.media": false,
+    "upload-image.image → clip-pack.introCard": false,
+    "combine-videos.video → clip-pack.media": true,
+    "combine-videos.video → clip-pack.introCard": false,
+    "tighten-episode.media → clip-pack.media": true,
+    "tighten-episode.media → clip-pack.introCard": false,
+    "episode-trailer.media → clip-pack.media": true,
+    "episode-trailer.media → clip-pack.introCard": false,
+    "list.- → clip-pack.media": true,
+    "text-prompt.prompt → clip-pack.media": false
+  },
+  "connectionsOut": {
+    "clip-pack.clips → trim-audio.in": true,
+    "clip-pack.clips → audio-fx.in": true,
+    "clip-pack.clips → combine-videos.in": true,
+    "clip-pack.clips → add-captions.in": true,
+    "clip-pack.clips → social-media-format.media": true,
+    "clip-pack.json → social-media-format.media": true,
+    "clip-pack.json → json-process.in": true,
+    "clip-pack.json → apply-edl.edl": true,
+    "clip-pack.json → extract-field.in": true,
+    "clip-pack.json → edit-plan.transcript": false
+  },
+  "pick": {
+    "data": {
+      "generatedVideoUrl": "https://r2/c0.mp4",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedTranscript": {
+        "words": []
+      },
+      "generatedResults": [
+        {
+          "url": "https://r2/c0.mp4",
+          "quality": "final",
+          "clipKey": "k0",
+          "title": "The pivot",
+          "thumbnailUrl": "https://r2/c0.png",
+          "generatedJson": {
+            "v": "plan"
+          },
+          "generatedTranscript": {
+            "words": []
+          }
+        },
+        {
+          "url": "https://r2/c1.mp4",
+          "quality": "final",
+          "clipKey": "k1",
+          "title": "The money",
+          "thumbnailUrl": "https://r2/c1.png",
+          "captionsFailed": true
+        }
+      ]
+    },
+    "first": {
+      "activeResultIndex": 0,
+      "generatedVideoUrl": "https://r2/c0.mp4",
+      "generatedAudioUrl": "(undefined)",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedTranscript": {
+        "words": []
+      }
+    },
+    "second": {
+      "activeResultIndex": 1,
+      "generatedVideoUrl": "https://r2/c1.mp4",
+      "generatedAudioUrl": "(undefined)",
+      "generatedJson": "(undefined)",
+      "generatedTranscript": "(undefined)"
+    }
+  },
+  "pickAudio": {
+    "data": {
+      "generatedAudioUrl": "https://r2/c0.mp3",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedResults": [
+        {
+          "url": "https://r2/c0.mp3",
+          "quality": "final",
+          "clipKey": "k0",
+          "title": "The pivot",
+          "generatedJson": {
+            "v": "plan"
+          }
+        },
+        {
+          "url": "https://r2/c1.mp3",
+          "quality": "final",
+          "clipKey": "k1",
+          "title": "The money"
+        }
+      ]
+    },
+    "first": {
+      "activeResultIndex": 0,
+      "generatedAudioUrl": "https://r2/c0.mp3",
+      "generatedVideoUrl": "(undefined)",
+      "generatedJson": {
+        "v": "plan"
+      },
+      "generatedTranscript": "(undefined)"
+    },
+    "second": {
+      "activeResultIndex": 1,
+      "generatedAudioUrl": "https://r2/c1.mp3",
+      "generatedVideoUrl": "(undefined)",
+      "generatedJson": "(undefined)",
+      "generatedTranscript": "(undefined)"
+    }
+  },
+  "shortfall": [
+    {
+      "name": "two clips delivered, two failed",
+      "output": {
+        "clips": [
+          {
+            "url": "https://r2/c0.mp4",
+            "clipKey": "k0"
+          },
+          {
+            "url": "https://r2/c1.mp4",
+            "clipKey": "k1"
+          }
+        ],
+        "failedClips": 2
+      },
+      "onNode": {
+        "failedClips": 2
+      },
+      "asReported": {
+        "failedClips": 2
+      }
+    },
+    {
+      "name": "two clips delivered, none failed",
+      "output": {
+        "clips": [
+          {
+            "url": "https://r2/c0.mp4",
+            "clipKey": "k0"
+          },
+          {
+            "url": "https://r2/c1.mp4",
+            "clipKey": "k1"
+          }
+        ]
+      },
+      "onNode": {
+        "failedClips": "(undefined)"
+      },
+      "asReported": {}
+    },
+    {
+      "name": "no clip delivered, three failed",
+      "output": {
+        "clips": [],
+        "failedClips": 3
+      },
+      "onNode": {
+        "failedClips": "(undefined)"
+      },
+      "asReported": {
+        "failedClips": 3
+      }
+    },
+    {
+      "name": "delivered, with captions and formats failures beside",
+      "output": {
+        "clips": [
+          {
+            "url": "https://r2/c0.mp4",
+            "clipKey": "k0"
+          },
+          {
+            "url": "https://r2/c1.mp4",
+            "clipKey": "k1"
+          }
+        ],
+        "failedClips": 1,
+        "failedCaptions": 1,
+        "failedFormats": [
+          "1:1"
+        ]
+      },
+      "onNode": {
+        "failedClips": 1
+      },
+      "asReported": {
+        "failedFormats": [
+          "1:1"
+        ],
+        "failedClips": 1
+      }
+    },
+    {
+      "name": "a failed count that is not a whole positive number",
+      "output": {
+        "clips": [
+          {
+            "url": "https://r2/c0.mp4",
+            "clipKey": "k0"
+          },
+          {
+            "url": "https://r2/c1.mp4",
+            "clipKey": "k1"
+          }
+        ],
+        "failedClips": 1.5
+      },
+      "onNode": {
+        "failedClips": "(undefined)"
+      },
+      "asReported": {}
+    }
+  ],
+  "audioLock": {
+    "forced": {
+      "framing": null,
+      "captions": false
+    },
+    "patch": [
+      {
+        "name": "custom framing and captions, no memory",
+        "data": {
+          "framing": {
+            "aspect": "16:9",
+            "layout": "side-by-side",
+            "switchType": "cut",
+            "emphasisStyle": "border"
+          },
+          "captions": true
+        },
+        "byWiring": {
+          "audio": {
+            "settingsBeforeAudio": {
+              "framing": {
+                "aspect": "16:9",
+                "layout": "side-by-side",
+                "switchType": "cut",
+                "emphasisStyle": "border"
+              },
+              "captions": true
+            },
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "nothing set, no memory",
+        "data": {},
+        "byWiring": {
+          "audio": {
+            "settingsBeforeAudio": {},
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "already forced, memory holds a custom framing",
+        "data": {
+          "framing": null,
+          "captions": false,
+          "settingsBeforeAudio": {
+            "framing": {
+              "aspect": "16:9",
+              "layout": "side-by-side",
+              "switchType": "cut",
+              "emphasisStyle": "border"
+            },
+            "captions": true
+          }
+        },
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": {
+            "framing": {
+              "aspect": "16:9",
+              "layout": "side-by-side",
+              "switchType": "cut",
+              "emphasisStyle": "border"
+            },
+            "captions": true,
+            "settingsBeforeAudio": "(undefined)"
+          },
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "already forced, memory holds framing None",
+        "data": {
+          "framing": null,
+          "captions": false,
+          "settingsBeforeAudio": {
+            "framing": null,
+            "captions": true
+          }
+        },
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": {
+            "framing": null,
+            "captions": true,
+            "settingsBeforeAudio": "(undefined)"
+          },
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "already forced, memory never held a framing",
+        "data": {
+          "framing": null,
+          "captions": false,
+          "settingsBeforeAudio": {
+            "captions": true
+          }
+        },
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": {
+            "framing": "(undefined)",
+            "captions": true,
+            "settingsBeforeAudio": "(undefined)"
+          },
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "forced values, no memory",
+        "data": {
+          "framing": null,
+          "captions": false
+        },
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "forced framing, captions never set",
+        "data": {
+          "framing": null
+        },
+        "byWiring": {
+          "audio": {
+            "settingsBeforeAudio": {
+              "framing": null
+            },
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "forced captions, framing never set",
+        "data": {
+          "captions": false
+        },
+        "byWiring": {
+          "audio": {
+            "settingsBeforeAudio": {
+              "captions": false
+            },
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      }
+    ],
+    "failSafe": [
+      {
+        "name": "custom framing and captions, no memory",
+        "byWiring": {
+          "audio": {
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "nothing set, no memory",
+        "byWiring": {
+          "audio": {
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "already forced, memory holds a custom framing",
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "already forced, memory holds framing None",
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "already forced, memory never held a framing",
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "forced values, no memory",
+        "byWiring": {
+          "audio": "(undefined)",
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "forced framing, captions never set",
+        "byWiring": {
+          "audio": {
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      },
+      {
+        "name": "forced captions, framing never set",
+        "byWiring": {
+          "audio": {
+            "framing": null,
+            "captions": false
+          },
+          "video": "(undefined)",
+          "(nothing wired)": "(undefined)"
+        }
+      }
+    ],
+    "graph": {
+      "drawnAudio": {
+        "framing": null,
+        "captions": false,
+        "captionStyle": "bouncy",
+        "settingsBeforeAudio": {
+          "framing": {
+            "aspect": "16:9",
+            "layout": "side-by-side",
+            "switchType": "cut",
+            "emphasisStyle": "border"
+          },
+          "captions": true
+        }
+      },
+      "swappedToVideo": {
+        "framing": {
+          "aspect": "16:9",
+          "layout": "side-by-side",
+          "switchType": "cut",
+          "emphasisStyle": "border"
+        },
+        "captions": true,
+        "captionStyle": "bouncy",
+        "settingsBeforeAudio": "(undefined)"
+      },
+      "audioRemoved": {
+        "framing": null,
+        "captions": false,
+        "captionStyle": "bouncy",
+        "settingsBeforeAudio": {
+          "framing": {
+            "aspect": "16:9",
+            "layout": "side-by-side",
+            "switchType": "cut",
+            "emphasisStyle": "border"
+          },
+          "captions": true
+        }
+      },
+      "chainTighten": {
+        "output": "audio",
+        "captions": false,
+        "settingsBeforeAudio": {
+          "output": "video",
+          "captions": true
+        }
+      },
+      "chainClip": {
+        "framing": null,
+        "captions": false,
+        "captionStyle": "bouncy",
+        "settingsBeforeAudio": {
+          "framing": {
+            "aspect": "16:9",
+            "layout": "side-by-side",
+            "switchType": "cut",
+            "emphasisStyle": "border"
+          },
+          "captions": true
+        }
+      },
+      "editedWhileAudio": {
+        "framing": null,
+        "captions": false,
+        "captionStyle": "bouncy",
+        "settingsBeforeAudio": {
+          "framing": {
+            "aspect": "1:1",
+            "layout": "grid"
+          },
+          "captions": true
+        }
+      },
+      "wiredKinds": {
+        "audio": "audio",
+        "video": "video",
+        "tightenAudio": "audio",
+        "none": "(undefined)"
+      }
+    }
+  }
+}

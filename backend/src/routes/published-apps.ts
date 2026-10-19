@@ -16,6 +16,8 @@ import { perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/lis
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
+import type { Scope } from "../lib/scopes.js"
 import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
@@ -23,6 +25,13 @@ import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credenti
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { ugcPublishedGraph, type UgcPublishedGraph } from "../lib/ugc-composed-graph.js"
+
+/**
+ * OAuth scopes for reading the user's own published apps (mine, by-workflow,
+ * favorites): `workflows:read`, or `apps:read`, the scope the MCP `list_apps`
+ * tool (with `scope: "mine"`) is registered under. A refusal names the first.
+ */
+const APP_READ_SCOPES: readonly [Scope, ...Scope[]] = ["workflows:read", "apps:read"]
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -261,6 +270,11 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (favoritesOnly && !req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required for favorites" } })
     }
+    // The public catalog takes no scope; the caller's own favorites do (as GET /v1/apps/favorites).
+    if (favoritesOnly) {
+      await requireAnyAppScope(APP_READ_SCOPES)(req, reply)
+      if (reply.sent) return reply
+    }
 
     // Card-only columns (no snapshot_nodes/edges/settings)
     const selectCols = "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_id, creator_display_name, total_run_count, favorite_count, created_at, monetization_enabled, publish_type, component_metadata"
@@ -395,7 +409,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // POST /v1/apps/favorite — Toggle favorite
-  app.post("/v1/apps/favorite", async (req, reply) => {
+  app.post("/v1/apps/favorite", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -433,7 +447,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/apps/favorites — Get user's favorited app IDs
-  app.get("/v1/apps/favorites", async (req, reply) => {
+  app.get("/v1/apps/favorites", { preHandler: requireAnyAppScope(APP_READ_SCOPES) }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -451,7 +465,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // POST /v1/apps/publish — Publish a workflow as an app
-  app.post("/v1/apps/publish", async (req, reply) => {
+  app.post("/v1/apps/publish", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -867,7 +881,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/apps/mine — List creator's published apps
-  app.get("/v1/apps/mine", async (req, reply) => {
+  app.get("/v1/apps/mine", { preHandler: requireAnyAppScope(APP_READ_SCOPES) }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -940,7 +954,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/apps/by-workflow/:workflowId — Get latest published app for a workflow (owner only)
-  app.get("/v1/apps/by-workflow/:workflowId", async (req, reply) => {
+  app.get("/v1/apps/by-workflow/:workflowId", { preHandler: requireAnyAppScope(APP_READ_SCOPES) }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -967,7 +981,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // PATCH /v1/apps/:appId — Update app metadata
-  app.patch("/v1/apps/:appId", async (req, reply) => {
+  app.patch("/v1/apps/:appId", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -1079,7 +1093,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
   })
 
   // DELETE /v1/apps/:appId — Soft delete (set deleted_at + is_active = false)
-  app.delete("/v1/apps/:appId", async (req, reply) => {
+  app.delete("/v1/apps/:appId", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
@@ -1116,7 +1130,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
 
   // POST /v1/apps/:appId/restore — Clears deleted_at, leaves is_active=false
   // (no expiration; user must re-publish manually from the edit page).
-  app.post("/v1/apps/:appId/restore", async (req, reply) => {
+  app.post("/v1/apps/:appId/restore", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 

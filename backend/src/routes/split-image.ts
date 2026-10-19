@@ -7,7 +7,7 @@ import { uploadBufferToR2 } from "../lib/storage.js"
 import { randomUUID } from "node:crypto"
 import { formatZodError } from "../lib/zod-error.js"
 
-const splitImageBody = z.object({
+export const splitImageBody = z.object({
   imageUrl: safeUrlSchema,
   gridCols: z.number().int().min(1).max(6),
   gridRows: z.number().int().min(1).max(6),

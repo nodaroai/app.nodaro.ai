@@ -13,7 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useModelCreditRange } from "@/hooks/use-model-credit-range"
 import { formatCreditBadge } from "@/components/editor/config-panels/model-options"
-import { modelSearchHaystack, modelMatchesQuery } from "@/lib/model-search"
+import { modelSearchHaystack, modelMatchesQuery, modelMakerIdFor } from "@/lib/model-search"
+import { MakerMark } from "./maker-mark"
 
 export type ModelOption = {
   value: string
@@ -105,7 +106,7 @@ export function ModelSearchSelect({
           className={cn("w-full justify-between font-normal", triggerClassName)}
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            {triggerIcon}
+            {triggerIcon ?? (selected && triggerLabel === undefined ? <MakerMark modelId={selected.value} /> : null)}
             <span className="truncate">{display}</span>
           </span>
           <ChevronsUpDown className="ms-1 size-3.5 shrink-0 opacity-50" />
@@ -167,6 +168,9 @@ function ModelCommandItem({
 }) {
   const badge = formatCreditBadge(option.value, useModelCredits(option.value), useModelCreditRange(option.value))
   const localizeDesc = useLocalizeModelDescription()
+  // The description and lock lines start under the label: past the check (14px)
+  // and, when the row draws a maker mark, the mark (16px), each with an 8px gap.
+  const indent = modelMakerIdFor(option.value) ? "ps-[2.875rem]" : "ps-[1.375rem]"
 
   const item = (
     <CommandItem
@@ -181,18 +185,19 @@ function ModelCommandItem({
         ) : (
           <Check className={cn("size-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} />
         )}
+        <MakerMark modelId={option.value} />
         <span className="truncate">{option.label}</span>
         {badge && (
           <span className="ms-auto text-[11px] tabular-nums text-muted-foreground">{badge}</span>
         )}
       </span>
       {option.desc && (
-        <span className="ps-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
+        <span className={cn(indent, "text-[11px] leading-tight text-muted-foreground/60")}>
           {localizeDesc(option.desc)}
         </span>
       )}
       {locked && (
-        <span className="ps-[1.375rem] text-[11px] leading-tight text-amber-600 dark:text-amber-400">{locked}</span>
+        <span className={cn(indent, "text-[11px] leading-tight text-amber-600 dark:text-amber-400")}>{locked}</span>
       )}
     </CommandItem>
   )

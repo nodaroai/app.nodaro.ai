@@ -48,20 +48,22 @@ interface LlmModelRateUsd {
   longContext?: { inputPricePerM: number; outputPricePerM: number }
 }
 
+// KIE list price 45/225 KIE-credits per M ($0.005/credit) — ~15% of Google's
+// STANDARD list (the convention the 3.6 row's "~30%" also uses); it reads as
+// 30% against the intro rate the direct row below carries through 2026-12-31,
+// so compare the two rows with that in mind (confirmed 2026-09-06).
+const GEMINI_3_8_FLASH_KIE_RATE: LlmModelRateUsd = { inputPricePerM: 0.225, outputPricePerM: 1.125 }
+
 /** Per-model USD/M-token provider rates, keyed by the shared LLM_MODEL_IDS enum. */
 const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "gemini-3-flash":    { inputPricePerM: 0.15,  outputPricePerM: 0.90 },
   // KIE list price 90/450 KIE-credits per M ($0.005/credit) — ~30% of the
   // official vendor price (confirmed 2026-07-26). 3× the 3-flash rate.
   "gemini-3.6-flash":  { inputPricePerM: 0.45,  outputPricePerM: 2.25 },
-  // KIE list price unpublished at add time (2026-08-18) — pinned to Google's
-  // own INTRO rate as the margin-safe ceiling; revisit when KIE lists it.
-  "gemini-3.7-flash":  { inputPricePerM: 0.75,  outputPricePerM: 3.75 },
-  // KIE list price 45/225 KIE-credits per M ($0.005/credit) — ~15% of Google's
-  // STANDARD list (the convention the 3.6 row's "~30%" also uses); it reads as
-  // 30% against the intro rate the direct row below carries through 2026-12-31,
-  // so compare the two rows with that in mind (confirmed 2026-09-06).
-  "gemini-3.8-flash":  { inputPricePerM: 0.225, outputPricePerM: 1.125 },
+  // KIE answers 3.7's lane with 3.8 (registry `kieServedAs`), so the row IS
+  // 3.8's — the same object, so the two cannot drift.
+  "gemini-3.7-flash":  GEMINI_3_8_FLASH_KIE_RATE,
+  "gemini-3.8-flash":  GEMINI_3_8_FLASH_KIE_RATE,
   "claude-haiku-4.5":  { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
   // KIE list price 12/60 KIE-credits per M ($0.005/credit), as given at add
   // time (2026-10-10) — 60% of Anthropic's $0.10/$0.50 short-prompt card. One

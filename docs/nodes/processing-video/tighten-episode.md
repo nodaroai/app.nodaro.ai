@@ -24,7 +24,7 @@ A longer recording (when its length can be read), one with no sound, or a music 
 | Handle | Type | Description |
 |---|---|---|
 | Episode (`media`) | Video or audio | The tightened episode. **Episode audio** on an audio episode. It carries the episode's length, so a step priced by the length of what it is given (Trim, Loop, Combine Videos, Video SFX, Pitch & Tempo) is priced by it: see [Steps after the node](#steps-after-the-node). |
-| Edit (EDL) (`json`) | EDL | The edit plan the episode was cut from, with your review edits applied. Wire it into another render, for example a second [Apply EDL](./apply-edl.md) in another format. |
+| Edit (EDL) (`json`) | EDL | The edit plan the episode was cut from, with your review edits applied. Wire it into another render, for example a second [Apply EDL](./apply-edl.md) in another format. Wired into a text or prompt input, it lands there as its JSON text, in the editor as in a server run. It is JSON, not media: it does not connect to an input that takes only audio, video or images (wire the **Episode** there). |
 
 ## Configuration
 

@@ -59,7 +59,7 @@ import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@no
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
 import { FRAME_TARGET_HANDLES } from "@nodaro/shared/workflow"
-import { VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, LLM_MODELS } from "@nodaro/shared/llm-models"
+import { VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, pickableLlmModels } from "@nodaro/shared/llm-models"
 import { clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT } from "@nodaro/shared/edl"
 import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, videoDepthLevers, videoDepthColormaps, resolveVideoDepthColormap, resolveVideoDepthProvider } from "@nodaro/shared/media"
@@ -4492,7 +4492,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {LLM_MODELS.map((m) => (
+            {pickableLlmModels(data.plannerModel ?? "claude-opus-4.7").map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.displayName}
               </SelectItem>

@@ -35,7 +35,7 @@
  */
 
 import type { FastifyReply, FastifyRequest } from "fastify"
-import { config } from "./config.js"
+import { localLlmKeySet } from "./llm/anthropic-availability.js"
 import { getNodaroCredential, getNodaroProviderPrefs, nodaroCloudBase } from "./nodaro-connect.js"
 import { ensureCloudReachableMediaUrl, NodaroCloudError } from "../providers/nodaro/client.js"
 import { URL_FIELD } from "./media-portability.js"
@@ -53,7 +53,7 @@ export async function shouldProxyLlmToCloud(): Promise<boolean> {
   const prefs = await getNodaroProviderPrefs()
   // scope "exclusives": LLM calls behave as if the credential did not exist.
   if (prefs.scope === "exclusives") return false
-  const hasLocalLane = Boolean(config.KIE_API_KEY || config.ANTHROPIC_API_KEY || config.GEMINI_API_KEY)
+  const hasLocalLane = localLlmKeySet()
   // precedence "nodaro": every LLM call goes through the connection, local
   // keys or not — the "ignore my other providers" choice.
   if (hasLocalLane && prefs.precedence !== "nodaro") return false

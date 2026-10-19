@@ -1,9 +1,11 @@
 import { Command } from "commander"
+import { isPreviewRefusalCode } from "@nodaro/shared/nodes"
+import { AlreadyRunningError, AppRunVersionChangedError, NodaroError } from "@nodaro/sdk/errors"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic, parseOverridePairs } from "../util.js"
-import { watchExecution } from "./workflows.js"
+import { shellQuote, watchExecution } from "./workflows.js"
 import { pickFromList, isInteractive } from "../interactive.js"
 
 async function pickAppInteractively(client: ReturnType<typeof buildClient>): Promise<string> {
@@ -46,6 +48,44 @@ function rejectPositionalInputs(extras: string[], slug: string): void {
 }
 
 export { parseOverridePairs }
+
+/**
+ * A whole positive number for `--app-version`, or a refusal naming the flag.
+ * (Not `--version`: the root program's `-v, --version` would claim it and
+ * print the CLI's version instead of running the command.)
+ */
+function parseAppVersion(value: string): number {
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 1) throw new Error(`--app-version must be a whole number of 1 or more, got ${JSON.stringify(value)}`)
+  return n
+}
+
+/**
+ * What to do instead after a refused Retry, as commands (stderr, so --json
+ * stdout stays clean), or `[]` when the refusal names no other way.
+ */
+export function retryRefusalAdvice(slug: string, runId: string, err: unknown): string[] {
+  const startOver = `  start it over (every step runs, and is charged, again): nodaro apps run ${shellQuote(slug)} --input …`
+  if (err instanceof AppRunVersionChangedError) {
+    const lines = ["the app changed since this run, so it is not continued:", startOver]
+    if (err.runVersion !== undefined) {
+      lines.push(`  or continue on the run's own version ${err.runVersion}: nodaro apps run-retry ${shellQuote(slug)} ${shellQuote(runId)} --app-version ${err.runVersion}`)
+    }
+    return lines
+  }
+  if (err instanceof NodaroError && (err.code === "app_run_version_unavailable" || err.code === "continuation_not_failed")) {
+    return [startOver]
+  }
+  if (err instanceof NodaroError && err.code === "already_running") {
+    const live = err instanceof AlreadyRunningError ? `nodaro executions get ${shellQuote(err.executionId)} --watch` : `nodaro apps run-get ${shellQuote(slug)} ${shellQuote(runId)}`
+    return [`  follow it: ${live}`]
+  }
+  // Any of the preview refusal codes (a render held, a review-on use-case node, or both).
+  if (err instanceof NodaroError && isPreviewRefusalCode(err.code)) {
+    return ["  retry it from the app page instead, where a person can review the Preview it stops at"]
+  }
+  return []
+}
 
 export function appsCommand(): Command {
   const cmd = new Command("apps").description("browse and run published apps (workflows wrapped in a curated UI)")
@@ -186,6 +226,65 @@ Tip: \`nodaro apps get <slug>\` shows the input schema for that app.`)
         if (opts.json) emit(result.data, opts)
         else detail(result.data)
       } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("run-retry <slug> <runId>")
+    .description("retry a failed app run from where it stopped: only the steps it did not complete run, and only those are charged")
+    .option("--dry-run", "show the steps the Retry would run and what it would charge; start nothing")
+    .option("--app-version <n>", "the app version you expect it to run (default: the app's latest); the run's own version continues it after the app changed", parseAppVersion)
+    .option("--watch", "follow the Retry's execution until completion")
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+The Retry runs the version the run ran, with the inputs the run applied (it takes none).
+To run with other inputs or on the app's current version, start over with \`nodaro apps run\`.
+
+Examples:
+  $ nodaro apps run-retry hair-styler-dd3erw 3f0c… --dry-run
+  $ nodaro apps run-retry hair-styler-dd3erw 3f0c… --watch`)
+    .action(async (slug: string, runId: string, opts: { dryRun?: boolean; appVersion?: number; watch?: boolean } & GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        if (opts.dryRun) {
+          const { data: plan } = await client.apps.resume(slug, runId, { dryRun: true, version: opts.appVersion })
+          if (opts.json) {
+            emit(plan, opts)
+            return
+          }
+          table(
+            plan.steps.map((s) => ({ node: s.nodeId, type: s.type, label: s.label ?? "" })),
+            ["node", "type", "label"],
+          )
+          const price = plan.estimatedCredits === null ? "not billed in credits on this edition" : `about ${plan.estimatedCredits} credits`
+          const reused = plan.reusedClips > 0 ? `, ${plan.reusedClips} finished clip(s) handed back at no cost` : ""
+          success(`Retry of run ${plan.runId} (app version ${plan.appVersion ?? "?"}): ${plan.steps.length} step(s), ${price}${reused}`)
+          if (plan.sufficient === false) {
+            // The app credits, when they are what stops it; else the balance.
+            warn(
+              plan.appCreditsAllowance !== undefined
+                ? "you have no app credits left to run apps: the Retry would be refused"
+                : `your balance cannot cover it${plan.available !== null ? ` (${plan.available} available)` : ""}: the Retry would be refused`,
+            )
+          }
+          dim(`start it: nodaro apps run-retry ${shellQuote(slug)} ${shellQuote(runId)}${opts.appVersion !== undefined ? ` --app-version ${opts.appVersion}` : ""}`)
+          return
+        }
+        const result = await client.apps.resume(slug, runId, { version: opts.appVersion })
+        if (opts.json && !opts.watch) {
+          emit(result, opts)
+          return
+        }
+        success(`execution ${result.executionId} (${result.status})${result.deduped ? " — this Retry was already started" : ""}`)
+        if (!opts.watch) {
+          dim(`follow: nodaro executions get ${result.executionId} --watch`)
+          return
+        }
+        await watchExecution(client, result.executionId, opts)
+      } catch (err) {
+        for (const line of retryRefusalAdvice(slug, runId, err)) warn(line)
         handleError(err)
       }
     })

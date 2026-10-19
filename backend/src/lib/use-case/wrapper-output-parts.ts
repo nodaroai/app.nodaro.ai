@@ -15,6 +15,10 @@ export interface UseCaseClipRow {
   readonly renderBasis?: string
   readonly title?: string
   readonly hook?: string
+  /** The still of the file it delivers (none for an audio clip). */
+  readonly thumbnailUrl?: string
+  /** Its captions could not be added: the clip is its render, uncaptioned. */
+  readonly captionsFailed?: true
 }
 
 /** One delivered format, in format order. */
@@ -42,6 +46,12 @@ export interface UseCaseWrapperOutput {
   readonly clips?: readonly UseCaseClipRow[]
   /** How many planned clips could not be rendered. */
   readonly failedClips?: number
+  /** How many delivered clips came without captions (their captions could not be added). */
+  readonly failedCaptions?: number
+  /** Clips rendered, but the run stopped before captioning them: nothing is kept; Continue captions them. */
+  readonly captionsNotRun?: true
+  /** Why no clip rendered: the render step's own error. */
+  readonly renderError?: string
   /** A run's delivered formats. */
   readonly formats?: readonly UseCaseFormatRow[]
   /** The chosen formats whose step failed (the run keeps the formats that rendered). */

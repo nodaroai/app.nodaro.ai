@@ -117,7 +117,7 @@ import { serverStamps } from "../../lib/trigger-data-stamps.js"
 import { serverTriggerData } from "../../lib/server-started-runs.js"
 import { lineageRootOf, nodeSelectionOf, type ContinueFromFailedStamp } from "../../lib/continue-from-failed-lineage.js"
 import { isSkipNode, isSourceNode } from "./execution-graph.js"
-import { isUnfinished } from "@nodaro/render-rules"
+import { isPlaceholder, isUnfinished } from "@nodaro/render-rules"
 import { failedAttemptJobIdOf } from "./failed-attempt.js"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 
@@ -444,7 +444,8 @@ function keepsSavedDataProvenance(
 
 /**
  * The state of every node the run does NOT execute, built from the earlier
- * execution's `node_states`. A node it completed hands on its output; any
+ * execution's `node_states`. A node it completed hands on its output (marked
+ * `carriedPlaceholder` when no run of the chain ever ran it); any
  * other node hands on nothing (seeded `skipped`), except a node no run gives
  * a state of its own (a source or parameter node, a Group / Collect
  * container) when the earlier run holds none for it: that one keeps the
@@ -475,6 +476,11 @@ export function continuationSeeds(
         completedAt,
         ...(keepsSavedDataProvenance(node, state, source, explicitOverrides) ? { fromSavedData: true as const } : {}),
         seededFromExecution: source.id,
+        // A node that run never ran either (it only handed on its saved data,
+        // or was itself handed on so) stays a placeholder on this seed: a
+        // continue-from-failed built on this execution that NAMES it still
+        // runs it (`completedFor`). Never one that ran, in that run or before.
+        ...(isPlaceholder(state) ? { carriedPlaceholder: true as const } : {}),
       })
       continue
     }

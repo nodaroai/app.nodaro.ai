@@ -55,11 +55,13 @@ export interface UseCaseDescriptor {
   readonly resultKind: UseCaseResultKind
   /**
    * The built nodes that try EVERY one of their kind (decided 2026-10-18: a
-   * Trailer makes every chosen format, whichever one fails): when a stage's
-   * nodes are all named here, one that fails never stops the others from
-   * starting. Each still checks for a Stop before it starts, so a Stop never
-   * starts a paid step. Any other stage keeps the engine's default — the
-   * first failure stops the nodes not started yet.
+   * Clip Pack renders and captions every clip, a Trailer makes every chosen
+   * format, whichever one fails). A node named here that runs over a list
+   * tries every item, and when a stage's nodes are all named here every one
+   * starts: one that fails never stops the others from starting. Each such
+   * node still checks for a Stop before it starts, so a Stop never starts a paid
+   * step. Any other node keeps the engine's default — the first failure stops
+   * what has not started yet.
    */
   readonly triesEvery?: readonly string[]
   /** The length of each video it delivers (video-output-length.ts makes it the node's length rule); absent for a node that is not a video producer. */

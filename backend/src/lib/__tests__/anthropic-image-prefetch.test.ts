@@ -85,3 +85,32 @@ describe("prefetchAsBase64 — the URL fallback", () => {
     expect(await prefetchAsBase64(SOURCE)).toEqual({ type: "image", url: SOURCE })
   })
 })
+
+describe("prefetchAsBase64 — a cancel", () => {
+  it("forwards the caller's signal to the fetch, and sends none when the caller passes none", async () => {
+    const png = await solid("png")
+    safeFetch.mockResolvedValue(served(png, "image/png"))
+    const ctrl = new AbortController()
+    await prefetchAsBase64(SOURCE, ctrl.signal)
+    expect(safeFetch.mock.calls[0]![1]).toEqual({ timeoutMs: 30_000, signal: ctrl.signal })
+    await prefetchAsBase64(SOURCE)
+    expect(safeFetch.mock.calls[1]![1]).toEqual({ timeoutMs: 30_000 })
+  })
+
+  it("a cancel during the fetch rejects with the cancel — never the URL fallback", async () => {
+    const ctrl = new AbortController()
+    safeFetch.mockImplementation(async () => {
+      ctrl.abort()
+      throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" })
+    })
+    const err = await prefetchAsBase64(SOURCE, ctrl.signal).catch((e: unknown) => e)
+    expect((err as Error).name).toBe("AbortError")
+  })
+
+  it("an already-cancelled signal fetches nothing", async () => {
+    const ctrl = new AbortController()
+    ctrl.abort()
+    await expect(prefetchAsBase64(SOURCE, ctrl.signal)).rejects.toMatchObject({ name: "AbortError" })
+    expect(safeFetch).not.toHaveBeenCalled()
+  })
+})

@@ -102,7 +102,7 @@
     "episode-trailer.json → json-process.in": true,
     "episode-trailer.json → combine-videos.videos": false,
     "episode-trailer.json → social-media-format.media": true,
-    "episode-trailer.json → combine-videos.in": true
+    "episode-trailer.json → combine-videos.in": false
   },
   "pick": {
     "data": {

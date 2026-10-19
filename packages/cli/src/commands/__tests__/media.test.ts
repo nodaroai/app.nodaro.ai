@@ -23,6 +23,7 @@ const mocks = {
   suggestOverlayPlacement: vi.fn(),
   videoOverlay: vi.fn(),
   addCaptions: vi.fn(),
+  nodesRun: vi.fn(),
   jobsGet: vi.fn(),
 }
 
@@ -44,6 +45,7 @@ vi.mock("../../client.js", () => ({
       videoOverlay: mocks.videoOverlay,
       addCaptions: mocks.addCaptions,
     },
+    nodes: { run: mocks.nodesRun },
     jobs: { get: mocks.jobsGet },
   }),
   handleError: (err: unknown) => {
@@ -88,6 +90,37 @@ beforeEach(() => {
 })
 afterEach(() => {
   exitSpy.mockRestore()
+})
+
+describe("media generate-mask command", () => {
+  it("sends the image, the prompt and --threshold", async () => {
+    mocks.nodesRun.mockResolvedValueOnce({ jobId: "j-mask" })
+    await runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--threshold", "0.45", "--json")
+    expect(mocks.nodesRun).toHaveBeenCalledWith("generate-mask", { imageUrl: "https://x/photo.png", prompt: "the person", threshold: 0.45 })
+    expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "j-mask" }, expect.anything())
+  })
+
+  it("omits threshold when the flag is not given (the server default applies)", async () => {
+    mocks.nodesRun.mockResolvedValueOnce({ jobId: "j-mask" })
+    await runCmd("media", "generate-mask", "https://x/photo.png", "sky and clouds", "--json")
+    expect(mocks.nodesRun).toHaveBeenCalledWith("generate-mask", { imageUrl: "https://x/photo.png", prompt: "sky and clouds" })
+  })
+
+  it("refuses a --threshold outside 0–1 before calling the API", async () => {
+    await expect(runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--threshold", "1.5")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--threshold"))
+    expect(mocks.nodesRun).not.toHaveBeenCalled()
+  })
+
+  it("--watch polls the job to its end", async () => {
+    mocks.nodesRun.mockResolvedValueOnce({ jobId: "j-mask" })
+    mocks.jobsGet.mockResolvedValueOnce({
+      data: { id: "j-mask", status: "completed", output_data: { maskUrl: "https://x/mask.png", imageUrl: "https://x/photo.png" } },
+    })
+    await runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--watch", "--poll-interval", "1")
+    expect(mocks.jobsGet).toHaveBeenCalledWith("j-mask")
+    expect(vi.mocked(success)).toHaveBeenCalledWith(expect.stringContaining("completed"))
+  })
 })
 
 describe("media download command", () => {

@@ -43,6 +43,7 @@ import {
   nodeSelectionData,
   nodeSelectionOf,
 } from "../continue-from-failed-lineage.js"
+import { completedFor, fromFailedClosedRunSet, fromFailedRunSet, isPlaceholder } from "@nodaro/render-rules"
 
 beforeEach(() => {
   db.calls.length = 0
@@ -103,6 +104,67 @@ describe("a run's node selection and its lineage's node scope", () => {
     expect(leftUnfinishedBy({ nodeStates })).toEqual(["b", "c", "d", "f"])
     expect(leftUnfinishedBy({})).toEqual([])
     expect(leftUnfinishedBy({ nodeStates: null })).toEqual([])
+  })
+})
+
+describe("a node named in nodeIds that never ran anywhere in the chain (a placeholder)", () => {
+  const at = "2026-10-19T10:00:00.000Z"
+  const states = {
+    // Outside the run's nodeIds: handed on from its saved data.
+    saved: { status: "completed", fromSavedData: true },
+    // A seed of one that was so.
+    carried: { status: "completed", seededFromExecution: "r1", carriedPlaceholder: true },
+    ran: { status: "completed", startedAt: at, jobId: "j" },
+    ranInline: { status: "completed", startedAt: at },
+    seededRan: { status: "completed", seededFromExecution: "r1" },
+    failed: { status: "failed", startedAt: at },
+  }
+
+  it("isPlaceholder: completed with no start, no job, and not seeded or seeded from a placeholder", () => {
+    expect(isPlaceholder(states.saved)).toBe(true)
+    expect(isPlaceholder(states.carried)).toBe(true)
+    for (const id of ["ran", "ranInline", "seededRan", "failed"] as const) expect(isPlaceholder(states[id])).toBe(false)
+    expect(isPlaceholder(undefined)).toBe(false)
+  })
+
+  it("completedFor: a placeholder counts as completed unless it is named", () => {
+    expect(completedFor(states.saved, false)).toBe(true)
+    expect(completedFor(states.saved, true)).toBe(false)
+    expect(completedFor(states.carried, true)).toBe(false)
+    expect(completedFor(states.ran, true)).toBe(true)
+    expect(completedFor(states.seededRan, true)).toBe(true)
+    expect(completedFor(states.failed, false)).toBe(false)
+  })
+
+  it("the run set: a named placeholder runs; an unnamed one, upstream or not, is handed on as before", () => {
+    // llm → jp → ct; jp completed (it ran), ct and up only ever handed on from saved data.
+    const graph = {
+      nodes: [{ id: "up" }, { id: "llm" }, { id: "jp" }, { id: "ct" }],
+      edges: [
+        { source: "up", target: "ct" },
+        { source: "llm", target: "jp" },
+        { source: "jp", target: "ct" },
+      ],
+    }
+    const order = graph.nodes.map((n) => n.id)
+    const source = {
+      nodeStates: {
+        up: states.saved,
+        llm: { status: "completed", seededFromExecution: "r1" },
+        jp: states.ran,
+        ct: states.carried,
+      },
+    }
+    // Not named: as before, nothing is left.
+    expect(fromFailedRunSet(["ct"], source)).toEqual([])
+    expect(fromFailedClosedRunSet(order, ["ct"], graph, source)).toEqual([])
+    // Named: ct runs, and the placeholder upstream of it (not named) is never pulled in.
+    expect(fromFailedRunSet(["ct"], source, ["ct"])).toEqual(["ct"])
+    expect(fromFailedClosedRunSet(order, ["ct"], graph, source, ["ct"])).toEqual(["ct"])
+    // A named node that really ran (or was seeded from a run that did) stays completed.
+    expect(fromFailedClosedRunSet(order, ["llm", "jp"], graph, source, ["llm", "jp"])).toEqual([])
+    // The default set (every node, none named): unchanged.
+    expect(fromFailedClosedRunSet(order, order, graph, source)).toEqual([])
   })
 })
 

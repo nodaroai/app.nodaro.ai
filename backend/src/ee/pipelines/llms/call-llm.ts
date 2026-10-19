@@ -22,7 +22,7 @@ import { extractJsonFromAIResponse } from "../../../lib/json-utils.js"
 import { anthropicKeySet, kieKeySet, pickClaudeLane, type ClaudeLane } from "../../../lib/llm/anthropic-availability.js"
 import { callKie } from "../../../lib/llm/kie-lane.js"
 import { inlineImagesForClaudeKie } from "../../../lib/llm/claude-kie-images.js"
-import { kieCostUsd, requestChars } from "../../../lib/llm/kie-cost.js"
+import { kieCostUsd, kieFailureCostUsd, kieInputTokens, requestChars } from "../../../lib/llm/kie-cost.js"
 import type { LlmContentBlock, LlmRequest } from "../../../lib/llm/types.js"
 import { kieRetryable } from "../../copilot/lane.js"
 
@@ -387,7 +387,8 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
         // eslint-disable-next-line no-console -- the lane is the operator's only signal until llm_calls.lane exists everywhere
         console.warn(`[callLLM] ${task}: ${modelId} served from KIE — ${laneReason}`)
       }
-      kieBaseBlocks ??= typeof userPrompt === "string" ? [] : await inlineImagesForClaudeKie(userPrompt)
+      // Under the pipeline's cancel: a Cancel while the images are fetched ends the call at once.
+      kieBaseBlocks ??= typeof userPrompt === "string" ? [] : await inlineImagesForClaudeKie(userPrompt, signal)
       const blocks = kieUserBlocks(userPrompt, kieBaseBlocks, feedback)
       // One deadline for this attempt's KIE tries, however many a burst takes.
       const deadline = AbortSignal.timeout(PIPELINE_KIE_TIMEOUT_MS)
@@ -600,7 +601,8 @@ async function runKieAttempt(opts: {
     return {
       raw: parseJsonOrUndefined(resp.text),
       stop: "answer",
-      inputTokens: resp.usage?.inputTokens ?? 0,
+      // The size estimate: KIE's own input count leaves out our prompt.
+      inputTokens: kieInputTokens(promptChars),
       outputTokens: resp.usage?.outputTokens ?? 0,
       cacheCreate: 0,
       cacheRead: 0,
@@ -612,11 +614,11 @@ async function runKieAttempt(opts: {
       return {
         raw: undefined,
         stop: err instanceof LlmContentRefusalError ? "refusal" : "truncated",
-        inputTokens: err.usage.inputTokens,
+        inputTokens: kieInputTokens(promptChars),
         outputTokens: err.usage.outputTokens,
         cacheCreate: 0,
         cacheRead: 0,
-        costUsd: err.usage.providerCost ?? 0,
+        costUsd: kieFailureCostUsd(opts.model.id, err.usage, promptChars),
         noAnswerReason: "",
       }
     }
@@ -661,7 +663,8 @@ function directFailureToKie(err: unknown, ctx: { modelId: string; task: string; 
 /**
  * May a failed KIE try be tried again within a burst? Only a transient failure
  * that cost nothing — the Copilot's own rule (`kieRetryable`: 429, 5xx, KIE's
- * 400 `api_error` "Internal error", a connection error with no status) — and
+ * 400 `api_error` "Internal error", a network failure or KIE's stream error
+ * frame with no status; never our own bug) — and
  * never one that reported usage, KIE's own account refusing, KIE having no
  * account for the model (`no_available_account`, K14), or the attempt's 600 s
  * deadline. None of those clears in a few minutes. A refusal or a cut-off

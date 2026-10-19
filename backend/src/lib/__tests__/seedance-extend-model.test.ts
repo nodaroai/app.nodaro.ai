@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the seedance extend credit rows buildSeedanceExtendCreditIdentifier builds
 import { describe, it, expect, afterEach, vi } from "vitest"
 import {
   seedanceExtendGenerationModel,

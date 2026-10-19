@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-17T22:16:38.546Z
-generated_from: 085c48b9e
+generated_at: 2026-10-18T09:32:17.563Z
+generated_from: 470a951f4
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -99,6 +99,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `character-fx` — Character FX
 - `character-motion` — Character Motion
 - `cinematic-avatar` — Cinematic Avatar
+- `clip-pack` — Clip Pack
 - `collect` — Collect
 - `collection-read` — Read Collection
 - `collection-write` — Save to Collection

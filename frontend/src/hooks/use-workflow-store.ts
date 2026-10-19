@@ -1,4 +1,5 @@
 import { curatedNodeDefaults } from "@/lib/curated-node-defaults"
+import type { WorkflowWrite } from "./workflow-store-adopted"
 import { create } from "zustand"
 import {
   applyNodeChanges,
@@ -36,6 +37,7 @@ import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
 import { initialEdgeData } from "@/lib/initial-edge-data"
 import { ensureNodePositions } from "@/lib/node-position"
+import { usecaseAudioLockGraph } from "@/lib/use-case-audio-lock"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { refreshEntityNodes } from "@/lib/entity-node-data"
@@ -401,7 +403,7 @@ export interface PresentationSettings {
 
 export const DEFAULT_PRESENTATION_SETTINGS: PresentationSettings = { runTarget: "workflow" }
 
-interface WorkflowState {
+export interface WorkflowState {
   readonly workflowId: string | null
   readonly projectId: string | null
   readonly workflowName: string
@@ -1100,18 +1102,40 @@ export function focusPatch(
     : { focusedNodeId: next, previousFocusedNodeId: state.focusedNodeId }
 }
 
+/**
+ * A store write with the audio lock applied to the graph it leaves (see `set`
+ * in the store). A graph adopted as stored — a load or a remote change (a new
+ * `loadGeneration`), a save conflict's merge (marked `adoptedAsStored`, which
+ * is stripped here and never reaches state) — is taken as it is: its changes
+ * are never a local edit. Any other write of the graph is locked, whatever
+ * else it carries (a save's new baseline included).
+ */
+function withAudioLock(state: WorkflowState, marked: WorkflowWrite): Partial<WorkflowState> {
+  const { adoptedAsStored, ...patch } = marked
+  if ((!patch.nodes && !patch.edges) || patch.loadGeneration !== undefined || adoptedAsStored === true) return patch
+  const nodes = patch.nodes ?? state.nodes
+  const locked = usecaseAudioLockGraph(state.nodes, state.edges, nodes, patch.edges ?? state.edges)
+  return locked === nodes ? patch : { ...patch, nodes: locked as WorkflowNode[] }
+}
+
 export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   // Every patch that raises `isDirty` also advances `dirtyEpoch`, whichever
   // of the ~30 editing actions produced it. That is what lets a save tell
   // "the edits I sent" from "edits made while I was in flight" without each
   // action having to remember a counter.
+  //
+  // Every graph write also keeps a use-case node's audio lock (lib/use-case-
+  // audio-lock.ts) in the SAME write — one undo step, panel open or not — on
+  // whichever path changed a wire's kind. A graph adopted as stored (a load,
+  // a remote change, a save conflict's merge) is taken as it is.
   const set = ((partial: unknown, replace?: boolean) =>
     rawSet(
       (state: WorkflowState): Partial<WorkflowState> => {
-        const patch = (
+        const raw = (
           typeof partial === "function" ? (partial as (s: WorkflowState) => Partial<WorkflowState>)(state) : partial
         ) as Partial<WorkflowState> | null | undefined
-        if (!patch) return {}
+        if (!raw) return {}
+        const patch = withAudioLock(state, raw)
         return patch.isDirty === true ? { ...patch, dirtyEpoch: state.dirtyEpoch + 1 } : patch
       },
       replace as false | undefined,
@@ -3199,7 +3223,11 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     if (maxId >= nextNodeId) {
       nextNodeId = maxId + 1
     }
-    set({
+    // The snapshot is a graph the store already wrote, its audio lock as it
+    // stood: restored as it is (no lock pass, which would read the undo
+    // itself as an edit) — `rawSet`, with the dirty epoch `set` would add.
+    rawSet((state) => ({
+      dirtyEpoch: state.dirtyEpoch + 1,
       // A paid run's mark follows the runs this tab has out now, not the
       // snapshot: Undo neither started nor stopped one (`withLiveRunsInFlight`).
       nodes: withLiveRunsInFlight(snapshot.nodes, get().nodes),
@@ -3214,7 +3242,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         get().nodeIdMoves,
       ),
       isDirty: true,
-    })
+    }))
   },
 
   editGraph: (edit) => {
@@ -3417,3 +3445,19 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   },
   }
 })
+
+// The writes made straight on the store (a paste, a cut, an import — and
+// tests) keep the audio lock as the store's own actions do: whichever path
+// changes the wires, the lock is part of that same write.
+{
+  const direct = useWorkflowStore.setState
+  useWorkflowStore.setState = ((partial: unknown, replace?: boolean) =>
+    // A whole-state replace (a reset) is the graph as given.
+    replace === true ? (direct as (p: unknown, r: true) => void)(partial, true) : direct(
+      (state: WorkflowState): Partial<WorkflowState> => {
+        const raw = (typeof partial === "function" ? (partial as (s: WorkflowState) => Partial<WorkflowState>)(state) : partial) as Partial<WorkflowState> | null | undefined
+        return raw ? withAudioLock(state, raw) : {}
+      },
+      replace as false | undefined,
+    )) as typeof direct
+}

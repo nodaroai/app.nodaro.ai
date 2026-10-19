@@ -1,5 +1,6 @@
 // @registry-lookup reads the JSON of the one node unit a wire leaves from (unitDefinitionOf(src.type))
 import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared/edl"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { unitDefinitionOf } from "./unit-definitions"
 import { unitPipJson } from "./unit-compose"
 
@@ -36,6 +37,17 @@ export function editPlanOutputOf(data: Readonly<Record<string, unknown>>): EditP
 }
 
 /**
+ * A use-case node's plan as its `json` pip hands it on (Chapters: its chapter
+ * list): the person's review applied, a clip-set edit of a chapter list
+ * included, and a plan held as null is none — never the text "null". The read
+ * the server's saved branch makes (`use-case-output.ts ::
+ * usecaseSavedNodeOutput`), for the scalar and the JSON consumers alike.
+ */
+export function usecaseJsonOf(data: Readonly<Record<string, unknown>>): unknown {
+  return editPlanOutputOf(data)?.json ?? undefined
+}
+
+/**
  * What a wire from a node unit's look pip hands a JSON consumer (`unitPipJson`):
  * wrapped, `value` undefined when the output holds none; undefined when the
  * wire does not leave a unit's look pip.
@@ -49,8 +61,9 @@ export function unitSourceJsonOf(src: { readonly type?: string; readonly data: u
  * The structured JSON a node hands a JSON consumer (Extract Field, JSON
  * Process) that reads its source's data directly, for the pip the wire leaves
  * from: an Edit Plan's plan as the person's review leaves it (the kept clips
- * only, edited hooks included), a node unit's look pip its own output, any
- * other node's `generatedJson`. The server's consumers read the same value off
+ * only, edited hooks included), a use-case node's plan likewise
+ * (`usecaseJsonOf`), a node unit's look pip its own output, any other node's
+ * `generatedJson`. The server's consumers read the same value off
  * the source's state (`structuredJsonOf`: the plan's seeded `output.json`,
  * from `editPlanSavedOutput`; a unit's `unitOutputs`).
  *
@@ -60,6 +73,7 @@ export function unitSourceJsonOf(src: { readonly type?: string; readonly data: u
 export function sourceJsonOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle?: string | null): unknown {
   const data = src.data as Readonly<Record<string, unknown>>
   if (src.type === "edit-plan") return editPlanOutputOf(data)?.json
+  if (isUseCaseNodeType(src.type)) return usecaseJsonOf(data)
   const unit = unitSourceJsonOf(src, sourceHandle)
   if (unit) return unit.value
   return data.generatedJson

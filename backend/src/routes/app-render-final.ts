@@ -1,3 +1,4 @@
+// @registry-enumerates asks CreditsService for the run's eligibility by user, not by node type, so not a @registry-lookup
 /**
  * POST /v1/app/:slug/runs/:runId/render-final — Render final in the app runner
  * (decided 2026-10-04).
@@ -35,7 +36,8 @@
  * render; the run has no completed execution to continue; with the stop rule
  * on, the render's take there is not a Preview (a Final app's tail is the
  * creator's, with markup); a final of this run is already rendering; the
- * overrides re-point an outbound node; with the stop rule on, a Preview further
+ * overrides re-point an outbound node; a Clip Pack's stored review keeps no
+ * clip (`use_case_nothing_kept`); with the stop rule on, a Preview further
  * on would stop the final with nobody there to review it; or the runner cannot
  * pay.
  */
@@ -59,6 +61,7 @@ import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { personalPayer, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { usecaseNothingKeptRefusal } from "../lib/use-case/continuation.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -81,6 +84,7 @@ import {
 } from "../services/workflow-engine/run-continuation.js"
 import { executeAppRenderFinal } from "../services/app-render-final.js"
 import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-codes.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 
 /** Stable refusal codes of this route (clients branch on the code). */
 export const APP_RENDER_FINAL_NOT_A_RENDER = "not_a_render"
@@ -97,7 +101,7 @@ type SnapshotNode = { id: string; type?: string; data?: Record<string, unknown>;
 type SnapshotEdge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
 export async function appRenderFinalRoutes(app: FastifyInstance) {
-  app.post("/v1/app/:slug/runs/:runId/render-final", async (req, reply) => {
+  app.post("/v1/app/:slug/runs/:runId/render-final", { preHandler: requireAppScope("workflows:execute") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
@@ -242,6 +246,19 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     const locked = findLockedOverrides(nodes, effective, exposedVideoLinkNodeIds(appRow.snapshot_settings as Record<string, unknown> | null, nodes))
     if (locked.length > 0) {
       return reply.status(400).send({ error: { code: "locked_field", message: describeLockedOverrides(locked) } })
+    }
+
+    // A Clip Pack whose stored review keeps no clip has nothing to render:
+    // refused here, before anything is written or held, as its continue route
+    // refuses it (the node would otherwise fail inside a final already started).
+    if (useCaseTarget && isUseCaseNodeType(render?.type)) {
+      const nothingKept = await usecaseNothingKeptRefusal({
+        nodeType: render.type,
+        jobId: useCaseTarget.jobId,
+        userId,
+        editedEdl: edits[renderNodeId]?.editedEdl,
+      })
+      if (nothingKept) return reply.status(nothingKept.status).send({ error: { code: nothingKept.code, message: nothingKept.message } })
     }
 
     const reviewerPresent = appReviewerPresent(req, { mark: parsedBody.data.reviewer })

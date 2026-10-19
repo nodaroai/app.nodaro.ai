@@ -93,6 +93,11 @@ describe("shouldProxyLlmToCloud", () => {
     }
   })
 
+  it("a whitespace-only key is no key — a keyless connected install still proxies", async () => {
+    env.KIE_API_KEY = "  "; env.ANTHROPIC_API_KEY = "\n"; env.GEMINI_API_KEY = " "
+    expect(await shouldProxyLlmToCloud()).toBe(true)
+  })
+
   it("is false with no connection, so a keyless unconnected install still fails locally with its own message", async () => {
     getNodaroCredential.mockResolvedValue(null)
     expect(await shouldProxyLlmToCloud()).toBe(false)

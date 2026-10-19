@@ -54,6 +54,28 @@ export const IMAGE_ASPECT_RATIO_VALUES = [
 export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIO_VALUES[number]
 
 /**
+ * The `resolution` vocabulary `/v1/generate-image` and `/v1/image-to-image`
+ * accept: the K tiers (`1K`/`2K`/`4K`) and the Flux 2 megapixel tiers. Like
+ * {@link IMAGE_ASPECT_RATIO_VALUES} it is a vocabulary bound, not a per-model
+ * gate — the catalog snap corrects a value the chosen model does not declare.
+ * One tuple for the route Zod enums and the SDK's `ImageResolution`.
+ */
+export const IMAGE_RESOLUTION_VALUES = ["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"] as const
+export type ImageResolution = typeof IMAGE_RESOLUTION_VALUES[number]
+
+/** The `quality` vocabulary of the same two routes (vocabulary bound; the catalog snap gates per model). */
+export const IMAGE_QUALITY_VALUES = ["medium", "high", "basic"] as const
+export type ImageQuality = typeof IMAGE_QUALITY_VALUES[number]
+
+/** The `renderingSpeed` vocabulary (Ideogram's speed tiers — see {@link RENDERING_SPEED_SUPPORT}). */
+export const IMAGE_RENDERING_SPEED_VALUES = ["TURBO", "BALANCED", "QUALITY"] as const
+export type ImageRenderingSpeed = typeof IMAGE_RENDERING_SPEED_VALUES[number]
+
+/** `/v1/edit-image`'s `targetResolution` (the upscalers' output tier; topaz maps it to a factor). */
+export const IMAGE_EDIT_TARGET_RESOLUTION_VALUES = ["2K", "4K", "8K"] as const
+export type ImageEditTargetResolution = typeof IMAGE_EDIT_TARGET_RESOLUTION_VALUES[number]
+
+/**
  * Per-provider maximum ASSEMBLED image-prompt length (chars), VERIFIED against
  * each model's official docs.kie.ai schema (2026-06). Providers absent here use
  * {@link IMAGE_PROMPT_MAX} (the documented KIE "standard" of 5000). Read via
@@ -819,12 +841,17 @@ export const IMAGE_EDIT_PROVIDERS = [
  * (`imageParam: "task_id"`) places it in the request body. Membership here
  * must match the KIE configs with `imageParam: "task_id"` — guarded by
  * backend/src/routes/__tests__/edit-image.test.ts.
+ *
+ * The ids as a tuple ({@link TaskChainedEditProvider} is its type); the Set is
+ * built from it, so the two cannot disagree.
  */
-export const TASK_CHAINED_EDIT_PROVIDERS: ReadonlySet<string> = new Set([
+export const TASK_CHAINED_EDIT_PROVIDER_IDS = [
   "grok-upscale",
   "grok-2-edit",
   "grok-2-segment",
-])
+] as const satisfies readonly (typeof IMAGE_EDIT_PROVIDERS)[number][]
+export type TaskChainedEditProvider = typeof TASK_CHAINED_EDIT_PROVIDER_IDS[number]
+export const TASK_CHAINED_EDIT_PROVIDERS: ReadonlySet<string> = new Set(TASK_CHAINED_EDIT_PROVIDER_IDS)
 
 /** Modify image providers (I2I + edit-with-prompt) */
 export const MODIFY_IMAGE_PROVIDERS = [

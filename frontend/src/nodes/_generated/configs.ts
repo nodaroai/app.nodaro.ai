@@ -2,6 +2,7 @@
 // @registry frontend/src/nodes/*/config.tsx
 // @registry-exports configs: UNIT_CONFIGS
 import type { UnitConfigPanel } from "../exec-kit"
+import { ConfigPanel as unit_clip_pack } from "../clip-pack/config" // unit:clip-pack
 import { ConfigPanel as unit_episode_chapters } from "../episode-chapters/config" // unit:episode-chapters
 import { ConfigPanel as unit_episode_trailer } from "../episode-trailer/config" // unit:episode-trailer
 import { ConfigPanel as unit_gif_to_video } from "../gif-to-video/config" // unit:gif-to-video
@@ -9,6 +10,7 @@ import { ConfigPanel as unit_remove_audio } from "../remove-audio/config" // uni
 import { ConfigPanel as unit_tighten_episode } from "../tighten-episode/config" // unit:tighten-episode
 
 export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.assign(Object.create(null), {
+  "clip-pack": unit_clip_pack, // unit:clip-pack
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video

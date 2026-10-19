@@ -116,6 +116,7 @@ import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared/credits"
 import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
+import { isFrozenLottieOverride, namedWorkNodeIds } from "../services/workflow-engine/named-work.js"
 import { savedUserDirectionRefs } from "../services/workflow-engine/node-user-direction.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
@@ -508,31 +509,6 @@ export function createOrchestratorWorker() {
 // ---------------------------------------------------------------------------
 
 /**
- * Freeze-on-exposure gate (design F16): true when this run carries a lottie
- * motionPlan override for `node` AND the node is a motion-graphics node whose
- * (already override-merged) plan is a lottie-graphic. Such a node must be
- * pre-completed with its overridden plan instead of re-generated — the creator
- * exposed slot fields, so end-users edit the published animation rather than
- * re-rolling it (no re-generation, no 5cr re-charge). The PRESENCE of a
- * `motionPlan` key in the override is the freeze signal; the frontend
- * (composeLottieSlotOverrides) emits one for EVERY slot-exposed lottie node,
- * even when the user touched nothing.
- *
- * Covers BOTH the presentation route and the app route: both enqueue the same
- * orchestrator job with `inputOverrides`, so this one gate fires for both.
- */
-function isFrozenLottieOverride(
-  node: SimpleNode,
-  inputOverrides: Record<string, Record<string, unknown>> | undefined,
-): boolean {
-  if (node.type !== "motion-graphics") return false
-  const override = inputOverrides?.[node.id]
-  if (!override || !("motionPlan" in override)) return false
-  const plan = node.data?.motionPlan as Record<string, unknown> | undefined
-  return plan?.planType === "lottie-graphic"
-}
-
-/**
  * @internal Exported for the orchestrator integration test (freeze-on-exposure
  * guard) so it can drive the real seeding + level-execution path. Not part of
  * the module's public surface — production callers use `createOrchestratorWorker`.
@@ -868,9 +844,19 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
       // Continue-from-failed runs only what the run it is seeded from did not
       // complete, whatever the caller listed: a completed step is seeded,
-      // never dispatched (or billed) again.
+      // never dispatched (or billed) again. A node the caller NAMED that no
+      // run of the chain ever ran (a placeholder) is not completed: the route
+      // says which ids were named (`namedNodeIds`), the worker never guesses;
+      // only one it would execute counts (`namedWorkNodeIds`, the route's own
+      // rule, over the overrides this run applies), so a named source keeps
+      // its seed and a named frozen node is never taken for work.
       if (job.data.continueMode === "from-failed") {
-        const remaining = fromFailedRunSet([...nodeSubset], seedSource)
+        const named = namedWorkNodeIds(
+          nodes,
+          job.data.namedNodeIds ?? [],
+          continuationInputOverrides(seedSource, job.data.inputOverrides),
+        )
+        const remaining = fromFailedRunSet([...nodeSubset], seedSource, named)
         if (remaining.length === 0) {
           await failExecution(executionId, CONTINUATION_SUBSET_REQUIRED)
           return
@@ -2235,7 +2221,8 @@ async function executeNodeForList(
     return { index: i, result, resultValue }
   })
 
-  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef)
+  // Fail-fast unless this node tries every item (a Clip Pack's clips).
+  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef, !ctx.triesEvery?.has(node.id))
 
   // Assemble per-iteration results + apply failure propagation. Throws the
   // first genuine failure when NOTHING succeeded (so the orchestrator marks

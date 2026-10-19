@@ -277,7 +277,7 @@ export async function parseSseStream(
             const providerCost = actualUsd ?? calculateLlmCost(modelId, usage)
             throw new LlmStreamResponseError(detail, {
               inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
-              providerCost, complete: providerCost !== undefined,
+              providerCost, ...(actualUsd !== undefined ? { creditsUsd: actualUsd } : {}), complete: providerCost !== undefined,
             })
           }
           throw new Error(detail)
@@ -365,7 +365,8 @@ export async function parseSseStream(
               console.warn(`[llm-kie-stream-terminal] ${detail}`)
               const failureUsage = {
                 inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0,
-                providerCost, complete: usage !== undefined && providerCost !== undefined,
+                providerCost, ...(actualUsd !== undefined ? { creditsUsd: actualUsd } : {}),
+                complete: usage !== undefined && providerCost !== undefined,
               }
               // A cap stop is the truncation every other lane reports as
               // `LlmOutputTruncatedError` (#1588): same class and opening sentence
@@ -407,8 +408,8 @@ export async function parseSseStream(
   const providerCost = actualUsd ?? (usage ? calculateLlmCost(modelId, usage) : undefined)
   // Last, so a streamed caller has already shown every token it received — the
   // throw is what stops those tokens being saved as a finished answer.
-  if (refusalFails) assertNotContentRefusal({ modelId, lane: `kie ${format} stream`, stopReason, usage, providerCost })
-  assertNotOutputCapped({ modelId, lane: `kie ${format} stream`, stopReason, cap, usage, providerCost })
+  if (refusalFails) assertNotContentRefusal({ modelId, lane: `kie ${format} stream`, stopReason, usage, providerCost, creditsUsd: actualUsd })
+  assertNotOutputCapped({ modelId, lane: `kie ${format} stream`, stopReason, cap, usage, providerCost, creditsUsd: actualUsd })
 
   return {
     // Text wins when present; the accumulated tool payload is the body only for

@@ -2,7 +2,7 @@
  * Podcast use-case verbs: one call per use-case over the editing primitives
  * (`tighten_episode` → POST /v1/tighten-episode, `make_chapters` → POST
  * /v1/episode-chapters, `make_trailer` → POST /v1/episode-trailer,
- * `continue_use_case` → POST
+ * `make_clip_pack` → POST /v1/clip-pack, `continue_use_case` → POST
  * /v1/<the run's type>/continue, the type read from the run's own job row). CORE and ungated like `apply_edl`: the route
  * answers an install that cannot run it (unconnected, keyless) with its own
  * honest 503 before any charge. Its own module (the video verbs file is past
@@ -19,14 +19,20 @@
  */
 import { z } from "zod"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
-import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
+import { EDIT_PLAN_MAX_CLIP_COUNT, EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS, SPEAKER_SWITCH_IDS } from "@nodaro/shared/edl"
 import {
+  CLIP_PACK_DEFAULTS,
+  CLIP_PACK_DEFAULT_FRAMING,
+  CLIP_PACK_MAX_TARGET_SEC,
+  CLIP_PACK_MIN_TARGET_SEC,
   EPISODE_CHAPTERS_DEFAULTS,
   EPISODE_TRAILER_DEFAULTS,
+  SPEAKER_VIEW_EMPHASIS_ATOMS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   TIGHTEN_EPISODE_DEFAULTS,
   TRAILER_FORMATS,
   USE_CASE_NODE_TYPES,
+  isClipPackEmphasis,
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseFeeCreditId,
@@ -117,6 +123,7 @@ const NEXT_STEP: Readonly<Record<string, (jobId: string | undefined) => string>>
   render_final_already_rendered: (id) =>
     id ? ` That render is job ${id}: read it with get_job. Change the edit to render again.` : "",
   continuation_settling: () => " Call continue_use_case again in a few seconds.",
+  use_case_nothing_kept: () => " To render the final, keep at least one clip in `edited_edl` and call continue_use_case again.",
 }
 
 function refusalText(statusCode: number, body: string): string | null {
@@ -146,6 +153,7 @@ const REGISTER_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, (ctx: RegisterCtx)
   tighten: registerTightenEpisode,
   chapters: registerMakeChapters,
   trailer: registerMakeTrailer,
+  clipPack: registerMakeClipPack,
 }
 
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {
@@ -403,6 +411,121 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
         },
         widgetKind: "video",
         widgetData: { prompt: "(trailer)" },
+        ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
+      }),
+  )
+}
+
+const F = CLIP_PACK_DEFAULT_FRAMING
+/** The emphasis values, named from the atoms Speaker View draws (its refusal and its description). */
+const EMPHASIS_VALUES = `"none", or ${SPEAKER_VIEW_EMPHASIS_ATOMS.join(", ")} joined with "+" (each once)`
+const EMPHASIS_HINT = `emphasis is ${EMPHASIS_VALUES}`
+
+function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
+  const CLIP_PACK_LABEL = usecaseDescriptor(usecaseTypeOfBuilder("clipPack")).label
+  server.registerTool(
+    "make_clip_pack",
+    {
+      title: "Clip Pack",
+      description:
+        "Cut a podcast or interview recording into a pack of short clips in one call: finds the best moments " +
+        `(\`count\`, default ${CLIP_PACK_DEFAULTS.count}; \`target_length_sec\`, default ${CLIP_PACK_DEFAULTS.targetDurationSec}), renders each — ` +
+        `framed for ${F.aspect} with the speakers ${F.layout} by default (\`framing\`, or \`null\` for the recording's shape) — ` +
+        "and captions each clip (`captions`, default on). Pass `media_url` (a video or audio recording, up to 3 hours); " +
+        "an audio recording makes audio clips, with no framing or captions. `review_before_render: true` stops at quick proxy " +
+        "previews: inspect `output_data.json` (one EDL per clip), then `continue_use_case` with `mode: \"render-final\"` and an " +
+        "`edited_edl` that keeps or drops clips (keep at least one); Render final renders only the kept clips, with no fee. " +
+        "Returns a job id: the clips are `output_data.clips` (`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]`), " +
+        "the first also `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried: one that cannot be rendered is " +
+        "skipped and not charged, counted in `output_data.failedClips`, and the pack completes with the others, its fee kept, so it " +
+        "has no `from-failed`: render the missing clip yourself from its EDL in `output_data.json` (Apply EDL or Speaker View, then " +
+        "Add Captions; no fee), or start a new run. A clip whose captions could " +
+        "not be added comes uncaptioned (`captionsFailed`, counted in `output_data.failedCaptions`; those captions are not charged). " +
+        "When no clip renders, the run fails and its fee is refunded. If a run fails, `continue_use_case` with " +
+        "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
+        priceSentence(usecaseTypeOfBuilder("clipPack")),
+      inputSchema: {
+        media_url: z.string().url().describe("The recording (video or audio URL)."),
+        count: z
+          .number()
+          .int()
+          .min(1)
+          .max(EDIT_PLAN_MAX_CLIP_COUNT)
+          .optional()
+          .describe(`How many clips to find, 1–${EDIT_PLAN_MAX_CLIP_COUNT} (default ${CLIP_PACK_DEFAULTS.count}); the plan may find fewer.`),
+        target_length_sec: z
+          .number()
+          .int()
+          .min(CLIP_PACK_MIN_TARGET_SEC)
+          .max(CLIP_PACK_MAX_TARGET_SEC)
+          .optional()
+          .describe(`Each clip's target length in seconds, ${CLIP_PACK_MIN_TARGET_SEC}–${CLIP_PACK_MAX_TARGET_SEC} (default ${CLIP_PACK_DEFAULTS.targetDurationSec}).`),
+        framing: z
+          .object({
+            aspect: z.enum(tuple(EDL_TARGET_ASPECTS)).describe("The clips' shape."),
+            layout: z
+              .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
+              .optional()
+              .describe(`How the speakers are laid out (default ${F.layout}; one the shape does not draw is snapped).`),
+            switch_type: z.enum(tuple(SPEAKER_SWITCH_IDS)).optional().describe(`The switch at each speaker change (default ${F.switchType}).`),
+            emphasis: z
+              .string()
+              .max(40)
+              .refine(isClipPackEmphasis, EMPHASIS_HINT)
+              .optional()
+              .describe(`How the speaker talking is emphasised (default ${F.emphasisStyle}): ${EMPHASIS_VALUES}.`),
+          })
+          .nullable()
+          .optional()
+          .describe(`Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default ${F.aspect}, ${F.layout}). null: the recording's shape.`),
+        captions: z.boolean().optional().describe(`Caption each video clip (default ${CLIP_PACK_DEFAULTS.captions}).`),
+        caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${CLIP_PACK_DEFAULTS.captionStyle}).`),
+        review_before_render: z.boolean().optional().describe(`Stop at proxy previews for review (default ${CLIP_PACK_DEFAULTS.reviewBeforeRender}).`),
+        plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${CLIP_PACK_DEFAULTS.planTier}).`),
+        instructions: z.string().max(4000).optional().describe("Instructions for picking the clips (\"the funniest moments\")."),
+        style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
+        client_request_id: clientRequestIdSchema.optional(),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
+    },
+    async (args) =>
+      dispatchJob(fastify, session, {
+        // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
+        url: "/v1/clip-pack",
+        label: CLIP_PACK_LABEL,
+        formatRefusal: refusalText,
+        payload: {
+          mediaUrls: [args.media_url],
+          ...(args.count !== undefined ? { count: args.count } : {}),
+          ...(args.target_length_sec !== undefined ? { targetDurationSec: args.target_length_sec } : {}),
+          // null = no framing; a field left out takes the route's default (layout: stacked).
+          ...(args.framing === null
+            ? { framing: null }
+            : args.framing
+              ? {
+                  framing: {
+                    aspect: args.framing.aspect,
+                    ...(args.framing.layout ? { layout: args.framing.layout } : {}),
+                    ...(args.framing.switch_type ? { switchType: args.framing.switch_type } : {}),
+                    ...(args.framing.emphasis ? { emphasisStyle: args.framing.emphasis } : {}),
+                  },
+                }
+              : {}),
+          ...(args.captions !== undefined ? { captions: args.captions } : {}),
+          ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
+          ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
+          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+          ...(args.instructions ? { instructions: args.instructions } : {}),
+          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+          // The agent that asked for a review is its reviewer (as on tighten_episode).
+          ...(args.review_before_render === true ? { reviewerPresent: true } : {}),
+          mcp_client: session.clientName,
+          userId: session.userId,
+        },
+        widgetKind: "video",
+        widgetData: { prompt: "(clip pack)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
       }),
   )

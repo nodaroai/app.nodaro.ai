@@ -108,6 +108,17 @@ const PINNED_SETTING_KEYS: Readonly<Record<UseCaseNodeType, readonly string[]>> 
   ],
   "episode-chapters": ["instructions", "planTier", "styleGuide"],
   "episode-trailer": ["formats", "instructions", "planTier", "reviewBeforeRender", "styleGuide"],
+  "clip-pack": [
+    "captionStyle",
+    "captions",
+    "count",
+    "framing",
+    "instructions",
+    "planTier",
+    "reviewBeforeRender",
+    "styleGuide",
+    "targetDurationSec",
+  ],
 }
 
 describe("guard: the use-case resolvers' setting keys are pinned", () => {

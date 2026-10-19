@@ -22,7 +22,14 @@ import { loadExecutionForWrapper } from "../execution-inline-graph.js"
 import { markJobFailed } from "../job-failure.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperKeepsPartial, usecaseWrapperOutput, type UseCaseWrapperOutput } from "./wrapper-output.js"
+import {
+  usecaseNoClipsRenderedMessage,
+  usecaseNoResultMessage,
+  usecaseWrapperHasResult,
+  usecaseWrapperKeepsPartial,
+  usecaseWrapperOutput,
+  type UseCaseWrapperOutput,
+} from "./wrapper-output.js"
 
 export type FinalizeOutcome = "not_terminal" | "not_use_case" | "already_final" | "completed" | "failed"
 
@@ -58,7 +65,10 @@ function failureMessage(
   graph: StoredInlineGraph | null,
 ): string {
   // A completed run that delivered nothing, in its kind's own words ("no chapters").
-  if (status === "completed") return usecaseNoResultMessage(graph)
+  if (status === "completed") return usecaseNoResultMessage(graph, output)
+  // A clip set whose every clip failed (its render step then fails too): how many, not the step's error.
+  const noClips = status === "failed" ? usecaseNoClipsRenderedMessage(graph, output) : null
+  if (noClips) return noClips
   const detail = (errorMessage ?? "").replace(/^Node execution failed:\s*/, "").replace(/^uc-[a-z-]+:\s*/, "")
   if (output.failedStep) return `${output.failedStep}: ${detail || "failed"}`
   if (detail) return detail
@@ -105,14 +115,19 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
   const backfill = typeof input._executionId === "string" ? {} : { input_data: { ...input, _executionId: exec.id } }
 
   // A run that failed after delivering part of a list (a Trailer whose other
-  // formats rendered) completes with what it delivered, its fee kept.
+  // formats rendered, a Clip Pack whose other clips did) completes with what
+  // it delivered, its fee kept. (A clip that fails inside the render's
+  // fan-out leaves the run completed: the same keep, by the completed path.)
   const delivered = exec.status === "completed" || (exec.status === "failed" && usecaseWrapperKeepsPartial(exec.inlineGraph, output))
+  // `captionsNotRun` only decides whether the run kept anything (just below):
+  // it is the engine's, never part of the job's output.
+  const { captionsNotRun: _captionsNotRun, ...published } = output
   if (delivered && usecaseWrapperHasResult(exec.inlineGraph, output)) {
     const { markJobCompleted } = await loadShared()
     // `failedStep` names the step a FAILED run stopped at: a completed run
     // that dropped a format names it on `failedFormats` instead, never as a
     // failed step.
-    const { failedNodeId: _failedNodeId, failedStep: _failedStep, ...completed } = output
+    const { failedNodeId: _failedNodeId, failedStep: _failedStep, ...completed } = published
     const flipped = await markJobCompleted(exec.wrapperJobId, { output_data: completed, credits_actual: exec.totalCreditsUsed + fee, ...backfill })
     if (!flipped) return "already_final"
     await commitReservedCreditsForJob(exec.wrapperJobId)
@@ -121,7 +136,7 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
 
   const flipped = await markJobFailed(exec.wrapperJobId, {
     error_message: failureMessage(exec.status, exec.errorMessage, output, exec.inlineGraph),
-    extra: { output_data: output, ...backfill },
+    extra: { output_data: published, ...backfill },
     from: [...OPEN],
   })
   if (!flipped) return "already_final"

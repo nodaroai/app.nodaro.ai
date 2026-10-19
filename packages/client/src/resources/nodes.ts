@@ -1,4 +1,5 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
+import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
@@ -320,6 +321,26 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
    * and is folded into the preset's prompt (over-long values dropped, not 400).
    */
   subject?: Subject
+  /**
+   * The image to edit. Alone, the run is image-to-image on it (a text-to-image
+   * model runs as its image-to-image sibling); with `maskUrl`, an inpaint.
+   */
+  baseImageUrl?: string
+  /**
+   * Inpaint mask — white = the area to change, black = keep (what
+   * `generate-mask` writes). Needs a base: `baseImageUrl`, else the first
+   * `referenceImageUrls` entry. Works on EVERY image model: the result's masked
+   * area is composited back over the base, so everything outside the mask is
+   * the base's own pixels. On the models whose `IMAGE_MASK_MODE` is `"prompt"`
+   * (`@nodaro/shared`) the masked area's position is also described in the
+   * prompt; the rest rely on the composite alone. (A model that takes the mask
+   * itself is on `image-to-image` — `I2I_MASK_SUPPORT`.)
+   */
+  maskUrl?: string
+  /** 0–1: how far the result may move from the base (taken by the models in `I2I_STRENGTH_SUPPORT`). */
+  strength?: number
+  /** 0–20: prompt adherence (taken by the models in `GUIDANCE_SCALE_SUPPORT`). */
+  guidanceScale?: number
   [k: string]: unknown
 }
 
@@ -779,6 +800,11 @@ export class NodesResource {
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "image-to-image", params: ImageToImageParams, options?: RunNodeOptions): Promise<ImageJobStarted>
+  run(type: "edit-image", params: EditImageParams, options?: RunNodeOptions): Promise<ImageJobStarted>
+  run(type: "generate-mask", params: GenerateMaskParams, options?: RunNodeOptions): Promise<ImageJobStarted>
+  /** Synchronous and free: answers the tiles, no job. */
+  run(type: "split-image", params: SplitImageParams, options?: RunNodeOptions): Promise<SplitImageResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult | GenerateImageBatchResult> {
     // The route comes from the table the platform's workflow engine uses
@@ -846,7 +872,10 @@ export class NodesResource {
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>
   runAndWait(type: "video-depth", params: VideoDepthParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
-  runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "pro-3d-render" ? Pro3DRenderJobOutput : T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
+  runAndWait(type: "image-to-image", params: ImageToImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "edit-image", params: EditImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "generate-mask", params: GenerateMaskParams, opts?: RunAndWaitOptions): Promise<GenerateMaskJobOutput>
+  runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "pro-3d-render" ? Pro3DRenderJobOutput : T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : T extends "generate-mask" ? GenerateMaskJobOutput : NodeJobOutput>
   async runAndWait(
     type: string,
     params: Record<string, unknown> = {},

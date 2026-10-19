@@ -13,6 +13,9 @@ export const queryKeys = {
     cursor: (workflowId: string, nodeId: string, channel = "") => ["telegram-feed", "cursor", workflowId, nodeId, channel] as const,
   },
 
+  // The model makers' marks this instance publishes (GET /v1/model-makers).
+  makerLogos: () => ["models", "maker-logos"] as const,
+
   credits: {
     all: ["credits"] as const,
     balance: (userId: string) => ["credits", "balance", userId] as const,

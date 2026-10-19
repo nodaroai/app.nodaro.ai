@@ -22,6 +22,8 @@ export {
   StudioOpError,
   ContinuationRefusedError,
   ContinuationPreviewPendingError,
+  AppRunVersionChangedError,
+  AlreadyRunningError,
   StudioPreviewAppliedError,
   StudioPreviewUnavailable,
   throwFromResponse,

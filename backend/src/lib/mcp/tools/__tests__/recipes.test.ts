@@ -117,7 +117,7 @@ describe("recipe catalog", () => {
       "word_timestamps", "threshold_db", "min_silence_ms", "pad_ms", "target_duration_sec", "target_aspect",
       "output_data", "plan_tier", "clip_key", "crossfade_ms", "speaker_map", "speaker_names", "transcript_source_id",
       "offset_ms", "layout_hints", "error_message", "job_id", "preview_review_required", "preview_render_nested",
-      "media_url", "intro_card_url", "formats",
+      "media_url", "intro_card_url", "formats", "target_length_sec", "edited_edl",
       // The refusal codes that say what held a run, and the list-driven refusal.
       "preview_review_required_review_on", "preview_review_required_mixed", "preview_render_nested_review_on",
       "preview_render_nested_mixed", "use_case_review_list_driven",

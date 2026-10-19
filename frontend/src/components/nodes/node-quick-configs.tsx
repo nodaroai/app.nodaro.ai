@@ -52,7 +52,7 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, orderedLlmModels, STRUCTURED_VISION_MODELS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
+import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODELS, type LlmFeature, type LlmModelDef, orderedLlmModels, STRUCTURED_VISION_MODELS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
 import {
   isSeedanceVideoEditProvider,
   DEFAULT_TTS_PROVIDER,
@@ -137,6 +137,11 @@ export interface QuickConfigControl {
    *  options function a {@link QuickConfigContext}; without it the strip does
    *  not subscribe to the graph at all. */
   readonly needsGraph?: boolean
+  /** Values a stored node may carry that the menu no longer OFFERS but that
+   *  still run (a retired LLM model): never snapped away, labelled on the
+   *  trigger, accepted on an app run, and never listed. Static on purpose, so a
+   *  static `options` list stays one an app publisher can restrict. */
+  readonly retainedOptions?: ReadonlyArray<QuickConfigOption>
   /** Which option a stale stored value snaps to. Default: the first option. A
    *  control whose valid set has a better answer than "first" (Speaker View's
    *  layout twin: side by side → stacked) names it here. Must return one of the
@@ -257,6 +262,12 @@ export function quickConfigChoicePatch(
   return patch
 }
 
+/** The option for a stored value the control keeps without offering it
+ *  ({@link QuickConfigControl.retainedOptions}), else undefined. */
+export function quickConfigRetainedOption(control: QuickConfigControl, v: string): QuickConfigOption | undefined {
+  return control.retainedOptions?.find((o) => o.value === v)
+}
+
 /** The fail-safe for a stale value (mirrors the config panels' provider-change
  *  snap): `undefined` when there is nothing to do — the value is unset, valid,
  *  or an in-range custom numeric — else the patch that snaps it to a valid
@@ -276,6 +287,7 @@ export function quickConfigSnapPatch(
     return control.preserveOnHide ? undefined : { [control.field]: undefined }
   }
   if (options.some((o) => o.value === value) || isInQuickConfigRange(control, value)) return undefined
+  if (quickConfigRetainedOption(control, value)) return undefined
   const snapped = control.snap?.(value, data, ctx)
   // A fail-safe writes an OPEN option: the first that is not greyed (the
   // free-credit video limits), else the first.
@@ -395,11 +407,16 @@ const sunoVocalControl = (): QuickConfigControl => ({
 /** LLM model dropdown (writes `data.llmModel`), shared by the LLM-backed nodes.
  *  Vendor-clustered + tier-ordered via the shared ordering (the strip's compact
  *  Select can't render group headers, but the clustering still scans). */
+/** Retired LLM models: a saved node keeps (and runs) one, the strip never offers it. */
+const retiredLlmOptions = (models: readonly LlmModelDef[]): ReadonlyArray<QuickConfigOption> =>
+  models.filter((m) => m.retired).map((m) => ({ value: m.id, label: m.displayName }))
+
 const llmModelControl = (): QuickConfigControl => ({
   field: "llmModel",
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: orderedLlmModels().map((m) => ({ value: m.id, label: m.displayName })),
+  retainedOptions: retiredLlmOptions(LLM_MODELS),
   // Clearing `advancedMode` on ANY model switch is deliberately blunt: the
   // registry's additionalClear is unconditional, so a Gemini→Gemini switch also
   // turns Advanced off and the user has to re-enable it. That is a visible,
@@ -470,6 +487,7 @@ const visionModelControl = (): QuickConfigControl => ({
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: orderedLlmModels(STRUCTURED_VISION_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
+  retainedOptions: retiredLlmOptions(STRUCTURED_VISION_MODELS),
   // A node with no stored model runs on the analyzer's default model — show
   // that, not whichever vision model happens to be listed first.
   defaultValue: LLM_FEATURE_DEFAULTS["describe-to-picker"],
@@ -1368,6 +1386,8 @@ export function QuickConfigSelect({
   const current = options.find((o) => o.value === effectiveValue)
   const triggerLabel =
     current?.label ??
+    // A retired value a saved node keeps (not listed, still runs) → its own name.
+    quickConfigRetainedOption(control, effectiveValue)?.label ??
     // In-range custom numeric (customRange) → render it directly ("46s").
     (effectiveValue !== "" && inRange(effectiveValue) ? `${effectiveValue}${range?.unit ?? ""}` : undefined) ??
     // Fall back to the first option label when the field is unset — avoids

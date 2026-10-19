@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
-import { estimateRunCredits } from "../estimate-run-credits"
+import { estimateRunCreditLines, estimateRunCredits } from "../estimate-run-credits"
+import { clipRenderChain } from "@/lib/edl-review/clip-chain"
 import { usecaseRenderFinalOffered, usecaseRenderFinalRun, usecaseRenderFinalTarget } from "../use-case-render-final-set"
 
 /**
@@ -83,5 +84,75 @@ describe("the editor's Render final of a Trailer is quoted on the edited cut (de
   it("an edit that lengthens the trailer to 150 s is quoted above the unedited 40 seconds", () => {
     const lengthened = { v: 1, kind: "edl", basis: editPlanBasis(PLAN), edl: { segments: edlOf(150).segments, dropped: [] } }
     expect(quote({ editedEdl: lengthened })).toBeGreaterThan(quote({}))
+  })
+})
+
+describe("the editor's Render final of a review-on Clip Pack: the kept clips at final, no fee", () => {
+  // Two one-minute clips, each priced once per run of its render and its captions.
+  const clip = (i: number) => ({
+    version: 1, clock: "master", sources: [{ id: "rec", url: "https://r2/ep.mp4", kind: "video" }],
+    segments: [{ id: `c${i}`, inMs: i * 100_000, outMs: i * 100_000 + 60_000, video: "rec" }], dropped: [], meta: { title: `Clip ${i}` },
+  })
+  const PACK = [clip(0), clip(1)]
+  const SETTINGS = { reviewBeforeRender: true, captions: true }
+  const cp = (data: Record<string, unknown> = {}) => ({
+    id: "cp", type: "clip-pack", position: at,
+    data: {
+      label: "Clip Pack", ...SETTINGS, generatedJson: PACK,
+      generatedResults: [0, 1].map((i) => preview("00000000-0000-4000-8000-000000000001", { url: `https://r2/p${i}.mp4`, useCaseSettings: SETTINGS })),
+      ...data,
+    },
+  })
+  const cpWire = { id: "w", source: "rec", target: "cp", sourceHandle: "video", targetHandle: "media" }
+  // Speaker View (framed by default) 7 a minute, captions 3 a clip; the fee 1000, so it would show.
+  const PRICES: Record<string, number> = { "speaker-view:complex": 7, "add-captions:kinetic": 3, "use-case-fee:clip-pack": 1000 }
+  const quote = (data: Record<string, unknown> = {}) => {
+    const run = usecaseRenderFinalRun("cp", [rec, cp(data)] as never, [cpWire] as never)!
+    const asked: string[] = []
+    const lines = estimateRunCreditLines(run.executable, run.graph, [cpWire] as never, (id) => {
+      asked.push(id)
+      return PRICES[id]
+    })
+    return { lines, asked, chain: clipRenderChain("cp", [rec, cp(data)] as never, [cpWire] as never) }
+  }
+
+  it("2 kept clips: 2 final Speaker View renders + 2 captions, and the fee is never asked for", () => {
+    const { lines, asked, chain } = quote()
+    expect(lines.map((l) => [l.nodeId, l.credits])).toEqual([["cp", 2 * 7 + 2 * 3]])
+    expect(asked).not.toContain("use-case-fee:clip-pack")
+    // The footer's sentence names the runs the price is made of.
+    expect(chain.map((s) => [s.label, s.times])).toEqual([["Render Clip", 2], ["Caption Clip", 2]])
+  })
+
+  it("a canvas node after the pack: the chain names it at the times its own line is priced", () => {
+    const up = { id: "up", type: "add-captions", position: at, data: { label: "Subtitles" } }
+    const wires = [cpWire, { id: "o", source: "cp", target: "up", sourceHandle: "clips", targetHandle: "video" }]
+    const nodes = [rec, cp(), up]
+    const run = usecaseRenderFinalRun("cp", nodes as never, wires as never)!
+    const lines = estimateRunCreditLines(run.executable, run.graph, wires as never, (id) => PRICES[id])
+    const chain = clipRenderChain("cp", nodes as never, wires as never)
+    expect(chain.map((s) => s.nodeId)).toEqual(["cp::uc-render", "cp::uc-captions", "up"])
+    const upLine = lines.find((l) => l.nodeId === "up")!
+    expect(upLine.quantity.fanOut).toBe(2)
+    expect(chain[2]!.times).toBe(upLine.quantity.fanOut)
+  })
+
+  it("a use-case node after the pack is named once, by its own label, at the times its own line is priced", () => {
+    const t2 = { id: "t2", type: "tighten-episode", position: at, data: { label: "Tighten Episode" } }
+    const wires = [cpWire, { id: "o", source: "cp", target: "t2", sourceHandle: "clips", targetHandle: "media" }]
+    const nodes = [rec, cp(), t2]
+    const run = usecaseRenderFinalRun("cp", nodes as never, wires as never)!
+    const lines = estimateRunCreditLines(run.executable, run.graph, wires as never, (id) => PRICES[id] ?? 1)
+    const chain = clipRenderChain("cp", nodes as never, wires as never)
+    expect(chain.map((s) => [s.nodeId, s.label])).toEqual([["cp::uc-render", "Render Clip"], ["cp::uc-captions", "Caption Clip"], ["t2", "Tighten Episode"]])
+    const t2Line = lines.find((l) => l.nodeId === "t2")!
+    expect(chain[2]!.times).toBe(t2Line.quantity.fanOut)
+  })
+
+  it("a dropped clip is neither priced nor named", () => {
+    const editedEdl = { v: 1, kind: "clips", basis: editPlanBasis(PACK), clips: [{ keep: false }, { keep: true }] }
+    const { lines, chain } = quote({ editedEdl })
+    expect(lines.map((l) => [l.nodeId, l.credits])).toEqual([["cp", 7 + 3]])
+    expect(chain.map((s) => [s.label, s.times])).toEqual([["Render Clip", 1], ["Caption Clip", 1]])
   })
 })

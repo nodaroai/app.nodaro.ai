@@ -12,6 +12,7 @@
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { GENERATE_MASK_LIMITS } from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
@@ -23,10 +24,15 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-const generateMaskBody = z.object({
+export const generateMaskBody = z.object({
   imageUrl: safeUrlSchema,
-  prompt: z.string().min(1).max(500),
-  threshold: z.number().min(0).max(1).optional().default(0.3),
+  prompt: z.string().min(1).max(GENERATE_MASK_LIMITS.PROMPT_MAX_LENGTH),
+  threshold: z
+    .number()
+    .min(GENERATE_MASK_LIMITS.THRESHOLD_MIN)
+    .max(GENERATE_MASK_LIMITS.THRESHOLD_MAX)
+    .optional()
+    .default(GENERATE_MASK_LIMITS.THRESHOLD_DEFAULT),
 })
 
 export async function generateMaskRoutes(app: FastifyInstance) {

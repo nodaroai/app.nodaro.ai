@@ -23,8 +23,10 @@ export function SpeakerViewFramingSummary({ regions, nodeId, autoRegions, autoFr
   readonly nodeId?: string
   readonly autoRegions?: boolean
   /** What the switch does for this edit (`speakerViewAutoFraming`): nothing
-   *  (`off`), a default box per speaker, or — with face tracks wired, faces
-   *  win — the tracked speakers followed and the others boxed, or all followed. */
+   *  (`off`), a default box per speaker, the same boxes on every clip of a
+   *  pack (dealt over the episode's speakers, decided 2026-10-14), or — with
+   *  face tracks wired, faces win — the tracked speakers followed and the
+   *  others boxed, or all followed. */
   readonly autoFraming?: SpeakerViewAutoFraming
   readonly readOnly?: boolean
   readonly onAutoRegionsChange?: (on: boolean) => void
@@ -37,6 +39,7 @@ export function SpeakerViewFramingSummary({ regions, nodeId, autoRegions, autoFr
   const summary = count > 0
     ? t("speakerView.framing.set", { count })
     : autoFraming === "boxes" ? t("speakerView.framing.auto")
+    : autoFraming === "pack-boxes" ? t("speakerView.framing.autoPack")
     : autoFraming === "some-tracked" ? t("speakerView.framing.autoTracked")
     : autoFraming === "all-tracked" ? t("speakerView.framing.allTracked")
     : t("speakerView.framing.full")

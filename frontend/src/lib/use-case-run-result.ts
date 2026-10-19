@@ -25,16 +25,20 @@
  *    review: its show notes land on `generatedText`, its chapter list on
  *    `generatedJson` as the run reports it, and its transcript as above —
  *    each cleared when the run carries none.
- *  - A type whose result is a list (Trailer's formats) lands the first
- *    delivery as its episode, the deliveries as its own list (`__listResults`,
- *    what an Each wire reads) with their stamps, and the deliveries it could
- *    not make (`failedFormats`) — lib/use-case-list-result.ts. Each take of the
- *    run keeps what its delivery is (its format) beside the run's plan.
+ *  - A type whose result is a list (Trailer's formats, Clip Pack's clips)
+ *    lands the first delivery as its episode, the deliveries as its own list
+ *    (`__listResults`, what an Each wire reads) with their stamps, and the
+ *    deliveries it could not make (`failedFormats`, `failedClips`) —
+ *    lib/use-case-list-result.ts. Each take of the run keeps what its
+ *    delivery is (its format; its clip, and whether its captions failed)
+ *    beside the run's plan, and what the run could not deliver.
  */
 import { editPlanResultPatch } from "@nodaro/shared/edl"
-import { isUseCaseNodeType, usecaseListsItsResult, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
+import { USE_CASE_NOTHING_KEPT } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType, usecaseDescriptor, usecaseListsItsResult, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
 import { runResultIdentity } from "@/lib/run-result-identity"
-import { usecaseFailedDeliveriesField, usecaseListFields, usecaseListRowFields, usecaseMergeRunRows, usecaseRunFailedFormats, usecaseRunRows } from "@/lib/use-case-list-result"
+import { usecaseFailedDeliveriesField, usecaseListFields, usecaseListRowFields, usecaseListStamp, usecaseMergeRunRows, usecaseRunRows, usecaseRunShortfall } from "@/lib/use-case-list-result"
+import { clipPackRowKey, trailerRowKey, usecaseRunRowsOnShow } from "@/lib/use-case-run-rows"
 import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
 import type { GeneratedResult } from "@/types/nodes"
 
@@ -133,7 +137,8 @@ export function usecaseRunResultFields(
 function listResultFields(nodeType: string, output: Output | null | undefined, jobId: string | null | undefined): Record<string, unknown> {
   if (!usecaseListsItsResult(nodeType)) return {}
   const { activeResultIndex: _shown, ...list } = usecaseListFields(nodeType, output ?? {}, jobId)
-  return { ...(list.generatedVideoUrl !== undefined ? list : {}), ...usecaseFailedDeliveriesField(nodeType, output) }
+  const delivered = list.generatedVideoUrl !== undefined || list.generatedAudioUrl !== undefined
+  return { ...(delivered ? list : {}), ...usecaseFailedDeliveriesField(nodeType, output) }
 }
 
 /** The run's wrapper job on the node, as the canvas's own run keeps it (`useCaseJobId`). */
@@ -177,6 +182,55 @@ export function usecaseFailedRunFields(
   }
 }
 
+/**
+ * The refusals of a continuation made before any work — nothing held, nothing
+ * written, the take on show untouched — that the person can mend on that same
+ * Preview: every clip dropped in the review (keep one again). Such a refusal
+ * is no failed run (decided 2026-10-18): the node keeps its Preview and its
+ * state, and the refusal is said once, as a passing error, so Render final is
+ * there again as soon as the review keeps a clip. A Render final refused as
+ * already under way or already rendered keeps its own rule (it fails the
+ * node and puts that final on show), and a refusal that names a run which
+ * cannot be continued at all stays a failure.
+ */
+export const USE_CASE_REFUSED_BEFORE_WORK_CODES: ReadonlySet<string> = new Set([USE_CASE_NOTHING_KEPT])
+
+/**
+ * What a lane writes on use-case node `nodeType` for a failure coded
+ * `errorCode` that is such a refusal: the node as it was before the Render
+ * final started — completed, no error, and the list of the run on show (a
+ * Render final clears the node's list when it starts) rebuilt from its own
+ * takes. `undefined` for any other failure, or node.
+ */
+export function usecaseRefusedBeforeWorkPatch(
+  nodeType: string | null | undefined,
+  errorCode: string | null | undefined,
+  data: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  if (!isUseCaseNodeType(nodeType) || typeof errorCode !== "string" || !USE_CASE_REFUSED_BEFORE_WORK_CODES.has(errorCode)) return undefined
+  return { executionStatus: "completed", errorCode: undefined, errorMessage: undefined, errorHint: undefined, jobAwaitingReview: undefined, ...shownRunList(nodeType, data) }
+}
+
+/** The node's own list of the run whose take is on show, rebuilt from that run's takes; empty when it has none. */
+function shownRunList(nodeType: UseCaseNodeType, data: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  if (!usecaseListsItsResult(nodeType)) return {}
+  const results = Array.isArray(data.generatedResults) ? (data.generatedResults as GeneratedResult[]) : []
+  const keyOf = usecaseDescriptor(nodeType).resultKind === "clips" ? clipPackRowKey : trailerRowKey
+  const rows = usecaseRunRowsOnShow(results, usecaseTakeOnShow(data) as GeneratedResult | undefined, keyOf)
+  if (rows.length === 0) return {}
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined)
+  return {
+    __listResults: rows.map((r) => r.url),
+    __listResultStamps: rows.map(({ row }) => {
+      const r = row as unknown as Readonly<Record<string, unknown>>
+      return usecaseListStamp({
+        quality: str(r.quality), clipKey: str(r.clipKey), planBasis: str(r.planBasis),
+        renderBasis: str(r.renderBasis), thumbnailUrl: str(r.thumbnailUrl), jobId: str(r.jobId),
+      })
+    }),
+  }
+}
+
 /** Take `index` (file `url`) on show as the node's one episode. */
 function showTake(index: number, url: string, data: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const medium = usecaseTakeMedium(url, data)
@@ -189,8 +243,8 @@ function showTake(index: number, url: string, data: Readonly<Record<string, unkn
  * built from (`useCaseSettings`): a Render final of that take renders with
  * them, and its review reads them (decided 2026-10-13). Only on the take that
  * IS the episode the output reports — for a list result, on every delivery of
- * the run, each with what it delivers (its format); `undefined` for any other
- * node type or take.
+ * the run, each with what it delivers (its format, or its clip) and what the
+ * run could not deliver; `undefined` for any other node type or take.
  */
 export function usecaseTakeFields(
   nodeType: string | null | undefined,
@@ -200,9 +254,9 @@ export function usecaseTakeFields(
   if (!isUseCaseNodeType(nodeType)) return undefined
   const episode = usecaseEpisodeOf(output)
   // A list result's every delivery is a take of the run (matched by its file), with what it
-  // delivers and the formats the run could not render (what the node names under that take).
+  // delivers and what the run could not deliver (what the node names under that take).
   const delivered = usecaseListRowFields(nodeType, output, takeUrl)
-  const failed = delivered ? usecaseRunFailedFormats(output) : []
+  const shortfall = delivered ? usecaseRunShortfall(output) : {}
   if (!delivered && (!episode || episode.url !== takeUrl)) return undefined
   const plan = planOf(output)
   const settings = runSettingsOf(output?.useCaseSettings)
@@ -211,7 +265,7 @@ export function usecaseTakeFields(
     generatedTranscript: present(output?.transcript) ? output!.transcript : undefined,
     ...(settings ? { useCaseSettings: settings } : {}),
     ...delivered,
-    ...(failed.length > 0 ? { failedFormats: failed } : {}),
+    ...shortfall,
   }
 }
 
@@ -294,11 +348,15 @@ export function usecaseRunSettings(data: Readonly<Record<string, unknown>>): Rea
 }
 
 /**
- * The medium of the take whose file is `url`: the file's own, else the episode
- * field that holds it, else the node's Output. One rule for what the node face
- * plays and for what a pick in the results gallery writes.
+ * The medium of the take whose file is `url`: what its run said (an audio
+ * Clip Pack's every clip is audio, whatever its file is named), else the
+ * file's own, else the episode field that holds it, else the node's Output.
+ * One rule for what the node face plays and for what a pick in the results
+ * gallery writes.
  */
 export function usecaseTakeMedium(url: string, data: Readonly<Record<string, unknown>>): "video" | "audio" {
+  const results = Array.isArray(data.generatedResults) ? (data.generatedResults as ReadonlyArray<{ url?: unknown; medium?: unknown } | null>) : []
+  if (results.some((r) => r?.url === url && r.medium === "audio")) return "audio"
   if (isAudioUrl(url)) return "audio"
   if (isVideoUrl(url)) return "video"
   if (data.generatedAudioUrl === url) return "audio"

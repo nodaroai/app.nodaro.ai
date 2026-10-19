@@ -138,6 +138,24 @@ export interface NodeOutput {
   formats?: ReadonlyArray<{ readonly format: string; readonly url: string }>
   /** Trailer: the formats whose render failed (the others were delivered). */
   failedFormats?: readonly string[]
+  /** A use-case node whose result is a clip set (Clip Pack): each clip's file and take stamps, with its title and hook, in plan order. */
+  clips?: ReadonlyArray<{
+    readonly url: string
+    readonly quality?: RenderQuality
+    readonly clipKey?: string
+    readonly planBasis?: string
+    readonly renderBasis?: string
+    readonly title?: string
+    readonly hook?: string
+    /** The still of the file it delivers (none for an audio clip). */
+    readonly thumbnailUrl?: string
+    /** Its captions could not be added: the clip is its render, uncaptioned. */
+    readonly captionsFailed?: true
+  }>
+  /** Clip Pack: how many planned clips could not be rendered (the others were delivered). */
+  failedClips?: number
+  /** Clip Pack: how many delivered clips came without captions. */
+  failedCaptions?: number
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -310,6 +328,13 @@ export interface NodeExecutionState {
    *  execution still counts the node as left (`leftUnfinishedBy`) and retries
    *  it, however many narrower hops lie between. Not on the wire contract. */
   carriedUnfinished?: true
+  /** A seed (`seededFromExecution`, status `completed`) of a node the earlier
+   *  execution never RAN — it handed the node on from its saved data (no
+   *  `startedAt`, no `jobId`), or was itself handed it so. Carried seed to
+   *  seed, so a continue-from-failed that names the node still runs it
+   *  (`completedFor`, `@nodaro/render-rules`) instead of reading it as done.
+   *  Not on the wire contract. */
+  carriedPlaceholder?: true
   /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
   skipReason?: NodeSkipReason
 }
@@ -399,6 +424,19 @@ export interface WorkflowExecutionJob {
    * and never re-derives it. Absent: such a head is refused.
    */
   reopenHead?: "done" | "failed"
+  /**
+   * A continue-from-failed (`continueMode`) the caller sent explicit `nodeIds`:
+   * those ids (of nodes of the workflow; a frozen one left out, it never
+   * runs). A node among them that no run of the chain ever ran — its state is
+   * only a placeholder, handed on from saved data (`isPlaceholder`,
+   * `@nodaro/render-rules`) — runs rather than being read as completed
+   * (`fromFailedRunSet`'s `named`). `nodeIds` alone cannot say it: the route
+   * sends the closed run set there, sent and defaulted alike. Decided by the
+   * route; the worker never re-derives it. Absent: none named (a default
+   * continue-from-failed, or a job queued before the field existed), and every
+   * `completed` state counts as completed, as before.
+   */
+  namedNodeIds?: string[]
   /**
    * For a triggered run: the trigger node that fired (the trigger row's
    * `config.nodeId`). The worker runs the branch behind it — see
@@ -751,11 +789,12 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
-  /** The nodes that try every one of their kind: a stage whose nodes are all
-   *  named here runs every one, whichever fails, each checking for a Stop
-   *  before it starts (a Trailer's formats, `usecaseTriesEvery`). Absent, or
-   *  a stage with any node not named: the default — the first failure stops
-   *  the nodes not started yet. */
+  /** The nodes that try every one of their kind (`usecaseTriesEvery`): a
+   *  node named here that runs over a list tries every item (a Clip Pack's
+   *  render and captions), and a stage whose nodes are all named here runs
+   *  every one, each checking for a Stop before it starts (a Trailer's
+   *  formats) — whichever fails. Absent, or a node not named: the default —
+   *  the first failure stops what has not started yet. */
   triesEvery?: ReadonlySet<string>
   /** A continued run (`continueFromExecutionId`): the node states of the run it
    *  continues. A use-case node that failed there continues its own inner run

@@ -27,8 +27,13 @@
  * run the route works out (lib/continuation-held-final.ts), as the
  * `run_workflow` call that sends it (`node_ids` and `inputs`). A failed lookup
  * reads as no hint: the read it rides on never fails for it.
+ *
+ * A failed APP run gets the hint for the app's own Retry instead
+ * (`appRunRetryHint`, `retry_app_run` — POST /v1/app/:slug/runs/:runId/resume),
+ * which continues it on the version it ran with the inputs it applied.
  */
 import type { McpSession } from "../session.js"
+import { supabase } from "../../supabase.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
 import { serverStamps } from "../../trigger-data-stamps.js"
 import { continuationPointOf } from "../../continue-from-failed-lineage.js"
@@ -109,12 +114,15 @@ export async function resumeFailedRunHint(
   if (execution.status !== "failed") return null
   const workflowId = execution.workflow_id
   if (typeof workflowId !== "string" || workflowId.length === 0) return null
-  if (execution.trigger_type === "app_run" || execution.trigger_type === "use_case") return null
+  if (execution.trigger_type === "use_case") return null
   // An app run's Retry runs as `manual` but is stamped with its run, as is a
   // Render final: both ran a published version, which `/run` refuses. Stamps
   // are read only on a run a stamp-writing lane started (lib/server-started-runs.ts).
   const stamps = serverStamps(execution)
-  if (stamps.appRun !== null || stamps.appRenderFinal !== null) return null
+  // A Render final keeps its own path (render_final), never `/run`'s.
+  if (stamps.appRenderFinal !== null) return null
+  // An app run is continued by the app's own Retry.
+  if (execution.trigger_type === "app_run" || stamps.appRun !== null) return appRunRetryHint(String(execution.id), session)
   let point: Awaited<ReturnType<typeof continuationPointOf>>
   type Graph = { nodes: Array<{ id: string; type?: string }>; edges: Array<{ source: string; target: string }> }
   let graph: Graph
@@ -164,4 +172,72 @@ export async function resumeFailedRunHint(
     `This run can be continued from where it stopped: run_workflow({ workflow_id: "${workflowId}", ` +
     `continue_from_execution_id: "${String(execution.id)}", from_failed: true }) runs only the nodes that did not complete.`
   )
+}
+
+/**
+ * The hint on a failed app run: the app's Retry (`retry_app_run`), which
+ * continues it from where it stopped on the version it ran, with the inputs it
+ * applied — only the steps it did not complete run and are charged.
+ *
+ * Only for the run's CURRENT execution: the Retry always continues the
+ * execution the run points at (`app_runs.execution_id`), so an execution a
+ * later Retry or a start-over moved on from gets no hint. Found by that
+ * pointer (the runner's own run, not archived), which also covers executions
+ * from before the app-run stamp existed. The slug named is the app's latest
+ * version's (a republish renames an older version's slug), and that version is
+ * the one the Retry route compares by default (its `latestVersionOf`): when
+ * the run ran another, the hint says so, since a plain Retry is refused then
+ * (`app_run_version_changed`). A component's run, a version that is
+ * gone, or a failed lookup reads as no hint.
+ */
+export async function appRunRetryHint(executionId: string, session: McpSession): Promise<string | null> {
+  try {
+    const { data: run } = await supabase
+      .from("app_runs") // tenant-scope-ignore: scoped by runner_id
+      .select("id, app_id")
+      .eq("execution_id", executionId)
+      .eq("runner_id", session.userId)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle()
+    const runRow = run as { id?: unknown; app_id?: unknown } | null
+    if (typeof runRow?.id !== "string" || typeof runRow.app_id !== "string") return null
+    const { data: ranRow } = await supabase
+      .from("published_apps")
+      .select("workflow_id, slug, version, publish_type")
+      .eq("id", runRow.app_id)
+      .is("deleted_at", null)
+      .maybeSingle()
+    const ran = ranRow as { workflow_id?: unknown; slug?: unknown; version?: unknown; publish_type?: unknown } | null
+    if (!ran || typeof ran.workflow_id !== "string" || ran.publish_type === "component") return null
+    const { data: liveRow } = await supabase
+      .from("published_apps")
+      .select("slug, version")
+      .eq("workflow_id", ran.workflow_id)
+      .is("deleted_at", null)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const live = liveRow as { slug?: unknown; version?: unknown } | null
+    const slug = typeof live?.slug === "string" ? live.slug : typeof ran.slug === "string" ? ran.slug : null
+    if (!slug) return null
+    const call = (extra: string) =>
+      `retry_app_run({ slug: ${JSON.stringify(slug)}, run_id: ${JSON.stringify(runRow.id)}${extra} })`
+    const ranVersion = typeof ran.version === "number" ? ran.version : null
+    const liveVersion = typeof live?.version === "number" ? live.version : null
+    if (ranVersion !== null && liveVersion !== null && ranVersion !== liveVersion) {
+      return (
+        `This app run used version ${ranVersion} of the app, which is now on version ${liveVersion}, so a plain Retry is refused. ` +
+        `To continue it from where it stopped on version ${ranVersion}: ${call(`, version: ${ranVersion}`)} quotes the steps and the price ` +
+        `(the same call with confirm: true, once the user accepts, starts it). To run version ${liveVersion}, start over with run_app.`
+      )
+    }
+    return (
+      `This app run can be retried from where it stopped: ${call("")} quotes the steps it runs again and the price; ` +
+      `the same call with confirm: true, once the user accepts, starts it (only the steps that did not complete run and are charged). ` +
+      `To run with other inputs, start over with run_app.`
+    )
+  } catch {
+    return null
+  }
 }

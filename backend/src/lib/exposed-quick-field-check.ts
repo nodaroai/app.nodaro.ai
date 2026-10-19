@@ -25,6 +25,8 @@ export function quickFieldRefusal(nodeType: string | undefined, storedKey: strin
   const spec = exposedQuickFieldSpec(nodeType, storedKey)
   if (!spec?.fixed) return null
   if (spec.values.includes(submitted as string | number | boolean)) return null
+  // A retired value (a model no picker offers any more) still runs: accepted, never listed in the refusal.
+  if (spec.retained?.includes(submitted as string | number | boolean)) return null
   if (spec.min !== undefined && spec.max !== undefined) {
     if (typeof submitted === "number" && Number.isFinite(submitted) && submitted >= spec.min && submitted <= spec.max) return null
     return `Invalid value for ${storedKey}: ${String(submitted)}. Use a number between ${spec.min} and ${spec.max}.`

@@ -246,7 +246,10 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
       <p className="text-[11px] text-muted-foreground me-auto hidden sm:block">{t("speakerView.framing.footnote")}</p>
       <Button variant="outline" size="sm" onClick={ed.resetToThirds} disabled={nothingToFrame}>{t("speakerView.framing.reset")}</Button>
       <Button variant="ghost" size="sm" onClick={requestClose}>{t("common.cancel")}</Button>
-      <Button size="sm" onClick={() => { ed.save(); tracks.save(); onClose() }} disabled={nothingToFrame || ed.readOnly}>{t("speakerView.framing.save")}</Button>
+      {/* Nothing changed: nothing to save. A Save then would only rewrite what
+          the run already draws as drawn rows (automatic boxes included), and
+          a new render basis would make every take read stale. */}
+      <Button size="sm" onClick={() => { ed.save(); tracks.save(); onClose() }} disabled={nothingToFrame || ed.readOnly || !dirty} data-testid="speaker-view-framing-save">{t("speakerView.framing.save")}</Button>
     </div>
   )
 

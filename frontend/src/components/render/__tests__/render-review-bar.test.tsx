@@ -35,6 +35,7 @@ vi.mock("lucide-react", () => new Proxy({}, {
 import { RenderReviewBar, RenderReviewBarView } from "../render-review-bar"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { translate } from "@/lib/i18n"
+import { editPlanBasis } from "@nodaro/shared/edl"
 
 beforeEach(() => {
   controls.renderFinal.mockClear()
@@ -134,6 +135,29 @@ describe("RenderReviewBar", () => {
     cleanup()
     useWorkflowStore.setState({ nodes: [{ id: "r", type: "apply-edl", position: { x: 0, y: 0 }, data: {} }] as never })
     render(<RenderReviewBar renderId="r" busy={false} />)
+    expect(screen.queryByTestId("render-review-refusal")).toBeNull()
+  })
+})
+
+describe("a Clip Pack whose review keeps no clip (decided 2026-10-18)", () => {
+  const PLAN = [0, 1].map((i) => ({ version: 1, sources: [], segments: [{ id: `c${i}`, inMs: i * 60_000, outMs: i * 60_000 + 30_000, video: "cam" }] }))
+  const seed = (clips: Array<{ keep: boolean }>) =>
+    useWorkflowStore.setState({
+      nodes: [{ id: "cp", type: "clip-pack", position: { x: 0, y: 0 }, data: { generatedJson: PLAN, editedEdl: { v: 1, kind: "clips", basis: editPlanBasis(PLAN), clips } } }] as never,
+    })
+
+  it("shows Render final disabled, with the hint to keep a clip", () => {
+    seed([{ keep: false }, { keep: false }])
+    render(<RenderReviewBar renderId="cp" busy={false} />)
+    const button = screen.getByText(/Render final/).closest("button")!
+    expect(button.disabled).toBe(true)
+    expect(screen.getByTestId("render-review-refusal").textContent).toBe("Keep at least one clip to render.")
+  })
+
+  it("one clip kept again: Render final goes ahead, no hint", () => {
+    seed([{ keep: false }, { keep: true }])
+    render(<RenderReviewBar renderId="cp" busy={false} />)
+    expect(screen.getByText(/Render final/).closest("button")!.disabled).toBe(false)
     expect(screen.queryByTestId("render-review-refusal")).toBeNull()
   })
 })

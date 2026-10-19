@@ -70,10 +70,15 @@ const ANTHROPIC_NATIVE_LONG_EDGE = 1568
  *
  *  Sized for Anthropic, so a KIE OpenAI-shaped lane may shrink these bytes
  *  further on its own way out (`inlineImagesForKie`, lib/kie-inline-image.ts):
- *  KIE's inline limit is lower, and those lanes take no image URL at all. */
-export async function prefetchAsBase64(url: string): Promise<LlmContentBlock> {
+ *  KIE's inline limit is lower, and those lanes take no image URL at all.
+ *
+ *  `signal` is the caller's cancel: it ends the fetch at once, and a cancel
+ *  rejects with its reason rather than falling back to the URL — a cancelled
+ *  call must stop, not go on with a URL block. */
+export async function prefetchAsBase64(url: string, signal?: AbortSignal): Promise<LlmContentBlock> {
+  signal?.throwIfAborted()
   try {
-    const r = await safeFetch(url, { timeoutMs: 30_000 })
+    const r = await safeFetch(url, signal ? { timeoutMs: 30_000, signal } : { timeoutMs: 30_000 })
     if (!r.ok) return { type: "image", url }
 
     const buf = Buffer.from(await r.arrayBuffer())
@@ -107,7 +112,8 @@ export async function prefetchAsBase64(url: string): Promise<LlmContentBlock> {
     // Pathologically dense even after downscale — let Claude fetch the URL itself
     // (no base64 size cap on URL sources) rather than send an oversized payload.
     return { type: "image", url }
-  } catch {
+  } catch (err) {
+    if (signal?.aborted) throw signal.reason ?? err
     // Network error, SSRF block, or an undecodable image → URL pass-through.
     return { type: "image", url }
   }

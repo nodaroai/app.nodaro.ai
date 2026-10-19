@@ -20,7 +20,9 @@
  *    final does not block another (decided 2026-10-13): a re-final after a
  *    further edit renders the final steps again, still with no fee — but the
  *    very edit a completed final already rendered is refused
- *    (`render_final_already_rendered`, naming it).
+ *    (`render_final_already_rendered`, naming it). A clip set's final whose
+ *    review dropped every clip is refused (`use_case_nothing_kept`): there is
+ *    nothing to render.
  *
  * The graph is the earlier run's stored snapshot, verbatim: its stored hash is
  * the run's identity, so a rebuilt graph would be refused as another one.
@@ -33,7 +35,10 @@ import {
   renderFinalRunSet,
   renderRunOverrides,
   usecaseRenderNodeId,
+  usecaseResultKind,
+  usecaseRunPlan,
   usecaseRunType,
+  usecaseDescriptor,
   type StoredInlineGraph,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -46,9 +51,12 @@ import {
   PREVIEW_RENDER_NODE_TYPES,
   RENDER_FINAL_ALREADY_RENDERED,
   RENDER_FINAL_ALREADY_RENDERED_MESSAGE,
+  USE_CASE_NOTHING_KEPT,
+  USE_CASE_NOTHING_KEPT_MESSAGE,
 } from "@nodaro/shared/nodes"
 import {
   editPlanBasis,
+  resolveEditPlanOutput,
 } from "@nodaro/shared/edl"
 import { supabase } from "../supabase.js"
 import { findExecutionIdForWrapper, loadInlineGraph } from "../execution-inline-graph.js"
@@ -190,6 +198,78 @@ async function alreadyRenderedRefusal(finalOf: string, editKey: string, userId: 
   return done ? { ok: false, status: 409, code: RENDER_FINAL_ALREADY_RENDERED, message: RENDER_FINAL_ALREADY_RENDERED_MESSAGE, jobId: done.id } : null
 }
 
+interface UseCaseRun {
+  readonly row: { readonly status?: unknown }
+  /** The wrapper job's input, as the run stored it. */
+  readonly stored: Readonly<Record<string, unknown>>
+  readonly sourceExecutionId: string
+  readonly graph: StoredInlineGraph
+  readonly source: ContinuationSource | null
+}
+
+/**
+ * The run `jobId` names — the user's own wrapper of a run of `nodeType`, its
+ * inner execution, the snapshot that execution stored and its states — or
+ * null when any of them is missing or not theirs. Throws on a read error.
+ */
+async function loadUseCaseRun(input: { readonly nodeType: UseCaseNodeType; readonly jobId: string; readonly userId: string }): Promise<UseCaseRun | null> {
+  const { data: wrapper, error } = await supabase
+    .from("jobs")
+    .select("id, user_id, status, provider, job_type, input_data")
+    .eq("id", input.jobId)
+    .maybeSingle()
+  if (error) throw new Error(`use-case continue: run ${input.jobId} unreadable: ${error.message}`)
+  const row = wrapper as { user_id?: unknown; status?: unknown; provider?: unknown; job_type?: unknown; input_data?: unknown } | null
+  const stored = isRecord(row?.input_data) ? row.input_data : {}
+  if (!row || row.user_id !== input.userId || row.provider !== "use-case" || usecaseRunType(stored, row.job_type) !== input.nodeType) return null
+
+  // A wrapper whose stamp never landed still has its run: the run names it.
+  const sourceExecutionId =
+    typeof stored._executionId === "string" ? stored._executionId : await findExecutionIdForWrapper(input.jobId, input.userId)
+  if (!sourceExecutionId) return null
+  const graph = await loadInlineGraph(sourceExecutionId)
+  if (!graph || graph.nodeType !== input.nodeType) return null
+  const source = await loadContinuationSource(sourceExecutionId, {
+    withStates: true,
+    isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(graph.nodes.find((n) => n.id === id)?.type ?? ""),
+  })
+  return { row, stored, sourceExecutionId, graph, source }
+}
+
+/**
+ * A clip set's Render final whose review keeps no clip renders nothing: its
+ * refusal, or null (another kind of run, no edit, or an edit that keeps a
+ * clip). The edit is judged on the plan as planned, as the run's seed and its
+ * quote read it.
+ */
+function nothingKeptRefusal(graph: StoredInlineGraph, source: ContinuationSource | null, edit: unknown): UseCaseContinuationRefusal | null {
+  if (usecaseResultKind(graph.outputMap) !== "clips" || edit === undefined || edit === null) return null
+  const kept = resolveEditPlanOutput(usecaseRunPlan(source?.nodeStates?.[graph.outputMap.planNodeId]), edit).json
+  return Array.isArray(kept) && kept.length === 0 ? { ok: false, status: 409, code: USE_CASE_NOTHING_KEPT, message: USE_CASE_NOTHING_KEPT_MESSAGE } : null
+}
+
+/**
+ * The same refusal for a Render final started elsewhere (an app run's, which
+ * continues the run `jobId` names through the node): asked before anything is
+ * written or held, so a review that kept no clip is refused up front rather
+ * than failing the final once it has started. Null when the run is not found
+ * (the caller's own checks answer that) or the edit keeps a clip. Only a
+ * clip set can keep nothing, so a node of any other result kind is answered
+ * from its type alone, before the run is read (no read on a Tighten Episode,
+ * Chapters or Trailer Render final).
+ */
+export async function usecaseNothingKeptRefusal(input: {
+  readonly nodeType: UseCaseNodeType
+  readonly jobId: string
+  readonly userId: string
+  readonly editedEdl: unknown
+}): Promise<UseCaseContinuationRefusal | null> {
+  if (input.editedEdl === undefined || input.editedEdl === null) return null
+  if (usecaseDescriptor(input.nodeType).resultKind !== "clips") return null
+  const run = await loadUseCaseRun(input)
+  return run ? nothingKeptRefusal(run.graph, run.source, input.editedEdl) : null
+}
+
 /**
  * Load the run `jobId` names and work out its continuation, or why it cannot
  * be continued. Throws on a read error (never read as "not found").
@@ -202,26 +282,9 @@ export async function resolveUseCaseContinuation(input: {
   readonly mode: UseCaseContinueMode
   readonly editedEdl?: unknown
 }): Promise<UseCaseContinuation | UseCaseContinuationRefusal> {
-  const { data: wrapper, error } = await supabase
-    .from("jobs")
-    .select("id, user_id, status, provider, job_type, input_data")
-    .eq("id", input.jobId)
-    .maybeSingle()
-  if (error) throw new Error(`use-case continue: run ${input.jobId} unreadable: ${error.message}`)
-  const row = wrapper as { user_id?: unknown; status?: unknown; provider?: unknown; job_type?: unknown; input_data?: unknown } | null
-  const stored = isRecord(row?.input_data) ? row.input_data : {}
-  if (!row || row.user_id !== input.userId || row.provider !== "use-case" || usecaseRunType(stored, row.job_type) !== input.nodeType) return NOT_FOUND
-
-  // A wrapper whose stamp never landed still has its run: the run names it.
-  const sourceExecutionId =
-    typeof stored._executionId === "string" ? stored._executionId : await findExecutionIdForWrapper(input.jobId, input.userId)
-  if (!sourceExecutionId) return NOT_FOUND
-  const graph = await loadInlineGraph(sourceExecutionId)
-  if (!graph || graph.nodeType !== input.nodeType) return NOT_FOUND
-  const source = await loadContinuationSource(sourceExecutionId, {
-    withStates: true,
-    isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(graph.nodes.find((n) => n.id === id)?.type ?? ""),
-  })
+  const run = await loadUseCaseRun(input)
+  if (!run) return NOT_FOUND
+  const { row, stored, sourceExecutionId, graph, source } = run
 
   const order = graph.nodes.map((n) => n.id)
   const finalChain = input.mode === "render-final" || stored.mode === "render-final" || stored._finalChain === true
@@ -308,6 +371,10 @@ export async function resolveUseCaseContinuation(input: {
   const final = await finalRefusal(input.jobId, input.userId)
   if (final) return final
   const edit = input.editedEdl
+  // A clip set whose review kept no clip renders nothing: refused before
+  // anything is held or written.
+  const nothingKept = nothingKeptRefusal(graph, source, edit)
+  if (nothingKept) return nothingKept
   const finalEdit = renderFinalEditKey(edit)
   const rendered = await alreadyRenderedRefusal(input.jobId, finalEdit, input.userId)
   if (rendered) return rendered

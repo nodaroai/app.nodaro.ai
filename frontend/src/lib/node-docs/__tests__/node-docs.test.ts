@@ -42,6 +42,7 @@ const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "tighten-episode": "new node (podcast use-case); the in-repo page is docs/nodes/processing-video/tighten-episode.md and the docs-site page follows its release",
   "episode-chapters": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/episode-chapters.md and the docs-site page follows its release",
   "episode-trailer": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/episode-trailer.md and the docs-site page follows its release",
+  "clip-pack": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/clip-pack.md and the docs-site page follows its release",
   "site-capture": "new node; the in-repo page is docs/nodes/input/site-capture.md and the docs-site page follows its release",
 }
 

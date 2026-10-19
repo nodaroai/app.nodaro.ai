@@ -1,4 +1,4 @@
-// @test-watches frontend/src/nodes/** backend/src/nodes/** packages/client/src/resources/edit.ts
+// @test-watches frontend/src/nodes/** backend/src/nodes/** packages/client/src/resources/edit.ts packages/client/src/resources/edit-use-case-inputs.ts
 /**
  * A run's use-case type, as every surface reads it from the job row (the
  * continue route, the MCP verb): the type its input records, else its
@@ -6,12 +6,13 @@
  * `@nodaro/shared/nodes`), the one render-rules and the backend's route bodies
  * are built from, so a new use-case node reaches `continueUseCase` and the
  * CLI's `--type` the day it ships; the SDK's copy of Trailer's formats (the
- * CLI's `--formats`) is the builder's, in order.
+ * CLI's `--formats`) is the builder's, in order, and its Clip Pack length
+ * bounds (the CLI's `--length`) are the builder's.
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { TRAILER_FORMATS, USE_CASE_NODE_TYPES, usecaseRunType } from "@nodaro/render-rules"
+import { CLIP_PACK_MAX_TARGET_SEC, CLIP_PACK_MIN_TARGET_SEC, TRAILER_FORMATS, USE_CASE_NODE_TYPES, usecaseRunType } from "@nodaro/render-rules"
 import { USE_CASE_NODE_TYPES as SHARED_USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 import { USE_CASE_NODE_TYPES as SDK_USE_CASE_NODE_TYPES } from "../../../../packages/client/src/resources/edit.js"
 import { USE_CASE_BODIES } from "../use-case/bodies.js"
@@ -45,10 +46,16 @@ describe("the SDK's use-case type list", () => {
     expect([...SDK_USE_CASE_NODE_TYPES]).toEqual([...USE_CASE_NODE_TYPES])
     expect(Object.keys(USE_CASE_BODIES).sort()).toEqual([...SDK_USE_CASE_NODE_TYPES].sort())
   })
+  // The use-case inputs (Trailer's formats, Clip Pack's length bounds) live beside the resource.
+  const inputs = () => readFileSync(join(__dirname, "..", "..", "..", "..", "packages", "client", "src", "resources", "edit-use-case-inputs.ts"), "utf8")
   it("its Trailer formats are the builder's, in delivery order", () => {
-    const source = readFileSync(join(__dirname, "..", "..", "..", "..", "packages", "client", "src", "resources", "edit.ts"), "utf8")
-    const match = source.match(/export const TRAILER_FORMATS = \[([^\]]*)\] as const/)
-    expect(match, "packages/client/src/resources/edit.ts declares TRAILER_FORMATS").not.toBeNull()
+    const match = inputs().match(/export const TRAILER_FORMATS = \[([^\]]*)\] as const/)
+    expect(match, "packages/client/src/resources/edit-use-case-inputs.ts declares TRAILER_FORMATS").not.toBeNull()
     expect([...match![1].matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual([...TRAILER_FORMATS])
+  })
+  it("its Clip Pack length bounds are the builder's (the CLI checks --length against them)", () => {
+    const source = inputs()
+    expect(Number(source.match(/export const CLIP_PACK_MIN_TARGET_SEC = (\d+)/)?.[1])).toBe(CLIP_PACK_MIN_TARGET_SEC)
+    expect(Number(source.match(/export const CLIP_PACK_MAX_TARGET_SEC = (\d+)/)?.[1])).toBe(CLIP_PACK_MAX_TARGET_SEC)
   })
 })

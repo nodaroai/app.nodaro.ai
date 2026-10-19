@@ -257,6 +257,26 @@ describe("the KIE attempt", () => {
     expect(retry[3]!.text).toMatch(/^YOUR PREVIOUS ATTEMPT FAILED VALIDATION:\ngreeting: /)
   })
 
+  it("a pipeline cancel during the image prefetch ends the call at once as a cancel — no KIE call, no row", async () => {
+    config.ANTHROPIC_API_KEY = ""
+    const ctrl = new AbortController()
+    let seen: AbortSignal | undefined
+    mocks.prefetch.mockImplementation(async (_url: string, signal?: AbortSignal) => {
+      seen = signal
+      ctrl.abort()
+      throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" })
+    })
+    const { client, inserts } = fakeSupabase()
+    const err = await pipelineContext
+      .run({ signal: ctrl.signal, pipelineId: "p1" }, () => callLLM(args(client, { userPrompt: imagePrompt })))
+      .catch((e: unknown) => e)
+    expect(seen).toBe(ctrl.signal)
+    expect((err as Error).name).toBe("AbortError")
+    expect((err as Error).message).not.toBe(PIPELINE_KIE_BUSY_MESSAGE)
+    expect(mocks.callKie).not.toHaveBeenCalled()
+    expect(inserts).toHaveLength(0)
+  })
+
   it("a block prompt's retry carries the feedback on the direct lane too", async () => {
     mocks.messagesCreate
       .mockResolvedValueOnce(directAnswer({ wrong: 1 }))
@@ -338,7 +358,9 @@ describe("the KIE attempt", () => {
   it("a content refusal on KIE fails at once, with its row on lane kie", async () => {
     config.ANTHROPIC_API_KEY = ""
     mocks.callKie.mockRejectedValueOnce(
-      new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (kie)`, { inputTokens: 2, outputTokens: 12, providerCost: 0.0004, complete: true }),
+      new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (kie)`, {
+        inputTokens: 2, outputTokens: 12, providerCost: 0.0004, creditsUsd: 0.0004, complete: true,
+      }),
     )
     const { client, inserts } = fakeSupabase()
     const err = await callLLM(args(client)).catch((e: unknown) => e)
@@ -348,10 +370,25 @@ describe("the KIE attempt", () => {
     expect(String(inserts[0]!.error)).toMatch(/^refusal: kie claude-sonnet-5-5/)
   })
 
+  it("a KIE refusal with no stated charge is costed by size, and its row records the size estimate — never KIE's input count", async () => {
+    config.ANTHROPIC_API_KEY = ""
+    mocks.callKie.mockRejectedValueOnce(
+      new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (kie)`, { inputTokens: 2, outputTokens: 12, providerCost: 0.0000001, complete: true }),
+    )
+    const { client, inserts } = fakeSupabase()
+    const err = (await callLLM(args(client)).catch((e: unknown) => e)) as InstanceType<typeof CallLLMRefusalError>
+    const promptChars = requestChars(kieCall()[1])
+    const expected = kieCostUsd("claude-sonnet-5.5", { promptChars, answerChars: 12 * 4 })
+    expect(inserts[0]!.cost_usd).toBeCloseTo(expected, 12)
+    expect(inserts[0]).toMatchObject({ input_tokens: Math.ceil(promptChars / 4), output_tokens: 12 })
+    // The usage on the refusal (what the stage bills) carries the same cost.
+    expect((err.cause as InstanceType<typeof LlmContentRefusalError>).usage.providerCost).toBeCloseTo(expected, 12)
+  })
+
   it("a cut-off answer on KIE gets the one concise retry", async () => {
     config.ANTHROPIC_API_KEY = ""
     mocks.callKie
-      .mockRejectedValueOnce(new LlmOutputTruncatedError("cut", { inputTokens: 2, outputTokens: 32768, providerCost: 0.13, complete: true }))
+      .mockRejectedValueOnce(new LlmOutputTruncatedError("cut", { inputTokens: 2, outputTokens: 32768, providerCost: 0.13, creditsUsd: 0.13, complete: true }))
       .mockResolvedValueOnce(kieAnswer({ greeting: "hi" }, { creditsUsd: 0.001 }))
     const result = await callLLM(args(fakeSupabase().client))
     expect(result.output.greeting).toBe("hi")
@@ -391,7 +428,10 @@ describe("cost and the llm_calls row", () => {
     const { client, inserts } = fakeSupabase()
     const result = await callLLM(args(client))
     expect(result.costUsd).toBe(0.0007)
-    expect(inserts[0]).toMatchObject({ cost_usd: 0.0007, input_tokens: 2, output_tokens: 40, lane: "kie" })
+    // input_tokens is the size estimate: KIE's own count (2) leaves out the caller's prompt.
+    const inputTokens = Math.ceil(requestChars(kieCall()[1]) / 4)
+    expect(inserts[0]).toMatchObject({ cost_usd: 0.0007, input_tokens: inputTokens, output_tokens: 40, lane: "kie" })
+    expect(result.inputTokens).toBe(inputTokens)
   })
 
   it("is the size estimate at KIE rates when it carried none — never the 2 reported input tokens", async () => {
@@ -580,6 +620,29 @@ describe("riding out a KIE failure burst", () => {
         httpStatus: 400,
       }),
     )
+    const { client, inserts } = fakeSupabase()
+    const err = await callLLM(args(client)).catch((e: unknown) => e)
+    expect((err as Error).message).toBe(PIPELINE_KIE_BUSY_MESSAGE)
+    expect(mocks.callKie).toHaveBeenCalledTimes(1)
+    expect(inserts).toHaveLength(1)
+  })
+
+  it("a network failure (fetch's TypeError) and KIE's stream error frame are ridden out", async () => {
+    config.ANTHROPIC_API_KEY = ""
+    PIPELINE_KIE_BURST.windowMs = 180_000
+    mocks.callKie
+      .mockRejectedValueOnce(Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("connect ECONNRESET"), { code: "ECONNRESET" }) }))
+      .mockRejectedValueOnce(new Error("KIE.ai messages stream claude-sonnet-5.5 returned an error event: api_error: Internal error"))
+      .mockResolvedValueOnce(kieAnswer({ greeting: "hi" }))
+    const result = await callLLM(args(fakeSupabase().client, { maxRetries: 0 }))
+    expect(result.output.greeting).toBe("hi")
+    expect(mocks.callKie).toHaveBeenCalledTimes(3)
+  })
+
+  it("our own bug (a plain TypeError) is not ridden out — it fails at once", async () => {
+    config.ANTHROPIC_API_KEY = ""
+    PIPELINE_KIE_BURST.windowMs = 180_000
+    mocks.callKie.mockRejectedValueOnce(new TypeError("Cannot read properties of undefined (reading 'text')"))
     const { client, inserts } = fakeSupabase()
     const err = await callLLM(args(client)).catch((e: unknown) => e)
     expect((err as Error).message).toBe(PIPELINE_KIE_BUSY_MESSAGE)

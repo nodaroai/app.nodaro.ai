@@ -91,3 +91,35 @@ export type {
 export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 
 export type { ReferenceCaptionParams, AssembleNarratedVideoParams, RunNodeOptions } from "../resources/nodes.js"
+
+export type {
+  // The image routes beside generate-image: `nodes.run("image-to-image" |
+  // "edit-image" | "split-image" | "generate-mask", …)`.
+  ImageJobStarted,
+  ImageToImageParams,
+  EditImageCommonParams,
+  EditImageFromUrlParams,
+  EditImageFromTaskParams,
+  EditImageParams,
+  SplitImageParams,
+  SplitImageTile,
+  SplitImageResult,
+  GenerateMaskParams,
+  GenerateMaskJobOutput,
+} from "../resources/nodes-image-params.js"
+
+export type {
+  // The vocabularies those params take.
+  ModifyImageProvider,
+  ImageEditProvider,
+  TaskChainedEditProvider,
+  ImageAspectRatio,
+  ImageResolution,
+  ImageQuality,
+  ImageRenderingSpeed,
+  ImageEditTargetResolution,
+} from "@nodaro/shared/models"
+
+export type { TopazUpscaleFactor } from "@nodaro/shared/credits"
+
+export type { ImageToImageAttachColumn } from "@nodaro/shared/entities"

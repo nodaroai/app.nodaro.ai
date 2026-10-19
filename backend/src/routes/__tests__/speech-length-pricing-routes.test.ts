@@ -1,3 +1,4 @@
+// @test-units-by-name asserts only the speech credit ids it names (getModelCreditBaseCost is mocked)
 /**
  * Seam 1 — the REST routes' credit guards price speech by length while
  * SPEECH_LENGTH_PRICING_ENABLED is on, and pass NO computeCredits while it is

@@ -23,9 +23,11 @@ ordered list, so other nodes joining those lists never touch it. Each graph and
 length row holds its own inputs, and `episode-trailer-identity.test.ts`
 rebuilds every row from them. Its editor twin is
 `frontend/src/__tests__/fixtures/episode-trailer-identity.json`.
-Its `connectionsOut` freezes today's node-type-keyed validator answers (e.g.
-`json → combine-videos.in` true); if dev changes the validator before the
-conversion, rule on it — never re-record.
+Its `connectionsOut` froze the node-type-keyed validator's answers. One record
+has since been corrected by hand, never re-recorded: `json → combine-videos.in`
+is now false, because the validator reads the pip and a use-case node's plan
+never feeds a media-only input (`usecaseDataPipRefused`). Any later validator
+change is ruled on record by record — never re-record.
 
 It was recorded once, on `feat/episode-trailer` before the units merge
 (`UNITS_RECORD_TRAILER_IDENTITY=1`; the test refuses to overwrite an existing
@@ -113,3 +115,35 @@ it("regenerate", () => {
   writeFileSync(process.env.OUT!, JSON.stringify({ ...fx, source: process.env.SOURCE ?? "", cases: fx.cases }) + "\n")
 })
 ```
+
+## `clip-pack-identity.json`
+
+Clip Pack's composed facts on the server before it became a node unit: its
+request body (as JSON Schema), its `GET /v1/nodes` entry and charged
+description, its use-case descriptor (`triesEvery` included), the stored
+snapshot (graph, settings, hash) of 23 built cases (the defaults, every
+framing shape including `null` "None" and the field-by-field fallbacks, the
+caption variants, the count and length clamps, review on, an audio
+recording), its length rule (none today: `videoOutputLength` answers
+`no-rule`), its fee and the credit id a run reserves, the lists it belongs to,
+and its MCP handle row. Only Clip Pack's own facts are kept, plus its
+predecessor in each ordered list, so other nodes joining those lists never
+touch it. Each graph and length row holds its own inputs, and
+`clip-pack-identity.test.ts` rebuilds every row from them. Its editor twin is
+`frontend/src/__tests__/fixtures/clip-pack-identity.json`, which also freezes
+the audio lock (what an audio recording forces, what a video wired again gives
+back, and the store's graph-wide lock over a drawn wire and a chain). Its
+`connectionsOut` freezes today's node-type-keyed validator answers; if dev
+changes the validator before the conversion, rule on it — never re-record.
+json-pip wires into media-only inputs are deliberately not frozen (known
+validator bug, fixed separately), and media-pip wires into JSON-only inputs
+are deliberately not frozen either (same validator bug, reverse direction).
+The request body (and the `/v1/nodes` input schema) freezes whole shared
+vocabularies — caption styles, layouts, xfade switch ids; if dev grows one
+before the merge, rule on it — never re-record. The editor twin also freezes the node
+fields a run's shortfall lands on (`usecaseFailedDeliveriesField`).
+
+It was recorded once, on `feat/clip-pack` before the units merge
+(`UNITS_RECORD_CLIP_PACK_IDENTITY=1`; the test refuses to overwrite an existing
+fixture). **Never re-record it**: a re-recording takes whatever the code then
+builds as the truth.

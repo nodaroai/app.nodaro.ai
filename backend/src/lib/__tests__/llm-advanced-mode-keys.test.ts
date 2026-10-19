@@ -29,6 +29,14 @@ describe("advancedModeError — the direct lane's key", () => {
     expect(advancedModeError({ advancedMode: true }, "gemini-3.6-flash")).toBeNull()
   })
 
+  it("a whitespace-only key is no key, for Gemini as for Claude", async () => {
+    const { advancedModeError } = await import("../llm-advanced-mode.js")
+    configMock.ANTHROPIC_API_KEY = "  "
+    configMock.GEMINI_API_KEY = " \n"
+    expect(advancedModeError({ advancedMode: true }, "claude-opus-5.5")?.code).toBe("advanced_mode_unavailable")
+    expect(advancedModeError({ advancedMode: true }, "gemini-3.6-flash")?.code).toBe("advanced_mode_unavailable")
+  })
+
   it("a model with no direct lane is still `advanced_mode_unsupported`, and Advanced off is never an error", async () => {
     const { advancedModeError } = await import("../llm-advanced-mode.js")
     expect(advancedModeError({ advancedMode: true }, "kimi-k3")?.code).toBe("advanced_mode_unsupported")

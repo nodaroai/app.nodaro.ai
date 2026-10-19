@@ -1,3 +1,4 @@
+// @registry-enumerates reserves the social-publish credit id through CreditsService — a credit id, not a node type, so not a @registry-lookup
 import { DelayedError, UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq"
 import { redis } from "../lib/queue.js"
 import type { SocialPublishJobData } from "../lib/social-queue.js"

@@ -21,7 +21,7 @@ export type {
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
 export { unwrapEditPlanOutput } from "@nodaro/shared/edl"
 
-export { EditResource, TRAILER_FORMATS, USE_CASE_NODE_TYPES } from "../resources/edit.js"
+export { CLIP_PACK_MAX_TARGET_SEC, CLIP_PACK_MIN_TARGET_SEC, EditResource, TRAILER_FORMATS, USE_CASE_NODE_TYPES } from "../resources/edit.js"
 
 export type {
   EditJobResult,
@@ -35,6 +35,8 @@ export type {
   EditPlanSource,
   CameraSwitchInput,
   SilenceRanges,
+  ClipPackEmphasis,
+  ClipPackInput,
   EpisodeChaptersInput,
   EpisodeTrailerInput,
   TrailerFormat,

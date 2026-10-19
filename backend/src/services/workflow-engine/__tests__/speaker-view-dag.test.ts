@@ -186,12 +186,46 @@ describe("the payload builder", () => {
       expect(on.payload).not.toHaveProperty("autoRegions")
       const off = built(canvas({ layout: "single", targetAspect: "9:16" }, { edl: oneCamera }))
       expect(off.payload).not.toHaveProperty("speakerRegions")
-      // A fan-out row (a list of several clips drives the node): one clip of a
-      // pack, so nothing is filled — the editor's run says the same.
-      const g = canvas({ layout: "single", targetAspect: "9:16", autoRegions: true }, { edl: oneCamera })
+    })
+
+    it("autoRegions on a fan-out row (one clip of a pack, decided 2026-10-14): the boxes of every speaker in the episode's transcript, whoever is on screen — the same rows the editor's run sends", () => {
+      // Only speaker_1 is on screen in this clip; the episode's transcript names speaker_0 first.
+      const guestOnly = {
+        version: 1,
+        clock: "master",
+        sources: [{ id: "a", url: "https://x/a.mp4", kind: "video" }],
+        segments: [{ id: "s1", inMs: 5000, outMs: 10000, video: "a", speaker: "speaker_1" }],
+      }
+      const g = canvas({ layout: "single", targetAspect: "9:16", autoRegions: true }, { edl: guestOnly })
       const node = g.nodes.find((n) => n.id === SV)!
       const row = buildPayload(node, "job-1", resolveNodeInputs(node, g.edges, g.states, g.nodes), "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: 1 })
-      expect(row.payload).not.toHaveProperty("speakerRegions")
+      expect(row.payload.speakerRegions).toEqual([
+        { source: "a", speaker: "speaker_0", region: { x: 0.0918, y: 0, w: 0.3164, h: 1 } },
+        { source: "a", speaker: "speaker_1", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } },
+      ])
+      // Run once (not a row), the same clip shows one speaker: no box.
+      expect(built(g).payload).not.toHaveProperty("speakerRegions")
+    })
+
+    it("autoRegions on a fan-out row: a stray one-word label gets no share (decided 2026-10-18) — halves, the rows the editor's run sends", () => {
+      const guestOnly = {
+        version: 1,
+        clock: "master",
+        sources: [{ id: "a", url: "https://x/a.mp4", kind: "video" }],
+        segments: [{ id: "s1", inMs: 70_000, outMs: 75_000, video: "a", speaker: "speaker_1" }],
+      }
+      const stray = { version: 1, words: [
+        { text: "hi", startMs: 0, endMs: 60_000, speaker: "speaker_0" },
+        { text: "um", startMs: 60_000, endMs: 60_300, speaker: "speaker_2" },
+        { text: "yo", startMs: 61_000, endMs: 121_000, speaker: "speaker_1" },
+      ] }
+      const g = canvas({ layout: "single", targetAspect: "9:16", autoRegions: true }, { edl: guestOnly, transcript: stray })
+      const node = g.nodes.find((n) => n.id === SV)!
+      const row = buildPayload(node, "job-1", resolveNodeInputs(node, g.edges, g.states, g.nodes), "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: 1 })
+      expect(row.payload.speakerRegions).toEqual([
+        { source: "a", speaker: "speaker_0", region: { x: 0.0918, y: 0, w: 0.3164, h: 1 } },
+        { source: "a", speaker: "speaker_1", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } },
+      ])
     })
 
     it("writes only keys the plugin's job payload declares", () => {

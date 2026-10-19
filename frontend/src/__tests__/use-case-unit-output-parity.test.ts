@@ -96,4 +96,16 @@ describe("what the two readers hand on (pinned values)", () => {
       for (const pip of ["media", "json", undefined]) expect(unitOutputValue(unit("episode-trailer"), data, pip)).toBeUndefined()
     })
   }
+
+  // Clip Pack's clips are a list the same way: the first clip on `clips` and
+  // on no pip; how many clips failed is a run-result key, not a value it hands on.
+  for (const shape of ["clipsList", "clipsPartial"] as const) {
+    it(`Clip Pack, ${shape}: the first clip on clips and on no pip, nothing on json; the generic reader has nothing`, () => {
+      const data = SHAPES[shape]
+      expect(extractNodeOutput(node("clip-pack", data), "clips")).toBe("https://r/c0.mp4")
+      expect(extractNodeOutput(node("clip-pack", data), undefined)).toBe("https://r/c0.mp4")
+      expect(extractNodeOutput(node("clip-pack", data), "json")).toBeUndefined()
+      for (const pip of ["clips", "json", undefined]) expect(unitOutputValue(unit("clip-pack"), data, pip)).toBeUndefined()
+    })
+  }
 })

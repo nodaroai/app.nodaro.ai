@@ -105,3 +105,31 @@ describe("reviewKindOf (which inspector a render opens)", () => {
     expect(reviewKindOf("p", nodes, edges)).toBeNull()
   })
 })
+
+describe("a Clip Pack node (its plan and its renders are its own run's)", () => {
+  const rec = node("rec", "upload-video", { url: "https://r2/ep.mp4" })
+  const wire = { id: "w", source: "rec", target: "cp", sourceHandle: "video", targetHandle: "media" }
+  const pack = (data: Record<string, unknown>) => node("cp", "clip-pack", { reviewBeforeRender: true, ...data })
+
+  it("opens the Clip Pack inspector on itself once its run holds a clip set", () => {
+    const nodes = [rec, pack({ generatedJson: CLIPS })]
+    expect(reviewEntryOf("cp", nodes, [wire])).toEqual({ planId: "cp", kind: "clips" })
+    expect(reviewKindOf("cp", nodes, [wire])).toBe("clips")
+    expect(reviewTargetOf("cp", nodes, [wire])).toBe("cp")
+    expect(reviewRendersOf("cp", nodes, [wire]).map((n) => n.id)).toEqual(["cp"])
+  })
+
+  it("opens nothing before its run has planned, or on a plan that is not a clip set", () => {
+    expect(reviewKindOf("cp", [rec, pack({})], [wire])).toBeNull()
+    expect(reviewKindOf("cp", [rec, pack({ generatedJson: TIGHTEN })], [wire])).toBeNull()
+  })
+
+  it("opens nothing when a list drives it (one run per item: no single run to review)", () => {
+    const list = node("ls", "list", {
+      columns: [{ id: "default", name: "Items", handleId: "col_default", type: "video-url" }],
+      rows: [["https://r2/a.mp4"], ["https://r2/b.mp4"]],
+    })
+    const fed = { id: "lw", source: "ls", target: "cp", sourceHandle: "col_default", targetHandle: "media", data: { outputMode: "each" } }
+    expect(reviewKindOf("cp", [list, pack({ generatedJson: CLIPS })], [fed])).toBeNull()
+  })
+})

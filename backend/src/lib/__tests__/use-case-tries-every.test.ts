@@ -32,6 +32,7 @@ const WIDEST: { readonly [K in UseCaseBuilderKey]: UseCaseSettings } = {
   tighten: { ...TIGHTEN_EPISODE_DEFAULTS, output: "video", captions: true, framing: { aspect: "9:16", layout: "stacked" } },
   chapters: {},
   trailer: { formats: [...TRAILER_FORMATS] },
+  clipPack: { captions: true, framing: { aspect: "9:16", layout: "stacked" } },
 }
 
 /** Every input the builder takes, wired: the recording, and a music bed and an intro card where it has one. */
@@ -75,6 +76,17 @@ describe("a builder's triesEvery names its built nodes and covers every delivery
     const graph = built("trailer", USE_CASE_SPECS.trailer)
     expect(deliveryNodeIds("formats", graph)).toHaveLength(TRAILER_FORMATS.length)
     expect(graph.nodes.some((n) => n.type === "combine-videos")).toBe(true)
+  })
+
+  it("Clip Pack's widest settings build its per-clip render and its captions, and it tries every one of both", () => {
+    const graph = built("clipPack", USE_CASE_SPECS.clipPack)
+    const ids = new Set(graph.nodes.map((n) => n.id))
+    const tries = USE_CASE_SPECS.clipPack.triesEvery ?? []
+    expect(tries).toHaveLength(2)
+    for (const id of tries) expect(ids.has(id), id).toBe(true)
+    expect(graph.nodes.find((n) => n.id === tries[1])?.type).toBe("add-captions")
+    // Captions on: the captioned clip is the delivery, and the render feeding it is tried for every clip too.
+    expect(deliveryNodeIds("clips", graph)).toEqual([tries[1]])
   })
 
   for (const [key, spec] of SPECS) {

@@ -1,3 +1,4 @@
+// @registry-enumerates prices the refine model it is given (getModelCreditBaseCost) — a credit id, not a node type, so not a @registry-lookup
 import type { Job } from "bullmq"
 import { defaultCarriedFraction, type SurroundDirection } from "@nodaro/shared/entities"
 import { generateImage, editImage } from "../../providers/index.js"

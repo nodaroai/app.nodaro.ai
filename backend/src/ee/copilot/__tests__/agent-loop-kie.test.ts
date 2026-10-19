@@ -121,7 +121,10 @@ describe("a turn on KIE", () => {
     expect(result.usage.costUsd).toBeCloseTo(0.0005, 12)
     expect(result.usage.cacheReadTokens).toBe(0)
     expect(result.usage.cacheWriteTokens).toBe(0)
-    expect(result.usage.inputTokens).toBe(2)
+    // The size estimate, not KIE's own input count (2), which leaves out our prompt.
+    const input = baseInput()
+    const promptChars = input.system.length + JSON.stringify([{ role: "user", content: input.userContent }]).length + JSON.stringify([]).length
+    expect(result.usage.inputTokens).toBe(Math.ceil(promptChars / 4))
     expect(result.usage.outputTokens).toBe(50)
   })
 
@@ -190,6 +193,20 @@ describe("K13 — a KIE failure that cost nothing", () => {
     expect(Date.now() - started).toBeLessThan(5_000)
   })
 
+  it("a cancel from another replica, seen after the pause, ends the turn as cancelled — no further attempt", async () => {
+    m.kieStream.mockImplementation(() => fakeStream({ error: apiError(503, "api_error", "Service unavailable") }))
+    let cancelled = false
+    const isCancelRequested = vi.fn(async () => cancelled)
+    m.kieStream.mockImplementationOnce(() => {
+      cancelled = true // the DB flag is set while the first attempt is failing
+      return fakeStream({ error: apiError(503, "api_error", "Service unavailable") })
+    })
+    const result = await runAgentLoop({ ...baseInput(), lane: "kie", isCancelRequested })
+    expect(result.stopReason).toBe("cancelled")
+    expect(m.kieStream).toHaveBeenCalledTimes(1)
+    expect(isCancelRequested).toHaveBeenCalled()
+  })
+
   it("no retry after a token — the turn ends as today", async () => {
     m.kieStream.mockImplementation(() => fakeStream({ text: "partial", error: apiError(500, "api_error", "boom") }))
     const input = baseInput()
@@ -200,6 +217,39 @@ describe("K13 — a KIE failure that cost nothing", () => {
 
   it("no retry after message_delta — KIE already charged for it", async () => {
     m.kieStream.mockImplementation(() => fakeStream({ events: [delta()], error: apiError(500, "api_error", "boom") }))
+    await expect(runAgentLoop({ ...baseInput(), lane: "kie" })).rejects.toThrow()
+    expect(m.kieStream).toHaveBeenCalledTimes(1)
+  })
+
+  it("a connection error and a stream error frame are retried", async () => {
+    m.kieStream
+      .mockReturnValueOnce(fakeStream({ error: new Anthropic.APIConnectionError({ message: "Connection error." }) }))
+      .mockReturnValueOnce(fakeStream({ error: Anthropic.APIError.generate(undefined, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, undefined, new Headers()) }))
+      .mockReturnValueOnce(fakeStream())
+    const result = await runAgentLoop({ ...baseInput(), lane: "kie" })
+    expect(result.stopReason).toBe("completed")
+    expect(m.kieStream).toHaveBeenCalledTimes(3)
+  })
+
+  it("a garbled frame and out-of-order stream events (as the SDK's stream throws them) are retried", async () => {
+    const garbled = Object.assign(new Anthropic.AnthropicError("Unexpected token } in JSON"), { cause: new SyntaxError("Unexpected token } in JSON") })
+    m.kieStream
+      .mockReturnValueOnce(fakeStream({ error: garbled }))
+      .mockReturnValueOnce(fakeStream({ error: new Anthropic.AnthropicError('Unexpected event order, got content_block_delta before "message_start"') }))
+      .mockReturnValueOnce(fakeStream())
+    const result = await runAgentLoop({ ...baseInput(), lane: "kie" })
+    expect(result.stopReason).toBe("completed")
+    expect(m.kieStream).toHaveBeenCalledTimes(3)
+  })
+
+  it("our own bug is not retried — raw, or wrapped by the SDK's stream as an AnthropicError", async () => {
+    m.kieStream.mockImplementation(() => fakeStream({ error: new TypeError("x is not a function") }))
+    await expect(runAgentLoop({ ...baseInput(), lane: "kie" })).rejects.toThrow()
+    expect(m.kieStream).toHaveBeenCalledTimes(1)
+
+    m.kieStream.mockReset()
+    const wrapped = Object.assign(new Anthropic.AnthropicError("x is not a function"), { cause: new TypeError("x is not a function") })
+    m.kieStream.mockImplementation(() => fakeStream({ error: wrapped }))
     await expect(runAgentLoop({ ...baseInput(), lane: "kie" })).rejects.toThrow()
     expect(m.kieStream).toHaveBeenCalledTimes(1)
   })
@@ -237,5 +287,85 @@ describe("a direct refusal", () => {
     const err = await runAgentLoop(baseInput()).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(LlmPlatformExhaustedError)
     expect(err).not.toBeInstanceOf(CopilotDirectRefusedError)
+  })
+})
+
+describe("the direct lane's request", () => {
+  const history: Anthropic.Messages.MessageParam[] = [
+    { role: "user", content: [{ type: "text", text: "earlier" }] },
+    { role: "assistant", content: [{ type: "thinking", thinking: "hmm", signature: "sig" }, { type: "text", text: "ok" }] },
+  ]
+  // A tool definition carries more than the API takes (list-time marks); only three fields are sent.
+  const tools = [
+    { name: "get_graph", description: "Read the graph", input_schema: { type: "object", properties: {} }, _meta: { confirm: "none" } },
+  ] as never
+
+  it("is byte-for-byte the request the loop sent before the KIE lane existed (standard tier: thinking on, prior thinking kept)", async () => {
+    m.directStream.mockReturnValue(fakeStream())
+    await runAgentLoop({ ...baseInput(), history, tools })
+    expect(m.directStream).toHaveBeenCalledTimes(1)
+    const [params, options] = m.directStream.mock.calls[0]! as [unknown, Record<string, unknown>]
+    expect(params).toEqual({
+      model: "claude-sonnet-5",
+      max_tokens: 16_384,
+      system: [{ type: "text", text: "system", cache_control: { type: "ephemeral" } }],
+      messages: [
+        { role: "user", content: [{ type: "text", text: "earlier" }] },
+        { role: "assistant", content: [{ type: "thinking", thinking: "hmm", signature: "sig" }, { type: "text", text: "ok" }] },
+        { role: "user", content: [{ type: "text", text: "hi", cache_control: { type: "ephemeral" } }] },
+      ],
+      tools: [{ name: "get_graph", description: "Read the graph", input_schema: { type: "object", properties: {} } }],
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+    })
+    expect(Object.keys(options)).toEqual(["timeout"])
+  })
+
+  it("a tier that names no effort sends no thinking param (economy)", async () => {
+    m.directStream.mockReturnValue(fakeStream())
+    await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.economy, tools })
+    const params = m.directStream.mock.calls[0]![0] as Record<string, unknown>
+    expect(params).toEqual({
+      model: "claude-haiku-5-5",
+      max_tokens: 16_384,
+      system: [{ type: "text", text: "system", cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: [{ type: "text", text: "hi", cache_control: { type: "ephemeral" } }] }],
+      tools: [{ name: "get_graph", description: "Read the graph", input_schema: { type: "object", properties: {} } }],
+    })
+  })
+})
+
+describe("K13 and the tools", () => {
+  const toolUse = (id: string) => ({
+    final: { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const, id, name: "get_graph", input: {} }] },
+  })
+
+  it("a call that failed mid-tool_use (before any charge) is asked again, and no tool runs from the failed attempt", async () => {
+    m.kieStream
+      .mockReturnValueOnce(fakeStream({
+        events: [{ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "t-lost", name: "get_graph", input: {} } }],
+        error: apiError(503, "api_error", "Service unavailable"),
+      }))
+      .mockReturnValueOnce(fakeStream())
+    const result = await runAgentLoop({ ...baseInput(), lane: "kie" })
+    expect(result.stopReason).toBe("completed")
+    expect(m.kieStream).toHaveBeenCalledTimes(2)
+    expect(m.dispatch).not.toHaveBeenCalled()
+    expect(JSON.stringify(result.messages)).not.toContain("t-lost")
+  })
+
+  it("a retry in the second iteration re-sends that iteration's request — the first iteration's tool is not run again", async () => {
+    m.kieStream
+      .mockReturnValueOnce(fakeStream(toolUse("t1")))
+      .mockReturnValueOnce(fakeStream({ error: apiError(503, "api_error", "Service unavailable") }))
+      .mockReturnValueOnce(fakeStream())
+    const result = await runAgentLoop({ ...baseInput(), lane: "kie" })
+    expect(result.stopReason).toBe("completed")
+    expect(m.kieStream).toHaveBeenCalledTimes(3)
+    expect(m.dispatch).toHaveBeenCalledTimes(1)
+    expect(result.toolCalls).toBe(1)
+    const retried = m.kieStream.mock.calls[2]![0] as { messages: unknown[] }
+    expect(retried.messages).toEqual((m.kieStream.mock.calls[1]![0] as { messages: unknown[] }).messages)
+    expect(JSON.stringify(retried.messages).match(/"tool_use_id":"t1"/g)).toHaveLength(1)
   })
 })

@@ -1,3 +1,4 @@
+// @registry-enumerates asks CreditsService about the model id it is given — a credit id, not a node type, so not a @registry-lookup
 /**
  * Phase 1D.3 — branchPipeline cloning service.
  *

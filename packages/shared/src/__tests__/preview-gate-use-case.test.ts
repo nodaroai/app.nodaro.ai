@@ -31,6 +31,8 @@ describe("a review-on use-case node holds what follows it until its Render final
     expect(REVIEW_HOLDING_USE_CASE_TYPES.has("tighten-episode")).toBe(true)
     expect(isPreviewHoldingType("tighten-episode")).toBe(true)
     expect(isPreviewHoldingType("episode-trailer")).toBe(true)
+    expect(isPreviewHoldingType("clip-pack")).toBe(true)
+    expect(PREVIEW_RENDER_NODE_TYPES.has("clip-pack")).toBe(false)
     expect(isPreviewHoldingType("apply-edl")).toBe(true)
     expect(isPreviewHoldingType("speaker-view")).toBe(true)
     expect(isPreviewHoldingType("social-media-format")).toBe(false)

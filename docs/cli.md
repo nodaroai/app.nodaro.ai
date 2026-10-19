@@ -136,6 +136,7 @@ nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
 nodaro workflows run <id> --continue-from <executionId> --from-failed [--node n1 n2 ...] [--idempotency-key <key>] [--watch]
 #   --from-failed without --node considers the nodes the failed run's chain was first started on (every node for a full run), plus what that run left failed
+#   with --node, every node named counts: one no run of the chain ever ran runs and is charged (a source, trigger or skipped node never does)
 #   --idempotency-key (8+ characters) is sent as Idempotency-Key: the same key twice starts one run
 nodaro workflows run <id> --continue-from <executionId> --node n1 n2 ... [--override n1.quality=final ...] [--watch]
 #   a run of named nodes continuing a completed run; --override (nodeId.field=value, repeat) is a per-node override for this run only
@@ -163,6 +164,13 @@ nodaro apps run <slug> --input prompt="…" [--watch]
 nodaro apps run <slug> --params-file inputs.json [--watch]
 nodaro apps runs <slug> [--limit <n>] [--cursor <token>] [--json]  # list past runs
 nodaro apps run-get <slug> <runId>
+nodaro apps run-retry <slug> <runId> [--dry-run] [--app-version <n>] [--watch] [--json]
+#   retries a FAILED run from where it stopped: only the steps it did not complete run, and only those are charged;
+#   every step it completed hands on its result. It runs the version the run ran, with the inputs the run applied (it takes none).
+#   --dry-run lists the steps it would run and what it would charge, and starts nothing.
+#   --app-version is the app version you expect it to run (default: the app's latest). When the app changed since the run, the
+#   Retry is refused (app_run_version_changed) and the CLI prints both ways on: start over with `nodaro apps run`, or
+#   continue on the run's own version with --app-version <that version>. A run that was stopped rather than failing is started over.
 
 # Nodes — list types + run a single node directly
 nodaro nodes list [--category input|parameter|ai-image|ai-video|ai-audio|ai-text|processing|composition|output|control|entity|trigger|utility] [--json]
@@ -404,7 +412,7 @@ nodaro voice dub --audio <url> --target-language <code> [--source-language <code
 nodaro voice clones list [--json]                        # clones made before cloning was retired
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, video overlay, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, image mask, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
@@ -463,6 +471,11 @@ nodaro media overlay <imageUrl> [layerUrls...] [--layers-file <path>] [--anchor 
 nodaro media overlay-placement <imageUrl> [--intent <text>] [--aspect <ratio>] [--safe-area <x,y,w,h>] [--json]
                                                          # asks a vision model WHERE one layer should go and answers in the same percent units —
                                                          # anchor, x, y, width + a one-line reason. Synchronous (no job to poll); one image-to-text call.
+nodaro media generate-mask <imageUrl> <prompt> [--threshold <n>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # selects a subject described in text in an image (Grounded SAM) and returns a black-and-white
+                                                         # mask image (white = the subject). --threshold 0-1 (default 0.3; lower selects more). The job's
+                                                         # output carries maskUrl (the mask) and imageUrl (the source, passed through) — feed both to an
+                                                         # inpainting edit. Price: GET /v1/credits/model-cost?model=generate-mask. See docs/nodes/ai-image/generate-mask.md.
 nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
                                                          # 1-20 timed image layers over a video in one local FFmpeg render (no AI), 20 credits; the base
                                                          # audio is kept untouched. One --at per positional layer URL, in order ("3" = from 3 s to the end,
@@ -537,11 +550,27 @@ nodaro edit episode-trailer --media <url> [--intro-card <url>] [--formats 9:16,1
                                                          # a preview of the trailer and prints the edit continue-use-case command that renders
                                                          # every format. Priced as its steps plus a per-run fee (listed after this block).
                                                          # Not yet enabled on nodaro.ai.
-nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
-                                                         # continue a Tighten Episode, Chapters or Trailer run as a new job. from-failed: keep the steps
+nodaro edit clip-pack --media <url> [--count <n>] [--length <sec>] [--framing 16:9|9:16|1:1|4:5|none [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>]] (--layout, --switch and --emphasis only with --framing <aspect>) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # Clip Pack: one recording (video or audio, up to 3 hours) in, a pack of short clips
+                                                         # out — --count clips (1–50, default 8; the plan may find fewer) of about --length
+                                                         # seconds each (5–180, default 60), framed for 9:16 with the speakers stacked and
+                                                         # captioned by default (--framing none: the recording's shape; an audio recording makes
+                                                         # audio clips). --switch is the switch at each speaker change (cut, pan, zoom, or
+                                                         # xfade:<transition>, e.g. xfade:fade; default pan); --emphasis how the speaker talking is
+                                                         # emphasised (none, or scale, border, dim joined with "+", each once; default scale);
+                                                         # --caption-style the captions' look (default karaoke). Every flag is checked before any
+                                                         # request. With --watch each
+                                                         # clip is printed when the run completes ("1  <url>  <title>" per line, "(no captions)"
+                                                         # after the title of a clip whose captions could not be added), then "N clips could not
+                                                         # be rendered." when some could not. --review stops at previews of the clips
+                                                         # and prints the edit continue-use-case command that renders the kept clips. Priced as
+                                                         # its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer|clip-pack] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job. from-failed: keep the steps
                                                          # that finished, run the rest (the fee is held again; the failed run's was refunded).
-                                                         # render-final (Tighten Episode, Trailer): the full-quality result after a --review preview,
-                                                         # with the preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL).
+                                                         # render-final (Tighten Episode, Trailer, Clip Pack): the full-quality result after a --review preview,
+                                                         # with the preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL;
+                                                         # for a Clip Pack, the clips to keep — one that keeps none is refused use_case_nothing_kept).
                                                          # A refusal naming another job prints its code and that job: already_running
                                                          # (follow it), continuation_superseded (continue it instead),
                                                          # render_final_already_rendered (its result is the one to use).
@@ -574,7 +603,7 @@ nodaro workspace join <code> [--json]
 nodaro workspace usage [id] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by member|model|day|none] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 ```
 
-The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, and 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
+The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`, and 11 credits<!-- credits: use-case-fee:clip-pack --> for `edit clip-pack`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
 
 ### Working in a workspace
 

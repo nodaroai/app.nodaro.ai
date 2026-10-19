@@ -14,6 +14,7 @@ import type Anthropic from "@anthropic-ai/sdk"
 import type { WiredAsset } from "./tools/edit-workflow.js"
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { insertAppReport } from "../../lib/app-reports.js"
+import { LlmLaneError } from "../../lib/llm-errors.js"
 import { supabase } from "../../lib/supabase.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { commitJobCredits } from "../../workers/shared.js"
@@ -391,7 +392,9 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       // reservation below — nothing was spent, nothing is charged.
       failure = { code: err.code, message: TURN_ERROR_TEXT[err.code]! }
     } else {
-      const message = err instanceof Error ? err.message : String(err)
+      // The operator's report keeps the vendor's own reply: a lane error's
+      // `message` is the person's sentence, its `internalDetails` the wire text.
+      const message = err instanceof LlmLaneError ? err.internalDetails : err instanceof Error ? err.message : String(err)
       failure = { code: "llm_error", message: TURN_ERROR_TEXT.llm_error! }
       input.req.log.error({ err, turnId: input.turn.id }, "[copilot] turn failed")
       void insertAppReport({
@@ -493,7 +496,9 @@ async function prepareKieTurn(opts: {
   for (let i = opts.priorRows.length - 1; i >= 0 && historyUrls.length < cap; i--) {
     const row = opts.priorRows[i]!
     if (row.role !== "user" || !Array.isArray(row.content)) continue
-    for (const url of undescribedImageUrls(row.content)) {
+    // An earlier image the model cannot read is dropped from the history
+    // (`buildHistory`), as this turn's are at admission — never paid to describe.
+    for (const url of undescribedImageUrls(row.content).filter((u) => anthropicVisionAccepts(u))) {
       if (historyUrls.length < cap && !historyUrls.includes(url) && !currentUrls.includes(url)) historyUrls.push(url)
     }
   }

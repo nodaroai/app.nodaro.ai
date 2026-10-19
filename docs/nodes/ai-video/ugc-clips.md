@@ -7,6 +7,8 @@
 
 UGC Clips takes the script from [UGC Script](./ugc-script.md) and the creator from [UGC Creator](./ugc-creator.md), checks the script again, and splits it into clips, one per take. Each clip goes to [UGC Clip](./ugc-clip.md), which renders it; how many clips a video has depends on its length and its lines. The node shows the clips and the length of each.
 
+On an English video, each take is kept short enough for its voice to fit one clip: at most 60 words as the voice says them (a number or a price counts as the words it is read out as). A longer take is split into two clips (or three, when one part of the script runs long), so a 25-second English video is usually two clips. A single line of the script longer than that is a rule the script breaks (below). A voice that still runs too long for one clip stops that clip before it renders (see [UGC Clip](./ugc-clip.md#overview)).
+
 A script that breaks a rule (possible only after you edit its lines) fails the node before any clip is paid for: "The script needs changes:" followed by each problem and its fix.
 
 A Hebrew script is first recorded as one speech with the chosen voice, its words are timed, and it is split at its pauses; UGC Clips then hands on one clip per piece (each up to 7 seconds). These three steps are charged at their own prices. The recording may hold at most 1.2 times the video's length, and never more than 21 seconds: a longer one stops the run at the split (its charge is refunded; the speech and its word timings are not), with "SPEECH_TOO_LONG … Shorten the script." UGC Script already rewrites a Hebrew script longer than that length allows at 2.5 words a second (45 words for a 15-second video, 52 at most). Hebrew voices: Maya and Shira (woman), Itai and Omer (man).

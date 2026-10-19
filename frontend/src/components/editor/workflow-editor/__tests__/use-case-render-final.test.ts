@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { editPlanBasis } from "@nodaro/shared/edl"
 
 /**
  * Render final on a use-case node (Tighten Episode, decided 2026-10-13): a
@@ -236,6 +237,46 @@ describe("Render final on a Tighten Episode node", () => {
     mockFanOut.mockReturnValue({ items: ["a", "b"] })
     await run("final")
     expect(mockRunWorkflow).not.toHaveBeenCalled()
+  })
+})
+
+describe("Render final on a review-on Clip Pack node", () => {
+  const WRAPPER = "00000000-0000-4000-8000-0000000000c1"
+  const SETTINGS = { reviewBeforeRender: true, captions: true }
+  const KEEP_ONE = { v: 1, kind: "clips", basis: "b", clips: [{ keep: true }, { keep: false }] }
+  const CP = n("cp", "clip-pack", {
+    ...SETTINGS, useCaseJobId: WRAPPER, editedEdl: KEEP_ONE,
+    generatedResults: [0, 1].map((i) => ({ url: `https://r2/p${i}.mp4`, quality: "proxy", jobId: WRAPPER, useCaseSettings: SETTINGS })),
+  })
+  const CP_EDGES = [
+    { id: "a", source: "rec", target: "cp", sourceHandle: "video", targetHandle: "media" },
+    { id: "b", source: "cp", target: "post", sourceHandle: "media" },
+  ]
+
+  it("continues the node's own run with the Preview's settings; the reviewer's keeps travel as the node's saved edit, never an override", async () => {
+    mockNodes = [REC, CP, POST]
+    mockEdges = CP_EDGES
+    mockDirty = true
+    const save = vi.fn().mockResolvedValue({ success: true })
+    await handleRenderFinal("cp", "final", makeCtx() as never, "p1", save, vi.fn())
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    const [, ids, , opts] = mockRunWorkflow.mock.calls[0]!
+    expect([...(ids as string[])].sort()).toEqual(["cp", "post"])
+    expect(opts).toEqual({ inputOverrides: { cp: { useCaseContinue: { mode: "render-final", jobId: WRAPPER, settings: SETTINGS } } } })
+    expect(save).toHaveBeenCalledWith("p1")
+    expect(save.mock.invocationCallOrder[0]!).toBeLessThan(mockRunWorkflow.mock.invocationCallOrder[0]!)
+  })
+
+  it("a review that keeps no clip: nothing starts, and it says to keep a clip (the server would refuse it)", async () => {
+    const plan = [0, 1].map((i) => ({ version: 1, sources: [], segments: [{ id: `c${i}`, inMs: i * 60_000, outMs: i * 60_000 + 30_000, video: "cam" }] }))
+    const dropAll = { v: 1, kind: "clips", basis: editPlanBasis(plan), clips: [{ keep: false }, { keep: false }] }
+    mockNodes = [REC, { ...CP, data: { ...CP.data, generatedJson: plan, editedEdl: dropAll } }, POST]
+    mockEdges = CP_EDGES
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await handleRenderFinal("cp", "final", makeCtx({ confirmRun }) as never, "p1", vi.fn(), vi.fn())
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(confirmRun).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalledWith("Keep at least one clip to render.")
   })
 })
 

@@ -190,6 +190,36 @@ describe("expandUseCaseNodes: a Trailer (one delivery per format)", () => {
   })
 })
 
+describe("expandUseCaseNodes: a Clip Pack (one clip per planned clip)", () => {
+  const pack = (data: Record<string, unknown> = {}) => ({ id: "cp", type: "clip-pack", data: { label: "Clip Pack", ...data } })
+  const fmt = { id: "fmt", type: "social-media-format", data: {} }
+  const recWire = { source: "rec", target: "cp", sourceHandle: "video", targetHandle: "media" }
+  const clipsWire = { source: "cp", target: "fmt", sourceHandle: "clips", targetHandle: "media" }
+
+  it("a wire out of its clips starts at the last per-clip step (the captions), on an Each wire (priced once per clip)", () => {
+    const x = expandUseCaseNodes([rec, pack(), fmt], [recWire, clipsWire])
+    expect(x.edges).toContainEqual({ ...clipsWire, source: "cp::uc-captions", sourceHandle: "video-out", data: { outputMode: "each" } })
+    // The per-clip render is read by the captions on an Each wire too: the chain's own.
+    expect(x.edges).toContainEqual(expect.objectContaining({ source: "cp::uc-render", sourceHandle: "video", target: "cp::uc-captions", targetHandle: "in", data: { outputMode: "each" } }))
+    expect(x.fees).toEqual([{ nodeId: "cp", creditId: "use-case-fee:clip-pack" }])
+  })
+  it("a wire naming no pip reads the clips too; its json is the plan, one value", () => {
+    const x = expandUseCaseNodes([rec, pack(), fmt], [recWire, { ...clipsWire, sourceHandle: null }])
+    expect(x.edges).toContainEqual({ ...clipsWire, sourceHandle: "video-out", source: "cp::uc-captions", data: { outputMode: "each" } })
+    const j = expandUseCaseNodes([rec, pack(), fmt], [recWire, { ...clipsWire, sourceHandle: "json" }])
+    expect(j.edges).toContainEqual({ ...clipsWire, sourceHandle: "edl", source: "cp::uc-plan", data: { outputMode: "last" } })
+  })
+  it("review on: its consumers read the per-clip previews until its Render final", () => {
+    const x = expandUseCaseNodes([rec, pack({ reviewBeforeRender: true }), fmt], [recWire, clipsWire])
+    expect(x.nodes.map((n) => n.id)).not.toContain("cp::uc-captions")
+    expect(x.edges).toContainEqual({ ...clipsWire, source: "cp::uc-render", sourceHandle: "video", data: { outputMode: "each" } })
+  })
+  it("no framing, no captions: the wire starts at the Apply EDL render", () => {
+    const x = expandUseCaseNodes([rec, pack({ framing: null, captions: false }), fmt], [recWire, clipsWire])
+    expect(x.edges).toContainEqual({ ...clipsWire, source: "cp::uc-render", sourceHandle: "media", data: { outputMode: "each" } })
+  })
+})
+
 describe("usecaseMediaKindOf: what the recording wired into `media` is", () => {
   const node = (type: string, data: Record<string, unknown> = {}) => ({ id: "rec", type, data })
 

@@ -46,7 +46,7 @@ describe("a review-on use-case node's remedy is its review, never a Final", () =
     expect(any).toMatch(/Final/)
     // Every node that has it on holds the run the same way: no node type is named.
     for (const text of [review, any]) {
-      expect(text).not.toMatch(/Tighten Episode|Trailer|Chapters/)
+      expect(text).not.toMatch(/Tighten Episode|Trailer|Chapters|Clip Pack/)
       expect(text).toMatch(/every node (that has it on|in it must have “Review before render” off)/)
     }
     // No kind known (a bare code, an older row): the render's words, as always.
@@ -71,6 +71,8 @@ describe("the kind is the holders'", () => {
     expect(previewHoldKind(["tighten-episode"])).toBe("review")
     expect(previewHoldKind(["tighten-episode", "tighten-episode"])).toBe("review")
     expect(previewHoldKind(["episode-trailer"])).toBe("review")
+    expect(previewHoldKind(["clip-pack"])).toBe("review")
+    expect(previewHoldKind(["speaker-view", "clip-pack"])).toBe("any")
     expect(previewHoldKind(["apply-edl", "episode-trailer"])).toBe("any")
     // Both remedies only when both kinds actually hold.
     expect(previewHoldKind(["apply-edl", "tighten-episode"])).toBe("any")

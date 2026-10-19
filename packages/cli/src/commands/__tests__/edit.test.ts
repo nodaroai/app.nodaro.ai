@@ -16,6 +16,7 @@ const mocks = {
   tightenEpisode: vi.fn(),
   episodeChapters: vi.fn(),
   episodeTrailer: vi.fn(),
+  clipPack: vi.fn(),
   continueUseCase: vi.fn(),
   jobsGetStatus: vi.fn(),
 }
@@ -30,6 +31,7 @@ vi.mock("../../client.js", () => ({
       tightenEpisode: mocks.tightenEpisode,
       episodeChapters: mocks.episodeChapters,
       episodeTrailer: mocks.episodeTrailer,
+      clipPack: mocks.clipPack,
       continueUseCase: mocks.continueUseCase,
     },
     jobs: { getStatus: mocks.jobsGetStatus },
@@ -501,6 +503,178 @@ describe("edit episode-trailer", () => {
   })
 })
 
+describe("edit clip-pack", () => {
+  it("maps flags to client.edit.clipPack", async () => {
+    mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" })
+    await runCmd(
+      "edit", "clip-pack",
+      "--media", "https://r2/ep.mp4",
+      "--count", "5",
+      "--length", "45",
+      "--framing", "1:1",
+      "--layout", "side-by-side",
+      "--no-captions",
+      "--plan-tier", "premium",
+      "--instructions", "the funniest moments",
+      "--style-guide", "brisk",
+      "--idempotency-key", "key-c-12345",
+      "--json",
+    )
+    expect(mocks.clipPack).toHaveBeenCalledWith(
+      {
+        mediaUrl: "https://r2/ep.mp4",
+        count: 5,
+        targetDurationSec: 45,
+        framing: { aspect: "1:1", layout: "side-by-side" },
+        captions: false,
+        planTier: "premium",
+        instructions: "the funniest moments",
+        styleGuide: "brisk",
+      },
+      { idempotencyKey: "key-c-12345" },
+    )
+    expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "job-c" }, expect.anything())
+  })
+
+  it("sends only the recording when nothing else is given", async () => {
+    mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" })
+    await runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", "--json")
+    expect(mocks.clipPack).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4" }, undefined)
+  })
+
+  it("--framing none sends framing: null (the recording's shape); an aspect alone leaves the layout to the route", async () => {
+    mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" }).mockResolvedValueOnce({ jobId: "job-d" })
+    await runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", "--framing", "none", "--json")
+    expect(mocks.clipPack).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: null }, undefined)
+    await runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", "--framing", "9:16", "--json")
+    expect(mocks.clipPack).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "9:16" } }, undefined)
+  })
+
+  it("--review asks for the previews and prints how to render the kept clips", async () => {
+    mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", "--review")
+      expect(mocks.clipPack).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", reviewBeforeRender: true }, undefined)
+      expect(log.mock.calls.map((c) => String(c[0])).join("\n")).toContain("nodaro edit continue-use-case job-c --mode render-final")
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("with --watch, prints each clip once the run completes", async () => {
+    mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" })
+    mocks.jobsGetStatus.mockResolvedValueOnce({
+      data: {
+        id: "job-c",
+        status: "completed",
+        output_data: {
+          clips: [
+            { url: "https://r2/a.mp4", title: "The hook", clipKey: "k1" },
+            { url: "https://r2/b.mp4", title: "The turn", clipKey: "k2", captionsFailed: true },
+            { url: "https://r2/c.mp4", clipKey: "k3", captionsFailed: true },
+          ],
+          failedClips: 2,
+        },
+      },
+    })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", "--watch", "--poll-interval", "1")
+      expect(log).toHaveBeenCalledWith("1  https://r2/a.mp4  The hook")
+      // An uncaptioned clip keeps its title; the note follows it.
+      expect(log).toHaveBeenCalledWith("2  https://r2/b.mp4  The turn (no captions)")
+      expect(log).toHaveBeenCalledWith("3  https://r2/c.mp4  (no captions)")
+      expect(log).toHaveBeenCalledWith("2 clips could not be rendered.")
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("with --watch, one clip that could not be rendered is said in the singular, and none says nothing", async () => {
+    const run = async (failedClips?: number) => {
+      mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" })
+      mocks.jobsGetStatus.mockResolvedValueOnce({
+        data: { id: "job-c", status: "completed", output_data: { clips: [{ url: "https://r2/a.mp4", clipKey: "k1" }], ...(failedClips !== undefined ? { failedClips } : {}) } },
+      })
+      const log = vi.spyOn(console, "log").mockImplementation(() => {})
+      try {
+        await runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", "--watch", "--poll-interval", "1")
+        return log.mock.calls.map((c) => String(c[0]))
+      } finally {
+        log.mockRestore()
+      }
+    }
+    expect(await run(1)).toContain("1 clip could not be rendered.")
+    expect((await run()).some((l) => l.includes("could not be rendered"))).toBe(false)
+  })
+
+  it("refuses a bad --count, --length, --framing or --layout before any request", async () => {
+    const bad: string[][] = [
+      ["--count", "60"],
+      ["--count", "0"],
+      ["--count", "2.5"],
+      ["--length", "4"],
+      ["--length", "181"],
+      ["--framing", "21:9"],
+      ["--layout", "stacked"],
+      ["--framing", "none", "--layout", "stacked"],
+      ["--framing", "9:16", "--layout", "diagonal"],
+      ["--plan-tier", "gold"],
+    ]
+    for (const args of bad) {
+      await expect(runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", ...args), args.join(" ")).rejects.toThrow("process.exit(1)")
+    }
+    expect(mocks.clipPack).not.toHaveBeenCalled()
+    const warned = vi.mocked(warn).mock.calls.map((c) => String(c[0]))
+    expect(warned[0]).toMatch(/^--count must be 1–50/)
+    expect(warned[3]).toMatch(/^--length must be 5–180 seconds/)
+    expect(warned[6]).toMatch(/^--layout applies with --framing <aspect> only/)
+    expect(warned[7]).toMatch(/^--layout applies with --framing <aspect> only/)
+  })
+  it("maps --switch, --emphasis (with --framing <aspect>) and --caption-style to the framing and the captions' look", async () => {
+    mocks.clipPack.mockResolvedValueOnce({ jobId: "job-c" })
+    await runCmd(
+      "edit", "clip-pack", "--media", "https://r2/ep.mp4",
+      "--framing", "9:16", "--switch", "xfade:fade", "--emphasis", "scale+border", "--caption-style", "word-pop", "--json",
+    )
+    expect(mocks.clipPack).toHaveBeenCalledWith(
+      {
+        mediaUrl: "https://r2/ep.mp4",
+        framing: { aspect: "9:16", switchType: "xfade:fade", emphasisStyle: "scale+border" },
+        captionStyle: "word-pop",
+      },
+      undefined,
+    )
+  })
+
+  it("refuses a bad --switch, --emphasis or --caption-style, or one without what it applies to, before any request", async () => {
+    const bad: string[][] = [
+      ["--switch", "pan"],
+      ["--framing", "none", "--emphasis", "scale"],
+      ["--framing", "9:16", "--switch", "teleport"],
+      ["--framing", "9:16", "--emphasis", "glow"],
+      ["--framing", "9:16", "--emphasis", "scale+scale"],
+      ["--framing", "9:16", "--emphasis", "none+dim"],
+      ["--caption-style", "comic"],
+      ["--no-captions", "--caption-style", "karaoke"],
+    ]
+    for (const args of bad) {
+      await expect(runCmd("edit", "clip-pack", "--media", "https://r2/ep.mp4", ...args), args.join(" ")).rejects.toThrow("process.exit(1)")
+    }
+    expect(mocks.clipPack).not.toHaveBeenCalled()
+    const warned = vi.mocked(warn).mock.calls.map((c) => String(c[0]))
+    expect(warned[0]).toMatch(/^--switch applies with --framing <aspect> only/)
+    expect(warned[1]).toMatch(/^--emphasis applies with --framing <aspect> only/)
+    expect(warned[2]).toMatch(/^--switch must be one of cut, pan, zoom, xfade:fade/)
+    expect(warned[3]).toBe('--emphasis must be none, or scale, border, dim joined with "+" (each once) (got "glow")')
+    expect(warned[4]).toMatch(/^--emphasis must be/)
+    expect(warned[5]).toMatch(/^--emphasis must be/)
+    expect(warned[6]).toMatch(/^--caption-style must be subtitle, word-highlight, karaoke/)
+    expect(warned[7]).toBe("--caption-style applies with captions on (drop --no-captions)")
+  })
+})
+
 describe("edit continue-use-case", () => {
   it("continues a failed run with only the job and the mode", async () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2", executionId: "exec-2" })
@@ -539,6 +713,12 @@ describe("edit continue-use-case", () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
     await runCmd("edit", "continue-use-case", "job-1", "--mode", "render-final", "--type", "episode-trailer", "--json")
     expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "render-final", nodeType: "episode-trailer" }, undefined)
+  })
+
+  it("--type clip-pack renders a Clip Pack's kept clips", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
+    await runCmd("edit", "continue-use-case", "job-1", "--mode", "render-final", "--type", "clip-pack", "--json")
+    expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "render-final", nodeType: "clip-pack" }, undefined)
   })
 
   it("a run whose type the key can't read asks for --type, not the SDK's nodeType", async () => {

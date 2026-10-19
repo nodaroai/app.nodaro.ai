@@ -554,6 +554,18 @@ const trailer = await client.edit.episodeTrailer({ mediaUrl: masterUrl, formats:
 const cut = await client.jobs.getStatus(trailer.jobId) // output_data.formats: [{ format: "9:16", url }, { format: "1:1", url }]
 ```
 
+A pack of short clips is one call too: `client.edit.clipPack` finds the
+best moments of the recording (8 by default, about 60 seconds each) and
+renders each as its own clip, framed for 9:16 with the speakers stacked and
+captioned by default (`framing: null` keeps the recording's shape).
+Its fee is 11 credits<!-- credits: use-case-fee:clip-pack --> per run, on top of its steps (quote it with
+`estimateClipPack`). Not yet enabled on nodaro.ai.
+
+```ts
+const pack = await client.edit.clipPack({ mediaUrl: masterUrl, count: 5 })
+const clips = await client.jobs.getStatus(pack.jobId) // output_data.clips: [{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }, …]
+```
+
 ### Improve a prompt with the Prompt Wizard
 
 `client.promptHelper` is AI assistance for writing prompts for generation

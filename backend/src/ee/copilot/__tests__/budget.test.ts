@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the workflow-copilot credit row it names
 /**
  * The reservation is a hard ceiling — `commit_credits` refunds a surplus but
  * never charges above it — so a turn that outspends its reservation is served

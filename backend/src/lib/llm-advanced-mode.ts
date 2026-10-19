@@ -23,9 +23,8 @@
 
 import { z } from "zod"
 import { getLlmModel, supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON } from "@nodaro/shared/llm-models"
-import { config } from "./config.js"
 import { ADVANCED_MODE_UNAVAILABLE_MESSAGE } from "./llm-errors.js"
-import { anthropicDirectUsable, anthropicKeySet } from "./llm/anthropic-availability.js"
+import { anthropicDirectUsable, anthropicKeySet, geminiKeySet } from "./llm/anthropic-availability.js"
 import type { LlmServingLane } from "./pricing/llm-cost.js"
 
 /**
@@ -90,7 +89,7 @@ export function advancedModeError(
     message: "Advanced mode needs this provider's own API key, which this installation does not have — turn Advanced mode off to run the model.",
   }
   const model = getLlmModel(llmModel!)
-  if (model?.directGeminiModel) return config.GEMINI_API_KEY ? null : noKey
+  if (model?.directGeminiModel) return geminiKeySet() ? null : noKey
   if (!anthropicKeySet()) return noKey
   if (!opts.ignoreLatch && !anthropicDirectUsable()) return { code: "advanced_mode_unavailable", message: ADVANCED_MODE_UNAVAILABLE_MESSAGE }
   return null

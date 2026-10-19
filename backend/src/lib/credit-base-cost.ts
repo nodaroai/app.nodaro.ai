@@ -1,3 +1,4 @@
+// @registry-enumerates prices the model identifier it is given by getModelCreditBaseCost — a credit id, not a node type, so not a @registry-lookup
 import { hasCredits } from "./config.js"
 
 /**

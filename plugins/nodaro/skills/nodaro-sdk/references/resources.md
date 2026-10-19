@@ -13,7 +13,7 @@
 | `developerApps` | Manage your own OAuth apps |
 | `oauth` | Code exchange, revoke, app-info |
 | `webhooks` | Outbound webhooks: endpoints that receive your `job.completed` / `job.failed` (create returns the signing secret once), rotate the secret (the old one keeps signing for a grace period), delivery log and one delivery by id, test ping. Verify a delivery with `verifyWebhookSignature` |
-| `apps` | Published apps: inputs, run, runs history |
+| `apps` | Published apps: inputs, run, runs history, Retry of a failed run (`resume`) |
 | `characters` | Character Studio: CRUD, portraits, assets, motion; high-fidelity training — `train`, `trainingStatus`, `deleteLora` (Cloud) |
 | `locations` | Location Studio: CRUD, assets, atmosphere motion |
 | `objects` | Object Studio: CRUD, assets, motion |
@@ -30,7 +30,6 @@
 | `uploads` | Signed upload URLs for image / video / audio |
 | `library` | Generated-media library |
 | `gallery` | The public gallery (`browse`) and your favorites: `toggleFavorite`, `favorites` |
-| `presets` | Node presets (factory + user) |
 | `presets` | Node presets: your own (create, update, delete, import, reorder, folders) and the factory catalog; favorites; `needsImage` / `minReferences` (photos a preset works from) and `previewUrl` |
 | `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
 | `collections` | Where a workflow's records live: list, create, update, delete collections; records (newest first, words, since), addRecord (dedupe + idempotency, eviction past the cap), deleteRecord, export CSV / JSON |

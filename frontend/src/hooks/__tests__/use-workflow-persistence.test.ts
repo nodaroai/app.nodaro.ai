@@ -2580,3 +2580,70 @@ describe("applyCompletedExecutionResults — a server-run Trailer reopens with e
     expect(data).toMatchObject({ failedFormats: ["4:5"], __listResults: ["https://r2/t-916.mp4", "https://r2/t-11.mp4"] })
   })
 })
+
+describe("a Clip Pack run reopens with every clip on both load lanes — one not rendered, one uncaptioned", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const clipsOf = () => [
+    { url: "https://r2/c0.mp4", quality: "final", clipKey: "k0", title: "The pivot", planBasis: "p0", renderBasis: "r0", thumbnailUrl: "https://r2/c0.png" },
+    { url: "https://r2/c1.mp4", quality: "final", clipKey: "k1", title: "The money", planBasis: "p1", renderBasis: "r1", thumbnailUrl: "https://r2/c1.png", captionsFailed: true },
+  ]
+  const rowsOf = (results: Array<Record<string, unknown>>) =>
+    results.map((r) => [r.url, r.clipKey, r.title, r.jobId, r.quality, r.planBasis, r.renderBasis, r.thumbnailUrl, r.captionsFailed, r.failedClips])
+
+  it("a job that finished while the tab was closed (via load): one row per clip with its own stamps, the list, the count named", async () => {
+    const earlier = { url: "https://r2/old.mp4", jobId: "job-0", quality: "final", clipKey: "k9", timestamp: "t0" }
+    const nodes = [makeNode({ id: "cp", type: "clip-pack", data: { label: "Clip Pack", executionStatus: "running", currentJobId: VALID_UUID, generatedResults: [earlier] } })]
+    mockGetBatchJobStatus.mockResolvedValue([
+      {
+        id: VALID_UUID,
+        status: "completed",
+        output_data: { videoUrl: "https://r2/c0.mp4", clips: clipsOf(), failedClips: 1, failedCaptions: 1, json: [{ version: 1 }], quality: "final", useCaseSettings: { count: 3 } },
+        error_message: null,
+      },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    expect(rowsOf(data.generatedResults as Array<Record<string, unknown>>)).toEqual([
+      ["https://r2/c0.mp4", "k0", "The pivot", VALID_UUID, "final", "p0", "r0", "https://r2/c0.png", undefined, 1],
+      ["https://r2/c1.mp4", "k1", "The money", VALID_UUID, "final", "p1", "r1", "https://r2/c1.png", true, 1],
+      [earlier.url, "k9", undefined, earlier.jobId, earlier.quality, undefined, undefined, undefined, undefined, undefined],
+    ])
+    expect(data).toMatchObject({ executionStatus: "completed", activeResultIndex: 0, generatedVideoUrl: "https://r2/c0.mp4", __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"], failedClips: 1 })
+    expect(data.__listResultStamps).toEqual([
+      { quality: "final", clipKey: "k0", planBasis: "p0", renderBasis: "r0", thumbnailUrl: "https://r2/c0.png", jobId: VALID_UUID },
+      { quality: "final", clipKey: "k1", planBasis: "p1", renderBasis: "r1", thumbnailUrl: "https://r2/c1.png", jobId: VALID_UUID },
+    ])
+  })
+
+  it("a server run reopened from its execution (applyCompletedExecutionResults)", () => {
+    const JOB = "00000000-0000-4000-8000-0000000000e2"
+    const stamps = [
+      { quality: "final", clipKey: "k0", planBasis: "p0", renderBasis: "r0", thumbnailUrl: "https://r2/c0.png", jobId: JOB },
+      { quality: "final", clipKey: "k1", planBasis: "p1", renderBasis: "r1", thumbnailUrl: "https://r2/c1.png", jobId: JOB },
+    ]
+    const nodes = [makeNode({ id: "cp", type: "clip-pack", data: { label: "Clip Pack", executionStatus: "running" } })] as never
+    const [out] = applyCompletedExecutionResults(nodes, {
+      cp: {
+        status: "completed",
+        startedAt: "2026-10-18T10:00:00.000Z",
+        jobId: JOB,
+        output: { videoUrl: "https://r2/c0.mp4", listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"], listResultStamps: stamps, clips: clipsOf(), failedClips: 1, failedCaptions: 1, quality: "final" },
+      },
+    } as never, null)
+    const data = (out as { data: Record<string, unknown> }).data
+    expect(rowsOf(data.generatedResults as Array<Record<string, unknown>>)).toEqual([
+      ["https://r2/c0.mp4", "k0", "The pivot", JOB, "final", "p0", "r0", "https://r2/c0.png", undefined, 1],
+      ["https://r2/c1.mp4", "k1", "The money", JOB, "final", "p1", "r1", "https://r2/c1.png", true, 1],
+    ])
+    expect(data).toMatchObject({ failedClips: 1, __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"], __listResultStamps: stamps })
+  })
+})

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, type ModelKind, type ModelMode } from "@nodaro/shared/model-catalog"
+import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, MODEL_MAKERS, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
 import { projectModel } from "../lib/mcp/tools/models.js"
 import { isModelDenied } from "../lib/surface-deny.js"
 import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
@@ -68,5 +68,23 @@ export async function modelsRoutes(app: FastifyInstance) {
     // change rarely; the Run button reads them live when it matters.
     reply.header("Cache-Control", "public, max-age=300")
     return reply.send({ sections, recommendations, totalModels: filtered.length })
+  })
+
+  /**
+   * GET /v1/model-makers — every company in `MODEL_MAKERS` with the mark this
+   * deployment publishes for it (`logoUrl`, null when none), the same address
+   * GET /v1/models puts on that maker's models. For a client that only draws
+   * marks (the editor's model picker): a few hundred bytes instead of the whole
+   * catalog, and a maker whose models are hidden from discovery keeps its mark.
+   */
+  app.get("/v1/model-makers", async (_req, reply) => {
+    const logos = await makerLogoUrls()
+    const makers = (Object.keys(MODEL_MAKERS) as ModelMakerId[]).map((id) => ({
+      id,
+      name: MODEL_MAKERS[id].name,
+      logoUrl: logos.get(id) ?? null,
+    }))
+    reply.header("Cache-Control", "public, max-age=300")
+    return reply.send({ makers })
   })
 }

@@ -75,6 +75,19 @@ export const CHARACTER_ATTACH_COLUMNS = [
 export type CharacterAttachColumn = (typeof CHARACTER_ATTACH_COLUMNS)[number]
 
 /**
+ * The narrower set `/v1/image-to-image`'s `attachToColumn` accepts (Character
+ * Studio refining an existing asset): the four refinable buckets. A subset of
+ * {@link CHARACTER_ATTACH_COLUMNS}, checked at compile time.
+ */
+export const IMAGE_TO_IMAGE_ATTACH_COLUMNS = [
+  "expressions",
+  "poses",
+  "angles",
+  "lighting_variations",
+] as const satisfies readonly CharacterAttachColumn[]
+export type ImageToImageAttachColumn = (typeof IMAGE_TO_IMAGE_ATTACH_COLUMNS)[number]
+
+/**
  * Canonical variant presets per character asset type — the SINGLE source of
  * truth shared by the `generate-character-asset` route (Zod validation rejects a
  * non-`custom` variant outside this list) and any client building the asset-set

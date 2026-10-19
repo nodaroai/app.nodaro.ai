@@ -10,6 +10,8 @@
  * an explicit `undefined`).
  */
 import { describe, it, expect } from "vitest"
+import { z } from "zod"
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
@@ -40,6 +42,20 @@ describe("LLM_MCP_FIELDS", () => {
         /^\s*advanced_mode:\s*z\./m,
       )
     }
+  })
+})
+
+describe("LLM_MCP_FIELDS.llmModel and retired models", () => {
+  it("accepts a retired id (saved callers keep working) but does not advertise it", () => {
+    const schema = z.object(LLM_MCP_FIELDS)
+    expect(schema.safeParse({ llmModel: "gemini-3.7-flash" }).success).toBe(true)
+    expect(schema.safeParse({ llmModel: "gemini-3.8-flash" }).success).toBe(true)
+    expect(schema.safeParse({ llmModel: "not-a-model" }).success).toBe(false)
+    // The converter the MCP server lists tools through, so this is what clients see.
+    const listed = toJsonSchemaCompat(schema) as { properties?: Record<string, { enum?: string[] }> }
+    const advertised = listed.properties?.llmModel?.enum
+    expect(advertised).toContain("gemini-3.8-flash")
+    expect(advertised).not.toContain("gemini-3.7-flash")
   })
 })
 

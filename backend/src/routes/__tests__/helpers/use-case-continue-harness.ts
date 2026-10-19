@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
-import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph } from "@nodaro/render-rules"
+import { CLIP_PACK_DEFAULTS, TIGHTEN_EPISODE_DEFAULTS, buildClipPackGraph, buildTightenEpisodeGraph, toStoredInlineGraph } from "@nodaro/render-rules"
 
 export const USER = "00000000-0000-4000-8000-000000000001"
 export const ID = "00000000-0000-4000-8000-0000000000aa"
@@ -75,6 +75,60 @@ export function p1StoredRun(status: "failed" | "completed", opts: { readonly typ
   src.source = source
   return { recordedHash: row.hash, stored, wrapper }
 }
+
+/**
+ * A completed review-on Clip Pack run holding its per-clip previews: its
+ * wrapper, its stored snapshot and its execution, the plan's clip set on the
+ * plan node (as planned on `plannedJson` when `applied` is given: a seed
+ * whose review was applied). Returns its snapshot.
+ */
+export function seedPreviewClipPackRun(opts: { readonly plan: readonly unknown[]; readonly applied?: readonly unknown[] }) {
+  const review = { ...CLIP_PACK_DEFAULTS, reviewBeforeRender: true }
+  const stored = toStoredInlineGraph(buildClipPackGraph(review, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), review)
+  const rows = opts.plan.map((_, i) => `https://r2/p${i}.mp4`)
+  src.wrapper = {
+    id: ID, user_id: USER, status: "completed", provider: "use-case", job_type: "clip-pack",
+    input_data: { type: "clip-pack", mode: "run", _executionId: "exec-0", _feeCredits: 10, settings: review, mediaUrl: "https://r2/ep.mp4", durationSec: 3600 },
+  }
+  src.graph = stored
+  src.source = {
+    id: "exec-0", userId: USER, workflowId: null, status: "completed", appVersionId: null, inlineGraphHash: stored.hash,
+    nodeStates: {
+      "uc-source": { status: "completed" }, "uc-transcribe": { status: "completed" },
+      "uc-plan": { status: "completed", output: opts.applied ? { json: opts.applied, plannedJson: opts.plan } : { json: opts.plan } },
+      "uc-render": { status: "completed", output: { videoUrl: rows[0], listResults: rows, quality: "proxy", listResultStamps: rows.map(() => ({ quality: "proxy" })) } },
+      "uc-captions": { status: "skipped" },
+    },
+  }
+  return stored
+}
+
+/**
+ * A Clip Pack run (review off) that failed after rendering its clips and
+ * before captioning them (a time cap, a dead worker): its wrapper failed (fee
+ * refunded), its captions step never ran. Returns its snapshot.
+ */
+export function seedCaptionsNotRunClipPack() {
+  const stored = toStoredInlineGraph(buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), CLIP_PACK_DEFAULTS)
+  src.wrapper = {
+    id: ID, user_id: USER, status: "failed", provider: "use-case", job_type: "clip-pack",
+    input_data: { type: "clip-pack", mode: "run", _executionId: "exec-0", _feeCredits: 10, settings: CLIP_PACK_DEFAULTS, mediaUrl: "https://r2/ep.mp4", durationSec: 3600 },
+  }
+  src.graph = stored
+  src.source = {
+    id: "exec-0", userId: USER, workflowId: null, status: "failed", appVersionId: null, inlineGraphHash: stored.hash,
+    nodeStates: {
+      "uc-source": { status: "completed" }, "uc-transcribe": { status: "completed" }, "uc-plan": { status: "completed" },
+      "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", listResults: ["https://r2/r0.mp4", "https://r2/r1.mp4"], quality: "final" } },
+      "uc-captions": { status: "pending" },
+    },
+  }
+  return stored
+}
+
+/** POST a use-case type's continue route. */
+export const postContinue = async (type: string, payload: Record<string, unknown>) =>
+  (await makeApp()).inject({ method: "POST", url: `/v1/${type}/continue`, payload })
 
 export const src = {
   wrapper: null as Record<string, unknown> | null,

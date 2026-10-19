@@ -205,6 +205,34 @@ describe("continuationSeeds: every node the run does not execute hands on the ea
     for (const id of ["router", "empty", "fresh", "done"]) expect(seeds.get(id)?.carriedUnfinished).toBeUndefined()
   })
 
+  it("a completed node the earlier run never ran (a placeholder) is marked carriedPlaceholder; one it ran, or one seeded from a run that ran it, is not", () => {
+    const nodes: SimpleNode[] = ["saved", "carried", "ran", "ranNoJob", "seededRan", "oldSeed", "plan"].map((id) => ({
+      id,
+      type: id === "plan" ? "edit-plan" : "add-captions",
+      data: {},
+    }))
+    const states: Record<string, NodeExecutionState> = {
+      // Outside that run's nodeIds: handed on from its saved data.
+      saved: { status: "completed", nodeType: "add-captions", output: {}, fromSavedData: true },
+      // Handed on so by the run before: the mark rides on, seed to seed.
+      carried: { status: "completed", nodeType: "add-captions", output: {}, seededFromExecution: "exec-older", carriedPlaceholder: true },
+      ran: { status: "completed", nodeType: "add-captions", output: {}, jobId: "job-1", startedAt: "2026-10-19T10:00:00.000Z" },
+      // An inline node: no job, but it started.
+      ranNoJob: { status: "completed", nodeType: "add-captions", output: {}, startedAt: "2026-10-19T10:00:00.000Z" },
+      seededRan: { status: "completed", nodeType: "add-captions", output: {}, seededFromExecution: "exec-older" },
+      // A seed of a placeholder written before the mark existed reads as one that ran.
+      oldSeed: { status: "completed", nodeType: "add-captions", output: {}, seededFromExecution: "exec-older", fromSavedData: true },
+      // An Edit Plan outside a live run's nodeIds: its seed loses fromSavedData, never the mark.
+      plan: { status: "completed", nodeType: "edit-plan", output: { json: {} }, fromSavedData: true },
+    }
+    const seeds = continuationSeeds(nodes, source({ nodeStates: states }), new Set())
+    for (const id of ["saved", "carried", "plan"]) {
+      expect(seeds.get(id)).toMatchObject({ status: "completed", seededFromExecution: "exec-0", carriedPlaceholder: true })
+    }
+    expect(seeds.get("plan")!.fromSavedData).toBeUndefined()
+    for (const id of ["ran", "ranNoJob", "seededRan", "oldSeed"]) expect(seeds.get(id)?.carriedPlaceholder).toBeUndefined()
+  })
+
   it("a source or parameter node the earlier run holds no state for is left to the ordinary seeding", () => {
     const { nodes } = graph({ generatedJson: tightenPlan })
     const seeds = continuationSeeds(nodes, source({ nodeStates: stoppedRun(tightenPlan) }), new Set(["cut", "cap"]))

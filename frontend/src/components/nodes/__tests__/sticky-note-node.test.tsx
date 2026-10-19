@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the sticky-note definition (NODE_DEFINITIONS)
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { StickyNoteNode } from "../sticky-note-node"

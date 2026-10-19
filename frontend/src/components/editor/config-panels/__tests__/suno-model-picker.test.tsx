@@ -1,3 +1,5 @@
+// @test-watches frontend/src/nodes/**
+// (it filters every node definition for suno-* types, so any unit can change what it checks)
 /**
  * Every Suno picker offers every Suno version, current generation first.
  *

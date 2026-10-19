@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   run: null as Record<string, unknown> | null,
   version: null as Record<string, unknown> | null,
   slugWorkflow: "wf-1" as string | null,
+  /** The Clip Pack up-front check's answer (lib/use-case/continuation.ts). */
+  nothingKept: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
@@ -41,6 +43,7 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => mocks.flag }))
 vi.mock("@/lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: mocks.queueAdd } }))
 vi.mock("@/lib/access-blocks.js", () => ({ isUserBlocked: vi.fn().mockResolvedValue(false) }))
+vi.mock("@/lib/use-case/continuation.js", () => ({ usecaseNothingKeptRefusal: mocks.nothingKept }))
 vi.mock("@/middleware/credit-guard.js", () => ({ resolveWebSurfaceFlag: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { checkAppRunEligibility: mocks.eligibility } }))
 vi.mock("@/lib/idempotent-insert.js", () => ({
@@ -57,6 +60,7 @@ vi.mock("@/services/workflow-engine/run-continuation.js", async (importOriginal)
 import { appRenderFinalRoutes } from "../app-render-final.js"
 import { supabase } from "../../lib/supabase.js"
 import { resetFinalExecutionColumnForTests } from "../../lib/app-run-final-column.js"
+import { usecasePreviewTarget } from "@nodaro/render-rules"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const RUN = "00000000-0000-4000-8000-000000000040"
@@ -173,6 +177,7 @@ beforeEach(async () => {
   }
   mocks.loadSource.mockResolvedValue(source())
   mocks.eligibility.mockResolvedValue({ allowed: true })
+  mocks.nothingKept.mockResolvedValue(null)
   mockTables()
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -496,6 +501,77 @@ describe("Render final of an app run", () => {
       const job = mocks.queueAdd.mock.calls[0]![1]
       expect([...job.nodeIds].sort()).toEqual(["hook", "t1"])
       expect(job.inputOverrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "job-tw", settings: trSettings } } })
+    })
+
+    it("a review-on Clip Pack's Preview batch (its own list of clips) is offered Render final: every clip renders, no edit sent", async () => {
+      const cpSettings = { count: 3, captions: true, reviewBeforeRender: true }
+      mocks.version = {
+        ...mocks.version!,
+        snapshot_nodes: [
+          { id: "rec", type: "upload-video", data: {} },
+          { id: "t1", type: "clip-pack", data: { reviewBeforeRender: true } },
+          { id: "hook", type: "webhook-output", data: { url: "https://creator.example/hook" } },
+        ],
+      }
+      const clips = ["https://r2/c0.mp4", "https://r2/c1.mp4", "https://r2/c2.mp4"]
+      const cpPreview = {
+        status: "completed",
+        jobId: "job-cw",
+        output: {
+          videoUrl: clips[0], quality: "proxy", useCaseSettings: cpSettings,
+          listResults: clips, listResultStamps: clips.map((_, i) => ({ quality: "proxy", clipKey: `k${i}` })),
+        },
+      }
+      // Task 2's target reads the list as the node's own result, not its runs.
+      expect(usecasePreviewTarget(cpPreview, "clip-pack")).toEqual({ jobId: "job-cw", settings: cpSettings })
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates(cpPreview) }))
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(202)
+      const job = mocks.queueAdd.mock.calls[0]![1]
+      expect([...job.nodeIds].sort()).toEqual(["hook", "t1"])
+      // The continuation alone: no edit of the clip set, so every clip renders at Final.
+      expect(job.inputOverrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "job-cw", settings: cpSettings } } })
+      expect(job.inputOverrides.t1).not.toHaveProperty("editedEdl")
+    })
+
+    it("a review-on Clip Pack whose stored review keeps no clip is refused 409 use_case_nothing_kept before anything is written or held", async () => {
+      const cpSettings = { count: 2, captions: true, reviewBeforeRender: true }
+      mocks.version = {
+        ...mocks.version!,
+        snapshot_nodes: [
+          { id: "rec", type: "upload-video", data: {} },
+          { id: "t1", type: "clip-pack", data: { reviewBeforeRender: true } },
+          { id: "hook", type: "webhook-output", data: { url: "https://creator.example/hook" } },
+        ],
+      }
+      const clips = ["https://r2/c0.mp4", "https://r2/c1.mp4"]
+      const cpPreview = {
+        status: "completed",
+        jobId: "job-cw",
+        output: { videoUrl: clips[0], quality: "proxy", useCaseSettings: cpSettings, listResults: clips, listResultStamps: clips.map((_, i) => ({ quality: "proxy", clipKey: `k${i}` })) },
+      }
+      const dropAll = { v: 1, kind: "clips", basis: "b", clips: [{ keep: false }, { keep: false }] }
+      mocks.run = { ...mocks.run!, node_states: { t1: { editedEdl: dropAll } } }
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates(cpPreview) }))
+      mocks.nothingKept.mockResolvedValue({
+        ok: false, status: 409, code: "use_case_nothing_kept", message: "Every clip was dropped in the review: keep at least one clip to render the final.",
+      })
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error).toEqual({ code: "use_case_nothing_kept", message: "Every clip was dropped in the review: keep at least one clip to render the final." })
+      // Asked of the Preview's own run, with the review the runner stored.
+      expect(mocks.nothingKept).toHaveBeenCalledWith({ nodeType: "clip-pack", jobId: "job-cw", userId: USER, editedEdl: dropAll })
+      // Nothing written, queued or held.
+      expect(mocks.queueAdd).not.toHaveBeenCalled()
+      expect(mocks.inserts).toEqual([])
+      expect(mocks.runUpdates).toEqual([])
+      expect(mocks.eligibility).not.toHaveBeenCalled()
+
+      // A review that keeps a clip goes ahead, with that review sent to the node.
+      mocks.nothingKept.mockResolvedValue(null)
+      const ok = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(ok.statusCode).toBe(202)
+      expect(mocks.queueAdd.mock.calls[0]![1].inputOverrides.t1).toMatchObject({ editedEdl: dropAll, useCaseContinue: { mode: "render-final", jobId: "job-cw" } })
     })
 
     // Another render's final completed first and handed the node's Preview on

@@ -81,6 +81,8 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   // An app run's Render final (the app runner).
   render_final_not_preview: "apiErr.reason.renderFinalNotPreview",
   render_final_already_rendered: "runContinuation.alreadyRendered",
+  // A clip set's Render final whose review dropped every clip.
+  use_case_nothing_kept: "runContinuation.nothingKept",
   // Its run's earlier finals could not be read (transient): try again.
   run_finals_unavailable: "apiErr.reason.server",
   conflict: "apiErr.reason.changedElsewhere",

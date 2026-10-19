@@ -12,9 +12,9 @@
  */
 import { getLlmModel, type LlmModelDef } from "@nodaro/shared/llm-models"
 import { prefetchAsBase64 } from "../../lib/anthropic-image.js"
-import { billedProviderCost } from "../../lib/llm-errors.js"
+import { billedProviderCost, type LlmFailureUsage } from "../../lib/llm-errors.js"
 import { callKie } from "../../lib/llm/kie-lane.js"
-import { kieCostUsd, requestChars } from "../../lib/llm/kie-cost.js"
+import { kieCostUsd, kieFailureCostUsd, requestChars } from "../../lib/llm/kie-cost.js"
 import type { LlmRequest } from "../../lib/llm/types.js"
 import { TURN_CAPS } from "./constants.js"
 
@@ -59,13 +59,14 @@ async function describeOne(
   url: string,
   turnSignal: AbortSignal | undefined,
 ): Promise<{ description?: string; costUsd: number }> {
+  let req: LlmRequest | undefined
   try {
-    const image = await prefetchAsBase64(url)
+    const image = turnSignal ? await prefetchAsBase64(url, turnSignal) : await prefetchAsBase64(url)
     if (image.type !== "image_base64") {
       console.warn(`[copilot] image description skipped on ${model.id}: the image could not be inlined`)
       return { costUsd: 0 }
     }
-    const req: LlmRequest = {
+    req = {
       modelId: model.id,
       system: DESCRIBE_IMAGE_SYSTEM,
       messages: [{ role: "user", content: [image, { type: "text", text: DESCRIBE_IMAGE_PROMPT }] }],
@@ -81,6 +82,8 @@ async function describeOne(
     return description ? { description, costUsd } : { costUsd }
   } catch (err) {
     console.warn(`[copilot] image description failed on ${model.id}: ${String(err).slice(0, 200)}`)
-    return { costUsd: billedProviderCost(err) ?? 0 }
+    // Billed (a refusal, a cut-off answer): KIE's stated charge, else the size estimate.
+    if (billedProviderCost(err) === null || !req) return { costUsd: 0 }
+    return { costUsd: kieFailureCostUsd(model.id, (err as { usage: LlmFailureUsage }).usage, requestChars(req)) }
   }
 }

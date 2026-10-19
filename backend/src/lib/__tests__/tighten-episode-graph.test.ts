@@ -261,7 +261,7 @@ describe("snapshot + hash", () => {
     expect(isStoredInlineGraph([])).toBe(false)
     expect(isStoredInlineGraph({ version: 1, nodes: [], edges: [] })).toBe(false)
     expect(isStoredInlineGraph({ ...stored, version: 2 })).toBe(false)
-    expect(isStoredInlineGraph({ ...stored, nodeType: "clip-pack" })).toBe(false)
+    expect(isStoredInlineGraph({ ...stored, nodeType: "not-a-use-case" })).toBe(false)
     expect(isStoredInlineGraph({ ...stored, settings: undefined })).toBe(false)
     expect(isStoredInlineGraph({ ...stored, outputMap: { ...stored.outputMap, renderNodeId: 3 } })).toBe(false)
   })

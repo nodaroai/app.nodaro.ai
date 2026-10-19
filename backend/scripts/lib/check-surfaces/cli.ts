@@ -10,7 +10,11 @@
  * `.action(fn)`, the nearest `.command("leaf …")` on its receiver chain names
  * the command (through wrappers like `withAccountFlags(cmd.command(…))`), and
  * calls like `client.characters.list(…)` inside `fn` — plus inside the
- * same-file helpers it calls, one hop — are its SDK calls.
+ * same-file helpers it calls, one hop — are its SDK calls. A group file may
+ * register some of its commands from a sibling module it imports
+ * (`registerUseCaseCommands(cmd)` in commands/edit-use-case.ts): that module's
+ * actions are read too, and one whose receiver is the function's parameter
+ * (no `new Command("…")` in sight) belongs to the group that imports it.
  */
 // @reads packages/cli/src/**
 import { readFileSync } from "node:fs"
@@ -207,8 +211,13 @@ interface AstAction {
   sdk: string[]
 }
 
-/** Every `.action(fn)` of a command file with the command it belongs to and the SDK methods it calls. */
-export function astActions(file: string, text: string, rel: string, sdkKeys: ReadonlySet<string>): AstAction[] {
+/**
+ * Every `.action(fn)` of a command file with the command it belongs to and the
+ * SDK methods it calls. `defaultParent`: the command an action belongs to when
+ * its receiver names none (a sibling module's registration function, handed
+ * the group's command as a parameter).
+ */
+export function astActions(file: string, text: string, rel: string, sdkKeys: ReadonlySet<string>, defaultParent?: string): AstAction[] {
   const sf = parseText(file, text)
   const helpers = new Map<string, ts.Node>()
   for (const st of sf.statements) {
@@ -234,7 +243,7 @@ export function astActions(file: string, text: string, rel: string, sdkKeys: Rea
             m.forEachChild(visitCalls)
           }
           visitCalls(fn)
-          out.push({ file: rel, line: lineOf(sf, n.arguments[0]), parent: target.parent, leaf: target.leaf, sdk: [...sdk] })
+          out.push({ file: rel, line: lineOf(sf, n.arguments[0]), parent: target.parent ?? defaultParent, leaf: target.leaf, sdk: [...sdk] })
         }
       }
     }
@@ -244,19 +253,42 @@ export function astActions(file: string, text: string, rel: string, sdkKeys: Rea
   return out
 }
 
+/** The sibling command modules a group file imports (`./edit-use-case.js` → its repo-relative `.ts` path). */
+function siblingModules(repoRoot: string, rel: string): string[] {
+  const sf = parseText(rel, readFileSync(join(repoRoot, rel), "utf8"))
+  const dir = rel.slice(0, rel.lastIndexOf("/"))
+  const out: string[] = []
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || st.importClause?.isTypeOnly) continue
+    const from = (st.moduleSpecifier as ts.StringLiteral).text
+    if (from.startsWith("./")) out.push(`${dir}/${from.slice(2).replace(/\.js$/, ".ts")}`)
+  }
+  return out
+}
+
 export async function extractCli(repoRoot: string, sdkKeys: ReadonlySet<string>): Promise<CliInventory> {
   const { leaves, groups, files } = await runtimeTree(repoRoot)
   const actions: AstAction[] = []
-  for (const rel of new Set(files.values())) {
+  const groupFiles = new Set(files.values())
+  for (const rel of groupFiles) {
     const file = join(repoRoot, rel)
     actions.push(...astActions(file, readFileSync(file, "utf8"), rel, sdkKeys))
+  }
+  // A group file's sibling modules: their actions belong to the group when their receiver names none.
+  const siblingsOf = new Map<string, Set<string>>()
+  for (const [group, rel] of files) {
+    const siblings = siblingModules(repoRoot, rel).filter((s) => !groupFiles.has(s))
+    siblingsOf.set(rel, new Set(siblings))
+    for (const s of siblings) actions.push(...astActions(join(repoRoot, s), readFileSync(join(repoRoot, s), "utf8"), s, sdkKeys, group))
   }
   const commands: CliCommand[] = leaves.map((p) => {
     const leaf = p[p.length - 1]!
     const parent = p[p.length - 2]
     const groupFile = files.get(p[0]!)
     const candidates = actions.filter((a) => a.leaf === leaf && a.parent === parent)
-    const pick = candidates.find((a) => a.file === groupFile) ?? (candidates.length === 1 ? candidates[0] : undefined)
+    const pick = candidates.find((a) => a.file === groupFile)
+      ?? candidates.find((a) => groupFile !== undefined && siblingsOf.get(groupFile)?.has(a.file))
+      ?? (candidates.length === 1 ? candidates[0] : undefined)
     return { path: p.join(" "), ref: pick ? `${pick.file}:${pick.line}` : undefined, sdk: pick?.sdk ?? [] }
   })
   return { commands, groups }

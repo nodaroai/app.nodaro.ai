@@ -17,4 +17,9 @@ export type {
   AppRun,
   ListAppRunsParams,
   DeleteAppRunResult,
+  ResumeAppRunOptions,
+  AppRunResumeStep,
+  AppRunResumePlan,
+  AppRunResumeResult,
+  AppRunResumeRefusalCode,
 } from "../resources/apps.js"

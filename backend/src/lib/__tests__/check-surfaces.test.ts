@@ -241,6 +241,15 @@ describe("CLI extraction", () => {
     expect(cmd("apps run")?.sdk).toEqual(expect.arrayContaining(["apps.run", "apps.list"]))
   })
 
+  it("reads a group's commands registered from a sibling module (edit's use-case commands)", () => {
+    expect(cmd("edit clip-pack")?.sdk).toEqual(expect.arrayContaining(["edit.clipPack"]))
+    expect(cmd("edit tighten-episode")?.sdk).toEqual(expect.arrayContaining(["edit.tightenEpisode"]))
+    expect(cmd("edit clip-pack")?.ref).toMatch(/^packages\/cli\/src\/commands\/edit-use-case\.ts:\d+$/)
+    expect(cmd("edit continue-use-case")?.sdk).toEqual(expect.arrayContaining(["edit.continueUseCase"]))
+    // A command the group file itself registers is still read there.
+    expect(cmd("edit apply-edl")?.ref).toMatch(/^packages\/cli\/src\/commands\/edit\.ts:\d+$/)
+  })
+
   it("leaves local-only commands with no SDK call", () => {
     expect(cmd("auth login")?.sdk).toEqual([])
     expect(cmd("workspace current")?.sdk).toEqual([])

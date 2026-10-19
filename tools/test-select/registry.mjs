@@ -121,6 +121,170 @@ export function collectRegistries(files, composers = {}) {
 const escape = (s) => s.replace(/[$]/g, "\\$")
 const UPPER = /^[A-Z][A-Z0-9_]*$/
 
+const OPEN = { "{": "}", "[": "]", "(": ")" }
+const CLOSE = { "}": "{", "]": "[", ")": "(" }
+/** How far a bracket walk goes before it gives up (the legacy capture then stands). */
+const MAX_WALK = 20000
+
+/**
+ * `source` with every comment blanked and, with `strings`, the inside of every
+ * string and template literal too (quotes kept) — the same length, so offsets
+ * hold; line breaks are kept. A '…' or "…" literal ends at its line's end.
+ * Regex literals are not recognised: a misread only blanks text, so a reader
+ * of the result finds less there, never more — and the legacy captures in
+ * bindingsOf are its floor.
+ */
+function blanked(source, strings) {
+  const out = source.split("")
+  const blank = (from, to) => {
+    for (let k = from; k < to; k++) if (out[k] !== "\n") out[k] = " "
+  }
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i]
+    if (c === "/" && (source[i + 1] === "/" || source[i + 1] === "*")) {
+      const line = source[i + 1] === "/"
+      let e = line ? source.indexOf("\n", i) : source.indexOf("*/", i + 2)
+      e = e < 0 ? source.length : line ? e : e + 2
+      blank(i, e)
+      i = e - 1
+    } else if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1
+      for (; j < source.length && source[j] !== c; j++) {
+        if (source[j] === "\\") j++
+        else if (c !== "`" && source[j] === "\n") break
+      }
+      if (strings) blank(i + 1, Math.min(j, source.length))
+      i = j
+    }
+  }
+  return out.join("")
+}
+
+/** In blanked `code`: the index of the `}` closing the `{` at `open`, or -1. */
+function matchingBrace(code, open) {
+  const stack = []
+  for (let i = open; i < code.length && i - open < MAX_WALK; i++) {
+    const c = code[i]
+    if (OPEN[c]) stack.push(OPEN[c])
+    else if (CLOSE[c]) {
+      if (stack.pop() !== c) return -1
+      if (stack.length === 0) return i
+    }
+  }
+  return -1
+}
+
+/**
+ * In blanked `code`: the [start, end) of the inside of the object pattern that
+ * ends right before the `=` at `eq` (`{ a, b: { c } } = …` → ` a, b: { c } `),
+ * or null when what precedes the `=` is not a closing `}` or the walk back to
+ * its `{` fails.
+ */
+function patternBefore(code, eq) {
+  let i = eq - 1
+  while (i >= 0 && /\s/.test(code[i])) i--
+  if (code[i] !== "}") return null
+  const stack = []
+  for (let j = i; j >= 0 && i - j < MAX_WALK; j--) {
+    const c = code[j]
+    if (CLOSE[c]) stack.push(CLOSE[c])
+    else if (OPEN[c]) {
+      if (stack.pop() !== c) return null
+      if (stack.length === 0) return [j + 1, i]
+    }
+  }
+  return null
+}
+
+/**
+ * The module's export names an object pattern reads: the key of each
+ * top-level property (`a`, `a: b`, `a: { b }`, `a = 1`, `"a": b`), never a
+ * nested pattern's keys (those are properties of the export, not exports). A
+ * `...rest` element is the module object minus the named keys — a namespace.
+ * A computed key (`[k]: v`) names nothing. `code` is the pattern with comments
+ * and string contents blanked (it decides the top-level commas), `text` the
+ * same span with only comments blanked (it holds a quoted key).
+ */
+function takePattern(code, text, bound, namespaces) {
+  let depth = 0
+  let from = 0
+  const take = (to) => {
+    const p = text.slice(from, to).trim()
+    const rest = p.match(/^\.\.\.\s*([\w$]+)$/)
+    if (rest) namespaces.add(rest[1])
+    const key = !rest && p.match(/^(?:([\w$]+)|"([^"]*)"|'([^']*)')\s*(?:[:=]|$)/)
+    if (key) bound.add(key[1] ?? key[2] ?? key[3])
+  }
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i]
+    if (OPEN[c]) depth++
+    else if (CLOSE[c]) depth--
+    else if (c === "," && depth === 0) {
+      take(i)
+      from = i + 1
+    }
+  }
+  take(code.length)
+}
+
+/**
+ * The bindings a module makes of other modules' exports: `bound` (names
+ * imported or destructured by name) and `namespaces` (module objects). The last
+ * source is memoised: enumeratorsIn asks once per registry of the same file.
+ */
+let memo = { source: null, value: null }
+function bindingsOf(source) {
+  if (memo.source === source) return memo.value
+  const bound = new Set()
+  // Namespace bindings: `import * as m from …`, the module object of a
+  // dynamic import / vi.importActual, and the `...rest` of a destructured one —
+  // `m.nodeTypes` counts for any name.
+  const namespaces = new Set()
+  const take = (list) => {
+    for (const part of list.split(",")) {
+      const p = part.trim().replace(/^type\s+/, "\0")
+      if (!p || p.startsWith("\0")) continue
+      const original = p.split(/\s+as\s+/)[0].split(":")[0].trim()
+      bound.add(original)
+    }
+  }
+  for (const m of source.matchAll(/\bimport\s+(?!type\b)(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\b/g)) take(m[1])
+  for (const m of source.matchAll(/\bexport\s+(?!type\b)\{([^}]*)\}\s*from\b/g)) take(m[1])
+  // A destructured dynamic import is read as a balanced pattern, with comments
+  // and string contents blanked so a bracket inside them does not count:
+  //   `const { X, Y: y, Z = 1, ...rest } = await import(…)` (or vi.importActual,
+  //   vi.importMock, importOriginal) — anchored on the import, the pattern is
+  //   the `{…}` that ends just before its `=`, read back from there;
+  //   `import(…).then(({ X }) => …)` (also `async`, or a typed parameter).
+  const text = blanked(source, false)
+  const code = blanked(source, true)
+  for (const m of code.matchAll(/=\s*(?:await\s+)?(?:import|vi\.importActual|vi\.importMock|importOriginal)\b/g)) {
+    const span = patternBefore(code, m.index)
+    if (span) takePattern(code.slice(...span), text.slice(...span), bound, namespaces)
+  }
+  for (const m of code.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*(?:async\s*)?\(\s*(?=\{)/g)) {
+    const open = m.index + m[0].length
+    const close = matchingBrace(code, open)
+    if (close >= 0 && /^\s*(?::[^)]*)?\)\s*=>/.test(code.slice(close + 1, close + 200))) takePattern(code.slice(open + 1, close), text.slice(open + 1, close), bound, namespaces)
+  }
+  // The legacy captures are the floor: whatever the reader above makes of a
+  // site, a name these took still counts. (A brace-free class starts at any
+  // earlier open brace — a function body — and swallows the first name, which
+  // is why it is not the reader.)
+  for (const m of source.matchAll(/\{([^}]*)\}\s*=\s*(?:await\s+)?(?:import|vi\.importActual)\b/g)) take(m[1])
+  for (const m of source.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*\(\s*\{([^}]*)\}\s*\)\s*=>/g)) take(m[1])
+  for (const m of source.matchAll(/\bimport\s+\*\s+as\s+([\w$]+)\s+from\b/g)) namespaces.add(m[1])
+  for (const m of source.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*(?::[^=]+)?=\s*(?:await\s+)?(?:import\s*\(|vi\.importActual\b|vi\.importMock\b|importOriginal\b)/g)) namespaces.add(m[1])
+  // `import(…).then((m) => m.x)`
+  for (const m of source.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*(?:\(\s*)?([\w$]+)\s*\)?\s*=>/g)) namespaces.add(m[1])
+  // `(await import(…)).x`, `(await importOriginal()).x`, `(await vi.importActual(…)).x` —
+  // also with a type argument, which may itself hold parentheses:
+  // `(await vi.importActual<typeof import("x")>("x")).x`.
+  for (const m of source.matchAll(/\(\s*await\s+(?:import|importOriginal|vi\.importActual|vi\.importMock)\s*(?:<[^>]*>)?\s*\([^)]*\)\s*\)\s*\.\s*([\w$]+)/g)) bound.add(m[1])
+  memo = { source, value: { bound, namespaces } }
+  return memo.value
+}
+
 /**
  * Which of `names` a module uses. A name counts when the module imports it by
  * name (`import { X }`, `import { X as Y }`, `export { X } from`, a destructured
@@ -132,30 +296,7 @@ const UPPER = /^[A-Z][A-Z0-9_]*$/
 export function namesUsed(source, names) {
   const used = new Set()
   if (!source || names.size === 0) return used
-  const bound = new Set()
-  const take = (list) => {
-    for (const part of list.split(",")) {
-      const p = part.trim().replace(/^type\s+/, "\0")
-      if (!p || p.startsWith("\0")) continue
-      const original = p.split(/\s+as\s+/)[0].split(":")[0].trim()
-      bound.add(original)
-    }
-  }
-  for (const m of source.matchAll(/\bimport\s+(?!type\b)(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\b/g)) take(m[1])
-  for (const m of source.matchAll(/\bexport\s+(?!type\b)\{([^}]*)\}\s*from\b/g)) take(m[1])
-  for (const m of source.matchAll(/\{([^}]*)\}\s*=\s*(?:await\s+)?(?:import|vi\.importActual)\b/g)) take(m[1])
-  // Namespace bindings: `import * as m from …`, and the module object of a
-  // dynamic import / vi.importActual — `m.nodeTypes` counts for any name.
-  const namespaces = new Set()
-  for (const m of source.matchAll(/\bimport\s+\*\s+as\s+([\w$]+)\s+from\b/g)) namespaces.add(m[1])
-  for (const m of source.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*(?::[^=]+)?=\s*(?:await\s+)?(?:import\s*\(|vi\.importActual\b|vi\.importMock\b|importOriginal\b)/g)) namespaces.add(m[1])
-  // `import(…).then((m) => m.x)` and `.then(({ x }) => …)`
-  for (const m of source.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*(?:\(\s*)?([\w$]+)\s*\)?\s*=>/g)) namespaces.add(m[1])
-  for (const m of source.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*\(\s*\{([^}]*)\}\s*\)\s*=>/g)) take(m[1])
-  // `(await import(…)).x`, `(await importOriginal()).x`, `(await vi.importActual(…)).x` —
-  // also with a type argument, which may itself hold parentheses:
-  // `(await vi.importActual<typeof import("x")>("x")).x`.
-  for (const m of source.matchAll(/\(\s*await\s+(?:import|importOriginal|vi\.importActual|vi\.importMock)\s*(?:<[^>]*>)?\s*\([^)]*\)\s*\)\s*\.\s*([\w$]+)/g)) bound.add(m[1])
+  const { bound, namespaces } = bindingsOf(source)
   for (const n of names) {
     if (bound.has(n)) used.add(n)
     else if (UPPER.test(n) && new RegExp(`\\.${escape(n)}\\b`).test(source)) used.add(n)

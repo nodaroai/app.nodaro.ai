@@ -5,6 +5,7 @@ import {
   quickConfigSnapPatch,
   quickConfigOptionValue,
   isInQuickConfigRange,
+  quickConfigRetainedOption,
   resolveQuickConfigOptions,
   type QuickConfigControl,
 } from "../node-quick-configs"
@@ -104,4 +105,20 @@ describe("quickConfigOptionValue — the node-data value an option stands for", 
     expect(quickConfigOptionValue(control("video-to-video", "draft"), "full")).toBeUndefined()
     expect(quickConfigOptionValue(control("video-to-video", "provider"), "wan")).toBe("wan")
   })
+})
+
+describe("a retired LLM model a saved node still carries", () => {
+  // gemini-3.7-flash is retired: no menu offers it, but a node that stored it
+  // keeps running it. The strip must neither list it nor snap it away.
+  for (const [type, field] of [["image-to-text", "llmModel"], ["describe-to-picker", "llmModel"]] as const) {
+    it(`${type}: not offered, never snapped, still labelled`, () => {
+      const c = control(type, field)
+      const options = resolveQuickConfigOptions(c, {})
+      expect(options.map((o) => o.value)).not.toContain("gemini-3.7-flash")
+      expect(quickConfigSnapPatch(c, "gemini-3.7-flash", options, { llmModel: "gemini-3.7-flash" })).toBeUndefined()
+      expect(quickConfigRetainedOption(c, "gemini-3.7-flash")?.label).toBe("Gemini 3.7 Flash")
+      // An id that was never registered is still a stale value and snaps.
+      expect(quickConfigSnapPatch(c, "not-a-model", options, {})).toBeDefined()
+    })
+  }
 })

@@ -2,6 +2,7 @@
 // @registry backend/src/nodes/*/price.ee.ts
 // @registry-exports prices: UNIT_PRICES
 import type { UnitPrice } from "../../../nodes/kit.js"
+import { price as unit_clip_pack } from "../../../nodes/clip-pack/price.ee.js" // unit:clip-pack
 import { price as unit_episode_chapters } from "../../../nodes/episode-chapters/price.ee.js" // unit:episode-chapters
 import { price as unit_episode_trailer } from "../../../nodes/episode-trailer/price.ee.js" // unit:episode-trailer
 import { price as unit_gif_to_video } from "../../../nodes/gif-to-video/price.ee.js" // unit:gif-to-video
@@ -9,6 +10,7 @@ import { price as unit_remove_audio } from "../../../nodes/remove-audio/price.ee
 import { price as unit_tighten_episode } from "../../../nodes/tighten-episode/price.ee.js" // unit:tighten-episode
 
 export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Object.create(null), {
+  "clip-pack": unit_clip_pack, // unit:clip-pack
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video

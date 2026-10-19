@@ -11,6 +11,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { hasCredits } from "../../lib/config.js"
+import { requireAppScope } from "../../lib/scope-prehandler.js"
 
 const defaultsSchema = z.object({
   flatFee: z.number().int().min(0),
@@ -24,7 +25,7 @@ const earningsQuerySchema = z.object({
 
 export async function monetizationRoutes(app: FastifyInstance) {
   // GET /v1/user/monetization-defaults
-  app.get("/v1/user/monetization-defaults", async (req, reply) => {
+  app.get("/v1/user/monetization-defaults", { preHandler: requireAppScope("workflows:read") }, async (req, reply) => {
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     if (!hasCredits()) return reply.status(404).send({ error: { code: "not_available", message: "Not available in this edition" } })
 
@@ -41,7 +42,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
   })
 
   // PUT /v1/user/monetization-defaults
-  app.put("/v1/user/monetization-defaults", async (req, reply) => {
+  app.put("/v1/user/monetization-defaults", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     if (!hasCredits()) return reply.status(404).send({ error: { code: "not_available", message: "Not available in this edition" } })
 
@@ -68,7 +69,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/user/earnings — global earnings summary for billing page
-  app.get("/v1/user/earnings", async (req, reply) => {
+  app.get("/v1/user/earnings", { preHandler: requireAppScope("workflows:read") }, async (req, reply) => {
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     if (!hasCredits()) return reply.status(404).send({ error: { code: "not_available", message: "Not available in this edition" } })
 
@@ -156,7 +157,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/apps/:appId/earnings — per-app earnings for analytics
-  app.get("/v1/apps/:appId/earnings", async (req, reply) => {
+  app.get("/v1/apps/:appId/earnings", { preHandler: requireAppScope("workflows:read") }, async (req, reply) => {
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     if (!hasCredits()) return reply.status(404).send({ error: { code: "not_available", message: "Not available in this edition" } })
 

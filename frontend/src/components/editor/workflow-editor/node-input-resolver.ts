@@ -48,7 +48,7 @@ import type { ConnectedReference } from "@nodaro/shared/types"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
 import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
-import { editPlanOutputOf, unitSourceJsonOf } from "@/lib/edit-plan-saved-output";
+import { editPlanOutputOf, unitSourceJsonOf, usecaseJsonOf } from "@/lib/edit-plan-saved-output";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -1014,6 +1014,14 @@ export function extractNodeOutputAsList(
     const items = jsonListItems(unitJson.value);
     return items.length > 0 ? items : undefined;
   }
+  // A use-case node's `json` pip lists its plan as the person's review leaves
+  // it (usecaseJsonOf — a dropped chapter is not listed, a kept one carries its
+  // hook): what filter-list and an Each fan-out read alike. Mirror of the
+  // backend's fan-out and list collector.
+  if (sourceHandle === "json" && isUseCaseNodeType(node.type)) {
+    const items = jsonListItems(usecaseJsonOf(data));
+    return items.length > 0 ? items : undefined;
+  }
   // A render whose descriptor says so (Apply EDL) on its media handle: its
   // LATEST batch only — never its accumulated history, which holds earlier
   // runs' clips too (TA6, decided 2026-10-04). None after a single run: the
@@ -1470,6 +1478,10 @@ export function resolveNodeInputs(
         // the planner's clips from an older server run.
         : src.type === "edit-plan"
         ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
+        // A use-case node's `json` pip: its reviewed plan's items (the
+        // backend's usecasePlanListFor), in every list mode.
+        : isUseCaseNodeType(src.type) && resolvedSourceHandle === "json"
+        ? extractNodeOutputAsList(src, "json")
         : src.type === "selector"
           ? (resolvedSourceHandle === "rest"
               ? ((srcData.__restResults as string[] | undefined) ?? (srcData.restResults as string[] | undefined))
@@ -2405,7 +2417,11 @@ export function resolveNodeInputs(
       } else {
         inputs.prompt = output
       }
-    } else if (src.type === "text-prompt") {
+    } else if (src.type === "text-prompt" || (isUseCaseNodeType(src.type) && !usecaseHandsOnEpisode(src.type, resolvedSourceHandle))) {
+      // A use-case node's data pip (its plan on `json`, its text) is text,
+      // whatever its episode is: ahead of the media branches below, which read
+      // the node's type (Trailer is a video producer, and its plan would land
+      // as a video). The server's text-source branch takes it the same way.
       inputs.prompt = output;
     } else if (src.type && PARAMETER_NODE_TYPES.has(src.type)) {
       // Parameter nodes (framing, camera-motion, person, mood, pose, styling,
@@ -3036,10 +3052,9 @@ export function resolveNodeInputs(
     } else if (
       (isRenderNodeType(src.type) && !isRenderDataHandle(src.type, resolvedSourceHandle)) ||
       // A use-case node's episode (Tighten Episode): video OR audio by what it
-      // holds, like a render's media; its `json` (the plan) takes the generic
-      // json routing and its `text` (Chapters' show notes; an unnamed pip of
-      // such a type too) the text catch-all below. Mirror of the backend
-      // resolver's use-case branch.
+      // holds, like a render's media; its data pips (`json`, the plan; `text`,
+      // Chapters' show notes) took the text branch above. Mirror of the
+      // backend resolver's use-case branch.
       usecaseHandsOnEpisode(src.type, resolvedSourceHandle)
     ) {
       // Dual-handle. The data pips (`json`, and a transcript pip of its own —

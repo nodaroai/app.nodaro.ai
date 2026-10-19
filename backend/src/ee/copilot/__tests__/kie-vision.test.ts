@@ -50,6 +50,13 @@ describe("describeImageUrls", () => {
     expect(signal.aborted).toBe(true)
   })
 
+  it("the turn's cancel reaches the image prefetch too", async () => {
+    h.callKie.mockResolvedValue(answer("x"))
+    const ctrl = new AbortController()
+    await describeImageUrls("claude-sonnet-5", ["https://r2.example/a.png"], { signal: ctrl.signal })
+    expect(h.prefetch).toHaveBeenCalledWith("https://r2.example/a.png", ctrl.signal)
+  })
+
   it("runs the descriptions in parallel", async () => {
     const resolvers: Array<(v: unknown) => void> = []
     h.callKie.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)))
@@ -97,6 +104,16 @@ describe("describeImageUrls", () => {
     // The flag is what makes KIE's refusal a throw instead of an answer.
     expect((h.callKie.mock.calls[0]![1] as { failOnRefusal?: boolean }).failOnRefusal).toBe(true)
     expect(out.descriptions.size).toBe(0)
+    // No stated charge: the size estimate, never the rate-table figure from KIE's input count.
+    const req = h.callKie.mock.calls[0]![1]
+    expect(out.costUsd).toBeCloseTo(kieCostUsd("claude-sonnet-5", { promptChars: requestChars(req), answerChars: 8 * 4 }), 12)
+  })
+
+  it("a billed failure that stated KIE's charge costs that charge", async () => {
+    h.callKie.mockRejectedValueOnce(
+      new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (kie)`, { inputTokens: 2, outputTokens: 8, providerCost: 0.0000001, creditsUsd: 0.0002, complete: true }),
+    )
+    const out = await describeImageUrls("claude-sonnet-5", ["https://r2.example/a.png"])
     expect(out.costUsd).toBe(0.0002)
   })
 

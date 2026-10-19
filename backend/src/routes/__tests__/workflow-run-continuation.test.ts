@@ -76,6 +76,8 @@ import { supabase } from "../../lib/supabase.js"
 import { renderFinalCredits } from "../../lib/render-final-run.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
+/** When a node the run ran was started: every executed state has one (a placeholder has none). */
+const RAN_AT = "2026-10-17T10:00:00.000Z"
 const WORKFLOW = "00000000-0000-4000-8000-000000000020"
 const PRIOR = "00000000-0000-4000-8000-000000000061"
 const NEW_EXEC = "00000000-0000-4000-8000-000000000062"
@@ -299,7 +301,7 @@ describe("POST /v1/workflows/:id/run — continueFromExecutionId", () => {
     it("R4-1: a seeded Preview render the run does not execute is refused here, before any row exists", async () => {
       mocks.loadSource.mockResolvedValue(source({
         inputOverrides: null,
-        nodeStates: { cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "proxy" } } },
+        nodeStates: { cut: { status: "completed", startedAt: RAN_AT, nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "proxy" } } },
       }))
       const res = await run({ continueFromExecutionId: PRIOR, nodeIds: ["cap"] })
       expect(res.statusCode).toBe(400)
@@ -316,7 +318,7 @@ describe("POST /v1/workflows/:id/run — continueFromExecutionId", () => {
     it("R4-1: a seeded Final render the run does not execute is let through", async () => {
       mocks.loadSource.mockResolvedValue(source({
         inputOverrides: null,
-        nodeStates: { cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" } } },
+        nodeStates: { cut: { status: "completed", startedAt: RAN_AT, nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" } } },
       }))
       const res = await run({ continueFromExecutionId: PRIOR, nodeIds: ["cap"] })
       expect(res.statusCode).toBe(202)
@@ -350,8 +352,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       continueFromFailed: null,
       inputOverrides: null,
       nodeStates: {
-        plan: { status: "completed", nodeType: "edit-plan", output: { json: { clips: [] } } },
-        cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" } },
+        plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: { clips: [] } } },
+        cut: { status: "completed", startedAt: RAN_AT, nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" } },
         cap: { status: "failed", nodeType: "add-captions", error: "boom" },
       },
       ...over,
@@ -409,9 +411,9 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
     mocks.loadSource.mockResolvedValue(
       failed({
         nodeStates: {
-          plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } },
+          plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } },
           cut: { status: "failed", error: "boom" },
-          hook: { status: "completed", output: {} },
+          hook: { status: "completed", startedAt: RAN_AT, output: {} },
         },
       }),
     )
@@ -443,7 +445,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
   it("closes a narrow nodeIds over the incomplete nodes it needs upstream", async () => {
     // The render never completed: captions alone would run on nothing.
     mocks.loadSource.mockResolvedValue(
-      failed({ nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } }, cut: { status: "failed", error: "boom" } } }),
+      failed({ nodeStates: { plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } }, cut: { status: "failed", error: "boom" } } }),
     )
     const res = await fromFailed({ nodeIds: ["cap"], inputOverrides: { cut: { quality: "final" } } })
     expect(res.statusCode).toBe(202)
@@ -460,7 +462,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       ],
       edges: [],
     }
-    mocks.loadSource.mockResolvedValue(failed({ nodeStates: { gen: { status: "completed", output: { imageUrl: "https://r2.example/a.png" } } } }))
+    mocks.loadSource.mockResolvedValue(failed({ nodeStates: { gen: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://r2.example/a.png" } } } }))
     const res = await fromFailed()
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("continuation_subset_required")
@@ -508,9 +510,9 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       mocks.loadSource.mockResolvedValue(
         failed({
           nodeStates: {
-            plan: { status: "completed", output: { json: {} } },
-            cut: { status: "completed", output: { video: "https://r2.example/cut.mp4", quality: "final" } },
-            cap: { status: "completed", output: { video: "https://r2.example/cap.mp4" } },
+            plan: { status: "completed", startedAt: RAN_AT, output: { json: {} } },
+            cut: { status: "completed", startedAt: RAN_AT, output: { video: "https://r2.example/cut.mp4", quality: "final" } },
+            cap: { status: "completed", startedAt: RAN_AT, output: { video: "https://r2.example/cap.mp4" } },
             hook: { status: "failed", error: "timeout" },
           },
         }),
@@ -544,7 +546,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
     const stampOf = () => (mocks.inserts[0]!.trigger_data as { continueFromFailed: { all: boolean } }).continueFromFailed
 
     it("the remainder runs a render at Preview: the editor's run is let through, stamped not all", async () => {
-      mocks.loadSource.mockResolvedValue(failed({ nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } } } }))
+      mocks.loadSource.mockResolvedValue(failed({ nodeStates: { plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } } } }))
       const res = await editor()
       expect(res.statusCode).toBe(202)
       expect((mocks.queueAdd.mock.calls[0]![1] as Record<string, unknown>).nodeIds).toEqual(["cut", "cap", "hook"])
@@ -552,7 +554,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
     })
 
     it("the same remainder with the render overridden to Final runs to the end: all", async () => {
-      mocks.loadSource.mockResolvedValue(failed({ nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } } } }))
+      mocks.loadSource.mockResolvedValue(failed({ nodeStates: { plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } } } }))
       const res = await editor({ inputOverrides: { cut: { quality: "final" } } })
       expect(res.statusCode).toBe(202)
       expect(stampOf().all).toBe(true)
@@ -560,7 +562,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
 
     it("the render's Final pinned on the failed run counts too (the merged overrides are judged)", async () => {
       mocks.loadSource.mockResolvedValue(
-        failed({ inputOverrides: { cut: { quality: "final" } }, nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } } } }),
+        failed({ inputOverrides: { cut: { quality: "final" } }, nodeStates: { plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } } } }),
       )
       expect((await editor()).statusCode).toBe(202)
       expect(stampOf().all).toBe(true)
@@ -570,8 +572,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
       mocks.loadSource.mockResolvedValue(
         failed({
           nodeStates: {
-            plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } },
-            cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "proxy" } },
+            plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } },
+            cut: { status: "completed", startedAt: RAN_AT, nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "proxy" } },
             cap: { status: "failed", nodeType: "add-captions", error: "boom" },
           },
         }),
@@ -601,8 +603,8 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
               status: "completed",
               continueFromFailed: { from: PRIOR, root: PRIOR, seededFrom: PRIOR, all: false },
               nodeStates: {
-                plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } },
-                cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "proxy" } },
+                plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } },
+                cut: { status: "completed", startedAt: RAN_AT, nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "proxy" } },
                 cap: { status: "skipped", nodeType: "add-captions" },
                 hook: { status: "skipped", nodeType: "webhook-output" },
               },
@@ -617,7 +619,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
   })
 
   it("judges the reduced set: a Preview render the failed run never completed is refused for an API caller", async () => {
-    mocks.loadSource.mockResolvedValue(failed({ nodeStates: { plan: { status: "completed", nodeType: "edit-plan", output: { json: {} } } } }))
+    mocks.loadSource.mockResolvedValue(failed({ nodeStates: { plan: { status: "completed", startedAt: RAN_AT, nodeType: "edit-plan", output: { json: {} } } } }))
     const res = await fromFailed()
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("preview_review_required")
@@ -627,7 +629,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
   it("a run with nothing left answers 409, before any execution row exists", async () => {
     mocks.loadSource.mockResolvedValue(
       failed({
-        nodeStates: Object.fromEntries(["plan", "cut", "cap", "hook"].map((id) => [id, { status: "completed", output: { quality: "final" } }])),
+        nodeStates: Object.fromEntries(["plan", "cut", "cap", "hook"].map((id) => [id, { status: "completed", startedAt: RAN_AT, output: { quality: "final" } }])),
       }),
     )
     const res = await fromFailed()
@@ -650,7 +652,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
     [
       "of someone else's execution",
       {},
-      () => mocks.loadSource.mockResolvedValue(failed({ userId: "other", nodeStates: Object.fromEntries(["plan", "cut", "cap", "hook"].map((id) => [id, { status: "completed" }])) })),
+      () => mocks.loadSource.mockResolvedValue(failed({ userId: "other", nodeStates: Object.fromEntries(["plan", "cut", "cap", "hook"].map((id) => [id, { status: "completed", startedAt: RAN_AT }])) })),
       404,
       "continuation_not_found",
     ],
@@ -753,7 +755,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
           nodeStates: {
             plan: { status: "completed", nodeType: "edit-plan", output: { json: { clips: [] } }, seededFromExecution: PRIOR },
             cut: { status: "completed", nodeType: "apply-edl", output: { video: "https://r2.example/cut.mp4", quality: "final" }, seededFromExecution: PRIOR },
-            cap: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/cap.mp4" } },
+            cap: { status: "completed", startedAt: RAN_AT, nodeType: "add-captions", output: { video: "https://r2.example/cap.mp4" } },
             hook: { status: "skipped", nodeType: "webhook-output", seededFromExecution: PRIOR },
           },
           ...over,
@@ -806,7 +808,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
         byId({
           [PRIOR]: failed(),
           [LATER]: narrowB({
-            nodeStates: Object.fromEntries(["plan", "cut", "cap", "hook"].map((id) => [id, { status: "completed", output: { quality: "final" } }])),
+            nodeStates: Object.fromEntries(["plan", "cut", "cap", "hook"].map((id) => [id, { status: "completed", startedAt: RAN_AT, output: { quality: "final" } }])),
           }),
         })
         const res = await fromFailed()
@@ -839,7 +841,7 @@ describe("POST /v1/workflows/:id/run — continueMode \"from-failed\" (a saved w
           nodeStates: {
             ...((narrowB() as { nodeStates?: Record<string, unknown> }).nodeStates ?? {}),
             cap: { status: "completed", nodeType: "add-captions", output: { video: "https://r2.example/cap.mp4" }, seededFromExecution: LATER },
-            hook: { status: "completed", nodeType: "webhook-output", output: {} },
+            hook: { status: "completed", startedAt: RAN_AT, nodeType: "webhook-output", output: {} },
           },
         })
         // A graph with one more node, which neither B nor C ran.

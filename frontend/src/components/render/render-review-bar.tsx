@@ -15,6 +15,7 @@ import { Film, Loader2, RefreshCw } from "lucide-react"
 import { useRenderFinal } from "@/hooks/use-render-final"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
+import { usecaseRenderFinalRefusalKey } from "@/lib/use-case-render-final-target"
 import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { runPriceSuffix, runPriceTitle } from "./run-price"
 import { useT } from "@/lib/i18n"
@@ -139,11 +140,16 @@ interface RenderReviewBarProps {
 }
 
 /** The editor's bar: Render final always; Update preview with the flag on (decided 2026-10-06).
- *  A render that cannot run at all (`renderRunRefusalKey`) shows both disabled, with why. */
+ *  A render that cannot run at all (`renderRunRefusalKey`), or a use-case node
+ *  whose Render final cannot go ahead now (`usecaseRenderFinalRefusalKey`: a
+ *  clip set whose review keeps no clip), shows them disabled, with why. */
 export function RenderReviewBar({ renderId, busy, className }: RenderReviewBarProps) {
   const t = useT()
   const { renderFinal, updatePreview, finalCredits, previewCredits, finalUnchecked, previewUnchecked, canUpdatePreview, checkPending, checking } = useRenderFinal(renderId)
-  const refusal = useWorkflowStore((s) => renderRunRefusalKey(s.nodes.find((n) => n.id === renderId)))
+  const refusal = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === renderId)
+    return renderRunRefusalKey(node) ?? usecaseRenderFinalRefusalKey(node)
+  })
   return (
     <RenderReviewBarView
       onRenderFinal={renderFinal}

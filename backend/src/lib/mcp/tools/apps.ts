@@ -14,7 +14,10 @@ import {
   flatInputsToOverrides,
   mergeInputOverrides,
 } from "../extract-app-inputs.js"
-import { cardResultText, clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
+import { cardResultText, clientRequestIdSchema, errorResult, idempotencyHeaders } from "./_verb-helpers.js"
+import { isPreviewRefusalCode } from "@nodaro/shared/nodes"
+import { isUuid } from "./_id-guard.js"
+import { hasCredits } from "../../config.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -35,6 +38,9 @@ export interface RegisterAppsOpts {
  *   3. `run_app({ slug, inputs })` — execute. `inputs` is FLAT keyed by
  *      the schema keys (not node-id) — server translates back via the
  *      schema's keyMap before sending to /v1/app/:slug/run.
+ *   4. `retry_app_run({ slug, run_id, confirm })` — a run that failed is
+ *      continued from where it stopped (POST /v1/app/:slug/runs/:runId/resume),
+ *      quoted first and run with `confirm: true`.
  *
  * Per-user dynamic `app_<slug>` tools were dropped: they didn't scale,
  * they competed with the verb tools, and the prefer-verbs nudge in
@@ -229,6 +235,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
         },
         outputSchema: {
           executionId: z.string(),
+          runId: z.string().optional(),
           slug: z.string().optional(),
           name: z.string().optional(),
           status: z.string().optional(),
@@ -296,9 +303,11 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           }
         }
         let executionId: string | undefined
+        let runId: string | undefined
         try {
-          const body = JSON.parse(res.body) as { executionId?: string }
+          const body = JSON.parse(res.body) as { executionId?: string; runId?: string }
           executionId = body.executionId
+          runId = typeof body.runId === "string" ? body.runId : undefined
         } catch {
           /* fall through */
         }
@@ -319,18 +328,121 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
             {
               type: "text" as const,
               text: cardResultText({
-                started: `Started app '${args.slug}' (id ${executionId}).`,
+                started: `Started app '${args.slug}' (id ${executionId}${runId ? `, run ${runId}` : ""}).`,
                 noun: "outputs",
                 pollHint:
-                  "poll get_app_run with this execution id (NOT get_job — this id is an execution id)",
+                  "poll get_app_run with this execution id (NOT get_job — this id is an execution id)" +
+                  (runId
+                    ? `; if it fails, retry_app_run({ slug: ${JSON.stringify(args.slug)}, run_id: ${JSON.stringify(runId)} }) quotes continuing it from where it stopped`
+                    : ""),
               }),
             },
           ],
           structuredContent: {
             executionId,
+            ...(runId ? { runId } : {}),
             slug: args.slug,
             name: appName,
             status: "queued",
+          },
+        }
+      },
+    )
+
+    // ── retry_app_run ──
+    // The app's Retry of a FAILED run (POST /v1/app/:slug/runs/:runId/resume):
+    // continued from where it stopped, on the version it ran, with the inputs
+    // it applied. Price confirmation follows render_final / start_recast:
+    // without `confirm` the tool returns the quote (the route's dryRun —
+    // nothing is created or charged); `confirm: true`, only after the user
+    // accepted it, runs. The quote says whether the payer can cover it; the
+    // route refuses one it cannot with a 402 before any execution exists, and
+    // every refusal comes back as a tool error with the way on.
+    server.registerTool(
+      "retry_app_run",
+      {
+        title: "Retry App Run",
+        description:
+          "Retry a FAILED published-app run from where it stopped: only the steps it did not complete run and are charged; every step it completed hands on its result. " +
+          "It runs the version the run ran, with the inputs it applied (it takes none). " +
+          "Without `confirm` it returns the PRICE QUOTE only (the steps it runs again; nothing is charged); with `confirm: true` — only after the user accepted the quoted credits — it runs. " +
+          "Returns an execution id: poll get_app_run. To run with other inputs, or a run that was stopped rather than failing, start over with run_app.",
+        inputSchema: {
+          slug: z.string().min(1).describe("The app's slug."),
+          run_id: z.string().min(1).describe("The run's id (run_app's runId)."),
+          version: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("The app version to expect (default: the latest). The run's own version continues it after the app changed."),
+          confirm: z
+            .boolean()
+            .optional()
+            .describe("true ONLY after the user accepted the quoted credits in this conversation."),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      },
+      async (args) => {
+        if (!isUuid(args.run_id)) {
+          return { content: [{ type: "text" as const, text: `Run ${args.run_id} not found (expected a run UUID).` }], isError: true as const }
+        }
+        const url = `/v1/app/${encodeURIComponent(args.slug)}/runs/${encodeURIComponent(args.run_id)}/resume`
+        const versionField = args.version !== undefined ? { version: args.version } : {}
+        // Quote first, always: it also checks the run, its version and what is left to run.
+        // The route's body is strict: the user travels in mcpInject's header.
+        const est = await mcpInject(fastify, session, { method: "POST", url, payload: { dryRun: true, ...versionField } })
+        if (est.statusCode >= 400) return retryRefused(args.slug, args.run_id, est.statusCode, est.body)
+        const quote = (parseBody(est.body).data ?? {}) as RetryQuote
+
+        if (args.confirm !== true) {
+          const steps = quote.steps ?? []
+          const named = steps.map((st) => st.label ?? st.nodeId).join(", ")
+          const billed = typeof quote.estimatedCredits === "number" && hasCredits()
+          const price = billed ? `costs about ${quote.estimatedCredits} credits` : "is not billed in credits on this edition"
+          const reused = (quote.reusedClips ?? 0) > 0 ? ` (${quote.reusedClips} finished clip(s) handed back at no cost)` : ""
+          // The app credits, when they are what stops it (the route reports them); else the balance.
+          const next =
+            billed && quote.sufficient === false
+              ? typeof quote.appCreditsAllowance === "number"
+                ? "The user has no app credits left to run apps: tell them, and run it only after they have earned app credits or upgraded — " +
+                  "until then the Retry is refused with insufficient app credits."
+                : `The user's credits cannot cover it${typeof quote.available === "number" ? ` (${quote.available} available)` : ""}: ` +
+                  "tell them, and run it only after they have added credits — until then the Retry is refused with insufficient credits."
+              : "Present this to the user; call retry_app_run again with confirm: true once they accept."
+          return {
+            content: [
+              { type: "text" as const, text: `The Retry runs ${steps.length} step(s) again (${named}) and ${price}${reused}. ${next}` },
+            ],
+            structuredContent: { ...quote, confirmed: false },
+          }
+        }
+
+        const res = await mcpInject(fastify, session, { method: "POST", url, payload: versionField })
+        if (res.statusCode >= 400) return retryRefused(args.slug, args.run_id, res.statusCode, res.body)
+        const body = parseBody(res.body)
+        const executionId = typeof body.executionId === "string" ? body.executionId : undefined
+        if (!executionId) {
+          return { content: [{ type: "text" as const, text: "The Retry was submitted, but its execution id could not be read." }], isError: true as const }
+        }
+        const deduped = body.deduped === true
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `${deduped ? "This Retry was already started" : "Started the Retry"}: execution ${executionId} continues run ${args.run_id}. ` +
+                "Poll get_app_run with this execution id (NOT get_job).",
+            },
+          ],
+          structuredContent: {
+            executionId,
+            runId: args.run_id,
+            status: "pending",
+            nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
+            estimatedCredits: quote.estimatedCredits ?? null,
+            confirmed: true,
+            ...(deduped ? { deduped } : {}),
           },
         }
       },
@@ -380,4 +492,75 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       },
     )
   }
+}
+
+/** What the Retry's quote answers (the route's `dryRun`). */
+interface RetryQuote {
+  steps?: Array<{ nodeId: string; type: string; label: string | null }>
+  estimatedCredits?: number | null
+  reusedClips?: number
+  sufficient?: boolean | null
+  available?: number | null
+  /** Present only when the runner's app credits are what stops it. */
+  appCreditsAllowance?: number
+  appVersion?: number | null
+}
+
+function parseBody(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * A refused Retry as a tool error: the route's code and message (a 402 keeps
+ * the route's own message — which allowance, which balance — rather than the
+ * generic credits line), then the way on.
+ */
+function retryRefused(slug: string, runId: string, statusCode: number, raw: string) {
+  const body = parseBody(raw)
+  const error = body.error as { code?: unknown; message?: unknown } | undefined
+  const refused =
+    statusCode === 402 && typeof error?.message === "string" && error.message
+      ? `Nodaro rejected the request (402${typeof error.code === "string" ? ` ${error.code}` : ""}): ${error.message}`
+      : errorResult(statusCode, raw).content[0].text
+  const next = retryRefusalNext(slug, runId, body)
+  return { content: [{ type: "text" as const, text: next ? `${refused} ${next}` : refused }], isError: true as const }
+}
+
+/**
+ * What an agent does after a refused Retry, by the route's code (the answer's
+ * own message already says why), or `null` when there is nothing to add.
+ */
+export function retryRefusalNext(slug: string, runId: string, body: Record<string, unknown>): string | null {
+  const error = body.error as { code?: unknown } | undefined
+  const code = typeof error?.code === "string" ? error.code : null
+  const runVersion = typeof body.runVersion === "number" ? body.runVersion : null
+  const startOver = "Start it over with run_app (every step runs, and is charged, again)"
+  if (code === "app_run_version_changed") {
+    return (
+      startOver +
+      (runVersion !== null
+        ? `, or continue it on its own version: retry_app_run({ slug: ${JSON.stringify(slug)}, run_id: ${JSON.stringify(runId)}, version: ${runVersion} }).`
+        : ".")
+    )
+  }
+  if (code === "app_run_version_unavailable" || code === "continuation_not_failed") return `${startOver}.`
+  if (code === "already_running" && typeof body.executionId === "string") {
+    return `Poll get_app_run({ execution_id: ${JSON.stringify(body.executionId)} }) instead.`
+  }
+  // Any of the preview refusal codes (a render held, a review-on use-case node, or both).
+  if (code !== null && isPreviewRefusalCode(code)) {
+    return "Retry it from the app page instead, where a person can review the Preview it stops at."
+  }
+  if (code === "insufficient_app_credits") {
+    return "Tell the user: their app credits cannot cover this Retry; retry it once they have more."
+  }
+  if (code === "insufficient_credits") {
+    return "Tell the user: their balance cannot cover this Retry; retry it once they have added credits."
+  }
+  return null
 }

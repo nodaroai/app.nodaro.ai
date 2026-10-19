@@ -11,7 +11,9 @@
  *  - the gate's reason (nothing kept, the rule's issues, a newer run) or, while
  *    a run holds the review, "Rendering final… clip 3 of 6 · edits locked";
  *  - Close and Render final · {n} clips · ≈{credits}, behind the gate
- *    (`reviewGate`) as the cut review's are. A clip set's review offers no
+ *    (`reviewGate`) as the cut review's are, and only where Render final can
+ *    go ahead (`canRenderFinal`: a use-case node's only on a Preview its own
+ *    run made). A clip set's review offers no
  *    Update preview here (the design's footer names Render final only).
  */
 import { useState } from "react"
@@ -64,7 +66,7 @@ export function ClipFooter({ cards, runs, chain, compact, onClose }: ClipFooterP
         <button type="button" className={cn(RUN_BUTTON, "border-border bg-background hover:bg-accent")} onClick={onClose}>
           {t("common.close")}
         </button>
-        {gate.mode === "ready" && (
+        {gate.mode === "ready" && runs.canRenderFinal && (
           <button
             type="button"
             className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}

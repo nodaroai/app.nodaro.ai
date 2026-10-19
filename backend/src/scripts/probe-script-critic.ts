@@ -18,8 +18,10 @@
  * Usage:  cd backend && npx tsx src/scripts/probe-script-critic.ts
  *
  * Hard-requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY in backend/.env
- * (loaded transitively via lib/config.js). Also requires the LLM provider
- * env (ANTHROPIC_API_KEY etc.) since callLLM hits Anthropic for real.
+ * (loaded transitively via lib/config.js). Also requires an LLM key, since
+ * callLLM makes real calls: ANTHROPIC_API_KEY for the direct lane, or
+ * KIE_API_KEY — with no usable Anthropic key (or the account latched out)
+ * callLLM serves the critic from KIE instead.
  */
 import { config } from "../lib/config.js"
 import { createClient } from "@supabase/supabase-js"

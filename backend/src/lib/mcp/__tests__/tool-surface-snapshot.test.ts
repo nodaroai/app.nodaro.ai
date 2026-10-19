@@ -837,6 +837,30 @@ const TRAILER_CONTINUE_WORDING_BYTES = 9
 // the four formats, as the route caps them), far under the per-tool budget; the 6 B of headroom
 // carry across.
 const MAKE_TRAILER_TOOL_BYTES = 3_303
+// RAISED 2026-10-18 by wording only: `continue_use_case` names the use-case nodes this deployment
+// offers, and the list gains Clip Pack ("Tighten Episode, Chapters, Trailer or Clip Pack"). No tool
+// was added, so the fixture does NOT move. Measured by this suite: 448_314 total − 448_303 before =
+// 11 B; the 6 B of headroom carry across.
+const CLIP_PACK_CONTINUE_WORDING_BYTES = 11
+// RAISED 2026-10-18 by one NEW tool and nothing else: `make_clip_pack` (the Clip Pack node's verb —
+// a recording cut into a pack of short clips: transcribe, Edit Plan in clips mode, one render per
+// clip, framed with Speaker View or at the recording's shape, captions per clip), registered in
+// verbs-use-case.ts beside `make_trailer` and gated the same way (workflows:execute, every
+// edition), so the fixture moves by exactly that name in cloud/all AND community/all. Measured by
+// this suite on the same tree: 453_912 total − 448_314 before = 5_598 B (its framing's switch
+// enumerates every Speaker View switch, the xfade transitions included), far under the per-tool
+// budget; the 6 B of headroom carry across.
+const MAKE_CLIP_PACK_TOOL_BYTES = 5_598
+// RAISED 2026-10-18 by wording only: `make_clip_pack`'s `framing.emphasis` description names the
+// values it takes ("none", or scale, border, dim joined with "+", each once), as its refusal
+// already did. No tool was added, so the fixture does NOT move. Measured by this suite: 453_975
+// total − 453_912 before = 63 B; the 6 B of headroom carry across.
+const CLIP_PACK_EMPHASIS_VALUES_BYTES = 63
+// RAISED 2026-10-18 by wording only: `make_clip_pack` says a pack that completes without a clip
+// keeps its fee and has no from-failed, and how to get the missing clip (render its EDL from
+// `output_data.json` yourself, or a new run). No tool was added, so the fixture does NOT move.
+// Measured by this suite: 454_349 total − 454_154 before = 195 B; the 6 B of headroom carry across.
+const MAKE_CLIP_PACK_PARTIAL_RUN_BYTES = 195
 // RAISED 2026-10-18 by wording only: `make_trailer` says every format is tried, that a run which
 // completes without one keeps its fee and has no from-failed, and how to get the missing format
 // (render `output_data.json` yourself — Apply EDL, Combine Videos with the card first, Social Media
@@ -995,6 +1019,30 @@ const RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES = 776
 // before is carried across. The rules live in docs/api-integration.md.
 const RUN_WORKFLOW_NODE_IDS_BYTES = 427
 
+// RAISED 2026-10-19 by run_workflow's node list, and nothing else. No tool was
+// added, so the fixture does NOT move. `node_ids`'s description gains one clause
+// (with from_failed, a named node of work no run of its chain ever ran runs too,
+// and is charged; never a source, trigger or skipped node), and `from_failed`'s
+// one more (plus any node_ids no run of its chain ever ran). Measured by this
+// suite on the same tree with and without the change: 446_349 total − 446_173 =
+// 176 B; the 27 B of headroom the list had before is carried across. The rules
+// live in docs/api-integration.md.
+const RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES = 176
+
+// RAISED 2026-10-19 by the app's Retry of a failed run, and nothing else: ONE new
+// tool, `retry_app_run` (the MCP face of POST /v1/app/:slug/runs/:runId/resume,
+// with `version`, and `confirm` — price confirmation as render_final: the quote
+// without it, the run with it), gated by workflows:execute beside run_app, so
+// cloud/all AND community/all name it and the fixture moves by that one name; and
+// run_app's outputSchema gains the optional `runId` the run route already returns
+// (the id retry_app_run takes). The resume hint on get_app_run / diagnose_run is a
+// result, not schema, so it costs nothing here. Measured by this suite on the same
+// tree with and without the change (dev's apps.ts swapped in), after the
+// named-never-run raise above: 447_723 total − 446_349 = 1_374 B; the 27 B of
+// headroom the list had before is carried across. The refusals and the version
+// rule live in docs/api-integration.md.
+const RETRY_APP_RUN_BYTES = 1_374
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1092,6 +1140,10 @@ export const TOOL_WIRE_BUDGET = {
     CHAPTERS_WORDING_BYTES +
     TRAILER_CONTINUE_WORDING_BYTES +
     MAKE_TRAILER_TOOL_BYTES +
+    CLIP_PACK_CONTINUE_WORDING_BYTES +
+    MAKE_CLIP_PACK_TOOL_BYTES +
+    CLIP_PACK_EMPHASIS_VALUES_BYTES +
+    MAKE_CLIP_PACK_PARTIAL_RUN_BYTES +
     MAKE_TRAILER_PARTIAL_RUN_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +
@@ -1111,7 +1163,9 @@ export const TOOL_WIRE_BUDGET = {
     VIDU_Q4_MODEL_ENUM_BYTES +
     GEMINI_4_ARGON_ID_BYTES +
     RUN_WORKFLOW_CONTINUE_FROM_FAILED_BYTES +
-    RUN_WORKFLOW_NODE_IDS_BYTES,
+    RUN_WORKFLOW_NODE_IDS_BYTES +
+    RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
+    RETRY_APP_RUN_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

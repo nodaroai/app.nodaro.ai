@@ -65,6 +65,7 @@ import {
   loadContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { runsInALevel } from "../services/workflow-engine/execution-graph.js"
+import { namedWorkNodeIds } from "../services/workflow-engine/named-work.js"
 import { fromFailedConsidered, isUseCaseNodeType, usecaseContinuePath } from "@nodaro/render-rules"
 import { heldFinalRun, type HeldFinalRun } from "../lib/continuation-held-final.js"
 import {
@@ -104,7 +105,9 @@ openApiRegistry.registerPath({
                     "nodeIds, every node when it was sent none — plus every node the failed run left failed or held back); the run executes " +
                     "only those the failed run did not complete. Sent, they replace that default, and the run is built on the chain's newest " +
                     "continuation when it failed or is done (one held at a Preview review still answers continuation_preview_pending), " +
-                    "running the nodes they name that it left.",
+                    "running the nodes they name that it left. Every id sent counts as named: a node of work no run of the chain ever ran " +
+                    "(each only handed on its saved results) runs and is priced; a source, trigger, parameter picker or container keeps what " +
+                    "the run handed on, and a node set to skip (or a Lottie Motion Graphics node whose plan the overrides set) never runs.",
                 }),
               continueFromExecutionId: z
                 .string()
@@ -125,7 +128,8 @@ openApiRegistry.registerPath({
                     "\"from-failed\": continue a FAILED run from where it stopped. Requires continueFromExecutionId (the run that failed); " +
                     "not combinable with renderFinal. Runs every node that run did not complete (of nodeIds; by default of the nodes the " +
                     "first run of its chain was started on, every node when that run was sent no nodeIds, plus every node left failed or held " +
-                    "back by it, by the run it builds on, or by an earlier run of its chain) and hands " +
+                    "back by it, by the run it builds on, or by an earlier run of its chain), and each node of work nodeIds names that no " +
+                    "run of its chain ever ran, and hands " +
                     "on what it did complete, never dispatched or billed again (a node that failed runs again in full; a use-case node resumes " +
                     "its failed attempt). A run its payer cannot cover, priced on what is left, answers 402 insufficient_credits before " +
                     "any execution exists. When a later " +
@@ -505,6 +509,14 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       [] as Array<{ source: string; target: string }>,
     ).nodes.map((n) => n.id)
     const nodeIdsSent = nodeIds !== undefined && nodeIds.length > 0
+    // The nodes a continue-from-failed was sent by name (every id sent counts):
+    // one of them that no run of its chain ever ran — only handed on from its
+    // saved data, a placeholder — runs (and is priced) instead of reading as
+    // completed (`completedFor`, `@nodaro/render-rules`; explicit `nodeIds`
+    // always win). Only a node the engine executes counts, judged once the
+    // execution it builds on is read (`namedWorkNodeIds`, below).
+    let sentNodeIds: string[] = []
+    let namedNodeIds: string[] = []
     if (continueFromFailed) {
       if (!nodeIds || !nodeIdsSent) {
         nodeIds = graphOrder
@@ -516,6 +528,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             error: { code: "validation_error", message: "None of nodeIds is a node of this workflow." },
           })
         }
+        sentNodeIds = [...new Set(nodeIds)]
       }
     }
 
@@ -606,6 +619,12 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         ),
       )
       const isWork = (id: string) => runsInALevel(currentTypeOf.get(id) ?? "")
+      // The named nodes a run built on `from` executes: the orchestrator's own
+      // rule, over the overrides it applies when seeded from `from` (its pin
+      // with the sent ones over it) — a named source, trigger or parameter node
+      // keeps its seed, a named frozen one is no work.
+      const namedOn = (from: Parameters<typeof continuationInputOverrides>[0]) =>
+        namedWorkNodeIds(runGraph.nodes, sentNodeIds, continuationInputOverrides(from, inputOverrides))
       /** Every node of work `from` did not complete OF `considered` (and what they need upstream) is in `runs`. */
       const takesOnAllLeftBy = (from: Parameters<typeof fromFailedClosedRunSet>[3], considered: readonly string[], runs: ReadonlySet<string>) =>
         fromFailedClosedRunSet(graphOrder, considered, runGraph, from).filter(isWork).every((id) => runs.has(id))
@@ -679,7 +698,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             if (
               head &&
               !continuationHeadRefusal(head, requested!, continuationRun, { reopen }) &&
-              (reopen === "failed" || fromFailedClosedRunSet(graphOrder, nodeIds!, runGraph, head).some(isWork))
+              (reopen === "failed" || fromFailedClosedRunSet(graphOrder, nodeIds!, runGraph, head, namedOn(head)).some(isWork))
             ) {
               reopened = head
               reopenHead = reopen
@@ -755,7 +774,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         // What that run did not complete, closed over the incomplete nodes
         // it needs upstream — the set every check below judges and the
         // orchestrator runs.
-        const remaining = fromFailedClosedRunSet(graphOrder, nodeIds!, runGraph, source)
+        namedNodeIds = namedOn(source)
+        const remaining = fromFailedClosedRunSet(graphOrder, nodeIds!, runGraph, source, namedNodeIds)
         if (!remaining.some(isWork)) {
           return reply.status(409).send({
             error: {
@@ -1115,6 +1135,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       ...(fromFailedStamp?.seededFrom && fromFailedStamp.seededFrom !== fromFailedStamp.from
         ? { seedFromExecutionId: fromFailedStamp.seededFrom, ...(reopenHead ? { reopenHead } : {}) }
         : {}),
+      // The ids it was sent by name: the worker narrows the run set by the same rule.
+      ...(fromFailedStamp && namedNodeIds.length > 0 ? { namedNodeIds } : {}),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {
