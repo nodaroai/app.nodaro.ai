@@ -14,7 +14,8 @@ import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
@@ -35,8 +36,8 @@ export const imageToImageBody = z.object({
   // a superset so existing i2i callers are unaffected.
   provider: z.enum(MODIFY_IMAGE_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
-  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
-  quality: z.enum(["medium", "high", "basic"]).optional(),
+  resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
+  quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
   strength: z.number().min(0).max(1).optional(),
   // The SAME shared vocabulary /v1/generate-image and /v1/edit-image declare
   // (`IMAGE_ASPECT_RATIO_VALUES`) — one tuple, not three drifting literal
@@ -46,7 +47,7 @@ export const imageToImageBody = z.object({
   aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
-  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
+  renderingSpeed: z.enum(IMAGE_RENDERING_SPEED_VALUES).optional(),
   guidanceScale: z.number().min(0).max(30).optional(),
   maskUrl: safeUrlSchema.optional(),
   // Character Studio Identity Foundation (v2): per-asset description, capped
@@ -63,7 +64,7 @@ export const imageToImageBody = z.object({
   // When all three are present, the worker appends `{name: attachName, url}` to
   // the user's character row column after the refine completes.
   attachToCharacterId: z.string().uuid().optional(),
-  attachToColumn: z.enum(["expressions", "poses", "angles", "lighting_variations"]).optional(),
+  attachToColumn: z.enum(IMAGE_TO_IMAGE_ATTACH_COLUMNS).optional(),
   attachName: z.string().min(1).max(200).optional(),
   // Identity injection (non-studio path only). When the upstream Character
   // node has its "Inject identity description in downstream prompts" toggle

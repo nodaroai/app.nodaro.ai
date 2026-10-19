@@ -1145,7 +1145,8 @@ session there, then `removeItem` from the old one. `sessionId` and `origin`
 the platform stamps them on the job whatever the route — and are typed on every
 generation params type: `GenerateImageParams`, `GenerateVideoParams`,
 `TextToVideoParams`, `TextToSpeechParams`, `VideoUpscaleParams`,
-`VideoDepthParams`, `AssembleNarratedVideoParams`, the 3D scene params and the
+`VideoDepthParams`, `AssembleNarratedVideoParams`, `ImageToImageParams`,
+`EditImageParams`, `GenerateMaskParams`, the 3D scene params and the
 character / object / location / creature `generate*` inputs. An `origin` that
 is not a slug (lowercase letters, digits and dashes, at most 40) is refused with
 a `400 validation_error` on every route. `GenerateImageParams` also types
@@ -2254,6 +2255,57 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > assembles in the hybrid reference format. See the
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
 > model.
+
+> **Typed image routes.** `image-to-image`, `edit-image`, `split-image` and
+> `generate-mask` have typed overloads on `run` (and, for the three that start a
+> job, on `runAndWait`), with the params types `ImageToImageParams`,
+> `EditImageParams`, `SplitImageParams` and `GenerateMaskParams`. Each takes
+> the platform's own vocabularies (`ModifyImageProvider`, `ImageEditProvider`,
+> `ImageAspectRatio`, `ImageResolution`, …, re-exported from the SDK); any
+> other route field still passes through.
+>
+> The compile-time check applies when the body is typed as the params type —
+> `const params: EditImageParams = …`, or `{ … } satisfies EditImageParams`
+> inline. A body written straight into the call that the typed overload rejects
+> (a missing `prompt`, an unknown `resolution`, `taskId` on `recraft-upscale`)
+> still compiles: it falls through to the untyped `run(type: string, …)`
+> overload and resolves the untyped `RunNodeResult` (on `runAndWait`, the
+> generic overload's output), and the route answers `400`. Use `satisfies` to
+> get the check.
+>
+> - `run("image-to-image" | "edit-image" | "generate-mask", …)` answers
+>   `ImageJobStarted` — `{ jobId: string; adjustments? }` — so `result.jobId`
+>   needs no cast. `ImageToImageParams` requires `imageUrl` and `prompt`; its
+>   `maskUrl` is sent to the model as its own mask, so only `ideogram-edit` and
+>   `flux-fill` use it.
+> - `EditImageParams` is one of two forms: `imageUrl` for every provider except
+>   the Grok task ops, or `taskId` plus `provider: "grok-upscale" | "grok-2-edit"
+>   | "grok-2-segment"` (a prior Grok generation's task id, its job's
+>   `output_data.kieTaskId`). A body typed as `EditImageParams` that sends both,
+>   or a `taskId` on another provider, does not compile. The provider defaults
+>   to `recraft-upscale`; `prompt` is required for `nano-banana-edit` and
+>   `grok-2-edit` (a `400` without one); `maskIndexes` is for `grok-2-edit` only.
+> - `split-image` is free and synchronous: it creates no job, so `runAndWait`
+>   does not apply (it would throw — the answer has no `jobId`). `run` answers
+>   `SplitImageResult` — `{ images: { name, url }[] }`, one PNG per tile, in
+>   `names` order. `names` must hold exactly `gridCols × gridRows` entries
+>   (`gridCols` and `gridRows` each 1–6).
+> - `runAndWait("generate-mask", …)` resolves `GenerateMaskJobOutput`:
+>   `{ imageUrl, maskUrl }` — the source image passed through unchanged, and the
+>   mask PNG (white = the subject `prompt` names).
+> - Inpaint on `generate-image`: `GenerateImageParams.baseImageUrl` +
+>   `maskUrl` (white = the area to change). Every image model can inpaint: the
+>   result's masked area is composited back over the base, and on the models
+>   whose `IMAGE_MASK_MODE` is `"prompt"` the area's position is also written
+>   into the prompt. `strength` and `guidanceScale` are typed there too.
+>
+> ```ts
+> import type { EditImageParams, GenerateImageParams, GenerateMaskParams } from "@nodaro/sdk"
+>
+> const { maskUrl } = await client.nodes.runAndWait("generate-mask", { imageUrl, prompt: "the red car" } satisfies GenerateMaskParams)
+> await client.nodes.runAndWait("generate-image", { prompt: "a blue car", baseImageUrl: imageUrl, maskUrl } satisfies GenerateImageParams)
+> const { jobId } = await client.nodes.run("edit-image", { imageUrl, provider: "topaz-image-upscale", upscaleFactor: "4" } satisfies EditImageParams)
+> ```
 
 > **Seedance 2.5 Draft.** `GenerateVideoParams` and `TextToVideoParams` take
 > `draft?: boolean`: on `seedance-2-5` the run is a 480p draft (any `resolution`

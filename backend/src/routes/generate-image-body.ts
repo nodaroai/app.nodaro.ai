@@ -9,7 +9,7 @@ import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { imageBatchFields, imageBatchIssues } from "../lib/image-batch.js"
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
-import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -161,11 +161,11 @@ export const generateImageBody = z.object({
   // 2.7 / Nano Banana 2 Lite specific, and the per-model gate is the catalog
   // snap below, which corrects an unsupported ratio instead of rejecting it.
   aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
-  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
-  quality: z.enum(["medium", "high", "basic"]).optional(),
+  resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
+  quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
-  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
+  renderingSpeed: z.enum(IMAGE_RENDERING_SPEED_VALUES).optional(),
   styleType: z.string().optional(),
   expandPrompt: z.boolean().optional(),
   // Identity injection: when the upstream Character node has its

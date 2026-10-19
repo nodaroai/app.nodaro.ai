@@ -11,8 +11,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
-import { buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale } from "@nodaro/shared/credits"
+import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, IMAGE_EDIT_TARGET_RESOLUTION_VALUES, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale, TOPAZ_UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -34,8 +34,9 @@ export const editImageBody = z.object({
   prompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
-  upscaleFactor: z.enum(["1", "2", "4"]).optional(),
-  targetResolution: z.enum(["2K", "4K", "8K"]).optional(),
+  // topaz-image-upscale's factors — the same list its resolver reads.
+  upscaleFactor: z.enum(TOPAZ_UPSCALE_FACTORS).optional(),
+  targetResolution: z.enum(IMAGE_EDIT_TARGET_RESOLUTION_VALUES).optional(),
   // The SAME vocabulary /v1/generate-image and /v1/image-to-image declare —
   // one shared tuple, not three drifting literal lists. This bounds the
   // vocabulary only, so a free-form string can't reach KIE as `image_size`;

@@ -23,7 +23,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-const generateMaskBody = z.object({
+export const generateMaskBody = z.object({
   imageUrl: safeUrlSchema,
   prompt: z.string().min(1).max(500),
   threshold: z.number().min(0).max(1).optional().default(0.3),
