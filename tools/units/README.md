@@ -432,7 +432,7 @@ which the two engines' parity tests read.)
 | Key | Rule |
 |---|---|
 | `execution.builder` | `use-case` only, required: a key of `USE_CASE_SPECS` (`packages/render-rules/src/use-case-specs.ts`), unique across units. |
-| `handles.inputs[].id` (use-case) | one of `media`, `music`, `introCard` (`USE_CASE_INPUT_HANDLES`; the run routes only these), with no `field`, no `many`, never accepting `look`. |
+| `handles.inputs[].id` (use-case) | one of `media`, `music`, `introCard`, `masterAudio` (`USE_CASE_INPUT_HANDLES`; the run routes only these), with no `field`, no `many`, never accepting `look`. |
 | `handles.inputs[].accepts: ["look"]` | a JSON input: `look` is never beside another kind, and it declares no `field` (its wire lands in `unitInputs`, "A unit's input lanes"). |
 | `handles.inputs[].many: true` | the input takes every wire, in order: only `true`, only when `accepts` ⊆ `video`, `audio` (`MANY_KINDS`), never with `field`. |
 | `handles.outputs[].kind: "look"` (not a use case) | a JSON output names its `from` (the field its value lands on), and a unit with one has only `look` outputs: no lane lands a job's JSON beside its media yet ("A worker unit's JSON outputs"; `json-output-rules.mjs`). |

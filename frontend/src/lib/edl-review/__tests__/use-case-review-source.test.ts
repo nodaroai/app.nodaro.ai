@@ -39,6 +39,17 @@ describe("a use-case node is its own review source", () => {
     })
   })
 
+  it("reads the recording the run reads first: the node's mediaOrder, else the first wire (a malformed order orders nothing)", () => {
+    const audio = { id: "mic", type: "upload-audio", position: at, data: { url: "https://r2/ep.m4a" } }
+    const audioWire = { id: "w2", source: "mic", target: "t1", sourceHandle: "audio", targetHandle: "media" }
+    const ordered = usecaseReviewSource("t1", [rec, audio, t1({ mediaOrder: ["mic"] })], [wire, audioWire])
+    expect(ordered?.recordingUrl).toBe("https://r2/ep.m4a")
+    expect(ordered?.render).toEqual(buildTightenEpisodeGraph(resolveTightenEpisodeSettings({}, "audio"), { media: { url: "https://r2/ep.m4a", kind: "audio" } }).nodes.find((n) => n.id === "uc-render")!.data)
+    for (const mediaOrder of [undefined, "mic", [7]]) {
+      expect(usecaseReviewSource("t1", [rec, audio, t1({ mediaOrder })], [wire, audioWire])?.recordingUrl, String(mediaOrder)).toBe("https://r2/ep.mp4")
+    }
+  })
+
   it("with framing, the review reads the framed render's own settings", () => {
     const framing = { aspect: "9:16", layout: "stacked" }
     const source = usecaseReviewSource("t1", [rec, t1({ framing })], [wire])!

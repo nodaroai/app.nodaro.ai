@@ -3,7 +3,16 @@
  * builds, wired to the node's real upstream source (decided 2026-10-13).
  */
 import { describe, it, expect } from "vitest"
-import { expandUseCaseNodes, usecaseMediaKindOf, withUseCaseMembers } from "@nodaro/render-rules"
+import {
+  expandUseCaseNodes,
+  usecaseDescriptor,
+  usecaseMediaKindOf,
+  usecaseRenameInnerIds,
+  withUseCaseMembers,
+  type UseCaseDescriptor,
+  type UseCaseSources,
+  type UseCaseSourcesShape,
+} from "@nodaro/render-rules"
 
 const rec = { id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4", metadata: { durationSeconds: 3600 } } }
 const bed = { id: "bed", type: "upload-audio", data: { url: "https://r2/bed.mp3" } }
@@ -232,5 +241,172 @@ describe("usecaseMediaKindOf: what the recording wired into `media` is", () => {
     expect(usecaseMediaKindOf(undefined, null)).toBe("video")
     expect(usecaseMediaKindOf(node("upload-video"), "video")).toBe("video")
     expect(usecaseMediaKindOf(node("apply-edl"), "media")).toBe("video")
+  })
+})
+
+describe("the expansion maps every recording (decided 2026-10-17)", () => {
+  it("renames ids named inside data: sourceOrder, sourceConfig keys, reference, speakerMapByOrder values, masterSourceId, wideSourceId", () => {
+    const rename = (id: string) => (id === "uc-source" ? "rec-a" : `uc::${id}`)
+    expect(usecaseRenameInnerIds({
+      sourceOrder: ["uc-master", "uc-source"],
+      sourceConfig: { "uc-master": { role: "master-audio" }, "uc-source": { role: "camera" } },
+      reference: "uc-master",
+      speakerMapByOrder: { "1": "uc-source", "2": "" },
+      masterSourceId: "uc-master",
+      wideSourceId: "uc-cam-2",
+      other: "uc-source",
+    }, rename)).toEqual({
+      sourceOrder: ["uc::uc-master", "rec-a"],
+      sourceConfig: { "uc::uc-master": { role: "master-audio" }, "rec-a": { role: "camera" } },
+      reference: "uc::uc-master",
+      speakerMapByOrder: { "1": "rec-a", "2": "" },
+      masterSourceId: "uc::uc-master",
+      wideSourceId: "uc::uc-cam-2",
+      other: "uc-source",
+    })
+  })
+  it("keeps the renaming P1 and P2 data has always had: lists by Array.isArray, duckUnder whenever it is a string (empty too)", () => {
+    const rename = (id: string) => `uc::${id}`
+    expect(usecaseRenameInnerIds({ trackOrder: ["a", "b"], clipOrder: ["c"], duckUnder: "", sourceOrder: "x" }, rename))
+      .toEqual({ trackOrder: ["uc::a", "uc::b"], clipOrder: ["uc::c"], duckUnder: "uc::", sourceOrder: "x" })
+    expect(Object.keys(usecaseRenameInnerIds({ b: 1, sourceConfig: {}, a: 2 }, rename))).toEqual(["b", "sourceConfig", "a"])
+    expect(usecaseRenameInnerIds({ reference: "", masterSourceId: 3, wideSourceId: null }, rename)).toEqual({ reference: "", masterSourceId: 3, wideSourceId: null })
+  })
+  it("reference is renamed only when it names a built node (given the built ids): a URL or a mode there is kept", () => {
+    const rename = (id: string) => `uc::${id}`
+    const ids = new Set(["uc-source", "uc-master"])
+    expect(usecaseRenameInnerIds({ reference: "uc-master" }, rename, ids)).toEqual({ reference: "uc::uc-master" })
+    expect(usecaseRenameInnerIds({ reference: "https://r2/ref.wav" }, rename, ids)).toEqual({ reference: "https://r2/ref.wav" })
+    expect(usecaseRenameInnerIds({ reference: "" }, rename, ids)).toEqual({ reference: "" })
+  })
+  it("a key absent from the data stays absent", () => {
+    expect(usecaseRenameInnerIds({ label: "x" }, (id) => `uc::${id}`)).toEqual({ label: "x" })
+  })
+  it("with several media wires and one recording allowed, the first in mediaOrder replaces the source (today: the first wire)", () => {
+    const nodes = [
+      { id: "a", type: "upload-video", data: {} }, { id: "b", type: "upload-video", data: {} },
+      { id: "t", type: "tighten-episode", data: { mediaOrder: ["b", "a"] } },
+    ]
+    const edges = [
+      { source: "a", target: "t", sourceHandle: "video", targetHandle: "media" },
+      { source: "b", target: "t", sourceHandle: "video", targetHandle: "media" },
+    ]
+    const x = expandUseCaseNodes(nodes, edges)
+    expect(x.edges.some((e) => e.source === "b" && e.target === "t::uc-transcribe")).toBe(true)
+    expect(x.edges.some((e) => e.source === "a" && String(e.target).startsWith("t::"))).toBe(false)
+    expect(x.nodes.find((n) => n.id === "t::uc-plan")!.data).toMatchObject({ sourceOrder: ["b"] })
+  })
+  it("with no mediaOrder the first wire is the recording, as before", () => {
+    const nodes = [
+      { id: "a", type: "upload-video", data: {} }, { id: "b", type: "upload-video", data: {} },
+      { id: "t", type: "tighten-episode", data: {} },
+    ]
+    const edges = [
+      { source: "a", target: "t", sourceHandle: "video", targetHandle: "media" },
+      { source: "b", target: "t", sourceHandle: "video", targetHandle: "media" },
+    ]
+    const x = expandUseCaseNodes(nodes, edges)
+    expect(x.edges.some((e) => e.source === "a" && e.target === "t::uc-transcribe")).toBe(true)
+    expect(x.edges.some((e) => e.source === "b" && String(e.target).startsWith("t::"))).toBe(false)
+  })
+  it("the recording's kind is the first ordered wire's", () => {
+    const nodes = [
+      { id: "v", type: "upload-video", data: {} }, { id: "au", type: "upload-audio", data: {} },
+      { id: "t", type: "tighten-episode", data: { mediaOrder: ["au"] } },
+    ]
+    const edges = [
+      { source: "v", target: "t", sourceHandle: "video", targetHandle: "media" },
+      { source: "au", target: "t", sourceHandle: "audio", targetHandle: "media" },
+    ]
+    const x = expandUseCaseNodes(nodes, edges)
+    // An audio episode renders no captions node.
+    expect(x.nodes.some((n) => n.id === "t::uc-captions")).toBe(false)
+    expect(x.edges.some((e) => e.source === "au" && e.target === "t::uc-transcribe")).toBe(true)
+  })
+  it("a mediaOrder that is not a list of ids is read as none (written by hand, an import or an agent)", () => {
+    const nodes = [
+      { id: "a", type: "upload-video", data: {} }, { id: "b", type: "upload-video", data: {} },
+      { id: "t", type: "tighten-episode", data: { mediaOrder: "b" } },
+      { id: "t2", type: "tighten-episode", data: { mediaOrder: [7, "b", null] } },
+    ]
+    const edges = [
+      { source: "a", target: "t", sourceHandle: "video", targetHandle: "media" },
+      { source: "b", target: "t", sourceHandle: "video", targetHandle: "media" },
+      { source: "a", target: "t2", sourceHandle: "video", targetHandle: "media" },
+      { source: "b", target: "t2", sourceHandle: "video", targetHandle: "media" },
+    ]
+    const x = expandUseCaseNodes(nodes, edges)
+    expect(x.edges.some((e) => e.source === "a" && e.target === "t::uc-transcribe")).toBe(true)
+    expect(x.edges.some((e) => e.source === "b" && e.target === "t2::uc-transcribe")).toBe(true)
+  })
+})
+
+/**
+ * Master audio, before any node lists it (each node's multicam work adds it to
+ * its unit.json): Tighten's descriptor is widened for the duration of a test —
+ * it takes `masterAudio`, built as `uc-master` feeding its render — and its
+ * resolver and builder are watched. Restored after every test.
+ */
+describe("expandUseCaseNodes: Master audio", () => {
+  const mic = { id: "mic", type: "upload-audio", data: { url: "https://r2/master.wav" } }
+  const recWire = { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" }
+  const micWire = { source: "mic", target: "t1", sourceHandle: "audio", targetHandle: "masterAudio" }
+  type Writable = { -readonly [K in keyof UseCaseDescriptor]: UseCaseDescriptor[K] }
+
+  function withMasterAudio<T>(fn: (seen: { shapes: Array<UseCaseSourcesShape | undefined>; sources: UseCaseSources[] }) => T): T {
+    const d = usecaseDescriptor("tighten-episode") as Writable
+    const saved = { inputs: d.inputs, inputNodeIds: d.inputNodeIds, resolveSettings: d.resolveSettings, build: d.build }
+    const seen = { shapes: [] as Array<UseCaseSourcesShape | undefined>, sources: [] as UseCaseSources[] }
+    d.inputs = [...saved.inputs, "masterAudio"]
+    d.inputNodeIds = { ...saved.inputNodeIds, masterAudio: "uc-master" }
+    d.resolveSettings = (raw, kind, shape) => {
+      seen.shapes.push(shape)
+      return saved.resolveSettings(raw, kind, shape)
+    }
+    d.build = (settings, sources) => {
+      seen.sources.push(sources)
+      const g = saved.build(settings, sources)
+      if (!sources.masterAudio) return g
+      return {
+        ...g,
+        nodes: [...g.nodes, { id: "uc-master", type: "upload-audio", position: { x: 0, y: 0 }, data: { url: sources.masterAudio.url } }],
+        edges: [...g.edges, { id: "uc-master-render", source: "uc-master", sourceHandle: "audio", target: "uc-render", targetHandle: "sources" }],
+      }
+    }
+    try {
+      return fn(seen)
+    } finally {
+      Object.assign(d, saved)
+    }
+  }
+
+  it("a wired master is built as an AUDIO source and the settings are resolved knowing it is there", () => {
+    withMasterAudio((seen) => {
+      expandUseCaseNodes([rec, mic, tighten], [recWire, micWire])
+      expect(seen.sources).toHaveLength(1)
+      expect(seen.sources[0]!.masterAudio).toEqual({ url: expect.any(String), kind: "audio" })
+      expect(seen.shapes).toEqual([{ recordings: 1, masterAudio: true }])
+    })
+  })
+  it("its built stand-in (the spec's inputNodeIds.masterAudio) is replaced by the real master, on its own handle", () => {
+    withMasterAudio(() => {
+      const x = expandUseCaseNodes([rec, mic, tighten], [recWire, micWire])
+      expect(x.nodes.map((n) => n.id)).not.toContain("t1::uc-master")
+      expect(x.edges).toContainEqual({ source: "mic", sourceHandle: "audio", target: "t1::uc-render", targetHandle: "sources" })
+    })
+  })
+  it("no master wired: no master source, the shape says so, and the expansion is the plain one", () => {
+    const plain = expandUseCaseNodes([rec, tighten], [recWire])
+    withMasterAudio((seen) => {
+      const x = expandUseCaseNodes([rec, tighten], [recWire])
+      expect(seen.sources[0]).not.toHaveProperty("masterAudio")
+      expect(seen.shapes).toEqual([{ recordings: 1, masterAudio: false }])
+      expect(x).toEqual(plain)
+    })
+  })
+  it("a type that does not take Master audio reads nothing from a master wire: the estimate is unchanged", () => {
+    const plain = expandUseCaseNodes([rec, tighten], [recWire])
+    const x = expandUseCaseNodes([rec, mic, tighten], [recWire, micWire])
+    expect({ ...x, nodes: x.nodes.filter((n) => n.id !== "mic") }).toEqual(plain)
   })
 })

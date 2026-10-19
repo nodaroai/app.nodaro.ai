@@ -9,6 +9,7 @@
 // template itself) is fixed text, so a template change is a plain change.
 import path from "node:path"
 import { GENERATED_HEADER } from "./seams.mjs"
+import { USE_CASE_INPUT_HANDLES } from "./vocabulary.mjs"
 import { dataInterfaceName, insertAtPositions, unitBinding } from "./manifest.mjs"
 
 const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
@@ -235,7 +236,7 @@ export function useCaseRowsSource(units, legacyTypes = []) {
     "// The use-case node units (execution.kind \"use-case\"), in position order: each one's graph",
     "// builder (a USE_CASE_SPECS key), label and input pips. use-case-rows.ts composes them.",
     "",
-    "export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<\"media\" | \"music\" | \"introCard\"> }> = [",
+    `export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<${USE_CASE_INPUT_HANDLES.map((h) => JSON.stringify(h)).join(" | ")}> }> = [`,
     ...rows.map((u) => `  { type: ${JSON.stringify(u.type)}, builder: ${JSON.stringify(u.manifest.execution.builder)}, label: ${JSON.stringify(u.manifest.label)}, inputs: [${u.manifest.handles.inputs.map((h) => JSON.stringify(h.id)).join(", ")}] }, ${tag(u.type)}`),
     "]",
     "",

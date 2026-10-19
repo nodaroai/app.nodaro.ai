@@ -41,7 +41,7 @@ describe("runUseCase", () => {
   it("sends the recording as mediaUrls and the call's Idempotency-Key", async () => {
     const f = mockFetch(202, { jobId: "job-1" })
     vi.stubGlobal("fetch", f)
-    await expect(runUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", settings: { captions: false } }, "click-1:iter:2")).resolves.toEqual({ jobId: "job-1" })
+    await expect(runUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], settings: { captions: false } }, "click-1:iter:2")).resolves.toEqual({ jobId: "job-1" })
     expect(headersOf(f)["Idempotency-Key"]).toBe("click-1:iter:2")
     expect(bodyOf(f)).toMatchObject({ mediaUrls: ["https://r2/ep.mp4"], captions: false })
   })
@@ -49,23 +49,23 @@ describe("runUseCase", () => {
   it("sends no key when the call has none", async () => {
     const f = mockFetch(202, { jobId: "job-1" })
     vi.stubGlobal("fetch", f)
-    await runUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", settings: {} })
+    await runUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], settings: {} })
     expect(headersOf(f)["Idempotency-Key"]).toBeUndefined()
   })
 
   it("runUseCase posts the type's route with the recording, the optional inputs and the settings", async () => {
     const f = mockFetch(202, { jobId: "job-1" })
     vi.stubGlobal("fetch", f)
-    await runUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", musicUrl: "https://r2/bed.mp3", settings: { captions: false } }, "k-1234567890123456")
+    await runUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], musicUrl: "https://r2/bed.mp3", settings: { captions: false } }, "k-1234567890123456")
     expect(f).toHaveBeenCalledWith(expect.stringContaining("/v1/tighten-episode"), expect.objectContaining({ method: "POST" }))
     expect(bodyOf(f)).toMatchObject({ mediaUrls: ["https://r2/ep.mp4"], musicUrl: "https://r2/bed.mp3", captions: false })
   })
 
-  it("drops an unset or empty setting, and keeps a null one (a setting's None)", async () => {
+  it("drops an unset setting, and keeps an empty one and a null one (the run decides which to send)", async () => {
     const f = mockFetch(202, { jobId: "job-1" })
     vi.stubGlobal("fetch", f)
-    await runUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", settings: { output: undefined, framing: null, instructions: "", captions: true } })
-    expect((f.mock.calls[0][1] as RequestInit).body).toBe(JSON.stringify({ mediaUrls: ["https://r2/ep.mp4"], framing: null, captions: true }))
+    await runUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], settings: { output: undefined, framing: null, instructions: "", captions: true } })
+    expect((f.mock.calls[0][1] as RequestInit).body).toBe(JSON.stringify({ mediaUrls: ["https://r2/ep.mp4"], framing: null, instructions: "", captions: true }))
   })
 })
 
@@ -74,7 +74,7 @@ describe("estimateUseCase", () => {
     const data = { totalCredits: 31, stepsCredits: 21, feeCredits: 10, durationSec: 600 }
     const f = mockFetch(200, { data })
     vi.stubGlobal("fetch", f)
-    await expect(estimateUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", settings: { captions: false } })).resolves.toEqual(data)
+    await expect(estimateUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], settings: { captions: false } })).resolves.toEqual(data)
     expect(f.mock.calls[0][0]).toMatch(/\/v1\/tighten-episode\/estimate$/)
     expect(bodyOf(f)).toMatchObject({ mediaUrls: ["https://r2/ep.mp4"], captions: false })
   })
@@ -97,9 +97,9 @@ describe("a refused start or estimate names the node in each locale", () => {
     it(locale, async () => {
       useLocaleStore.setState({ locale })
       vi.stubGlobal("fetch", mockFetch(500, null))
-      await expect(runUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", settings: {} })).rejects.toThrow(new Error(start))
+      await expect(runUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], settings: {} })).rejects.toThrow(new Error(start))
       vi.stubGlobal("fetch", mockFetch(500, null))
-      await expect(estimateUseCase("tighten-episode", { mediaUrl: "https://r2/ep.mp4", settings: {} })).rejects.toThrow(new Error(estimate))
+      await expect(estimateUseCase("tighten-episode", { mediaUrls: ["https://r2/ep.mp4"], settings: {} })).rejects.toThrow(new Error(estimate))
     })
   }
 })

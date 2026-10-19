@@ -372,6 +372,7 @@ export {
   ugcPhotoValueKey,
 } from "./node-settings"
 export { NODE_DATA_FIELDS, type NodeDataFieldSpec } from "./generated/node-data-fields"
+export { usecaseSentSettings, usecaseSettingTakesEmpty, usecaseSettingTakesNull, type UseCaseBodyTakes } from "./use-case-sent-settings"
 export { ugcGraphFeeds, type UgcGraphFeeds } from "./ugc-graph-feeds"
 export { APP_IMPLICIT_INPUT_TYPES, appInputItems, appInputNodeIds, presentationItemNodeIds } from "./app-inputs"
 export {
@@ -521,6 +522,7 @@ export {
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseListsItsResult,
+  usecaseRecordings,
   usecaseResultIsText,
   usecaseTriesEvery,
   type UseCaseDescriptor,
@@ -529,6 +531,19 @@ export {
   type UseCaseSettings,
   type UseCaseSources,
 } from "./use-case-registry"
+export {
+  USE_CASE_CAMERAS_DEFAULTS,
+  USE_CASE_MASTER_NODE_ID,
+  USE_CASE_MAX_RECORDINGS,
+  orderUseCaseMedia,
+  resolveUseCaseCameras,
+  usecaseMediaOrderOf,
+  usecaseRecordingNodeId,
+  usecaseRecordingPosition,
+  usecaseRecordingsOf,
+  type UseCaseCameras,
+  type UseCaseSourcesShape,
+} from "./use-case-cameras"
 export { USE_CASE_ROWS, composeUseCaseRows, usecaseRowOf, usecaseTypeOfBuilder, type UseCaseRow } from "./use-case-rows"
 export { USE_CASE_SPECS, type UseCaseBuilderKey, type UseCaseBuilderSpec } from "./use-case-specs"
 export {
@@ -552,6 +567,7 @@ export {
   expandUseCaseNodes,
   runsUseCaseRenderFinal,
   usecaseMediaKindOf,
+  usecaseRenameInnerIds,
   withUseCaseMembers,
   type UseCaseExpandOptions,
   type UseCaseExpandedEdge,

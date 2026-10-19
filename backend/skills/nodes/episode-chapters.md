@@ -1,7 +1,7 @@
 ---
 node_type: episode-chapters
-generated_at: 2026-10-17T17:18:53.661Z
-generated_from: a0ebae513
+generated_at: 2026-10-19T15:56:14.658Z
+generated_from: e04b2b33b
 ---
 
 # Chapters
@@ -18,6 +18,7 @@ generated_from: a0ebae513
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `mediaOrder?: string[]`
 - `planTier?: "economy" | "standard" | "premium"`
 - `instructions?: string`
 - `styleGuide?: string`

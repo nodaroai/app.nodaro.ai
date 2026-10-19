@@ -75,6 +75,12 @@ interface UseCaseOutputMapBase {
   readonly json: UseCaseHandleRef
   readonly transcript: UseCaseHandleRef
   readonly planNodeId: string
+  /**
+   * A multicam run's Audio Sync and Speaker Map, whose notes the wrapper
+   * reports; absent on every one-recording graph (never written as
+   * undefined), so their hashes hold.
+   */
+  readonly multicam?: { readonly sync?: UseCaseHandleRef; readonly map?: UseCaseHandleRef }
 }
 /** One delivered medium (Tighten Episode). `kind` is absent on every P1 snapshot. */
 export interface EpisodeOutputMap extends UseCaseOutputMapBase {
@@ -223,6 +229,8 @@ function isOutputMap(m: unknown): boolean {
   if (!isRecord(m)) return false
   const base = isHandleRef(m.json) && isHandleRef(m.transcript) && typeof m.planNodeId === "string"
   if (!base) return false
+  const multicam = m.multicam
+  if (multicam !== undefined && !(isRecord(multicam) && (multicam.sync === undefined || isHandleRef(multicam.sync)) && (multicam.map === undefined || isHandleRef(multicam.map)))) return false
   const rendered = isHandleRef(m.preview) && typeof m.renderNodeId === "string"
   switch (m.kind) {
     case undefined:

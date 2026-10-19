@@ -24,6 +24,8 @@ The **Clip Pack** template in the template marketplace is the same chain built b
 
 A longer recording (when its length can be read), or one with no sound, is refused before anything is charged.
 
+With more than one recording wired into `media`, a run reads the first one the node's `mediaOrder` setting names (a list of the wired nodes' ids). The editor does not set `mediaOrder` yet; without it, a run reads the first recording wired in.
+
 ## Outputs
 
 | Handle | Type | Description |

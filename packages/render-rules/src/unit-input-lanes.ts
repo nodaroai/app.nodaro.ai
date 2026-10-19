@@ -100,12 +100,25 @@ export function unitInputLanding(
 }
 
 /**
- * A many-wire input's rows in a node's chosen order: the ids `order` lists
- * first (each once, an id no longer wired skipped), then the rest in wire
- * order — the Audio Sync rule, one row per upstream node. Both engines' code
- * for a node that orders its sources calls it. Pure.
+ * A node's sources in its chosen order: the ids `order` lists first (each
+ * once, an id no longer wired skipped), then the rest in wire order — the
+ * Audio Sync rule, one row per upstream node (a second row from a node is
+ * dropped, wherever it stands). The one ordering rule: both engines' code for
+ * a node that orders its sources calls it — a many-wire input's rows (keyed by
+ * `id`), a use-case node's recordings (`orderUseCaseMedia`, keyed by
+ * `nodeId`). Pure.
  */
-export function orderSourceRows<T extends { readonly id: string }>(rows: readonly T[], order: readonly string[] | undefined): T[] {
-  const listed = [...new Set(order ?? [])].filter((id) => rows.some((r) => r.id === id))
-  return [...listed.map((id) => rows.find((r) => r.id === id)!), ...rows.filter((r) => !listed.includes(r.id))]
+export function orderSourceRows<T extends { readonly id: string }>(rows: readonly T[], order: readonly string[] | undefined): T[]
+export function orderSourceRows<T>(rows: readonly T[], order: readonly string[] | undefined, keyOf: (row: T) => string): T[]
+export function orderSourceRows<T>(rows: readonly T[], order: readonly string[] | undefined, keyOf: (row: T) => string = (r) => (r as { readonly id: string }).id): T[] {
+  const listed = [...new Set(order ?? [])]
+  const ordered = [
+    ...listed.flatMap((id) => {
+      const row = rows.find((r) => keyOf(r) === id)
+      return row === undefined ? [] : [row]
+    }),
+    ...rows.filter((r) => !listed.includes(keyOf(r))),
+  ]
+  const seen = new Set<string>()
+  return ordered.filter((r) => (seen.has(keyOf(r)) ? false : (seen.add(keyOf(r)), true)))
 }

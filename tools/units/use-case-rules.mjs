@@ -9,6 +9,9 @@ const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 /** Where a use-case node's graph builders live: USE_CASE_SPECS, read as text (repoContext). */
 export const USE_CASE_SPECS_FILE = "packages/render-rules/src/use-case-specs.ts"
 
+/** The lanes routeUseCaseInput lands a use-case input in, one per USE_CASE_INPUT_HANDLES entry (`media` → useCaseMedia). */
+const USE_CASE_LANES = USE_CASE_INPUT_HANDLES.map((h) => `useCase${h[0].toUpperCase()}${h.slice(1)}`).join(" / ")
+
 /** The builder keys of packages/render-rules/src/use-case-specs.ts, read as text: `  <key>: defineUseCase` lines of USE_CASE_SPECS. */
 export function useCaseBuildersFrom(source) {
   const start = source.indexOf("export const USE_CASE_SPECS")
@@ -29,8 +32,8 @@ export function useCaseProblems(unit, m, ctx) {
     else if (ctx.useCaseBuilders && !ctx.useCaseBuilders.has(b)) out.push(`execution.builder "${b}" is not a use-case spec in ${USE_CASE_SPECS_FILE} — write its builder first`)
     for (const [i, h] of inputs.entries()) {
       if (!USE_CASE_INPUT_HANDLES.includes(h?.id)) out.push(`handles.inputs[${i}].id "${h?.id}": a use-case input is one of ${USE_CASE_INPUT_HANDLES.join(", ")} (routeUseCaseInput routes only these)`)
-      if (h?.field !== undefined) out.push(`handles.inputs[${i}].field: a use-case input lands in useCaseMedia / useCaseMusic / useCaseIntroCard, never a data field — remove it`)
-      if (Array.isArray(h?.accepts) && h.accepts.includes("look")) out.push(`handles.inputs[${i}].accepts: a use-case input takes media, never JSON (routeUseCaseInput routes it into useCaseMedia / useCaseMusic / useCaseIntroCard)`)
+      if (h?.field !== undefined) out.push(`handles.inputs[${i}].field: a use-case input lands in ${USE_CASE_LANES}, never a data field — remove it`)
+      if (Array.isArray(h?.accepts) && h.accepts.includes("look")) out.push(`handles.inputs[${i}].accepts: a use-case input takes media, never JSON (routeUseCaseInput routes it into ${USE_CASE_LANES})`)
       if (h?.many !== undefined) out.push(`handles.inputs[${i}].many: a use-case input already takes every wire (routeUseCaseInput) — remove it`)
     }
     for (const [i, h] of outputs.entries()) if (h?.from !== undefined) out.push(`handles.outputs[${i}].from: a use-case node's outputs are read by the use-case reader (use-case-io.ts / use-case-output.ts) — remove it`)

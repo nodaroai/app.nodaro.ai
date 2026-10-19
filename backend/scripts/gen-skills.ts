@@ -41,6 +41,7 @@ import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
 import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js"
 import { renderExposableSlidersModule } from "./lib/gen-skills/render-exposable-sliders.js"
 import { renderNodeDataFieldsModule } from "./lib/gen-skills/render-node-data-fields.js"
+import { renderUseCaseSentSettingsModule } from "./lib/gen-skills/render-use-case-sent-settings.js"
 import { captureToolSurface } from "./lib/gen-skills/tool-surface.js"
 import { GEN_SKILLS_OUTPUTS, GEN_SKILLS_UNTRACKED_CHECK } from "./lib/gen-skills/outputs.js"
 import { NODE_TYPE_TO_TOOL } from "./lib/gen-skills/node-type-to-tool.js"
@@ -92,6 +93,9 @@ const EXPOSABLE_SLIDERS_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "
 // packages/render-rules/src/generated/node-data-fields.ts — each node type's declared data fields,
 // read by render-rules to tell a node's configuration from what it holds (nodeSettingKeys).
 const NODE_DATA_FIELDS_FILE = join(REPO_ROOT, "packages", "render-rules", "src", "generated", "node-data-fields.ts")
+// packages/render-rules/src/generated/use-case-sent-settings.ts — the use-case settings each request
+// body takes as null or as an empty string, read by the editor's run (it cannot import the bodies).
+const USE_CASE_SENT_SETTINGS_FILE = join(REPO_ROOT, "packages", "render-rules", "src", "generated", "use-case-sent-settings.ts")
 
 const CHECK_MODE = process.argv.includes("--check")
 
@@ -407,6 +411,10 @@ async function main(): Promise<void> {
   if (existingFields !== fieldsSource) {
     mkdirSync(dirname(NODE_DATA_FIELDS_FILE), { recursive: true })
     writeFileSync(NODE_DATA_FIELDS_FILE, fieldsSource)
+  }
+  const sentSettingsSource = renderUseCaseSentSettingsModule()
+  if (!existsSync(USE_CASE_SENT_SETTINGS_FILE) || readFileSync(USE_CASE_SENT_SETTINGS_FILE, "utf-8") !== sentSettingsSource) {
+    writeFileSync(USE_CASE_SENT_SETTINGS_FILE, sentSettingsSource)
   }
 
   console.log("[gen-skills] done")

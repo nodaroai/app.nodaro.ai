@@ -194,6 +194,7 @@ export const PER_WIRE_ORDER_FIELDS = [
   "imageOrder",
   "clipOrder",
   "sourceOrder",
+  "mediaOrder",
   "trackOrder",
   "segmentOrder",
   "assetOrder",

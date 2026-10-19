@@ -211,6 +211,7 @@
       "exports": {
         "use-cases": [
           "USE_CASE_BODIES",
+          "usecaseBodyTakesEmpty",
           "usecaseBodyTakesNull"
         ]
       },

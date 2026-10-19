@@ -706,6 +706,8 @@ export interface ResolvedInputs {
   useCaseMusic?: string
   /** A use-case node's optional `introCard` video (a type whose descriptor takes one). */
   useCaseIntroCard?: string
+  /** A use-case node's optional `masterAudio` — the separate audio its recordings are synced to (a type whose descriptor takes it). */
+  useCaseMasterAudio?: string
   /** A node unit's JSON inputs (accepts "look": the wired JSON string; "" when
    *  wired but its upstream produced nothing — the unit refuses the run) and
    *  many-wire inputs (one row per upstream node, in edge-list order), by

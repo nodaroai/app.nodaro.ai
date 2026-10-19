@@ -9,6 +9,8 @@ export type EpisodeTrailerData = {
   [key: string]: unknown
   label: string
   fieldMappings: FieldMappings
+  /** The recordings' order (their upstream node ids): the run sends and builds them in it; a wired recording it does not list follows in wire order. */
+  mediaOrder?: string[]
   formats?: Array<"9:16" | "1:1" | "4:5" | "16:9">
   reviewBeforeRender?: boolean
   planTier?: "economy" | "standard" | "premium"

@@ -1,7 +1,7 @@
 ---
 node_type: tighten-episode
-generated_at: 2026-10-18T10:07:00.696Z
-generated_from: 79c6cdc25
+generated_at: 2026-10-19T15:56:14.657Z
+generated_from: e04b2b33b
 ---
 
 # Tighten Episode
@@ -18,6 +18,7 @@ generated_from: 79c6cdc25
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `mediaOrder?: string[]`
 - `output?: "video" | "audio"`
 - `framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null`
 - `captions?: boolean`

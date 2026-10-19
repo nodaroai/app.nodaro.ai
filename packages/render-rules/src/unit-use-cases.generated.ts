@@ -2,7 +2,7 @@
 // The use-case node units (execution.kind "use-case"), in position order: each one's graph
 // builder (a USE_CASE_SPECS key), label and input pips. use-case-rows.ts composes them.
 
-export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<"media" | "music" | "introCard"> }> = [
+export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<"media" | "music" | "introCard" | "masterAudio"> }> = [
   { type: "tighten-episode", builder: "tighten", label: "Tighten Episode", inputs: ["media", "music"] }, // unit:tighten-episode
   { type: "episode-chapters", builder: "chapters", label: "Chapters", inputs: ["media"] }, // unit:episode-chapters
   { type: "episode-trailer", builder: "trailer", label: "Trailer", inputs: ["media", "introCard"] }, // unit:episode-trailer

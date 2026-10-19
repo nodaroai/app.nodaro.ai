@@ -17,6 +17,7 @@ import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../uni
 import { loadUnits } from "../units/manifest.mjs"
 import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, useCaseRowsSource } from "../units/templates.mjs"
 import { memberLineTypes } from "../test-select/registry.mjs"
+import { USE_CASE_INPUT_HANDLES } from "../units/vocabulary.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.join(here, "../units/__fixtures__/tree")
@@ -280,6 +281,12 @@ test("inPositionOrder: units by position.after over the (alphabetical) legacy li
   assert.deepEqual(inPositionOrder(units, new Set(["legacy-a", "legacy-b"])).map((x) => x.type), ["b-other", "z-tighten", "a-chapters"])
   assert.match(useCaseRowsSource(units, new Set(["legacy-a", "legacy-b"])), /"z-tighten".*\n.*"a-chapters"/)
   assert.match(contractsSource(units, new Set(["legacy-a", "legacy-b"])), /UNIT_USE_CASE_TYPES = \[\n {2}"z-tighten", \/\/ unit:z-tighten\n {2}"a-chapters", \/\/ unit:a-chapters\n\] as const/)
+})
+
+test("useCaseRowsSource: a row's inputs are typed by the vocabulary's use-case input handles (one list, no second literal)", () => {
+  const src = useCaseRowsSource([])
+  assert.deepEqual(USE_CASE_INPUT_HANDLES, ["media", "music", "introCard", "masterAudio"])
+  assert.match(src, new RegExp(`readonly inputs: ReadonlyArray<${USE_CASE_INPUT_HANDLES.map((h) => JSON.stringify(h)).join(" \\| ")}>`))
 })
 
 // A node converted into a unit leaves its row in gen:skills' legacy handle table, and

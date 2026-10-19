@@ -9,7 +9,9 @@
  * Every type is built through its registry descriptor (`use-case-registry.ts`).
  * Inner ids are `<nodeId>::<inner id>`. The built node each wired input stands
  * for (`inputNodeIds`: the source for `media`, the bed for `music`, …) is
- * REPLACED by the node wired into it, on that wire's handle, so the plan's
+ * REPLACED by the node wired into it, on that wire's handle — recording i of
+ * `media`, in the node's `mediaOrder`, replaces `usecaseRecordingNodeId(i)`,
+ * the first of them the source — so the plan's
  * and the render's length read the real recording. An unwired node keeps its
  * placeholder source (unknown length: the ceiling). Wires out of the node
  * leave from the mapped output (`json` → the plan's edit, `transcript` → the
@@ -39,7 +41,8 @@ import {
   type UseCaseNodeType,
 } from "./use-case-graph"
 import { descendantsOf } from "./graph-walk"
-import { usecaseDescriptor } from "./use-case-registry"
+import { usecaseRecordingNodeId, usecaseRecordingsOf, type UseCaseSourcesShape } from "./use-case-cameras"
+import { usecaseDescriptor, type UseCaseInputHandle, type UseCaseSources } from "./use-case-registry"
 
 type AnyNode = { readonly id?: string; readonly type?: string | null; readonly data?: unknown }
 type AnyEdge = { readonly source?: string; readonly target: string; readonly sourceHandle?: string | null; readonly targetHandle?: string | null; readonly data?: unknown }
@@ -77,6 +80,18 @@ export interface UseCaseExpandOptions {
 }
 
 const PLACEHOLDER_URL = "estimate://use-case-source"
+
+/**
+ * The stand-in source a wired optional input is built on (its real source
+ * replaces it after the build): one per input, typed as the builder reads it,
+ * so a new input cannot be built on an untyped stand-in — Master audio is
+ * audio.
+ */
+const OPTIONAL_INPUT_PLACEHOLDERS: { readonly [H in Exclude<UseCaseInputHandle, "media">]: NonNullable<UseCaseSources[H]> } = {
+  music: { url: PLACEHOLDER_URL },
+  introCard: { url: PLACEHOLDER_URL },
+  masterAudio: { url: PLACEHOLDER_URL, kind: "audio" },
+}
 
 /**
  * What the recording wired into `media` is. Video unless it is certainly
@@ -127,6 +142,44 @@ function renderFinalSettingsOf(data: Readonly<Record<string, unknown>>): Readonl
   return s && typeof s === "object" && !Array.isArray(s) ? (s as Readonly<Record<string, unknown>>) : undefined
 }
 
+/**
+ * Node ids named INSIDE built node data follow the renaming of the nodes they
+ * name, or the plan would look for a source that is not on the graph and price
+ * at the ceiling: the plan's `sourceOrder`, `sourceConfig` keys and
+ * `reference`; the mix's `trackOrder` and `duckUnder`; Combine Videos'
+ * `clipOrder`; a camera switch's `speakerMapByOrder` values; a Speaker Map's
+ * `masterSourceId` and `wideSourceId`. A key the data does not carry stays
+ * absent, and the keys P1 and P2 data carry are renamed as they always were
+ * (a list whenever it is a list, `duckUnder` whenever it is a string). An id
+ * among the newer single ids is renamed only when it names a node (an empty
+ * one is "none"). `reference` is a common word (Audio Sync's reference
+ * recording is a node id; another node's could be a URL or a mode): given the
+ * built graph's node ids (`nodeIds`), it is renamed only when it is one of
+ * them. Exported for tests.
+ */
+export function usecaseRenameInnerIds(
+  data: Readonly<Record<string, unknown>>,
+  rename: (id: string) => string,
+  nodeIds?: ReadonlySet<string>,
+): Record<string, unknown> {
+  const list = (v: unknown) => (v as string[]).map(rename)
+  const one = (v: unknown) => (typeof v === "string" && v !== "" ? rename(v) : v)
+  const nodeRef = (v: unknown) => (typeof v === "string" && nodeIds && !nodeIds.has(v) ? v : one(v))
+  const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
+  return {
+    ...data,
+    ...(Array.isArray(data.sourceOrder) ? { sourceOrder: list(data.sourceOrder) } : {}),
+    ...(Array.isArray(data.trackOrder) ? { trackOrder: list(data.trackOrder) } : {}),
+    ...(typeof data.duckUnder === "string" ? { duckUnder: rename(data.duckUnder) } : {}),
+    ...(Array.isArray(data.clipOrder) ? { clipOrder: list(data.clipOrder) } : {}),
+    ...("reference" in data ? { reference: nodeRef(data.reference) } : {}),
+    ...("masterSourceId" in data ? { masterSourceId: one(data.masterSourceId) } : {}),
+    ...("wideSourceId" in data ? { wideSourceId: one(data.wideSourceId) } : {}),
+    ...(isMap(data.sourceConfig) ? { sourceConfig: Object.fromEntries(Object.entries(data.sourceConfig).map(([k, x]) => [rename(k), x])) } : {}),
+    ...(isMap(data.speakerMapByOrder) ? { speakerMapByOrder: Object.fromEntries(Object.entries(data.speakerMapByOrder).map(([k, x]) => [k, one(x)])) } : {}),
+  }
+}
+
 /** The expansion of every use-case node on the graph (see the module note). */
 export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
   nodes: readonly N[],
@@ -140,22 +193,41 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
   const byId = new Map(nodes.flatMap((n) => (typeof n.id === "string" ? [[n.id, n] as const] : [])))
   const ucIds = new Set(useCases.map((u) => u.id))
   const wireInto = (id: string, handle: string) => edges.find((e) => e.target === id && e.targetHandle === handle && !!e.source)
+  /**
+   * The recordings a node reads: its `media` wires in the node's `mediaOrder`
+   * (both engines' order), one per upstream node, up to as many as its type
+   * takes. Wire i is recording i. With no `mediaOrder` the first is the first
+   * wire, as it always was.
+   */
+  const mediaWires = (u: N & { readonly id: string; readonly type: UseCaseNodeType }): E[] =>
+    usecaseRecordingsOf(
+      edges.filter((e) => e.target === u.id && e.targetHandle === "media" && !!e.source).map((edge) => ({ nodeId: edge.source!, edge })),
+      u.data,
+      usecaseDescriptor(u.type).maxRecordings,
+    ).map((w) => w.edge)
+  const kindOf = (w: E | undefined): UseCaseMediaKind => usecaseMediaKindOf(byId.get(w?.source ?? ""), w?.sourceHandle)
+
+  /** Each node's recordings, read once: the build and the replacement below use the same wires. */
+  const recordingWires = new Map(useCases.map((u) => [u.id, mediaWires(u)] as const))
 
   const built = new Map<string, UseCaseGraph>()
   const finals = new Set(useCases.filter((u) => runsUseCaseRenderFinal(u.data)).map((u) => u.id))
   for (const u of useCases) {
     const d = usecaseDescriptor(u.type)
-    const mediaWire = wireInto(u.id, "media")
-    const kind = usecaseMediaKindOf(byId.get(mediaWire?.source ?? ""), mediaWire?.sourceHandle)
+    const wires = recordingWires.get(u.id)!
+    const kind = kindOf(wires[0])
+    // A wired optional input is a placeholder of its own (its real source replaces it below).
+    const optional: Partial<Pick<UseCaseSources, Exclude<UseCaseInputHandle, "media">>> = Object.fromEntries(
+      d.inputs.flatMap((h) => (h !== "media" && wireInto(u.id, h) ? [[h, { ...OPTIONAL_INPUT_PLACEHOLDERS[h] }] as const] : [])),
+    )
+    const shape: UseCaseSourcesShape = { recordings: Math.max(1, wires.length), masterAudio: optional.masterAudio !== undefined }
     const raw = (u.data ?? {}) as Readonly<Record<string, unknown>>
     // A Render final renders with the settings of the run it finishes (the
     // preview's, carried on the continuation), never the node's later ones.
-    const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? raw), reviewBeforeRender: false } : raw, kind)
-    // A wired optional input is a placeholder of its own (its real source replaces it below).
-    const optional = Object.fromEntries(
-      d.inputs.filter((h) => h !== "media" && wireInto(u.id, h)).map((h) => [h, { url: PLACEHOLDER_URL }] as const),
-    )
-    built.set(u.id, d.build(settings, { media: { url: PLACEHOLDER_URL, kind }, ...optional }))
+    const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? raw), reviewBeforeRender: false } : raw, kind, shape)
+    // Recordings 2..n are placeholders too, each of its own kind (absent for one recording).
+    const moreMedia: UseCaseSources["moreMedia"] = wires.length > 1 ? wires.slice(1).map((w) => ({ url: PLACEHOLDER_URL, kind: kindOf(w) })) : undefined
+    built.set(u.id, d.build(settings, { media: { url: PLACEHOLDER_URL, kind }, ...(moreMedia ? { moreMedia } : {}), ...optional }))
   }
 
   /**
@@ -216,22 +288,17 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
       ...fromOne(w.source!, w.sourceHandle ?? null),
       ...(ucIds.has(w.source!) ? { data: leavingData(w) } : w.data !== undefined ? { data: w.data } : {}),
     })
+    // Recording i replaces the built node it stands for (the first: the
+    // source, `inputNodeIds.media`); each other wired input replaces its own.
+    recordingWires.get(u.id)!.forEach((w, i) => replaced.set(usecaseRecordingNodeId(i), fromWire(w)))
     for (const h of d.inputs) {
+      if (h === "media") continue
       const w = wireInto(u.id, h)
       const builtId = d.inputNodeIds[h]
       if (w && builtId) replaced.set(builtId, fromWire(w))
     }
-    // Node ids named INSIDE data (the plan's sourceOrder; the mix's trackOrder
-    // and duckUnder; Combine Videos' clipOrder) follow the same renaming, or the
-    // plan would look for a source that is not on the graph and price at the ceiling.
     const rename = (id: string) => replaced.get(id)?.source ?? inner(u.id, id)
-    const renameData = (data: Readonly<Record<string, unknown>>): Record<string, unknown> => ({
-      ...data,
-      ...(Array.isArray(data.sourceOrder) ? { sourceOrder: (data.sourceOrder as string[]).map(rename) } : {}),
-      ...(Array.isArray(data.trackOrder) ? { trackOrder: (data.trackOrder as string[]).map(rename) } : {}),
-      ...(typeof data.duckUnder === "string" ? { duckUnder: rename(data.duckUnder) } : {}),
-      ...(Array.isArray(data.clipOrder) ? { clipOrder: (data.clipOrder as string[]).map(rename) } : {}),
-    })
+    const builtIds = new Set(g.nodes.map((n) => n.id))
     const firstRun = whole ? null : initialRunNodeIds(g)
     const runs = (id: string) => !firstRun || firstRun.includes(id)
     // A Render final runs its render and what follows it; the rest is read, not
@@ -249,7 +316,7 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     for (const n of g.nodes) {
       if (replaced.has(n.id) || !runs(n.id)) continue
       if (!finalPart || finalPart.has(n.id)) ids.push(inner(u.id, n.id))
-      const data = renameData(n.data)
+      const data = usecaseRenameInnerIds(n.data, rename, builtIds)
       outNodes.push({ id: inner(u.id, n.id), type: n.type, data: n.id === g.outputMap.planNodeId ? { ...data, ...planResult } : data })
     }
     for (const e of g.edges) {
