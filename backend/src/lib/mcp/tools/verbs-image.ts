@@ -37,7 +37,7 @@ import { normalizeImageInput } from "../normalize.js"
 import { presetImageBody } from "./_image-preset-call.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
 import type { SuggestedPlacement } from "../../../routes/image-overlay-placement.js"
-import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, overlayShapeStyleSchema, overlayImageEffectsSchema, OVERLAY_PLATFORM_IDS, OVERLAY_MAX_VARIANTS } from "@nodaro/shared/media"
+import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, overlayShapeStyleSchema, overlayImageEffectsSchema, OVERLAY_PLATFORM_IDS, OVERLAY_MAX_VARIANTS, GENERATE_MASK_LIMITS } from "@nodaro/shared/media"
 
 // Used only as `description` hints in the schema below — the actual model
 // validation runs through `normalizeImageInput` which silently maps unknown
@@ -811,8 +811,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         image_url: z.string().url().optional().describe("Source image URL."),
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
-        prompt: z.string().min(1).max(500).describe("What to mask (e.g. 'the person' or 'sky and clouds')."),
-        threshold: z.number().min(0).max(1).optional().describe("Segmentation confidence threshold (0–1). Default 0.3."),
+        prompt: z.string().min(1).max(GENERATE_MASK_LIMITS.PROMPT_MAX_LENGTH).describe("What to mask (e.g. 'the person' or 'sky and clouds')."),
+        threshold: z
+          .number()
+          .min(GENERATE_MASK_LIMITS.THRESHOLD_MIN)
+          .max(GENERATE_MASK_LIMITS.THRESHOLD_MAX)
+          .optional()
+          .describe(`Segmentation confidence threshold (${GENERATE_MASK_LIMITS.THRESHOLD_MIN}–${GENERATE_MASK_LIMITS.THRESHOLD_MAX}). Default ${GENERATE_MASK_LIMITS.THRESHOLD_DEFAULT}.`),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },

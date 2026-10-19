@@ -1,6 +1,6 @@
 import type { NodaroClientCore } from "../core.js"
 import { readSseStream } from "../sse.js"
-import type { OverlayAnchor, VideoMaskRequest, MaskCompositeRequest } from "@nodaro/shared/media"
+import type { OverlayAnchor, VideoMaskRequest, MaskCompositeRequest, GenerateMaskRequest, GenerateMaskOutput } from "@nodaro/shared/media"
 import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
 import type { TranscribeLane } from "@nodaro/shared/models"
 import type { VideoOverlayRequest } from "@nodaro/shared/video"
@@ -457,6 +457,21 @@ export class MediaResource {
    */
   videoMask(input: VideoMaskRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-mask", { body: input })
+  }
+
+  /**
+   * Select a subject described in plain text in an IMAGE and get a
+   * black-and-white MASK image back (`POST /v1/generate-mask`, Grounded SAM) —
+   * white = the subject. `prompt` is 1–500 characters (e.g. "the person",
+   * "sky and clouds"); `threshold` is the segmentation confidence, 0–1
+   * (default 0.3; lower selects more). Poll `jobs.get(jobId)`: the output
+   * ({@link GenerateMaskOutput}) carries `maskUrl` (the mask) and `imageUrl`
+   * (the SOURCE image passed through unchanged, not the result). Use the
+   * mask for inpainting with an image-edit model. Price:
+   * `GET /v1/credits/model-cost?model=generate-mask`.
+   */
+  generateMask(input: GenerateMaskRequest): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/generate-mask", { body: input })
   }
 
   /**

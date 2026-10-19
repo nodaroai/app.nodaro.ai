@@ -9,6 +9,27 @@ function make(fetchMock: ReturnType<typeof vi.fn>) {
 }
 
 describe("media resource", () => {
+  it("generateMask() POSTs /v1/generate-mask with the body as given and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "mask-1" }))
+    const c = make(fetchMock)
+    const out = await c.media.generateMask({ imageUrl: "https://x/photo.png", prompt: "the person", threshold: 0.4 })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/generate-mask")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ imageUrl: "https://x/photo.png", prompt: "the person", threshold: 0.4 })
+    expect(out).toEqual({ jobId: "mask-1" })
+  })
+
+  it("generateMask() sends no threshold when none is given (the server default applies)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "mask-2" }))
+    const c = make(fetchMock)
+    await c.media.generateMask({ imageUrl: "https://x/photo.png", prompt: "sky and clouds" })
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      imageUrl: "https://x/photo.png",
+      prompt: "sky and clouds",
+    })
+  })
+
   it("downloadVideo() POSTs /v1/download-video and returns { downloadId }", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ downloadId: "dl-1" }))
     const c = make(fetchMock)

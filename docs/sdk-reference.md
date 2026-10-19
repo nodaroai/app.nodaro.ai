@@ -5383,6 +5383,26 @@ keeps the video's own size and frame rate. Poll `jobs.get(jobId)`: the output ca
 `animated_first_frame`, `audio_reencoded`). Full reference:
 [Video Overlay](./nodes/processing-video/video-overlay.md).
 
+#### `generateMask(input)`
+
+```ts
+generateMask(input: {
+  imageUrl: string
+  prompt: string                  // 1–500 chars, e.g. "the person", "sky and clouds"
+  threshold?: number              // 0..1, default 0.3 (lower selects more)
+}): Promise<{ jobId: string }>
+```
+
+Select a subject described in plain text in an image (`POST /v1/generate-mask`,
+Grounded SAM) and get a black-and-white **mask image** back — white = the
+subject. Poll `jobs.get(jobId)`: the output (`GenerateMaskOutput`) carries
+`maskUrl` (the mask PNG) and `imageUrl` — the **source** image passed through
+unchanged, not the result — so an inpainting edit can take the pair. The
+request and output types (`GenerateMaskRequest`, `GenerateMaskOutput`) are
+exported from `@nodaro/sdk` and `@nodaro/shared/media`; the bounds are
+`GENERATE_MASK_LIMITS`. Price: `GET /v1/credits/model-cost?model=generate-mask`.
+Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md).
+
 #### `videoMask(input)`
 
 ```ts

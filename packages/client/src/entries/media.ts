@@ -12,3 +12,7 @@ export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProc
 // The engine union `media.addCaptions({ transcribeProvider })` takes — re-exported so a
 // consumer can name it without depending on @nodaro/shared directly.
 export type { TranscribeLane } from "@nodaro/shared/models"
+
+// The Generate Mask request and job-output shapes `media.generateMask` uses —
+// re-exported so a consumer can name them without depending on @nodaro/shared directly.
+export type { GenerateMaskRequest, GenerateMaskOutput } from "@nodaro/shared/media"

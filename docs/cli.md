@@ -405,7 +405,7 @@ nodaro voice dub --audio <url> --target-language <code> [--source-language <code
 nodaro voice clones list [--json]                        # clones made before cloning was retired
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, video overlay, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, image mask, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
@@ -464,6 +464,11 @@ nodaro media overlay <imageUrl> [layerUrls...] [--layers-file <path>] [--anchor 
 nodaro media overlay-placement <imageUrl> [--intent <text>] [--aspect <ratio>] [--safe-area <x,y,w,h>] [--json]
                                                          # asks a vision model WHERE one layer should go and answers in the same percent units —
                                                          # anchor, x, y, width + a one-line reason. Synchronous (no job to poll); one image-to-text call.
+nodaro media generate-mask <imageUrl> <prompt> [--threshold <n>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # selects a subject described in text in an image (Grounded SAM) and returns a black-and-white
+                                                         # mask image (white = the subject). --threshold 0-1 (default 0.3; lower selects more). The job's
+                                                         # output carries maskUrl (the mask) and imageUrl (the source, passed through) — feed both to an
+                                                         # inpainting edit. Price: GET /v1/credits/model-cost?model=generate-mask. See docs/nodes/ai-image/generate-mask.md.
 nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
                                                          # 1-20 timed image layers over a video in one local FFmpeg render (no AI), 20 credits; the base
                                                          # audio is kept untouched. One --at per positional layer URL, in order ("3" = from 3 s to the end,

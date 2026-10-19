@@ -6,6 +6,7 @@ import { collectVariadic, reportQueuedJob } from "../util.js"
 import {
   OVERLAY_ANCHORS,
   OVERLAY_PLATFORM_IDS,
+  GENERATE_MASK_LIMITS,
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
   DEFAULT_VIDEO_MASK_PROVIDER,
@@ -1026,6 +1027,39 @@ names).`)
         }
       },
     )
+
+  cmd
+    .command("generate-mask <imageUrl> <prompt>")
+    .description("select a subject described in text in an image (Grounded SAM) and get a black-and-white mask image back (white = the subject)")
+    .option("--threshold <n>", `segmentation confidence ${GENERATE_MASK_LIMITS.THRESHOLD_MIN}–${GENERATE_MASK_LIMITS.THRESHOLD_MAX} (default ${GENERATE_MASK_LIMITS.THRESHOLD_DEFAULT}; lower selects more)`, parseFloat)
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media generate-mask https://x/portrait.png "the person" --watch
+  $ nodaro media generate-mask https://x/landscape.jpg "sky and clouds" --threshold 0.2 --watch --json
+
+The finished job's output carries \`maskUrl\` (the mask) and \`imageUrl\` (the source
+image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for inpainting.`)
+    .action(async (imageUrl: string, prompt: string, opts: { threshold?: number } & WatchOpts) => {
+      try {
+        if (opts.threshold !== undefined && !(opts.threshold >= GENERATE_MASK_LIMITS.THRESHOLD_MIN && opts.threshold <= GENERATE_MASK_LIMITS.THRESHOLD_MAX)) {
+          warn(`--threshold must be between ${GENERATE_MASK_LIMITS.THRESHOLD_MIN} and ${GENERATE_MASK_LIMITS.THRESHOLD_MAX}`)
+          process.exit(1)
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.media.generateMask({
+          imageUrl,
+          prompt,
+          ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
+        })
+        await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "mask" })
+      } catch (err) {
+        handleError(err)
+      }
+    })
 
   cmd
     .command("video-mask <videoUrl> <prompt>")
