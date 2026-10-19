@@ -16,12 +16,13 @@
  * Anything else — another user's job, a deleted or failed one, a moved Re-render count, a read that
  * fails — is priced in full. The quote may be above what the run costs, never below it.
  *
- * The content key is the clip route's own (`ugc-clip:<sha256(ticket minus startSec and clipCount,
- * keys sorted | n=<nonce> | r=<runKey>)>:<attempt>`), copied here because the route offers no way
- * to ask it. Should the two ever differ, no claim matches and every clip is priced in full: the
- * safe side. Content-free: the ticket is hashed as it is, never read.
+ * The content key is the clip route's own, asked of the plugin that serves the route
+ * (`services.ugc.clipContentKey`); this file holds no copy of how it is made. A plugin without that
+ * member, a key it cannot make, or one that throws checks no claim: every clip is priced in full,
+ * the safe side. Without a plugin there is no clip route, so nothing is ever handed back anyway.
+ * Content-free: the ticket is handed to the plugin as it is, never read here.
  */
-import { createHash } from "node:crypto"
+import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
 import { supabase } from "../../lib/supabase.js"
 
 /** One clip the editor expects back: its place in the tickets (from 1), its take's job, and the Re-render count this run sends. */
@@ -31,38 +32,37 @@ export interface UgcReuseClaim {
   readonly nonce: number
 }
 
-/** The ticket fields no render reads, left out of the clip route's content key. */
-const KEY_EXCLUDED: readonly string[] = ["startSec", "clipCount"]
 /** The most attempts the clip route makes on one content key. */
 const MAX_ATTEMPTS = 20
 
-const canonical = (v: unknown): string =>
-  Array.isArray(v)
-    ? `[${v.map(canonical).join(",")}]`
-    : v && typeof v === "object"
-      ? `{${Object.keys(v as object)
-          .sort()
-          .map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`)
-          .join(",")}}`
-      : JSON.stringify(v)
-
-/** The clip route's content key for a ticket, at a Re-render count, under a run key (none: an editor run). */
-export function ugcClipContentKey(ticket: Readonly<Record<string, unknown>>, nonce: number, runKey?: string): string {
-  const keyed = Object.fromEntries(Object.entries(ticket).filter(([k]) => !KEY_EXCLUDED.includes(k)))
-  const hash = createHash("sha256").update(canonical(keyed)).update(`|n=${nonce}|r=${runKey ?? ""}`).digest("hex")
-  return `ugc-clip:${hash}`
+/** A ticket as the run sends it: the editor's saved wire string is read as the value it holds. */
+function ticketValue(raw: unknown): unknown {
+  if (typeof raw !== "string") return raw
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return undefined
+  }
 }
 
-function ticketObject(raw: unknown): Record<string, unknown> | undefined {
-  let value = raw
-  if (typeof raw === "string") {
-    try {
-      value = JSON.parse(raw)
-    } catch {
-      return undefined
-    }
-  }
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+/**
+ * The clip route's key for each claim, asked of the plugin. Null when the plugin cannot say (no
+ * member: an older plugin, or none loaded): then no claim is checked. A claim whose ticket gets no
+ * key is left out, and so priced in full.
+ */
+function claimKeys(
+  tickets: readonly unknown[],
+  claims: readonly UgcReuseClaim[],
+  runKey: string | undefined,
+): Array<{ claim: UgcReuseClaim; key: string }> | null {
+  const ugc = getPluginServices().ugc
+  if (typeof ugc?.clipContentKey !== "function") return null
+  return claims.flatMap((claim) => {
+    const ticket = ticketValue(tickets[claim.clip - 1])
+    if (ticket === undefined) return []
+    const key: unknown = ugc.clipContentKey!(ticket, claim.nonce, runKey)
+    return typeof key === "string" && key.length > 0 ? [{ claim, key }] : []
+  })
 }
 
 /** The attempt number a job's idempotency key holds under `key`, or undefined when it is no attempt of that key. */
@@ -93,12 +93,10 @@ export async function verifiedReusedClips(
   runKey?: string,
 ): Promise<Set<number>> {
   const verified = new Set<number>()
-  const keyed = claims.flatMap((claim) => {
-    const ticket = ticketObject(tickets[claim.clip - 1])
-    return ticket ? [{ claim, key: ugcClipContentKey(ticket, claim.nonce, runKey) }] : []
-  })
-  if (keyed.length === 0) return verified
   try {
+    // Inside the try: a plugin whose key throws prices every clip, never fails the quote.
+    const keyed = claims.length > 0 ? claimKeys(tickets, claims, runKey) : []
+    if (keyed === null || keyed.length === 0) return verified
     const { data, error } = await supabase
       .from("jobs")
       .select("id, status, idempotency_key, type:input_data->>type")

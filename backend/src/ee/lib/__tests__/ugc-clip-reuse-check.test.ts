@@ -3,8 +3,13 @@
  * free only when it is the caller's own finished UGC Clip job of exactly that ticket at the Re-render
  * count the run sends, and the clip route would stop at it. The jobs table is an in-memory stand-in
  * that applies the query's own filters, so a read that forgets `user_id` reads another user's rows.
+ *
+ * The content key is the plugin's (`services.ugc.clipContentKey`); a stand-in plays it here, so these
+ * tests pin how the check USES the key, not how the key is made (the plugin pins that, and that its
+ * clip route admits under the very key it hands out).
  */
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { setPluginServices } from "../../../lib/private-plugins/services-registry.js"
 
 type Row = { id: string; user_id: string; status: string; idempotency_key: string | null; input_data: Record<string, unknown> }
 const h = vi.hoisted(() => ({ rows: [] as Row[], error: null as { message: string } | null, filters: [] as string[][] }))
@@ -34,7 +39,7 @@ vi.mock("../../../lib/supabase.js", () => {
   return { supabase: { from: (table: string) => (table === "jobs" ? query() : (() => { throw new Error(`unexpected table ${table}`) })()) } }
 })
 
-import { ugcClipContentKey, verifiedReusedClips } from "../ugc-clip-reuse-check.js"
+import { verifiedReusedClips } from "../ugc-clip-reuse-check.js"
 
 /** A ticket as the clip route admits it. */
 const TICKET = {
@@ -47,7 +52,18 @@ const TICKET = {
 const OTHER = { ...TICKET, index: 0, spokenText: "Another line." }
 const TICKETS = [OTHER, TICKET]
 const JOB = "00000000-0000-4000-8000-0000000000aa"
+/**
+ * The plugin's key, played by a stand-in: a value of the ticket's line, the nonce and the run key, and
+ * null for anything that is not a ticket. What the real one hashes is the plugin's to pin.
+ */
+const standInKey = vi.fn((ticket: unknown, nonce: number, runKey?: string): string | null =>
+  ticket && typeof ticket === "object" && !Array.isArray(ticket) && typeof (ticket as { spokenText?: unknown }).spokenText === "string"
+    ? `ugc-clip:${(ticket as { spokenText: string }).spokenText}|n=${nonce}|r=${runKey ?? ""}`
+    : null,
+)
+const ugcClipContentKey = (ticket: unknown, nonce: number, runKey?: string) => standInKey(ticket, nonce, runKey)!
 const keyOf = (nonce: number) => ugcClipContentKey(TICKET, nonce)
+const withPluginKey = () => setPluginServices({ ugc: { estimate: () => ({ tickets: [], creatorImage: null }), clipContentKey: standInKey } })
 const clipJob = (over: Partial<Row> = {}): Row => ({
   id: JOB, user_id: "u1", status: "completed", idempotency_key: `${keyOf(0)}:0`, input_data: { type: "ugc-clip", clip: 2 }, ...over,
 })
@@ -57,19 +73,55 @@ beforeEach(() => {
   h.rows = []
   h.error = null
   h.filters = []
+  standInKey.mockClear()
+  withPluginKey()
 })
+afterEach(() => setPluginServices({}))
 
-describe("the clip route's content key, as the app computes it", () => {
-  // Expected values computed with the clip route's own function (the plugin's clip-ticket.ts), for this ticket.
-  it("matches the route's key: the ticket without startSec and clipCount, the nonce and the run key", () => {
-    expect(ugcClipContentKey(TICKET, 0)).toBe("ugc-clip:f6c0e0d07946138aa48fe198aa3d66dc31cd119658dcd8b994715a74c16eaa18")
-    expect(ugcClipContentKey(TICKET, 2)).toBe("ugc-clip:7a327541be84a203e866debf81839bd0c8f6673096652956f26beebc0c9ee733")
-    expect(ugcClipContentKey({ ...TICKET, startSec: 99, clipCount: 9 }, 0)).toBe(ugcClipContentKey(TICKET, 0))
-    expect(ugcClipContentKey(TICKET, 0, "exec-root")).toBe("ugc-clip:2ae1378af4fe5a2f7008bc3e8bfc25ea66113584cbf48a6a9f0772b04136ecc9")
+describe("the content key is the plugin's: the app asks, and holds no copy", () => {
+  it("asks the plugin for each claim's key with the ticket the run sends, the claim's nonce and the run key", async () => {
+    h.rows = [clipJob({ idempotency_key: `${ugcClipContentKey(TICKET, 3, "exec-root")}:0` })]
+    standInKey.mockClear()
+    expect(await verifiedReusedClips("u1", TICKETS, claim({ nonce: 3 }), "exec-root")).toEqual(new Set([2]))
+    expect(standInKey).toHaveBeenCalledWith(TICKET, 3, "exec-root")
+    // The editor's saved wire string is handed over as the value it holds.
+    standInKey.mockClear()
+    await verifiedReusedClips("u1", [JSON.stringify(OTHER), JSON.stringify(TICKET)], claim({ nonce: 3 }), "exec-root")
+    expect(standInKey).toHaveBeenCalledWith(TICKET, 3, "exec-root")
   })
-  it("reads the keys in any order: the wire's own order is not the key", () => {
-    const reordered = Object.fromEntries(Object.entries(TICKET).reverse())
-    expect(ugcClipContentKey(reordered, 0)).toBe(ugcClipContentKey(TICKET, 0))
+
+  it("a plugin without the member (an older one), or none loaded: every clip priced in full, and nothing is read", async () => {
+    h.rows = [clipJob()]
+    setPluginServices({ ugc: { estimate: () => ({ tickets: [], creatorImage: null }) } })
+    expect(await verifiedReusedClips("u1", TICKETS, claim())).toEqual(new Set())
+    setPluginServices({})
+    expect(await verifiedReusedClips("u1", TICKETS, claim())).toEqual(new Set())
+    expect(h.filters).toEqual([])
+  })
+
+  it("a ticket the plugin cannot key (null, or not a string key): that clip priced in full, the others still checked", async () => {
+    const otherJob = "00000000-0000-4000-8000-0000000000bb"
+    h.rows = [clipJob(), { ...clipJob(), id: otherJob, idempotency_key: `${ugcClipContentKey(OTHER, 0)}:0` }]
+    standInKey.mockImplementationOnce(() => null)
+    const claims = [{ clip: 1, jobId: otherJob, nonce: 0 }, ...claim()]
+    expect(await verifiedReusedClips("u1", TICKETS, claims)).toEqual(new Set([2]))
+    standInKey.mockImplementationOnce(() => 42 as unknown as string)
+    expect(await verifiedReusedClips("u1", TICKETS, claims)).toEqual(new Set([2]))
+    standInKey.mockImplementationOnce(() => "")
+    expect(await verifiedReusedClips("u1", TICKETS, claims)).toEqual(new Set([2]))
+    // A wire string that does not parse is not asked about at all.
+    standInKey.mockClear()
+    expect(await verifiedReusedClips("u1", ["{not json", TICKET], claims)).toEqual(new Set([2]))
+    expect(standInKey).toHaveBeenCalledTimes(1)
+  })
+
+  it("a plugin whose key throws: every clip priced in full, never an error", async () => {
+    h.rows = [clipJob()]
+    standInKey.mockImplementationOnce(() => { throw new Error("boom") })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(await verifiedReusedClips("u1", TICKETS, claim())).toEqual(new Set())
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
 

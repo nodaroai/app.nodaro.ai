@@ -3439,6 +3439,15 @@ export interface PluginUgcService {
    * of at least 1: the host holds twice the price.
    */
   clipHoldFactor?(): number
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it. The content key the plugin's
+   * `/v1/ugc/clip` admits this ticket under, at this Re-render count (`nonce`) and run key (none for an
+   * editor run): the key a UGC Clip job's `idempotency_key` carries as `<key>:<attempt>`. The host's
+   * quote reads it to check a clip claimed as reused (`ee/lib/ugc-clip-reuse-check.ts`) and holds no
+   * copy of how it is made. Null when the ticket is not one the route can admit. Absent on an older
+   * plugin (or with no plugin): the host checks no claim and prices every clip in full.
+   */
+  clipContentKey?(ticket: unknown, nonce: number, runKey?: string): string | null
 }
 
 export interface PluginServices {
