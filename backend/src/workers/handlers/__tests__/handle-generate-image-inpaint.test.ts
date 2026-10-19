@@ -154,12 +154,33 @@ describe("generate-image inpaint", () => {
       jobId: "job-1",
     })
 
-    // Finalize receives the composite output as mediaUrl.
+    // Finalize receives the composite as the result's url, so finalize uploads
+    // it (watermark + the user's storage) — never as a pre-uploaded mediaUrl.
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
       jobId: "job-1",
       jobType: "generate-image",
-      result: PROVIDER_RESULT,
-      mediaUrl: COMPOSITE_URL,
+      result: { ...PROVIDER_RESULT, url: COMPOSITE_URL },
+    })
+  })
+
+  it("base + mask with extra variants: finalizes only the composite, never a raw variant", async () => {
+    mocks.mockGenerateImage.mockResolvedValueOnce({
+      ...PROVIDER_RESULT,
+      extraUrls: ["https://r2/raw-2.png"],
+    })
+    const job = makeJob({
+      prompt: "a red hat",
+      provider: "gpt-image-2",
+      baseImageUrl: "https://r2/base.png",
+      maskUrl: "https://r2/mask.png",
+    })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
+      jobId: "job-1",
+      jobType: "generate-image",
+      result: { ...PROVIDER_RESULT, url: COMPOSITE_URL },
     })
   })
 

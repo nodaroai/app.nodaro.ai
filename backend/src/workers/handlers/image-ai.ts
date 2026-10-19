@@ -128,27 +128,32 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   }
   await setJobProgress(job, ctx.jobId, 85)
 
-  let mediaUrl: string | undefined
-  if (isInpaint) {
-    // REFUND-CRITICAL: run the composite BEFORE finalizeJobWithMedia and let a
-    // plain Error propagate. Do NOT wrap this in try/catch or runPostProcessing —
-    // swallowing the throw (or running it after finalize) would mark the job
-    // completed and charge the user for a broken composite. The worker's
-    // charge-for-nothing guard only refunds when the job is NOT yet completed.
-    // See test "composite rejects (plain Error): ... finalize is NOT called".
-    mediaUrl = await compositeInpaint({
-      baseUrl: inpaintBase!,
-      resultUrl: result.url,
-      maskUrl: maskUrl!,
-      jobId: ctx.jobId,
-    })
-  }
+  // REFUND-CRITICAL: run the composite BEFORE finalizeJobWithMedia and let a
+  // plain Error propagate. Do NOT wrap this in try/catch or runPostProcessing —
+  // swallowing the throw (or running it after finalize) would mark the job
+  // completed and charge the user for a broken composite. The worker's
+  // charge-for-nothing guard only refunds when the job is NOT yet completed.
+  // See test "composite rejects (plain Error): ... finalize is NOT called".
+  // The composite is the delivered image: it goes to finalize as the result's
+  // url (one image, so no extraUrls), and finalize uploads it like any other
+  // image — watermark and the user's storage included (#2386).
+  const { extraUrls: _uncomposited, ...single } = result
+  const delivered = isInpaint
+    ? {
+        ...single,
+        url: await compositeInpaint({
+          baseUrl: inpaintBase!,
+          resultUrl: result.url,
+          maskUrl: maskUrl!,
+          jobId: ctx.jobId,
+        }),
+      }
+    : result
 
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "generate-image",
-    result,
-    ...(mediaUrl && { mediaUrl }),
+    result: delivered,
   })
   if (!ok) return
   await setJobProgress(job, ctx.jobId, 100)

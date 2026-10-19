@@ -469,14 +469,12 @@ export interface FinalizeInput {
   /** Optional pre-uploaded R2 URL. When provided, finalize skips its own
    *  upload step and uses this URL directly. Used by video handlers that
    *  must upload before finalize (audio merge produces a local file the
-   *  handler uploads + watermarks itself). Image and audio handlers + all
-   *  reconcile paths leave this undefined and let finalize upload.
-   *  For multi-variant outputs (image), pass the primary URL here and the
-   *  variants via `extraMediaUrls`. */
+   *  handler uploads + watermarks itself) and by audio handlers.
+   *  REFUSED for image job types: finalize's image upload is the one place an
+   *  image is watermarked and charged to the user's storage, so a handler that
+   *  produced its own image (the inpaint composite) passes it as `result.url`
+   *  instead and lets finalize upload it (#2386). */
   mediaUrl?: string
-  /** Extra R2 URLs for multi-variant image outputs (used alongside
-   *  `mediaUrl`). Ignored for video/audio. */
-  extraMediaUrls?: readonly string[]
   /** Extra fields merged into `output_data` (e.g., `thumbnailUrl`,
    *  provider-meta extras). Useful for video handlers that need to record
    *  a thumbnail alongside the main URL. */
@@ -537,6 +535,11 @@ export async function finalizeJobWithMedia(
   input: FinalizeInput,
 ): Promise<FinalizeOutcome> {
   const { jobId, jobType, result } = input
+  if (IMAGE_TYPES.has(jobType) && input.mediaUrl !== undefined) {
+    // A pre-uploaded image would skip the watermark and the user's storage
+    // accounting (#2386). Fail before any claim or write.
+    throw new Error(`[job-finalize] ${jobType}: pass the image as result.url, not mediaUrl`)
+  }
 
   // 1. Load job row (the shape we need for upload / asset / reopen).
   const { data: jobRow } = await supabase
@@ -573,21 +576,20 @@ export async function finalizeJobWithMedia(
 
   // 3. Upload media — dispatch by jobType. Callers that have already uploaded
   //    (e.g., video handlers after audio-merge produces a local file) pass
-  //    `input.mediaUrl` so we skip the upload and use it directly.
+  //    `input.mediaUrl` so we skip the upload and use it directly. Images
+  //    always upload here (mediaUrl is refused above).
   let outputData: Record<string, unknown>
   // Captured for the reference-video auto-attach below — set only on the video
   // path (the R2 URL we record as the clip's canonical location).
   let videoR2Url: string | undefined
   try {
     if (IMAGE_TYPES.has(jobType)) {
-      const r2Urls = input.mediaUrl !== undefined
-        ? [input.mediaUrl, ...(input.extraMediaUrls ?? [])]
-        : await uploadImageVariantsMaybeWatermark(
-            [result.url, ...(result.extraUrls ?? [])],
-            jobId,
-            job.user_id ?? undefined,
-            watermark,
-          )
+      const r2Urls = await uploadImageVariantsMaybeWatermark(
+        [result.url, ...(result.extraUrls ?? [])],
+        jobId,
+        job.user_id ?? undefined,
+        watermark,
+      )
       outputData = buildImageOutputData(
         result as Parameters<typeof buildImageOutputData>[0],
         r2Urls,
