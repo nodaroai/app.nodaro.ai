@@ -84,6 +84,7 @@ import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
+import { usecaseSavedNodeOutput } from "./use-case-output.js"
 import { routeUseCaseInput } from "./use-case-inputs.js"
 import { routeUnitInput } from "./unit-inputs.js"
 import { buildNodeRefMap } from "./payload-builder.js"
@@ -317,7 +318,7 @@ export function resolveNodeInputs(
     const unitPipJson = unitLookPipJsonFor(sourceNode, state, effectiveSourceHandle)
     const effectiveListResults = isLlmChatItemsEdge || !servesList
       ? undefined
-      : selectorListResults ?? splitParts ?? (unitPipJson ? jsonArrayItems(unitPipJson.value) : listFor(sourceNode, state))
+      : selectorListResults ?? splitParts ?? (unitPipJson ? jsonArrayItems(unitPipJson.value) : isUseCaseNodeType(sourceNode.type) && effectiveSourceHandle === "json" ? usecasePlanListFor(sourceNode, state, effectiveSourceHandle) : listFor(sourceNode, state))
     // What a fan-out iteration indexes BY ROW: the row-aligned twin when the
     // source publishes one (Extract Field), else the list itself. Addressing by
     // position (item / item:N / range / Bundle) keeps using the public list above.
@@ -1014,6 +1015,19 @@ export function getListInputForNode(
  * columns of one table — the one that feeds the prompt drives (its item is what
  * becomes the per-row prompt), and a row runs when any of them has a value in it.
  */
+/**
+ * A use-case node's `json` pip as a list: its plan as the person's review leaves
+ * it — this run's output, else (when its saved data may stand in) its saved,
+ * reviewed output — one item per kept element. Undefined for any other node or
+ * pip, and for a plan that is not a list. What filter-list's collector reads
+ * off it too; the editor's extractNodeOutputAsList mirrors it.
+ */
+function usecasePlanListFor(node: SimpleNode, state: NodeExecutionState | undefined, sourceHandle: string | null | undefined): string[] | undefined {
+  if (!isUseCaseNodeType(node.type) || sourceHandle !== "json") return undefined
+  const output = state?.output ?? (savedDataAllowed(state) ? usecaseSavedNodeOutput(node.data as Record<string, unknown>, node.type) : undefined)
+  return jsonArrayItems(output?.json)
+}
+
 export function getListFanOutForNode(
   targetNode: SimpleNode,
   edges: SimpleEdge[],
@@ -1174,6 +1188,17 @@ export function getListFanOutForNode(
     if (rendersLatestBatch(sourceNode.type) && edge.sourceHandle !== "json") {
       const items = listFor(sourceNode, state)
       if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
+      continue
+    }
+
+    // 4b'. A use-case node's `json` pip: its plan's list as the person's review
+    //     leaves it — this run's output, else its saved (reviewed) output —
+    //     exactly what a list collector (filter-list) reads off it. Never the
+    //     generic fallbacks below, which re-read the raw plan and would run a
+    //     dropped chapter too. Mirrors the editor's extractNodeOutputAsList.
+    if (isUseCaseNodeType(sourceNode.type) && edge.sourceHandle === "json") {
+      const items = usecasePlanListFor(sourceNode, state, edge.sourceHandle)
+      if (items) consider(edge, selectListItems(items, selectorArg))
       continue
     }
 
@@ -2441,8 +2466,14 @@ function routeOutput(
     return
   }
 
+  // A use-case node's data pip (its plan on `json`, its text — an unnamed pip
+  // of a type whose result is text too) is text, whatever its episode is: the
+  // media branches below read the node's type (Trailer is a video producer, and
+  // its plan would land as a video). Mirrors the editor's resolver.
+  const usecaseDataPip = isUseCaseNodeType(srcType) && (edge.sourceHandle === "json" || edge.sourceHandle === "text" || (edge.sourceHandle == null && usecaseResultIsText(srcType)))
+
   // --- Text/prompt sources ---
-  if (TEXT_SOURCE_NODE_TYPES.has(srcType)) {
+  if (TEXT_SOURCE_NODE_TYPES.has(srcType) || usecaseDataPip) {
     // Transcribe → add-captions: wire word-timed captions through alongside the
     // text fallback. The kinetic-captions worker prefers `captions` when present
     // and falls back to `text` only for static styles.
@@ -2715,10 +2746,9 @@ function routeOutput(
   }
 
   // --- a use-case node's episode (Tighten Episode): video OR audio, by what
-  // the run produced, for the render's reason above; its `json` (the plan)
-  // takes the generic json routing, its `text` (Chapters' show notes — an
-  // unnamed pip of such a type too) the text routing. ---
-  if (isUseCaseNodeType(srcType) && edge.sourceHandle !== "json" && edge.sourceHandle !== "text" && !(edge.sourceHandle == null && usecaseResultIsText(srcType))) {
+  // the run produced, for the render's reason above; its data pips (`json`,
+  // the plan; `text`, Chapters' show notes) took the text branch above. ---
+  if (isUseCaseNodeType(srcType) && !usecaseDataPip) {
     if (producedVideoIn(src, nodeStates)) routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     else routeAudioOutput(inputs, output, targetType, src.id)
     return

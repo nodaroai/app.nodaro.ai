@@ -10,7 +10,7 @@ import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { jsonKindMismatch } from "@nodaro/shared/nodes"
-import { getDragAncestorSet, resolveEffectiveSourceType, ugcWireAllowed } from "@/lib/connection-validation"
+import { getDragAncestorSet, resolveEffectiveSourceType, ugcWireAllowed, usecaseDataPipRefused } from "@/lib/connection-validation"
 import { isTeleportNodeType, resolveTeleportOrigin } from "@nodaro/render-rules"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
@@ -214,6 +214,8 @@ export function HandleWithPopover({
       // An EDL-shaped JSON output is not a Transcript: the drop validator
       // refuses it (decided 2026-10-07), so the glow must not offer it.
       if (jsonKindMismatch(carrierType, carrierHandle, nodeType, handleId)) return false
+      // A use-case node's plan or text never feeds a media-only input (the drop validator's rule).
+      if (usecaseDataPipRefused(carrierType, carrierHandle, nodeType, handleId)) return false
       // The UGC rules the drop applies by pip (a UGC wire, a private output).
       if (!ugcWireAllowed(carrierType, carrierHandle, nodeType, handleId)) return false
       // Cycle check: would-be edge is (from.nodeId → nodeId). Cycle iff
@@ -239,6 +241,7 @@ export function HandleWithPopover({
       if (!entry?.accepts(effectiveType)) return false
       // Same EDL-is-not-a-Transcript rule as the target-direction branch.
       if (jsonKindMismatch(carrierType, carrierHandle, fromType, from.id)) return false
+      if (usecaseDataPipRefused(carrierType, carrierHandle, fromType, from.id)) return false
       // Same UGC rules as the target-direction branch.
       if (!ugcWireAllowed(carrierType, carrierHandle, fromType, from.id ?? "")) return false
       // Would-be edge is (nodeId → from.nodeId). Cycle iff from.nodeId is

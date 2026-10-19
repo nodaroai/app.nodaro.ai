@@ -103,6 +103,10 @@ import {
   groupHandleId,
 } from "@nodaro/shared/workflow"
 import {
+  AUDIO_PRODUCER_TYPES,
+  DYNAMIC_PRODUCER_TYPES,
+  IMAGE_PRODUCER_TYPES,
+  VIDEO_PRODUCER_TYPES,
   jsonKindMismatch,
   jsonKindMismatchMessage,
 } from "@nodaro/shared/nodes"
@@ -111,7 +115,8 @@ import {
 } from "@nodaro/shared/ugc"
 import { isValidUgcConnection } from "./ugc-handles"
 import { unitConnectionVerdict } from "./unit-connections"
-import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
+import { isUseCaseNodeType, resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
+import { usecaseHandsOnEpisode } from "./use-case-pips"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { isScrapeNodeType } from "./scrape-node-types"
@@ -271,6 +276,40 @@ export function ugcWireAllowed(rawSourceType: string, sourceHandle: string | nul
   return UGC_NODE_TYPES.has(targetType) ? isValidUgcConnection(targetType, targetHandle, rawSourceType, sourceHandle) : true
 }
 
+/**
+ * The plain sources a data pip is judged against: one text (Combine Text — one
+ * string, not a list) and one JSON (an Edit Plan's edit). An input either of
+ * them reaches takes data.
+ */
+const DATA_SOURCE_STAND_INS: ReadonlyArray<readonly [type: string, pip: string]> = [["combine-text", "text"], ["edit-plan", "edl"]]
+
+/**
+ * Whether a wire from a use-case node's data pip — its plan (`json`), its
+ * text — is refused because the input takes only media. The node is a media
+ * producer (video, or video-or-audio) for its episode only, and the input rules
+ * read the node's type, so without this its plan reached Trim Audio's `in` or
+ * Generate Image's `references`. A data pip connects where a plain text or
+ * JSON source would (`DATA_SOURCE_STAND_INS`); its episode, and every other
+ * node, are judged as before. Read by the drop validator and the drag glow
+ * alike, like `jsonKindMismatch`.
+ */
+export function usecaseDataPipRefused(
+  sourceType: string | null | undefined,
+  sourceHandle: string | null | undefined,
+  targetType: string | null | undefined,
+  targetHandle: string | null | undefined,
+): boolean {
+  if (!isUseCaseNodeType(sourceType) || usecaseHandsOnEpisode(sourceType, sourceHandle)) return false
+  // Only a node the input rules take as a media producer gets the leniency to take away.
+  const mediaProducer = [VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES].some((set) => set.has(sourceType))
+  if (!mediaProducer) return false
+  return !DATA_SOURCE_STAND_INS.some(([type, pip]) =>
+    connectionTypesAccepted(
+      { source: "data-source", sourceHandle: pip, target: "data-target", targetHandle: targetHandle ?? null },
+      (id) => (id === "data-source" ? type : id === "data-target" ? targetType ?? undefined : undefined),
+    ))
+}
+
 export function isValidWorkflowConnection(
   connection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
@@ -329,6 +368,12 @@ function connectionTypesAccepted(
   // render) is not a Transcript: refused at connect time, whatever the target
   // node (decided 2026-10-07). Read from the shared output kinds, not a name list.
   if (jsonKindMismatch(typeOf(connection.source), connection.sourceHandle, typeOf(connection.target), connection.targetHandle)) {
+    return false
+  }
+
+  // A use-case node's plan or text is not its episode: it never feeds an input
+  // that takes only media (usecaseDataPipRefused).
+  if (usecaseDataPipRefused(typeOf(connection.source), connection.sourceHandle, typeOf(connection.target), connection.targetHandle)) {
     return false
   }
 

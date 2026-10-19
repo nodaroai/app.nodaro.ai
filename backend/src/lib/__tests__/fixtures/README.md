@@ -23,9 +23,11 @@ ordered list, so other nodes joining those lists never touch it. Each graph and
 length row holds its own inputs, and `episode-trailer-identity.test.ts`
 rebuilds every row from them. Its editor twin is
 `frontend/src/__tests__/fixtures/episode-trailer-identity.json`.
-Its `connectionsOut` freezes today's node-type-keyed validator answers (e.g.
-`json → combine-videos.in` true); if dev changes the validator before the
-conversion, rule on it — never re-record.
+Its `connectionsOut` froze the node-type-keyed validator's answers. One record
+has since been corrected by hand, never re-recorded: `json → combine-videos.in`
+is now false, because the validator reads the pip and a use-case node's plan
+never feeds a media-only input (`usecaseDataPipRefused`). Any later validator
+change is ruled on record by record — never re-record.
 
 It was recorded once, on `feat/episode-trailer` before the units merge
 (`UNITS_RECORD_TRAILER_IDENTITY=1`; the test refuses to overwrite an existing

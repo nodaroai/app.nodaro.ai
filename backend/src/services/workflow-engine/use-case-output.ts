@@ -83,14 +83,16 @@ export function usecaseJobOutput(
  * A use-case node's saved output, read off what the node holds (the
  * orchestrator's `extractSavedNodeOutput`, for "run from here"): the episode it
  * shows, its plan with the person's review applied — the read an Edit Plan's
- * saved output makes — and its text (Chapters' show notes). Undefined when it
+ * saved output makes (a clip-set edit of Chapters' list too) — and its text
+ * (Chapters' show notes). A null plan is none. Undefined when it
  * holds none of them. The server twin of the editor's `usecaseSavedOutput`
  * (use-case-io.ts).
  */
 export function usecaseSavedNodeOutput(data: Record<string, unknown>, type: string): NodeOutput | undefined {
   const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
   const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
-  const json = editPlanSavedOutput(data)?.json
+  // A plan held as null is no plan: nothing on `json`, never the text "null".
+  const json = editPlanSavedOutput(data)?.json ?? undefined
   const text = typeof data.generatedText === "string" && data.generatedText ? data.generatedText : undefined
   // A list result (Trailer's formats): its last run's deliveries, the node's own list (as UGC Finish's).
   const saved = usecaseListsItsResult(type) ? data.__listResults : undefined

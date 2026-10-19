@@ -86,6 +86,15 @@ describe("validateWorkflowEdges", () => {
     expect(result.ok).toBe(true)
     expect(result.warnings.join(" ")).toContain("does not look like a video source")
   })
+
+  it("a use-case node's plan pip is no audio source, though its episode is (the pip, not the node type)", () => {
+    const graph = [{ id: "te", type: "tighten-episode" }, { id: "gv", type: "generate-video" }]
+    const plan = validateWorkflowEdges(graph, [{ id: "e1", source: "te", sourceHandle: "json", target: "gv", targetHandle: "audio" }])
+    expect(plan.ok).toBe(true)
+    expect(plan.warnings.join(" ")).toContain("does not look like a audio source")
+    const episode = validateWorkflowEdges(graph, [{ id: "e1", source: "te", sourceHandle: "media", target: "gv", targetHandle: "audio" }])
+    expect(episode.warnings).toEqual([])
+  })
 })
 
 describe("node type catalog", () => {

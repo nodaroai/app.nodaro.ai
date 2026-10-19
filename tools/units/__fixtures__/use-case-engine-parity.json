@@ -1,0 +1,473 @@
+{
+  "$comment": "What a use-case node (Tighten Episode, Chapters, Trailer) hands on from what it holds, on BOTH engines: the editor's readers (frontend/src/__tests__/use-case-engine-parity.test.ts) and the server's (backend/src/services/workflow-engine/__tests__/use-case-engine-parity.test.ts) are each held to the values here, so they agree and cannot agree on the wrong thing. `shape` names a saved state in use-case-output-shapes.json. `handOn`: what a wire from `pip` (null: no pip) carries to a generic consumer, `value` null when it carries nothing; on `json` it is the plan with the person's review applied (a clip-set edit of a chapter list included), and a plan held as null is nothing, never the text \"null\". `prompt`: a `json` pip wired into a text or prompt input (the canvas accepts each of these wires) lands its plan as the consumer's prompt (never as a video, whatever the node's episode is), `prompt` null when nothing lands. `jsonReaders`: Extract Field, JSON Process and filter-list wired to the `json` pip read the same reviewed plan. `fanOut`: an Each wire from the `json` pip into a Prompt fans out over these items (null: no fan-out) — the reviewed list, exactly what filter-list reads: a dropped chapter never runs, and one kept chapter is no fan-out; a plan that is not a list (Tighten's EDL) never fans out, not even over the node's saved episode takes. `listModes`: a wire from the `json` pip in an item mode (`item:N`) into a Prompt picks the Nth item of that same reviewed list; a plan that is not a list (Tighten's EDL) is handed on whole, never one of the node's video takes.",
+  "handOn": [
+    {
+      "type": "tighten-episode",
+      "shape": "empty",
+      "pip": "json",
+      "value": null
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "reviewedPlan",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[{\"start\":20,\"end\":30}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "staleEdit",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10},{\"start\":20,\"end\":30}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "unenvelopedEdit",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10},{\"start\":20,\"end\":30}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "audioEpisode",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "scalarPlan",
+      "pip": "json",
+      "value": "\"a plan held as text\""
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "pip": "json",
+      "value": null
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "pip": "media",
+      "value": "https://r/g.mp4"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "pip": null,
+      "value": "https://r/g.mp4"
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "videoTakes",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "reviewedPlan",
+      "pip": "json",
+      "value": "{\"version\":1,\"segments\":[{\"start\":20,\"end\":30}],\"dropped\":[]}"
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "nullPlan",
+      "pip": "json",
+      "value": null
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "empty",
+      "pip": "json",
+      "value": null
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chapters",
+      "pip": "json",
+      "value": "[{\"startMs\":0,\"title\":\"Intro\"},{\"startMs\":62000,\"title\":\"Main\"}]"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "pip": "json",
+      "value": "[{\"startMs\":0,\"title\":\"Intro\",\"meta\":{\"hook\":\"Hi\"}}]"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewedThree",
+      "pip": "json",
+      "value": "[{\"startMs\":0,\"title\":\"Intro\"},{\"startMs\":180000,\"title\":\"Outro\",\"meta\":{\"hook\":\"Close\"}}]"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "pip": "text",
+      "value": "0:00 Intro\n1:02 Main"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "pip": null,
+      "value": "0:00 Intro\n1:02 Main"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "textAndVideo",
+      "pip": "json",
+      "value": "[]"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "nullPlan",
+      "pip": "json",
+      "value": null
+    }
+  ],
+  "prompt": [
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "llm-chat",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "generate-image",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "generate-video",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "generate-script",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "social-media-format",
+      "handle": "text",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "text-prompt",
+      "handle": "in",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "generate-music",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "image-critic",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "qa-check",
+      "handle": "in",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "text-to-video",
+      "handle": "in",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "combine-text",
+      "handle": "text",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "suno-lyrics",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "reviewedPlan",
+      "target": "llm-chat",
+      "handle": "prompt",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":20,\"end\":30}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "target": "llm-chat",
+      "handle": "prompt",
+      "prompt": null
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "target": "generate-image",
+      "handle": "prompt",
+      "prompt": null
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "videoTakes",
+      "target": "text-prompt",
+      "handle": "in",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "videoTakes",
+      "target": "social-media-format",
+      "handle": "text",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "nullPlan",
+      "target": "text-prompt",
+      "handle": "in",
+      "prompt": null
+    },
+    {
+      "type": "episode-trailer",
+      "shape": "videoTakes",
+      "target": "instagram-post",
+      "handle": "in",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "target": "instagram-post",
+      "handle": "in",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "target": "llm-chat",
+      "handle": "prompt",
+      "prompt": "[{\"startMs\":0,\"title\":\"Intro\",\"meta\":{\"hook\":\"Hi\"}}]"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "nullPlan",
+      "target": "llm-chat",
+      "handle": "prompt",
+      "prompt": null
+    }
+  ],
+  "jsonReaders": [
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "consumer": "extract-field",
+      "data": {
+        "field": "title"
+      },
+      "text": "Intro"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chapters",
+      "consumer": "extract-field",
+      "data": {
+        "field": "title"
+      },
+      "text": "Intro\nMain"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "consumer": "json-process",
+      "data": {
+        "mode": "visual",
+        "inputPath": "",
+        "filters": [],
+        "projections": [
+          "title"
+        ]
+      },
+      "processedResult": [
+        {
+          "title": "Intro"
+        }
+      ]
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"startMs\":0,\"title\":\"Intro\",\"meta\":{\"hook\":\"Hi\"}}"
+      ]
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewedThree",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"startMs\":0,\"title\":\"Intro\"}",
+        "{\"startMs\":180000,\"title\":\"Outro\",\"meta\":{\"hook\":\"Close\"}}"
+      ]
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "reviewedPlan",
+      "consumer": "extract-field",
+      "data": {
+        "field": "segments"
+      },
+      "text": "{\"start\":20,\"end\":30}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "reviewedPlan",
+      "consumer": "json-process",
+      "data": {
+        "mode": "visual",
+        "inputPath": "segments",
+        "filters": [],
+        "projections": [
+          "start"
+        ]
+      },
+      "processedResult": [
+        {
+          "start": 20
+        }
+      ]
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "reviewedPlan",
+      "consumer": "filter-list",
+      "data": {
+        "conditions": []
+      },
+      "items": [
+        "{\"version\":1,\"segments\":[{\"start\":20,\"end\":30}],\"dropped\":[]}"
+      ]
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "consumer": "extract-field",
+      "data": {
+        "field": "segments"
+      },
+      "text": ""
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "consumer": "json-process",
+      "data": {
+        "mode": "visual",
+        "inputPath": "segments",
+        "filters": [],
+        "projections": [
+          "start"
+        ]
+      },
+      "processedResult": null
+    }
+  ],
+  "fanOut": [
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewedThree",
+      "items": [
+        "{\"startMs\":0,\"title\":\"Intro\"}",
+        "{\"startMs\":180000,\"title\":\"Outro\",\"meta\":{\"hook\":\"Close\"}}"
+      ]
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewed",
+      "items": null
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chapters",
+      "items": [
+        "{\"startMs\":0,\"title\":\"Intro\"}",
+        "{\"startMs\":62000,\"title\":\"Main\"}"
+      ]
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "items": null
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "reviewedPlan",
+      "items": null
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "nullPlan",
+      "items": null
+    }
+  ],
+  "listModes": [
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewedThree",
+      "mode": "item:1",
+      "prompt": "{\"startMs\":180000,\"title\":\"Outro\",\"meta\":{\"hook\":\"Close\"}}"
+    },
+    {
+      "type": "episode-chapters",
+      "shape": "chaptersReviewedThree",
+      "mode": "item:0",
+      "prompt": "{\"startMs\":0,\"title\":\"Intro\"}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "mode": "item:0",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    },
+    {
+      "type": "tighten-episode",
+      "shape": "videoTakes",
+      "mode": "item:1",
+      "prompt": "{\"version\":1,\"segments\":[{\"start\":0,\"end\":10}],\"dropped\":[]}"
+    }
+  ]
+}

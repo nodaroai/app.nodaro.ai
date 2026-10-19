@@ -226,17 +226,16 @@ describe("editor reads of an Edit Plan's saved output", () => {
       "components/editor/workflow-editor/node-input-resolver.ts": 1,
       // the reader the clips fan-out (@nodaro/render-rules) is handed
       "components/editor/workflow-editor/types.ts": 1,
-      // a use-case node's json pip: its plan with the review applied (extractNodeOutput's branch)
-      "components/editor/workflow-editor/use-case-io.ts": 1,
       // the reader the render estimate's minutes (@nodaro/render-rules) are handed
       "lib/apply-edl-estimate.ts": 1,
       // the node's badge, clip count and tree
       "components/nodes/edit-plan-node.tsx": 1,
       // Speaker View's panel, strip and badge: the edit(s) wired into its `edl` handle
       "lib/speaker-view-context.ts": 1,
-      // the reader itself (its cache), and sourceJsonOf (Extract Field and
-      // JSON Process read a source's JSON through it)
-      "lib/edit-plan-saved-output.ts": 2,
+      // the reader itself (its cache), sourceJsonOf (Extract Field and
+      // JSON Process read a source's JSON through it), and usecaseJsonOf (a
+      // use-case node's json pip — extractNodeOutput's branch and sourceJsonOf)
+      "lib/edit-plan-saved-output.ts": 3,
     })
   })
 

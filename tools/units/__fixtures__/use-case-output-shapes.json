@@ -8,6 +8,7 @@
   "emptyStrings": { "generatedVideoUrl": "", "generatedAudioUrl": "https://r/e.mp3", "generatedText": "" },
   "chapters": { "generatedText": "0:00 Intro\n1:02 Main", "generatedJson": [{ "startMs": 0, "title": "Intro" }, { "startMs": 62000, "title": "Main" }] },
   "chaptersReviewed": { "generatedText": "0:00 Intro\n1:02 Main", "generatedJson": [{ "startMs": 0, "title": "Intro" }, { "startMs": 62000, "title": "Main" }], "editedEdl": { "v": 1, "kind": "clips", "basis": "939d46a29b04c4e6", "clips": [{ "keep": true, "hook": "Hi" }, { "keep": false }] } },
+  "chaptersReviewedThree": { "generatedText": "0:00 Intro\n1:02 Main\n3:00 Outro", "generatedJson": [{ "startMs": 0, "title": "Intro" }, { "startMs": 62000, "title": "Main" }, { "startMs": 180000, "title": "Outro" }], "editedEdl": { "v": 1, "kind": "clips", "basis": "ca80176093bd3d86", "clips": [{ "keep": true }, { "keep": false }, { "keep": true, "hook": "Close" }] } },
   "textAndVideo": { "generatedText": "notes", "generatedVideoUrl": "https://r/g.mp4", "generatedJson": [] },
   "scalarPlan": { "generatedJson": "a plan held as text" },
   "nullPlan": { "generatedVideoUrl": "https://r/g.mp4", "generatedJson": null },

@@ -12,6 +12,7 @@
  *   on a partial copy would refuse graphs the editor accepts.
  */
 import { AUDIO_PRODUCER_TYPES, DYNAMIC_HANDLE_NODE_TYPES, DYNAMIC_PRODUCER_TYPES, RENDERED_OUTPUT_HANDLES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
 // Every node's handles: the gen:skills table ∪ the node units' (lib/node-handles.ts).
 import { ALL_NODE_HANDLES as NODE_HANDLES } from "../../../lib/node-handles.js"
 
@@ -109,8 +110,11 @@ export function validateWorkflowEdges(nodes: ReadonlyArray<NodeLike>, edges: Rea
     }
 
     const expected = targetHandle ? MEDIA_TARGET_HANDLES[targetHandle] : undefined
-    if (expected && !DYNAMIC_PRODUCER_TYPES.has(sourceType)) {
-      const produces = expected === "video" ? VIDEO_PRODUCER_TYPES.has(sourceType) : AUDIO_PRODUCER_TYPES.has(sourceType)
+    // A use-case node is a video-or-audio producer for its episode only: its
+    // plan (`json`) or text is no media source (the editor's usecaseDataPipRefused).
+    const dataPip = isUseCaseNodeType(sourceType) && (sourceHandle === "json" || sourceHandle === "text" || (sourceHandle == null && usecaseResultIsText(sourceType)))
+    if (expected && (!DYNAMIC_PRODUCER_TYPES.has(sourceType) || dataPip)) {
+      const produces = !dataPip && (expected === "video" ? VIDEO_PRODUCER_TYPES.has(sourceType) : AUDIO_PRODUCER_TYPES.has(sourceType))
       if (!produces) {
         warnings.push(`edge "${where}": ${sourceType} does not look like a ${expected} source for the "${targetHandle}" input`)
       }
