@@ -32,14 +32,17 @@ import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import {
   EPISODE_TRAILER_DEFAULTS,
   buildEpisodeTrailerGraph,
+  buildSpeakerLayoutGraph,
   buildTightenEpisodeGraph,
   editPlanRenderEstimateLength,
   initialRunNodeIds,
   renderFinalRunSet,
   renderRunOverrides,
   TIGHTEN_EPISODE_DEFAULTS,
+  resolveSpeakerLayoutSettings,
   resolveTightenEpisodeSettings,
   toStoredInlineGraph,
+  usecaseTypeOfBuilder,
 } from "@nodaro/render-rules"
 
 const video = (sec: number) => ({ id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4", metadata: { durationSeconds: sec } } })
@@ -750,6 +753,8 @@ describe("Tighten Episode framed and following faces = its chain + Speaker Frame
     const before = await estimateWorkflowCredits([video(3600), node(framed)], [wire("video")])
     expect(before).toBe(1052)
     expect(await estimateWorkflowCredits([video(3600), node({ ...framed, framingSource: "static" })], [wire("video")])).toBe(before)
+    // Absent reads Tighten's absent default (static) for every viewer.
+    expect(await estimateWorkflowCredits([video(3600), node(framed)], [wire("video")], { framesWithheld: true })).toBe(before)
   })
   it("tracking with no framing prices nothing more (there is nothing to frame)", async () => {
     expect(await estimateWorkflowCredits([video(3600), node({ framingSource: "tracking" })], [wire("video")])).toBe(932)
@@ -780,5 +785,69 @@ describe("Tighten Episode framed and following faces = its chain + Speaker Frame
     // A viewer who may not use Speaker Map: the first recording alone, still following faces.
     const one: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 90], ["speaker-frames", 11], ["speaker-view:complex", 90], fee]
     expect(await estimateWorkflowCredits([...cams, mic, node({ ...tracking, captions: false, cameras: { wide: 3 } })], wires)).toBe(listOf(one))
+  })
+})
+
+/**
+ * Speaker Layout (decided 2026-10-17): no plan, no cut — Transcribe, then
+ * Speaker View over the whole recording (its video mode on one recording;
+ * Speaker Map's whole-recording edit, switched with two or more cameras, on
+ * several), quoted at its complex rate over the recording's length, plus the
+ * fee. Following faces adds Speaker Frames over the same length.
+ */
+describe("Speaker Layout estimate = its chain + 10 (static prices)", () => {
+  const type = usecaseTypeOfBuilder("speakerLayout")
+  const layout = (data: Record<string, unknown>) => ({ id: "sl", type, data: { label: "Speaker Layout", ...data } })
+  const slWire = { source: "rec", target: "sl", sourceHandle: "video", targetHandle: "media" }
+  const fee: Step = ["use-case-fee:speaker-layout"]
+  const static60 = { framingSource: "static" }
+  /** Three 60-minute cameras (the third the wide) and a 60-minute Master audio wired into the node. */
+  const multicamLayout = (data: Record<string, unknown>) => {
+    const cams = [1, 2, 3].map((n) => ({ id: `cam${n}`, type: "upload-video", data: { url: `https://r2/cam${n}.mp4`, metadata: { durationSeconds: 3600 } } }))
+    const mic = { id: "mic", type: "upload-audio", data: { url: "https://r2/master.wav", metadata: { durationSeconds: 3600 } } }
+    const nodes = [...cams, mic, layout({ cameras: { wide: 3 }, ...data })]
+    const edges = [
+      ...cams.map((c) => ({ source: c.id, target: "sl", sourceHandle: "video", targetHandle: "media" })),
+      { source: "mic", target: "sl", sourceHandle: "audio", targetHandle: "masterAudio" },
+    ]
+    return [nodes, edges] as const
+  }
+
+  it("60-min video, even split: Transcribe + Speaker View at its complex rate over the recording + the fee", async () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["speaker-view:complex", 60], fee]
+    expect(await estimateWorkflowCredits([video(3600), layout(static60)], [slWire])).toBe(listOf(steps))
+  })
+  it("unknown length, even split: Speaker View at the 180-minute ceiling (never under-quotes)", async () => {
+    expect(await estimateWorkflowCredits([layout(static60)], [])).toBe(listOf([["elevenlabs-stt"], ["speaker-view:complex", 180], fee]))
+  })
+  it("following faces: Speaker Frames over the bare video (3,600 s × 2 fps: 8 blocks)", async () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["speaker-frames", 8], ["speaker-view:complex", 60], fee]
+    expect(await estimateWorkflowCredits([video(3600), layout({ framingSource: "tracking" })], [slWire])).toBe(listOf(steps))
+  })
+  it("a new node (Automatic, absent alike): following faces while Speaker Frames is available, the even split where it is withheld", async () => {
+    const tracked = await estimateWorkflowCredits([video(3600), layout({ framingSource: "tracking" })], [slWire])
+    expect(await estimateWorkflowCredits([video(3600), layout({ framingSource: "auto" })], [slWire])).toBe(tracked)
+    expect(await estimateWorkflowCredits([video(3600), layout({ framingSource: "auto" })], [slWire], { framesWithheld: true })).toBe(listOf([["elevenlabs-stt"], ["speaker-view:complex", 60], fee]))
+    // No framing source at all reads its type's absent default, auto, before the viewer (decided 2026-10-20).
+    expect(await estimateWorkflowCredits([video(3600), layout({})], [slWire])).toBe(tracked)
+    expect(await estimateWorkflowCredits([video(3600), layout({})], [slWire], { framesWithheld: true })).toBe(listOf([["elevenlabs-stt"], ["speaker-view:complex", 60], fee]))
+  })
+  it("three cameras + Master audio, even split (a viewer who may use Speaker Map): Audio Sync over four sources, Speaker Map, Camera Switch, Speaker View over the master's length", async () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["speaker-view:complex", 60], fee]
+    expect(await estimateWorkflowCredits(...multicamLayout(static60), { multicam: true })).toBe(listOf(steps))
+  })
+  it("three cameras + Master audio, following faces: Speaker Frames over Speaker Map's whole edit on every camera (3 × ⌈3,604 × 2⌉ = 21,624 frames: 22 blocks), never the ceiling", async () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["speaker-frames", 22], ["speaker-view:complex", 60], fee]
+    expect(await estimateWorkflowCredits(...multicamLayout({ framingSource: "tracking" }), { multicam: true })).toBe(listOf(steps))
+  })
+  it("review on: the run ends at the proxy render; its Render final renders it at final over the recording's length, no fee", async () => {
+    expect(await estimateWorkflowCredits([video(3600), layout({ ...static60, reviewBeforeRender: true })], [slWire])).toBe(listOf([["elevenlabs-stt"], ["speaker-view:complex:proxy", 60], fee]))
+    const reviewOn = resolveSpeakerLayoutSettings({ ...static60, reviewBeforeRender: true }, "video")
+    const g = toStoredInlineGraph(buildSpeakerLayoutGraph(reviewOn, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), reviewOn)
+    const runSet = renderFinalRunSet(g.outputMap.renderNodeId, g.nodes, g.edges)
+    const overrides = renderRunOverrides(g.outputMap.renderNodeId, "final", runSet)
+    const nodes = g.nodes.map((n) => ({ id: n.id, type: n.type, data: { ...n.data, ...(overrides[n.id] ?? {}) } }))
+    expect([...runSet]).toEqual(["uc-render"])
+    expect(await estimateRunSetCredits(nodes, g.edges, runSet)).toBe(listOf([["speaker-view:complex", 60]]))
   })
 })

@@ -587,6 +587,20 @@ const pack = await client.edit.clipPack({ mediaUrl: masterUrl, count: 5 })
 const clips = await client.jobs.getStatus(pack.jobId) // output_data.clips: [{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }, …]
 ```
 
+To frame a whole recording by speaker without cutting anything, call
+`client.edit.speakerLayout`: the video is as long as the recording, each
+speaker framed in turn (9:16 with the speakers stacked by default; set
+`targetAspect`, `layout`, `switchType`, `emphasisStyle`).
+Its fee is 11 credits<!-- credits: use-case-fee:speaker-layout --> per run, on top of its steps (quote it with
+`estimateSpeakerLayout`). Not yet enabled on nodaro.ai. It takes the cameras
+of one conversation as Tighten Episode does (each speaker is then shown on
+their own camera), with the same need for Speaker Map.
+
+```ts
+const layout = await client.edit.speakerLayout({ mediaUrl: masterUrl, targetAspect: "9:16" })
+const framed = await client.jobs.getStatus(layout.jobId) // output_data.videoUrl: the framed video
+```
+
 ### Improve a prompt with the Prompt Wizard
 
 `client.promptHelper` is AI assistance for writing prompts for generation

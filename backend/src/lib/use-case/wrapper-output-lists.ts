@@ -44,6 +44,7 @@ import {
   chapterRowsOf,
   clipPackNoneRenderedMessage,
   formatChapterListText,
+  usecasePlanNodeId,
   usecaseResultKind,
   type ClipsOutputMap,
   type StoredInlineGraph,
@@ -59,7 +60,8 @@ export function listOutput(
   executionId: string,
 ): UseCaseWrapperOutput {
   const map = graph.outputMap
-  const planOut = completedOutput(nodeStates, map.planNodeId)
+  const planId = usecasePlanNodeId(map)
+  const planOut = planId !== null ? completedOutput(nodeStates, planId) : undefined
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
   const cameras = usecaseCamerasReport(graph, nodeStates)
   const common = {
@@ -221,8 +223,8 @@ const stateOf = (states: Readonly<Record<string, unknown>>, id: string): unknown
  * it (decided 2026-10-18): a final Trailer some of whose formats rendered,
  * or a final Clip Pack some of whose clips did (or all did, and the captions
  * step failed: the clips come uncaptioned), completes with them, its fee
- * kept. Only a list result does; an episode or chapters run that failed is a
- * failure, and a preview is never kept from a failed run.
+ * kept. Only a list result does; an episode, chapters or layout run that
+ * failed is a failure, and a preview is never kept from a failed run.
  */
 export function usecaseWrapperKeepsPartial(graph: StoredInlineGraph | null, output: UseCaseWrapperOutput): boolean {
   if (!graph || output.quality !== "final") return false
@@ -265,6 +267,8 @@ export function usecaseNoResultMessage(graph: StoredInlineGraph | null, output?:
       return "The plan found no chapters in this recording."
     case "clips":
       return "The plan found no clips in this recording."
+    case "layout":
+      return "The run finished without a framed video."
     default:
       return "The run finished without a result"
   }

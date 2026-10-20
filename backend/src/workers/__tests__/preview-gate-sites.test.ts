@@ -140,6 +140,8 @@ describe("every enqueue producer answers reviewerPresent", () => {
         /(?:\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),[\s\S]*){3}/,
         /reviewerPresent: true,\n\s*mcp_client: session\.clientName,/,
       ],
+      // speaker_layout (its own module, decided 2026-10-17) forwards the caller's own ask, as the verbs above.
+      "lib/mcp/tools/verbs-use-case-speaker-layout.ts": [/\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),/],
     }
     // A file that calls a use-case route names one: a route literal, or the
     // type's route through the registry. A schema field (`reviewerPresent: z…`)

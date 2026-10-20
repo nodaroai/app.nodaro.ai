@@ -21,18 +21,19 @@ import {
 } from "@nodaro/render-rules"
 
 /** The types that take several recordings (written out): their cameras report is their last run's too. */
-const MULTICAM_TYPES: ReadonlySet<string> = new Set(["tighten-episode", "episode-trailer", "clip-pack"])
+const MULTICAM_TYPES: ReadonlySet<string> = new Set(["tighten-episode", "episode-trailer", "clip-pack", "speaker-layout"])
 
 const EXPECTED: { readonly [K in UseCaseResultKind]: readonly string[] } = {
   episode: ["errorCode"],
   chapters: ["errorCode"],
   formats: ["errorCode", "failedFormats"],
   clips: ["errorCode", "failedClips"],
+  layout: ["errorCode"],
 }
 
 describe("a use-case node's run-result keys follow its result kind", () => {
   it("the keys of each kind, beyond the failure code", () => {
-    expect(USE_CASE_RESULT_KEYS).toEqual({ episode: [], chapters: [], formats: ["failedFormats"], clips: ["failedClips"] })
+    expect(USE_CASE_RESULT_KEYS).toEqual({ episode: [], chapters: [], formats: ["failedFormats"], clips: ["failedClips"], layout: [] })
   })
 
   it("there is a use-case node to check", () => {

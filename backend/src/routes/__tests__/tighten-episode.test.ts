@@ -17,7 +17,9 @@ import {
   EPISODE_CHAPTERS_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
   buildEpisodeChaptersGraph,
+  buildSpeakerLayoutGraph,
   buildTightenEpisodeGraph,
+  resolveSpeakerLayoutSettings,
   usecaseDescriptor,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -639,3 +641,124 @@ describe("MCP tighten_episode through the real route", () => {
   })
 })
 
+/** POST /v1/speaker-layout (decided 2026-10-17): the use-case route factory's run of Speaker Layout. */
+describe("speaker-layout route (decided 2026-10-17)", () => {
+  const postSL = (app: Awaited<ReturnType<typeof makeApp>>, payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/speaker-layout", payload })
+  const estimateSL = (app: Awaited<ReturnType<typeof makeApp>>, payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/speaker-layout/estimate", payload })
+  const slGraph = () => {
+    const settings = resolveSpeakerLayoutSettings({ framingSource: "static" }, "video")
+    return { ok: true, settings, sources: { media }, graph: buildSpeakerLayoutGraph(settings, { media: media as never }) }
+  }
+  it("the fee held is use-case-fee:speaker-layout", async () => {
+    m.prepared = slGraph()
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.reserve.mock.calls[0]![3]).toBe("use-case-fee:speaker-layout")
+    expect(m.insertJob.mock.calls[0]![1]).toMatchObject({ provider: "use-case", job_type: "speaker-layout" })
+  })
+  it("takes its settings and the recordings; a plan setting it does not have is stripped, never read", async () => {
+    m.prepared = slGraph()
+    await postSL(await makeApp(), { mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], masterAudioUrl: "https://r2/m.wav", targetAspect: "1:1", layout: "grid", switchType: "cut", emphasisStyle: "border", framingSource: "tracking", reviewBeforeRender: true, planTier: "pro" })
+    const sent = m.prepare.mock.calls[0]![1] as Record<string, unknown>
+    expect(sent).toMatchObject({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], masterAudioUrl: "https://r2/m.wav", targetAspect: "1:1", layout: "grid", switchType: "cut", emphasisStyle: "border", framingSource: "tracking", reviewBeforeRender: true })
+    expect(sent).not.toHaveProperty("planTier")
+  })
+  it("an aspect or a framing source it does not know: 400 validation_error, nothing prepared", async () => {
+    for (const bad of [{ targetAspect: "21:9" }, { framingSource: "faces" }]) {
+      m.prepare.mockClear()
+      const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], ...bad })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(m.prepare).not.toHaveBeenCalled()
+    }
+  })
+  it("an unconnected self-host: 503 nodaro_connection_required before anything (Speaker View is Nodaro-exclusive)", async () => {
+    m.credits = false
+    m.preflight = { status: 503, code: "nodaro_connection_required", message: "Connect to nodaro.ai to run this." }
+    m.prepared = slGraph()
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(503)
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.insertIdem).not.toHaveBeenCalled()
+    expect(m.prepare).not.toHaveBeenCalled()
+  })
+  it("an unknown switch or emphasis: 400 validation_error, nothing prepared (never swapped for the default)", async () => {
+    for (const bad of [{ switchType: "warp" }, { switchType: "" }, { emphasisStyle: "glow" }, { emphasisStyle: "" }, { emphasisStyle: "scale+scale" }]) {
+      m.prepare.mockClear()
+      const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], ...bad })
+      expect(res.statusCode, JSON.stringify(bad)).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(m.prepare).not.toHaveBeenCalled()
+    }
+  })
+  it("every switch and emphasis the builder draws is taken", async () => {
+    for (const ok of [{ switchType: "cut" }, { switchType: "pan" }, { switchType: "zoom" }, { emphasisStyle: "border" }, { emphasisStyle: "none" }, { emphasisStyle: "border+dim" }]) {
+      m.prepared = slGraph()
+      const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], ...ok })
+      expect(res.statusCode, JSON.stringify(ok)).toBe(202)
+    }
+  })
+  it("the estimate never downloads: it reads the cache only, and is never limited", async () => {
+    m.prepared = slGraph()
+    const res = await estimateSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(200)
+    expect(m.limitCalls).toBe(0)
+    const opts = m.prepare.mock.calls[0]![2] as { measureWholeClip: (u: string) => Promise<unknown> }
+    await opts.measureWholeClip("https://r2/ep.mp4")
+    expect(m.peek).toHaveBeenCalledWith("https://r2/ep.mp4")
+    expect(m.measure).not.toHaveBeenCalled()
+  })
+  it("a run on an address not yet measured is limited: over the limit → 429 before anything is prepared, written or held", async () => {
+    m.limited = true
+    m.prepared = slGraph()
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(429)
+    expect(res.json().error.code).toBe("rate_limit_exceeded")
+    expect(m.peek).toHaveBeenCalledWith("https://r2/ep.mp4")
+    expect(m.prepare).not.toHaveBeenCalled()
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.insertIdem).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.estimateCalls).toBe(0)
+  })
+  it("a run under the limit measures as its dispatch does: measureClip(url), nothing else (the same cache key)", async () => {
+    m.prepared = slGraph()
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.limitCalls).toBe(1)
+    const opts = m.prepare.mock.calls[0]![2] as { measureWholeClip: (u: string) => Promise<unknown> }
+    await opts.measureWholeClip("https://r2/ep.mp4")
+    expect(m.measure.mock.calls).toEqual([["https://r2/ep.mp4"]])
+  })
+  it("an address already measured costs no start: the limit is not asked", async () => {
+    m.limited = true
+    m.peek.mockResolvedValue({ durationMs: 60_000, width: 1920, height: 1080 })
+    m.prepared = slGraph()
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.limitCalls).toBe(0)
+  })
+  it("a type that frames no recording whole (Tighten) is never limited and never peeks", async () => {
+    m.limited = true
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "9:16", layout: "stacked" } })
+    expect(res.statusCode).toBe(202)
+    expect(m.limitCalls).toBe(0)
+    expect(m.peek).not.toHaveBeenCalled()
+  })
+  it("several recordings are measured by no one here: never limited", async () => {
+    m.limited = true
+    m.prepared = slGraph()
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.limitCalls).toBe(0)
+    expect(m.peek).not.toHaveBeenCalled()
+  })
+  it("a recording no wider than the frame: preparation's media_shape, before any row or hold", async () => {
+    m.prepared = { ok: false, status: 400, code: "media_shape", message: "Use a wider video." }
+    const res = await postSL(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "media_shape", message: "Use a wider video." })
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+  })
+})

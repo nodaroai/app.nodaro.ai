@@ -1,6 +1,6 @@
 /**
  * The inputs of the podcast use-case runs on the `edit` resource (Tighten
- * Episode, Chapters, Trailer, Clip Pack) and the request body each one sends.
+ * Episode, Chapters, Trailer, Clip Pack, Speaker Layout) and the request body each one sends.
  * Split from `edit.ts`, which holds the methods, the type list and the
  * continue routes; every name here is re-exported from there.
  */
@@ -201,6 +201,43 @@ export interface ClipPackInput extends UseCaseRecordingsInput {
 }
 
 /**
+ * Input for {@link EditResource.speakerLayout} and
+ * {@link EditResource.estimateSpeakerLayout}: one video recording (or the
+ * recordings of one conversation, see {@link UseCaseRecordingsInput}) in, the
+ * whole recording framed by speaker out — the same length, nothing cut. Only
+ * the recording is required; every other field left out takes the node's
+ * default.
+ */
+export interface SpeakerLayoutInput extends UseCaseRecordingsInput {
+  /** The recording — a video URL, up to 3 hours (an audio-only recording is refused). Or `mediaUrls`. */
+  mediaUrl?: string
+  /** The video's shape (default `"9:16"`). With one recording, a video already as narrow as the shape (or narrower) is refused `400 media_shape`. */
+  targetAspect?: EdlTargetAspect
+  /** How the speakers are laid out (default `"stacked"`; one the shape does not draw is snapped to one it does). */
+  layout?: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip"
+  /** The switch at each speaker change (default `"cut"`). */
+  switchType?: SpeakerSwitchId
+  /** How the speaker talking is emphasised (default `"scale"`): `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`. */
+  emphasisStyle?: ClipPackEmphasis
+  /**
+   * How the speakers are followed: `"auto"` (the default) follows faces with
+   * Speaker Frames while it is available to the caller, else splits the frame
+   * evenly; `"static"` splits the frame evenly by speaker; `"tracking"`
+   * follows faces (charged per started block of 1,000 sampled frames;
+   * refused 403 where Speaker Frames is not available to the caller). Faces
+   * aren't named after a speaker yet, so a camera shared by several speakers
+   * keeps the even split.
+   */
+  framingSource?: "auto" | "static" | "tracking"
+  /**
+   * Stop at a quick preview for a person to review; render it at full
+   * quality with {@link EditResource.continueUseCase}
+   * (`mode: "render-final"`, no `editedEdl`: the layout has no cut to change).
+   */
+  reviewBeforeRender?: boolean
+}
+
+/**
  * The body's recordings (`mediaUrls`, then `masterAudioUrl` and `cameras` when
  * given), and the rest of the input as it came: the one mapper every use-case
  * body goes through. Throws before any request when the input names both
@@ -265,5 +302,10 @@ export function trailerBody(input: EpisodeTrailerInput): Record<string, unknown>
 
 /** Clip Pack's body: what the caller set, `framing: null` included (no framing). */
 export function clipPackBody(input: ClipPackInput): Record<string, unknown> {
+  return withRecordings(input)
+}
+
+/** Speaker Layout's body: the recordings, then what the caller set. */
+export function speakerLayoutBody(input: SpeakerLayoutInput): Record<string, unknown> {
   return withRecordings(input)
 }

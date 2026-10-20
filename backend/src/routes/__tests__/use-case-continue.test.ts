@@ -16,14 +16,16 @@ import {
   EPISODE_CHAPTERS_DEFAULTS,
   TIGHTEN_EPISODE_DEFAULTS,
   buildEpisodeChaptersGraph,
+  buildSpeakerLayoutGraph,
   buildTightenEpisodeGraph,
+  resolveSpeakerLayoutSettings,
   isStoredInlineGraph,
   resolveTightenEpisodeSettings,
   toStoredInlineGraph,
   usecaseGraphHash,
 } from "@nodaro/render-rules"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
-import { usecaseNothingKeptRefusal } from "@/lib/use-case/continuation.js"
+import { usecaseRenderFinalEditRefusal } from "@/lib/use-case/continuation.js"
 
 describe("from-failed", () => {
   it("a new wrapper, fee reserved again, the inner run continues from the failed one over what did not finish", async () => {
@@ -517,12 +519,12 @@ describe("a Clip Pack's Render final (a clip set)", () => {
   })
 })
 
-describe("usecaseNothingKeptRefusal: the same refusal, asked up front by an app run's Render final", () => {
+describe("usecaseRenderFinalEditRefusal: the same refusal, asked up front by an app run's Render final", () => {
   const CAM = { id: "cam", url: "https://r2/ep.mp4", kind: "video" }
   const clip = (inMs: number) => ({ version: 1, sources: [CAM], segments: [{ id: `s${inMs}`, video: "cam", inMs, outMs: inMs + 30_000 }] })
   const plan = [clip(0), clip(60_000)]
   const reviewOf = (keep: readonly boolean[]) => ({ v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis(plan), clips: keep.map((k) => ({ keep: k })) })
-  const ask = (editedEdl: unknown, nodeType: "clip-pack" | "tighten-episode" = "clip-pack") => usecaseNothingKeptRefusal({ nodeType, jobId: ID, userId: USER, editedEdl })
+  const ask = (editedEdl: unknown, nodeType: "clip-pack" | "tighten-episode" = "clip-pack") => usecaseRenderFinalEditRefusal({ nodeType, jobId: ID, userId: USER, editedEdl })
 
   it("a review that drops every clip: the continue route's 409, word for word", async () => {
     seedPreviewClipPackRun({ plan })
@@ -541,7 +543,7 @@ describe("usecaseNothingKeptRefusal: the same refusal, asked up front by an app 
     expect(await ask(undefined)).toBeNull()
     expect(await ask({ v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis([clip(0)]), clips: [{ keep: false }] })).toBeNull()
     expect(await ask(reviewOf([false, false]), "tighten-episode")).toBeNull()
-    expect(await usecaseNothingKeptRefusal({ nodeType: "clip-pack", jobId: ID, userId: "someone-else", editedEdl: reviewOf([false, false]) })).toBeNull()
+    expect(await usecaseRenderFinalEditRefusal({ nodeType: "clip-pack", jobId: ID, userId: "someone-else", editedEdl: reviewOf([false, false]) })).toBeNull()
   })
   it("a node that is no clip set is answered from its type alone: its run is never read", async () => {
     // A Tighten Episode run held at its Preview, with a review edit: the run a read would find.
@@ -550,7 +552,7 @@ describe("usecaseNothingKeptRefusal: the same refusal, asked up front by an app 
     const reads = src.graphReads.length
     const tightenEdit = { v: EDITED_EDL_VERSION, kind: "edl", basis: "x", edl: { segments: [], dropped: [] } }
     for (const nodeType of ["tighten-episode", "episode-chapters", "episode-trailer"] as const) {
-      expect(await usecaseNothingKeptRefusal({ nodeType, jobId: ID, userId: USER, editedEdl: tightenEdit })).toBeNull()
+      expect(await usecaseRenderFinalEditRefusal({ nodeType, jobId: ID, userId: USER, editedEdl: tightenEdit })).toBeNull()
     }
     expect(src.graphReads.length).toBe(reads)
     // A clip set is still read, and still refused when its review keeps no clip.
@@ -627,5 +629,70 @@ describe("a run on several recordings and a Master audio", () => {
     m.deniedTypes = ["speaker-map"]
     expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(202)
     expect(m.execute.mock.calls[0]![0].nodeIds).not.toContain("uc-map")
+  })
+})
+
+/**
+ * Speaker Layout's Render final (decided 2026-10-17): after a review-on run
+ * held its proxy preview, the render at Final, no fee. A layout has no plan,
+ * so a final sent with an edit is refused (400 use_case_no_plan) before the
+ * run is even read — nothing written, held or quoted.
+ */
+describe("a Speaker Layout Render final", () => {
+  const seedPreviewLayoutRun = () => {
+    const review = resolveSpeakerLayoutSettings({ framingSource: "static", reviewBeforeRender: true }, "video")
+    const stored = toStoredInlineGraph(buildSpeakerLayoutGraph(review, { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 } }), review)
+    src.wrapper = {
+      id: ID, user_id: USER, status: "completed", provider: "use-case", job_type: "speaker-layout",
+      input_data: { type: "speaker-layout", mode: "run", _executionId: "exec-0", _feeCredits: 10, settings: review, mediaUrl: "https://r2/ep.mp4", durationSec: 3600 },
+    }
+    src.graph = stored
+    src.source = {
+      id: "exec-0", userId: USER, workflowId: null, status: "completed", appVersionId: null, inlineGraphHash: stored.hash,
+      nodeStates: {
+        "uc-source": { status: "completed" }, "uc-transcribe": { status: "completed" },
+        "uc-render": { status: "completed", output: { videoUrl: "https://r2/proxy.mp4", quality: "proxy" } },
+      },
+    }
+    return stored
+  }
+
+  it("renders uc-render at final, no fee, nothing else re-run", async () => {
+    const stored = seedPreviewLayoutRun()
+    const res = await postContinue("speaker-layout", { jobId: ID, mode: "render-final" })
+    expect(res.statusCode).toBe(202)
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.insertJob.mock.calls[0]![1].input_data).toMatchObject({ mode: "render-final", _feeCredits: 0, _finalChain: true, sourceJobId: ID })
+    // The same call a Tighten Render final makes, on the layout's one render.
+    expect(m.execute).toHaveBeenCalledWith(expect.objectContaining({
+      continueFromExecutionId: "exec-0", nodeIds: ["uc-render"], reviewerPresent: false,
+      inputOverrides: { "uc-render": { quality: "final" } },
+    }))
+    expect(m.execute.mock.calls[0]![0]).not.toHaveProperty("continueMode")
+    expect(m.execute.mock.calls[0]![0].graph).toBe(stored)
+  })
+
+  it("with an edit: 400 use_case_no_plan in its own words, nothing written, held or quoted (and the run never read)", async () => {
+    seedPreviewLayoutRun()
+    const res = await postContinue("speaker-layout", { jobId: ID, mode: "render-final", editedEdl: { v: EDITED_EDL_VERSION, kind: "edl", basis: "x", edl: { segments: [], dropped: [] } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "use_case_no_plan", message: "Speaker Layout has no edit to change — run Render final without one." })
+    nothingWritten()
+    expect(src.finalCreditsArgs).toEqual([])
+    expect(src.graphReads).toEqual([])
+  })
+
+  it("an app run's Render final asks the same refusal up front, from the type alone", async () => {
+    const edit = { v: EDITED_EDL_VERSION, kind: "edl", basis: "x", edl: { segments: [], dropped: [] } }
+    expect(await usecaseRenderFinalEditRefusal({ nodeType: "speaker-layout", jobId: ID, userId: USER, editedEdl: edit })).toMatchObject({ status: 400, code: "use_case_no_plan" })
+    expect(await usecaseRenderFinalEditRefusal({ nodeType: "speaker-layout", jobId: ID, userId: USER, editedEdl: undefined })).toBeNull()
+    expect(await usecaseRenderFinalEditRefusal({ nodeType: "speaker-layout", jobId: ID, userId: USER, editedEdl: null })).toBeNull()
+  })
+
+  it("a from-failed of a layout run takes no edit to refuse (the body refuses one there already)", async () => {
+    const res = await postContinue("speaker-layout", { jobId: ID, mode: "from-failed", editedEdl: { x: 1 } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    nothingWritten()
   })
 })

@@ -54,6 +54,7 @@ import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { framingSourceInputShape, framingSourcePayload } from "./verbs-use-case-framing.js"
 import { RECORDINGS_SENTENCE, recordingsInputShape, recordingsPayload } from "./verbs-use-case-recordings.js"
+import { registerSpeakerLayout } from "./verbs-use-case-speaker-layout.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
@@ -156,6 +157,7 @@ const REGISTER_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, (ctx: RegisterCtx)
   chapters: registerMakeChapters,
   trailer: registerMakeTrailer,
   clipPack: registerMakeClipPack,
+  speakerLayout: (ctx) => registerSpeakerLayout(ctx, { priceSentence, refusalText }),
 }
 
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {

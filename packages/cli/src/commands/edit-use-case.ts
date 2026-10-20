@@ -1,6 +1,6 @@
 // `nodaro edit`'s use-case node commands (the podcast nodes that run a whole
 // chain in one step): tighten-episode, episode-chapters, episode-trailer,
-// clip-pack, and continue-use-case for their runs. Registered on the `edit`
+// clip-pack, speaker-layout, and continue-use-case for their runs. Registered on the `edit`
 // command by edit.ts, in this order, after apply-edl.
 import type { Command } from "commander"
 import {
@@ -21,6 +21,7 @@ import {
   type ClipPackInput,
   type EpisodeChaptersInput,
   type EpisodeTrailerInput,
+  type SpeakerLayoutInput,
   type TightenEpisodeInput,
   type TrailerFormat,
   type UseCaseNodeType,
@@ -410,12 +411,93 @@ export function registerUseCaseCommands(cmd: Command): void {
       },
     )
 
+  // ── speaker-layout (podcast use-case node) ─────────────────────────────
+  /** Speaker Layout's framing sources, every one of `SpeakerLayoutInput["framingSource"]` (a Record, so a new one fails typecheck here). */
+  const LAYOUT_FRAMING_SOURCES = Object.keys({ auto: true, static: true, tracking: true } satisfies Record<NonNullable<SpeakerLayoutInput["framingSource"]>, true>)
+  withRecordingsOptions(
+    cmd
+      .command("speaker-layout")
+      .description("frame a whole recording by speaker in one step — the same length, nothing cut (several recordings: each speaker on their own camera)"),
+  )
+    .option("--aspect <aspect>", `the video's shape (default 9:16): ${EDL_TARGET_ASPECTS.join(" | ")}`)
+    .option("--layout <layout>", `how the speakers are laid out (default stacked): ${framingLayouts.join(" | ")}`)
+    .option("--switch <id>", "the switch at each speaker change (default cut): cut | pan | zoom | xfade:<transition>, e.g. xfade:fade")
+    .option("--emphasis <style>", `how the speaker talking is emphasised (default scale): ${EMPHASIS_HELP}`)
+    .option(
+      "--framing-source <source>",
+      `how the speakers are followed: ${LAYOUT_FRAMING_SOURCES.join(" | ")} (default auto: follows faces with Speaker Frames while it is available to you, else the even split; static: the even split; tracking: follows faces, charged per started block of 1,000 sampled frames)`,
+    )
+    .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
+    .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--watch", "poll the job until it finishes, then print the framed video's URL")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts &
+          RecordingsOpts & { aspect?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string; review?: boolean; idempotencyKey?: string },
+      ) => {
+        if (opts.aspect !== undefined && !(EDL_TARGET_ASPECTS as readonly string[]).includes(opts.aspect)) {
+          warn(`--aspect must be ${EDL_TARGET_ASPECTS.join(", ")} (got "${opts.aspect}")`)
+          process.exit(1)
+        }
+        if (opts.layout !== undefined && !framingLayouts.includes(opts.layout)) {
+          warn(`--layout must be ${framingLayouts.join(", ")} (got "${opts.layout}")`)
+          process.exit(1)
+        }
+        if (opts.switch !== undefined && !SPEAKER_SWITCH_IDS.includes(opts.switch)) {
+          warn(`--switch must be one of ${SPEAKER_SWITCH_IDS.join(", ")} (got "${opts.switch}")`)
+          process.exit(1)
+        }
+        if (opts.emphasis !== undefined && !isKnownSpeakerEmphasisStyle(opts.emphasis)) {
+          warn(`--emphasis must be ${EMPHASIS_HELP} (got "${opts.emphasis}")`)
+          process.exit(1)
+        }
+        if (opts.framingSource !== undefined && !LAYOUT_FRAMING_SOURCES.includes(opts.framingSource)) {
+          warn(`--framing-source must be ${LAYOUT_FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
+          process.exit(1)
+        }
+        const recordings = recordingsInput(opts)
+        type In = SpeakerLayoutInput
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.edit.speakerLayout(
+            {
+              ...recordings,
+              ...(opts.aspect ? { targetAspect: opts.aspect as NonNullable<In["targetAspect"]> } : {}),
+              ...(opts.layout ? { layout: opts.layout as NonNullable<In["layout"]> } : {}),
+              ...(opts.switch ? { switchType: opts.switch as NonNullable<In["switchType"]> } : {}),
+              ...(opts.emphasis ? { emphasisStyle: opts.emphasis as NonNullable<In["emphasisStyle"]> } : {}),
+              ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<In["framingSource"]> } : {}),
+              ...(opts.review ? { reviewBeforeRender: true } : {}),
+            },
+            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
+          )
+          const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: "speaker-layout",
+          })
+          if (opts.json) return
+          // The framed video (a preview with --review); --json already printed the whole job.
+          const url = (done?.data.output_data as { videoUrl?: unknown } | null | undefined)?.videoUrl
+          if (done?.data.status === "completed" && typeof url === "string") console.log(url)
+          if (opts.review) console.log(pc.dim(`  render the final after your review: nodaro edit continue-use-case ${result.jobId} --mode render-final`))
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
   // ── continue-use-case (podcast use-case runs) ───────────────────────────
   cmd
     .command("continue-use-case <jobId>")
-    .description("continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job: from where it failed, or its Render final after a review")
+    .description("continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or its Render final after a review")
     .requiredOption("--mode <mode>", "from-failed | render-final")
-    .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
+    .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL); a Speaker Layout run has no plan to edit")
     .option(
       "--type <type>",
       `the run's node type (${USE_CASE_NODE_TYPES.join(" | ")}); without it the job is read for its type, which needs the jobs:read scope`,

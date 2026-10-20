@@ -8,6 +8,7 @@ export const USE_CASE_NULL_SETTINGS: Readonly<Record<string, ReadonlyArray<strin
   "episode-chapters": [],
   "episode-trailer": ["cameras"],
   "clip-pack": ["framing", "cameras"],
+  "speaker-layout": ["cameras"],
 }
 
 /** Per use-case type, the settings its request body takes as an empty string (free text). */
@@ -16,4 +17,5 @@ export const USE_CASE_EMPTY_SETTINGS: Readonly<Record<string, ReadonlyArray<stri
   "episode-chapters": ["instructions", "styleGuide"],
   "episode-trailer": ["instructions", "styleGuide", "cameras"],
   "clip-pack": ["instructions", "styleGuide", "cameras"],
+  "speaker-layout": ["cameras"],
 }

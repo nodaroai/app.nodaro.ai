@@ -8,10 +8,14 @@
 import { z } from "zod"
 import {
   TRAILER_INTRO_CARD_MAX_SEC,
+  speakerViewClipRefusal,
   usecaseDescriptor,
   usecaseDistinctMaster,
+  usecaseIsMulticam,
   usecaseRecordingsKind,
   usecaseRecordingsProblem,
+  speakerViewVideoModeLive,
+  usecaseRenderNodeId,
   type UseCaseDescriptor,
   type UseCaseGraph,
   type UseCaseMediaKind,
@@ -21,6 +25,7 @@ import {
   type UseCaseSources,
 } from "@nodaro/render-rules"
 import { probeMediaDuration, probeMediaStreams } from "../../providers/video/ffmpeg-utils.js"
+import { ClipMeasureError, type MeasuredClip } from "../clip-measure.js"
 import type { UseCaseBody } from "./bodies.js"
 import { usecaseSourcesOf } from "./sources.js"
 import { camerasShape } from "./body-shapes.js"
@@ -55,6 +60,37 @@ export type UseCaseContinueBody = z.infer<typeof usecaseContinueBody>
 export type PreparedUseCase =
   | { readonly ok: true; readonly settings: UseCaseSettings; readonly sources: UseCaseSources; readonly graph: UseCaseGraph }
   | { readonly ok: false; readonly status: 400 | 403 | 503; readonly code: string; readonly message: string }
+
+/**
+ * How a preparation measures the one recording a whole-clip render frames
+ * (decided 2026-10-20). The caller decides, and must: an estimate passes the
+ * cache only (`peekClip`, never a download), a run the measurement the
+ * dispatch reads (`measureClip(url)`, the same cache key, so one download per
+ * recording per hour), behind the start limit. Null is "not measured": no
+ * shape refusal here — the estimate quotes, the run's Speaker View refuses.
+ * A `ClipMeasureError` is the recording's refusal (`media_unreadable`).
+ */
+export interface PrepareUseCaseOptions {
+  readonly measureWholeClip: (url: string) => Promise<MeasuredClip | null>
+}
+
+/**
+ * The one recording a preparation measures, or null when it measures none:
+ * a render that frames one recording whole (`wholeClipRender`) on exactly one
+ * recording with no Master audio, while Speaker View's video mode may run (as
+ * its dispatch, `speakerViewClipOfRun`, gates it — a run that will be refused
+ * anyway downloads nothing). The route asks it before the start limit and
+ * `prepareUseCase` before measuring, so the two never disagree.
+ */
+export function usecaseWholeClipUrl(
+  type: UseCaseNodeType,
+  body: Pick<UseCaseBody, "mediaUrls" | "masterAudioUrl">,
+  videoModeLive: boolean = speakerViewVideoModeLive(),
+): string | null {
+  if (!usecaseDescriptor(type).wholeClipRender || !videoModeLive) return null
+  if (body.mediaUrls.length !== 1 || usecaseDistinctMaster(body.masterAudioUrl, body.mediaUrls)) return null
+  return body.mediaUrls[0]!
+}
 
 const refuse = (code: string, message: string): PreparedUseCase => ({ ok: false, status: 400, code, message })
 
@@ -106,13 +142,15 @@ const isRefusal = (r: object): r is PreparedUseCase => "ok" in r
 
 /**
  * Probe every recording (and any optional input), refuse what the chain cannot
- * run, build the type's graph. No row, no hold. Several recordings (decided
+ * run, build the type's graph. No row, no hold. A render that frames one
+ * recording whole (`wholeClipRender`) is held to Speaker View's source-shape
+ * rule here, once the graph is built. Several recordings (decided
  * 2026-10-17): what each carries is probed first, then the set is refused if
  * the chain cannot run it (`usecaseRecordingsProblem`), before any length is
  * probed; the run's kind is every recording's (`usecaseRecordingsKind`). A
  * Master audio that is one of the recordings is none (`usecaseDistinctMaster`).
  */
-export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): Promise<PreparedUseCase> {
+export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody, opts: PrepareUseCaseOptions): Promise<PreparedUseCase> {
   const d = usecaseDescriptor(type)
   const several = body.mediaUrls.length > 1
   const masterAudioUrl = usecaseDistinctMaster(body.masterAudioUrl, body.mediaUrls)
@@ -177,5 +215,46 @@ export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody): 
     ...(body.introCardUrl ? { introCard: { url: body.introCardUrl, ...(introCardSec !== undefined ? { durationSec: introCardSec } : {}) } } : {}),
   })
   const settings = d.resolveSettings(body, kind, shape)
-  return { ok: true, settings, sources, graph: d.build(settings, sources) }
+  const graph = d.build(settings, sources)
+  // A render that frames one recording whole (Speaker Layout on one recording): Speaker View's own
+  // source-shape rule, up front. Several recordings or a Master audio render Speaker Map's edit, each
+  // camera held to that rule by Speaker View at run time.
+  const wholeClipUrl = usecaseWholeClipUrl(type, body)
+  if (wholeClipUrl !== null) {
+    // The one recording `usecaseWholeClipUrl` names is the run's only one: its graph frames it whole.
+    if (recordings.length !== 1 || usecaseIsMulticam(sources) || recordings[0]!.url !== wholeClipUrl) {
+      throw new Error(`prepareUseCase: a whole-clip render measures exactly one recording (${recordings.length} given)`)
+    }
+    const shapeRefusal = await wholeClipRefusal(wholeClipUrl, graph, opts.measureWholeClip)
+    if (shapeRefusal) return shapeRefusal
+  }
+  return { ok: true, settings, sources, graph }
+}
+
+/**
+ * Speaker View's source-shape rule for the one recording a whole-clip render
+ * frames (`speakerViewClipRefusal`, the same rule its dispatch applies): the
+ * recording measured (by the caller's `measureWholeClip`), then refused when
+ * it is no wider than the render's aspect, in Speaker View's own words. A
+ * recording that cannot be measured is refused with the measurement's
+ * sentence; one not measured is not refused here; any other error is thrown.
+ */
+async function wholeClipRefusal(
+  url: string,
+  graph: UseCaseGraph,
+  measure: PrepareUseCaseOptions["measureWholeClip"],
+): Promise<PreparedUseCase | null> {
+  const renderId = usecaseRenderNodeId(graph.outputMap)
+  const render = renderId === null ? undefined : graph.nodes.find((n) => n.id === renderId)
+  let clip: MeasuredClip | null
+  try {
+    clip = await measure(url)
+  } catch (err) {
+    if (err instanceof ClipMeasureError) return refuse("media_unreadable", err.message)
+    throw err
+  }
+  // Not measured (an estimate on an address not yet measured): the run refuses it.
+  if (clip === null) return null
+  const refusal = speakerViewClipRefusal({ clip, targetAspect: render?.data.targetAspect, requireFaces: false })
+  return refusal ? refuse("media_shape", refusal.message) : null
 }

@@ -3902,6 +3902,10 @@ export type SpeakerViewData = {
    *  transcript's speakers who talk at least 10 s or 5% of the episode, first
    *  heard first (decided 2026-10-14, 2026-10-18). Drawn regions always win. */
   autoRegions?: boolean
+  /** Speaker Layout sets it: with `autoRegions`, speakers under the talk-time
+   *  floor (10 s or 5% of the talk) get no box of their own on one edit too
+   *  (decided 2026-10-18). Never sent to the renderer. */
+  autoRegionsTalkFloor?: boolean
   /** The `speakerRegions` rows the region editor saved as untouched default
    *  thirds (their `speakerRegionKey`s). Default thirds frame but never label
    *  a face track (P3-4 rung 2); every other row counts as drawn. App-only:

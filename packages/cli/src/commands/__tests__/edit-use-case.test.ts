@@ -1,5 +1,5 @@
 // `nodaro edit`'s use-case node commands (tighten-episode, episode-chapters,
-// episode-trailer, clip-pack, continue-use-case), split from edit.test.ts past
+// episode-trailer, clip-pack, speaker-layout, continue-use-case), split from edit.test.ts past
 // its size: the same harness.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { Command } from "commander"
@@ -22,6 +22,7 @@ const mocks = {
   episodeChapters: vi.fn(),
   episodeTrailer: vi.fn(),
   clipPack: vi.fn(),
+  speakerLayout: vi.fn(),
   continueUseCase: vi.fn(),
   jobsGetStatus: vi.fn(),
 }
@@ -39,6 +40,7 @@ vi.mock("../../client.js", () => ({
       episodeChapters: mocks.episodeChapters,
       episodeTrailer: mocks.episodeTrailer,
       clipPack: mocks.clipPack,
+      speakerLayout: mocks.speakerLayout,
       continueUseCase: mocks.continueUseCase,
     },
     jobs: { getStatus: mocks.jobsGetStatus },
@@ -610,6 +612,85 @@ describe("edit clip-pack", () => {
   })
 })
 
+describe("edit speaker-layout (decided 2026-10-17)", () => {
+  it("sends only the recording when nothing else is given", async () => {
+    mocks.speakerLayout.mockResolvedValueOnce({ jobId: "job-l" })
+    await runCmd("edit", "speaker-layout", "--media", "https://r2/ep.mp4", "--json")
+    expect(mocks.speakerLayout).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4" }, undefined)
+    expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "job-l" }, expect.anything())
+  })
+
+  it("maps every flag, the recordings and the camera flags to client.edit.speakerLayout", async () => {
+    mocks.speakerLayout.mockResolvedValueOnce({ jobId: "job-l" })
+    await runCmd(
+      "edit", "speaker-layout",
+      "--media", "https://r2/a.mp4", "--media", "https://r2/b.mp4",
+      "--master-audio", "https://r2/m.wav",
+      "--wide-camera", "2",
+      "--aspect", "1:1",
+      "--layout", "grid",
+      "--switch", "cut",
+      "--emphasis", "scale+border",
+      "--framing-source", "static",
+      "--review",
+      "--idempotency-key", "key-l-12345",
+      "--json",
+    )
+    expect(mocks.speakerLayout).toHaveBeenCalledWith(
+      {
+        mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+        masterAudioUrl: "https://r2/m.wav",
+        cameras: { wide: 2 },
+        targetAspect: "1:1",
+        layout: "grid",
+        switchType: "cut",
+        emphasisStyle: "scale+border",
+        framingSource: "static",
+        reviewBeforeRender: true,
+      },
+      { idempotencyKey: "key-l-12345" },
+    )
+  })
+
+  it("--review prints how to render the final", async () => {
+    mocks.speakerLayout.mockResolvedValueOnce({ jobId: "job-l" })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "speaker-layout", "--media", "https://r2/ep.mp4", "--review")
+      expect(mocks.speakerLayout).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", reviewBeforeRender: true }, undefined)
+      expect(log.mock.calls.map((c) => String(c[0])).join("\n")).toContain("nodaro edit continue-use-case job-l --mode render-final")
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("with --watch, prints the framed video once the run completes", async () => {
+    mocks.speakerLayout.mockResolvedValueOnce({ jobId: "job-l" })
+    mocks.jobsGetStatus.mockResolvedValueOnce({ data: { id: "job-l", status: "completed", output_data: { videoUrl: "https://r2/framed.mp4" } } })
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await runCmd("edit", "speaker-layout", "--media", "https://r2/ep.mp4", "--watch", "--poll-interval", "1")
+      expect(log.mock.calls.map((c) => String(c[0]))).toContain("https://r2/framed.mp4")
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it("refuses an unknown aspect, layout, switch, emphasis or framing source before any request", async () => {
+    for (const [flag, value] of [["--aspect", "2:1"], ["--layout", "mosaic"], ["--switch", "wipe"], ["--emphasis", "glow"], ["--framing-source", "faces"]]) {
+      await expect(runCmd("edit", "speaker-layout", "--media", "https://r2/ep.mp4", flag!, value!)).rejects.toThrow("process.exit(1)")
+    }
+    expect(mocks.speakerLayout).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/^--aspect must be/),
+      expect.stringMatching(/^--layout must be/),
+      expect.stringMatching(/^--switch must be/),
+      expect.stringMatching(/^--emphasis must be/),
+      expect.stringMatching(/^--framing-source must be auto, static, tracking/),
+    ])
+  })
+})
+
 describe("edit continue-use-case", () => {
   it("continues a failed run with only the job and the mode", async () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2", executionId: "exec-2" })
@@ -654,6 +735,12 @@ describe("edit continue-use-case", () => {
     mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
     await runCmd("edit", "continue-use-case", "job-1", "--mode", "render-final", "--type", "clip-pack", "--json")
     expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "render-final", nodeType: "clip-pack" }, undefined)
+  })
+
+  it("--type speaker-layout renders a Speaker Layout's final, with no edit", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
+    await runCmd("edit", "continue-use-case", "job-1", "--mode", "render-final", "--type", "speaker-layout", "--json")
+    expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "render-final", nodeType: "speaker-layout" }, undefined)
   })
 
   it("a run whose type the key can't read asks for --type, not the SDK's nodeType", async () => {

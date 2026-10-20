@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { ALL_CAPTION_STYLES, type CaptionStyle } from "@nodaro/shared/captions"
 import { EDIT_PLAN_MAX_CLIP_COUNT, EDL_TARGET_ASPECTS, SPEAKER_SWITCH_IDS, parseSpeakerEmphasisStyle } from "@nodaro/shared/edl"
 import {
+  CLIP_PACK_ABSENT_FRAMING_SOURCE,
   CLIP_PACK_DEFAULTS,
   CLIP_PACK_DEFAULT_FRAMING,
   CLIP_PACK_MAX_TARGET_SEC,
@@ -187,7 +188,7 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources
 
       {/* Only with a framing chosen; hidden with Framing under the audio lock — never cleared. */}
       {framing && (
-        <UseCaseFramingSourceField value={data.framingSource} onChange={(framingSource) => onUpdate({ framingSource })} absent="static" />
+        <UseCaseFramingSourceField value={data.framingSource} onChange={(framingSource) => onUpdate({ framingSource })} absent={CLIP_PACK_ABSENT_FRAMING_SOURCE} />
       )}
 
       <div className="space-y-1.5">

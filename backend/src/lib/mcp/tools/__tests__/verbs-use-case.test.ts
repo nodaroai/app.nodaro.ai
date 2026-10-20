@@ -64,7 +64,7 @@ describe("registration", () => {
   it("lists every use-case tool under workflows:execute, with the job output schema", async () => {
     const { server } = await setup()
     const names = (await listTools(server)).map((t) => t.name)
-    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_trailer", "make_clip_pack", "continue_use_case"]))
+    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_trailer", "make_clip_pack", "speaker_layout", "continue_use_case"]))
   })
   it("names the gap when a built package carries a builder with no MCP verb", () => {
     h.builder = "no-such-builder"
@@ -79,6 +79,7 @@ describe("registration", () => {
     expect(names).not.toContain("make_chapters")
     expect(names).not.toContain("make_trailer")
     expect(names).not.toContain("make_clip_pack")
+    expect(names).not.toContain("speaker_layout")
     expect(names).not.toContain("continue_use_case")
   })
   it("lists none when this deployment offers no use-case node", async () => {
@@ -89,6 +90,7 @@ describe("registration", () => {
     expect(names).not.toContain("make_chapters")
     expect(names).not.toContain("make_trailer")
     expect(names).not.toContain("make_clip_pack")
+    expect(names).not.toContain("speaker_layout")
     expect(names).not.toContain("continue_use_case")
   })
   it("make_clip_pack is not listed when the Clip Pack node is denied; the others still are, and continue_use_case does not name it", async () => {
@@ -98,7 +100,7 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("make_clip_pack")
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_trailer", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters or Trailer run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters, Trailer or Speaker Layout run as a NEW job/)
     expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Clip Pack/)
   })
   it("make_trailer is not listed when the Trailer node is denied; the others still are", async () => {
@@ -108,7 +110,7 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("make_trailer")
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_clip_pack", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters or Clip Pack run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters, Clip Pack or Speaker Layout run as a NEW job/)
     expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Trailer/)
   })
   it("make_chapters is not listed when the Chapters node is denied; continue_use_case still is, for Tighten Episode", async () => {
@@ -118,7 +120,7 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("make_chapters")
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_trailer", "make_clip_pack", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Trailer or Clip Pack run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Trailer, Clip Pack or Speaker Layout run as a NEW job/)
     expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Chapters/)
   })
   it("tighten_episode is not listed when only Tighten Episode is denied; make_chapters and continue_use_case are", async () => {
@@ -128,12 +130,12 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("tighten_episode")
     expect(names).toEqual(expect.arrayContaining(["make_chapters", "make_trailer", "make_clip_pack", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Chapters, Trailer or Clip Pack run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Chapters, Trailer, Clip Pack or Speaker Layout run as a NEW job/)
   })
   it("continue_use_case names the use-case nodes this deployment offers", async () => {
     const { server } = await setup()
     const tool = (await listTools(server)).find((t) => t.name === "continue_use_case")
-    expect(tool?.description).toMatch(/^Continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a NEW job \(see `mode`\)/)
+    expect(tool?.description).toMatch(/^Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a NEW job \(see `mode`\)/)
     expect(tool?.description).toMatch(/Render final applies only to a run made with a review \(`review_before_render`\); Chapters has none\./)
   })
   it("says a layout without an aspect is ignored, and what each continue mode does", async () => {
@@ -763,7 +765,7 @@ describe("continue_use_case", () => {
     })
     const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
     expect(res.isError).toBe(true)
-    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode, Chapters, Trailer or Clip Pack\)/)
+    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout\)/)
     expect(seen.url).toBeUndefined()
   })
 

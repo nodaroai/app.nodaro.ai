@@ -17,6 +17,8 @@ const probe = vi.hoisted(() => ({
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ probeMediaStreams: probe.streams, probeMediaDuration: probe.duration }))
 import { STATIC_CREDIT_COSTS, estimateWorkflowCredits } from "../credits.js"
 import { prepareUseCase } from "@/lib/use-case/request.js"
+/** None of these types frames a recording whole: nothing is measured. */
+const NO_MEASURE = { measureWholeClip: async () => null }
 import { USE_CASE_BODIES, type UseCaseBody } from "@/lib/use-case/bodies.js"
 
 type Step = readonly [id: string, units?: number]
@@ -37,7 +39,7 @@ beforeEach(() => {
 
 describe("Tighten Episode on three cameras + Master audio, prepared by the server (decided 2026-10-19)", () => {
   it("90 minutes each, probed: the chain quotes the worked figure (1352 with the fee), Edit Plan at 90 minutes", async () => {
-    const prep = await prepareUseCase("tighten-episode", body())
+    const prep = await prepareUseCase("tighten-episode", body(), NO_MEASURE)
     if (!prep.ok) throw new Error(prep.message)
     expect(prep.sources.masterAudio).toMatchObject({ durationSec: 5400 })
     const nodes = prep.graph.nodes.map((n) => ({ id: n.id, type: n.type, data: { ...n.data } }))
@@ -46,7 +48,7 @@ describe("Tighten Episode on three cameras + Master audio, prepared by the serve
   })
   it("the plan's clock is the Master audio's: a longer master quotes Edit Plan (and the render) on its length, not the cameras'", async () => {
     probe.duration.mockImplementation(async (u: string) => (u.endsWith(".wav") ? 5460 : 5400))
-    const prep = await prepareUseCase("tighten-episode", body())
+    const prep = await prepareUseCase("tighten-episode", body(), NO_MEASURE)
     if (!prep.ok) throw new Error(prep.message)
     const nodes = prep.graph.nodes.map((n) => ({ id: n.id, type: n.type, data: { ...n.data } }))
     const ninety = await estimateWorkflowCredits(nodes.map((n) => (n.id === "uc-master" ? { ...n, data: { ...n.data, metadata: { durationSeconds: 5400 } } } : n)), prep.graph.edges)

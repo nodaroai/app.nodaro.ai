@@ -33,6 +33,7 @@ const WIDEST: { readonly [K in UseCaseBuilderKey]: UseCaseSettings } = {
   chapters: {},
   trailer: { formats: [...TRAILER_FORMATS] },
   clipPack: { captions: true, framing: { aspect: "9:16", layout: "stacked" } },
+  speakerLayout: { framingSource: "tracking" },
 }
 
 /**
@@ -55,6 +56,7 @@ function deliveryNodeIds(kind: UseCaseResultKind, graph: UseCaseGraph): readonly
   switch (kind) {
     case "episode":
     case "chapters":
+    case "layout":
       return null
     case "formats":
       if (graph.outputMap.kind !== "formats") throw new Error(`a formats builder built a ${graph.outputMap.kind ?? "episode"} map`)

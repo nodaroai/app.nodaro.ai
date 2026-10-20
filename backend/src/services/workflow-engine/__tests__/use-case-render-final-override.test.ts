@@ -12,6 +12,7 @@ import { describe, it, expect } from "vitest"
 import { applyInputOverridesToNodes } from "../../../workers/apply-input-overrides.js"
 import { usecaseContinuePath } from "@nodaro/render-rules"
 import { continuingGeneration, requestOf } from "../use-case-request.js"
+import { usecaseNoPlanRefusal } from "../../../lib/use-case/continuation.js"
 import { routeUseCaseInput } from "../use-case-inputs.js"
 import type { OrchestratorContext, ResolvedInputs, SimpleEdge, SimpleNode } from "../types.js"
 
@@ -51,6 +52,27 @@ describe("the editor's Render final override reaches the continue route", () => 
     const t1 = nodes.find((n) => n.id === "t1")!
     const request = requestOf(t1, { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as never, ctx, null, USE_CASE_RUN_VIEWER_AS_BEFORE)
     expect(request.path).not.toBe(CONTINUE_PATH)
+  })
+})
+
+describe("a layout has no plan: its Render final never sends an edit (decided 2026-10-20)", () => {
+  it("a Speaker Layout node holding a stray saved edit continues without it, so the route never refuses it 400 use_case_no_plan", () => {
+    const layout: SimpleNode = {
+      id: "sl1", type: "speaker-layout",
+      data: { reviewBeforeRender: true, useCaseJobId: "job-1", editedEdl: EDIT, useCaseContinue: { mode: "render-final", jobId: "job-1" } },
+    }
+    const request = requestOf(layout, {}, ctx, null, USE_CASE_RUN_VIEWER_AS_BEFORE)
+    expect(request.path).toBe(usecaseContinuePath("speaker-layout"))
+    expect(request.body).toMatchObject({ jobId: "job-1", mode: "render-final", nodeId: "sl1" })
+    expect(request.body).not.toHaveProperty("editedEdl")
+    expect(usecaseNoPlanRefusal("speaker-layout", request.body.editedEdl)).toBeNull()
+    // The same stray edit WOULD be refused, had it been sent.
+    expect(usecaseNoPlanRefusal("speaker-layout", EDIT)).toMatchObject({ status: 400, code: "use_case_no_plan" })
+  })
+  it("a type with a plan still sends its saved edit", () => {
+    const nodes = saved()
+    applyInputOverridesToNodes(nodes, { t1: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } }, "all")
+    expect(requestOf(nodes.find((n) => n.id === "t1")!, {}, ctx, null, USE_CASE_RUN_VIEWER_AS_BEFORE).body).toMatchObject({ editedEdl: EDIT })
   })
 })
 

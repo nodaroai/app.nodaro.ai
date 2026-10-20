@@ -46,7 +46,7 @@ export interface UseCaseMediaSource {
   readonly durationSec?: number
 }
 
-export type UseCaseResultKind = "episode" | "clips" | "formats" | "chapters"
+export type UseCaseResultKind = "episode" | "clips" | "formats" | "chapters" | "layout"
 
 export interface UseCaseGraphNode {
   readonly id: string
@@ -108,8 +108,43 @@ export interface FormatsOutputMap extends UseCaseOutputMapBase {
 export interface ChaptersOutputMap extends UseCaseOutputMapBase {
   readonly kind: "chapters"
 }
+/**
+ * No plan, no cut: the recording(s) framed by speaker, the same length
+ * (Speaker Layout, decided 2026-10-17). Not a `UseCaseOutputMapBase`: it has
+ * no plan to name.
+ */
+export interface LayoutOutputMap {
+  readonly kind: "layout"
+  readonly media: UseCaseHandleRef
+  readonly preview: UseCaseHandleRef
+  /** The edit as Speaker View drew it (its `json`). */
+  readonly json: UseCaseHandleRef
+  readonly transcript: UseCaseHandleRef
+  readonly renderNodeId: string
+  /** As on every other map: a multicam run's Audio Sync and Speaker Map, absent on one recording. */
+  readonly multicam?: { readonly sync?: UseCaseHandleRef; readonly map?: UseCaseHandleRef }
+}
 /** Which inner node/handle feeds each wrapper output, and the plan/render the review and Render final address. */
-export type UseCaseOutputMap = EpisodeOutputMap | ClipsOutputMap | FormatsOutputMap | ChaptersOutputMap
+export type UseCaseOutputMap = EpisodeOutputMap | ClipsOutputMap | FormatsOutputMap | ChaptersOutputMap | LayoutOutputMap
+
+/**
+ * The plan a review and a continuation address; null for a kind that has none
+ * (a layout frames the whole recording, with no plan). Every reader of an
+ * output map's plan id reads it here.
+ */
+export function usecasePlanNodeId(map: UseCaseOutputMap): string | null {
+  // Spelled as a narrowing check; keep it in step with usecaseKindHasPlan below.
+  return map.kind === "layout" ? null : map.planNodeId
+}
+
+/**
+ * Whether a result kind has a plan — the type-level twin of
+ * `usecasePlanNodeId`, for a reader that has a type, not a graph (a Render
+ * final's edit is refused up front for a kind without one).
+ */
+export function usecaseKindHasPlan(kind: UseCaseResultKind): boolean {
+  return kind !== "layout"
+}
 
 /** What the run delivers. A P1 snapshot names no kind: an episode. */
 export function usecaseResultKind(map: UseCaseOutputMap): UseCaseResultKind {
@@ -227,8 +262,9 @@ const isEdgeData = (v: unknown): boolean => v === undefined || (isRecord(v) && v
 /** An output map of one of the known result kinds (no kind: a P1 episode). */
 function isOutputMap(m: unknown): boolean {
   if (!isRecord(m)) return false
-  const base = isHandleRef(m.json) && isHandleRef(m.transcript) && typeof m.planNodeId === "string"
-  if (!base) return false
+  if (!isHandleRef(m.json) || !isHandleRef(m.transcript)) return false
+  // Every kind names its plan but a layout, which has none.
+  if (m.kind !== "layout" && typeof m.planNodeId !== "string") return false
   const multicam = m.multicam
   if (multicam !== undefined && !(isRecord(multicam) && (multicam.sync === undefined || isHandleRef(multicam.sync)) && (multicam.map === undefined || isHandleRef(multicam.map)))) return false
   const rendered = isHandleRef(m.preview) && typeof m.renderNodeId === "string"
@@ -242,6 +278,8 @@ function isOutputMap(m: unknown): boolean {
         m.formats.every((f) => isRecord(f) && typeof f.format === "string" && isHandleRef(f.ref))
     case "chapters":
       return true
+    case "layout":
+      return rendered && isHandleRef(m.media)
     default:
       return false
   }

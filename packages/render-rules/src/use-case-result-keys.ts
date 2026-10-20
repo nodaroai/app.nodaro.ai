@@ -13,4 +13,5 @@ export const USE_CASE_RESULT_KEYS: { readonly [K in UseCaseResultKind]: readonly
   chapters: [],
   formats: ["failedFormats"],
   clips: ["failedClips"],
+  layout: [],
 })

@@ -10,7 +10,7 @@
  */
 import { m, makeApp, post } from "./helpers/tighten-episode-route-harness.js"
 import { describe, it, expect } from "vitest"
-import { buildTightenEpisodeGraph, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
+import { USE_CASE_FRAMES_NODE_ID, SPEAKER_FRAMES_PRICED, buildTightenEpisodeGraph, resolveTightenEpisodeSettings, usecaseDescriptor, type UseCaseNodeType } from "@nodaro/render-rules"
 
 describe("POST /v1/tighten-episode: the framing source (decided 2026-10-17)", () => {
   const media = { url: "https://r2/ep.mp4", kind: "video" as const, durationSec: 3600 }
@@ -71,5 +71,67 @@ describe("POST /v1/tighten-episode: the framing source (decided 2026-10-17)", ()
     prepare("static")
     m.deniedTypes = ["speaker-frames"]
     expect((await post(await makeApp(), payload("static"))).statusCode).toBe(202)
+  })
+})
+
+/**
+ * A body that names no framing source (decided 2026-10-20): read through its
+ * type's absent default (the spec's `absentFramingSource`) BEFORE the viewer's
+ * rewrite — Speaker Layout's is `auto`, so it follows faces for a caller who
+ * may use Speaker Frames and is the even split (no 403, no Speaker Frames
+ * step) for one it is withheld from; every type that predates it reads absent
+ * as `static`, whoever asks, and its body reaches preparation untouched.
+ */
+describe("an absent framing source: the type's absent default, then the viewer", () => {
+  const media = { url: "https://r2/ep.mp4", kind: "video" as const, durationSec: 3600 }
+  // Preparation builds the graph from the body the route hands it, so the inner-step check sees what the run would build.
+  const buildFromBody = () =>
+    m.prepare.mockImplementation(async (type: UseCaseNodeType, body: Record<string, unknown>) => {
+      const d = usecaseDescriptor(type)
+      const settings = d.resolveSettings(body, "video")
+      return { ok: true, settings, sources: { media }, graph: d.build(settings, { media }) }
+    })
+  const runGraph = () => (m.execute.mock.calls[0]![0] as { graph: { nodes: Array<{ id: string }> } }).graph
+  const follows = () => runGraph().nodes.some((n) => n.id === USE_CASE_FRAMES_NODE_ID)
+  const postTo = async (type: UseCaseNodeType, payload: Record<string, unknown>) =>
+    (await makeApp()).inject({ method: "POST", url: `/v1/${type}`, payload })
+
+  it("Speaker Layout, Speaker Frames withheld: the even split — no 403, no Speaker Frames step, handed on as static", async () => {
+    buildFromBody()
+    m.deniedTypes = ["speaker-frames"]
+    const res = await postTo("speaker-layout", { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.prepare.mock.calls[0]![1]).toMatchObject({ framingSource: "static" })
+    expect(follows()).toBe(false)
+  })
+
+  it("Speaker Layout, Speaker Frames available: follows faces (while it is priced), the body handed on as sent", async () => {
+    buildFromBody()
+    m.deniedTypes = []
+    const res = await postTo("speaker-layout", { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(202)
+    expect(m.prepare.mock.calls[0]![1]).not.toHaveProperty("framingSource")
+    expect(follows()).toBe(SPEAKER_FRAMES_PRICED)
+  })
+
+  it("Speaker Layout's estimate reads it the same way", async () => {
+    buildFromBody()
+    m.deniedTypes = ["speaker-frames"]
+    const res = await (await makeApp()).inject({ method: "POST", url: "/v1/speaker-layout/estimate", payload: { mediaUrls: ["https://r2/ep.mp4"] } })
+    expect(res.statusCode).toBe(200)
+    expect(m.prepare.mock.calls[0]![1]).toMatchObject({ framingSource: "static" })
+  })
+
+  it("Tighten Episode, framed, whoever asks: static — the body reaches preparation untouched (no framing source added)", async () => {
+    for (const denied of [["speaker-frames"], []]) {
+      buildFromBody()
+      m.deniedTypes = denied
+      m.prepare.mockClear()
+      m.execute.mockClear()
+      const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], framing: { aspect: "9:16", layout: "stacked" } })
+      expect(res.statusCode).toBe(202)
+      expect(m.prepare.mock.calls[0]![1]).not.toHaveProperty("framingSource")
+      expect(follows()).toBe(false)
+    }
   })
 })

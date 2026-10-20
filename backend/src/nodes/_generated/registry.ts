@@ -7,6 +7,7 @@ import { descriptor as unit_episode_chapters } from "../episode-chapters/descrip
 import { descriptor as unit_episode_trailer } from "../episode-trailer/descriptor.generated.js" // unit:episode-trailer
 import { descriptor as unit_gif_to_video } from "../gif-to-video/descriptor.generated.js" // unit:gif-to-video
 import { descriptor as unit_remove_audio } from "../remove-audio/descriptor.generated.js" // unit:remove-audio
+import { descriptor as unit_speaker_layout } from "../speaker-layout/descriptor.generated.js" // unit:speaker-layout
 import { descriptor as unit_speaker_map } from "../speaker-map/descriptor.generated.js" // unit:speaker-map
 import { descriptor as unit_tighten_episode } from "../tighten-episode/descriptor.generated.js" // unit:tighten-episode
 
@@ -16,6 +17,7 @@ export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.as
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

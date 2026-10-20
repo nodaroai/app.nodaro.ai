@@ -37,6 +37,9 @@ export interface SpeakerViewNodeSettings {
   /** Opt-in: with no region drawn, the speakers sharing the edit's one camera
    *  get the region editor's default boxes (speaker-view-auto-regions.ts). */
   readonly autoRegions?: unknown
+  /** With `autoRegions`: a speaker under the talk-time floor (`speakerViewPackSpeakers`) gets no box
+   *  of their own (Speaker Layout sets it, decided 2026-10-18). Never on the wire. */
+  readonly autoRegionsTalkFloor?: unknown
   readonly quality?: unknown
   /** P3.9: `static` | `glide` (P3-10); read only while face tracks are wired. */
   readonly motion?: unknown

@@ -20,17 +20,19 @@ import type { SpeakerMapInput } from "./speaker-map-inputs.js"
 import {
   chaptersBody,
   clipPackBody,
+  speakerLayoutBody,
   tightenBody,
   trailerBody,
   withUseCaseBody,
   type ClipPackInput,
   type EpisodeChaptersInput,
   type EpisodeTrailerInput,
+  type SpeakerLayoutInput,
   type TightenEpisodeInput,
 } from "./edit-use-case-inputs.js"
 
 export { CLIP_PACK_MAX_TARGET_SEC, CLIP_PACK_MIN_TARGET_SEC, TRAILER_FORMATS } from "./edit-use-case-inputs.js"
-export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, TightenEpisodeInput, TrailerFormat, UseCaseRecordingsInput } from "./edit-use-case-inputs.js"
+export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, SpeakerLayoutInput, TightenEpisodeInput, TrailerFormat, UseCaseRecordingsInput } from "./edit-use-case-inputs.js"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -310,7 +312,7 @@ export { USE_CASE_NODE_TYPES, type UseCaseNodeType }
 /** The route that continues a run of `type`. */
 const continuePathOf = (type: UseCaseNodeType): `/v1/${UseCaseNodeType}/continue` => `/v1/${type}/continue`
 
-/** What a use-case run (`tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack`) and `continueUseCase` answer: the run's job to poll. */
+/** What a use-case run (`tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack`, `speakerLayout`) and `continueUseCase` answer: the run's job to poll. */
 export interface UseCaseJobResult extends EditJobResult {
   /** The run's execution (absent on a deduplicated retry). */
   executionId?: string
@@ -342,7 +344,7 @@ export type TightenEpisodeEstimate = UseCaseEstimate
 
 /** Input for {@link EditResource.continueUseCase}. */
 export interface UseCaseContinueInput {
-  /** The run to continue: the job `tightenEpisode`, `episodeChapters`, `episodeTrailer` or `clipPack` (or an earlier continuation) answered. */
+  /** The run to continue: the job `tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack` or `speakerLayout` (or an earlier continuation) answered. */
   jobId: string
   /**
    * `"from-failed"` re-runs what did not finish of a failed run;
@@ -351,7 +353,7 @@ export interface UseCaseContinueInput {
    * a Clip Pack edit that drops every clip is refused `use_case_nothing_kept`).
    */
   mode: "from-failed" | "render-final"
-  /** Render final only: the reviewer's edit of the plan (an EDL). */
+  /** Render final only: the reviewer's edit of the plan (an EDL). A Speaker Layout run has no plan: an edit is refused `400 use_case_no_plan`. */
   editedEdl?: unknown
   /**
    * The run's node type: its continuation goes to `POST /v1/<nodeType>/continue`.
@@ -363,7 +365,7 @@ export interface UseCaseContinueInput {
   nodeType?: UseCaseNodeType
 }
 
-/** Per-call options for the use-case requests (Tighten Episode, Chapters, Trailer, Clip Pack, and their continuations). */
+/** Per-call options for the use-case requests (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout, and their continuations). */
 export interface UseCaseRequestOptions {
   /**
    * Sent as the `Idempotency-Key` header. Reuse the same value when retrying
@@ -401,13 +403,15 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  *   it in each chosen format in one call; the same connection applies.
  * - {@link clipPack} cuts a recording into a pack of short clips (framed and
  *   captioned by default) in one call; the same connection applies.
+ * - {@link speakerLayout} frames a whole recording by speaker (the same
+ *   length, nothing cut) in one call; the same connection applies.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
  *
  * Every request method except the estimates ({@link estimateTightenEpisode},
  * {@link estimateEpisodeChapters}, {@link estimateEpisodeTrailer},
- * {@link estimateClipPack}: a quote, `{ data }`) returns
+ * {@link estimateClipPack}, {@link estimateSpeakerLayout}: a quote, `{ data }`) returns
  * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}); poll the
  * `jobId` with `client.jobs.getStatus(jobId)`.
  */
@@ -593,6 +597,31 @@ export class EditResource {
    */
   estimateClipPack(input: ClipPackInput): Promise<{ data: UseCaseEstimate }> {
     return withUseCaseBody(() => clipPackBody(input), (body) => this.client.request("POST", "/v1/clip-pack/estimate", { body }))
+  }
+
+  /**
+   * Speaker Layout (`POST /v1/speaker-layout`): frame a whole recording by
+   * speaker in one call — the same length, nothing cut. One recording: each
+   * speaker framed in turn; several recordings of one conversation: lined up,
+   * each speaker shown on their own camera. The finished job's
+   * `output_data.videoUrl` is the framed video, `output_data.json` the edit
+   * Speaker View drew. With `reviewBeforeRender` the run stops at a preview;
+   * {@link continueUseCase} (`mode: "render-final"`, no `editedEdl`) renders
+   * it at full quality. Priced as its steps at their own rates plus the listed
+   * per-run fee; quote it first with {@link estimateSpeakerLayout}.
+   */
+  speakerLayout(input: SpeakerLayoutInput, options?: UseCaseRequestOptions): Promise<UseCaseJobResult> {
+    return withUseCaseBody(() => speakerLayoutBody(input), (body) => this.client.request("POST", "/v1/speaker-layout", { body, ...idempotencyHeaders(options) }))
+  }
+
+  /**
+   * What a Speaker Layout run is estimated at (`POST /v1/speaker-layout/estimate`):
+   * its steps at their own rates plus its per-run fee. Nothing is created or
+   * charged. A recording whose length cannot be read is estimated at the
+   * 180-minute ceiling.
+   */
+  estimateSpeakerLayout(input: SpeakerLayoutInput): Promise<{ data: UseCaseEstimate }> {
+    return withUseCaseBody(() => speakerLayoutBody(input), (body) => this.client.request("POST", "/v1/speaker-layout/estimate", { body }))
   }
 
   /**

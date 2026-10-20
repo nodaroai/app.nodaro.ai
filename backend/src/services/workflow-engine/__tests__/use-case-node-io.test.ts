@@ -5,10 +5,12 @@
  * `json`) — live, from saved data, and rebuilt from its wrapper's row. And
  * what a Chapters node hands on: its show notes on `text`, its chapter list
  * on `json`. And what a Clip Pack hands on: its clips as its list, each row
- * its own clip's take.
+ * its own clip's take. And what a Speaker Layout hands on: its framed video,
+ * the edit its render drew on `json` (no plan, so no review applies).
  */
 import { describe, it, expect } from "vitest"
 import { planFanOut } from "@nodaro/shared/workflow"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput, fanOutIterationValue, getPrimaryOutput } from "../output-extractor.js"
 import { retainedOutputOfFailedJob } from "../failed-node-output.js"
@@ -276,5 +278,28 @@ describe("what a Clip Pack node hands on", () => {
   it("saved: its last run's clips are its own list", () => {
     expect(extractSavedNodeOutput(node("cp", "clip-pack", { generatedVideoUrl: "https://r2/c0.mp4", __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"] })))
       .toEqual({ videoUrl: "https://r2/c0.mp4", listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"] })
+  })
+})
+
+describe("what a Speaker Layout node hands on (decided 2026-10-17)", () => {
+  const drawn = { version: 1, sources: [{ id: "c1", url: "https://r2/c1.mp4" }], segments: [{ source: "c1", start: 0, end: 60 }], dropped: [] }
+  // An edit made on that very edit: an Edit Plan's read would apply it; a layout has no plan to review.
+  const edit = { v: EDITED_EDL_VERSION, kind: "edl", basis: editPlanBasis(drawn), edl: { segments: [{ source: "c1", start: 0, end: 5 }], dropped: [] } }
+  it("saved: its framed video and the edit its render drew, as held — never through a review", () => {
+    expect(extractSavedNodeOutput(node("s1", "speaker-layout", { generatedVideoUrl: "https://r2/framed.mp4", generatedJson: drawn, editedEdl: edit })))
+      .toEqual({ videoUrl: "https://r2/framed.mp4", json: drawn })
+    // The same data on a plan-made episode applies the edit: the two readers differ only by result kind.
+    expect(extractSavedNodeOutput(node("t1", "tighten-episode", { generatedVideoUrl: "https://r2/ep.mp4", generatedJson: drawn, editedEdl: edit }))?.json).not.toEqual(drawn)
+    expect(extractSavedNodeOutput(node("s1", "speaker-layout", { generatedVideoUrl: "https://r2/framed.mp4", generatedJson: null }))).toEqual({ videoUrl: "https://r2/framed.mp4" })
+    expect(extractSavedNodeOutput(node("s1", "speaker-layout"))).toBeUndefined()
+  })
+  it("rebuilt from its wrapper's row: the video, the drawn edit, the transcript, the take's stamps and length", () => {
+    const out = buildNodeOutputFromJobData({ videoUrl: "https://r2/framed.mp4", json: drawn, transcript: { words: [] }, quality: "final", renderBasis: "rb", durationSec: 60, _executionId: "e" }, "speaker-layout", "job-1")
+    expect(out).toMatchObject({ videoUrl: "https://r2/framed.mp4", json: drawn, transcript: { words: [] }, quality: "final", renderBasis: "rb", durationSec: 60 })
+  })
+  it("live: json is the drawn edit, any other pip the framed video", () => {
+    const output = { videoUrl: "https://r2/framed.mp4", json: drawn }
+    expect(getPrimaryOutput(output, "speaker-layout", "json")).toBe(JSON.stringify(drawn))
+    expect(getPrimaryOutput(output, "speaker-layout", "media")).toBe("https://r2/framed.mp4")
   })
 })

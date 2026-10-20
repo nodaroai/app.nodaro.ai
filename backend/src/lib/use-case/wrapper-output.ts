@@ -1,7 +1,8 @@
 /**
  * What a use-case wrapper job reports (its `output_data`), read from the
  * inner run's node states through the graph's outputMap, by the result its
- * kind promises — an episode here, a list (clips, formats) or chapters in
+ * kind promises — an episode here, a layout (the framed recording) in
+ * wrapper-output-layout.ts, a list (clips, formats) or chapters in
  * wrapper-output-lists.ts (with why a completed run delivered nothing). Pure.
  *
  * An episode:
@@ -25,6 +26,7 @@
  */
 import {
   runForwardedVideoLengthSec,
+  usecasePlanNodeId,
   usecaseResultKind,
   type EpisodeOutputMap,
   type RunOutputLengths,
@@ -32,6 +34,7 @@ import {
 } from "@nodaro/render-rules"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 import { listOutput } from "./wrapper-output-lists.js"
+import { layoutOutput } from "./wrapper-output-layout.js"
 import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
 
 export { usecaseNoClipsRenderedMessage, usecaseNoResultMessage, usecaseWrapperKeepsPartial } from "./wrapper-output-lists.js"
@@ -47,7 +50,8 @@ function episodeOutput(
   const mediaNodeId = completedOutput(nodeStates, map.media.nodeId) ? map.media.nodeId : map.renderNodeId
   const media = completedOutput(nodeStates, mediaNodeId)
   const render = completedOutput(nodeStates, map.renderNodeId)
-  const planOut = completedOutput(nodeStates, map.planNodeId)
+  const planId = usecasePlanNodeId(map)
+  const planOut = planId !== null ? completedOutput(nodeStates, planId) : undefined
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
   const renderData = graph.nodes.find((n) => n.id === map.renderNodeId)?.data ?? {}
   const quality = (render?.quality ?? renderData.quality) === "proxy" ? "proxy" : "final"
@@ -88,6 +92,8 @@ export function usecaseWrapperOutput(
     case undefined:
     case "episode":
       return episodeOutput(graph, map, nodeStates, executionId)
+    case "layout":
+      return layoutOutput(graph, map, nodeStates, executionId)
     default:
       return listOutput(graph, nodeStates, executionId)
   }
@@ -108,5 +114,8 @@ export function usecaseWrapperHasResult(graph: StoredInlineGraph | null, output:
       return (output.formats?.length ?? 0) > 0 || (output.quality === "proxy" && !!output.videoUrl)
     case "chapters":
       return typeof output.text === "string" && output.text.length > 0
+    case "layout":
+      // The framed recording (a review-on run's is its proxy preview).
+      return !!output.videoUrl
   }
 }

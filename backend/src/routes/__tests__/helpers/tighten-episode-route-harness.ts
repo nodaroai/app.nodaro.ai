@@ -37,6 +37,11 @@ export const m = {
   stampThrows: false,
   guard: "pass" as "pass" | 402 | 413,
   guardCalls: 0,
+  // A whole-clip render's measurement (Speaker Layout): the cache read, the download and the start limit.
+  peek: vi.fn(),
+  measure: vi.fn(),
+  limited: false,
+  limitCalls: 0,
 }
 vi.mock("@/lib/dedup-fingerprint.js", async (orig) => ({
   ...(await orig<typeof import("@/lib/dedup-fingerprint.js")>()),
@@ -51,6 +56,18 @@ vi.mock("@/lib/execution-inline-graph.js", () => ({ ensureInlineGraphColumns: as
 vi.mock("@/lib/use-case/request.js", async (orig) => ({
   ...(await orig<typeof import("@/lib/use-case/request.js")>()),
   prepareUseCase: (...a: unknown[]) => m.prepare(...a),
+}))
+vi.mock("@/lib/clip-measure.js", async (orig) => ({
+  ...(await orig<typeof import("@/lib/clip-measure.js")>()),
+  peekClip: (...a: unknown[]) => m.peek(...a),
+  measureClip: (...a: unknown[]) => m.measure(...a),
+}))
+// Created once at the route's load: it reads `m.limited` per call, and answers as the real limiter does.
+vi.mock("@/lib/clip-measure-limit.js", () => ({
+  clipMeasureStartLimiter: () => async (_req: unknown, reply: { status: (n: number) => { send: (b: unknown) => unknown } }) => {
+    m.limitCalls++
+    if (m.limited) return reply.status(429).send({ error: { code: "rate_limit_exceeded", message: "Too many requests. Limit: 20 per 60s. Try again later." } })
+  },
 }))
 vi.mock("@/lib/use-case/preflight.js", () => ({ usecasePreflight: async () => m.preflight }))
 vi.mock("@/ee/billing/use-case-estimate.js", () => ({
@@ -135,7 +152,10 @@ beforeEach(() => {
   Object.assign(m, {
     credits: true, denied: false, deniedTypes: [], absent: false, authKind: "jwt", prepared: ok(), preflight: null, cover: { ok: true },
     coverArgs: [], estimateCalls: 0, estimatedTypes: [], reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
+    limited: false, limitCalls: 0,
   })
+  m.peek.mockReset().mockResolvedValue(null)
+  m.measure.mockReset().mockResolvedValue({ durationMs: 3_600_000, width: 1920, height: 1080 })
   m.insertJob.mockReset().mockResolvedValue({ data: { id: "job-1" }, error: null })
   m.insertIdem.mockReset().mockResolvedValue({ created: true, row: { id: "job-1" } })
   m.reserve.mockReset().mockResolvedValue({ usageLogId: "ul-1", creditsReserved: 10, watermark: false })

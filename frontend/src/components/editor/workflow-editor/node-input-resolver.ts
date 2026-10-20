@@ -1031,7 +1031,7 @@ export function extractNodeOutputAsList(
   // hook): what filter-list and an Each fan-out read alike. Mirror of the
   // backend's fan-out and list collector.
   if (sourceHandle === "json" && isUseCaseNodeType(node.type)) {
-    const items = jsonListItems(usecaseJsonOf(data));
+    const items = jsonListItems(usecaseJsonOf(node.type, data));
     return items.length > 0 ? items : undefined;
   }
   // A render whose descriptor says so (Apply EDL) on its media handle: its

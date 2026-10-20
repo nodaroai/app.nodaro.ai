@@ -141,9 +141,11 @@ live:
   Its spec (`USE_CASE_SPECS.<builder>`, composed with the node's row into its
   `UseCaseDescriptor`) states, beside its graph, what the engines read about
   the node so no rule names a use-case type:
-  - `outputLength` (`{ fixedSec, after? }`): the length of each video it
-    delivers — a fixed length, after the named input's length when that input
-    is wired. `lib/video-output-length.ts` makes it the node's length rule, and
+  - `outputLength`: the length of each video it delivers — `{ kind: "fixed",
+    fixedSec, after? }`, a fixed length after the named input's length when
+    that input is wired, or `{ kind: "clock" }`, the length of the recording
+    the run is clocked to (the Master audio's when wired, else the longest
+    recording's). `lib/video-output-length.ts` makes it the node's length rule, and
     a use-case type has a rule exactly when its spec declares one
     (`use-case-output-length.test.ts`). Absent for a node that is not a video
     producer.

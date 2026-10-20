@@ -51,14 +51,14 @@ export function routeUseCaseInput(inputs: UseCaseResolvedInputs, targetHandle: s
  * What a use-case node hands on, from what it holds: on `json` its plan with
  * the person's review applied (the Edit Plan's own read, which the server's
  * saved branch makes too — Chapters' chapter list with a clip-set edit
- * applied) — stringified for generic consumers, nothing for a null plan; on `text` its text (Chapters' show notes — also what an edge
+ * applied; a layout's drawn edit as held, `usecaseJsonOf`) — stringified for generic consumers, nothing for a null plan; on `text` its text (Chapters' show notes — also what an edge
  * naming no pip reads on such a type); on any other pip the
  * episode, video or audio. Mirrors the server's saved and live reads
  * (`output-extractor.ts`).
  */
 export function usecaseSavedOutput(nodeType: string, data: Readonly<Record<string, unknown>>, sourceHandle: string | undefined): string | undefined {
   if (sourceHandle === "json") {
-    const plan = usecaseJsonOf(data)
+    const plan = usecaseJsonOf(nodeType, data)
     return plan === undefined ? undefined : JSON.stringify(plan)
   }
   if (sourceHandle === "text" || (sourceHandle === undefined && usecaseResultIsText(nodeType))) {

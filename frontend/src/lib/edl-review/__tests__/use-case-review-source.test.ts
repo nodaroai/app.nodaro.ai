@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { isRenderNodeType, renderPlanPath } from "@nodaro/shared/nodes"
 import { buildEpisodeTrailerGraph, buildTightenEpisodeGraph, resolveClipPackSettings, resolveEpisodeTrailerSettings, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
-import { reviewViewOf, usecaseReviewSource } from "../use-case-review-source"
+import { reviewViewOf, usecaseReviewSource, usecaseReviewable } from "../use-case-review-source"
 import { reviewEntryOf, reviewKindOf, reviewRendersOf, reviewTargetOf } from "../review-entry"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
 import SINGLE_VIEWS from "./fixtures/use-case-review-view-single.json"
@@ -251,6 +251,15 @@ describe("Trailer's review on several recordings (decided 2026-10-17)", () => {
     expect(view.edges.map((e) => `${e.source}>${e.target}.${e.targetHandle}`)).toEqual(expect.arrayContaining(["t1>t1::uc-switch.edl", "t1::uc-switch>t1::uc-render.edl"]))
     expect(renderPlanPath(view.renderId, view.nodes, view.edges as never)?.planId).toBe("t1")
     expect((view.nodes.find((n) => n.id === "t1::uc-switch")!.data as Record<string, unknown>)).toMatchObject({ speakerMapByOrder: { "1": "t1::uc-cam-2" } })
+  })
+})
+
+describe("Speaker Layout is not reviewable (decided 2026-10-17: a layout has no plan)", () => {
+  it("even holding Speaker View's drawn edit on generatedJson, under a review hold", () => {
+    const sl = { id: "sl", type: "speaker-layout", position: at, data: { label: "S", generatedJson: plan, generatedTranscript: transcript, generatedVideoUrl: "https://r2/p.mp4" } }
+    const slWire = { id: "w", source: "rec", target: "sl", sourceHandle: "video", targetHandle: "media" }
+    expect(usecaseReviewable("sl", [rec, sl], [slWire])).toBe(false)
+    expect(usecaseReviewSource("sl", [rec, sl], [slWire])).toBeNull()
   })
 })
 

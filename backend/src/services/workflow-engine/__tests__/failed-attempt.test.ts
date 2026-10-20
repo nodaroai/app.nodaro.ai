@@ -6,7 +6,7 @@
  * removed or non-default new setting still runs the node fresh.
  */
 import { describe, expect, it } from "vitest"
-import { SPEAKER_FRAMES_PRICED, USE_CASE_DESCRIPTORS, usecaseDescriptor, type UseCaseNodeType } from "@nodaro/render-rules"
+import { SPEAKER_FRAMES_PRICED, USE_CASE_DESCRIPTORS, usecaseDescriptor, usecaseFramingForViewer, type UseCaseNodeType } from "@nodaro/render-rules"
 import { attemptMediaKind, attemptRanWithInputs, settingsUnchanged } from "../failed-attempt.js"
 import { freshRunInputs } from "../use-case-request.js"
 import type { ResolvedInputs, SimpleNode } from "../types.js"
@@ -185,6 +185,8 @@ const PINNED_SETTING_KEYS: Readonly<Record<UseCaseNodeType, readonly string[]>> 
     "styleGuide",
     "targetDurationSec",
   ],
+  // A new node (decided 2026-10-17): no attempt was stored before any of its settings, so it carries every one, the Cameras and framing source included.
+  "speaker-layout": ["cameras", "emphasisStyle", "framingSource", "layout", "reviewBeforeRender", "switchType", "targetAspect"],
 }
 
 /** The settings a type that takes several recordings makes for several (or a Master audio): one recording's, plus the Cameras settings. */
@@ -192,6 +194,8 @@ const PINNED_MULTICAM_SETTING_KEYS: Readonly<Partial<Record<UseCaseNodeType, rea
   "tighten-episode": [...PINNED_SETTING_KEYS["tighten-episode"], "cameras"],
   "episode-trailer": [...PINNED_SETTING_KEYS["episode-trailer"], "cameras"],
   "clip-pack": [...PINNED_SETTING_KEYS["clip-pack"], "cameras"],
+  // Speaker Layout always resolves its Cameras settings: several recordings add none.
+  "speaker-layout": PINNED_SETTING_KEYS["speaker-layout"],
 }
 
 /**
@@ -293,5 +297,36 @@ for (const [type, framedData] of FRAMED_DATA) describe(`attemptRanWithInputs (${
       expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: tracked }, "video", fresh(true))).toBe(SPEAKER_FRAMES_PRICED)
       expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: evenSplit }, "video", fresh(true))).toBe(!SPEAKER_FRAMES_PRICED)
     })
+  })
+})
+
+/**
+ * A node with NO framing source on a type whose absent default is `auto`
+ * (Speaker Layout, decided 2026-10-20 — one written by MCP or as workflow
+ * JSON): the route ran the attempt through the type's absent default and the
+ * viewer's rewrite, and the resume match reads the node the same way, so a
+ * from-failed run on such a node resumes its own attempt — never runs fresh
+ * and pays again.
+ */
+describe("an absent-framing Speaker Layout node, held through its type's absent default", () => {
+  const type: UseCaseNodeType = "speaker-layout"
+  const d = usecaseDescriptor(type)
+  const node = { id: "s1", type, data: { label: "Speaker Layout", fieldMappings: {} } } as unknown as SimpleNode
+  const inputs = { useCaseMedia: [{ nodeId: "rec", url: MEDIA }] } as unknown as ResolvedInputs
+  const fresh = (framesAvailable: boolean) => freshRunInputs(node, inputs, { multicam: false, framesAvailable })
+  // What the route stored: the body it was sent (no framing source), read for that viewer, resolved.
+  const ranFor = (framesAvailable: boolean) => d.resolveSettings(usecaseFramingForViewer({ mediaUrls: [MEDIA] }, framesAvailable, d), "video") as Record<string, unknown>
+  it("the node sends no framing source to a viewer with Speaker Frames, and the even split to one without", () => {
+    expect(fresh(true)).not.toHaveProperty("framingSource")
+    expect(fresh(false)).toMatchObject({ framingSource: "static" })
+  })
+  it("a viewer without Speaker Frames resumes the attempt that ran on the even split (no re-charge)", () => {
+    expect(ranFor(false).framingSource).toBe("static")
+    expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: ranFor(false) }, "video", fresh(false))).toBe(true)
+  })
+  it("a viewer with Speaker Frames resumes the attempt that followed faces (while it is priced)", () => {
+    expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: ranFor(true) }, "video", fresh(true))).toBe(true)
+    // And the two readings differ exactly when following faces is priced.
+    expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: ranFor(false) }, "video", fresh(true))).toBe(!SPEAKER_FRAMES_PRICED)
   })
 })

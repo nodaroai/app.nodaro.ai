@@ -7,6 +7,7 @@ import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
 import { unitOutputValue } from "@/lib/unit-compose"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { usecaseSavedOutput } from "@/components/editor/workflow-editor/use-case-io"
+import { sourceJsonOf } from "@/lib/edit-plan-saved-output"
 
 /**
  * The precedence guard for use-case node units (decided 2026-10-18): a node
@@ -81,6 +82,20 @@ describe("what the two readers hand on (pinned values)", () => {
     expect(extractNodeOutput(node("episode-chapters", data), undefined)).toBe("0:00 Intro\n1:02 Main")
     expect(extractNodeOutput(node("episode-chapters", data), "json")).toBe(JSON.stringify([{ startMs: 0, title: "Intro" }, { startMs: 62000, title: "Main" }]))
     for (const pip of ["text", "json", undefined]) expect(unitOutputValue(unit("episode-chapters"), data, pip)).toBeUndefined()
+  })
+
+  // A layout (Speaker Layout) has no plan: its `json` is the edit its render
+  // drew, held as is — an edit on the node is never applied to it, even one
+  // made on that very value (which a Tighten applies). The server's saved
+  // reader pins the same value (use-case-unit-output-parity.test.ts there).
+  it("Speaker Layout, reviewedPlan: the edit its render drew as held, never with the node's edit applied; a Tighten applies it", () => {
+    const data = SHAPES.reviewedPlan
+    expect(extractNodeOutput(node("speaker-layout", data), "json")).toBe(JSON.stringify(data.generatedJson))
+    expect(extractNodeOutput(node("speaker-layout", data), "media")).toBe("https://r/g.mp4")
+    expect(extractNodeOutput(node("tighten-episode", data), "json")).toBe(JSON.stringify({ version: 1, segments: [{ start: 20, end: 30 }], dropped: [] }))
+    // A JSON consumer reading the source's data directly (Extract Field, JSON Process) gets the same value.
+    expect(sourceJsonOf({ type: "speaker-layout", data }, "json")).toEqual(data.generatedJson)
+    expect(sourceJsonOf({ type: "speaker-layout", data: SHAPES.nullPlan }, "json")).toBeUndefined()
   })
 
   // A list result (Trailer's formats): the first delivery is the episode it

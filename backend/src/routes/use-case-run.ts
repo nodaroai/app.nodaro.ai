@@ -19,6 +19,7 @@ import {
   usecaseDistinctMaster,
   usecaseFeeCreditId,
   usecaseFramingForViewer,
+  usecaseFramingIsAuto,
   type UseCaseMediaSource,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -49,17 +50,32 @@ import {
   usecaseKeyedRunIsOwn,
   usecaseUnavailable,
 } from "../lib/use-case/lanes.js"
-import { prepareUseCase, usecaseReviewerPresent, type PreparedUseCase } from "../lib/use-case/request.js"
+import { prepareUseCase, usecaseReviewerPresent, usecaseWholeClipUrl, type PreparedUseCase, type PrepareUseCaseOptions } from "../lib/use-case/request.js"
+import { measureClip, peekClip } from "../lib/clip-measure.js"
+import { clipMeasureStartLimiter } from "../lib/clip-measure-limit.js"
 import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
 import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+
+/**
+ * The per-user limit on starting a measurement of a recording (decided
+ * 2026-10-20): the SAME counter `POST /v1/media/clip-length` and `POST
+ * /v1/speaker-view` draw on, so the doors share one allowance.
+ */
+const measureStartLimit = clipMeasureStartLimiter()
+
+/** An estimate reads the cache only: it never downloads a recording. */
+const ESTIMATE_MEASURE: PrepareUseCaseOptions = { measureWholeClip: (url) => peekClip(url).catch(() => null) }
+/** A run measures as its dispatch does (`measureClip(url)`, no options): the same cache key, so the dispatch reuses it. */
+const RUN_MEASURE: PrepareUseCaseOptions = { measureWholeClip: (url) => measureClip(url) }
 
 type Ready = { readonly userId: string; readonly body: UseCaseBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
 
 /**
  * The refusals both of a type's routes share, in order: body, identity, deny,
  * nesting depth, the snapshot columns, (the run route) a review-on run nobody
- * can review, the connection, then the recording itself. Sends the answer and
+ * can review, the connection, (the run route) the measurement start limit,
+ * then the recording itself. Sends the answer and
  * returns null; nothing is written either way.
  */
 async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: FastifyReply, opts: { readonly run: boolean }): Promise<Ready | null> {
@@ -78,11 +94,12 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([type]) } })
     return null
   }
-  // An `auto` framing source follows faces only for a caller who may use Speaker Frames; for anyone
-  // else it is the even split, silently (decided 2026-10-20). An explicit `tracking` is kept: the
-  // inner-step check below refuses it for such a caller.
+  // An `auto` framing source — sent, or absent on a type whose absent default is `auto` — follows
+  // faces only for a caller who may use Speaker Frames; for anyone else it is the even split,
+  // silently (decided 2026-10-20). An explicit `tracking` is kept: the inner-step check below
+  // refuses it for such a caller. Availability is read only for a body that chooses `auto`.
   const sent = parsed.data as UseCaseBody
-  const body = sent.framingSource === "auto" ? usecaseFramingForViewer(sent, await usecaseFramesAvailable(userId)) : sent
+  const body = usecaseFramingIsAuto(sent, d) ? usecaseFramingForViewer(sent, await usecaseFramesAvailable(userId), d) : sent
   // Several recordings or a Master audio asked for by a caller who may not use Speaker Map: refused before anything is probed.
   const multicamDenied = await usecaseMulticamDenial(type, body, userId)
   if (multicamDenied) {
@@ -125,7 +142,15 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
     return null
   }
-  const prep = await prepareUseCase(type, body)
+  // A run that will measure its one recording (a whole-clip render): a start costs a download, so it is
+  // limited per user — 429 before any probe, row or hold. An address already measured costs nothing.
+  // An estimate never measures (it reads the cache only), so it is never limited.
+  const wholeClipUrl = opts.run ? usecaseWholeClipUrl(type, body) : null
+  if (wholeClipUrl !== null && !(await peekClip(wholeClipUrl).catch(() => null))) {
+    await measureStartLimit(req, reply)
+    if (reply.sent) return null
+  }
+  const prep = await prepareUseCase(type, body, opts.run ? RUN_MEASURE : ESTIMATE_MEASURE)
   if (!prep.ok) {
     reply.status(prep.status).send({ error: { code: prep.code, message: prep.message } })
     return null

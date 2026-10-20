@@ -29,6 +29,7 @@ import {
   usecaseDescriptor,
   usecaseFramingForViewer,
   usecaseRecordingsKind,
+  usecasePlanNodeId,
   usecaseRenameInnerIds,
   usecaseRenderNodeId,
   usecaseRunMaxRecordings,
@@ -78,6 +79,8 @@ export function usecaseReviewable(nodeId: string, nodes: readonly GraphNode[], e
   if (!node || !isUseCaseNodeType(node.type ?? undefined)) return false
   const d = usecaseDescriptor(node.type as UseCaseNodeType)
   if (!d.reviewable) return false
+  // A layout frames the whole recording: no plan to review (its Render final needs none).
+  if (d.resultKind === "layout") return false
   if (planKindOf(dataOf(node).generatedJson) !== (d.resultKind === "clips" ? "clips" : "edl")) return false
   return !usecaseListDriven(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[])
 }
@@ -119,7 +122,7 @@ function takeInputs(node: GraphNode, nodes: readonly GraphNode[], edges: readonl
   const media = recordings[0] ?? { url: "", kind: "video" as const }
   return {
     // A take that kept none reads the framing source as this viewer's run would (`usecaseFramingForViewer`).
-    raw: kept ?? usecaseFramingForViewer(data, usecaseFramesOffered()),
+    raw: kept ?? usecaseFramingForViewer(data, usecaseFramesOffered(), d),
     sources: {
       media,
       ...(recordings.length > 1 ? { moreMedia: recordings.slice(1) } : {}),
@@ -187,7 +190,9 @@ export function usecaseReviewView<N extends GraphNode, E extends GraphEdge>(
   const chain = builtChain(node, nodes, edges)
   const renderNodeId = usecaseRenderNodeId(chain.outputMap)
   if (!renderNodeId) return null
-  const { planNodeId, transcript } = chain.outputMap
+  const planNodeId = usecasePlanNodeId(chain.outputMap)
+  if (planNodeId === null) return null
+  const { transcript } = chain.outputMap
   // What sits between the plan and the render (a multicam run's Camera Switch)
   // is kept; Speaker Map (and the wire the canvas withholds) and Audio Sync are not reviewed.
   const after = reachable(planNodeId, chain.edges, "down")

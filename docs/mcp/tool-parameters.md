@@ -2666,6 +2666,27 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `subreddit` | string |  | Reddit keyword search: search inside this subreddit only. At most 100 characters. |
 | `video_kind` | string |  | YouTube: all (default), videos or shorts. One of `all`, `videos`, `shorts`. |
 
+## `speaker_layout`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) |  | The recording (a video URL; audio-only is refused). Or `media_urls`. |
+| `media_urls` | string (URL)[] |  | Instead of media_url: 1–6 recordings of one conversation (cameras; one may be sound only), in order; without master_audio_url, 2+ cameras keep one place for the sound, so up to 5. With 2 or more the run lines them up, works out who is on which camera and cuts to whoever is talking. From 1 to 6 items. |
+| `master_audio_url` | string (URL) |  | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. Up to 6 recordings in all, this one included. |
+| `cameras` | object |  | With several recordings or a Master audio: the Cameras settings. |
+| `cameras.wide_camera` | integer |  | Which recording (1-based) is the wide shot: shown when a speaker has no camera of their own. From 1 to 6. |
+| `cameras.already_synced` | boolean |  | The recordings already share one clock: skip lining them up. |
+| `cameras.speaker_cameras` | object (map of integer) |  | Who is on which camera: speaker number (1 = the first voice heard) → recording number, 0 = the wide shot. Overrides the automatic map. |
+| `target_aspect` | string |  | The video's shape (default 9:16). One of `16:9`, `9:16`, `1:1`, `4:5`. |
+| `layout` | string |  | How the speakers are laid out (default stacked; one the shape does not draw is snapped). One of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`. |
+| `switch_type` | string |  | The switch at each speaker change (default cut). One of `cut`, `pan`, `zoom`, `xfade:fade`, `xfade:dissolve`, `xfade:dip-to-black`, `xfade:dip-to-white`, `xfade:fadegrays`, `xfade:wipe-left`, `xfade:wipe-right`, `xfade:wipe-up`, `xfade:wipe-down`, `xfade:wipe-tl`, `xfade:wipe-tr`, `xfade:wipe-bl`, `xfade:wipe-br`, `xfade:slide-left`, `xfade:slide-right`, `xfade:slide-up`, `xfade:slide-down`, `xfade:smooth-left`, `xfade:smooth-right`, `xfade:smooth-up`, `xfade:smooth-down`, `xfade:circle-open`, `xfade:circle-close`, `xfade:circle-crop`, `xfade:rect-crop`, `xfade:horz-open`, `xfade:horz-close`, `xfade:vert-open`, `xfade:vert-close`, `xfade:diag-tl`, `xfade:diag-tr`, `xfade:diag-bl`, `xfade:diag-br`, `xfade:hl-slice`, `xfade:hr-slice`, `xfade:vu-slice`, `xfade:vd-slice`, `xfade:reveal-left`, `xfade:reveal-right`, `xfade:reveal-up`, `xfade:reveal-down`, `xfade:cover-left`, `xfade:cover-right`, `xfade:cover-up`, `xfade:cover-down`, `xfade:pixelize`, `xfade:radial`, `xfade:hblur`, `xfade:distance`, `xfade:zoom-in`, `xfade:squeeze-h`, `xfade:squeeze-v`. |
+| `emphasis` | string |  | How the speaker talking is emphasised (default scale): "none", or scale, border, dim joined with "+" (each once). At most 40 characters. |
+| `framing_source` | string |  | How the speakers are followed: "auto" (default) follows faces with Speaker Frames while it is available to you, else the even split; "static" splits the frame evenly by speaker; "tracking" follows faces (charged per started block of 1,000 sampled frames; refused 403 where Speaker Frames is not available to you). Faces aren't named after a speaker yet, so a camera shared by several speakers keeps the even split. One of `auto`, `static`, `tracking`. |
+| `review_before_render` | boolean |  | Stop at a proxy preview for review (default false). |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `speaker_map`
 
 Needs `workflows:execute`.

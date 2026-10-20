@@ -52,6 +52,8 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 
 import { USE_CASE_BODIES, type UseCaseBody } from "../use-case/bodies.js"
 import { prepareUseCase } from "../use-case/request.js"
+/** None of these types frames a recording whole: nothing is measured. */
+const NO_MEASURE = { measureWholeClip: async () => null }
 import { usecaseRunRoutes } from "../../routes/use-case-run.js"
 
 interface GraphRow {
@@ -133,7 +135,7 @@ describe("the server's preparation builds the recorded one-recording rows", () =
     it(`${label(r, i)}: prepareUseCase resolves the same settings and builds the same graph`, async () => {
       probeAs(r)
       const body = USE_CASE_BODIES[r.type].parse(payloadOf(r)) as UseCaseBody
-      const prep = await prepareUseCase(r.type, body)
+      const prep = await prepareUseCase(r.type, body, NO_MEASURE)
       expect(prep.ok, JSON.stringify(prep)).toBe(true)
       if (!prep.ok) return
       expect(plain(prep.settings)).toEqual(r.settings)

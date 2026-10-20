@@ -17,6 +17,7 @@
 import { describe, it, expect } from "vitest"
 import {
   EXTRA_NODE_SETTINGS,
+  MULTICAM_SPEAKER_MAP_TYPE,
   NODE_DATA_FIELDS,
   TIGHTEN_EPISODE_DEFAULTS,
   TRAILER_FORMATS,
@@ -28,6 +29,7 @@ import {
   usecaseRecordings,
   usecaseRecordingsKind,
   usecaseRecordingsProblem,
+  usecasePlanNodeId,
   usecaseRenderNodeId,
   type UseCaseGraph,
   type UseCaseHandleRef,
@@ -126,6 +128,37 @@ function* trailerMulticamSpace(): Generator<SettingsCase & { readonly name: stri
 }
 
 /**
+ * Speaker Layout (decided 2026-10-17): one video recording, or every
+ * recordings set the route lets run × in sync × the wide, each × framing
+ * source × aspect × layout × review. Video only (an audio-only run is refused).
+ */
+function* speakerLayoutSpace(): Generator<SettingsCase & { readonly name: string }> {
+  const one: ReadonlyArray<{ readonly name: string; readonly sources: UseCaseSources }> = [
+    { name: "1 recording", sources: { media: { url: "https://r2/ep", kind: "video" } } },
+    { name: "1 recording (60 min)", sources: { media: { url: "https://r2/ep", kind: "video", durationSec: 3600 } } },
+  ]
+  for (const { name, sources } of [...one, ...MULTICAM_RECORDINGS]) {
+    const kinds = usecaseRecordings(sources).map((r) => r.kind)
+    const multi = kinds.length > 1 || !!sources.masterAudio
+    for (const synced of multi ? [false, true] : [false])
+      for (const wide of multi ? [null, kinds.length] : [null])
+        for (const framingSource of FRAMING_SOURCES)
+          for (const targetAspect of ["9:16", "16:9"])
+            for (const layout of ["stacked", "single", "grid"])
+              for (const reviewBeforeRender of [false, true]) {
+                const cameras = { wide, synced, speakerCameras: {} }
+                if (usecaseRecordingsProblem({ kinds, masterAudio: !!sources.masterAudio, cameras })) continue
+                yield {
+                  name,
+                  raw: { targetAspect, layout, reviewBeforeRender, ...(multi ? { cameras } : {}), ...(framingSource ? { framingSource } : {}) },
+                  kind: usecaseRecordingsKind(kinds)!,
+                  sources,
+                }
+              }
+  }
+}
+
+/**
  * Clip Pack on several recordings or a Master audio (decided 2026-10-17):
  * every recordings set the route lets run × in sync × the wide × the override
  * × framing × framing source × captions × review.
@@ -216,6 +249,7 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
               }
     yield* clipPackMulticamSpace()
   },
+  "speaker-layout": speakerLayoutSpace,
 }
 
 /** Every graph `type`'s descriptor builds over its settings table, with the case it was built from. */
@@ -228,6 +262,7 @@ function* graphsOf(type: UseCaseNodeType): Generator<{ readonly c: SettingsCase;
 function outputRefsOf(g: UseCaseGraph): UseCaseHandleRef[] {
   const m = g.outputMap
   if (m.kind === "chapters") return [m.json, m.transcript]
+  // A layout's json and transcript are its render's (it has no plan).
   const delivered = m.kind === "formats" ? m.formats.map((f) => f.ref) : [m.media]
   return [...delivered, m.preview, m.json, m.transcript]
 }
@@ -267,7 +302,9 @@ function problems(g: UseCaseGraph): string[] {
     if (!n || !ALL_NODE_HANDLES[n.type]?.outputs.includes(ref.handle)) out.push(`outputMap → ${ref.nodeId}.${ref.handle} is not an output`)
   }
   const renderId = usecaseRenderNodeId(g.outputMap)
-  if (!byId.has(g.outputMap.planNodeId) || (renderId !== null && !byId.has(renderId))) out.push("outputMap plan/render id missing")
+  const planId = usecasePlanNodeId(g.outputMap)
+  if ((planId !== null && !byId.has(planId)) || (renderId !== null && !byId.has(renderId))) out.push("outputMap plan/render id missing")
+  if (planId === null && renderId === null) out.push("outputMap names neither a plan nor a render")
   // Kahn: acyclic
   const indeg = new Map(g.nodes.map((n) => [n.id, 0]))
   for (const e of g.edges) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1)
@@ -327,6 +364,24 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
     }
     // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 format sets × 2 review × 2 intro cards, none refused.
     expect(count).toBe(512)
+  })
+
+  it("Speaker Layout (one recording, or every set the route lets run)", () => {
+    let count = 0
+    const d = usecaseDescriptor("speaker-layout")
+    for (const c of speakerLayoutSpace()) {
+      const g = d.build(d.resolveSettings(c.raw, c.kind, shapeOf(c.sources)), c.sources)
+      expect(problems(g), JSON.stringify({ name: c.name, raw: c.raw })).toEqual([])
+      const multi = usecaseRecordings(c.sources).length > 1 || !!c.sources.masterAudio
+      // No plan, no cut; Speaker Map's whole-recording edit on several recordings, switched with two or more cameras.
+      expect(g.nodes.some((n) => n.type === "edit-plan")).toBe(false)
+      expect(g.nodes.some((n) => n.type === MULTICAM_SPEAKER_MAP_TYPE)).toBe(multi)
+      expect(g.nodes.some((n) => n.type === "camera-switch")).toBe(usecaseRecordings(c.sources).filter((r) => r.kind === "video").length >= 2)
+      expect(g.nodes.some((n) => n.type === "speaker-frames")).toBe(c.raw.framingSource === "tracking" || (c.raw.framingSource === undefined && d.resolveSettings(c.raw, c.kind).framingSource === "tracking"))
+      count++
+    }
+    // (2 one-recording sets + 8 recordings sets × 2 synced × 2 wide) × 3 framing sources × 2 aspects × 3 layouts × 2 review, none refused.
+    expect(count).toBe((2 + 8 * 4) * 36)
   })
 
   it("Clip Pack on several recordings or a Master audio (every set the route lets run)", () => {

@@ -33,6 +33,7 @@
 import { toast } from "sonner"
 import {
   usecaseDescriptor,
+  usecaseKindHasPlan,
   usecaseListsItsResult,
   usecaseRunRecordings,
   usecaseSentSettings,
@@ -388,7 +389,8 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
       toast.error(message)
       return Promise.reject(new Error(message))
     }
-    const edit = cont.mode === "render-final" ? (cont.editedEdl ?? data.editedEdl) : undefined
+    // A kind with no plan (a layout) has no edit to send: the server refuses one (`use_case_no_plan`), so a stray edit on the node is never sent.
+    const edit = cont.mode === "render-final" && usecaseKindHasPlan(d.resultKind) ? (cont.editedEdl ?? data.editedEdl) : undefined
     return runUseCaseContinue(node.id, type, { jobId: cont.jobId, mode: cont.mode, ...(edit ? { editedEdl: edit } : {}) }, ctx, opts.idempotencyKey)
   }
   // A fresh run: the previous run is no longer this node's to continue. Its
@@ -408,6 +410,7 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
     master: inputs.useCaseMasterAudio ? { nodeId: inputs.useCaseMasterAudioNodeId ?? "", url: inputs.useCaseMasterAudio } : undefined,
     multicam: usecaseMulticamOffered(),
     framesAvailable: usecaseFramesOffered(),
+    absentFramingSource: d.absentFramingSource,
     // Both engines' rule (usecaseSentSettings): unset not sent, a null or "" only where the body takes one, the rest as held.
     settings: usecaseSentSettings(type, d.settingKeys, data),
   })

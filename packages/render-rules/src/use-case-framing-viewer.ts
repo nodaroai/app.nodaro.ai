@@ -3,7 +3,10 @@
  * new node's default — follows faces only while Speaker Frames is available to
  * the run's viewer. For a viewer it is withheld from, `auto` is the even split,
  * silently: no refusal, nothing extra charged (as a node on several recordings
- * reads its first one for a viewer without Speaker Map). An explicit
+ * reads its first one for a viewer without Speaker Map). A node or body that
+ * names no framing source chooses its type's absent default (its spec's
+ * `absentFramingSource`: `auto` for Speaker Layout, `static` for every node
+ * that predates it, whose runs it keeps byte-identical). An explicit
  * `tracking` is never rewritten: a caller who asks for it while Speaker
  * Frames is withheld is refused up front (the route's inner-step check).
  *
@@ -23,8 +26,9 @@
  * tracking chain, never less than the run's hold). Pure.
  */
 
-/** The step a run that follows faces adds (and whose availability decides `auto`). */
-export const USE_CASE_FRAMES_TYPE = "speaker-frames"
+import { usecaseFramingChoice, type UseCaseFramingSource } from "./use-case-framing"
+
+export { USE_CASE_FRAMES_TYPE } from "./use-case-framing"
 
 /** Who an estimate is for, as a use-case node reads its recordings and framing. Absent fields: as before either existed. */
 export interface UseCaseViewerFlags {
@@ -45,14 +49,31 @@ export interface UseCaseRunViewer {
 /** A viewer's run with neither several recordings nor Speaker Frames: every run exactly as before both existed. */
 export const USE_CASE_RUN_VIEWER_AS_BEFORE: UseCaseRunViewer = Object.freeze({ multicam: false, framesAvailable: false })
 
+/** What a type reads a node or body with no framing source as: its spec's `absentFramingSource` (use-case-specs.ts). */
+export interface UseCaseFramingDefault {
+  readonly absentFramingSource: UseCaseFramingSource
+}
+
 /**
- * `settings` as the viewer's run reads them: an `auto` framing source is the
- * even split (`static`) when Speaker Frames is not available to the viewer;
- * anything else — and every settings object when it is — is returned as given
- * (the same object, so a reader that keeps its key order sees no change).
+ * Whether `settings` choose `auto` for a type: their own framing source, or —
+ * when they name none (or one that is not a framing source) — the type's
+ * absent default. Only such settings are read differently per viewer.
  */
-export function usecaseFramingForViewer<T extends Readonly<Record<string, unknown>>>(settings: T, framesAvailable: boolean): T {
-  if (framesAvailable || settings.framingSource !== "auto") return settings
+export function usecaseFramingIsAuto(settings: Readonly<Record<string, unknown>>, type: UseCaseFramingDefault): boolean {
+  return usecaseFramingChoice(settings.framingSource, type.absentFramingSource) === "auto"
+}
+
+/**
+ * `settings` as the viewer's run reads them: a framing source that chooses
+ * `auto` — written, or absent on a type whose absent default is `auto`
+ * (`type.absentFramingSource`, its spec's; decided 2026-10-20) — is the even
+ * split (`static`) when Speaker Frames is not available to the viewer;
+ * anything else — and every settings object when it is — is returned as given
+ * (the same object, so a reader that keeps its key order sees no change, and
+ * a type whose absent default is `static` never gains the key).
+ */
+export function usecaseFramingForViewer<T extends Readonly<Record<string, unknown>>>(settings: T, framesAvailable: boolean, type: UseCaseFramingDefault): T {
+  if (framesAvailable || !usecaseFramingIsAuto(settings, type)) return settings
   return { ...settings, framingSource: "static" }
 }
 

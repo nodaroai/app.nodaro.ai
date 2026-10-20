@@ -17,6 +17,7 @@ import {
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseFanOutRefusalOf,
+  usecaseKindHasPlan,
   usecaseRunRecordings,
   usecaseSentSettings,
   type UseCaseNodeType,
@@ -100,7 +101,8 @@ export function failedAttemptOf(
  * (`usecaseRunRecordings`): several recordings and a master only when
  * `viewer.multicam` (the run's viewer may use Speaker Map, `usecaseMulticamAvailable`),
  * else the first recording alone, exactly as before multicam; an `auto`
- * framing source is sent as the even split unless `viewer.framesAvailable`
+ * framing source (written, or absent on a type whose absent default is
+ * `auto`) is sent as the even split unless `viewer.framesAvailable`
  * (`usecaseFramingForViewer`). Key order: the
  * recordings, music, intro card, master, then the settings. Throws when no
  * recording is wired. Also what a failed attempt's inputs are held to before
@@ -126,6 +128,7 @@ export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs,
     master: resolvedInputs.useCaseMasterAudio ? { nodeId: resolvedInputs.useCaseMasterAudioNodeId ?? "", url: resolvedInputs.useCaseMasterAudio } : undefined,
     multicam: viewer.multicam,
     framesAvailable: viewer.framesAvailable,
+    absentFramingSource: d.absentFramingSource,
     settings: sent,
   })
   if (run.recordings.length === 0) throw new Error(`${d.label} needs a recording wired into Media`)
@@ -164,9 +167,10 @@ export function requestOf(
   }
   const cont = continuationOf(data)
   if (cont) {
-    // The reviewer's edit of the plan: what the person authored, sent with a Render final only.
+    // The reviewer's edit of the plan: what the person authored, sent with a Render final only — and
+    // only by a type that has a plan to edit (a layout has none: a stray saved edit is never sent).
     const edited = data.editedEdl
-    const edit = cont.mode === "render-final" && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
+    const edit = cont.mode === "render-final" && usecaseKindHasPlan(d.resultKind) && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
     return { path: continuePath, label: d.label, body: { jobId: cont.jobId, mode: cont.mode, ...edit, ...lane } }
   }
   const fresh = (): UseCaseRequest => ({ path: d.route, label: d.label, body: { ...freshRunInputs(node, resolvedInputs, viewer), ...lane } })

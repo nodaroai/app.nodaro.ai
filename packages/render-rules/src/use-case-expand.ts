@@ -34,6 +34,7 @@ import {
   initialRunNodeIds,
   isUseCaseNodeType,
   usecaseFeeCreditId,
+  usecasePlanNodeId,
   usecaseRenderNodeId,
   type UseCaseFeeCreditId,
   type UseCaseGraph,
@@ -268,9 +269,9 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     const raw = (u.data ?? {}) as Readonly<Record<string, unknown>>
     // A Render final renders with the settings of the run it finishes (the
     // preview's, carried on the continuation), never the node's later ones.
-    // The framing source as the viewer's run reads it (`usecaseFramingForViewer`); a Render final's
-    // stored settings are already resolved (never `auto`).
-    const own = usecaseFramingForViewer(raw, framesAvailable)
+    // The framing source as the viewer's run reads it (`usecaseFramingForViewer`, an absent one through
+    // the type's own default); a Render final's stored settings are already resolved (never `auto`).
+    const own = usecaseFramingForViewer(raw, framesAvailable, d)
     const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? own), reviewBeforeRender: false } : own, kind, shape)
     // Recordings 2..n are placeholders too, each of its own kind (absent for one recording).
     const moreMedia: UseCaseSources["moreMedia"] = wires.length > 1 ? wires.slice(1).map((w) => ({ url: PLACEHOLDER_URL, kind: kindOf(w) })) : undefined
@@ -370,13 +371,15 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     const planResult = final
       ? { ...(ran.generatedJson !== undefined ? { generatedJson: ran.generatedJson } : {}), ...(ran.editedEdl !== undefined ? { editedEdl: ran.editedEdl } : {}) }
       : {}
+    // A layout has no plan: nothing is seeded.
+    const planId = usecasePlanNodeId(g.outputMap)
     for (const n of g.nodes) {
       if (replaced.has(n.id) || !runs(n.id)) continue
       if (!finalPart || finalPart.has(n.id)) ids.push(inner(u.id, n.id))
       const renamed = usecaseRenameInnerIds(n.data, rename, builtIds)
       const soundSec = n.id === USE_CASE_MASTER_NODE_ID ? soundLengthSec.get(u.id) : undefined
       const data = soundSec === undefined ? renamed : { ...renamed, metadata: { ...(renamed.metadata as Record<string, unknown> | undefined), durationSeconds: soundSec } }
-      outNodes.push({ id: inner(u.id, n.id), type: n.type, data: n.id === g.outputMap.planNodeId ? { ...data, ...planResult } : data })
+      outNodes.push({ id: inner(u.id, n.id), type: n.type, data: n.id === planId ? { ...data, ...planResult } : data })
     }
     for (const e of g.edges) {
       if (!runs(e.target) || (!replaced.has(e.source) && !runs(e.source))) continue

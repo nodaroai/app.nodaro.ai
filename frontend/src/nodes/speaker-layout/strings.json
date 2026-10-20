@@ -1,0 +1,17 @@
+{
+  "keys": {
+    "node.speakerLayoutConnectRecording": {"en": "Connect a video recording", "he": "חברו הקלטת וידאו", "ja": "動画の録画を接続してください", "ko": "동영상 녹화를 연결하세요", "pt-br": "Conecte uma gravação de vídeo"},
+    "node.speakerLayoutVideo": {"en": "Framed video", "he": "וידאו ממוסגר", "ja": "フレーミングした動画", "ko": "프레이밍된 동영상", "pt-br": "Vídeo enquadrado"},
+    "node.speakerLayoutEdit": {"en": "Edit (EDL)", "he": "עריכה (EDL)", "ja": "編集（EDL）", "ko": "편집(EDL)", "pt-br": "Edição (EDL)"},
+    "proccfg.speakerLayoutHint": {"en": "Frames the whole recording by speaker — the same length, nothing cut.", "he": "ממסגר את כל ההקלטה לפי דובר — באותו אורך, בלי לחתוך דבר.", "ja": "録画全体を話者ごとにフレーミングします。長さはそのままで、何もカットしません。", "ko": "녹화 전체를 화자별로 프레이밍합니다. 길이는 그대로이며 아무것도 자르지 않습니다.", "pt-br": "Enquadra a gravação inteira por quem fala — mesma duração, sem cortes."},
+    "proccfg.speakerLayoutAspect": {"en": "Shape", "he": "צורה", "ja": "形", "ko": "비율", "pt-br": "Formato"},
+    "proccfg.speakerLayoutLayout": {"en": "Layout", "he": "פריסה", "ja": "レイアウト", "ko": "레이아웃", "pt-br": "Layout"},
+    "proccfg.speakerLayoutReview": {"en": "Review before render", "he": "סקירה לפני רינדור", "ja": "レンダリング前に確認", "ko": "렌더링 전에 검토", "pt-br": "Revisar antes de renderizar"},
+    "proccfg.speakerLayoutReviewHint": {"en": "Renders a 720p Preview first; choose Render final to render it at full quality.", "he": "מרנדר קודם תצוגה מקדימה ב-720p; בחרו ברינדור סופי כדי לרנדר אותה באיכות מלאה.", "ja": "まず720pのプレビューをレンダリングします。「最終レンダリング」を選ぶとフル品質でレンダリングします。", "ko": "먼저 720p 미리보기를 렌더링합니다. “최종 렌더링”을 선택하면 최고 품질로 렌더링합니다.", "pt-br": "Renderiza primeiro uma prévia em 720p; escolha “Renderização final” para renderizá-la em qualidade total."}
+  },
+  "labels": {
+    "Speaker Layout": {"he": "פריסת דוברים", "ja": "スピーカーレイアウト", "ko": "화자별 화면 배치", "pt-br": "Layout de locutores"},
+    "Recordings": {"he": "הקלטות", "ja": "録音", "ko": "녹음", "pt-br": "Gravações"},
+    "Master audio": {"he": "אודיו ראשי", "ja": "マスターオーディオ", "ko": "마스터 오디오", "pt-br": "Áudio principal"}
+  }
+}

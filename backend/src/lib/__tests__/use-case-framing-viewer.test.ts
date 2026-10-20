@@ -11,6 +11,7 @@ import {
   USE_CASE_FRAMES_NODE_ID,
   USE_CASE_RUN_VIEWER_AS_BEFORE,
   expandUseCaseNodes,
+  USE_CASE_NODE_TYPES,
   usecaseDescriptor,
   usecaseFramesAvailableFor,
   usecaseFramingForViewer,
@@ -18,20 +19,42 @@ import {
 } from "@nodaro/render-rules"
 
 const FRAMED = { framing: { aspect: "9:16", layout: "stacked" } } as const
+/** A type whose absent default is `static` (every type that predates `auto`). */
+const STATIC_ABSENT = { absentFramingSource: "static" } as const
+/** A type whose absent default is `auto` (Speaker Layout). */
+const AUTO_ABSENT = { absentFramingSource: "auto" } as const
 
 describe("usecaseFramingForViewer", () => {
   it("auto, Speaker Frames withheld: the even split", () => {
-    expect(usecaseFramingForViewer({ ...FRAMED, framingSource: "auto" }, false)).toEqual({ ...FRAMED, framingSource: "static" })
+    expect(usecaseFramingForViewer({ ...FRAMED, framingSource: "auto" }, false, STATIC_ABSENT)).toEqual({ ...FRAMED, framingSource: "static" })
   })
   it("auto, Speaker Frames available: the same object (the resolver follows faces)", () => {
     const s = { ...FRAMED, framingSource: "auto" }
-    expect(usecaseFramingForViewer(s, true)).toBe(s)
+    expect(usecaseFramingForViewer(s, true, STATIC_ABSENT)).toBe(s)
   })
-  it("never rewrites an explicit choice or a node without one", () => {
+  it("never rewrites an explicit choice, nor a node without one on a type whose absent default is static", () => {
     for (const s of [{ ...FRAMED, framingSource: "tracking" }, { ...FRAMED, framingSource: "static" }, { ...FRAMED }, {}]) {
-      expect(usecaseFramingForViewer(s, false)).toBe(s)
-      expect(usecaseFramingForViewer(s, true)).toBe(s)
+      expect(usecaseFramingForViewer(s, false, STATIC_ABSENT)).toBe(s)
+      expect(usecaseFramingForViewer(s, true, STATIC_ABSENT)).toBe(s)
     }
+  })
+  it("absent on a type whose absent default is auto: the even split for a viewer without Speaker Frames, the same object for one with", () => {
+    const s = { ...FRAMED }
+    expect(usecaseFramingForViewer(s, false, AUTO_ABSENT)).toEqual({ ...FRAMED, framingSource: "static" })
+    expect(usecaseFramingForViewer(s, true, AUTO_ABSENT)).toBe(s)
+    // A value that is not a framing source is read as absent.
+    expect(usecaseFramingForViewer({ framingSource: "nonsense" }, false, AUTO_ABSENT)).toEqual({ framingSource: "static" })
+    // An explicit choice is never rewritten, whatever the type's default.
+    for (const t of [{ framingSource: "tracking" }, { framingSource: "static" }]) expect(usecaseFramingForViewer(t, false, AUTO_ABSENT)).toBe(t)
+  })
+  it("each type's absent default is its spec's: Speaker Layout auto, every type that predates it static", () => {
+    expect(Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => [t, usecaseDescriptor(t).absentFramingSource]))).toEqual({
+      "tighten-episode": "static",
+      "episode-chapters": "static",
+      "episode-trailer": "static",
+      "clip-pack": "static",
+      "speaker-layout": "auto",
+    })
   })
   it("an estimate given no answer reads Speaker Frames as available (never under the run's hold)", () => {
     expect(usecaseFramesAvailableFor(undefined)).toBe(true)
@@ -47,10 +70,10 @@ describe("usecaseFramingForViewer", () => {
 describe("Tighten's resolved settings for the viewer", () => {
   const d = usecaseDescriptor("tighten-episode")
   it("auto for a viewer without Speaker Frames resolves exactly as a node with no framing source", () => {
-    expect(d.resolveSettings(usecaseFramingForViewer({ ...FRAMED, framingSource: "auto" }, false), "video")).toEqual(d.resolveSettings({ ...FRAMED }, "video"))
+    expect(d.resolveSettings(usecaseFramingForViewer({ ...FRAMED, framingSource: "auto" }, false, d), "video")).toEqual(d.resolveSettings({ ...FRAMED }, "video"))
   })
   it("auto for a viewer with Speaker Frames follows faces (while it is priced)", () => {
-    const s = d.resolveSettings(usecaseFramingForViewer({ ...FRAMED, framingSource: "auto" }, true), "video") as { framingSource?: string }
+    const s = d.resolveSettings(usecaseFramingForViewer({ ...FRAMED, framingSource: "auto" }, true, d), "video") as { framingSource?: string }
     expect(s.framingSource).toBe(SPEAKER_FRAMES_PRICED ? "tracking" : undefined)
   })
 })
@@ -58,7 +81,7 @@ describe("Tighten's resolved settings for the viewer", () => {
 describe("both engines' one body rule (usecaseRunRecordings) reads the viewer's framing", () => {
   const wired = [{ nodeId: "rec", url: "https://r2/ep.mp4" }]
   const run = (settings: Record<string, unknown>, framesAvailable: boolean) =>
-    usecaseRunRecordings({ wired, data: {}, maxRecordings: 6, takesMaster: true, multicam: false, framesAvailable, settings })
+    usecaseRunRecordings({ wired, data: {}, maxRecordings: 6, takesMaster: true, multicam: false, framesAvailable, absentFramingSource: "static", settings })
   it("sends auto as the even split to a viewer without Speaker Frames", () => {
     expect(run({ ...FRAMED, framingSource: "auto" }, false).settings).toEqual({ ...FRAMED, framingSource: "static" })
   })

@@ -25,7 +25,7 @@ This recipe covers:
 Each of them ends the same way: **render a Preview, review it with the user, then render
 the final.**
 
-## One step: Tighten Episode, Clip Pack, Trailer, Chapters
+## One step: Tighten Episode, Clip Pack, Trailer, Chapters, Speaker Layout
 
 Each podcast use-case has a one-node verb. Reach for it first when it is in your tool list:
 
@@ -53,6 +53,15 @@ Each podcast use-case has a one-node verb. Reach for it first when it is in your
 - **`make_chapters`** — "chapters for this episode" is one call: pass the recording's `media_url` (transcribe → plan
   in `chapters` mode; nothing renders). The show notes are `output_data.text` (one `0:00 Title` line per chapter),
   the list is `output_data.json` (`[{ startMs, title }]`). A run that finds no chapters fails, and its fee is refunded.
+- **`speaker_layout`** — "make this whole episode vertical, framed on the speakers" (nothing cut) is one call: pass the
+  recording's `media_url` (a video) and, optionally, `target_aspect` (default 9:16), `layout` (default stacked),
+  the switch at each speaker change (default cut), `emphasis` (default scale). It runs transcribe → Speaker View over the whole recording; the
+  framed video is `output_data.videoUrl`, as long as the recording. `framing_source` defaults to auto (follows faces
+  where Speaker Frames is available, else the even split). A conversation on several cameras is one call too:
+  `media_urls` + `master_audio_url` (and `cameras`) — each speaker is shown on their own camera; it needs Speaker Map
+  (refused `403 node_not_available` where it is not available). Set `review_before_render: true` to stop at a preview;
+  then `continue_use_case` with `mode: "render-final"` and no `edited_edl` (there is no cut to edit). To cut the episode
+  as well, use `tighten_episode` with a framing instead. Not yet enabled on nodaro.ai.
 
 A failed run of any of them continues with `continue_use_case` and `mode: "from-failed"` — finished steps are kept. The
 primitive chains below are the advanced path: use them when you need control the one-node verbs do not give (several

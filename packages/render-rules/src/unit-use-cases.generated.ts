@@ -7,4 +7,5 @@ export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly
   { type: "episode-chapters", builder: "chapters", label: "Chapters", inputs: ["media"] }, // unit:episode-chapters
   { type: "episode-trailer", builder: "trailer", label: "Trailer", inputs: ["media", "introCard", "masterAudio"] }, // unit:episode-trailer
   { type: "clip-pack", builder: "clipPack", label: "Clip Pack", inputs: ["media", "masterAudio"] }, // unit:clip-pack
+  { type: "speaker-layout", builder: "speakerLayout", label: "Speaker Layout", inputs: ["media", "masterAudio"] }, // unit:speaker-layout
 ]

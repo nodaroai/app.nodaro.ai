@@ -47,7 +47,7 @@ import { CLIP_PACK_NODE_IDS, clipPackPlanNode, clipPackRenderNode, withClipPackT
 import { buildClipPackMulticamGraph } from "./clip-pack-multicam"
 import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
 import { usecaseIsMulticam } from "./use-case-multicam"
-import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires } from "./use-case-framing"
+import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires, type UseCaseFramingSource } from "./use-case-framing"
 import type { UseCaseSources } from "./use-case-registry"
 
 /** The shortest and longest clip a pack asks the plan for, in seconds. */
@@ -90,6 +90,14 @@ export interface ClipPackSettings {
    */
   readonly framingSource?: "tracking"
 }
+
+/**
+ * What a Clip Pack node or body that names no framing source reads: the even
+ * split it always had, so a saved node and an API caller keep their run. The
+ * ONE value: its spec's `absentFramingSource` is this, and the resolver reads
+ * it for a direct call.
+ */
+export const CLIP_PACK_ABSENT_FRAMING_SOURCE: UseCaseFramingSource = "static"
 
 export const CLIP_PACK_DEFAULTS: ClipPackSettings = Object.freeze({
   count: EDIT_PLAN_DEFAULT_CLIP_COUNT,
@@ -182,7 +190,7 @@ export function resolveClipPackSettings(
     instructions: typeof r.instructions === "string" ? r.instructions : d.instructions,
     styleGuide: typeof r.styleGuide === "string" ? r.styleGuide : d.styleGuide,
     ...(usecaseShapeIsMulticam(shape) ? { cameras: resolveUseCaseCameras(r.cameras, shape) } : {}),
-    ...(framing && resolveUseCaseFramingSource(r.framingSource, "static") === "tracking" ? { framingSource: "tracking" as const } : {}),
+    ...(framing && resolveUseCaseFramingSource(r.framingSource, CLIP_PACK_ABSENT_FRAMING_SOURCE) === "tracking" ? { framingSource: "tracking" as const } : {}),
   }
 }
 

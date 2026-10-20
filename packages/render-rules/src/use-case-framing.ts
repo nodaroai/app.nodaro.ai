@@ -17,7 +17,9 @@
 import { SPEAKER_FRAMES_PRICED } from "./speaker-frames"
 import type { UseCaseGraphEdge, UseCaseGraphNode, UseCaseHandleRef } from "./use-case-graph"
 import { usecaseEdge, usecaseNode } from "./use-case-graph-parts"
-import { USE_CASE_FRAMES_TYPE } from "./use-case-framing-viewer"
+
+/** The step a run that follows faces adds (and whose availability decides `auto`). */
+export const USE_CASE_FRAMES_TYPE = "speaker-frames"
 
 export const USE_CASE_FRAMING_SOURCES = ["auto", "static", "tracking"] as const
 export type UseCaseFramingSource = (typeof USE_CASE_FRAMING_SOURCES)[number]
@@ -31,10 +33,23 @@ export function usecaseAutoFraming(flags: { readonly framesPriced?: boolean } = 
   return (flags.framesPriced ?? SPEAKER_FRAMES_PRICED) === true ? "tracking" : "static"
 }
 
+/** Whether a stored or sent value is a framing source (absent, unknown and non-strings are not). */
+export function isUseCaseFramingSource(raw: unknown): raw is UseCaseFramingSource {
+  return typeof raw === "string" && (USE_CASE_FRAMING_SOURCES as readonly string[]).includes(raw)
+}
+
+/**
+ * The framing source a stored or sent value chooses, before `auto` is
+ * resolved: the value when it is one, else `absent` — the type's own default
+ * for a node or body that names none (its spec's `absentFramingSource`).
+ */
+export function usecaseFramingChoice(raw: unknown, absent: UseCaseFramingSource): UseCaseFramingSource {
+  return isUseCaseFramingSource(raw) ? raw : absent
+}
+
 /** A stored or sent framing source, resolved: absent or unknown reads as `absent`; `auto` follows the flag. */
 export function resolveUseCaseFramingSource(raw: unknown, absent: UseCaseFramingSource): ResolvedFramingSource {
-  const known = typeof raw === "string" && (USE_CASE_FRAMING_SOURCES as readonly string[]).includes(raw)
-  const choice = known ? (raw as UseCaseFramingSource) : absent
+  const choice = usecaseFramingChoice(raw, absent)
   return choice === "auto" ? usecaseAutoFraming() : choice
 }
 

@@ -41,7 +41,7 @@ import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, with
 import { buildTightenMulticamGraph } from "./tighten-episode-multicam"
 import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
 import { usecaseIsMulticam } from "./use-case-multicam"
-import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires } from "./use-case-framing"
+import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires, type UseCaseFramingSource } from "./use-case-framing"
 import type { UseCaseSources } from "./use-case-registry"
 
 export type { PlanTier, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
@@ -82,6 +82,14 @@ export interface TightenEpisodeSettings {
    */
   readonly framingSource?: "tracking"
 }
+
+/**
+ * What a Tighten node or body that names no framing source reads (decided
+ * 2026-10-17): the even split it always had, so a saved node and an API caller
+ * keep their run. The ONE value: its spec's `absentFramingSource` is this, and
+ * the resolver reads it for a direct call.
+ */
+export const TIGHTEN_ABSENT_FRAMING_SOURCE: UseCaseFramingSource = "static"
 
 export const TIGHTEN_EPISODE_DEFAULTS: TightenEpisodeSettings = Object.freeze({
   output: "video",
@@ -163,8 +171,8 @@ export function resolveTightenEpisodeSettings(
     styleGuide: str(r.styleGuide, d.styleGuide),
     musicDuckAmount: duck,
     ...(usecaseShapeIsMulticam(shape) ? { cameras: resolveUseCaseCameras(r.cameras, shape) } : {}),
-    // Absent reads the even split (decided 2026-10-17): a saved node and an API caller keep their run.
-    ...(framing && resolveUseCaseFramingSource(r.framingSource, "static") === "tracking" ? { framingSource: "tracking" as const } : {}),
+    // Absent reads the spec's absent default (written in by the descriptor); a direct call reads the same value.
+    ...(framing && resolveUseCaseFramingSource(r.framingSource, TIGHTEN_ABSENT_FRAMING_SOURCE) === "tracking" ? { framingSource: "tracking" as const } : {}),
   }
 }
 

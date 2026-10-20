@@ -45,6 +45,7 @@ import {
   mediaLengthSecOf,
   persistedEdlPlan,
   resolveGraphOrigin,
+  speakerMapClockOrigin,
   type EditPlanOutputReader,
   type EstimateGraphEdge,
   type EstimateGraphNode,
@@ -60,6 +61,7 @@ import {
   type SpeakerFramesScopeSource,
 } from "./speaker-frames"
 import { editPlanProducerKind, editPlanSourceKind } from "./edit-plan-source-kind"
+import { MULTICAM_SPEAKER_MAP_TYPE } from "./speaker-map-step"
 
 /** Base credits per started block of sampled frames (decided 2026-10-16: one
  *  rate for every footage class). The ONE value behind `STATIC_CREDIT_COSTS`,
@@ -140,6 +142,54 @@ function blocksOfEdit(raw: unknown, data: Record<string, unknown>): number {
 }
 
 /**
+ * A source's length this run, read only where this run cannot change it: a
+ * step that holds its result, an input node, or what a running step is
+ * estimated to make (`runWireLengthSec`) — never the saved length of a step
+ * about to run again. Undefined when not known.
+ */
+function originLengthThisRun(
+  origin: EstimateGraphNode | undefined,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader,
+): number | undefined {
+  if (!origin) return undefined
+  const settled = (o: EstimateGraphNode): boolean => !rerunIds.has(o.id) || INPUT_NODE_TYPES.has(o.type ?? "")
+  const sec = settled(origin)
+    ? mediaLengthSecOf(dataOf(origin))
+    : runWireLengthSec(origin.id, nodes, edges, rerunIds, { planOutputOf, otherSec: (o) => (settled(o) ? mediaLengthSecOf(dataOf(o)) : undefined) })
+  return sec !== undefined && sec > 0 ? sec : undefined
+}
+
+/**
+ * The most frames the whole-recording edit a Speaker Map is ABOUT to make can
+ * sample (decided 2026-10-20): one segment over its clock recording
+ * (`speakerMapClockOrigin`), so on each camera it reads at most that length
+ * plus the two margins (at most 180 minutes), at 2 fps. Undefined — the
+ * ceiling — when the clock's length this run is not known, or it reads no camera.
+ */
+function plannedSpeakerMapFrames(
+  map: EstimateGraphNode,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader,
+): number | undefined {
+  const clockSec = originLengthThisRun(speakerMapClockOrigin(map, nodes, edges), nodes, edges, rerunIds, planOutputOf)
+  if (clockSec === undefined) return undefined
+  const cameras = new Set<string>()
+  for (const e of edges) {
+    if (e.target !== map.id || e.targetHandle !== "sources") continue
+    const origin = resolveGraphOrigin(nodes.find((n) => n.id === e.source), nodes, edges)
+    if (origin && editPlanProducerKind(origin.type) === "video") cameras.add(origin.id)
+  }
+  if (cameras.size === 0) return undefined
+  const perSourceMs = Math.min(clockSec * 1000, SPEAKER_FRAMES_MAX_SOURCE_MS) + 2 * SPEAKER_FRAMES_SPAN_MARGIN_MS
+  return cameras.size * Math.ceil((perSourceMs * SPEAKER_FRAMES_SAMPLE_FPS) / 1000)
+}
+
+/**
  * The most frames an edit an Edit Plan is ABOUT to make can sample (decided
  * 2026-10-17). It must never be below what the run will hold for it, so:
  *  - the scope samples the kept spans of the master clock on every VIDEO
@@ -172,14 +222,7 @@ function plannedEditFrames(
   rerunIds: ReadonlySet<string>,
   planOutputOf: EditPlanOutputReader,
 ): number | undefined {
-  const lengthThisRun = (origin: EstimateGraphNode | undefined): number | undefined => {
-    if (!origin) return undefined
-    const settled = (o: EstimateGraphNode): boolean => !rerunIds.has(o.id) || INPUT_NODE_TYPES.has(o.type ?? "")
-    const sec = settled(origin)
-      ? mediaLengthSecOf(dataOf(origin))
-      : runWireLengthSec(origin.id, nodes, edges, rerunIds, { planOutputOf, otherSec: (o) => (settled(o) ? mediaLengthSecOf(dataOf(o)) : undefined) })
-    return sec !== undefined && sec > 0 ? sec : undefined
-  }
+  const lengthThisRun = (origin: EstimateGraphNode | undefined) => originLengthThisRun(origin, nodes, edges, rerunIds, planOutputOf)
   const masterSec = lengthThisRun(editPlanMasterOrigin(plan, nodes, edges))
   const tEdge = edges.find((e) => e.target === plan.id && e.targetHandle === "transcript")
   const transcriber = tEdge ? resolveGraphOrigin(nodes.find((n) => n.id === tEdge.source), nodes, edges) : undefined
@@ -243,6 +286,10 @@ function wireEdit(
     const plannedFrames = plannedEditFrames(producer, nodes, edges, rerunIds, planOutputOf)
     return plannedFrames === undefined ? undefined : { plannedFrames }
   }
+  if (producer.type === MULTICAM_SPEAKER_MAP_TYPE) {
+    const plannedFrames = plannedSpeakerMapFrames(producer, nodes, edges, rerunIds, planOutputOf)
+    return plannedFrames === undefined ? undefined : { plannedFrames }
+  }
   // A re-running Camera Switch keeps every span and source of the edit it reads.
   if (EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) {
     const upstream = edges.find((e) => e.target === producer.id && e.targetHandle === "edl")
@@ -265,7 +312,9 @@ function wireEdit(
  *  - an edit an Edit Plan is about to make (decided 2026-10-17): on each
  *    camera the plan reads, the episode's length this run (plus the 2 s
  *    margins) at 2 fps — never the ceiling when that length is known
- *    (`plannedEditFrames` says when it is).
+ *    (`plannedEditFrames` says when it is). An edit a Speaker Map is about
+ *    to make (decided 2026-10-20): its clock recording's length this run on
+ *    each camera it reads (`plannedSpeakerMapFrames`).
  *    Every wire on the handle folds into one run, as the run itself folds
  *    them: their frames add, then round to blocks once;
  *  - a video wired instead of an edit (decided 2026-10-16): the whole video at

@@ -7,7 +7,9 @@ import {
   buildClipPackGraph,
   buildEpisodeChaptersGraph,
   buildEpisodeTrailerGraph,
+  buildSpeakerLayoutGraph,
   buildTightenEpisodeGraph,
+  resolveSpeakerLayoutSettings,
   toStoredInlineGraph,
   type TightenEpisodeSettings,
 } from "@nodaro/render-rules"
@@ -26,6 +28,8 @@ const clipPackStored = toStoredInlineGraph(
   buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }),
   CLIP_PACK_DEFAULTS,
 )
+const layoutSettings = resolveSpeakerLayoutSettings({ framingSource: "static" }, "video")
+const layoutStored = toStoredInlineGraph(buildSpeakerLayoutGraph(layoutSettings, { media: { url: "https://r2/ep.mp4", kind: "video" } }), layoutSettings)
 const m = vi.hoisted(() => ({
   exec: null as Record<string, unknown> | null,
   wrapper: null as Record<string, unknown> | null,
@@ -406,6 +410,30 @@ describe("finalizeUseCaseWrapper", () => {
         nodeStates: { "uc-render": { status: "completed", output: { videoUrl: "https://r2/r0.mp4", quality: "final" } }, "uc-captions": { status: "completed", output: { videoUrl: "https://r2/c0.mp4" } } },
       })
       expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect(m.completed).not.toHaveBeenCalled()
+      expect(m.refund.mock.calls).toEqual([["job-w"]])
+    })
+  })
+  describe("a Speaker Layout run (decided 2026-10-17)", () => {
+    const rendered = { "uc-render": { status: "completed", output: { videoUrl: "https://r2/framed.mp4", json: { version: 1 }, quality: "final" } } }
+    it("completed: the wrapper completes with the framed video and the edit it drew, and commits the fee", async () => {
+      m.exec = exec({ inlineGraph: layoutStored, nodeStates: rendered })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+      expect(m.completed.mock.calls[0]![1]).toMatchObject({ output_data: { videoUrl: "https://r2/framed.mp4", json: { version: 1 }, quality: "final" }, credits_actual: 882 })
+      expect(m.commit.mock.calls).toEqual([["job-w"]])
+      expect(m.refund).not.toHaveBeenCalled()
+    })
+    it("completed with no framed video: fails in the kind's words, refunds the fee", async () => {
+      m.exec = exec({ inlineGraph: layoutStored, nodeStates: { "uc-transcribe": { status: "completed", output: { json: { words: [] } } } } })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect((m.failed.mock.calls[0]![1] as { error_message: string }).error_message).toBe("The run finished without a framed video.")
+      expect(m.refund.mock.calls).toEqual([["job-w"]])
+      expect(m.completed).not.toHaveBeenCalled()
+    })
+    it("a failed run is a failure, the step named (a layout is not a list: nothing kept)", async () => {
+      m.exec = exec({ inlineGraph: layoutStored, status: "failed", errorMessage: "Node execution failed: uc-render: boom", nodeStates: { "uc-render": { status: "failed", error: "boom" } } })
+      expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+      expect((m.failed.mock.calls[0]![1] as { error_message: string }).error_message).toBe("Speaker Layout: boom")
       expect(m.completed).not.toHaveBeenCalled()
       expect(m.refund.mock.calls).toEqual([["job-w"]])
     })

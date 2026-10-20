@@ -18,6 +18,7 @@ import {
   type UseCaseResultKind,
 } from "./use-case-graph"
 import type { UseCaseSourcesShape } from "./use-case-cameras"
+import type { UseCaseFramingSource } from "./use-case-framing"
 import { USE_CASE_ROWS } from "./use-case-rows"
 import { USE_CASE_SPECS, type UseCaseBuilderKey } from "./use-case-specs"
 
@@ -37,14 +38,17 @@ export interface UseCaseSources {
 export { usecaseRecordings } from "./use-case-cameras"
 export type UseCaseSettings = Readonly<Record<string, unknown>>
 /**
- * How long each video a use-case node delivers is, for a listing: a fixed
- * length, after the length of the input it names when that input is wired
- * (unknown when that input's length is).
+ * How long each video a use-case node delivers is, for a listing:
+ *  - `fixed`: a fixed length, after the length of the input it names when
+ *    that input is wired (unknown when that input's length is);
+ *  - `clock` (decided 2026-10-20): the length of the recording the run is
+ *    clocked to — the Master audio's when it is wired, else the longest
+ *    recording's (the whole-recording edit spans the clock, and the longest
+ *    never under-quotes it); unknown when a length it needs is unknown.
  */
-export interface UseCaseOutputLength {
-  readonly fixedSec: number
-  readonly after?: UseCaseInputHandle
-}
+export type UseCaseOutputLength =
+  | { readonly kind: "fixed"; readonly fixedSec: number; readonly after?: UseCaseInputHandle }
+  | { readonly kind: "clock" }
 
 export interface UseCaseDescriptor {
   readonly type: UseCaseNodeType
@@ -77,12 +81,27 @@ export interface UseCaseDescriptor {
   /** The length of each video it delivers (video-output-length.ts makes it the node's length rule); absent for a node that is not a video producer. */
   readonly outputLength?: UseCaseOutputLength
   /**
+   * Its render frames one recording whole (Speaker View's video mode): the
+   * route measures that recording and applies Speaker View's source-shape rule
+   * before anything starts. Absent for a node whose render cuts a plan.
+   */
+  readonly wholeClipRender?: boolean
+  /**
    * The node data an audio-only recording wired into `media` forces (the
    * editor's lock writes these values; the run's resolver reads an audio
    * recording so). Absent for a node that refuses an audio recording
    * (`needsVideo`) and for one an audio recording changes nothing on.
    */
   readonly audioForced?: Readonly<Record<string, unknown>>
+  /**
+   * What a node or body that names no framing source chooses (decided
+   * 2026-10-20) — the ONE place a type declares it: `usecaseFramingForViewer`
+   * reads it before the viewer's rewrite (route, estimate, both engines, the
+   * resume match) and `resolveSettings` before resolving. `static` for every
+   * type that predates `auto` (its runs stay byte-identical); `auto` for a
+   * new node. A type whose builder never follows faces declares `static`.
+   */
+  readonly absentFramingSource: UseCaseFramingSource
   /** `shape`: how many recordings the run has and whether Master audio is wired (a one-recording run's settings never depend on it). */
   resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind, shape?: UseCaseSourcesShape): UseCaseSettings
   build(settings: UseCaseSettings, sources: UseCaseSources): UseCaseGraph

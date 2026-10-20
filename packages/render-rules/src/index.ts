@@ -76,6 +76,7 @@ export {
   resolveEditPlanEpisodeSec,
   resolveEditPlanEstimateDurationSec,
   resolveGraphOrigin,
+  speakerMapClockOrigin,
   type EditPlanOutputReader,
   type EstimateGraphEdge,
   type EstimateGraphNode,
@@ -415,13 +416,17 @@ export {
   USE_CASE_RUN_VIEWER_AS_BEFORE,
   usecaseFramesAvailableFor,
   usecaseFramingForViewer,
+  usecaseFramingIsAuto,
+  type UseCaseFramingDefault,
   type UseCaseRunViewer,
   type UseCaseViewerFlags,
 } from "./use-case-framing-viewer"
 export {
   USE_CASE_FRAMES_NODE_ID,
   USE_CASE_FRAMING_SOURCES,
+  isUseCaseFramingSource,
   resolveUseCaseFramingSource,
+  usecaseFramingChoice,
   usecaseAutoFraming,
   usecaseFramesNode,
   usecaseFramesWires,
@@ -520,6 +525,8 @@ export {
   toStoredInlineGraph,
   usecaseFeeCreditId,
   usecaseGraphHash,
+  usecaseKindHasPlan,
+  usecasePlanNodeId,
   usecaseRenderNodeId,
   usecaseResultKind,
   usecaseRunType,
@@ -527,6 +534,7 @@ export {
   type ClipsOutputMap,
   type EpisodeOutputMap,
   type FormatsOutputMap,
+  type LayoutOutputMap,
   type StoredInlineGraph,
   type UseCaseFeeCreditId,
   type UseCaseGraph,
@@ -658,6 +666,7 @@ export {
   type TrailerFormat,
 } from "./episode-trailer-graph"
 export {
+  CLIP_PACK_ABSENT_FRAMING_SOURCE,
   CLIP_PACK_DEFAULTS,
   CLIP_PACK_EMPHASIS_REFUSAL,
   CLIP_PACK_DEFAULT_FRAMING,
@@ -674,6 +683,14 @@ export {
 } from "./clip-pack-graph"
 export { chapterRowsOf, chapterTimestamp, formatChapterListText, type ChapterRow } from "./chapter-list-text"
 export { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
+export {
+  SPEAKER_LAYOUT_DEFAULTS,
+  SPEAKER_LAYOUT_NODE_IDS,
+  buildSpeakerLayoutGraph,
+  resolveSpeakerLayoutSettings,
+  type SpeakerLayoutGraph,
+  type SpeakerLayoutSettings,
+} from "./speaker-layout-graph"
 export {
   DUBBING_MAX_SPAN_MINUTES,
   dubbingMinutes,

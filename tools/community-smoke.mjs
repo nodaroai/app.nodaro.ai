@@ -1038,12 +1038,12 @@ await check("Edit Plan is a Nodaro-exclusive: omitted from discovery, run refuse
   return "edit-plan absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
-// The podcast use-case nodes (Tighten Episode, Chapters, Trailer, Clip Pack) each build and run a
+// The podcast use-case nodes (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout) each build and run a
 // chain whose planning step is Nodaro-EXCLUSIVE. Unconnected, discovery omits
 // them and a run is refused 503 nodaro_connection_required BEFORE its wrapper
 // job, its fee hold or any inner job exists — and before the recording is
 // fetched, so the example.com URL below is never read.
-// A node that takes several recordings (Tighten Episode, Trailer, Clip Pack) is asked twice: its
+// A node that takes several recordings (Tighten Episode, Trailer, Clip Pack, Speaker Layout) is asked twice: its
 // one-recording body and its multicam body (two recordings + a Master audio).
 // Speaker Map, which several recordings need, is keyless and offered on a
 // community install, so the multicam body must be refused the same way: 503
@@ -1054,6 +1054,7 @@ for (const [type, label, multicam] of [
   ["episode-chapters", "Chapters", false],
   ["episode-trailer", "Trailer", true],
   ["clip-pack", "Clip Pack", true],
+  ["speaker-layout", "Speaker Layout", true],
 ]) {
   const name = `${label} on an unconnected install: hidden from discovery, refused 503 before any job`
   await check(name, async () => {

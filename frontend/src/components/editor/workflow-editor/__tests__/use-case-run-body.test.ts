@@ -150,6 +150,18 @@ describe("the framing source (decided 2026-10-17/20)", () => {
     expect(await framed({ framingSource: "auto" }, true)).toBe(`${HEAD},"framingSource":"auto","userId":"${USER}"}`)
     expect(await framed({ framingSource: "auto" }, false)).toBe(`${HEAD},"framingSource":"static","userId":"${USER}"}`)
   })
+  it("none on a type whose absent default is auto (Speaker Layout): none to a viewer who may use Speaker Frames, the even split to anyone else (decided 2026-10-20)", async () => {
+    const layout = async (frames: boolean) => {
+      store.frames = frames
+      try {
+        return await bodyOf({}, REC, false, "speaker-layout")
+      } finally {
+        store.frames = false
+      }
+    }
+    expect(await layout(true)).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"userId":"${USER}"}`)
+    expect(await layout(false)).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"framingSource":"static","userId":"${USER}"}`)
+  })
 })
 
 /**

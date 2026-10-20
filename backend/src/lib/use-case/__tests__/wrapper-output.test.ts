@@ -9,8 +9,10 @@ import {
   buildEpisodeTrailerGraph,
   resolveClipPackSettings,
   resolveEpisodeTrailerSettings,
+  buildSpeakerLayoutGraph,
   buildTightenEpisodeGraph,
   clipPackNoneRenderedMessage,
+  resolveSpeakerLayoutSettings,
   parseClipPackNoneRendered,
   resolveTightenEpisodeSettings,
   toStoredInlineGraph,
@@ -146,6 +148,11 @@ describe("usecaseWrapperHasResult (the finaliser completes only a run that deliv
   it("chapters: their text", () => {
     expect(usecaseWrapperHasResult(withKind("chapters"), { ...base, text: "00:00 Intro" })).toBe(true)
     expect(usecaseWrapperHasResult(withKind("chapters"), { ...base, text: "" })).toBe(false)
+  })
+  it("a layout: its framed video (a review-on run's is its proxy preview)", () => {
+    expect(usecaseWrapperHasResult(withKind("layout"), { ...base, videoUrl: "https://r2/v.mp4" })).toBe(true)
+    expect(usecaseWrapperHasResult(withKind("layout"), { ...base, quality: "proxy", videoUrl: "https://r2/p.mp4" })).toBe(true)
+    expect(usecaseWrapperHasResult(withKind("layout"), { ...base, audioUrl: "https://r2/a.m4a", json: {} })).toBe(false)
   })
 })
 
@@ -599,6 +606,82 @@ describe("a Trailer run on several recordings (decided 2026-10-17)", () => {
       expect(out, failed).toMatchObject({ formats: [], failedNodeId: failed })
       expect(usecaseWrapperKeepsPartial(g, out), failed).toBe(false)
     }
+  })
+})
+
+/** Speaker Layout (decided 2026-10-17): the whole recording framed by speaker — its one render is its result. */
+describe("a layout run's result", () => {
+  const rec = (n: number) => ({ url: `https://r2/c${n}.mp4`, kind: "video" as const })
+  const layoutGraph = (over: Record<string, unknown> = {}, sources: Parameters<typeof buildSpeakerLayoutGraph>[1] = { media: rec(1) }, shape?: { recordings: number; masterAudio: boolean }) => {
+    const settings = resolveSpeakerLayoutSettings({ framingSource: "static", ...over }, "video", shape)
+    return toStoredInlineGraph(buildSpeakerLayoutGraph(settings, sources), settings)
+  }
+  const done = (output: Record<string, unknown>) => ({ status: "completed", output })
+  const drawn = { version: 1, sources: [{ id: "c1" }], segments: [{ id: "s0" }] }
+  const renamed = { words: [{ text: "hi", speaker: "s0" }] }
+
+  it("one recording: the render's video, the edit it drew on json, its renamed transcript, its basis, the run's settings", () => {
+    const g = layoutGraph()
+    const out = usecaseWrapperOutput(g, {
+      "uc-transcribe": done({ json: { words: [{ text: "hi" }] } }),
+      "uc-render": done({ videoUrl: "https://r2/out.mp4", json: drawn, transcript: renamed, quality: "final", renderBasis: "rb1", durationSec: 3600 }),
+    }, "exec-1")
+    expect(out).toEqual({
+      videoUrl: "https://r2/out.mp4",
+      json: drawn,
+      transcript: renamed,
+      quality: "final",
+      renderBasis: "rb1",
+      useCaseSettings: g.settings,
+      durationSec: 3600,
+      _executionId: "exec-1",
+    })
+    // No plan: nothing on `plan`, no `planBasis`, no cameras report for one recording.
+    expect(out).not.toHaveProperty("plan")
+    expect(usecaseWrapperHasResult(g, out)).toBe(true)
+    // What the node lands: the video, the drawn edit on json, the transcript, the take's stamps.
+    expect(usecaseJobOutput(out as unknown as Record<string, unknown>)).toMatchObject({ videoUrl: "https://r2/out.mp4", json: drawn, transcript: renamed, quality: "final", renderBasis: "rb1", durationSec: 3600 })
+  })
+
+  it("a review-on run: the render's proxy preview, read as a result", () => {
+    const g = layoutGraph({ reviewBeforeRender: true })
+    const out = usecaseWrapperOutput(g, { "uc-render": done({ videoUrl: "https://r2/proxy.mp4" }) }, "exec-1")
+    expect(out).toMatchObject({ videoUrl: "https://r2/proxy.mp4", quality: "proxy" })
+    expect(usecaseWrapperHasResult(g, out)).toBe(true)
+  })
+
+  it("a failed render: no result, the step named; a failed layout keeps nothing", () => {
+    const g = layoutGraph()
+    const out = usecaseWrapperOutput(g, { "uc-transcribe": done({ json: { words: [] } }), "uc-render": { status: "failed" } }, "exec-1")
+    expect(out.videoUrl).toBeUndefined()
+    expect(out.failedNodeId).toBe("uc-render")
+    expect(usecaseWrapperHasResult(g, out)).toBe(false)
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(false)
+    expect(usecaseNoResultMessage(g, out)).toBe("The run finished without a framed video.")
+  })
+
+  it("two cameras: the cameras report (who was put on which camera, the sync and map notes)", () => {
+    const g = layoutGraph({}, { media: rec(1), moreMedia: [rec(2)] }, { recordings: 2, masterAudio: false })
+    const states: Record<string, unknown> = {
+      "uc-map": done({ json: { version: 1, speakerMap: { s0: "uc-source", s1: "uc-rec-2" }, confidence: { s0: { camera: "uc-source", marginDb: 6 }, s1: { camera: "uc-rec-2", marginDb: 4 } }, notes: ["m"] } }),
+      "uc-transcribe": done({ json: { words: [{ text: "a", speaker: "s0" }, { text: "b", speaker: "s1" }] } }),
+      "uc-render": done({ videoUrl: "https://r2/out.mp4" }),
+    }
+    const out = usecaseWrapperOutput(g, states, "e")
+    expect(out.cameras?.mapNotes).toEqual(["m"])
+    expect(out.cameras?.speakers.map((sp) => sp.speaker)).toEqual(["s0", "s1"])
+  })
+
+  it("one camera + Master audio (nothing to cut between): no per-speaker lines, no map notes — only the sync notes", () => {
+    // A graph with Speaker Map but no Camera Switch (Speaker Layout's one-camera edit): every speaker is "" by construction, which says nothing.
+    const settings = resolveSpeakerLayoutSettings({ framingSource: "static" }, "video", { recordings: 1, masterAudio: true })
+    const g = toStoredInlineGraph(buildSpeakerLayoutGraph(settings, { media: { url: "https://r2/c1.mp4", kind: "video" }, masterAudio: { url: "https://r2/m.wav", kind: "audio" } }), settings)
+    const out = usecaseWrapperOutput(g, {
+      "uc-sync": { status: "completed", output: { json: { version: 1, reference: "uc-master", offsets: [], notes: ["n"] } } },
+      "uc-map": { status: "completed", output: { json: { version: 1, speakerMap: { s0: "" }, confidence: { s0: { camera: "", marginDb: null } }, notes: ["fewer than two"] } } },
+      "uc-render": { status: "completed", output: { videoUrl: "https://r2/out.mp4" } },
+    }, "e")
+    expect(out.cameras).toEqual({ speakers: [], syncNotes: ["n"], mapNotes: [] })
   })
 })
 

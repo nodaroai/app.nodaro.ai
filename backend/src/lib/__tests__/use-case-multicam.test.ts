@@ -183,7 +183,7 @@ describe("usecaseRecordingsKind (one rule: the route, the expansion, the audio l
 
 describe("usecaseRunRecordings (both engines' one rule — decided 2026-10-19)", () => {
   const rec = (nodeId: string, url = `https://r2/${nodeId}.mp4`) => ({ nodeId, url })
-  const base = { data: {}, maxRecordings: 6, takesMaster: true, framesAvailable: false, settings: { output: "video", cameras: { wide: 2 } } } as const
+  const base = { data: {}, maxRecordings: 6, takesMaster: true, framesAvailable: false, absentFramingSource: "static", settings: { output: "video", cameras: { wide: 2 } } } as const
 
   it("a Master audio from the SAME upstream node as a recording is no master, whatever its URL (a Split Media's audio beside its video)", () => {
     const run = usecaseRunRecordings({ ...base, wired: [rec("split", "https://r2/split-video.mp4")], master: { nodeId: "split", url: "https://r2/split-audio.m4a" }, multicam: true })

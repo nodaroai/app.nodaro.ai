@@ -1,6 +1,6 @@
 /**
  * The SDK's podcast use-case verbs (edit.*): Tighten Episode on several
- * recordings, Chapters, Trailer and Clip Pack. The edit resource's other verbs,
+ * recordings, Chapters, Trailer, Clip Pack and Speaker Layout. The edit resource's other verbs,
  * and Tighten's single-recording run, estimate and continuation, are edit.test.ts.
  */
 import { describe, it, expect, vi } from "vitest"
@@ -338,5 +338,82 @@ describe("edit.clipPack / estimateClipPack", () => {
     await client(fetchMock).edit.continueUseCase({ jobId: "job-c", mode: "from-failed", nodeType: "clip-pack" })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/clip-pack/continue")
+  })
+})
+
+describe("edit.speakerLayout / estimateSpeakerLayout (decided 2026-10-17)", () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>, i = 0) => JSON.parse((fetchMock.mock.calls[i]![1] as { body: string }).body)
+
+  it("speakerLayout posts the one recording alone when nothing else is set", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-l", executionId: "exec-l" }))
+    const out = await client(fetchMock).edit.speakerLayout({ mediaUrl: "https://r2/ep.mp4" })
+    expect(out.jobId).toBe("job-l")
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/speaker-layout")
+    expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/ep.mp4"] })
+  })
+
+  it("sends every setting, the recordings and the Cameras settings under the route's names, and an Idempotency-Key when asked", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-l" }))
+    await client(fetchMock).edit.speakerLayout(
+      {
+        mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+        masterAudioUrl: "https://r2/m.wav",
+        cameras: { wide: 2, synced: true },
+        targetAspect: "1:1",
+        layout: "grid",
+        switchType: "cut",
+        emphasisStyle: "scale+border",
+        framingSource: "static",
+        reviewBeforeRender: true,
+      },
+      { idempotencyKey: "key-l-12345" },
+    )
+    expect(bodyOf(fetchMock)).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 2, synced: true },
+      targetAspect: "1:1",
+      layout: "grid",
+      switchType: "cut",
+      emphasisStyle: "scale+border",
+      framingSource: "static",
+      reviewBeforeRender: true,
+    })
+    expect((fetchMock.mock.calls[0]![1] as { headers: Record<string, string> }).headers["Idempotency-Key"]).toBe("key-l-12345")
+  })
+
+  it("estimateSpeakerLayout posts the same body to its estimate route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 900, stepsCredits: 889, feeCredits: 11, durationSec: 3600 } }))
+    const out = await client(fetchMock).edit.estimateSpeakerLayout({ mediaUrl: "https://r2/ep.mp4", targetAspect: "4:5" })
+    expect(out.data.feeCredits).toBe(11)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/speaker-layout/estimate")
+    expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], targetAspect: "4:5" })
+  })
+
+  it("mediaUrl and mediaUrls together, or neither, reject with a TypeError before any request", async () => {
+    const fetchMock = vi.fn()
+    const edit = client(fetchMock).edit
+    await expect(edit.speakerLayout({ mediaUrl: "https://r2/a.mp4", mediaUrls: ["https://r2/b.mp4"] })).rejects.toThrow(new TypeError("pass mediaUrl or mediaUrls, not both"))
+    await expect(edit.estimateSpeakerLayout({ layout: "stacked" })).rejects.toThrow(new TypeError("pass mediaUrl or mediaUrls"))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("continueUseCase renders a Speaker Layout's final on its own route, read from the job, with no edit", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { id: "job-l", job_type: "speaker-layout", input_data: { type: "speaker-layout", mode: "run" } } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-l2" }))
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-l", mode: "render-final" })
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/speaker-layout/continue")
+    expect(bodyOf(fetchMock, 1)).toEqual({ jobId: "job-l", mode: "render-final" })
+  })
+
+  it("an edit on a Speaker Layout Render final comes back as the route's use_case_no_plan refusal", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, { error: { code: "use_case_no_plan", message: "Speaker Layout has no edit to change — run Render final without one." } }),
+    )
+    const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-l", mode: "render-final", nodeType: "speaker-layout", editedEdl: { v: 1 } }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).code).toBe("use_case_no_plan")
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/speaker-layout/continue")
   })
 })

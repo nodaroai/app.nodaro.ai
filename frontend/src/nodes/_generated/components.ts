@@ -7,6 +7,7 @@ import { NodeComponent as unit_episode_chapters } from "../episode-chapters/node
 import { NodeComponent as unit_episode_trailer } from "../episode-trailer/node" // unit:episode-trailer
 import { NodeComponent as unit_gif_to_video } from "../gif-to-video/node" // unit:gif-to-video
 import { NodeComponent as unit_remove_audio } from "../remove-audio/node" // unit:remove-audio
+import { NodeComponent as unit_speaker_layout } from "../speaker-layout/node" // unit:speaker-layout
 import { NodeComponent as unit_speaker_map } from "../speaker-map/node" // unit:speaker-map
 import { NodeComponent as unit_tighten_episode } from "../tighten-episode/node" // unit:tighten-episode
 
@@ -16,6 +17,7 @@ export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Obje
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

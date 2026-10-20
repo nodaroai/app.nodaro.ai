@@ -23,7 +23,7 @@
  */
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
-import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseFeeCreditId, usecaseRunPlan, type UseCaseNodeType } from "@nodaro/render-rules"
+import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseFeeCreditId, usecasePlanNodeId, usecaseRunPlan, type UseCaseNodeType } from "@nodaro/render-rules"
 import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
 import { hasCredits } from "../lib/config.js"
@@ -154,8 +154,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         try {
           // The run's plan on its plan node (this quote only), under the reviewer's
           // edit: the final is quoted on the edited cut, as its steps then hold.
-          const planNodeId = plan.graph.outputMap.planNodeId
-          const runPlan = usecaseRunPlan(plan.source.nodeStates?.[planNodeId])
+          const planNodeId = usecasePlanNodeId(plan.graph.outputMap)
+          const runPlan = planNodeId !== null ? usecaseRunPlan(plan.source.nodeStates?.[planNodeId]) : undefined
           const credits = await renderFinalCredits({
             userId,
             nodes: plan.graph.nodes.map((n) => ({

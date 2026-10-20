@@ -68,12 +68,14 @@ interface SwitchSectionProps {
   readonly durationMs: unknown
   /** The speaker changes Pan and Crossfade apply to (SV5, SV21 c), when countable. */
   readonly counts: { readonly changes: number; readonly pan: number; readonly crossfade: number } | null
+  /** Whether the switch's tween length is offered (false for a node whose run sets none). */
+  readonly showDuration?: boolean
   readonly onUpdate: Update
 }
 
 /** SWITCH (U2): what happens at a speaker change, with how many changes Pan
  *  and Crossfade actually reach. */
-export function SpeakerViewSwitchSection({ options, crossfade, value, durationMs, counts, onUpdate }: SwitchSectionProps) {
+export function SpeakerViewSwitchSection({ options, crossfade, value, durationMs, counts, showDuration = true, onUpdate }: SwitchSectionProps) {
   const t = useT()
   const localizeOption = useLocalizeOptionLabel()
   const pan = options.find((o) => o.id === "pan")
@@ -108,7 +110,7 @@ export function SpeakerViewSwitchSection({ options, crossfade, value, durationMs
         </div>
       )}
       <Reasons testId="speaker-view-switch-reasons" reasons={distinctReasons([...options, crossfade], t)} />
-      <TweenSlider label={t("speakerView.field.switchMs")} value={msOf(durationMs, SPEAKER_VIEW_DEFAULTS.switchDurationMs)} onChange={(n) => onUpdate({ switchDurationMs: n })} />
+      {showDuration && <TweenSlider label={t("speakerView.field.switchMs")} value={msOf(durationMs, SPEAKER_VIEW_DEFAULTS.switchDurationMs)} onChange={(n) => onUpdate({ switchDurationMs: n })} />}
     </section>
   )
 }
@@ -117,11 +119,13 @@ interface EmphasisSectionProps {
   readonly options: readonly SpeakerViewOption[]
   readonly value: string | undefined
   readonly durationMs: unknown
+  /** Whether the emphasis's tween length is offered (false for a node whose run sets none). */
+  readonly showDuration?: boolean
   readonly onUpdate: Update
 }
 
 /** EMPHASIS (U2): who is marked while speaking — greyed whole under Single. */
-export function SpeakerViewEmphasisSection({ options, value, durationMs, onUpdate }: EmphasisSectionProps) {
+export function SpeakerViewEmphasisSection({ options, value, durationMs, showDuration = true, onUpdate }: EmphasisSectionProps) {
   const t = useT()
   const none = options.every((o) => !o.allowed)
   return (
@@ -129,7 +133,7 @@ export function SpeakerViewEmphasisSection({ options, value, durationMs, onUpdat
       <Label>{t("speakerView.section.emphasis")}</Label>
       <SpeakerEmphasisPicker options={speakerViewPickerOptions(options, SPEAKER_EMPHASIS_LABEL_KEYS as Readonly<Record<string, MessageKey>>, t)} value={value} ariaLabel={t("speakerView.field.emphasis")} onChange={(emphasisStyle) => onUpdate({ emphasisStyle })} />
       <Reasons testId="speaker-view-emphasis-reasons" reasons={distinctReasons(options, t)} />
-      <TweenSlider label={t("speakerView.field.emphasisMs")} value={msOf(durationMs, SPEAKER_VIEW_DEFAULTS.emphasisDurationMs)} disabled={none} onChange={(n) => onUpdate({ emphasisDurationMs: n })} />
+      {showDuration && <TweenSlider label={t("speakerView.field.emphasisMs")} value={msOf(durationMs, SPEAKER_VIEW_DEFAULTS.emphasisDurationMs)} disabled={none} onChange={(n) => onUpdate({ emphasisDurationMs: n })} />}
     </section>
   )
 }

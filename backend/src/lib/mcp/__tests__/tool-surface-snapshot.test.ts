@@ -1091,6 +1091,14 @@ const TIGHTEN_FRAMING_SOURCE_BYTES = 538
 // does NOT move. Measured by this suite on the same tree: 468_268 total − 465_895 before = 2_373 B
 // (make_clip_pack to 8_229, under the per-tool budget); the 103 B of headroom carry across.
 const CLIP_PACK_RECORDINGS_BYTES = 2_373
+// RAISED 2026-10-20 by `speaker_layout`, Speaker Layout's own verb (verbs-use-case-speaker-layout.ts:
+// one recording or several, the shape, layout, switch, emphasis, framing source and review), and by
+// `continue_use_case` naming Speaker Layout among the runs it continues; nothing else. The fixture
+// gains `speaker_layout` on both editions. Measured by this suite on the tree merged with dev:
+// 474_485 total − 468_268 before = 6_217 B: speaker_layout 6_201 B (under the per-tool budget) and
+// continue_use_case's label list + 16 B ("Trailer or Clip Pack" → "Trailer, Clip Pack or Speaker
+// Layout"). The 103 B of headroom carry across.
+const SPEAKER_LAYOUT_TOOL_BYTES = 6_217
 
 // RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
 // added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
@@ -1236,7 +1244,8 @@ export const TOOL_WIRE_BUDGET = {
     TRAILER_RECORDINGS_BYTES +
     TRAILER_MEDIA_URL_VIDEO_BYTES +
     TIGHTEN_FRAMING_SOURCE_BYTES +
-    CLIP_PACK_RECORDINGS_BYTES,
+    CLIP_PACK_RECORDINGS_BYTES +
+    SPEAKER_LAYOUT_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

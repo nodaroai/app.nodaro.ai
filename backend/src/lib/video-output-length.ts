@@ -369,11 +369,22 @@ function ugcClipLength(): WireLength {
 
 /**
  * A use-case node's output length (its spec's `outputLength`, use-case-specs.ts):
- * the fixed length, after the input it names when that input is wired. An input
- * whose length the listing does not know leaves the delivery unknown (unknown
- * in, unknown out).
+ *  - `fixed`: the fixed length, after the input it names when that input is
+ *    wired;
+ *  - `clock`: the recording the run is clocked to — the Master audio wire's
+ *    length when one is wired, else the longest `media` wire's (component-wise,
+ *    so it never under-quotes the whole-recording edit).
+ * An input whose length the listing does not know leaves the delivery unknown
+ * (unknown in, unknown out); a clock with no recording wired is unknown.
  */
 export function usecaseLength(len: UseCaseOutputLength, inputs: readonly WireInput[]): WireLength {
+  if (len.kind === "clock") {
+    const master = inputs.filter((i) => i.handle === "masterAudio")
+    const needed = master.length > 0 ? master : inputs.filter((i) => i.handle === "media")
+    const lengths = needed.map((i) => knownLength(i.length))
+    if (lengths.length === 0 || lengths.some((l) => l === undefined)) return "unknown"
+    return (lengths as InputLength[]).reduce(maxLen)
+  }
   const base = fixed(len.fixedSec)
   const before = len.after ? inputs.find((i) => i.handle === len.after) : undefined
   if (!before) return base

@@ -40,6 +40,7 @@ export type {
   ClipPackInput,
   EpisodeChaptersInput,
   EpisodeTrailerInput,
+  SpeakerLayoutInput,
   TrailerFormat,
   TightenEpisodeInput,
   TightenEpisodeJobResult,
