@@ -30,10 +30,13 @@
  *    high: the frames of the edit wired in when it is known now; for an edit
  *    an Edit Plan is about to make, the episode's length this run on each
  *    camera the plan reads (`plannedEditFrames`); for a video wired instead of an edit, its
- *    recorded length (as Speaker View's video mode reads it); else the
- *    ceiling of 180 minutes on each of 6 cameras — 129,600 frames, 130 blocks.
- *    It leans high so that a run the balance check lets start is not refused
- *    its own hold mid-run.
+ *    recorded length (as Speaker View's video mode reads it). A length not
+ *    known before the run is 180 minutes on each camera the run will frame
+ *    (decided 2026-10-20, `speakerFramesCeilingBlocks`): one for a video, the
+ *    cameras an Edit Plan or Speaker Map reads for the edit it is about to
+ *    make — at most 6; when the cameras cannot be counted either, the ceiling
+ *    of 180 minutes on each of 6 cameras, 130 blocks. It leans high so that a
+ *    run the balance check lets start is not refused its own hold mid-run.
  *
  * Pure; never mutates its input.
  */
@@ -61,6 +64,8 @@ import {
   type SpeakerFramesScopeSource,
 } from "./speaker-frames"
 import { editPlanProducerKind, editPlanSourceKind } from "./edit-plan-source-kind"
+import { bypassTeleports } from "./teleport-bypass"
+import { usecaseMediaKindOf } from "./use-case-expand"
 import { MULTICAM_SPEAKER_MAP_TYPE } from "./speaker-map-step"
 
 /** Base credits per started block of sampled frames (decided 2026-10-16: one
@@ -75,6 +80,15 @@ export const SPEAKER_FRAMES_FRAMES_PER_BLOCK = 1000
 /** Cameras the estimate's ceiling assumes (Speaker View shows at most six). */
 export const SPEAKER_FRAMES_CEILING_SOURCES = 6
 
+/** The most frames one camera of an edit samples over an episode of
+ *  `episodeSec`: at most 180 minutes, plus the 2 s margins each side, at 2 fps
+ *  (21,608 at the cap) — the bound every planned edit and the unknown-length
+ *  ceiling count per camera. */
+export function speakerFramesCameraFrames(episodeSec: number): number {
+  const perSourceMs = Math.min(episodeSec * 1000, SPEAKER_FRAMES_MAX_SOURCE_MS) + 2 * SPEAKER_FRAMES_SPAN_MARGIN_MS
+  return Math.ceil((perSourceMs * SPEAKER_FRAMES_SAMPLE_FPS) / 1000)
+}
+
 /** The estimate's ceiling: 180 minutes on each of 6 cameras at 2 fps. */
 export const SPEAKER_FRAMES_CEILING_FRAMES =
   (SPEAKER_FRAMES_MAX_SOURCE_MS / 1000) * SPEAKER_FRAMES_SAMPLE_FPS * SPEAKER_FRAMES_CEILING_SOURCES
@@ -88,6 +102,19 @@ export function speakerFramesBlocks(frames: number): number {
 
 /** The estimate's ceiling in blocks (130). */
 export const SPEAKER_FRAMES_CEILING_BLOCKS = speakerFramesBlocks(SPEAKER_FRAMES_CEILING_FRAMES)
+
+/**
+ * The estimate when the length is not known before the run but the cameras
+ * the run will frame are (decided 2026-10-20): 180 minutes on each of them
+ * (`speakerFramesCameraFrames`, the margins included), at most 6 — never above
+ * the 130-block ceiling. One video: 22 blocks; 3 cameras: 65; 6: 130. A count
+ * that is not a whole number of at least one is the ceiling (never low).
+ */
+export function speakerFramesCeilingBlocks(cameras: number): number {
+  if (!Number.isInteger(cameras) || cameras < 1) return SPEAKER_FRAMES_CEILING_BLOCKS
+  const frames = Math.min(cameras, SPEAKER_FRAMES_CEILING_SOURCES) * speakerFramesCameraFrames(SPEAKER_FRAMES_MAX_SOURCE_MS / 1000)
+  return Math.min(SPEAKER_FRAMES_CEILING_BLOCKS, speakerFramesBlocks(frames))
+}
 
 /** Frames a bare video of `durationSec` samples: the whole video at 2 fps. */
 export function speakerFramesBareVideoFrames(durationSec: number): number {
@@ -162,12 +189,36 @@ function originLengthThisRun(
   return sec !== undefined && sec > 0 ? sec : undefined
 }
 
+/** The most frames an edit a step is ABOUT to make can sample. `lengthKnown`
+ *  false: its length this run is not known, so `frames` is 180 minutes on each
+ *  of its cameras (decided 2026-10-20) and the estimate is held to the
+ *  130-block ceiling (`speakerFramesCeilingBlocks`). */
+interface PlannedEdit {
+  readonly frames: number
+  readonly lengthKnown: boolean
+}
+
+/** A planned edit over `cameras` cameras of an episode of `episodeSec`, or of
+ *  unknown length (180 minutes on each). Undefined — the ceiling — for none. */
+function plannedOver(cameras: number, episodeSec: number | undefined): PlannedEdit | undefined {
+  if (cameras === 0) return undefined
+  const sec = episodeSec ?? SPEAKER_FRAMES_MAX_SOURCE_MS / 1000
+  return { frames: cameras * speakerFramesCameraFrames(sec), lengthKnown: episodeSec !== undefined }
+}
+
 /**
  * The most frames the whole-recording edit a Speaker Map is ABOUT to make can
  * sample (decided 2026-10-20): one segment over its clock recording
  * (`speakerMapClockOrigin`), so on each camera it reads at most that length
- * plus the two margins (at most 180 minutes), at 2 fps. Undefined — the
- * ceiling — when the clock's length this run is not known, or it reads no camera.
+ * plus the two margins (at most 180 minutes), at 2 fps. When the clock's
+ * length this run is not known, 180 minutes on each camera — the scope
+ * refuses a source that keeps more, and the one segment keeps all of it.
+ * A source is a camera by exactly the run's rule: the kind both engines give
+ * each row the map is handed (`usecaseMediaKindOf`, on the wire's own pip,
+ * teleports walked as the run walks them) — a node that hands on either kind
+ * (Adjust Volume on its video pip, a Voice Changer on its video) is a camera,
+ * and the map keeps every source that is not audio as one. Undefined — the
+ * ceiling — when it reads no camera.
  */
 function plannedSpeakerMapFrames(
   map: EstimateGraphNode,
@@ -175,18 +226,14 @@ function plannedSpeakerMapFrames(
   edges: readonly EstimateGraphEdge[],
   rerunIds: ReadonlySet<string>,
   planOutputOf: EditPlanOutputReader,
-): number | undefined {
+): PlannedEdit | undefined {
   const clockSec = originLengthThisRun(speakerMapClockOrigin(map, nodes, edges), nodes, edges, rerunIds, planOutputOf)
-  if (clockSec === undefined) return undefined
   const cameras = new Set<string>()
-  for (const e of edges) {
+  for (const e of bypassTeleports(nodes, edges)) {
     if (e.target !== map.id || e.targetHandle !== "sources") continue
-    const origin = resolveGraphOrigin(nodes.find((n) => n.id === e.source), nodes, edges)
-    if (origin && editPlanProducerKind(origin.type) === "video") cameras.add(origin.id)
+    if (usecaseMediaKindOf(nodes.find((n) => n.id === e.source), e.sourceHandle) === "video") cameras.add(e.source)
   }
-  if (cameras.size === 0) return undefined
-  const perSourceMs = Math.min(clockSec * 1000, SPEAKER_FRAMES_MAX_SOURCE_MS) + 2 * SPEAKER_FRAMES_SPAN_MARGIN_MS
-  return cameras.size * Math.ceil((perSourceMs * SPEAKER_FRAMES_SAMPLE_FPS) / 1000)
+  return plannedOver(cameras.size, clockSec)
 }
 
 /**
@@ -210,7 +257,14 @@ function plannedSpeakerMapFrames(
  *  - a length is read only where this run cannot change it: a step that holds
  *    its result, an input node, or what a running step is estimated to make
  *    (`runWireLengthSec`) — never the saved length of a step about to run again.
- * Undefined — the ceiling — otherwise, or when the plan reads no camera. Clips,
+ * When the episode's length is not known (decided 2026-10-20): 180 minutes on
+ * each camera the plan reads, but only when a Transcribe about to run hears
+ * the plan's master — the run refuses a master over 180 minutes, so the
+ * transcript the plan spans ends within them. Undefined — the ceiling — when
+ * the plan reads no camera, when its transcript is not made by a Transcribe
+ * here (the plan spans that transcript's end, which no recording bounds), or
+ * when its length is not known and the transcript is not heard from the
+ * master this run (a longer recording, or one that is not a source). Clips,
  * trailers and tightened cuts all keep within the episode, so one bound serves
  * every mode; the node's untick list is not applied (it names the edit's
  * source ids, which the plan mints when it runs).
@@ -221,21 +275,28 @@ function plannedEditFrames(
   edges: readonly EstimateGraphEdge[],
   rerunIds: ReadonlySet<string>,
   planOutputOf: EditPlanOutputReader,
-): number | undefined {
+): PlannedEdit | undefined {
   const lengthThisRun = (origin: EstimateGraphNode | undefined) => originLengthThisRun(origin, nodes, edges, rerunIds, planOutputOf)
-  const masterSec = lengthThisRun(editPlanMasterOrigin(plan, nodes, edges))
+  const master = editPlanMasterOrigin(plan, nodes, edges)
+  const masterSec = lengthThisRun(master)
   const tEdge = edges.find((e) => e.target === plan.id && e.targetHandle === "transcript")
   const transcriber = tEdge ? resolveGraphOrigin(nodes.find((n) => n.id === tEdge.source), nodes, edges) : undefined
-  if (masterSec === undefined || transcriber?.type !== "transcribe") return undefined
+  // A transcript from anywhere else may run past every recording, and the plan
+  // spans its end: no bound per camera holds, so the ceiling.
+  if (transcriber?.type !== "transcribe") return undefined
   let heardSec: number | undefined
+  let heardMaster = false
   if (rerunIds.has(transcriber.id)) {
     const heardEdge = edges.find((e) => e.target === transcriber.id)
-    heardSec = heardEdge ? lengthThisRun(resolveGraphOrigin(nodes.find((n) => n.id === heardEdge.source), nodes, edges)) : undefined
+    const heard = heardEdge ? resolveGraphOrigin(nodes.find((n) => n.id === heardEdge.source), nodes, edges) : undefined
+    heardSec = lengthThisRun(heard)
+    heardMaster = heard !== undefined && heard.id === master?.id
   } else {
     heardSec = transcriptDurationSec(heldTranscript(dataOf(transcriber)))
   }
-  if (heardSec === undefined) return undefined
-  const episodeSec = Math.max(masterSec, heardSec)
+  const episodeSec = masterSec !== undefined && heardSec !== undefined ? Math.max(masterSec, heardSec) : undefined
+  // Unknown length: 180 minutes a camera only when the transcript is the master's (decided 2026-10-20).
+  if (episodeSec === undefined && !heardMaster) return undefined
 
   const cfg = (dataOf(plan).sourceConfig as Record<string, { kind?: unknown } | undefined> | undefined) ?? {}
   const cameras = new Set<string>()
@@ -245,9 +306,7 @@ function plannedEditFrames(
     // Both engines key the source settings by the source node, teleports walked.
     if (origin && editPlanSourceKind(cfg[origin.id]?.kind, editPlanProducerKind(origin.type)) === "video") cameras.add(origin.id)
   }
-  if (cameras.size === 0) return undefined
-  const perSourceMs = Math.min(episodeSec * 1000, SPEAKER_FRAMES_MAX_SOURCE_MS) + 2 * SPEAKER_FRAMES_SPAN_MARGIN_MS
-  return cameras.size * Math.ceil((perSourceMs * SPEAKER_FRAMES_SAMPLE_FPS) / 1000)
+  return plannedOver(cameras.size, episodeSec)
 }
 
 /** The transcript a Transcribe holds and hands on its `json` output: the active
@@ -267,7 +326,7 @@ function heldTranscript(data: Record<string, unknown>): unknown {
 
 /** What one `edl` wire will deliver: an edit its producer holds now, or the
  *  frames bound of one a plan is about to make; undefined — the ceiling — else. */
-type WireEdit = { readonly held: unknown } | { readonly plannedFrames: number }
+type WireEdit = { readonly held: unknown } | { readonly planned: PlannedEdit }
 
 function wireEdit(
   producer: EstimateGraphNode | undefined,
@@ -283,12 +342,12 @@ function wireEdit(
     return blank(plan) ? undefined : { held: plan }
   }
   if (producer.type === "edit-plan") {
-    const plannedFrames = plannedEditFrames(producer, nodes, edges, rerunIds, planOutputOf)
-    return plannedFrames === undefined ? undefined : { plannedFrames }
+    const planned = plannedEditFrames(producer, nodes, edges, rerunIds, planOutputOf)
+    return planned === undefined ? undefined : { planned }
   }
   if (producer.type === MULTICAM_SPEAKER_MAP_TYPE) {
-    const plannedFrames = plannedSpeakerMapFrames(producer, nodes, edges, rerunIds, planOutputOf)
-    return plannedFrames === undefined ? undefined : { plannedFrames }
+    const planned = plannedSpeakerMapFrames(producer, nodes, edges, rerunIds, planOutputOf)
+    return planned === undefined ? undefined : { planned }
   }
   // A re-running Camera Switch keeps every span and source of the edit it reads.
   if (EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) {
@@ -314,19 +373,22 @@ function wireEdit(
  *    margins) at 2 fps — never the ceiling when that length is known
  *    (`plannedEditFrames` says when it is). An edit a Speaker Map is about
  *    to make (decided 2026-10-20): its clock recording's length this run on
- *    each camera it reads (`plannedSpeakerMapFrames`).
+ *    each camera it reads (`plannedSpeakerMapFrames`). When that length is
+ *    not known (decided 2026-10-20): 180 minutes on each camera the plan or
+ *    map reads, held to the 130-block ceiling (`speakerFramesCeilingBlocks`).
  *    Every wire on the handle folds into one run, as the run itself folds
  *    them: their frames add, then round to blocks once;
  *  - a video wired instead of an edit (decided 2026-10-16): the whole video at
  *    2 fps over its recorded length — the length Speaker View's video mode
  *    reads (`runWireLengthSec`: an upload's recorded length, a render's
  *    estimated length, what a Trim, Loop or Combine Videos passes on), at
- *    most 180 minutes;
+ *    most 180 minutes; its length not known before the run: 180 minutes on
+ *    its one camera, 22 blocks (decided 2026-10-20);
  *  - nothing wired, an edit set on the node itself: its frames;
- *  - anything else — a producer that holds nothing yet, a plan whose
- *    episode length this run is not known, an edit that cannot be read, a video whose
- *    length is not known before the run —
- *    the ceiling: 180 minutes on each of 6 cameras, 130 blocks;
+ *  - anything else — a producer that holds nothing yet, a plan or map that
+ *    reads no camera, a plan whose transcript is not made by a Transcribe
+ *    here, an edit that cannot be read, another producer about to run — the
+ *    ceiling: 180 minutes on each of 6 cameras, 130 blocks;
  *  - nothing at all: one block (the run is refused before any reserve).
  *
  * @param rerunIds ids of the nodes about to EXECUTE ({@link resolveApplyEdlEstimateMinutes}).
@@ -345,12 +407,14 @@ export function speakerFramesEstimateBlocks(
     const edits: unknown[] = []
     let heldWires = 0
     let plannedFrames = 0
+    let lengthUnknown = false
     for (const edge of edlEdges) {
       const producer = resolveGraphOrigin(nodes.find((n) => n.id === edge.source), nodes, edges)
       const found = wireEdit(producer, nodes, edges, rerunIds, planOutputOf)
       if (!found) return SPEAKER_FRAMES_CEILING_BLOCKS
-      if ("plannedFrames" in found) {
-        plannedFrames += found.plannedFrames
+      if ("planned" in found) {
+        plannedFrames += found.planned.frames
+        if (!found.planned.lengthKnown) lengthUnknown = true
         continue
       }
       heldWires++
@@ -359,7 +423,10 @@ export function speakerFramesEstimateBlocks(
       else edits.push(found.held)
     }
     const heldFrames = heldWires > 0 ? framesOfEdit(edits, data) : 0
-    return heldFrames === undefined ? SPEAKER_FRAMES_CEILING_BLOCKS : speakerFramesBlocks(heldFrames + plannedFrames)
+    if (heldFrames === undefined) return SPEAKER_FRAMES_CEILING_BLOCKS
+    const blocks = speakerFramesBlocks(heldFrames + plannedFrames)
+    // A length not known before the run is 180 minutes a camera, on at most 6 (decided 2026-10-20).
+    return lengthUnknown ? Math.min(SPEAKER_FRAMES_CEILING_BLOCKS, blocks) : blocks
   }
   const videoEdges = edges.filter((e) => e.target === node.id && e.targetHandle === "video")
   if (videoEdges.length > 0) {
@@ -367,7 +434,8 @@ export function speakerFramesEstimateBlocks(
     let sec = 0
     for (const edge of videoEdges) {
       const known = runWireLengthSec(edge.source, nodes, edges, rerunIds, { planOutputOf, otherSec: (o) => mediaLengthSecOf(dataOf(o)) })
-      if (known === undefined || !(known > 0)) return SPEAKER_FRAMES_CEILING_BLOCKS
+      // Its length not known before the run: 180 minutes on its one camera (decided 2026-10-20).
+      if (known === undefined || !(known > 0)) return speakerFramesCeilingBlocks(1)
       sec = Math.max(sec, known)
     }
     return speakerFramesBlocks(speakerFramesBareVideoFrames(Math.min(sec, SPEAKER_FRAMES_MAX_SOURCE_MS / 1000)))

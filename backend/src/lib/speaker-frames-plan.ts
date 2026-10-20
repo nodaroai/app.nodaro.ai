@@ -44,10 +44,12 @@ const defaultProbe: SpeakerFramesProbe = async (url) => {
 /**
  * The frames a Speaker Frames job will sample, counted on the server from the
  * payload the builder made: the scope of its edit and untick list, or a bare
- * video's probed length. A bare video that cannot be probed is counted at the
- * 180 minutes one source may contribute (the job refuses it before sampling
- * and the reserve is refunded). `undefined` for a payload that resolves to no
- * scope (the builder refuses those before any reserve).
+ * video's probed length. A bare video that cannot be probed, or that is longer,
+ * is counted at the 180 minutes one source may contribute (decided
+ * 2026-10-20): the job refuses a longer one before sampling and the reserve is
+ * refunded, so no charge can exceed that — and the estimate of a video of
+ * unknown length is those 180 minutes. `undefined` for a payload that resolves
+ * to no scope (the builder refuses those before any reserve).
  */
 export async function speakerFramesReserveFrames(
   payload: Readonly<Record<string, unknown>>,
@@ -74,7 +76,8 @@ export async function speakerFramesReserveFrames(
   if (scope.sources.every((s) => s.frames !== null)) return speakerFramesScopeFrames(scope.sources)
   const sec = await probe(videoUrl!).catch(() => undefined)
   const known = typeof sec === "number" && Number.isFinite(sec) && sec > 0
-  return known ? speakerFramesBareVideoFrames(sec) : speakerFramesBareVideoFrames(SPEAKER_FRAMES_MAX_SOURCE_MS / 1000)
+  const maxSec = SPEAKER_FRAMES_MAX_SOURCE_MS / 1000
+  return speakerFramesBareVideoFrames(known ? Math.min(sec, maxSec) : maxSec)
 }
 
 /**

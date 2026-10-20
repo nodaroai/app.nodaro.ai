@@ -958,7 +958,9 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   // (SV14 b), which a crossfade switch can only shorten — so this leans high.
   "speaker-view": resolveApplyEdlEstimateMinutes,
   // Speaker Frames: started blocks of 1,000 sampled frames — the edit wired in
-  // when it is known now, else the 180 min × 6 cameras ceiling (130 blocks).
+  // when it is known now; a length not known before the run, 180 min on each
+  // camera the run will frame (at most 6); else the 180 min × 6 cameras
+  // ceiling (130 blocks).
   // The server's estimate reads the same rule; the reserve counts the run's
   // own frames, and the charge the frames it sampled.
   "speaker-frames": speakerFramesEstimateBlocks,
