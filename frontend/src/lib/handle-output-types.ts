@@ -134,7 +134,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "suno-mashup": { audio: "audio" },
   "suno-music-video": { video: "video" },
   "suno-replace-section": { audio: "audio" },
-  "suno-separate": { vocals: "audio", instrumental: "audio" },
+  "suno-separate": { vocals: "audio", instrumental: "audio", isolated: "audio", without: "audio" },
   "audio-separation": { vocals: "audio", instrumental: "audio", drums: "audio", bass: "audio", other: "audio", guitar: "audio", piano: "audio" },
   "suno-style-boost": { text: "text" },
   "suno-upload-extend": { audio: "audio" },

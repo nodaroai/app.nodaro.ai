@@ -47,7 +47,10 @@ import {
 } from "@nodaro/shared/scene3d"
 import {
   COMPOSER_PLAN_MAP,
-  COMPOSER_PLAN_FIELDS
+  COMPOSER_PLAN_FIELDS,
+  SUNO_SEPARATE_META_FIELDS,
+  SUNO_SEPARATE_RESULT_FIELDS,
+  sunoSeparateHandleUrl
 } from "@nodaro/shared/models"
 import {
   extractAllGeneratedResults,
@@ -313,7 +316,8 @@ export const ANALYSIS_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
 ])
 
 // All NodeOutput keys that map 1:1 from job output_data
-const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
+// (a Set: the shared Suno Separate lists at the end repeat stems listed earlier)
+const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [...new Set<keyof NodeOutput>([
   "imageUrl",
   // generate-mask emits { imageUrl, maskUrl }. Without maskUrl here the live DAG
   // path drops it, so the "mask" source handle resolves to the passthrough image
@@ -374,7 +378,12 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   // edge leaves the `stills` handle; without this key the live DAG path drops
   // it and the handle resolves to nothing.
   "shotStills",
-]
+  // suno-separate: every stem / take URL and how the run ran (one shared list
+  // with the worker and the editor) — without these the live DAG drops the
+  // isolated / without takes and every full-stems stem it has no key for.
+  ...SUNO_SEPARATE_RESULT_FIELDS,
+  ...SUNO_SEPARATE_META_FIELDS,
+])]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
 const PLAN_OUTPUT_KEYS = [...COMPOSER_PLAN_FIELDS, "plan"]
@@ -896,9 +905,11 @@ export function getPrimaryOutput(
   // (`vocal`/`instrumental`) are accepted here as a safety net for any edge
   // that bypassed the migration (e.g. an MCP-built workflow that didn't go
   // through `loadWorkflow`).
+  // A stem that did not come back is empty, never the main audio (only an
+  // output of the pre-stems shape, `audioUrl` alone, feeds vocals/instrumental)
+  // — the shared rule the editor's engine applies too.
   if (sourceType === "suno-separate" && sourceHandle) {
-    if (sourceHandle === "vocals" || sourceHandle === "vocal" || sourceHandle === "vocal-out") return output.vocalUrl || output.audioUrl
-    if (sourceHandle === "instrumental" || sourceHandle === "instrumental-out") return output.instrumentalUrl || output.audioUrl
+    return sunoSeparateHandleUrl(output as Readonly<Record<string, unknown>>, sourceHandle)
   }
 
   // Audio-separation (Demucs): route each of the 7 stem handles; fall back to
@@ -1762,17 +1773,17 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     }
   }
 
-  // Suno-separate → audioUrl + stem URLs (vocalUrl, instrumentalUrl)
+  // Suno-separate → audioUrl + every stem / take URL the run saved
   if (type === "suno-separate") {
     const url =
       getActiveResultUrl(data) ??
       (data.generatedAudioUrl as string | undefined)
     const output: NodeOutput = {}
     if (url) output.audioUrl = url
-    const vocalUrl = data.vocalUrl as string | undefined
-    const instrumentalUrl = data.instrumentalUrl as string | undefined
-    if (vocalUrl) output.vocalUrl = vocalUrl
-    if (instrumentalUrl) output.instrumentalUrl = instrumentalUrl
+    for (const key of SUNO_SEPARATE_RESULT_FIELDS) {
+      const v = data[key]
+      if (typeof v === "string" && v !== "") output[key] = v
+    }
     return Object.keys(output).length > 0 ? output : undefined
   }
 

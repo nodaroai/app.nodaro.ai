@@ -2916,8 +2916,11 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno generation (sunoTaskId/sunoTrackId are looked up server-side). At least 1 character. |
-| `type` | string |  | `separate_vocal` (default) = vocals + instrumental. `split_stem` = full multi-stem split. One of `separate_vocal`, `split_stem`. |
+| `audio_url` | string (URL) |  | Any audio by URL. |
+| `audio_asset_id` | string |  | Nodaro audio job id or uploaded audio asset id. A Suno generation is separated by its Suno ids (looked up server-side). At least 1 character. |
+| `type` | string |  | `separate_vocal` (default) = vocals + instrumental. `split_stem` = full multi-stem split. `split_stem_advanced` = one instrument (`stem_name`) alone and the song without it. One of `separate_vocal`, `split_stem`, `split_stem_advanced`. |
+| `stem_name` | string |  | One of Suno's instrument names, e.g. Piano or Lead Vocal (only for split_stem_advanced; default Lead Vocal) |
+| `fallback_to_demucs` | boolean |  | When Suno refuses (a commercially released recording, or over 20 MB), run Demucs instead and charge its price. Vocals and full stems only — one-instrument mode has no fallback. Default false. |
 
 ## `suno_style_boost`
 

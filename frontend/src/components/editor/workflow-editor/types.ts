@@ -14,7 +14,7 @@ import type { SelectorFields } from "@nodaro/shared/workflow"
 import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
 import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
 import { FAN_OUT_EACH_TYPES, withWiredSettings, FAN_IN_TARGETS, isRenderNodeType } from "@nodaro/shared/nodes"
-import { SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution } from "@nodaro/shared/models"
+import { SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared/scene3d"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
@@ -53,6 +53,9 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   "suno-extend": 30,
   "suno-lyrics": 10,
   "suno-separate": 40,
+  // Full stems and one instrument price at their own ids (sunoSeparateCreditId).
+  [sunoSeparateCreditId("split_stem")]: 130,
+  [sunoSeparateCreditId("split_stem_advanced")]: 80,
   "audio-separation": 30,
   "suno-music-video": 10,
   "suno-mashup": 30,

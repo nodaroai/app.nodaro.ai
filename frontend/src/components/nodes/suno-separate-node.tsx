@@ -17,8 +17,19 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoSeparateData } from "@/types/nodes"
+import { DEFAULT_SUNO_STEM_NAME, sunoSeparateCreditId, type SunoSeparateType } from "@nodaro/shared/models"
+import { sunoSeparateLane } from "@/lib/suno-ids"
 
 const ACCEPTS_AUDIO = (t: string) => isValidSunoSeparateConnection("audio", t)
+
+// Shown until the live price loads (current credits, like the server's
+// creditCost); keyed by mode so the credit ids stay spelled only in
+// sunoSeparateCreditId. An unknown saved mode reads as the two-stem split.
+const FALLBACK_CREDITS_BY_TYPE: Readonly<Record<SunoSeparateType, number>> = {
+  separate_vocal: 40,
+  split_stem: 130,
+  split_stem_advanced: 80,
+}
 
 function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -30,8 +41,17 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl ?? nodeData.vocalUrl
-  const separateCreditId = nodeData.type === "split_stem" ? "suno-separate-stem" : "suno-separate"
-  const credits = useModelCredits(separateCreditId, nodeData.type === "split_stem" ? 10 : 5)
+  const separateCreditId = sunoSeparateCreditId(nodeData.type)
+  const credits = useModelCredits(separateCreditId, FALLBACK_CREDITS_BY_TYPE[nodeData.type] ?? FALLBACK_CREDITS_BY_TYPE.separate_vocal)
+  // Each mode fills its own pips: vocals + instrumental, the full stems (an
+  // instrumental only when the run returned one), or one instrument's
+  // isolated / without. The others are muted, never removed — a wired edge
+  // stays drawn.
+  const mode: SunoSeparateType = nodeData.type ?? "separate_vocal"
+  const oneInstrument = mode === "split_stem_advanced"
+  const instrumentalMuted = oneInstrument || (mode === "split_stem" && !nodeData.instrumentalUrl)
+  // The lane the run takes, read the way execute-node decides it.
+  const lane = useWorkflowStore((s) => sunoSeparateLane(id, s.nodes, s.edges, nodeData.taskId))
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -87,6 +107,8 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         { id: "audio",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "vocals",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         { id: "instrumental", type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
+        { id: "isolated",     type: "source", position: Position.Right, customStyle: { top: '88px',              right: '-29px' }, external: true },
+        { id: "without",      type: "source", position: Position.Right, customStyle: { top: '120px',             right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -153,14 +175,29 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
+        {nodeData.engineUsed === "demucs" && (
+          <p className="text-[10px] text-amber-500" data-testid="suno-separate-demucs-note">
+            {t(nodeData.fallbackReason === "too_large" ? "node.sunoSeparate.usedDemucsTooLarge" : "node.sunoSeparate.usedDemucs")}
+          </p>
+        )}
+
         <span className="text-xs text-muted-foreground">
-          {t("node.separate")} · {nodeData.type === "split_stem" ? t("audiocfg.twelveStems") : t("node.vocalInst")}
+          {t("node.separate")} · {oneInstrument
+            ? (nodeData.stemName ?? DEFAULT_SUNO_STEM_NAME)
+            : mode === "split_stem" ? t("audiocfg.twelveStems") : t("node.vocalInst")}
         </span>
+        {lane && (
+          <span className="text-[10px] text-muted-foreground/70" data-testid="suno-separate-lane">
+            {t(lane === "suno" ? "node.sunoSeparate.laneSuno" : "node.sunoSeparate.laneUpload")}
+          </span>
+        )}
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="audio"        type="target" position={Position.Left}  label="Audio"        color={HANDLE_COLORS.audio} icon={<Scissors />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="right" top="24px" />
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="56px" />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="right" top="24px"  disabled={oneInstrument} />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="56px"  disabled={instrumentalMuted} />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="isolated"     type="source" position={Position.Right} label="Isolated"     color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="88px"  disabled={!oneInstrument} />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="without"      type="source" position={Position.Right} label="Without"      color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="120px" disabled={!oneInstrument} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

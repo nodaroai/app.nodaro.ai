@@ -146,7 +146,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "model": { valueType: "string", fixed: true, values: ["V4","V4_5","V4_5ALL","V4_5PLUS","V5","V5_5","V6","V6_MINI","V6_WILD"] },
   },
   "suno-separate": {
-    "type": { valueType: "string", fixed: true, values: ["separate_vocal","split_stem"] },
+    "type": { valueType: "string", fixed: true, values: ["separate_vocal","split_stem","split_stem_advanced"] },
   },
   "suno-upload-extend": {
     "model": { valueType: "string", fixed: true, values: ["V4","V4_5","V4_5ALL","V4_5PLUS","V5","V5_5","V6","V6_MINI","V6_WILD"] },

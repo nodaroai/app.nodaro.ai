@@ -767,7 +767,8 @@ describe("sunoSeparate", () => {
     const stems = [
       ["vocals", "vocalUrl"],
       ["instrumental", "instrumentalUrl"],
-      ["backing vocals", "backingVocalsUrl"],
+      // KIE's real spelling (probe 2026-10-18): underscore, title case.
+      ["Backing_Vocals", "backingVocalsUrl"],
       ["drums", "drumsUrl"],
       ["bass", "bassUrl"],
       ["guitar", "guitarUrl"],

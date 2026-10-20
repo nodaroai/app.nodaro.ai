@@ -410,6 +410,31 @@ describe("payload adapters — for job types whose enqueued shape isn't the rout
     await runJobOnCloud("suno-separate", { taskId: "t", audioId: "a" })
     expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/separate", { taskId: "t", audioId: "a" })
   })
+
+  it("suno-separate relay carries audioUrl, stemName, fallbackToDemucs and renames separateType→type", async () => {
+    // Any-audio separation: the route takes the audio, the instrument and the
+    // fallback flag under these same names. Dropped on the wire, the cloud
+    // would run a different mode, or refuse where the user asked for Demucs.
+    ensureCloudReachableMediaUrl.mockClear()
+    await runJobOnCloud("suno-separate", {
+      jobId: "local-job",
+      usageLogId: "local-usage",
+      audioUrl: "http://localhost:3002/storage/audio/song.mp3",
+      separateType: "split_stem_advanced",
+      stemName: "Piano",
+      fallbackToDemucs: true,
+    })
+    expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/separate", {
+      audioUrl: "http://localhost:3002/storage/audio/song.mp3",
+      type: "split_stem_advanced",
+      stemName: "Piano",
+      fallbackToDemucs: true,
+    })
+    // The audio is re-hosted by the URL_FIELD rule, so a private-host upload
+    // reaches the cloud; the other new fields are not URLs and pass verbatim.
+    expect(ensureCloudReachableMediaUrl).toHaveBeenCalledWith("http://localhost:3002/storage/audio/song.mp3")
+    expect(ensureCloudReachableMediaUrl).toHaveBeenCalledTimes(1)
+  })
 })
 
 

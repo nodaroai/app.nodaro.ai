@@ -59,7 +59,9 @@ import {
   DEFAULT_DIALOGUE_PROVIDER,
   VOICE_CHANGER_MODELS,
   DEFAULT_VOICE_CHANGER_MODEL,
+  SUNO_SEPARATE_TYPES,
 } from "@nodaro/shared/models"
+import { SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import {
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
@@ -679,14 +681,12 @@ const scene3dDurationControl = (): QuickConfigControl => ({
   customRange: { min: SCENE3D_LIMITS.minDurationSeconds, max: SCENE3D_LIMITS.maxDurationSeconds, unit: "s" },
 })
 
-/** Suno Separate: vocals + instrumental, or the 12-stem split — the panel's
- *  two choices (the split prices higher; the run reads `type`). */
+/** Suno Separate: vocals + instrumental, the full-stems split, or one
+ *  instrument — the panel's modes, from the shared list (each prices
+ *  differently; the run reads `type`). */
 const sunoSeparateTypeControl = (): QuickConfigControl => ({
   field: "type", ariaLabel: tx("audiocfg.separationType"), icon: Layers,
-  options: [
-    { value: "separate_vocal", label: tx("audiocfg.vocalInstrumental") },
-    { value: "split_stem", label: tx("audiocfg.twelveStems") },
-  ],
+  options: SUNO_SEPARATE_TYPES.map((type) => ({ value: type, label: tx(SUNO_SEPARATE_TYPE_LABEL_KEYS[type]) })),
 })
 /** Voice Changer / Voice Changer Pro speech-to-speech model — the shared list
  *  the panels render; an unset node runs the default model. */

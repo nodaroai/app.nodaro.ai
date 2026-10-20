@@ -30,6 +30,7 @@ const SRC = join(__dirname, "..")
 const HOLD_READERS: Record<string, string> = {
   "ee/billing/credits.ts": "reservation and settlement mechanics: refunds and commits move the hold",
   "workers/shared.ts": "settlement: the hold is the ceiling a measured or metered actual is clamped to",
+  "ee/billing/commit-at-charged-price.ts": "settlement: the hold is the ceiling a fallback's charged price is clamped to",
   "lib/job-policy-gate.ts": "a policy budget counts what is HELD by in-flight runs",
   "lib/credits-job-lifecycle.ts":
     "jobCreditHolds: a batch job's live holds — which one a job keeps after a race, and the job's credits column pointed back at that hold",

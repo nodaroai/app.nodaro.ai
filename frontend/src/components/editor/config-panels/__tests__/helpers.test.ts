@@ -630,6 +630,11 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(node)).toBe("suno-separate-stem")
   })
 
+  it("suno-separate one-instrument mode prices as suno-separate-single", () => {
+    const node = makeNode({ type: "suno-separate", data: { label: "Sep", type: "split_stem_advanced", stemName: "Bass" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-separate-single")
+  })
+
   // Wiring check: getModelIdentifier's Suno branch must delegate to
   // sunoCreditType for EVERY select operation, not just the ones spot-checked
   // above. Derived from the shared SUNO_SELECT_OPERATIONS / SUNO_MODELS lists

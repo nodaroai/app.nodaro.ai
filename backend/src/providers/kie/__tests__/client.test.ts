@@ -288,6 +288,31 @@ describe("split tasks", () => {
     expect(taskId).toBe("t-create-only")
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  it("pollKieTask onFail hook replaces the generic failure", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({
+      code: 200,
+      data: { taskId: "t-fail", state: "fail", failCode: "413", failMsg: "matched" },
+    }), { status: 200 }))
+    const { pollKieTask } = await import("../client.js")
+    const typed = new Error("typed refusal")
+    const onFail = vi.fn(() => typed)
+    const err = await withTimers(() => pollKieTask("t-fail", 3, undefined, { onFail })).catch((e: unknown) => e)
+    expect(onFail).toHaveBeenCalledWith("413", "matched")
+    expect(err).toBe(typed)
+  })
+
+  it("pollKieTask onFail returning undefined keeps the generic upstream failure", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({
+      code: 200,
+      data: { taskId: "t-fail", state: "fail", failCode: "500", failMsg: "boom" },
+    }), { status: 200 }))
+    const { pollKieTask } = await import("../client.js")
+    const err = await withTimers(() => pollKieTask("t-fail", 3, undefined, { onFail: () => undefined })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect((err as KieError).isUpstreamFailure).toBe(true)
+    expect((err as KieError).internalDetails).toBe("task failed: [500] boom")
+  })
 })
 
 // ---------------------------------------------------------------------------

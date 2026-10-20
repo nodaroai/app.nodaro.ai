@@ -134,6 +134,13 @@ vi.mock("@/lib/app-settings.js", () => ({
   })),
 }))
 
+// Reached through a dynamic import by commitJobCreditsAtChargedPrice; its own
+// suite (ee/billing/__tests__/commit-at-charged-price.test.ts) covers the settle.
+const mockCommitAtChargedPrice = vi.hoisted(() => vi.fn())
+vi.mock("@/ee/billing/commit-at-charged-price.js", () => ({
+  commitAtChargedPrice: mockCommitAtChargedPrice,
+}))
+
 // credit-anomaly is dynamically imported inside commitJobCredits. Mock both the
 // provider→credits converter (mirrors the real markup formula so the existing
 // provider-metered tests stay deterministic) and the anomaly logger (no-op).
@@ -207,6 +214,7 @@ import {
   markJobCompleted,
   markJobCompletedDetailed,
   commitJobCredits,
+  commitJobCreditsAtChargedPrice,
   refundJobCredits,
   uploadImageMaybeWatermark,
   completeFfmpegVideoJob,
@@ -927,6 +935,37 @@ describe("commitJobCredits", () => {
     mocks.mockMarkupPercent.value = 25
     await commitJobCredits("u1", "job1", null, 12)
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// commitJobCreditsAtChargedPrice
+// ---------------------------------------------------------------------------
+
+describe("commitJobCreditsAtChargedPrice", () => {
+  beforeEach(() => {
+    mockCommitAtChargedPrice.mockResolvedValue({ committed: 33, reserved: 44 })
+  })
+
+  it("settles through the ee helper with the given credit id", async () => {
+    await commitJobCreditsAtChargedPrice("u1", "job1", "audio-separation")
+    expect(mockCommitAtChargedPrice).toHaveBeenCalledWith("u1", "job1", "audio-separation")
+  })
+
+  it.each([null, undefined])("skips with no usage log (%s)", async (usageLogId) => {
+    await commitJobCreditsAtChargedPrice(usageLogId, "job1", "audio-separation")
+    expect(mockCommitAtChargedPrice).not.toHaveBeenCalled()
+  })
+
+  it("skips when the edition has no credits", async () => {
+    mocks.mockHasCredits.value = false
+    await commitJobCreditsAtChargedPrice("u1", "job1", "audio-separation")
+    expect(mockCommitAtChargedPrice).not.toHaveBeenCalled()
+  })
+
+  it("swallows errors", async () => {
+    mockCommitAtChargedPrice.mockRejectedValueOnce(new Error("DB down"))
+    await expect(commitJobCreditsAtChargedPrice("u1", "job1", "audio-separation")).resolves.toBeUndefined()
   })
 })
 

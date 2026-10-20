@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -451,9 +451,9 @@ export function getModelIdentifier(
     return sunoCreditType(data.model as string | undefined, nodeType)
   }
 
-  // Suno separate: "split_stem" costs more than "separate_vocal"
+  // Suno separate: each mode has its own price (the shared rule)
   if (nodeType === "suno-separate") {
-    return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+    return sunoSeparateCreditId(data.type)
   }
 
   // Audio separation (Demucs): "best" quality costs more

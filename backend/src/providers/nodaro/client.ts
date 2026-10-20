@@ -335,7 +335,8 @@ function instanceMediaOrigins(): string[] {
   return origins
 }
 
-function isOurMediaUrl(url: string): boolean {
+/** True for a url on this instance's own media storage (see `instanceMediaOrigins`). */
+export function isOurMediaUrl(url: string): boolean {
   try {
     const u = new URL(url)
     if (u.protocol !== "http:" && u.protocol !== "https:") return false

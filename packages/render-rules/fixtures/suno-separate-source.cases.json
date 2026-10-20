@@ -1,0 +1,53 @@
+{
+  "about": "Suno Separate source parity: the same node data and wired inputs, run through the editor (execute-node) and the server (payload-builder), must send the identical source. expected null = the run is refused. Rule: @nodaro/render-rules suno-separate-source.ts.",
+  "cases": [
+    {
+      "name": "both ids wired, beside wired audio",
+      "data": { "type": "split_stem" },
+      "inputs": { "sunoTaskId": "task-1", "sunoTrackId": "track-1", "audioUrl": "https://cdn.test/track.mp3" },
+      "expected": { "taskId": "task-1", "audioId": "track-1" }
+    },
+    {
+      "name": "typed task id only, with a wired upload",
+      "data": { "type": "separate_vocal", "taskId": "task-9", "audioId": "" },
+      "inputs": { "audioUrl": "https://cdn.test/upload.mp3" },
+      "expected": { "taskId": "task-9", "audioId": "task-9" }
+    },
+    {
+      "name": "a wired task id wins over a different typed one",
+      "data": { "type": "separate_vocal", "taskId": "typed-task", "audioId": "typed-track" },
+      "inputs": { "sunoTaskId": "wired-task", "audioUrl": "https://cdn.test/track.mp3" },
+      "expected": { "taskId": "wired-task", "audioId": "typed-track" }
+    },
+    {
+      "name": "wired task id only, beside wired audio",
+      "data": { "type": "split_stem" },
+      "inputs": { "sunoTaskId": "wired-task", "audioUrl": "https://cdn.test/track.mp3" },
+      "expected": { "taskId": "wired-task", "audioId": "wired-task" }
+    },
+    {
+      "name": "typed task id only, nothing wired",
+      "data": { "type": "split_stem_advanced", "taskId": "task-9" },
+      "inputs": {},
+      "expected": { "taskId": "task-9", "audioId": "task-9" }
+    },
+    {
+      "name": "wired audio URL only",
+      "data": { "type": "split_stem", "taskId": "", "audioId": "" },
+      "inputs": { "audioUrl": "https://cdn.test/upload.mp3" },
+      "expected": { "audioUrl": "https://cdn.test/upload.mp3" }
+    },
+    {
+      "name": "nothing at all",
+      "data": { "taskId": "", "audioId": "" },
+      "inputs": {},
+      "expected": null
+    },
+    {
+      "name": "an audio id alone is no source",
+      "data": { "audioId": "track-only" },
+      "inputs": {},
+      "expected": null
+    }
+  ]
+}

@@ -384,6 +384,8 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "In": "Entrada",
   "Instructions": "Instruções",
   "Instrumental": "Instrumental",
+  "Isolated": "Isolado",
+  "Without": "Sem ele",
   "JSON": "JSON",
   "Location": "Local",
   "Locations": "Locais",

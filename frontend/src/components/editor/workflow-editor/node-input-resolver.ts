@@ -618,6 +618,13 @@ const DEFAULT_EACH_TYPES = FAN_OUT_EACH_TYPES;
  *  are valid when audioUrls is shorter). */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio", "assemble-narrated-video"]);
 
+/** Suno Separate's output handle → the node-data field it carries (old spellings included). */
+const SUNO_SEPARATE_FIELD_BY_HANDLE: ReadonlyMap<string, string> = new Map([
+  ["vocals", "vocalUrl"], ["vocal", "vocalUrl"], ["vocal-out", "vocalUrl"],
+  ["instrumental", "instrumentalUrl"], ["instrumental-out", "instrumentalUrl"],
+  ["isolated", "isolatedUrl"], ["without", "withoutUrl"],
+]);
+
 /** Node types that accept multiple video inputs (accumulate to videoUrls array).
  *  Single source of truth for the video-accumulation branches below — mirrors
  *  MULTI_AUDIO_INPUT_TYPES so combine-videos (unordered "in" handle) and
@@ -3128,35 +3135,22 @@ export function resolveNodeInputs(
       }
     } else if (
       src.type === "suno-separate" &&
-      (resolvedSourceHandle === "instrumental" ||
-        resolvedSourceHandle === "instrumental-out" ||
-        resolvedSourceHandle === "vocals" ||
-        resolvedSourceHandle === "vocal-out")
+      resolvedSourceHandle != null &&
+      SUNO_SEPARATE_FIELD_BY_HANDLE.has(resolvedSourceHandle)
     ) {
-      // Suno-separate emits two stems; route the right one based on the
-      // edge's sourceHandle. Batch 2 rename normalized `vocal-out` →
+      // Suno-separate emits two stems (vocals / instrumental) or, in "one
+      // instrument" mode, two takes (isolated / without); route the one the
+      // edge's sourceHandle names. Batch 2 rename normalized `vocal-out` →
       // `vocals` and `instrumental-out` → `instrumental` — both spellings
       // accepted here as a safety net for edges that bypass loadWorkflow's
       // migration (MCP-built / scripted workflows).
       const srcData = src.data as Record<string, unknown>;
-      const isInstrumental = resolvedSourceHandle === "instrumental" || resolvedSourceHandle === "instrumental-out"
-      if (isInstrumental) {
-        const instrumentalUrl = srcData.instrumentalUrl as string | undefined;
-        if (instrumentalUrl) {
-          if (node.type === "merge-video-audio") {
-            inputs.audioSources = [...(inputs.audioSources ?? []), { url: instrumentalUrl, sourceNodeId: src.id }];
-          } else {
-            inputs.audioUrl = instrumentalUrl;
-          }
-        }
-      } else {
-        const vocalUrl = srcData.vocalUrl as string | undefined;
-        if (vocalUrl) {
-          if (node.type === "merge-video-audio") {
-            inputs.audioSources = [...(inputs.audioSources ?? []), { url: vocalUrl, sourceNodeId: src.id }];
-          } else {
-            inputs.audioUrl = vocalUrl;
-          }
+      const stemUrl = srcData[SUNO_SEPARATE_FIELD_BY_HANDLE.get(resolvedSourceHandle)!] as string | undefined;
+      if (stemUrl) {
+        if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: stemUrl, sourceNodeId: src.id }];
+        } else {
+          inputs.audioUrl = stemUrl;
         }
       }
     } else if (

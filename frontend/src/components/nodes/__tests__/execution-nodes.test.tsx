@@ -9,8 +9,8 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@xyflow/react")>()
   return {
     ...actual,
-    Handle: ({ type, position, id }: any) => (
-      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    Handle: ({ type, position, id, "aria-label": ariaLabel }: any) => (
+      <div data-testid={`handle-${id}`} data-type={type} data-position={position} aria-label={ariaLabel} />
     ),
     NodeResizer: () => null,
     NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
@@ -331,3 +331,68 @@ describe.each(NODES)(
     })
   },
 )
+
+// ---------------------------------------------------------------------------
+// Suno Separate — the pips a mode does not fill are muted (never removed, so
+// a wired edge stays drawn), the lane the run takes, and a Demucs fallback.
+// ---------------------------------------------------------------------------
+
+describe("SunoSeparateNode — mode pips, lane hint, Demucs note", () => {
+  const MUTED = /not used by current model/
+  const pip = (label: string) => screen.getByTestId(`handle-${label.toLowerCase()}`)
+  const base = { label: "Suno Separate", taskId: "", audioId: "" }
+
+  it("one-instrument mode mutes vocals/instrumental pips and lights isolated/without", () => {
+    renderNode(SunoSeparateNode, { ...base, type: "split_stem_advanced" })
+    expect(pip("Vocals").getAttribute("aria-label")).toMatch(MUTED)
+    expect(pip("Instrumental").getAttribute("aria-label")).toMatch(MUTED)
+    expect(pip("Isolated").getAttribute("aria-label")).not.toMatch(MUTED)
+    expect(pip("Without").getAttribute("aria-label")).not.toMatch(MUTED)
+  })
+
+  it("vocals + instrumental mode (and an unset mode) mutes isolated/without", () => {
+    for (const type of ["separate_vocal", undefined]) {
+      const { unmount } = renderNode(SunoSeparateNode, { ...base, type })
+      expect(pip("Vocals").getAttribute("aria-label")).not.toMatch(MUTED)
+      expect(pip("Instrumental").getAttribute("aria-label")).not.toMatch(MUTED)
+      expect(pip("Isolated").getAttribute("aria-label")).toMatch(MUTED)
+      expect(pip("Without").getAttribute("aria-label")).toMatch(MUTED)
+      unmount()
+    }
+  })
+
+  it("full-stems mutes instrumental until an instrumentalUrl exists", () => {
+    const { unmount } = renderNode(SunoSeparateNode, { ...base, type: "split_stem" })
+    expect(pip("Vocals").getAttribute("aria-label")).not.toMatch(MUTED)
+    expect(pip("Instrumental").getAttribute("aria-label")).toMatch(MUTED)
+    expect(pip("Isolated").getAttribute("aria-label")).toMatch(MUTED)
+    unmount()
+    renderNode(SunoSeparateNode, { ...base, type: "split_stem", instrumentalUrl: "https://cdn.test/inst.mp3" })
+    expect(pip("Instrumental").getAttribute("aria-label")).not.toMatch(MUTED)
+  })
+
+  it("names the Suno lane on a typed task id, and no lane when nothing is wired", () => {
+    const { unmount } = renderNode(SunoSeparateNode, { ...base, type: "separate_vocal", taskId: "task-1" })
+    expect(screen.getByText("Suno track")).toBeInTheDocument()
+    unmount()
+    renderNode(SunoSeparateNode, { ...base, type: "separate_vocal" })
+    expect(screen.queryByText("Suno track")).toBeNull()
+    expect(screen.queryByText("Uploaded audio")).toBeNull()
+  })
+
+  it("says a run fell back to Demucs, and why", () => {
+    const { unmount } = renderNode(SunoSeparateNode, { ...base, type: "separate_vocal", engineUsed: "demucs", sunoRefused: true, fallbackReason: "catalog" })
+    expect(screen.getByText("Suno refused this audio — separated with Demucs")).toBeInTheDocument()
+    unmount()
+    const r = renderNode(SunoSeparateNode, { ...base, type: "split_stem", engineUsed: "demucs", fallbackReason: "too_large" })
+    expect(screen.getByText("Too large for Suno — separated with Demucs")).toBeInTheDocument()
+    r.unmount()
+    renderNode(SunoSeparateNode, { ...base, type: "separate_vocal", engineUsed: "suno" })
+    expect(screen.queryByText(/separated with Demucs/)).toBeNull()
+  })
+
+  it("one-instrument mode names its instrument on the card", () => {
+    renderNode(SunoSeparateNode, { ...base, type: "split_stem_advanced", stemName: "Bass" })
+    expect(screen.getByText(/Bass/)).toBeInTheDocument()
+  })
+})

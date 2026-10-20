@@ -1,0 +1,7 @@
+---
+"@nodaro/shared": minor
+---
+
+Suno Separate contract (`@nodaro/shared/models`). This is a public API contract: the separation modes, the stem names and the result/handle fields the API accepts and returns. `SUNO_SEPARATE_TYPES` lists the three modes (`separate_vocal`, `split_stem`, and the new `split_stem_advanced`, which isolates one named instrument). `SUNO_STEM_NAMES` lists the 98 instrument names that mode accepts, with `DEFAULT_SUNO_STEM_NAME` (`"Lead Vocal"`). `SUNO_SEPARATE_STEM_FIELDS` / `SUNO_SEPARATE_TAKE_FIELDS` / `SUNO_SEPARATE_RESULT_FIELDS` / `SUNO_SEPARATE_META_FIELDS` name the fields a run's output carries: the per-stem URLs plus a new `otherUrl`, the one-instrument takes `isolatedUrl` / `withoutUrl` / `isolated2Url` / `without2Url`, and `separateType`, `stemName`, `engineUsed`, `sunoRefused`, `fallbackReason`. `sunoSeparateCreditId` gives the credit id each mode is priced from. `sunoSeparateHandleUrl` and `sunoSeparatePrimaryUrl` map a run's output to the URL behind each handle. A stem that did not come back stays empty and is never filled with the main audio.
+
+`NODE_TYPE_EXECUTION_DATA_KEYS` gains a `suno-separate` entry: every result field and the run facts `separateType`, `engineUsed`, `sunoRefused` and `fallbackReason` (not `stemName`, which is the node's setting). A finished run's stems and takes therefore stay out of undo history, node presets and exported templates.

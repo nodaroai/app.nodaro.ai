@@ -7,7 +7,8 @@
  * runs it, and how many times any node runs (the editor's run estimate and the stored listing), and the episode length the template gallery sorts at,
  * and UGC Creator's round (what it draws and how it treats a blocked, failed or refused option), and a graph's UGC videos and what of their estimates a run executes,
  * and which keys are a run's result (the editor's Clear results), which nodes are a UGC video's join, overlay and captions (the newer-run lanes), and a UGC video as it is published (the publish strip),
- * and the chain a use-case node (Tighten Episode) is built into, with the snapshot a run stores of it and the expansion every estimator prices it by. In-repo workspace package under the root license;
+ * and the chain a use-case node (Tighten Episode) is built into, with the snapshot a run stores of it and the expansion every estimator prices it by,
+ * and which audio a Suno Separate run separates. In-repo workspace package under the root license;
  * never published to npm.
  */
 // A Teleport pair passes on exactly what entered it: both engines and the canvas read the bypassed graph.
@@ -678,6 +679,14 @@ export {
 } from "./free-video-limits"
 // The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).
 export { wholeEpisodeEdl, type WholeEpisodeEdlSource } from "./whole-episode-edl"
+// Which audio a Suno Separate run separates: the editor's run and lane hint, the workflow payload, the route and the worker.
+export {
+  pickSunoSeparateSource,
+  sunoSeparateSourceLane,
+  type SunoSeparateSource,
+  type SunoSeparateSourceCandidates,
+  type SunoSeparateSourceLane,
+} from "./suno-separate-source"
 // Where a node unit's JSON and many-wire inputs land (both engines' resolvers).
 export {
   orderSourceRows,

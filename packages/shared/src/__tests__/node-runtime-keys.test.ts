@@ -8,6 +8,7 @@ import {
   isExecutionDataKey,
   stripTransientRuntimeData,
 } from "../index.js"
+import { SUNO_SEPARATE_RESULT_FIELDS } from "../suno-separate.js"
 
 /**
  * TRANSIENT_RUNTIME_KEYS = run-state that must neither mark the workflow
@@ -119,13 +120,31 @@ describe("EXECUTION_DATA_KEYS", () => {
     expect(isExecutionDataKey("candidates", "ugc-clip")).toBe(false)
   })
 
-  it("files only UGC types' generic names: Video Overlay's results stay as every other surface reads them", () => {
+  it("files only UGC types' and Suno Separate's own names: Video Overlay's results stay as every other surface reads them", () => {
     // Presets capture them, Reset clears them, exports and the Copilot keep them — as on any node.
     for (const key of ["durationSec", "width", "height", "warnings", "resultCompositionKey"]) {
       expect(isExecutionDataKey(key, "video-overlay"), key).toBe(false)
     }
     expect(executionDataKeysOf("video-overlay")).toBe(EXECUTION_DATA_KEYS)
-    for (const type of Object.keys(NODE_TYPE_EXECUTION_DATA_KEYS)) expect(type, type).toMatch(/^ugc-/)
+    for (const type of Object.keys(NODE_TYPE_EXECUTION_DATA_KEYS)) expect(type, type).toMatch(/^(ugc-|suno-separate$)/)
+  })
+
+  it("files every Suno Separate result field and run fact as that type's run result: never undo, preset or template state", () => {
+    for (const key of [...SUNO_SEPARATE_RESULT_FIELDS, "engineUsed", "sunoRefused", "fallbackReason", "separateType"]) {
+      expect(isExecutionDataKey(key, "suno-separate"), key).toBe(true)
+      expect(TRANSIENT_RUNTIME_KEYS.has(key), `${key} must stay persisted`).toBe(false)
+    }
+  })
+
+  it("never files Suno Separate's settings as run state, nor its result names on another node", () => {
+    // stemName is the instrument SETTING (the run only echoes it back).
+    for (const key of ["stemName", "type", "fallbackToDemucs", "taskId", "audioId", "label"]) {
+      expect(isExecutionDataKey(key, "suno-separate"), key).toBe(false)
+    }
+    for (const key of ["vocalUrl", "isolatedUrl", "engineUsed"]) {
+      expect(isExecutionDataKey(key, "audio-separation"), key).toBe(false)
+      expect(isExecutionDataKey(key, undefined), key).toBe(false)
+    }
   })
 
   it("a type's own keys come with every global one, as a set", () => {

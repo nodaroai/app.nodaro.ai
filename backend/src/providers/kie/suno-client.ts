@@ -15,9 +15,13 @@ import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, sleep, 
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, type SunoModel, type SunoAddTrackModel } from "@nodaro/shared/models"
+import {
+  DEFAULT_SUNO_MODEL, sunoModelHonoursDuration,
+  type SunoModel, type SunoAddTrackModel, type SunoSeparateType,
+} from "@nodaro/shared/models"
+import { sunoStemFieldFor } from "./suno-stem-fields.js"
 
-export type { SunoModel, SunoAddTrackModel }
+export type { SunoModel, SunoAddTrackModel, SunoSeparateType }
 
 // =============================================================================
 // CONSTANTS
@@ -153,12 +157,11 @@ export interface SunoLyricsResult {
   lyrics: Array<{ text: string; title: string }>
 }
 
-export type SunoSeparateType = "separate_vocal" | "split_stem"
-
 export interface SunoSeparateParams {
   taskId: string
   audioId: string
-  type: SunoSeparateType
+  /** The old vocal-removal endpoint has no one-instrument mode — that runs on the market lane. */
+  type: Exclude<SunoSeparateType, "split_stem_advanced">
 }
 
 export interface SunoSeparateResult {
@@ -177,6 +180,14 @@ export interface SunoSeparateResult {
   fxUrl?: string
   brassUrl?: string
   woodwindsUrl?: string
+  /** Demucs `other` stem — set only by a full-stems Demucs fallback run. */
+  otherUrl?: string
+  /** One-instrument mode, take 1: the named instrument alone / the song without it. */
+  isolatedUrl?: string
+  withoutUrl?: string
+  /** One-instrument mode, take 2 (kept with the result, not wireable). */
+  isolated2Url?: string
+  without2Url?: string
 }
 
 export interface SunoMusicVideoParams {
@@ -922,23 +933,6 @@ export async function sunoSeparate(
  * Response contains originData array with stem_type_group_name + audio_url per stem.
  */
 async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult> {
-  const STEM_NAME_MAP: Record<string, keyof SunoSeparateResult> = {
-    vocals: "vocalUrl",
-    instrumental: "instrumentalUrl",
-    "backing vocals": "backingVocalsUrl",
-    drums: "drumsUrl",
-    bass: "bassUrl",
-    guitar: "guitarUrl",
-    piano: "pianoUrl",
-    keyboard: "keyboardUrl",
-    percussion: "percussionUrl",
-    strings: "stringsUrl",
-    synth: "synthUrl",
-    fx: "fxUrl",
-    brass: "brassUrl",
-    woodwinds: "woodwindsUrl",
-  }
-
   return pollSunoEndpoint<SunoSeparateResult>(taskId, {
     path: "/api/v1/vocal-removal/record-info",
     warnPrefix: "Separate poll attempt",
@@ -969,18 +963,16 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
 
       // Success: originData is a non-empty array of stems
       if (originData && originData.length > 0) {
-        const result: SunoSeparateResult = { taskId }
-
-        for (const stem of originData) {
-          const stemName = (stem.stem_type_group_name as string | undefined)?.toLowerCase()
-          const audioUrl = stem.audio_url as string | undefined
-          if (!stemName || !audioUrl) continue
-
-          const resultKey = STEM_NAME_MAP[stemName]
-          if (resultKey) {
-            ;(result as unknown as Record<string, unknown>)[resultKey] = audioUrl
-          }
-        }
+        // KIE spells some stem names with underscores (`Backing_Vocals`);
+        // `sunoStemFieldFor` reads `_` as a space, case-insensitively.
+        const stems = originData.flatMap((stem) => {
+          const stemName = stem.stem_type_group_name
+          const audioUrl = stem.audio_url
+          if (typeof stemName !== "string" || typeof audioUrl !== "string" || !audioUrl) return []
+          const resultKey = sunoStemFieldFor(stemName)
+          return resultKey ? [[resultKey, audioUrl] as const] : []
+        })
+        const result: SunoSeparateResult = { taskId, ...Object.fromEntries(stems) }
 
         const stemCount = Object.values(result).filter((v) => typeof v === "string" && v.startsWith("http")).length
         if (DEBUG) console.log(

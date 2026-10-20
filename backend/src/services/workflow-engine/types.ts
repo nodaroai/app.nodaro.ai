@@ -81,6 +81,27 @@ export interface NodeOutput {
   otherUrl?: string
   guitarUrl?: string
   pianoUrl?: string
+  /** suno-separate's other full-stems outputs (`SUNO_SEPARATE_STEM_FIELDS`). */
+  backingVocalsUrl?: string
+  keyboardUrl?: string
+  percussionUrl?: string
+  stringsUrl?: string
+  synthUrl?: string
+  fxUrl?: string
+  brassUrl?: string
+  woodwindsUrl?: string
+  /** suno-separate one-instrument mode: take 1 (the `isolated` / `without`
+   *  handles) and take 2 (kept, not wireable) — `SUNO_SEPARATE_TAKE_FIELDS`. */
+  isolatedUrl?: string
+  withoutUrl?: string
+  isolated2Url?: string
+  without2Url?: string
+  /** How a suno-separate run ran (`SUNO_SEPARATE_META_FIELDS`). */
+  separateType?: string
+  stemName?: string
+  engineUsed?: string
+  sunoRefused?: boolean
+  fallbackReason?: string
   splitResults?: string[]
   combinedText?: string
   kieTaskId?: string

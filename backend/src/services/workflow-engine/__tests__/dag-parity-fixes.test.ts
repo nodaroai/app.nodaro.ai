@@ -221,21 +221,23 @@ describe("lip-sync — infinitalk composite credit identifier", () => {
 
 describe("suno-separate — split_stem charges higher credit tier", () => {
   it("uses suno-separate-stem for split_stem type", () => {
-    const n = node("s1", "suno-separate", {
-      type: "split_stem",
-      sunoTaskId: "t1",
-      sunoTrackId: "tr1",
-    })
-    const result = buildPayload(n, JOB_ID, {})
+    const n = node("s1", "suno-separate", { type: "split_stem" })
+    const result = buildPayload(n, JOB_ID, { sunoTaskId: "t1", sunoTrackId: "tr1" })
     expect(result.modelIdentifier).toBe("suno-separate-stem")
-    expect(result.payload.type).toBe("split_stem")
+    expect(result.payload.separateType).toBe("split_stem")
   })
 
   it("uses suno-separate for separate_vocal type (default)", () => {
-    const n = node("s1", "suno-separate", { sunoTaskId: "t1", sunoTrackId: "tr1" })
-    const result = buildPayload(n, JOB_ID, {})
+    const n = node("s1", "suno-separate", {})
+    const result = buildPayload(n, JOB_ID, { sunoTaskId: "t1", sunoTrackId: "tr1" })
     expect(result.modelIdentifier).toBe("suno-separate")
-    expect(result.payload.type).toBe("separate_vocal")
+    expect(result.payload.separateType).toBe("separate_vocal")
+  })
+
+  it("uses suno-separate-single for split_stem_advanced (one instrument)", () => {
+    const n = node("s1", "suno-separate", { type: "split_stem_advanced" })
+    const result = buildPayload(n, JOB_ID, { audioUrl: "https://cdn.example/a.mp3" })
+    expect(result.modelIdentifier).toBe("suno-separate-single")
   })
 })
 

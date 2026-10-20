@@ -57,7 +57,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, pickSunoSeparateSource } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -153,6 +153,12 @@ import {
   resolveMusicProvider,
   MUSIC_CREDIT_ID,
   getMaxTtsChars,
+  sunoSeparateCreditId,
+  DEFAULT_SUNO_STEM_NAME,
+  SUNO_SEPARATE_TYPES,
+  SUNO_STEM_NAMES,
+  type SunoSeparateType,
+  type SunoStemName,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -6092,17 +6098,42 @@ export function buildPayload(
       })
 
     case "suno-separate": {
-      // `split_stem` is ~3x more expensive than `separate_vocal` — the route's
-      // creditGuard switches identifiers based on `type`. Mirror that here so
-      // orchestrated split_stem runs don't under-charge the user.
-      const separateType = (data.type as string | undefined) || "separate_vocal"
-      const separateIdentifier =
-        separateType === "split_stem" ? "suno-separate-stem" : "suno-separate"
-      return simpleResult("suno-separate", separateIdentifier, {
+      // The mode and the instrument are coerced, not passed through: the
+      // route's Zod enums guard only the direct API, and a value written into
+      // workflow JSON (MCP, an import) would otherwise reach the provider
+      // after the credit hold. An unknown mode runs as vocals + instrumental,
+      // an unknown instrument as the default — and the price follows the
+      // coerced mode, the same shared rule the route's creditGuard reads.
+      const separateType: SunoSeparateType = SUNO_SEPARATE_TYPES.includes(data.type as SunoSeparateType)
+        ? (data.type as SunoSeparateType)
+        : "separate_vocal"
+      const sepStemName: SunoStemName | undefined =
+        separateType !== "split_stem_advanced"
+          ? undefined
+          : SUNO_STEM_NAMES.includes(data.stemName as SunoStemName)
+            ? (data.stemName as SunoStemName)
+            : DEFAULT_SUNO_STEM_NAME
+      // The source: a task id (wired, else the node's own) separates the Suno
+      // track, else the wired audio by URL — the rule execute-node applies
+      // (@nodaro/render-rules suno-separate-source.ts). Never both. With
+      // neither, the node fails here rather than reaching the worker (or the
+      // cloud relay) with no source.
+      const sepSource = pickSunoSeparateSource({
+        taskIds: [resolvedInputs.sunoTaskId, data.taskId],
+        audioIds: [resolvedInputs.sunoTrackId, data.audioId],
+        audioUrl: resolvedInputs.audioUrl,
+      })
+      if (!sepSource) {
+        throw codedMediaRefusal("audio_required", "connect a Suno track or any audio to the Suno Separate node")
+      }
+      // The worker reads `separateType` (the route's enqueue key); a `type`
+      // key here was ignored, so every server-run split ran as vocals.
+      return simpleResult("suno-separate", sunoSeparateCreditId(separateType), {
         jobId,
-        taskId: resolvedInputs.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.audioId,
-        type: separateType,
+        ...sepSource,
+        separateType,
+        ...(sepStemName ? { stemName: sepStemName } : {}),
+        ...(data.fallbackToDemucs === true ? { fallbackToDemucs: true } : {}),
         usageLogId,
       })
     }

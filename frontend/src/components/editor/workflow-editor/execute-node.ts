@@ -56,8 +56,10 @@ import {
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
-  transcribeLaneSupportsWordTimestamps
+  transcribeLaneSupportsWordTimestamps,
+  DEFAULT_SUNO_STEM_NAME
 } from "@nodaro/shared/models";
+import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs";
 import {
   resolveEditPlanSources,
   describeAudioSyncOffsetIssue,
@@ -90,7 +92,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, isUseCaseNodeType } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, isUseCaseNodeType, pickSunoSeparateSource } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -4897,43 +4899,41 @@ function executeNodeCore(
 
   if (node.type === "suno-separate") {
     const d = node.data as SunoSeparateData;
-    let taskId: string | undefined = inputs.sunoTaskId ?? d.taskId?.trim();
-    let audioId: string | undefined = inputs.sunoTrackId ?? d.audioId?.trim();
-
-    // Fallback: the same gated, last-wins upstream walk the resolver and the
-    // config panels use (#819) — whatever the panel showed as inherited.
-    if (!taskId || !audioId) {
-      const { nodes: allNodes, edges: allEdges } = runGraph();
-      const upstream = findUpstreamSunoIds(node.id, allNodes, allEdges);
-      taskId ??= upstream?.taskId;
-      audioId ??= upstream?.trackId;
-    }
-    if (!taskId) {
+    // The ids come from the wired Suno source, then the node's typed fields,
+    // then the same gated, last-wins upstream walk the resolver and the
+    // config panels use (#819) — whatever the panel showed as inherited. The
+    // source itself is the rule the server applies too (@nodaro/render-rules
+    // suno-separate-source.ts): a task id separates the Suno track, else the
+    // wired audio by URL; a blank field (the default data holds "") is no id.
+    const { nodes: allNodes, edges: allEdges } = runGraph();
+    const upstream = findUpstreamSunoIds(node.id, allNodes, allEdges);
+    const source = pickSunoSeparateSource({
+      taskIds: [inputs.sunoTaskId, d.taskId, upstream?.taskId],
+      audioIds: [inputs.sunoTrackId, d.audioId, upstream?.trackId],
+      audioUrl: inputs.audioUrl,
+    });
+    if (!source) {
       toast.error(
-        nodeRunError(d.label, "nodeRun.noTaskIDFoundConnect"),
+        nodeRunError(d.label, "nodeRun.noAudioForSunoSeparate"),
       );
-      return Promise.reject(new Error("No task ID"));
+      return Promise.reject(new Error("No audio to separate"));
     }
+    const type = d.type || "separate_vocal";
     setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
         sunoSeparateApi({
-          taskId,
-          audioId: audioId ?? taskId,
-          type: d.type || "separate_vocal",
+          ...source,
+          type,
+          stemName: type === "split_stem_advanced" ? (d.stemName ?? DEFAULT_SUNO_STEM_NAME) : undefined,
+          fallbackToDemucs: d.fallbackToDemucs ?? false,
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
       "Suno Separate",
       ctx,
-      (od) => {
-        const extra: Record<string, unknown> = {};
-        if (od.vocalUrl) extra.vocalUrl = od.vocalUrl;
-        if (od.instrumentalUrl) extra.instrumentalUrl = od.instrumentalUrl;
-        if (od.stems) extra.stems = od.stems;
-        return extra;
-      },
+      (od) => sunoSeparateRunOutputFields("suno-separate", od),
     );
   }
 

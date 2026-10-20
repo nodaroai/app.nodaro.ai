@@ -1463,3 +1463,30 @@ describe("Tighten Episode's inputs and its episode downstream", () => {
     expect(inputs.audioUrls).toEqual(["https://r2/tight.m4a"])
   })
 })
+
+describe("resolveNodeInputs — suno-separate handles", () => {
+  const sep = makeNode("s1", "suno-separate", {
+    generatedAudioUrl: "https://cdn.test/iso.mp3",
+    isolatedUrl: "https://cdn.test/iso.mp3",
+    withoutUrl: "https://cdn.test/without.mp3",
+  })
+  const edge = (sourceHandle: string, target = "t1") => ({ id: `s1-${sourceHandle}`, source: "s1", target, sourceHandle })
+
+  it("routes the isolated and without handles like vocals", () => {
+    const target = makeNode("t1", "trim-audio")
+    expect(resolveNodeInputs(target, [sep, target], [edge("isolated")]).audioUrl).toBe("https://cdn.test/iso.mp3")
+    expect(resolveNodeInputs(target, [sep, target], [edge("without")]).audioUrl).toBe("https://cdn.test/without.mp3")
+  })
+
+  it("adds a take to a merge's audio sources", () => {
+    const target = makeNode("t1", "merge-video-audio")
+    expect(resolveNodeInputs(target, [sep, target], [edge("without")]).audioSources).toEqual([
+      { url: "https://cdn.test/without.mp3", sourceNodeId: "s1" },
+    ])
+  })
+
+  it("an instrumental pip that came back empty hands on nothing — never the main audio", () => {
+    const target = makeNode("t1", "trim-audio")
+    expect(resolveNodeInputs(target, [sep, target], [edge("instrumental")]).audioUrl).toBeUndefined()
+  })
+})

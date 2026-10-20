@@ -155,6 +155,26 @@ describe("what a run left behind is removed", () => {
     expect(dataOf(byId(out!.nodes, "ss"))).toEqual({ label: "ss" })
   })
 
+  it("a Suno Separate node loses every stem, both takes and how it ran — and keeps its instrument", () => {
+    const suno = node("ss", "suno-separate", {
+      type: "split_stem_advanced",
+      stemName: "Bass",
+      fallbackToDemucs: true,
+      backingVocalsUrl: "b",
+      woodwindsUrl: "w",
+      isolatedUrl: "i",
+      withoutUrl: "o",
+      isolated2Url: "i2",
+      without2Url: "o2",
+      separateType: "split_stem_advanced",
+      engineUsed: "demucs",
+      sunoRefused: true,
+      fallbackReason: "catalog",
+    })
+    const out = clear([suno], [])
+    expect(dataOf(byId(out!.nodes, "ss"))).toEqual({ label: "ss", type: "split_stem_advanced", stemName: "Bass", fallbackToDemucs: true })
+  })
+
   it("outputs that reach the node through a poll callback go too — overlay renders, the silent cut, a run's warning, a slideshow's disclosure, a scraper's ledger", () => {
     const overlay = node("ov", "image-overlay", {
       canvas: { width: 1080, height: 1350, backgroundColor: "#000" },

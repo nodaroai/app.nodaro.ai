@@ -520,6 +520,30 @@ describe("reconcileKieJob", () => {
     expect(mocks.jobsUpdateMock).toHaveBeenCalled()
   })
 
+  it("a suno-separate row is never polled — bump/exhaust only, whichever lane's task id it holds", async () => {
+    // Suno Separate registers BOTH its lanes' task ids (the old vocal-removal
+    // endpoint and the market jobs/createTask endpoint) as kie-suno. Polling
+    // either with the wrong endpoint, or through a single-URL kind, could
+    // "complete" the job with one URL and no stems; a crash must instead ride
+    // to exhaustion → refund.
+    const row: KieJobRow = {
+      id: "j-suno-separate",
+      provider_kind: "kie-suno",
+      provider_task_id: "market-task-x",
+      reconcile_attempts: 0,
+      job_type: "suno-separate",
+    }
+    await reconcileKieJob(row)
+    expect(mocks.pollSunoTaskMock).not.toHaveBeenCalled()
+    expect(mocks.pollKieTaskMock).not.toHaveBeenCalled()
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    const bumpCall = mocks.jobsUpdateMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1,
+    )
+    expect(bumpCall).toBeTruthy()
+  })
+
   // -------------------------------------------------------------------------
   // Post-poll failures MUST bump reconcile_attempts (P0.1, audit Blocker B1).
   // Before this, a poll-success-but-finalize-failure propagated to the cron's

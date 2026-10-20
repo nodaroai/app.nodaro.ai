@@ -10,7 +10,8 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { basename, dirname, resolve } from "node:path"
-import { COMPOSER_PLAN_FIELDS } from "@nodaro/shared/models"
+import { COMPOSER_PLAN_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "@nodaro/shared/models"
+import { SUNO_SEPARATE_RUN_FACTS } from "@/lib/named-run-outputs"
 import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
 import { RUN_INPUT_COPY_KEYS } from "@nodaro/render-rules"
 import { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS } from "../clear-run-results"
@@ -65,6 +66,15 @@ const INPUT_COPIES: readonly string[] = ["inputVideoUrl", "inputAssets", "backgr
 interface Written {
   readonly key: string
   readonly file: string
+}
+
+/**
+ * Field lists a funnel writes by looping over them (`for (const key of [...LIST])`),
+ * which no literal-reading regex sees: a file that names the list writes its keys.
+ */
+const WRITTEN_FIELD_LISTS: Readonly<Record<string, readonly string[]>> = {
+  SUNO_SEPARATE_RESULT_FIELDS,
+  SUNO_SEPARATE_RUN_FACTS,
 }
 
 /** Top-level keys of the object literal that starts at `open` (the index just after its `{`). */
@@ -163,6 +173,9 @@ function writtenKeys(): Written[] {
       out.push({ key: m[1], file })
     }
     for (const key of extractorKeys(src)) out.push({ key, file })
+    for (const [list, keys] of Object.entries(WRITTEN_FIELD_LISTS)) {
+      if (new RegExp(`\\.\\.\\.${list}\\b`).test(src)) for (const key of keys) out.push({ key, file })
+    }
   }
   for (const path of PATCH_BUILDERS) {
     const file = basename(path)
@@ -193,10 +206,10 @@ describe("every key a run writes onto a node has a decision", () => {
     for (const known of ["executionStatus", "generatedResults", "generatedVideoUrl", "combinedText", "lastSeenId", "alignmentResults"]) {
       expect(keys.has(known), known).toBe(true)
     }
-    // One per extractor shape (returned literal · nested spread · `extra.x =` ·
-    // `extra[key]` over names) and one from a patch builder: each shape hid real
-    // outputs from an earlier version of this scanner.
-    for (const hidden of ["generatedSilentVideoUrl", "width", "stems", "drumsUrl", "lastScaleFactor", "warningMessage", "lastGoodCount"]) {
+    // One per extractor shape (returned literal · nested spread · `extra[key]`
+    // over names · a loop over a shared field list) and one from a patch builder:
+    // each shape hid real outputs from an earlier version of this scanner.
+    for (const hidden of ["generatedSilentVideoUrl", "width", "isolatedUrl", "drumsUrl", "lastScaleFactor", "warningMessage", "lastGoodCount"]) {
       expect(keys.has(hidden), hidden).toBe(true)
     }
   })

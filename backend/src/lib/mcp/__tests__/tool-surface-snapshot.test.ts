@@ -1067,6 +1067,19 @@ const TIGHTEN_RECORDINGS_BYTES = 1_661
 // 462_730 total − 462_651 = 79 B (tighten_episode 5_532 → 5_611); the 103 B of headroom carry across.
 const TIGHTEN_CAMERA_CAP_BYTES = 79
 
+// RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
+// added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
+// (audio_asset_id is now optional — exactly one of the two), the one-instrument
+// mode, `stem_name` and `fallback_to_demucs`, and its description says what it
+// takes and what Suno refuses; separate_audio's description no longer says Suno
+// needs a Suno track. `stem_name` is a plain string, not the 98-name enum the
+// route validates (decided 2026-10-19: the enum alone was ~1.2 KB of every
+// session's tools/list; the route's 400 lists the valid names). Measured by this
+// suite on the same tree with and without the change: 447_037 total − 446_173 =
+// 864 B (suno_separate_stems 1_310 -> 2_151, separate_audio 1_774 -> 1_797); the
+// 27 B of headroom the list had before is carried across.
+const SUNO_SEPARATE_ANY_AUDIO_BYTES = 864
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1190,6 +1203,7 @@ export const TOOL_WIRE_BUDGET = {
     RUN_WORKFLOW_NODE_IDS_BYTES +
     RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
     RETRY_APP_RUN_BYTES +
+    SUNO_SEPARATE_ANY_AUDIO_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +

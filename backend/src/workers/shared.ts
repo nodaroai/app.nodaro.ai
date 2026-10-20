@@ -686,6 +686,31 @@ export async function commitJobCredits(
 }
 
 /**
+ * Commit credits at ANOTHER credit id's charged price, clamped at the
+ * reservation (cloud edition only) — for a run reserved as one product and
+ * delivered as a cheaper one (a refused Suno Separate run finished by the
+ * Demucs fallback pays the Demucs price). The settle lives in
+ * `ee/billing/commit-at-charged-price.ts`; a failure is logged and never
+ * fails the job, like `commitJobCredits`.
+ */
+export async function commitJobCreditsAtChargedPrice(
+  usageLogId: string | null | undefined,
+  jobId: string,
+  creditId: string,
+): Promise<void> {
+  if (!hasCredits() || !usageLogId) return
+
+  try {
+    const { commitAtChargedPrice } = await import("../ee/billing/commit-at-charged-price.js")
+    const { committed, reserved } = await commitAtChargedPrice(usageLogId, jobId, creditId)
+    console.log(`[worker] Credits committed at ${creditId}'s charged price for job ${jobId} (actual: ${committed}, reserved: ${reserved ?? "??"})`)
+  } catch (error) {
+    console.error(`[worker] Failed to commit credits for job ${jobId}:`, error)
+    // Don't fail the job if credit commit fails
+  }
+}
+
+/**
  * Refund credits after job failure (cloud edition only).
  *
  * Defaults to refunding (safe for the user). The ONLY case we skip the refund

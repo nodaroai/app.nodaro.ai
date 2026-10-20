@@ -2,7 +2,8 @@
 import { surfaceVoiceGenderAllowed } from "@/lib/surface-selectors"
 
 import { useMemo, useCallback, useEffect, useId } from "react"
-import { findUpstreamSunoIds, type UpstreamSunoIds } from "@/lib/suno-ids"
+import { findUpstreamSunoIds, sunoSeparateLane, type UpstreamSunoIds } from "@/lib/suno-ids"
+import { SUNO_SEPARATE_STEM_LABEL_KEYS, SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import { AlertTriangle, Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
@@ -65,7 +66,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared/models"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
 import { AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 import { isPerSecondLipSyncProvider, sunoCreditType } from "@nodaro/shared/credits"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
@@ -957,35 +958,107 @@ export function SunoInheritedHint({ what, manual, inherited, sourceLabel }: {
 
 export function SunoSeparateConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<SunoSeparateData> & { nodeId?: string }) {
   const t = useT()
+  const fallbackSwitchId = useId()
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
+  const lane = useMemo(() => sunoSeparateLane(nodeId, nodes, edges, data.taskId), [nodeId, nodes, edges, data.taskId])
+  const mode: SunoSeparateType = data.type ?? "separate_vocal"
+  const oneInstrument = mode === "split_stem_advanced"
+  // Other audio wired and no Suno id anywhere: the run separates by URL, so the
+  // id fields would only invite pasting ids that are not needed.
+  const showSunoIds = !(lane === "upload" && !inherited && !data.audioId?.trim())
+  // Every stem the last run returned, beyond the vocals / instrumental shown above.
+  const stems = SUNO_SEPARATE_STEM_FIELDS
+    .filter((field) => field !== "vocalUrl" && field !== "instrumentalUrl")
+    .flatMap((field) => (data[field] ? [{ field, url: data[field] }] : []))
+  const takes = [
+    { n: 1, isolated: data.isolatedUrl, without: data.withoutUrl },
+    { n: 2, isolated: data.isolated2Url, without: data.without2Url },
+  ].filter((take) => take.isolated || take.without)
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.separationType")}</label>
-        <Select value={data.type} onValueChange={(v) => onUpdate({ type: v as SunoSeparateData["type"] })}>
+        <Select value={mode} onValueChange={(v) => onUpdate({ type: v as SunoSeparateType })}>
           <SelectTrigger aria-label={t("audiocfg.separationType")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="separate_vocal">{t("audiocfg.vocalInstrumental")}</SelectItem>
-            <SelectItem value="split_stem">{t("audiocfg.twelveStems")}</SelectItem>
+            {SUNO_SEPARATE_TYPES.map((type) => (
+              <SelectItem key={type} value={type}>{t(SUNO_SEPARATE_TYPE_LABEL_KEYS[type])}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
-      <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />
+      {oneInstrument && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.stemToIsolate")}</label>
+          {/* KIE's instrument names, shown verbatim (decided 2026-10-19: not translated). */}
+          <Select value={data.stemName ?? DEFAULT_SUNO_STEM_NAME} onValueChange={(v) => onUpdate({ stemName: v as SunoStemName })}>
+            <SelectTrigger aria-label={t("audiocfg.stemToIsolate")}><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {SUNO_STEM_NAMES.map((name) => (
+                <SelectItem key={name} value={name}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor={fallbackSwitchId}>{t("audiocfg.fallbackToDemucs")}</Label>
+          <Switch
+            id={fallbackSwitchId}
+            checked={data.fallbackToDemucs ?? false}
+            disabled={oneInstrument}
+            onCheckedChange={(v) => onUpdate({ fallbackToDemucs: v })}
+            aria-describedby={`${fallbackSwitchId}-hint`}
+          />
+        </div>
+        <p id={`${fallbackSwitchId}-hint`} className="text-[10px] text-muted-foreground">{t("audiocfg.fallbackToDemucsHint")}</p>
+      </div>
+      {showSunoIds && <SunoIdFields taskId={data.taskId} audioId={data.audioId} inherited={inherited} onUpdate={onUpdate} />}
       {data.vocalUrl && (
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.vocal")}</label>
-          <WaveformAudioPlayer url={data.vocalUrl} variant="compact" className="w-full" />
+          <WaveformAudioPlayer url={data.vocalUrl} label={t("audiocfg.vocal")} variant="compact" className="w-full" />
         </div>
       )}
       {data.instrumentalUrl && (
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.instrumental")}</label>
-          <WaveformAudioPlayer url={data.instrumentalUrl} variant="compact" className="w-full" />
+          <WaveformAudioPlayer url={data.instrumentalUrl} label={t("audiocfg.instrumental")} variant="compact" className="w-full" />
         </div>
       )}
+      {stems.length > 0 && (
+        <div className="flex flex-col gap-1.5" data-testid="suno-separate-stems">
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.stems")}</label>
+          {stems.map(({ field, url }) => (
+            <div key={field} className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-muted-foreground">{t(SUNO_SEPARATE_STEM_LABEL_KEYS[field])}</span>
+              <WaveformAudioPlayer url={url} label={t(SUNO_SEPARATE_STEM_LABEL_KEYS[field])} variant="compact" className="w-full" />
+            </div>
+          ))}
+        </div>
+      )}
+      {takes.map((take) => (
+        <div key={take.n} className="flex flex-col gap-1.5" data-testid={`suno-separate-take-${take.n}`}>
+          <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.take", { n: take.n })}</label>
+          {take.isolated && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-muted-foreground">{t("audiocfg.takeIsolated")}</span>
+              <WaveformAudioPlayer url={take.isolated} label={t("audiocfg.takeIsolated")} variant="compact" className="w-full" />
+            </div>
+          )}
+          {take.without && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-muted-foreground">{t("audiocfg.takeWithout")}</span>
+              <WaveformAudioPlayer url={take.without} label={t("audiocfg.takeWithout")} variant="compact" className="w-full" />
+            </div>
+          )}
+        </div>
+      ))}
+      {/* Runs saved before the per-stem fields kept their stems in one record. */}
       {data.stems && Object.keys(data.stems).length > 0 && (
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.stems")}</label>

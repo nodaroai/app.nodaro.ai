@@ -840,6 +840,12 @@ describe("CreditsService", () => {
       ])).toBe(130) // base
     })
 
+    it("estimator: suno-separate split_stem_advanced → suno-separate-single", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "suno-separate", data: { type: "split_stem_advanced", stemName: "Bass" } },
+      ])).toBe(80)
+    })
+
     it("resolves suno-separate default type", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-separate", data: { type: "separate" } },

@@ -1,5 +1,5 @@
 import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
-import { bypassTeleports } from "@nodaro/render-rules"
+import { bypassTeleports, sunoSeparateSourceLane } from "@nodaro/render-rules"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /**
@@ -101,4 +101,40 @@ export function findUpstreamSunoIds(
     }
   }
   return found
+}
+
+/** The source a Suno Separate run separates: a Suno track by its ids, or any other audio by its URL. */
+export type SunoSeparateLane = "suno" | "upload"
+
+/**
+ * Which lane a Suno Separate run takes, by the rule execute-node and the
+ * server apply (`sunoSeparateSourceLane`, @nodaro/render-rules): a task id (a
+ * wired Suno source's, else the typed one) separates the Suno track;
+ * otherwise a wired audio source separates by URL. A track id alone does not
+ * make the Suno lane — the run then sends the audio URL. A wired Suno source
+ * that has not run yet reads as the Suno lane: a workflow run runs it first
+ * and it hands its ids on. Null when nothing is wired and no task id is typed.
+ */
+export function sunoSeparateLane(
+  nodeId: string | undefined,
+  nodes: ReadonlyArray<SunoSourceNode>,
+  edges: ReadonlyArray<Pick<WorkflowEdge, "source" | "target">> | undefined,
+  manualTaskId?: string,
+): SunoSeparateLane | null {
+  const upstream = findUpstreamSunoIds(nodeId, nodes, edges)
+  let wired = false
+  let pendingSunoSource = false
+  if (nodeId && edges) {
+    for (const edge of bypassTeleports(nodes, edges)) {
+      if (edge.target !== nodeId) continue
+      wired = true
+      const src = nodes.find((n) => n.id === edge.source)
+      if (!src || !SUNO_TRACK_SOURCE_TYPES.has(src.type ?? "")) continue
+      const ids = readSunoIds(src.data as Record<string, unknown>)
+      if (!ids.trackId && !ids.taskId) pendingSunoSource = true
+    }
+  }
+  const lane = sunoSeparateSourceLane({ taskIds: [upstream?.taskId, manualTaskId], hasAudio: wired })
+  if (lane === "suno" || pendingSunoSource) return "suno"
+  return lane === "url" ? "upload" : null
 }

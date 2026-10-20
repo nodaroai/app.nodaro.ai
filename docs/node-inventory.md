@@ -124,7 +124,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `suno-mashup` | Suno Mashup | ai | Blend two audio tracks into a single mashup using Suno AI | `audio1`:audio, `audio2`:audio | `audio`:audio | NO |
 | `suno-music-video` | Music Video | ai | Generate a music video for a Suno-generated track | `audio`:audio | `video`:video | NO |
 | `suno-replace-section` | Suno Replace Section | ai | Replace a specific time range within a Suno-generated track with new content | `audio`:audio, `prompt`:text | `audio`:audio | NO |
-| `suno-separate` | Suno Separate | ai | Separate vocals from instrumentals, or split a track into individual stems | `audio`:audio | `audio`:audio | NO |
+| `suno-separate` | Suno Separate | ai | Separate any audio with Suno — a Suno track or uploaded/upstream audio — into vocals + instrumental, full stems, or one named instrument (alone and the song without it). Suno refuses commercially released recordings; optionally falls back to Demucs. | `audio`:audio | `vocals`:audio, `instrumental`:audio, `isolated`:audio, `without`:audio | NO |
 | `suno-style-boost` | Suno Style Boost | ai | Enhance and refine the style of lyrics or text content using Suno AI | `prompt`:text | `text`:text | NO |
 | `suno-upload-extend` | Suno Upload Extend | ai | Extend any audio file (not limited to Suno-generated tracks) using Suno AI | `audio`:audio, `prompt`:text | `audio`:audio | NO |
 | `switchx` | Relight & Switch | ai | Relight + switch/composite driven by the source pixels (Beeble SwitchX) | `video`:video, `image`:image, `mask`:mask, `mask-video`:mask, `prompt`:text | `video`:video | NO |

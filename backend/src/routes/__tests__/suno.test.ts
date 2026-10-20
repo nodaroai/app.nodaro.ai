@@ -96,6 +96,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { sunoRoutes } from "../suno.js"
+import { SUNO_STEM_NAMES } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 
 // ---------------------------------------------------------------------------
@@ -422,6 +423,127 @@ describe("POST /v1/suno/separate", () => {
       type: "invalid_type",
     })
     expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts audioUrl without Suno ids and enqueues it", async () => {
+    const res = await authedPost("/v1/suno/separate", {
+      audioUrl: "https://cdn.example/song.mp3",
+      fallbackToDemucs: true,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-separate", {
+      jobId: TEST_JOB_ID,
+      audioUrl: "https://cdn.example/song.mp3",
+      separateType: "separate_vocal",
+      fallbackToDemucs: true,
+      usageLogId: "usage-1",
+    })
+    expect(mockReserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), TEST_JOB_ID, "suno-separate",
+    )
+  })
+
+  it("rejects neither a task id nor audioUrl with 400 validation_error", async () => {
+    for (const body of [{ type: "split_stem" }, { audioId: "audio-1" }, { taskId: "  " }]) {
+      const res = await authedPost("/v1/suno/separate", body)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
+  // The editor and workflow runs send a task id alone when no audio id is
+  // known (decided 2026-10-19: one source rule, @nodaro/render-rules).
+  it("accepts a task id alone and enqueues the task id as the audio id", async () => {
+    const res = await authedPost("/v1/suno/separate", { taskId: "task-1" })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-separate", {
+      jobId: TEST_JOB_ID,
+      taskId: "task-1",
+      audioId: "task-1",
+      separateType: "separate_vocal",
+      usageLogId: "usage-1",
+    })
+  })
+
+  it("with a task id and audioUrl, the ids win and the URL is not enqueued", async () => {
+    const res = await authedPost("/v1/suno/separate", {
+      taskId: "task-1", audioId: "audio-1", audioUrl: "https://cdn.example/song.mp3", type: "split_stem",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-separate", {
+      jobId: TEST_JOB_ID,
+      taskId: "task-1",
+      audioId: "audio-1",
+      separateType: "split_stem",
+      usageLogId: "usage-1",
+    })
+  })
+
+  it("split_stem_advanced reserves suno-separate-single and defaults stemName to Lead Vocal", async () => {
+    const res = await authedPost("/v1/suno/separate", {
+      audioUrl: "https://cdn.example/song.mp3",
+      type: "split_stem_advanced",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockReserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), TEST_JOB_ID, "suno-separate-single",
+    )
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-separate", {
+      jobId: TEST_JOB_ID,
+      audioUrl: "https://cdn.example/song.mp3",
+      separateType: "split_stem_advanced",
+      stemName: "Lead Vocal",
+      usageLogId: "usage-1",
+    })
+  })
+
+  it("forwards a chosen stemName in one-instrument mode, and drops it in any other mode", async () => {
+    await authedPost("/v1/suno/separate", {
+      taskId: "task-1", audioId: "audio-1", type: "split_stem_advanced", stemName: "Piano",
+    })
+    expect(mockVideoQueueAdd).toHaveBeenLastCalledWith("suno-separate", expect.objectContaining({ stemName: "Piano" }))
+    await authedPost("/v1/suno/separate", {
+      taskId: "task-1", audioId: "audio-1", type: "split_stem", stemName: "Piano",
+    })
+    expect(mockVideoQueueAdd.mock.lastCall?.[1]).not.toHaveProperty("stemName")
+  })
+
+  it("rejects an unknown stemName", async () => {
+    const res = await authedPost("/v1/suno/separate", {
+      audioUrl: "https://cdn.example/song.mp3",
+      type: "split_stem_advanced",
+      stemName: "Kazoo Orchestra",
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    // The MCP tool takes stem_name as a plain string (wire budget), so this
+    // message is what an agent sees: it names the field and every valid name.
+    const message = res.json().error.message as string
+    expect(message).toMatch(/^stemName: Invalid option: expected one of /)
+    for (const name of SUNO_STEM_NAMES) expect(message).toContain(`"${name}"`)
+  })
+
+  it("legacy body { taskId, audioId, type } enqueues exactly as before", async () => {
+    const res = await authedPost("/v1/suno/separate", {
+      taskId: "task-1",
+      audioId: "audio-1",
+      type: "split_stem",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-separate", {
+      jobId: TEST_JOB_ID,
+      taskId: "task-1",
+      audioId: "audio-1",
+      separateType: "split_stem",
+      usageLogId: "usage-1",
+    })
+    expect(Object.keys(mockVideoQueueAdd.mock.lastCall?.[1] ?? {}).sort()).toEqual(
+      ["audioId", "jobId", "separateType", "taskId", "usageLogId"],
+    )
+    expect(mockReserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), TEST_JOB_ID, "suno-separate-stem",
+    )
   })
 })
 

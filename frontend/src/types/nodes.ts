@@ -47,6 +47,9 @@ import {
   type QaCheckProvider,
   type SunoModel,
   type SunoAddTrackModel,
+  type SunoSeparateType,
+  type SunoStemName,
+  type SunoSeparateResultField,
   type VoiceDesignModel,
   type VoiceChangerModel
 } from "@nodaro/shared/models"
@@ -3260,7 +3263,11 @@ export type SunoLyricsData = PromptAffixFields & {
 export type SunoSeparateData = {
   [key: string]: unknown
   label: string
-  type: "separate_vocal" | "split_stem"
+  type: SunoSeparateType
+  /** The instrument "one instrument" mode (`split_stem_advanced`) isolates. */
+  stemName?: SunoStemName
+  /** "If Suno refuses, use Demucs": a refused vocals / stems run runs on Demucs instead of failing. */
+  fallbackToDemucs?: boolean
   taskId: string
   audioId: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3268,13 +3275,15 @@ export type SunoSeparateData = {
   generatedAudioUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  vocalUrl?: string
-  instrumentalUrl?: string
   stems?: Record<string, string>
+  /** How the last run ran: on Suno, or on Demucs after Suno refused (and why). */
+  engineUsed?: "suno" | "demucs"
+  sunoRefused?: boolean
+  fallbackReason?: "catalog" | "too_large"
   currentJobId?: string
   currentJobProgress?: number
   fieldMappings?: FieldMappings
-}
+} & Partial<Record<SunoSeparateResultField, string>>
 
 export type AudioSeparationData = {
   [key: string]: unknown
@@ -8886,8 +8895,8 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Suno Separate",
     category: "ai",
     inputs: ["audio"],
-    outputs: ["instrumental", "vocals"],
-    defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
+    outputs: ["instrumental", "vocals", "isolated", "without"],
+    defaultData: { label: "Suno Separate", type: "separate_vocal", stemName: "Lead Vocal", fallbackToDemucs: false, taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
   },
   {
     type: "suno-music-video",

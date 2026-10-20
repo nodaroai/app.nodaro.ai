@@ -57,6 +57,7 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
+  sunoSeparateCreditId,
 } from "@nodaro/shared/models"
 import {
   CAMERA_SWITCH_CREDIT_ID,
@@ -1634,6 +1635,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "suno-lyrics": 10,
   "suno-separate": 40,            // matches model_pricing (mig 059); held by re-baseline (unclear)
   "suno-separate-stem": 130,      // base
+  "suno-separate-single": 80,     // one instrument (split_stem_advanced; mig 545)
   "audio-separation": 30,         // Demucs (ryan5453) on Replicate, fixed reserved tier (Auto/Fast)
   "audio-separation:best": 80,    // htdemucs_ft (~4× compute), fixed reserved tier
   "audio-separation:stems": 60,   // htdemucs_6s (6-stem, heavier than base) — conservative estimate, tune via audit-credits
@@ -5488,9 +5490,9 @@ function getNodeModelIdentifier(
     return sunoCreditType(data.model as string | undefined, nodeType)
   }
 
-  // Suno separate: "split_stem" costs more
+  // Suno separate: each mode has its own price (the shared rule)
   if (nodeType === "suno-separate") {
-    return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+    return sunoSeparateCreditId(data.type)
   }
 
   // Audio separation (Demucs): "best" quality costs more

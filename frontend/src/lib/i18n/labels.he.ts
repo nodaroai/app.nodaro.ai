@@ -396,6 +396,8 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "In": "קלט",
   "Instructions": "הוראות",
   "Instrumental": "כלי",
+  "Isolated": "מבודד",
+  "Without": "בלעדיו",
   "JSON": "JSON",
   "Location": "מיקום",
   "Locations": "מיקומים",
