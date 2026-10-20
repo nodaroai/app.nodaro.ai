@@ -28,6 +28,14 @@ const { mockFrom, mockAdd } = vi.hoisted(() => {
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mockFrom } }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mockAdd } }))
 
+// Partial: only `pitchTempo` is replaced, so `PitchTempoInputError` and the
+// rest of the module stay real for everything else in the import graph.
+const { mockPitchTempo } = vi.hoisted(() => ({ mockPitchTempo: vi.fn() }))
+vi.mock("../../../providers/video/pitch-tempo.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../providers/video/pitch-tempo.js")>()),
+  pitchTempo: mockPitchTempo,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -39,6 +47,7 @@ import { applyImageWatermark } from "../../../utils/watermark.js"
 import { ensureMediaProxy } from "../../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../../services/media-proxy-span-map.js"
 import { detectFaces } from "../../../services/face-detect/detect-faces.js"
+import { PitchTempoInputError } from "../../../providers/video/pitch-tempo.js"
 
 describe("buildToolkit", () => {
   let tk: PluginToolkit
@@ -78,6 +87,26 @@ describe("buildToolkit", () => {
     expect(typeof tk.media.mergeVideoAudio).toBe("function")
     expect(typeof tk.media.applyAudioFx).toBe("function")
     expect(typeof tk.media.applyImageWatermark).toBe("function")
+    expect(typeof tk.media.removeAudio).toBe("function")
+    expect(typeof tk.media.pitchTempo).toBe("function")
+  })
+
+  it("media.pitchTempo passes semitones and audioUrl, tempo 1", async () => {
+    mockPitchTempo.mockResolvedValueOnce({ outputPath: "/tmp/pitch-tempo-x/output.mp3", inputType: "audio" })
+    const out = await tk.media.pitchTempo!({ audioUrl: "https://a/x.mp3", semitones: 3 })
+    expect(mockPitchTempo).toHaveBeenCalledWith({
+      audioUrl: "https://a/x.mp3",
+      semitones: 3,
+      tempo: 1,
+      preserveFormants: true,
+    })
+    expect(out).toEqual({ audioPath: "/tmp/pitch-tempo-x/output.mp3" })
+  })
+
+  it("media.pitchTempo re-throws PitchTempoInputError unchanged", async () => {
+    const err = new PitchTempoInputError("no audio")
+    mockPitchTempo.mockRejectedValueOnce(err)
+    await expect(tk.media.pitchTempo!({ audioUrl: "https://a/x.mp3", semitones: -2 })).rejects.toBe(err)
   })
 
   it("media: the detection proxy and its clock are the real core functions (P3.2; optional in the contract, answered here)", () => {
@@ -97,6 +126,7 @@ describe("buildToolkit", () => {
     expect(typeof tk.storage.uploadBufferToR2).toBe("function")
     expect(typeof tk.storage.uploadFileToR2).toBe("function")
     expect(typeof tk.storage.runPostProcessing).toBe("function")
+    expect(typeof tk.storage.uploadJobScratchFile).toBe("function")
   })
 
   it("jobs: every member is a function", () => {

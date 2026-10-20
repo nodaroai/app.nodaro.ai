@@ -73,12 +73,19 @@
  * source's length, but the 200-part cap bounds it (200 × the part length), so
  * its leaf sums its steps' kill budgets over that longest source at the 4K30
  * liveness canvas (`providers/video/split-media-plan.ts`).
+ * cast-swap joins ahead of its node (Cast Swap): a private plugin handler, so
+ * the same dispatch fallback; a full clip's provider edit can approach the
+ * 90-minute default, so its leaf declares a fixed bound per run shape — full
+ * clip or preview (`providers/video/cast-swap-budget.ts`). Until its node
+ * exists only the worker reads it; it waits in `AWAITING_NODE` in
+ * `node-executor-budget-ceilings.test.ts` until then.
  * Pure: imports only the budget leaves, the units' budget leaves (the
  * aggregate imports each unit's budget.ts and nothing else), the pure compose
  * helper and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
 import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
+import { castSwapJobBudgetMs } from "../providers/video/cast-swap-budget.js"
 import { silenceDetectJobBudgetMs } from "../providers/audio/silence-detect-budget.js"
 import { speakerFramesJobBudgetMs } from "../providers/video/speaker-frames-budget.js"
 import { speakerViewJobBudgetMs } from "../providers/video/speaker-view-budget.js"
@@ -98,6 +105,7 @@ type JobBudgetFn = UnitBudget
 const LEGACY_JOB_BUDGETS: Record<string, JobBudgetFn> = {
   "apply-edl": applyEdlJobBudgetMs,
   "audio-sync": audioSyncJobBudgetMs,
+  "cast-swap": castSwapJobBudgetMs,
   "silence-detect": silenceDetectJobBudgetMs,
   "speaker-frames": speakerFramesJobBudgetMs,
   "speaker-view": speakerViewJobBudgetMs,

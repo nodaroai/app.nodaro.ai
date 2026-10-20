@@ -1014,7 +1014,7 @@ describe("handler liveness budget ⇔ job-budget registry (the orchestrator's nu
   // `livenessBudgetMs` (core-only): the video worker's dispatch site falls back
   // to the registry for it (pinned by video-worker-heartbeat-wiring.test.ts).
   // Listed by name, so a CORE handler for one of them still has to declare.
-  const PLUGIN_HANDLED = new Set(["speaker-frames", "speaker-view"])
+  const PLUGIN_HANDLED = new Set(["cast-swap", "speaker-frames", "speaker-view"])
 
   // A node unit's budget IS the registry's row (its budget.ts, composed under
   // its type): its worker declares none, and the same dispatch fallback reads it.

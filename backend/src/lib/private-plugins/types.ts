@@ -1046,6 +1046,23 @@ export interface PluginMediaToolkit {
   detectFaces?(input: PluginDetectFacesInput): Promise<PluginDetectFacesResult>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
+  /**
+   * Mirrors `removeAudio` (`providers/video/remove-audio.ts`): the video with
+   * every audio stream dropped, stream-copied (no re-encode). `videoPath` is a
+   * local file in its own work dir; the caller removes `dirname(videoPath)`.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  removeAudio?(options: { readonly videoUrl: string }): Promise<{ readonly videoPath: string }>
+  /**
+   * Mirrors `pitchTempo` (`providers/video/pitch-tempo.ts`) as a pitch shift
+   * only: tempo 1, formants kept. Give it audio-only media (e.g.
+   * `extractAudio`'s output) — the core picks its lane from the streams the
+   * file carries, and only an audio input comes back as MP3. `audioPath` is a
+   * local file in its own work dir; the caller removes `dirname(audioPath)`.
+   * A bad input rejects with the core's `PitchTempoInputError`, unchanged.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  pitchTempo?(options: { readonly audioUrl: string; readonly semitones: number }): Promise<{ readonly audioPath: string }>
   /** Mirrors `mixAudio` (`providers/video/mix-audio.ts`). */
   mixAudio(options: PluginMixAudioOptions): Promise<string>
   /** Mirrors `mergeVideoAudio` (`providers/video/merge-video-audio.ts`). */
@@ -1187,6 +1204,14 @@ export interface PluginStorageToolkit {
   mediaObjectKey?(id: string, type: "image" | "video" | "audio", ext?: string): string
   /** Mirrors `runPostProcessing` (`lib/post-processing-error.ts`). */
   runPostProcessing<T>(fn: () => Promise<T>): Promise<T>
+  /**
+   * Mirrors `uploadJobScratchFile` (`lib/job-scratch.ts`): streams a local file
+   * into the RUNNING job's scratch folder (the job id comes from the handler's
+   * job context, so call it from a worker job handler only) and returns its
+   * url. The folder is emptied when the job ends; counted against no quota.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  uploadJobScratchFile?(filePath: string, name: string, ext: string, contentType: string): Promise<string>
   /**
    * Mirrors `uploadToR2` (`lib/storage.ts:126`), narrowed to video content —
    * downloads `url` and uploads to R2 without transcoding. Used for
@@ -1968,6 +1993,29 @@ export interface PluginHttpToolkit {
     req?: FastifyRequest,
   ): Promise<{ id: string; created: boolean }>
   /**
+   * The request job funnel for a plugin route: mirrors `insertJobIdempotent`
+   * (`lib/insert-job.ts`). On top of `insertJobWithIdempotencyKey` it stamps
+   * what a core route's job carries — the request's validated `session_id`
+   * (`sessionId` in `req.body`), its client `input_data.origin` (`origin` in
+   * `req.body`), the calling surface, and the P14 payer pair from
+   * `req.billingContext` — and runs the job-policy gate before any row exists.
+   * A plugin-written `session_id` / `input_data.origin` is replaced by the
+   * request's.
+   *
+   * A refusal of the request rejects with a `PluginHttpError` (identify it by
+   * `.name === "PluginHttpError"`) whose `statusCode` + `body` the route sends
+   * verbatim: a session the caller may not use → 404, an `origin` that is not
+   * a slug → 400, a job-policy block → 422. Any other failure (the database)
+   * is re-thrown unchanged.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  insertJobWithProvenance?(
+    req: FastifyRequest,
+    row: Record<string, unknown> & { user_id: string },
+    idempotencyKey: string | null | undefined,
+  ): Promise<{ id: string; created: boolean }>
+  /**
    * Mirrors `computeVoiceChangerProPricing`
    * (`ee/billing/voice-changer-pro-credits.ts`) — see `VoiceChangerProPricing`.
    * Same dynamic-import gate as `computeGenerateVideoProPricing` below.
@@ -2173,6 +2221,24 @@ export interface PluginHttpToolkit {
   internalRequest?(
     app: FastifyInstance,
     opts: PluginInternalRequestOptions,
+  ): Promise<PluginInjectedResponse>
+  /**
+   * `internalRequest` for code that has no Fastify app in hand — a queue
+   * handler in the video worker. Same contract: the same internal headers
+   * (caller headers spread first), the same `body.userId` caveat, the same
+   * `jobSubmission` scope. The host supplies the app: the API app in the API
+   * process; in the worker, an app built once at worker boot and reused
+   * (`lib/private-plugins/worker-app.ts`). Absent where the process has no app
+   * to reach (the daemon host).
+   *
+   * `parentJobId` is the id (a UUID) of the job the handler is running. It
+   * travels only in the server-side submission scope, never on the wire, so
+   * the route's job insert can be tied to it.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  workerRequest?(
+    opts: PluginInternalRequestOptions & { parentJobId?: string },
   ): Promise<PluginInjectedResponse>
 }
 
@@ -2876,6 +2942,24 @@ export interface PluginAuthUser {
   app_metadata: Record<string, unknown>
   /** The linked identities, as GoTrue files them; a plugin narrows what it reads. */
   identities?: unknown
+}
+
+/**
+ * A refusal of a plugin route's request, shaped to be sent:
+ * `reply.status(err.statusCode).send(err.body)`. The body is exactly what
+ * `sendInternalError` (`lib/http-errors.ts`) answers for the original error,
+ * which rides along as `cause`. A plugin cannot import this class across the
+ * boundary: it identifies it by `.name === "PluginHttpError"`.
+ */
+export class PluginHttpError extends Error {
+  override readonly name = "PluginHttpError"
+  constructor(
+    readonly statusCode: 400 | 404 | 422,
+    readonly body: { error: { code: string; message: string } & Record<string, unknown> },
+    cause: unknown,
+  ) {
+    super(body.error.message, { cause })
+  }
 }
 
 /** Mirrors `ScopeError` (`lib/scopes.ts`) — a refusal shaped to be sent. */

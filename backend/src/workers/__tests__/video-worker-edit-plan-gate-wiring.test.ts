@@ -24,7 +24,7 @@ describe("video-worker edit-plan mode gate wiring", () => {
   it("merges the self-host relay handlers through the same gate, after the plugins load", () => {
     expect(code).toMatch(/Object\.assign\(allHandlers, withEditPlanModeGate\(nodaroExclusiveRelayHandlers, plannableEditPlanModes\)\)/)
     expect(code).not.toMatch(/Object\.assign\(allHandlers, nodaroExclusiveRelayHandlers\)/)
-    const load = code.indexOf("await loadPrivatePlugins({})")
+    const load = code.indexOf("await loadPrivatePlugins(")
     const relay = code.indexOf("withEditPlanModeGate(nodaroExclusiveRelayHandlers")
     const plugin = code.indexOf("withEditPlanModeGate(privatePluginHandlers")
     expect(load).toBeGreaterThanOrEqual(0)

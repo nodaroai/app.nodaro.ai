@@ -106,8 +106,8 @@ describe("declaredJobBudgetMs — the one per-job budget both readers call", () 
     expect(declaredJobBudgetMs("speaker-map", {})).toBeUndefined()
   })
 
-  it("registers exactly apply-edl, audio-sync, silence-detect, speaker-frames, speaker-view and split-media as legacy rows; every other name is a node unit's budget.ts", () => {
-    expect(BUDGETED_JOB_NAMES.filter((n) => !unitDescriptorOf(n))).toEqual(["apply-edl", "audio-sync", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
+  it("registers exactly apply-edl, audio-sync, cast-swap, silence-detect, speaker-frames, speaker-view and split-media as legacy rows; every other name is a node unit's budget.ts", () => {
+    expect(BUDGETED_JOB_NAMES.filter((n) => !unitDescriptorOf(n))).toEqual(["apply-edl", "audio-sync", "cast-swap", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
     for (const n of BUDGETED_JOB_NAMES.filter((t) => unitDescriptorOf(t))) expect(unitDescriptorOf(n)?.execution.kind, n).toBe("worker")
   })
 })
