@@ -1,7 +1,16 @@
 # Disposable CI runners
 
-This pool runs Linux Node test jobs on Railway. Docker jobs, database services,
-migrations and publishing remain on GitHub-hosted runners.
+This pool runs the heavy Linux Node jobs of `.github/workflows/ci.yml` on
+Railway: the test shards, Prepare Shared Packages, Type Check, Build Backend
+Once, the boot smoke and the test de-dup harness. The short source guards and
+the fan-in checks stay on `ubuntu-slim` (a pool hop queues longer than they
+run, and no repository secret reaches the pool). Jobs that need Docker (service
+or job containers), the `gh` CLI or a browser (Remotion Tests renders with the
+hosted runner's Chrome, whose shared libraries the image lacks), migrations and
+publishing also remain on GitHub-hosted runners. The header
+comment of `ci.yml` explains the one routing expression every pool job copies,
+and `tools/__tests__/ci-preparation-gates.test.mjs` holds each copy identical
+and lists every hosted job with its reason.
 
 ## Deployment
 
@@ -45,9 +54,15 @@ Vitest uses two workers because the host CPU count can exceed the container's
 CPU allocation.
 
 The image includes `zstd` to read the same npm download-cache format as hosted
-runners. Hosted preparation maintains that cache; disposable test runners
-restore it without uploading another copy. A missing cache falls back to a
-normal clean dependency download and installation.
+runners. Prepare Shared Packages maintains that cache (setup-node saves a new
+entry when `package-lock.json` changes, on either kind of runner); every other
+job only restores it, without uploading another copy. A missing cache falls
+back to a normal clean dependency download and installation.
+
+Every pool job adds one provisioning hop (the controller's 30-second poll plus
+a fresh deployment, typically 40-80 seconds) before its first step, and a PR
+run asks the pool for about fourteen runners. Several concurrent PR runs can
+still exceed the slot count and queue.
 
 Busy slots are protected by both runner state and in-progress job state. An API
 failure stops that scheduling cycle. Capacity is bounded by the configured slot
@@ -57,7 +72,9 @@ For a rollout, retain GitHub-hosted routing until an identical-commit benchmark
 and an intentional failed-job probe pass. Set repository variable
 `CI_RAILWAY_PILOT_BRANCH` to a same-repository PR branch for a limited pilot.
 After validating capacity and unattended scheduling, set `CI_RAILWAY_ENABLED`
-to `true` to route the two test suites for trusted PRs and pushes to `main`.
+to `true` to route every pool job for trusted PRs and pushes to `main` and
+`dev`. With the pool off, each job runs on its own hosted label (`ubuntu-latest`
+or `ubuntu-slim`), exactly as before it moved.
 Public mirrors and fork PRs always stay hosted. Both settings default to off.
 
 To return to hosted runners, clear both `CI_RAILWAY_ENABLED` and

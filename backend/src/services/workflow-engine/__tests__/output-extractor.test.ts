@@ -9,6 +9,7 @@ import {
   coerceListItemsOverrideToRows,
 } from "../output-extractor.js"
 import type { SimpleNode, NodeOutput } from "../types.js"
+import { SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "@nodaro/shared/models"
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
   return { id, type, data }
@@ -335,6 +336,41 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput(output, "suno-separate", "instrumental")).toBe("inst.mp3")
   })
 
+  it("full-stems instrumental emits nothing when no instrumentalUrl", () => {
+    // A full-stems run that returned vocals + drums but no instrumental: the
+    // instrumental handle used to fall back to the main audio (the vocals).
+    const output: NodeOutput = { audioUrl: "vocal.mp3", vocalUrl: "vocal.mp3", drumsUrl: "drums.mp3" }
+    expect(getPrimaryOutput(output, "suno-separate", "instrumental")).toBeUndefined()
+    expect(getPrimaryOutput(output, "suno-separate", "vocals")).toBe("vocal.mp3")
+  })
+
+  it("isolated / without route their own url; vocals empty in one-instrument mode", () => {
+    const output: NodeOutput = {
+      audioUrl: "piano.mp3",
+      isolatedUrl: "piano.mp3",
+      withoutUrl: "rest.mp3",
+      isolated2Url: "piano-2.mp3",
+      without2Url: "rest-2.mp3",
+    }
+    expect(getPrimaryOutput(output, "suno-separate", "isolated")).toBe("piano.mp3")
+    expect(getPrimaryOutput(output, "suno-separate", "without")).toBe("rest.mp3")
+    expect(getPrimaryOutput(output, "suno-separate", "vocals")).toBeUndefined()
+    expect(getPrimaryOutput(output, "suno-separate", "instrumental")).toBeUndefined()
+  })
+
+  it("isolated / without stay empty on a vocals run", () => {
+    const output: NodeOutput = { audioUrl: "v.mp3", vocalUrl: "v.mp3", instrumentalUrl: "i.mp3" }
+    expect(getPrimaryOutput(output, "suno-separate", "isolated")).toBeUndefined()
+    expect(getPrimaryOutput(output, "suno-separate", "without")).toBeUndefined()
+  })
+
+  it("legacy saved data with only audioUrl still feeds vocals", () => {
+    const output: NodeOutput = { audioUrl: "main.mp3" }
+    expect(getPrimaryOutput(output, "suno-separate", "vocals")).toBe("main.mp3")
+    expect(getPrimaryOutput(output, "suno-separate", "instrumental")).toBe("main.mp3")
+    expect(getPrimaryOutput(output, "suno-separate", "isolated")).toBeUndefined()
+  })
+
   it("routes voice-design voiceId handle", () => {
     const output: NodeOutput = { audioUrl: "a.mp3", generatedVoiceId: "voice-123" }
     expect(getPrimaryOutput(output, "voice-design", "voiceId")).toBe("voice-123")
@@ -549,6 +585,26 @@ describe("extractSavedNodeOutput", () => {
     expect(result?.instrumentalUrl).toBe("i.mp3")
   })
 
+  it("extracts every suno-separate result field from saved data", () => {
+    const n = node("1", "suno-separate", {
+      generatedAudioUrl: "piano.mp3",
+      isolatedUrl: "piano.mp3",
+      withoutUrl: "rest.mp3",
+      isolated2Url: "piano-2.mp3",
+      without2Url: "rest-2.mp3",
+      backingVocalsUrl: "",
+    })
+    const result = extractSavedNodeOutput(n)
+    expect(result).toEqual({
+      audioUrl: "piano.mp3",
+      isolatedUrl: "piano.mp3",
+      withoutUrl: "rest.mp3",
+      isolated2Url: "piano-2.mp3",
+      without2Url: "rest-2.mp3",
+    })
+    expect(getPrimaryOutput(result!, "suno-separate", "without")).toBe("rest.mp3")
+  })
+
   it("extracts voice-design dual output", () => {
     const n = node("1", "voice-design", { generatedAudioUrl: "a.mp3", generatedVoiceId: "v1" })
     const result = extractSavedNodeOutput(n)
@@ -666,6 +722,27 @@ describe("buildNodeOutputFromJobData", () => {
     const result = buildNodeOutputFromJobData({ imageUrl: "img.png", text: "hi" }, "generate-image")
     expect(result.imageUrl).toBe("img.png")
     expect(result.text).toBe("hi")
+  })
+
+  it("extractor allowlist carries suno separate fields", () => {
+    const outputData: Record<string, unknown> = {
+      audioUrl: "v.mp3",
+      provider: "kie",
+      separateType: "split_stem",
+      engineUsed: "demucs",
+      sunoRefused: true,
+      fallbackReason: "catalog",
+    }
+    for (const field of SUNO_SEPARATE_RESULT_FIELDS) outputData[field] = `${field}.mp3`
+    outputData.stemName = "Piano"
+    const result = buildNodeOutputFromJobData(outputData, "suno-separate") as Record<string, unknown>
+    for (const field of [...SUNO_SEPARATE_RESULT_FIELDS, ...SUNO_SEPARATE_META_FIELDS]) {
+      expect(result[field], field).toBe(outputData[field])
+    }
+    expect(result.isolatedUrl).toBe("isolatedUrl.mp3")
+    expect(result.withoutUrl).toBe("withoutUrl.mp3")
+    expect(result.backingVocalsUrl).toBe("backingVocalsUrl.mp3")
+    expect(result.engineUsed).toBe("demucs")
   })
 
   it("normalizes generatedText to text", () => {

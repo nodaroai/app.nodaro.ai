@@ -60,6 +60,8 @@ import {
 } from "@nodaro/shared/video"
 import { runWireLengthSec } from "./utility-wire-length"
 import { keptLengthOrigin } from "./kept-length"
+import { MULTICAM_SPEAKER_MAP_TYPE } from "./speaker-map-step"
+import { orderSourceRows } from "./unit-input-lanes"
 
 /** A node and a wire as the estimate reads them: either engine's graph fits. */
 export interface EstimateGraphNode {
@@ -145,19 +147,34 @@ function masterSourceData(
   nodes: readonly EstimateGraphNode[],
   edges: readonly EstimateGraphEdge[],
 ): Record<string, unknown> | undefined {
-  const data = dataOf(node)
-  const cfg = (data.sourceConfig as Record<string, { role?: string }> | undefined) ?? {}
-  const order = (data.sourceOrder as string[] | undefined) ?? []
-  const srcIds = edges
-    .filter((e) => e.target === node.id && e.targetHandle === "sources")
-    .map((e) => e.source)
-  const ordered = order.length
-    ? [...order.filter((id) => srcIds.includes(id)), ...srcIds.filter((id) => !order.includes(id))]
-    : srcIds
+  return editPlanMasterOrigin(node, nodes, edges)?.data as Record<string, unknown> | undefined
+}
+
+/**
+ * The upstream nodes wired into a node's `sources`, in its own `sourceOrder`
+ * (the ids it lists that are still wired, then the rest in wire order, each
+ * once): the ordering rule both engines run (`orderSourceRows`), read off the
+ * graph.
+ */
+export function orderedSourceIds(node: EstimateGraphNode, edges: readonly EstimateGraphEdge[]): string[] {
+  const order = dataOf(node).sourceOrder
+  const listed = Array.isArray(order) ? order.filter((id): id is string => typeof id === "string") : undefined
+  const wired = edges.filter((e) => e.target === node.id && e.targetHandle === "sources").map((e) => e.source)
+  return orderSourceRows(wired, listed, (id) => id)
+}
+
+/** An Edit Plan's master source node (teleports walked): the `master-audio`
+ *  role when one is set, else the first source in its `sourceOrder`, else first-wired. */
+export function editPlanMasterOrigin(
+  node: EstimateGraphNode,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+): EstimateGraphNode | undefined {
+  const cfg = (dataOf(node).sourceConfig as Record<string, { role?: string }> | undefined) ?? {}
+  const ordered = orderedSourceIds(node, edges)
   const masterId = ordered.find((id) => cfg[id]?.role === "master-audio") ?? ordered[0]
   if (!masterId) return undefined
-  const origin = resolveGraphOrigin(nodes.find((n) => n.id === masterId), nodes, edges)
-  return origin?.data as Record<string, unknown> | undefined
+  return resolveGraphOrigin(nodes.find((n) => n.id === masterId), nodes, edges)
 }
 
 /**
@@ -288,6 +305,8 @@ export function persistedEdlPlan(
   // An Edit Plan holds its plan as the person's review leaves it (TA13): the
   // edited cut, or the KEPT clips only — what the render will be handed.
   if (producer.type === "edit-plan") return planOutputOf(data)?.json
+  // Speaker Map's `edl` output is its whole-recording edit (its `json` is the map).
+  if (producer.type === MULTICAM_SPEAKER_MAP_TYPE) return data.generatedEdl
   const held = data.generatedJson
   if (!EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) return held
   const batch = Array.isArray(data.__listResults) && data.__listResults.length > 0 ? (data.__listResults as unknown[]) : undefined
@@ -445,7 +464,45 @@ function wiredEdlLength(
   if (producer.type === "edit-plan") {
     return editPlanRenderEstimateLength(dataOf(producer), resolveEditPlanEpisodeSec(producer, nodes, edges))
   }
+  if (producer.type === MULTICAM_SPEAKER_MAP_TYPE) {
+    // Speaker Map's edit is the whole clock recording, one segment (decided 2026-10-17): its master's length.
+    const sec = speakerMapClockSec(producer, nodes, edges, rerunIds, planOutputOf)
+    return sec !== undefined ? fixedLength(Math.min(EDIT_PLAN_MAX_MINUTES, minutesOf(sec))) : fixedLength(EDIT_PLAN_MAX_MINUTES)
+  }
   return fixedLength(EDIT_PLAN_MAX_MINUTES)
+}
+
+/**
+ * The recording a Speaker Map's whole-recording edit is clocked to — exactly
+ * the run's pick (`speakerMapRunInputs`, then the provider): its master
+ * (`masterSourceId`) while that node is still wired, else the first source in
+ * its `sourceOrder` (`orderedSourceIds`); teleports walked. Undefined with
+ * nothing wired.
+ */
+export function speakerMapClockOrigin(
+  map: EstimateGraphNode,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+): EstimateGraphNode | undefined {
+  const ordered = orderedSourceIds(map, edges)
+  const named = dataOf(map).masterSourceId
+  // A master naming a recording no longer wired is dropped, as the run drops it.
+  const clockId = typeof named === "string" && ordered.includes(named) ? named : ordered[0]
+  return clockId ? resolveGraphOrigin(nodes.find((n) => n.id === clockId), nodes, edges) : undefined
+}
+
+/** The clock recording's length (seconds) as the run estimate's wire rule reads it; undefined when not known before the run. */
+function speakerMapClockSec(
+  map: EstimateGraphNode,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader,
+): number | undefined {
+  const clock = speakerMapClockOrigin(map, nodes, edges)
+  if (!clock) return undefined
+  const sec = runWireLengthSec(clock.id, nodes, edges, rerunIds, { planOutputOf, otherSec: (o) => mediaLengthSecOf(dataOf(o)) })
+  return sec !== undefined && sec > 0 ? sec : undefined
 }
 
 /** Renders that take a plain video on `video` and cut it whole (Speaker View's

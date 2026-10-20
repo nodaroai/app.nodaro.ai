@@ -33,6 +33,7 @@
  * every section is recorded. Never re-record a section: a re-recording takes
  * whatever the code then builds as the truth.
  */
+import { USE_CASE_RUN_VIEWER_AS_BEFORE } from "@nodaro/render-rules"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
@@ -249,7 +250,7 @@ function bodyCases(): BodyCase[] {
 
 function engineBody(c: BodyCase): string {
   const node = { id: "u1", type: c.type, data: { label: usecaseDescriptor(c.type).label, fieldMappings: {}, ...c.data } } as unknown as SimpleNode
-  return JSON.stringify(freshRunInputs(node, c.inputs as unknown as ResolvedInputs))
+  return JSON.stringify(freshRunInputs(node, c.inputs as unknown as ResolvedInputs, USE_CASE_RUN_VIEWER_AS_BEFORE))
 }
 
 // ---------------------------------------------------------------------------

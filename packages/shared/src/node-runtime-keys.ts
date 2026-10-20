@@ -1,3 +1,5 @@
+import { SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "./suno-separate.js"
+
 /**
  * Field names on a node's `data` that hold runtime / result / transient execution
  * state (job ids, progress, generated outputs, fan-out bookkeeping). These are NEVER
@@ -175,6 +177,10 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
  * warnings, length and Re-render marks (`rerenderPending`: the clips pressed for
  * Re-render that no run has rendered yet — run bookkeeping; the press itself,
  * `rerender`, is a choice).
+ *
+ * Suno Separate: every stem / take URL a run writes and the run's facts (its
+ * engine, a Demucs fallback's refusal and reason, its mode) — not `stemName`,
+ * the node's instrument setting that the run only echoes back.
  */
 export const NODE_TYPE_EXECUTION_DATA_KEYS: Readonly<Record<string, readonly string[]>> = {
   "ugc-creator": ["ugcOutputs", "candidates", "optionFailed"],
@@ -182,6 +188,7 @@ export const NODE_TYPE_EXECUTION_DATA_KEYS: Readonly<Record<string, readonly str
   "ugc-clips": ["ugcOutputs", "quote"],
   "ugc-clip": ["ugcOutputs", "clipWarnings", "durationSec", "rerenderPending"],
   "ugc-cards": ["ugcOutputs"],
+  "suno-separate": [...SUNO_SEPARATE_RESULT_FIELDS, ...SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName")],
 }
 
 /** Is `key` execution data (run state or a run's result) on a node of `type`: global, or that type's own? */

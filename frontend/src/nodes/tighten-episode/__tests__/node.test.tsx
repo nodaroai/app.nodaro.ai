@@ -7,6 +7,8 @@ import userEvent from "@testing-library/user-event"
 
 const store = vi.hoisted(() => ({ updateNodeData: vi.fn(), runSingleNode: vi.fn(), nodes: [{ id: "t1", type: "tighten-episode", data: {} }], edges: [] }))
 const fanOut = vi.hoisted(() => ({ listDriven: false }))
+const pips = vi.hoisted(() => ({ masterShown: true }))
+vi.mock("@/hooks/use-target-handle-shown", () => ({ useTargetHandleShown: (_id: string, _type: string, handle: string) => handle !== "masterAudio" || pips.masterShown }))
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
@@ -21,7 +23,7 @@ vi.mock("@/components/nodes/base-node", () => ({
   BaseNode: ({ children }: any) => <div data-testid="base-node">{children}</div>,
 }))
 vi.mock("@/components/nodes/handle-with-popover", () => ({
-  HandleWithPopover: ({ handleId, type, label }: any) => <div data-testid={`pip-${type}-${handleId}`}>{label}</div>,
+  HandleWithPopover: ({ handleId, type, label, top }: any) => <div data-testid={`pip-${type}-${handleId}`} data-top={top}>{label}</div>,
   HANDLE_COLORS: { video: "#000", audio: "#111" },
 }))
 vi.mock("@/components/nodes/run-node-button", () => ({ RunNodeButton: () => null }))
@@ -59,6 +61,7 @@ afterEach(() => {
   store.updateNodeData.mockReset()
   store.runSingleNode.mockReset()
   fanOut.listDriven = false
+  pips.masterShown = true
 })
 
 describe("TightenEpisodeNode", () => {
@@ -67,12 +70,35 @@ describe("TightenEpisodeNode", () => {
     expect(screen.getByText(t("node.tightenConnectRecording"))).toBeInTheDocument()
   })
 
-  it("its pips: Recording and Music in (the label tables' keys), the episode and its edit out", () => {
+  it("its pips: Recordings (top), Master audio (middle) and Music (bottom) in — the label tables' keys — the episode and its edit out", () => {
     renderNode({ label: "T", fieldMappings: {} })
-    expect(screen.getByTestId("pip-target-media").textContent).toBe("Recording")
+    expect(screen.getByTestId("pip-target-media").textContent).toBe("Recordings")
+    expect(screen.getByTestId("pip-target-masterAudio").textContent).toBe("Master audio")
     expect(screen.getByTestId("pip-target-music").textContent).toBe("Music")
+    expect(["media", "masterAudio", "music"].map((h) => screen.getByTestId(`pip-target-${h}`).getAttribute("data-top"))).toEqual(["24px", "50%", "calc(100% - 24px)"])
     expect(screen.getByTestId("pip-source-media").textContent).toBe(t("node.tightenEpisodeVideo"))
     expect(screen.getByTestId("pip-source-json").textContent).toBe(t("node.tightenPlan"))
+  })
+
+  it("no Master audio pip for a viewer it is withheld from (Speaker Map not available, and nothing wired to it)", () => {
+    pips.masterShown = false
+    renderNode({ label: "T", fieldMappings: {} })
+    expect(screen.queryByTestId("pip-target-masterAudio")).toBeNull()
+    expect(screen.getByTestId("pip-target-music")).toBeInTheDocument()
+  })
+
+  it("under a multicam take, the camera note: a speaker with no clear camera, and recordings that could not be lined up", () => {
+    renderNode({
+      label: "T", fieldMappings: {}, executionStatus: "completed", generatedVideoUrl: "https://r2/ep.mp4", generatedResults: [{ url: "https://r2/ep.mp4", quality: "final" }],
+      useCaseCameras: { speakers: [{ speaker: "speaker_1", ordinal: 1, camera: null, marginDb: 0.4 }, { speaker: "speaker_0", ordinal: 2, camera: 2, marginDb: 7 }], syncNotes: ["weak"], mapNotes: [] },
+    })
+    expect(screen.getByText(translate("en", "node.usecaseCameraUnclear", { n: 1 }))).toBeInTheDocument()
+    expect(screen.getByText(t("node.usecaseCameraSyncWeak"))).toBeInTheDocument()
+  })
+
+  it("no cameras report: no note", () => {
+    renderNode({ label: "T", fieldMappings: {}, executionStatus: "completed", generatedVideoUrl: "https://r2/ep.mp4", generatedResults: [{ url: "https://r2/ep.mp4", quality: "final" }] })
+    expect(screen.queryByTestId("use-case-camera-note")).toBeNull()
   })
 
   it("a finished video episode plays", () => {

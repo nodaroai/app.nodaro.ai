@@ -6,6 +6,8 @@ import { useT, type MessageKey } from "@/lib/i18n"
 import type { ConfigProps } from "@/components/editor/config-panels/types"
 import { RunUpToHereNotice } from "@/components/editor/config-panels/run-up-to-here-notice"
 import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
+import { UseCaseMulticamSection } from "@/components/editor/config-panels/use-case-multicam-section"
+import { useUseCaseMulticamViewer } from "@/lib/use-case-multicam-viewer"
 import type { UnitConfigKit } from "../exec-kit"
 import type { EpisodeTrailerData } from "./types"
 
@@ -22,10 +24,18 @@ const FORMAT_LABEL_KEYS: Readonly<Record<TrailerFormat, MessageKey>> = {
  * stops for a review before it renders, and the plan step's tier,
  * instructions and style guide. No setting depends on a provider, so nothing
  * needs snapping (CLAUDE.md Provider Enum Sync 12b does not apply).
+ *
+ * Two or more recordings or a Master audio show the Cameras section
+ * (`UseCaseCamerasFields`) and badge what the run would refuse
+ * (`usecaseRecordingsProblem`) — only to a viewer who may use Speaker Map;
+ * any other viewer is told their run reads the first recording only, and
+ * nothing shows until their availability has landed. There is no audio lock:
+ * every format is a video, and a run with no picture is refused.
  */
-export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }) {
+export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources = [] }: ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }) {
   const data = raw as unknown as EpisodeTrailerData
   const t = useT()
+  const viewer = useUseCaseMulticamViewer()
   const chosen = data.formats && data.formats.length > 0 ? data.formats : EPISODE_TRAILER_DEFAULTS.formats
   // Kept in the formats' own order, whatever order they were ticked in.
   const toggle = (format: TrailerFormat, on: boolean) => {
@@ -35,6 +45,8 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: Confi
 
   return (
     <div className="space-y-4">
+      <UseCaseMulticamSection type="episode-trailer" data={data} onUpdate={onUpdate} nodeId={nodeId} nodes={nodes} edges={edges ?? []} sources={sources} viewer={viewer} />
+
       <fieldset className="space-y-1.5">
         <legend className="text-sm font-medium">{t("node.trailerFormats")}</legend>
         {TRAILER_FORMATS.map((format) => {

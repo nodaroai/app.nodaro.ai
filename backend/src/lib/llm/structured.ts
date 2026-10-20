@@ -12,7 +12,7 @@ import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
 import { anthropicKeySet } from "./anthropic-availability.js"
 import { assertInlineVideoLane, claudeMustServeDirect, llmComplete } from "./router.js"
-import { kieFallback, laneFallbackAllowed, serveFromFallback } from "./lane-fallback.js"
+import { directFallbackAllowed, kieFallback, serveFromFallback } from "./lane-fallback.js"
 import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
 import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
@@ -207,20 +207,18 @@ async function streamStructuredAttempt(
   }
   // KIE first. A failure before the first fragment reached the caller falls
   // back to direct (at no extra charge — the call is still billed as KIE);
-  // after one, the stream is tainted and the error surfaces.
+  // after one, the stream is tainted and the error surfaces. Not under
+  // `cheapLanesOnly` (directFallbackAllowed).
   let emitted = false
+  const ctx = { modelId: model.id, primary: "kie stream", fallback: "direct-anthropic stream" }
   try {
     return await streamKieMessages(model, req, () => {}, signal, (partial) => {
       emitted = true
       onToolJson(partial, undefined)
     })
   } catch (err) {
-    if (emitted || !directAvailable || req.requireLane === "kie" || !laneFallbackAllowed(err) || signal?.aborted) throw err
-    return serveFromFallback(
-      { modelId: model.id, primary: "kie stream", fallback: "direct-anthropic stream" },
-      err,
-      () => streamAnthropicStructured(model, req, jsonSchema, onToolJson, signal),
-    )
+    if (emitted || !directAvailable || req.requireLane === "kie" || signal?.aborted || !directFallbackAllowed(ctx, req, err)) throw err
+    return serveFromFallback(ctx, err, () => streamAnthropicStructured(model, req, jsonSchema, onToolJson, signal))
   }
 }
 
@@ -327,16 +325,17 @@ export const LLM_STRUCTURED_DEFAULT_ATTEMPTS = 3
  * carrying one (a KIE call 503'd, the direct lane answered), so this keeps
  * what they had.
  *
- * Not when the call is pinned to KIE, there is no direct key or model, or the
- * direct account is latched out (out of credit, or a latched key refusal):
- * then the call fails as before.
+ * Not when the call is pinned to KIE, there is no direct key or model, the
+ * direct account is latched out (out of credit, or a latched key refusal), or
+ * the call is kept to the cheap lanes (`cheapLanesOnly`: this ask IS the
+ * direct-vendor fallback, at the direct price): then the call fails as before.
  * The ask goes straight to the guarded direct adapter, so a platform refusal
  * there fails the call with the capacity sentence — it never loops back to KIE.
  */
 function directToolBackup(
   req: LlmRequest, lastLane: LlmServedLane | undefined,
 ): { modelId: string; call: (attemptReq: LlmRequest) => Promise<LlmResponse> } | undefined {
-  if (lastLane !== "kie" || req.requireLane === "kie" || !anthropicKeySet()) return undefined
+  if (lastLane !== "kie" || req.requireLane === "kie" || req.cheapLanesOnly === true || !anthropicKeySet()) return undefined
   const model = resolveModel(req)
   if (model.structuredOutputMode !== "anthropic-tool" || !model.directFallbackModel) return undefined
   if (directLaneLatch("anthropic")) return undefined

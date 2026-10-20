@@ -77,7 +77,7 @@ import {
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
-import { runForwardedVideoLengthSec, splitMediaPartAt } from "@nodaro/render-rules"
+import { editPlanProducerKind, runForwardedVideoLengthSec, splitMediaPartAt } from "@nodaro/render-rules"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES } from "@nodaro/shared/ugc"
 import { outputPipSourceType } from "@nodaro/shared/entities"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
@@ -1991,8 +1991,8 @@ function routeOutput(
       return
     }
     if (edge.targetHandle === "sources") {
-      const kind: "video" | "audio" =
-        VIDEO_PRODUCER_TYPES.has(srcType) ? "video" : AUDIO_PRODUCER_TYPES.has(srcType) ? "audio" : "video"
+      // The one rule the Speaker Frames estimate counts cameras by, too.
+      const kind = editPlanProducerKind(srcType)
       // Carry the source's own duration (when the producer exposes it) so the
       // reserve buckets on the MASTER source's real length, not the 180m ceiling.
       // editPlanSourceDurationSec adds the AUDIO lane (metadata.durationSeconds) —

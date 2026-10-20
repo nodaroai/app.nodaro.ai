@@ -17,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, SUNO_SEPARATE_TYPES } from "@nodaro/shared/models"
 import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
@@ -64,13 +64,14 @@ import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
  * than the audio URL — they're internal to KIE's Suno wrapper.
  *
  * Returns null when the job isn't a Suno generation or the ids are missing
- * (e.g. minimax music — no Suno ids written). Caller should error in that
- * case so the user knows to point at a Suno track specifically.
+ * (e.g. minimax music — no Suno ids written). A verb that only works on a
+ * Suno track errors in that case; suno_separate_stems instead separates the
+ * asset by its URL. Also returns the track's own audio URL when it has one.
  */
 async function resolveSunoIds(
   jobId: string,
   userId: string,
-): Promise<{ sunoTaskId: string; sunoTrackId: string } | null> {
+): Promise<{ sunoTaskId: string; sunoTrackId: string; audioUrl?: string } | null> {
   const { data } = await supabase
     .from("jobs")
     .select("output_data, user_id, is_public, status")
@@ -85,7 +86,9 @@ async function resolveSunoIds(
   const sunoTaskId = out.sunoTaskId as string | undefined
   const sunoTrackId = out.sunoTrackId as string | undefined
   if (!sunoTaskId || !sunoTrackId) return null
-  return { sunoTaskId, sunoTrackId }
+  // The track's own audio too, for a caller that can also send it by URL.
+  const audioUrl = typeof out.audioUrl === "string" && /^https?:\/\//.test(out.audioUrl) ? out.audioUrl : undefined
+  return { sunoTaskId, sunoTrackId, ...(audioUrl ? { audioUrl } : {}) }
 }
 // Audio enums stay hardcoded for now — Suno music + ElevenLabs dialogue
 // route through different backends than the standard /v1/generate-music
@@ -1549,27 +1552,53 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── suno_separate_stems ──
-  // Splits a Suno track into vocals + instrumental (or up to N stems).
-  // Resolves Suno's internal taskId/audioId from the source Nodaro job's
-  // output_data — callers only pass the Nodaro job_id of the Suno track.
+  // Splits a Suno track, or any audio, into vocals + instrumental, full stems
+  // or one named instrument. A Suno generation's job id is sent by its Suno
+  // taskId/audioId (read from the job's output_data) and nothing else — the
+  // ids win over a URL everywhere (@nodaro/render-rules
+  // suno-separate-source.ts); any other audio goes by URL — given directly,
+  // or resolved from an uploaded or generated asset id.
   server.registerTool(
     "suno_separate_stems",
     {
       title: "Suno Separate Stems",
       description:
-        "Separate a Suno-generated track into vocals + instrumental " +
-        "(`separate_vocal`) or full per-instrument stems (`split_stem`). " +
-        "Pass the Nodaro audio_asset_id of a Suno generation — non-Suno " +
-        "tracks (minimax, ElevenLabs, etc.) cannot be separated this way.",
+        "Separate any audio with Suno: vocals + instrumental (`separate_vocal`), " +
+        "full per-instrument stems (`split_stem`), or one named instrument " +
+        "(`split_stem_advanced` + `stem_name`: the instrument alone and the song " +
+        "without it, in two takes). Pass exactly one of audio_url or " +
+        "audio_asset_id — a Suno generation, an upload or any generated audio. " +
+        "Suno refuses commercially released recordings and audio over 20 MB; " +
+        "set fallback_to_demucs to run Demucs instead (vocals and full stems " +
+        "only), or use `separate_audio`.",
       inputSchema: {
+        audio_url: z.string().url().optional().describe("Any audio by URL."),
         audio_asset_id: z
           .string()
           .min(1)
-          .describe("Nodaro audio job id of a Suno generation (sunoTaskId/sunoTrackId are looked up server-side)."),
-        type: z
-          .enum(["separate_vocal", "split_stem"])
           .optional()
-          .describe("`separate_vocal` (default) = vocals + instrumental. `split_stem` = full multi-stem split."),
+          .describe("Nodaro audio job id or uploaded audio asset id. A Suno generation is separated by its Suno ids (looked up server-side)."),
+        type: z
+          .enum(SUNO_SEPARATE_TYPES)
+          .optional()
+          .describe(
+            "`separate_vocal` (default) = vocals + instrumental. `split_stem` = full multi-stem split. " +
+              "`split_stem_advanced` = one instrument (`stem_name`) alone and the song without it.",
+          ),
+        // A plain string, not the 98-name enum (decided 2026-10-19: the enum
+        // cost every session ~1.2 KB of tools/list). The route's Zod enum
+        // refuses a wrong name with a 400 that lists every valid one.
+        stem_name: z
+          .string()
+          .optional()
+          .describe("One of Suno's instrument names, e.g. Piano or Lead Vocal (only for split_stem_advanced; default Lead Vocal)"),
+        fallback_to_demucs: z
+          .boolean()
+          .optional()
+          .describe(
+            "When Suno refuses (a commercially released recording, or over 20 MB), run Demucs instead and " +
+              "charge its price. Vocals and full stems only — one-instrument mode has no fallback. Default false.",
+          ),
       },
       outputSchema: {
         jobId: z.string(),
@@ -1591,25 +1620,38 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
-      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
-      if (!ids) {
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                "Could not find Suno taskId/audioId for asset " +
-                args.audio_asset_id +
-                ". Pass a Nodaro audio job id from a Suno generation.",
-            },
-          ],
-          isError: true,
+      if (Boolean(args.audio_url) === Boolean(args.audio_asset_id)) {
+        return { content: [{ type: "text" as const, text: "Pass exactly one of audio_url or audio_asset_id." }], isError: true }
+      }
+      let source: { taskId?: string; audioId?: string; audioUrl?: string }
+      if (args.audio_url) {
+        source = { audioUrl: args.audio_url }
+      } else {
+        const assetId = args.audio_asset_id!
+        // A Suno generation (the caller's, or a public one) goes by its ids, as
+        // it always has; anything else by the URL of the caller's own asset.
+        const ids = await resolveSunoIds(assetId, session.userId)
+        if (ids) {
+          source = { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId }
+        } else {
+          try {
+            const audioUrl = await resolveAssetId({ assetId, userId: session.userId, expectedKind: "audio" })
+            if (!audioUrl) throw new Error(`Asset ${assetId} not found`)
+            source = { audioUrl }
+          } catch (err) {
+            return {
+              content: [{ type: "text" as const, text: `audio_asset_id: ${err instanceof Error ? err.message : String(err)}` }],
+              isError: true,
+            }
+          }
         }
       }
+      const type = args.type ?? "separate_vocal"
       const payload = {
-        taskId: ids.sunoTaskId,
-        audioId: ids.sunoTrackId,
-        type: args.type ?? "separate_vocal",
+        ...source,
+        type,
+        ...(args.stem_name ? { stemName: args.stem_name } : {}),
+        ...(args.fallback_to_demucs !== undefined ? { fallbackToDemucs: args.fallback_to_demucs } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -1618,7 +1660,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         payload,
         label: "stem separation",
         widgetKind: "audio",
-        widgetData: { prompt: args.type ?? "separate_vocal", model: "suno-separate" },
+        widgetData: { prompt: type, model: "suno-separate" },
       })
     },
   )
@@ -2135,8 +2177,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── separate_audio ──
-  // Demucs stem separation on ANY audio (unlike suno_separate_stems, which
-  // requires a Suno-generated track). Vocal/instrumental or full stems.
+  // Demucs stem separation on any audio. Vocal/instrumental or full stems.
   server.registerTool(
     "separate_audio",
     {
@@ -2144,8 +2185,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       description:
         "Separate ANY audio into vocals + instrumental, or full stems (drums, " +
         "bass, other, guitar, piano), using Demucs. Works on uploaded or " +
-        "generated audio — unlike `suno_separate_stems`, no Suno track is " +
-        "needed. Returns a job_id; the stems appear in the tool card — " +
+        "generated audio, including commercially released recordings that " +
+        "`suno_separate_stems` refuses. Returns a job_id; the stems appear in the tool card — " +
         "read the per-stem URLs (vocalUrl, instrumentalUrl, drumsUrl, …) " +
         "via get_job.",
       inputSchema: {

@@ -15,6 +15,8 @@
     "node.trailerPlan": {"en": "Edit (EDL)", "he": "עריכה (EDL)", "ja": "編集（EDL）", "ko": "편집(EDL)", "pt-br": "Edição (EDL)"}
   },
   "labels": {
-    "Trailer": {"he": "טריילר", "ja": "トレーラー", "ko": "트레일러", "pt-br": "Trailer do episódio"}
+    "Trailer": {"he": "טריילר", "ja": "トレーラー", "ko": "트레일러", "pt-br": "Trailer do episódio"},
+    "Recordings": {"he": "הקלטות", "ja": "録音", "ko": "녹음", "pt-br": "Gravações"},
+    "Master audio": {"he": "אודיו ראשי", "ja": "マスターオーディオ", "ko": "마스터 오디오", "pt-br": "Áudio principal"}
   }
 }

@@ -170,7 +170,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "suno-mashup": { inputs: ["audio1", "audio2"], outputs: ["audio"] },
   "suno-music-video": { inputs: ["audio"], outputs: ["video"] },
   "suno-replace-section": { inputs: ["audio", "prompt"], outputs: ["audio"] },
-  "suno-separate": { inputs: ["audio"], outputs: ["instrumental", "vocals"] },
+  "suno-separate": { inputs: ["audio"], outputs: ["instrumental", "vocals", "isolated", "without"] },
   "suno-style-boost": { inputs: ["prompt"], outputs: ["text"] },
   "suno-upload-extend": { inputs: ["audio", "prompt"], outputs: ["audio"] },
   "suno-voice": { inputs: [], outputs: ["voicePersona"] },

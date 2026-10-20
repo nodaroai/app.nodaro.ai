@@ -62,6 +62,26 @@ describe("a use-case node running its Render final", () => {
     const node = CreditsService.estimateWorkflowBaseCredits([rec, t1(FINAL), fmt], edges, { runNodeIds: new Set(["t1"]) })
     expect(node).toBe(expected)
   })
+
+  it("on two cameras, for a viewer who may use Speaker Map (decided 2026-10-17): Camera Switch on the reviewed cut, then the render and what follows, no fee — the hand-built chain from its switch on", () => {
+    const cam2 = { id: "cam2", type: "upload-video", data: { url: "https://r2/cam2.mp4", metadata: { durationSeconds: 3600 } } }
+    const twoCams = [...edges, { source: "cam2", target: "t1", sourceHandle: "video", targetHandle: "media" }]
+    // A viewer who may use Speaker Map (decided 2026-10-19): the run reads both cameras.
+    const x = expandUseCaseNodes([rec, cam2, t1(FINAL), fmt], twoCams, { multicam: true })
+    expect([...(x.members.get("t1") ?? [])].sort()).toEqual(["t1::uc-captions", "t1::uc-render", "t1::uc-switch"])
+    expect(x.fees).toEqual([])
+    const chain = buildTightenEpisodeGraph(
+      resolveTightenEpisodeSettings({ ...settings, reviewBeforeRender: false }, "video", { recordings: 2, masterAudio: false }),
+      { media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 }, moreMedia: [{ url: "https://r2/cam2.mp4", kind: "video", durationSec: 3600 }] },
+    )
+    const expected = CreditsService.estimateWorkflowBaseCredits(chain.nodes, chain.edges, { runNodeIds: new Set(["uc-switch", "uc-render", "uc-captions"]) })
+    const switchOnly = CreditsService.estimateWorkflowBaseCredits(chain.nodes, chain.edges, { runNodeIds: new Set(["uc-switch"]) })
+    expect(switchOnly).toBeGreaterThan(0)
+    expect(CreditsService.estimateWorkflowBaseCredits([rec, cam2, t1(FINAL), fmt], twoCams, { runNodeIds: new Set(["t1"]), multicam: true })).toBe(expected)
+    // Any other viewer's Render final is the one-recording run's, as before.
+    expect(CreditsService.estimateWorkflowBaseCredits([rec, cam2, t1(FINAL), fmt], twoCams, { runNodeIds: new Set(["t1"]) }))
+      .toBe(CreditsService.estimateWorkflowBaseCredits([rec, t1(FINAL), fmt], edges, { runNodeIds: new Set(["t1"]) }))
+  })
 })
 
 describe("a Render final is priced on the run's own cut", () => {

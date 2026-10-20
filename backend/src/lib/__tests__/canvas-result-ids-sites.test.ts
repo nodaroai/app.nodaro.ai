@@ -59,7 +59,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["lib/ugc-composed-graph.ts::workflows", "reads a referenced sub-workflow's graph only to tell which of its nodes can flow into a UGC Creator's photo; hands none of them out (a run reads the graph it runs through sub-workflow-handler.ts)"],
   ["lib/ugc-composed-graph.ts::published_apps", "reads a component's published snapshot only to tell whether it holds a UGC video; hands none of it out (an immutable snapshot, resolved when it was taken)"],
   ["lib/mcp/tools/gallery.ts::workflows", "get_app_run names a run's node states by the workflow's labels and types; what it hands out comes from the execution's node_states, never from saved node results"],
-  ["lib/schedule-cron.ts::workflows", "reads Schedule Trigger configuration only"],
+  ["lib/schedule-fire.ts::workflows", "reads whether the Schedule Trigger node is still on the graph (the orphan check) only"],
   ["lib/preview-fire-refusal.ts::workflows", "reads the graph only to decide whether a fire is refused at a Preview render; hands no node out"],
   ["routes/api-tokens.ts::workflows", "the token API derives a workflow's inputs, outputs and sub-workflow names; run results come from executions, never from saved node results"],
   ["routes/sub-workflows.ts::workflows", "the callable interface (inputs and outputs) only"],

@@ -166,6 +166,25 @@ describe("POST /v1/workflow-triggers — a schedule as rules", () => {
     expect(inserts.map((r) => r.config)).toEqual([{ interval: "1h" }, { cron: "0 6 * * 1-5", timezone: "UTC" }])
   })
 
+  it("stores Retry on failure with its defaults filled, and refuses an out-of-range value rather than clamping it", async () => {
+    const { inserts } = tables()
+    expect((await create({ rules: [{ kind: "hours", every: 2 }], retry: {} })).statusCode).toBe(201)
+    expect((await create({ rules: [{ kind: "hours", every: 2 }], retry: { afterMinutes: 120, maxAttempts: 1, cheapLanesOnly: false } })).statusCode).toBe(201)
+    expect(inserts.map((r) => (r.config as Row).retry)).toEqual([
+      { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: true },
+      { afterMinutes: 120, maxAttempts: 1, cheapLanesOnly: false },
+    ])
+    for (const retry of [{ afterMinutes: 4 }, { afterMinutes: 1441 }, { maxAttempts: 0 }, { maxAttempts: 6 }, { cheapLanesOnly: "yes" }, "on"]) {
+      const res = await create({ rules: [{ kind: "hours", every: 2 }], retry })
+      expect(res.statusCode, JSON.stringify(retry)).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(inserts).toHaveLength(2)
+    // A create with `retry: null` stores no retry key at all.
+    expect((await create({ rules: [{ kind: "hours", every: 2 }], retry: null })).statusCode).toBe(201)
+    expect(inserts[2].config).not.toHaveProperty("retry")
+  })
+
   it.each([
     ["an every outside the kind's range", { rules: [{ kind: "months", every: 24 }] }],
     ["a weeks rule with no weekday", { rules: [{ kind: "weeks", hour: 9 }] }],
@@ -229,6 +248,21 @@ describe("PATCH /v1/workflow-triggers/:id — the same rules, the same refusals,
     const { updates } = tables(STORED)
     expect((await patch({ timezone: "Asia/Jerusalem" })).statusCode).toBe(200)
     expect(updates[0].config).toEqual({ ...STORED.config, timezone: "Asia/Jerusalem" })
+  })
+
+  it("Retry on failure lands on top of the row; `retry: null` switches it off; a PATCH of something else keeps it", async () => {
+    const { updates } = tables(STORED)
+    expect((await patch({ retry: { afterMinutes: 15 } })).statusCode).toBe(200)
+    expect(updates[0].config).toEqual({ ...STORED.config, retry: { afterMinutes: 15, maxAttempts: 3, cheapLanesOnly: true } })
+
+    const withRetry = { ...STORED, config: { ...STORED.config, retry: { afterMinutes: 15, maxAttempts: 3, cheapLanesOnly: true } } }
+    const second = tables(withRetry)
+    expect((await patch({ timezone: "Asia/Jerusalem" })).statusCode).toBe(200)
+    expect(second.updates[0].config).toEqual({ ...withRetry.config, timezone: "Asia/Jerusalem" })
+    expect((await patch({ retry: null })).statusCode).toBe(200)
+    expect(second.updates[1].config).toEqual({ ...withRetry.config, retry: null })
+    expect((await patch({ retry: { maxAttempts: 7 } })).statusCode).toBe(400)
+    expect(second.updates).toHaveLength(2)
   })
 
   it("a legacy key sent beside rules is not stored; sent alone it replaces them", async () => {

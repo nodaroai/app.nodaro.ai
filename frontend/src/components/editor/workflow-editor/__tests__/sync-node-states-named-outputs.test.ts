@@ -136,6 +136,34 @@ describe("syncNodeStatesToStore — a finished node's named side outputs", () =>
     expect(byId.combine.combinedText).toBe("a b")
     expect(byId.split.splitResults).toEqual(["a", "b"])
   })
+
+  it("a Suno Separate run lands its other stems, its takes and how it ran — the reload lanes' mapping", () => {
+    const output = {
+      audioUrl: "https://cdn.test/vocals.mp3",
+      vocalUrl: "https://cdn.test/vocals.mp3",
+      otherUrl: "https://cdn.test/other.mp3",
+      isolatedUrl: "https://cdn.test/iso.mp3",
+      withoutUrl: "https://cdn.test/without.mp3",
+      engineUsed: "demucs",
+      sunoRefused: true,
+      fallbackReason: "catalog",
+    }
+    // The node still holds a previous full-stems run: a stem this run did not return goes.
+    mockNodes = [{ id: "sep", type: "suno-separate", data: { executionStatus: "running", instrumentalUrl: "https://cdn.test/old-inst.mp3", drumsUrl: "https://cdn.test/old-drums.mp3", stemName: "Piano" } }]
+    streamBackendExecution("exec-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({ sep: { status: "completed", output } })
+    expect(byId.sep.instrumentalUrl).toBeUndefined()
+    expect(byId.sep.drumsUrl).toBeUndefined()
+    expect(byId.sep.stemName).toBe("Piano")
+    expect(byId.sep).toMatchObject({
+      otherUrl: "https://cdn.test/other.mp3",
+      isolatedUrl: "https://cdn.test/iso.mp3",
+      withoutUrl: "https://cdn.test/without.mp3",
+      engineUsed: "demucs",
+      sunoRefused: true,
+      fallbackReason: "catalog",
+    })
+  })
 })
 
 // Video Overlay on a BACKEND run (Execute All, Run from here, schedule, webhook,

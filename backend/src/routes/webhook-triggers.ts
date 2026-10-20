@@ -13,6 +13,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import {
   SCHEDULE_EVERY_LIMITS,
+  SCHEDULE_RETRY_DEFAULTS,
+  SCHEDULE_RETRY_LIMITS,
   SCHEDULE_RULE_KINDS,
   isCronExpression,
   isValidTimezone,
@@ -107,6 +109,20 @@ const scheduleRuleBody = z
   })
 
 /**
+ * "Retry on failure" (@nodaro/shared `ScheduleRetry`): a field left out takes
+ * its default; out-of-range values are refused, not clamped — like a rule's.
+ * `null` in a PATCH switches the retry off (a PATCH merges into the stored
+ * config, so there is no other way to drop the key).
+ */
+const scheduleRetryBody = z
+  .object({
+    afterMinutes: z.number().int().min(SCHEDULE_RETRY_LIMITS.afterMinutes[0]).max(SCHEDULE_RETRY_LIMITS.afterMinutes[1]).default(SCHEDULE_RETRY_DEFAULTS.afterMinutes),
+    maxAttempts: z.number().int().min(SCHEDULE_RETRY_LIMITS.maxAttempts[0]).max(SCHEDULE_RETRY_LIMITS.maxAttempts[1]).default(SCHEDULE_RETRY_DEFAULTS.maxAttempts),
+    cheapLanesOnly: z.boolean().default(SCHEDULE_RETRY_DEFAULTS.cheapLanesOnly),
+  })
+  .nullable()
+
+/**
  * A schedule's config: `rules` (the model the node uses), or the legacy
  * `interval` / `cron` pair the cron still reads for rows made by hand. A
  * timezone the runtime cannot read is refused here rather than stored — the
@@ -118,16 +134,24 @@ const triggerConfigBody = z.object({
   timezone: z.string().max(64).refine((tz) => isValidTimezone(tz), "unknown timezone").optional(),
   interval: z.string().max(50).optional(),
   maxExecutions: z.number().int().min(0).optional(),
+  retry: scheduleRetryBody.optional(),
 })
 
 type TriggerConfigBody = z.infer<typeof triggerConfigBody>
 
-/** The config as the row stores it: rules normalised (ids filled, fields the kind does not read dropped). */
-function storedTriggerConfig(config: TriggerConfigBody): Record<string, unknown> {
-  if (!config.rules) return { ...config }
+/**
+ * The config as the row stores it: rules normalised (ids filled, fields the
+ * kind does not read dropped); a `retry: null` stored as such on a PATCH
+ * (it lands over the stored key — the sweep reads null as off) and dropped
+ * on a create, where there is nothing to switch off.
+ */
+function storedTriggerConfig(config: TriggerConfigBody, lane: "create" | "patch"): Record<string, unknown> {
+  const { retry, ...withoutRetry } = config
+  const base: Record<string, unknown> = retry === null && lane === "create" ? withoutRetry : { ...withoutRetry, ...(retry !== undefined ? { retry } : {}) }
+  if (!config.rules) return base
   // Rules present means rules: a legacy key sent beside them is not stored,
   // so nothing can shadow them later.
-  const { interval: _interval, cron: _cron, ...rest } = config
+  const { interval: _interval, cron: _cron, ...rest } = base
   return { ...rest, rules: normalizeScheduleRules(config.rules) }
 }
 
@@ -438,7 +462,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       workflow_id: workflowId,
       user_id: req.userId,
       type,
-      config: triggerConfig ? storedTriggerConfig(triggerConfig) : {},
+      config: triggerConfig ? storedTriggerConfig(triggerConfig, "create") : {},
       webhook_token: webhookToken,
     }
     // The column's default is already false — only a "yes" needs the column,
@@ -571,7 +595,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       if (bodyParsed.data.config !== undefined) {
         updates.config = applyTriggerConfigPatch(
           (trig.config as Record<string, unknown> | null) ?? null,
-          storedTriggerConfig(bodyParsed.data.config),
+          storedTriggerConfig(bodyParsed.data.config, "patch"),
         )
       }
     }

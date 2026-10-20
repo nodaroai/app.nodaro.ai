@@ -174,8 +174,10 @@ describe("both engines stamp through the one rule, on the list row only", () => 
 
   it("execute-node calls renderPlanClipKey with the list row, never the iteration number", () => {
     const src = read("../execute-node.ts")
-    const call = src.slice(src.indexOf("const clipKey = renderPlanClipKey("), src.indexOf("setUserPromptTemplate(undefined);\n    return runApplyEdl("))
-    expect(call).toContain("listRowIndex,")
+    const call = src.slice(src.indexOf("const planRow = "), src.indexOf("setUserPromptTemplate(undefined);\n    return runApplyEdl("))
+    // The list row, else the lone delivered row behind a Camera Switch (renderLoneRow, decided 2026-10-20).
+    expect(call).toContain("const planRow = listRowIndex ?? browserRenderLoneRow(")
+    expect(call).toMatch(/const clipKey = renderPlanClipKey\([^;]*\n\s+planRow,\n/)
     expect(call).not.toContain("listIterationIndex")
   })
 

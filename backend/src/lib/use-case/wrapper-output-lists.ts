@@ -28,7 +28,9 @@
  * 2026-10-18: one failure never stops the rest). A clip that could not be
  * rendered is counted on `failedClips` (a row the run never started,
  * `cancelled`, is not a failure: only a Stop leaves one, and a stopped run
- * keeps nothing). A rendered clip whose captions failed is still delivered,
+ * keeps nothing). On several cameras Camera Switch runs once per clip before
+ * the render and is tried for every clip too: a clip whose switch failed is
+ * never rendered and is counted the same way, once (clip-failures.ts). A rendered clip whose captions failed is still delivered,
  * uncaptioned — its render stands in, the row says `captionsFailed`, and
  * `failedCaptions` counts them (decided 2026-10-18) — only when captioning
  * ran: a run that stopped before it keeps nothing (`captionsNotRun`), and its
@@ -38,15 +40,19 @@
  * are the clips until Render final.
  */
 import {
+  MULTICAM_NODE_IDS,
   chapterRowsOf,
   clipPackNoneRenderedMessage,
   formatChapterListText,
+  usecasePlanNodeId,
   usecaseResultKind,
   type ClipsOutputMap,
   type StoredInlineGraph,
 } from "@nodaro/render-rules"
 import { edlSpanKey } from "@nodaro/shared/nodes"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseClipRow, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
+import { clipPackFailedClips, clipStepRows } from "./clip-failures.js"
 
 export function listOutput(
   graph: StoredInlineGraph,
@@ -54,11 +60,14 @@ export function listOutput(
   executionId: string,
 ): UseCaseWrapperOutput {
   const map = graph.outputMap
-  const planOut = completedOutput(nodeStates, map.planNodeId)
+  const planId = usecasePlanNodeId(map)
+  const planOut = planId !== null ? completedOutput(nodeStates, planId) : undefined
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
+  const cameras = usecaseCamerasReport(graph, nodeStates)
   const common = {
     ...(transcriptOut?.json !== undefined ? { transcript: transcriptOut.json } : {}),
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
+    ...(cameras ? { cameras } : {}),
     _executionId: executionId,
     ...failedStepOf(graph, nodeStates),
   }
@@ -174,17 +183,15 @@ function clipsOutput(
     }
   })
 
-  // The clips that could not be rendered: a render row with no file that was
-  // started (a row never started is `cancelled`). A render that failed
-  // outright (no clip at all) failed every clip it was given: the plan's.
-  const renderFailed = stateOf(nodeStates, map.renderNodeId) === "failed"
-  const failedClips = renderFailed
-    ? planned.length
-    : renderRows.filter((url, i) => !url && stamps[i]?.cancelled !== true).length
+  // The clips that could not be delivered, each counted once: its render row
+  // failed or, on several cameras, its Camera Switch row did (clip-failures.ts).
+  const hasSwitch = graph.nodes.some((n) => n.id === MULTICAM_NODE_IDS.switch)
+  const { failedClips, reason: renderError } = clipPackFailedClips({
+    planned: planned.length,
+    render: clipStepRows(nodeStates[map.renderNodeId], (o) => str(o.videoUrl) ?? str(o.audioUrl)),
+    ...(hasSwitch ? { switched: clipStepRows(nodeStates[MULTICAM_NODE_IDS.switch], (o) => (isRecord(o.json) && o.json.edl !== undefined ? "edl" : undefined)) } : {}),
+  })
   const failedCaptions = clips.filter((c) => c.captionsFailed).length
-  // Why no clip rendered: the render step's own error.
-  const renderState = nodeStates[map.renderNodeId] as { error?: unknown; errorCode?: unknown } | undefined
-  const renderError = renderFailed ? (str(renderState?.error) ?? str(renderState?.errorCode)) : undefined
   const first = clips[0]?.url
   const audio = !!render && !str(render.videoUrl) && !!str(render.audioUrl) && !after
   return {
@@ -216,8 +223,8 @@ const stateOf = (states: Readonly<Record<string, unknown>>, id: string): unknown
  * it (decided 2026-10-18): a final Trailer some of whose formats rendered,
  * or a final Clip Pack some of whose clips did (or all did, and the captions
  * step failed: the clips come uncaptioned), completes with them, its fee
- * kept. Only a list result does; an episode or chapters run that failed is a
- * failure, and a preview is never kept from a failed run.
+ * kept. Only a list result does; an episode, chapters or layout run that
+ * failed is a failure, and a preview is never kept from a failed run.
  */
 export function usecaseWrapperKeepsPartial(graph: StoredInlineGraph | null, output: UseCaseWrapperOutput): boolean {
   if (!graph || output.quality !== "final") return false
@@ -260,6 +267,8 @@ export function usecaseNoResultMessage(graph: StoredInlineGraph | null, output?:
       return "The plan found no chapters in this recording."
     case "clips":
       return "The plan found no clips in this recording."
+    case "layout":
+      return "The run finished without a framed video."
     default:
       return "The run finished without a result"
   }

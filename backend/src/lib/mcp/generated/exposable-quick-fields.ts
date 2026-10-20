@@ -47,7 +47,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
   },
   "describe-to-picker": {
-    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-4-argon","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "dubbing": {
@@ -146,7 +146,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "model": { valueType: "string", fixed: true, values: ["V4","V4_5","V4_5ALL","V4_5PLUS","V5","V5_5","V6","V6_MINI","V6_WILD"] },
   },
   "suno-separate": {
-    "type": { valueType: "string", fixed: true, values: ["separate_vocal","split_stem"] },
+    "type": { valueType: "string", fixed: true, values: ["separate_vocal","split_stem","split_stem_advanced"] },
   },
   "suno-upload-extend": {
     "model": { valueType: "string", fixed: true, values: ["V4","V4_5","V4_5ALL","V4_5PLUS","V5","V5_5","V6","V6_MINI","V6_WILD"] },

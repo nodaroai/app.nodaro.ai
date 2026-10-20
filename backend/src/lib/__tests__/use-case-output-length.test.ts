@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest"
 import { USE_CASE_NODE_TYPES, usecaseDescriptor, type UseCaseOutputLength } from "@nodaro/render-rules"
 import { VIDEO_OUTPUT_LENGTH_RULES, usecaseLength, type WireInput, type WireLength } from "../video-output-length.js"
 
-const STAND_IN: UseCaseOutputLength = { fixedSec: 40, after: "introCard" }
+const STAND_IN: UseCaseOutputLength = { kind: "fixed", fixedSec: 40, after: "introCard" }
 const MEDIA: WireInput = { sourceId: "rec", handle: "media", kind: "video", length: { fixedSec: 0, perEpisodeSec: 1 } }
 const card = (length: WireLength): WireInput => ({ sourceId: "card", handle: "introCard", kind: "video", length })
 
@@ -36,7 +36,29 @@ describe("usecaseLength: a fixed length, after the named input's", () => {
 
   it("with no input named, reads no wire (not even one with no handle)", () => {
     const noHandle: WireInput = { sourceId: "x", handle: undefined, kind: "video", length: { fixedSec: 99, perEpisodeSec: 0 } }
-    expect(usecaseLength({ fixedSec: 40 }, [MEDIA, noHandle, card("unknown")])).toEqual({ fixedSec: 40, perEpisodeSec: 0 })
+    expect(usecaseLength({ kind: "fixed", fixedSec: 40 }, [MEDIA, noHandle, card("unknown")])).toEqual({ fixedSec: 40, perEpisodeSec: 0 })
+  })
+})
+
+describe("usecaseLength: the clock's length (decided 2026-10-20)", () => {
+  const CLOCK: UseCaseOutputLength = { kind: "clock" }
+  const rec = (sourceId: string, length: WireLength): WireInput => ({ sourceId, handle: "media", kind: "video", length })
+  const master = (length: WireLength): WireInput => ({ sourceId: "m", handle: "masterAudio", kind: "audio", length })
+  it("one recording: its own length", () => {
+    expect(usecaseLength(CLOCK, [rec("a", { fixedSec: 3600, perEpisodeSec: 0 })])).toEqual({ fixedSec: 3600, perEpisodeSec: 0 })
+    expect(usecaseLength(CLOCK, [MEDIA])).toEqual(MEDIA.length)
+  })
+  it("several recordings: the longest (never under the whole-recording edit)", () => {
+    expect(usecaseLength(CLOCK, [rec("a", { fixedSec: 3000, perEpisodeSec: 0 }), rec("b", { fixedSec: 3600, perEpisodeSec: 0 })])).toEqual({ fixedSec: 3600, perEpisodeSec: 0 })
+  })
+  it("a Master audio: its length, whatever the cameras'", () => {
+    expect(usecaseLength(CLOCK, [rec("a", { fixedSec: 3600, perEpisodeSec: 0 }), master({ fixedSec: 3700, perEpisodeSec: 0 })])).toEqual({ fixedSec: 3700, perEpisodeSec: 0 })
+    expect(usecaseLength(CLOCK, [rec("a", "unknown"), master({ fixedSec: 3700, perEpisodeSec: 0 })])).toEqual({ fixedSec: 3700, perEpisodeSec: 0 })
+  })
+  it("unknown when a length it needs is, or nothing is wired", () => {
+    expect(usecaseLength(CLOCK, [rec("a", { fixedSec: 3000, perEpisodeSec: 0 }), rec("b", "unknown")])).toBe("unknown")
+    expect(usecaseLength(CLOCK, [rec("a", { fixedSec: 3000, perEpisodeSec: 0 }), master("unknown")])).toBe("unknown")
+    expect(usecaseLength(CLOCK, [])).toBe("unknown")
   })
 })
 

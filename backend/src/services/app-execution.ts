@@ -39,6 +39,9 @@ export interface ExecuteAppRunParams {
    *  preview stop rule apply?", carried onto the job verbatim (see
    *  `WorkflowExecutionJob.previewStopRule`). Absent = the rule's default. */
   previewStopRule?: boolean
+  /** A component's inner run of a run kept to the cheap lanes (see
+   *  `WorkflowExecutionJob.cheapLanesOnly`), carried onto the job verbatim. */
+  cheapLanesOnly?: boolean
   /** Spend-surface flag captured at the originating route (D1 v2). */
   webFreeMode?: boolean
   /**
@@ -96,6 +99,7 @@ export async function executeAppRun(
     billingContext,
     isComponentExecution,
     previewStopRule,
+    cheapLanesOnly,
     idempotencyKey,
     reviewerPresent,
   } = params
@@ -182,6 +186,8 @@ export async function executeAppRun(
     ...(isComponentExecution ? { isComponentExecution: true } : {}),
     // A component's inner run inherits its parent's stop-rule answer.
     ...(previewStopRule !== undefined ? { previewStopRule } : {}),
+    // …and its parent's cheap-lanes rule.
+    ...(cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
   }
 
   await orchestrationQueue.add("workflow-execution", jobData, {

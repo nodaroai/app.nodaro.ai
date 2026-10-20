@@ -479,7 +479,7 @@ try {
 ### `class ContinuationRefusedError extends NodaroError`
 
 HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode,
-Chapters, Trailer or Clip Pack run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+Chapters, Trailer, Clip Pack or Speaker Layout run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
 `already_running` (a continuation is under way, or one that already
 completed — follow `jobId`), `continuation_superseded` (a later continuation
 of that run failed too —
@@ -1356,7 +1356,11 @@ await client.jobs.delete(jobId)
 ### `client.llm`
 
 Structured LLM output: your system prompt and JSON Schema in, a validated
-object out. Billed under `llm-structured` per model tier.
+object out. Billed under `llm-structured` per model tier and lane (see
+[Structured LLM output](api-integration.md#structured-llm-output-any-schema)):
+economy 11 credits<!-- credits: llm-structured:economy -->, standard 20 credits<!-- credits: llm-structured -->,
+premium 40 credits<!-- credits: llm-structured:premium -->, premium-direct 150 credits<!-- credits: llm-structured:premium-direct -->.
+Claude Fable 5 is not offered (`400 validation_error`).
 
 #### `structured(input)`
 
@@ -2517,9 +2521,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > [Generate Text node docs](nodes/ai-text/llm-chat.md#model-selector)). Omit
 > it — or pick a level the model doesn't support — for the vendor default
 > ("Auto"). One exception: `POST /v1/describe-to-picker` and its text twin
-> `POST /v1/text-to-picker`, on their default model (Claude Opus 5.5, whether
-> named or omitted), run at `"high"` when the field is omitted — send another
-> level to change it; any other model keeps Auto (see
+> `POST /v1/text-to-picker` run Claude Opus 5.5 at `"high"` when the field is
+> omitted on that model — send another level to change it; any other model,
+> their default Gemini 3.8 Flash included, keeps Auto (see
 > [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost) for
 > what that run costs). `xhigh` and `max` bill **one tier up** (economy → standard,
 > standard → premium); see
@@ -6959,7 +6963,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (28 credits<!-- credits: describe-to-picker:premium-direct -->); another model with no effort keeps Auto. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature (a default run reads every picker's catalog) on the rung the model's tier and lane decide, as for Describe to Picker: economy 18 credits<!-- credits: text-to-picker:economy -->, standard 46 credits<!-- credits: text-to-picker -->, premium 90 credits<!-- credits: text-to-picker:premium -->, premium-direct 220 credits<!-- credits: text-to-picker:premium-direct -->. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the economy rung. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API, the premium-direct rung; any other model with no effort keeps Auto. Claude Fable 5 is not offered (`400 validation_error`). |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —
@@ -7328,10 +7332,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Ten
+Editorial primitives for podcast / long-form video editing. Eleven
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus four quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`) and one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus five quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -7341,15 +7345,17 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
-| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in, the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
+| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
 | `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
-| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in, a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
-| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in, a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`) | Continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack) its Render final after a review. The route is the run's own type. |
+| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `estimateSpeakerLayout(input)` | `POST /v1/speaker-layout/estimate` | What a Speaker Layout run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`, `/v1/speaker-layout/continue`) | Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack, Speaker Layout) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7509,17 +7515,21 @@ estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpiso
 
 Tighten a podcast recording in one call: the run transcribes it, plans the
 tightened cut, renders it and — as set — captions it, frames it and lays a
-music bed under it. Only `mediaUrl` is required; a field left out takes the
-node's default.
+music bed under it. Only the recording is required (`mediaUrl`, or
+`mediaUrls`); a field left out takes the node's default.
 
-**`TightenEpisodeInput`:**
+**`TightenEpisodeInput`** (with `UseCaseRecordingsInput`, its recordings):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls` | `string[]` | `mediaUrl` or `mediaUrls` | Instead of `mediaUrl`: the recordings of one conversation, in order (Camera 1, Camera 2…; one may be sound only) — up to six in all with the Master audio; without one, two or more cameras keep a place for the sound, so up to five. See [Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras). **Needs Speaker Map** (below). |
+| `masterAudioUrl` | `string` | no | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. **Needs Speaker Map** (below). |
+| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: `wide`, the recording number of the wide shot (`null` for none); `synced: true` when the recordings already share one clock; `speakerCameras`, a speaker number (`"1"` = the first voice heard) → a recording number, `0` for the wide shot, overriding the automatic map. Ignored on one recording with no Master audio. |
 | `musicUrl` | `string` | no | A music bed, ducked under the voice and ending with the episode. |
 | `output` | `"video" \| "audio"` | no | An audio recording always makes an audio episode. |
 | `framing` | `{ aspect, layout } \| null` | no | Frame a video episode with Speaker View, on automatic boxes over the speakers on screen. `aspect`: `"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`; `layout`: `"auto"` \| `"single"` \| `"side-by-side"` \| `"stacked"` \| `"grid"` \| `"pip"` (a layout the aspect does not draw is snapped to one it does). `null` or absent: no framing. |
+| `framingSource` | `"auto" \| "static" \| "tracking"` | no | With a framing, how it follows the speakers ([Following faces](./nodes/processing-video/tighten-episode.md#following-faces)): `"static"` (absent) splits the frame evenly by speaker; `"tracking"` follows faces with Speaker Frames (charged per started block of 1,000 sampled frames; a camera shared by several speakers keeps the even split until faces are named; refused `403 node_not_available` where Speaker Frames is not available to the caller); `"auto"` follows faces while Speaker Frames is available to the caller, else the even split. Ignored without a framing. |
 | `captions` | `boolean` | no | Captions on a video episode (on by default). |
 | `captionStyle` | `CaptionStyle` | no | The captions' look. |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview for a person to review; render the full-quality episode afterwards with `continueUseCase({ mode: "render-final" })`. |
@@ -7528,6 +7538,12 @@ node's default.
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
 
+Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
+`TypeError` before any request. **Several recordings or a Master audio need Speaker Map**,
+which is not yet enabled on nodaro.ai: until it is, such a request is refused
+`403 node_not_available` before anything is probed or charged — send one
+recording.
+
 `options.idempotencyKey` is sent as the `Idempotency-Key` header: retry the
 same request with the same key and the answer is the run already started
 (`deduped: true`), not a second one.
@@ -7535,7 +7551,10 @@ same request with the same key and the answer is the run already started
 `tightenEpisode` answers `TightenEpisodeJobResult` (the same shape as `UseCaseJobResult`) — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data` holds the episode (`videoUrl`,
 or `audioUrl` for an audio episode), the plan's EDL on `json`, and `quality`
-(`"proxy"` for a review-on run's preview, `"final"` otherwise).
+(`"proxy"` for a review-on run's preview, `"final"` otherwise). A run on
+several recordings or a Master audio adds `cameras`: `{ speakers: [{ speaker,
+ordinal, camera, marginDb }], syncNotes, mapNotes }` — who was put on which
+recording (`camera` `null` = the wide shot).
 
 `estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:tighten-episode --> per run.
@@ -7547,7 +7566,9 @@ could not be read.
 
 Both refuse before anything is created or charged: `400` (`validation_error`,
 `media_unreadable`, `media_has_no_audio`, `media_too_long`,
-`music_has_no_audio`), `403 node_not_available`, `503
+`music_has_no_audio`, and on several recordings `too_many_recordings`,
+`recordings_two_audio_only`, `wide_camera_out_of_range`, `invalid_cameras`),
+`403 node_not_available`, `503
 nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
 or `503 use_case_unavailable`. `tightenEpisode` also throws
 `InsufficientCreditsError` when the balance does not cover the estimate.
@@ -7568,7 +7589,8 @@ Only `mediaUrl` is required; a field left out takes the node's default.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrl` | `string` | one of the two | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls`, `masterAudioUrl`, `cameras` | | no | Instead of `mediaUrl`: the recordings of one conversation, as on `tightenEpisode` ([`UseCaseRecordingsInput`](#tightenepisodeinput-options--estimatetightenepisodeinput)). Several need Speaker Map (refused `403 node_not_available` where it is not available to you). Both `mediaUrl` and `mediaUrls`, or neither, reject with a `TypeError` before any request. |
 | `planTier` | `EditPlanTier` | no | `"economy"` (default) \| `"standard"` \| `"premium"`. |
 | `instructions` | `string` | no | Instructions for the chapters, e.g. "5 to 8 chapters" (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the chapter titles (up to 4 000 characters). |
@@ -7603,14 +7625,17 @@ it in each chosen social format: the run transcribes the recording, plans the
 trailer from its strongest moments (the plan picks the length and joins the
 moments with its own short crossfades; neither is a setting), renders it,
 plays an optional intro card first, and pads it to every format — never
-cropped. Only `mediaUrl` is required; a field left out takes the node's
-default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
+cropped. Only the recording is required (`mediaUrl`, or `mediaUrls`); a field
+left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
 
-**`EpisodeTrailerInput`:**
+**`EpisodeTrailerInput`** (with `UseCaseRecordingsInput`, its recordings):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | yes | The recording — a video URL, up to 3 hours (an audio-only recording is refused `media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video URL, up to 3 hours (an audio-only recording is refused `media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls` | `string[]` | `mediaUrl` or `mediaUrls` | Instead of `mediaUrl`: the recordings of one conversation, in order (Camera 1, Camera 2…) — up to six in all with the Master audio; without one, two or more cameras keep a place for the sound, so up to five. See [Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras). **Needs Speaker Map** (as on `tightenEpisode`). |
+| `masterAudioUrl` | `string` | no | The mixer or recorder track: the trailer's sound and the clock the recordings are lined up to. **Needs Speaker Map**. |
+| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio. |
 | `introCardUrl` | `string` | no | A short video, 15 s at most, played before the trailer. Make it the recording's size and shape, or one of the two is letterboxed. |
 | `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one: an empty list is sent as is and refused `400 validation_error`. |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview of the trailer for a person to review; render every format afterwards with `continueUseCase({ mode: "render-final" })`. |
@@ -7618,7 +7643,10 @@ default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processin
 | `instructions` | `string` | no | Instructions for the trailer (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 
-`options.idempotencyKey` works as on `tightenEpisode`.
+`options.idempotencyKey` works as on `tightenEpisode`. Passing both `mediaUrl`
+and `mediaUrls`, or neither, rejects with a `TypeError` before any request;
+several recordings or a Master audio are refused `403 node_not_available`
+where Speaker Map is not available to you (not yet on nodaro.ai).
 
 `episodeTrailer` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data.formats` is `[{ format, url }]`,
@@ -7628,7 +7656,8 @@ is `"proxy"` for a review-on run's preview (`videoUrl` is then the preview, and
 `formats` is `[]` until the Render final), `"final"` otherwise. A format that
 could not be rendered is named in `output_data.failedFormats`: the run
 completes with the others, keeps its fee and is not charged for that format.
-A run with no format rendered fails, and its fee is refunded.
+A run with no format rendered fails, and its fee is refunded. A run on several
+recordings or a Master audio adds `output_data.cameras`, as on `tightenEpisode`.
 
 `estimateEpisodeTrailer` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-trailer --> per run.
@@ -7653,9 +7682,12 @@ transcribes the recording, plans the clips (each with a title and a hook),
 renders each as its own clip — framed with Speaker View on automatic boxes
 by default, every clip boxed alike over the episode's speakers — and
 captions each on its own transcription. An audio recording makes audio
-clips, with no framing or captions. Only `mediaUrl` is required; a field
-left out takes the node's default. **Not yet enabled on nodaro.ai** (see the
-[node page](./nodes/processing-video/clip-pack.md)).
+clips, with no framing or captions. Only the recording is required; a field
+left out takes the node's default. It takes the cameras of one conversation
+as Tighten Episode does (`mediaUrls`, `masterAudioUrl`, `cameras` —
+`ClipPackInput` extends `UseCaseRecordingsInput`; each clip then cuts to
+whoever is talking), with the same need for Speaker Map. **Not yet enabled on
+nodaro.ai** (see the [node page](./nodes/processing-video/clip-pack.md)).
 
 **`ClipPackInput`:**
 
@@ -7665,6 +7697,7 @@ left out takes the node's default. **Not yet enabled on nodaro.ai** (see the
 | `count` | `number` | no | How many clips to find, 1–50 (default 8). The plan may find fewer. |
 | `targetDurationSec` | `number` | no | Each clip's target length in seconds, 5–180 (default 60; the bounds are exported as `CLIP_PACK_MIN_TARGET_SEC` / `CLIP_PACK_MAX_TARGET_SEC`). |
 | `framing` | `{ aspect, layout?, switchType?, emphasisStyle? } \| null` | no | Frame each video clip with Speaker View: `aspect` (`"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`), `layout` (default `"stacked"`; one the shape does not draw is snapped), `switchType` (`SpeakerSwitchId` from `@nodaro/shared/edl`: `"cut"`, `"pan"`, `"zoom"` or `"xfade:<transition>"`, listed in `SPEAKER_SWITCH_IDS`; default `"pan"`), `emphasisStyle` (`ClipPackEmphasis`, default `"scale"`; `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`, each once — any other is refused `400 validation_error`). Left out: 9:16, stacked, pan, scale. `null`: no framing (the recording's shape). |
+| `framingSource` | `"auto" \| "static" \| "tracking"` | no | With a framing, how it follows the speakers: `"static"` splits the frame evenly (what a request that leaves this out gets); `"tracking"` runs Speaker Frames once over the whole pack (charged per started block of 1,000 sampled frames; refused 403 where Speaker Frames is not available to you); `"auto"` follows faces while Speaker Frames is available to you, else the even split. |
 | `captions` | `boolean` | no | Caption each video clip (default `true`). |
 | `captionStyle` | `CaptionStyle` | no | The captions' look (default `"karaoke"`). |
 | `reviewBeforeRender` | `boolean` | no | Stop at quick previews of the clips for a person to review; render the kept clips afterwards with `continueUseCase({ mode: "render-final", editedEdl })`. |
@@ -7680,9 +7713,10 @@ Poll `jobId`: the finished job's `output_data.clips` is
 entry per clip in the plan's order (`thumbnailUrl` on each video clip), and
 `output_data.videoUrl` the first clip (`audioUrl` for audio clips);
 `output_data.json` is the plan's clip set and `quality` is `"proxy"` for a
-review-on run's previews, `"final"` otherwise. Every clip is tried: a clip
-that could not be rendered is skipped and not charged, and counted in
-`output_data.failedClips`; the run completes with the others and keeps its
+review-on run's previews, `"final"` otherwise; a run on several recordings
+adds `output_data.cameras`. Every clip is tried: a clip that could not be
+rendered (or, on several cameras, whose camera switch failed) is skipped and
+not charged, and counted in `output_data.failedClips`; the run completes with the others and keeps its
 fee. A clip whose captions could not be added comes uncaptioned, marked
 `captionsFailed: true` and counted in `output_data.failedCaptions`; those
 captions are not charged. A run with no clip rendered fails, and its fee is
@@ -7696,6 +7730,55 @@ clips the run cut that the review keeps. Both refuse before anything is
 created or charged, with the codes `tightenEpisode` lists (less the music
 ones).
 
+#### `speakerLayout(input, options?)` / `estimateSpeakerLayout(input)`
+
+```ts
+speakerLayout(input: SpeakerLayoutInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
+estimateSpeakerLayout(input: SpeakerLayoutInput): Promise<{ data: UseCaseEstimate }>
+```
+
+Frame a whole recording by speaker in one call — the same length, nothing
+cut: the run transcribes the recording and frames each speaker with Speaker
+View over the whole of it. With several recordings of one conversation, they
+are lined up and each speaker is shown on their own camera. Only the
+recording is required (`mediaUrl`, or `mediaUrls`); a field left out takes
+the node's default. **Not yet enabled on nodaro.ai** (see the
+[node page](./nodes/processing-video/speaker-layout.md)).
+
+**`SpeakerLayoutInput`** (with `UseCaseRecordingsInput`, its recordings, as on `tightenEpisode`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video URL, up to 3 hours (a run with no picture is refused `400 media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls`, `masterAudioUrl`, `cameras` | | no | Several recordings of one conversation, as on `tightenEpisode` (see [Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras)). **Needs Speaker Map.** |
+| `targetAspect` | `EdlTargetAspect` | no | `"16:9"` \| `"9:16"` (default) \| `"1:1"` \| `"4:5"`. With one recording, a video already as narrow as the shape (or narrower) is refused `400 media_shape`. |
+| `layout` | `"auto" \| "single" \| "side-by-side" \| "stacked" \| "grid" \| "pip"` | no | Default `"stacked"`; a layout the shape does not draw is snapped to one it does. |
+| `switchType` | `SpeakerSwitchId` | no | The switch at each speaker change (default `"cut"`): `"cut"`, `"pan"`, `"zoom"` or `"xfade:<transition>"`, listed in `SPEAKER_SWITCH_IDS` from `@nodaro/shared/edl`. Any other is refused `400 validation_error`. |
+| `emphasisStyle` | `ClipPackEmphasis` | no | Default `"scale"`; `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`, each once — any other is refused `400 validation_error`. |
+| `framingSource` | `"auto" \| "static" \| "tracking"` | no | How the speakers are followed ([Following faces](./nodes/processing-video/speaker-layout.md#following-faces)): `"auto"` (absent) follows faces with Speaker Frames while it is available to the caller, else the even split; `"static"` splits the frame evenly by speaker; `"tracking"` follows faces (charged per started block of 1,000 sampled frames; refused `403 node_not_available` where Speaker Frames is not available to the caller). Faces aren't named after a speaker yet, so a camera shared by several speakers keeps the even split. |
+| `reviewBeforeRender` | `boolean` | no | Stop at a quick preview; render it at full quality afterwards with `continueUseCase({ mode: "render-final" })` — with no `editedEdl`: the layout has no cut to change. |
+
+`options.idempotencyKey` works as on `tightenEpisode`. Passing both
+`mediaUrl` and `mediaUrls`, or neither, rejects with a `TypeError` before any
+request.
+
+`speakerLayout` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data.videoUrl` is the framed video,
+`durationSec` its length, `json` the edit Speaker View drew, `transcript` the
+transcript and `quality` `"proxy"` for a review-on run's preview, `"final"`
+otherwise; a run on several recordings or a Master audio adds `cameras`, who
+was put on which camera. A run on one recording reads the recording's size
+before it starts, and may be refused `429 rate_limit_exceeded` (try again in a
+moment) when you start too many of those in a minute.
+
+`estimateSpeakerLayout` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:speaker-layout --> per run.
+Speaker View is quoted at its higher rate over the recording's full length (a
+recording whose length cannot be read at the 180-minute ceiling); a Render
+final (`continueUseCase`) is quoted on the render alone, with no fee. The
+estimate never downloads the recording: it refuses a shape (`media_shape`)
+only when the recording's size is already known; otherwise the run refuses it.
+
 #### `continueUseCase(input, options?)`
 
 ```ts
@@ -7704,10 +7787,10 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters`, `episodeTrailer` or `clipPack` (or an earlier continuation) answered. |
-| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format; Clip Pack's kept clips, each captioned), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
-| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL; for a Clip Pack, `{ v: 1, kind: "clips", basis, clips: [{ keep, hook? }] }`, which keeps or drops each clip — one that drops every clip is refused `use_case_nothing_kept`, 409, before anything is held). |
-| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"` \| `"clip-pack"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack` or `speakerLayout` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality result after a review-on preview (Tighten Episode's episode; Trailer's trailer, intro card and every format; Clip Pack's kept clips, each captioned; Speaker Layout's framed video), with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
+| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL; for a Clip Pack, `{ v: 1, kind: "clips", basis, clips: [{ keep, hook? }] }`, which keeps or drops each clip — one that drops every clip is refused `use_case_nothing_kept`, 409, before anything is held; a Speaker Layout run has no plan, so an `editedEdl` is refused `use_case_no_plan`, 400, before anything is read). |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"` \| `"episode-trailer"` \| `"clip-pack"` \| `"speaker-layout"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
 
 **Which route.** With `nodeType`, the continuation goes straight to that
 type's route. Without it, `continueUseCase` first reads the job
@@ -7727,7 +7810,8 @@ One that reads the list from `@nodaro/shared` throws `use_case_type_unknown`
 when the installed `@nodaro/shared` is from before Trailer too, since
 `"episode-trailer"` is not in that list. Upgrade to continue Trailer runs.
 The same holds for a version from before Clip Pack and a Clip Pack run
-(`"clip-pack"`): upgrade to continue Clip Pack runs.
+(`"clip-pack"`), and for a version from before Speaker Layout and a Speaker
+Layout run (`"speaker-layout"`): upgrade to continue their runs.
 Earlier versions also continued on the Tighten Episode route whenever the type
 could not be read; this version throws instead.
 
@@ -7741,8 +7825,9 @@ again is refused. Refusals throw before any run exists, with the
 or not yours), `continuation_workflow_mismatch` (400),
 `continuation_version_mismatch` (400), `continuation_subset_required` (400), `continuation_not_failed`,
 `continuation_not_completed`, `continuation_settling` (try again in a moment),
-`render_final_not_preview` (409) and `use_case_nothing_kept` (409: a Clip Pack
-review that keeps no clip). A refusal that names another job throws a
+`render_final_not_preview` (409), `use_case_nothing_kept` (409: a Clip Pack
+review that keeps no clip) and `use_case_no_plan` (400: an `editedEdl` on a
+Speaker Layout Render final). A refusal that names another job throws a
 `ContinuationRefusedError` (a `NodaroError`, status 409) whose `jobId` is that
 job: `already_running` (a continuation under way, or one that already
 completed — follow it), `continuation_superseded` (a later

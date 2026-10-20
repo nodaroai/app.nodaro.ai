@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-14T09:49:17.780Z
-generated_from: 2c6fb981c
+generated_at: 2026-10-20T02:38:06.891Z
+generated_from: caf9fb638
 ---
 
 # Speaker View
@@ -29,6 +29,7 @@ generated_from: 2c6fb981c
 - `accentColor?: string`
 - `speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>`
 - `autoRegions?: boolean`
+- `autoRegionsTalkFloor?: boolean`
 - `defaultRegionKeys?: string[]`
 - `motion?: "static" | "glide"`
 - `requireFaces?: boolean`

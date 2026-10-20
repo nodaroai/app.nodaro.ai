@@ -11,10 +11,14 @@
       "clip-pack": "the published CLI's per-node command (`nodaro edit clip-pack`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "episode-chapters": "the published CLI's per-node command (`nodaro edit episode-chapters`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "episode-trailer": "the published CLI's per-node command (`nodaro edit episode-trailer`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
+      "speaker-layout": "the published CLI's per-node command (`nodaro edit speaker-layout`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)",
       "tighten-episode": "the published CLI's per-node command (`nodaro edit tighten-episode`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18)"
     },
     "packages/cli/src/commands/edit.ts": {
       "speaker-map": "the published CLI's per-node command (`nodaro edit speaker-map`): its name and flags are its public interface and the command is bespoke to this node — a name derived from the registry would still have to pick the node by name (decided 2026-10-18, the kit's CLI precedent)"
+    },
+    "packages/render-rules/src/speaker-map-step.ts": {
+      "speaker-map": "the multicam use-case builders insert a Speaker Map step and must name the node type they build; one leaf constant every render-rules reader imports (decided 2026-10-18)"
     }
   }
 }

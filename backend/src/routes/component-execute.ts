@@ -11,6 +11,7 @@ import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../lib/execution-budget.js"
 import { estimateWorkflowCredits, type EstimateEdge, type EstimateNode } from "../ee/billing/credits.js"
+import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
@@ -34,6 +35,11 @@ const bodySchema = z.object({
    *  forwarded by the orchestrator's component dispatch. Honored ONLY on the
    *  internal lane: from any other caller it would switch the gate off. */
   previewStopRule: z.boolean().optional(),
+  /** The parent execution's "cheap lanes only" (a scheduled run under a retry
+   *  policy), forwarded by the orchestrator's component dispatch. Honored ONLY
+   *  on the internal lane; it only ever reduces spend, but only the
+   *  orchestrator sets it. */
+  cheapLanesOnly: z.boolean().optional(),
   /** P14 — the parent execution's resolved payer, forwarded by the
    *  orchestrator's component dispatch. Honored ONLY on the internal lane
    *  (see below); shape-guarded, never trusted from the type alone. */
@@ -88,6 +94,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // caller sending `false` would switch the gate off for its own run).
     const forwardedPreviewStopRule =
       req.authKind === "internal" ? parsed.data.previewStopRule : undefined
+    const forwardedCheapLanesOnly = req.authKind === "internal" && parsed.data.cheapLanesOnly === true
 
     // Look up published app by slug. snapshot_nodes + snapshot_edges are
     // needed for compound output handles (sub-workflow-output ports) — they
@@ -241,6 +248,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           webFreeMode: req.webFreeMode === true,
           billingContext: runBillingContext,
           ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
+          ...(forwardedCheapLanesOnly ? { cheapLanesOnly: true } : {}),
         })
 
         // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
@@ -383,7 +391,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return { id: nodeId, type: node.type ?? "", data, parentId: node.parentId }
     })
 
-    return reply.send({ estimatedCredits: await estimateWorkflowCredits(priced, edges) })
+    // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
+    const viewer = await usecaseViewerEstimateFor(priced, req.userId)
+    return reply.send({ estimatedCredits: await (viewer.multicam || viewer.framesWithheld ? estimateWorkflowCredits(priced, edges, viewer) : estimateWorkflowCredits(priced, edges)) })
   })
 
   // ── How long this component run may take (podcast Track 0.11 follow-up) ──

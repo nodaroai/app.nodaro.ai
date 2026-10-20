@@ -9,11 +9,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { act } from "@testing-library/react"
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }) }))
+// The viewer's answer the store asks (may they use Speaker Map — several recordings, decided 2026-10-19); "no" by default.
+const viewer = vi.hoisted(() => ({ multicam: false }))
+vi.mock("@/lib/use-case-multicam-viewer", () => ({ usecaseMulticamOffered: () => viewer.multicam }))
 
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { adoptedAsStored } from "@/hooks/workflow-store-adopted"
 import { USE_CASE_SPECS, USE_CASE_NODE_TYPES, usecaseRowOf, type UseCaseBuilderKey } from "@nodaro/render-rules"
-import { USE_CASE_AUDIO_LOCKS, usecaseAudioLockFailSafe, usecaseAudioLockGraph, usecaseAudioLockPatch } from "@/lib/use-case-audio-lock"
+import { USE_CASE_AUDIO_LOCKS, usecaseAudioLockFailSafe, usecaseAudioLockGraph, usecaseAudioLockPatch, usecaseWiredMediaKind } from "@/lib/use-case-audio-lock"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 const CUSTOM = { aspect: "16:9", layout: "grid", switchType: "zoom", emphasisStyle: "dim" }
@@ -43,6 +46,7 @@ function writesOf(action: () => void, id: string): { count: number; first: Recor
 }
 
 afterEach(() => {
+  viewer.multicam = false
   act(() => useWorkflowStore.setState({ nodes: [], edges: [], isDirty: false, isReadOnly: false }))
 })
 
@@ -211,5 +215,72 @@ describe("the rule itself", () => {
   it("a graph with no locked node is handed back as it is", () => {
     const nodes = [VIDEO]
     expect(usecaseAudioLockGraph([], [], nodes, [])).toBe(nodes)
+  })
+})
+
+describe("the audio lock over several recordings (decided 2026-10-18): the recordings the run reads, by its own rule", () => {
+  const up = (id: string, type: string) => ({ id, type, data: {} }) as unknown as WorkflowNode
+  const wireOf = (source: string, sourceHandle: string, targetHandle = "media") => ({ id: `${source}-t`, source, sourceHandle, target: "t", targetHandle }) as unknown as WorkflowEdge
+  const t = { id: "t", type: "tighten-episode", data: {} } as unknown as WorkflowNode
+  const MC = true
+
+  it("an audio-only recording first and video cameras after: video (no lock) — for a viewer whose run reads them all", () => {
+    const nodes = [up("m", "upload-audio"), up("a", "upload-video"), up("b", "upload-video"), t]
+    expect(usecaseWiredMediaKind("t", nodes, [wireOf("m", "audio"), wireOf("a", "video"), wireOf("b", "video")], MC)).toBe("video")
+  })
+  it("…but audio for a viewer whose run reads the first recording alone (no Speaker Map): the lock follows the run", () => {
+    const nodes = [up("m", "upload-audio"), up("a", "upload-video"), t]
+    expect(usecaseWiredMediaKind("t", nodes, [wireOf("m", "audio"), wireOf("a", "video")])).toBe("audio")
+  })
+  it("every recording sound only: audio (the lock)", () => {
+    const nodes = [up("m", "upload-audio"), up("n", "upload-audio"), t]
+    expect(usecaseWiredMediaKind("t", nodes, [wireOf("m", "audio"), wireOf("n", "audio")], MC)).toBe("audio")
+  })
+  it("a wired Master audio never counts: one video recording + Master audio is video", () => {
+    const nodes = [up("a", "upload-video"), up("m", "upload-audio"), t]
+    expect(usecaseWiredMediaKind("t", nodes, [wireOf("a", "video"), wireOf("m", "audio", "masterAudio")], MC)).toBe("video")
+  })
+  it("one recording: exactly as before", () => {
+    expect(usecaseWiredMediaKind("t", [up("a", "upload-audio"), t], [wireOf("a", "audio")])).toBe("audio")
+    expect(usecaseWiredMediaKind("t", [up("a", "upload-audio"), t], [wireOf("a", "audio")], MC)).toBe("audio")
+    expect(usecaseWiredMediaKind("t", [t], [])).toBeUndefined()
+  })
+  it("the node's order picks the recording a one-recording run reads (mediaOrder), not the first wire", () => {
+    const ordered = { ...t, data: { mediaOrder: ["a"] } } as unknown as WorkflowNode
+    expect(usecaseWiredMediaKind("t", [up("m", "upload-audio"), up("a", "upload-video"), ordered], [wireOf("m", "audio"), wireOf("a", "video")])).toBe("video")
+  })
+
+  it("the store: a video wire drawn into a Tighten whose first recording is sound only gives back Output and Captions in that same write", () => {
+    viewer.multicam = true
+    act(() => useWorkflowStore.setState({ nodes: [VIDEO, AUDIO, node("t1", "tighten-episode", { output: "video", captions: true })], edges: [] }))
+    connect("aud", "t1")
+    expect(dataOf("t1")).toMatchObject({ output: "audio", captions: false, settingsBeforeAudio: { output: "video", captions: true } })
+    const restored = writesOf(() => useWorkflowStore.getState().onConnect({ source: "vid", sourceHandle: "video", target: "t1", targetHandle: "media" }), "t1")
+    expect(restored.count).toBe(1)
+    expect(restored.first).toMatchObject({ output: "video", captions: true })
+    expect(dataOf("t1").settingsBeforeAudio).toBeUndefined()
+  })
+  it("the store, a viewer whose run reads one recording: the second (video) wire changes nothing — the run still reads the sound", () => {
+    act(() => useWorkflowStore.setState({ nodes: [VIDEO, AUDIO, node("t1", "tighten-episode", { output: "video", captions: true })], edges: [] }))
+    connect("aud", "t1")
+    connect("vid", "t1")
+    expect(dataOf("t1")).toMatchObject({ output: "audio", captions: false, settingsBeforeAudio: { output: "video", captions: true } })
+  })
+
+  it("the store, Clip Pack (decided 2026-10-17): a video wire beside a sound-only first recording gives back Framing and Captions, for a viewer whose run reads them all", () => {
+    viewer.multicam = true
+    const framing = { aspect: "9:16", layout: "stacked", switchType: "pan", emphasisStyle: "scale" }
+    act(() => useWorkflowStore.setState({ nodes: [VIDEO, AUDIO, node("cp1", "clip-pack", { framing, captions: true })], edges: [] }))
+    connect("aud", "cp1")
+    expect(dataOf("cp1")).toMatchObject({ framing: null, captions: false, settingsBeforeAudio: { framing, captions: true } })
+    useWorkflowStore.getState().onConnect({ source: "vid", sourceHandle: "video", target: "cp1", targetHandle: "media" })
+    expect(dataOf("cp1")).toMatchObject({ framing, captions: true })
+    expect(dataOf("cp1").settingsBeforeAudio).toBeUndefined()
+  })
+  it("the store, Clip Pack, a viewer whose run reads one recording: the second (video) wire changes nothing", () => {
+    act(() => useWorkflowStore.setState({ nodes: [VIDEO, AUDIO, node("cp1", "clip-pack", { captions: true })], edges: [] }))
+    connect("aud", "cp1")
+    connect("vid", "cp1")
+    expect(dataOf("cp1")).toMatchObject({ framing: null, captions: false })
   })
 })

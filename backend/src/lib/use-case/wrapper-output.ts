@@ -1,7 +1,8 @@
 /**
  * What a use-case wrapper job reports (its `output_data`), read from the
  * inner run's node states through the graph's outputMap, by the result its
- * kind promises — an episode here, a list (clips, formats) or chapters in
+ * kind promises — an episode here, a layout (the framed recording) in
+ * wrapper-output-layout.ts, a list (clips, formats) or chapters in
  * wrapper-output-lists.ts (with why a completed run delivered nothing). Pure.
  *
  * An episode:
@@ -20,9 +21,12 @@
  *   its media node hands on, read as the step after the node is charged
  *   (`runForwardedVideoLengthSec`) — the cut its render recorded, through the
  *   captions and the music mix and merge that keep it (decided 2026-10-16).
+ * - a run on several recordings or a Master audio: its cameras report
+ *   (`cameras`, wrapper-output-cameras.ts), for an episode and a list alike.
  */
 import {
   runForwardedVideoLengthSec,
+  usecasePlanNodeId,
   usecaseResultKind,
   type EpisodeOutputMap,
   type RunOutputLengths,
@@ -30,10 +34,12 @@ import {
 } from "@nodaro/render-rules"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 import { listOutput } from "./wrapper-output-lists.js"
+import { layoutOutput } from "./wrapper-output-layout.js"
+import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
 
 export { usecaseNoClipsRenderedMessage, usecaseNoResultMessage, usecaseWrapperKeepsPartial } from "./wrapper-output-lists.js"
 
-export type { UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+export type { UseCaseCameraSpeaker, UseCaseCamerasReport, UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 
 function episodeOutput(
   graph: StoredInlineGraph,
@@ -44,7 +50,8 @@ function episodeOutput(
   const mediaNodeId = completedOutput(nodeStates, map.media.nodeId) ? map.media.nodeId : map.renderNodeId
   const media = completedOutput(nodeStates, mediaNodeId)
   const render = completedOutput(nodeStates, map.renderNodeId)
-  const planOut = completedOutput(nodeStates, map.planNodeId)
+  const planId = usecasePlanNodeId(map)
+  const planOut = planId !== null ? completedOutput(nodeStates, planId) : undefined
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
   const renderData = graph.nodes.find((n) => n.id === map.renderNodeId)?.data ?? {}
   const quality = (render?.quality ?? renderData.quality) === "proxy" ? "proxy" : "final"
@@ -54,6 +61,7 @@ function episodeOutput(
   const durationSec = videoUrl || audioUrl
     ? runForwardedVideoLengthSec(mediaNodeId, undefined, graph.nodes, graph.edges, (id) => completedOutput(nodeStates, id) as RunOutputLengths | undefined)
     : undefined
+  const cameras = usecaseCamerasReport(graph, nodeStates)
   return {
     ...(videoUrl ? { videoUrl } : {}),
     ...(audioUrl ? { audioUrl } : {}),
@@ -64,6 +72,7 @@ function episodeOutput(
     ...(str(render?.renderBasis) ? { renderBasis: str(render?.renderBasis) } : {}),
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
+    ...(cameras ? { cameras } : {}),
     _executionId: executionId,
     ...failedStepOf(graph, nodeStates),
   }
@@ -83,6 +92,8 @@ export function usecaseWrapperOutput(
     case undefined:
     case "episode":
       return episodeOutput(graph, map, nodeStates, executionId)
+    case "layout":
+      return layoutOutput(graph, map, nodeStates, executionId)
     default:
       return listOutput(graph, nodeStates, executionId)
   }
@@ -103,5 +114,8 @@ export function usecaseWrapperHasResult(graph: StoredInlineGraph | null, output:
       return (output.formats?.length ?? 0) > 0 || (output.quality === "proxy" && !!output.videoUrl)
     case "chapters":
       return typeof output.text === "string" && output.text.length > 0
+    case "layout":
+      // The framed recording (a review-on run's is its proxy preview).
+      return !!output.videoUrl
   }
 }

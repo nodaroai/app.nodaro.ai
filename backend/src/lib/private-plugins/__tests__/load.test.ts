@@ -251,6 +251,40 @@ describe("loadPrivatePlugins", () => {
     expect(result.loaded).toEqual(["voice-changer-pro"])
   })
 
+  describe("tk.http.workerRequest binding", () => {
+    async function load(opts: Parameters<typeof loadPrivatePlugins>[0]) {
+      let seen: PluginToolkit | undefined
+      const registerRoutes = vi.fn()
+      const plugin = makePlugin({ registerRoutes, handlers: (tk) => { seen = tk; return {} } })
+      const importer = vi.fn().mockResolvedValue({ contractVersion: 1, plugins: [plugin] })
+      await loadPrivatePlugins({ ...opts, importer, exit: vi.fn() as unknown as (code: number) => never })
+      return { tk: seen!, registerRoutes }
+    }
+
+    it("the worker's workerApp provider is what the plugin's workerRequest reaches; routes stay unregistered", async () => {
+      const inject = vi.fn().mockResolvedValue({ statusCode: 200, body: "{}" })
+      const workerApp = vi.fn(async () => ({ inject }) as unknown as FastifyInstance)
+      const { tk, registerRoutes } = await load({ workerApp })
+      expect(workerApp).not.toHaveBeenCalled() // lazy: nothing is built at load
+      await tk.http.workerRequest!({ method: "GET", url: "/v1/jobs", userId: "u-1" })
+      expect(registerRoutes).not.toHaveBeenCalled()
+      expect(workerApp).toHaveBeenCalledTimes(1)
+      expect(inject).toHaveBeenCalledTimes(1)
+    })
+
+    it("in the API process it is bound to the API app", async () => {
+      const inject = vi.fn().mockResolvedValue({ statusCode: 200, body: "{}" })
+      const { tk } = await load({ app: { inject } as unknown as FastifyInstance })
+      await tk.http.workerRequest!({ method: "GET", url: "/v1/jobs", userId: "u-1" })
+      expect(inject).toHaveBeenCalledTimes(1)
+    })
+
+    it("is absent when the process has no app to reach (the daemon host)", async () => {
+      const { tk } = await load({})
+      expect(tk.http.workerRequest).toBeUndefined()
+    })
+  })
+
   it("cloud + valid module with no plugins: resolves empty without exiting", async () => {
     const importer = vi.fn().mockResolvedValue({ contractVersion: 1, plugins: [] })
     const exit = vi.fn() as unknown as (code: number) => never

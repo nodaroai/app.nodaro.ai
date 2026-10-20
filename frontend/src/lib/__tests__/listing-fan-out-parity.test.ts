@@ -32,6 +32,32 @@ const CASES: Case[] = [
   { name: "Content Ideas at its count", nodes: [n("ci", "content-ideas", { count: 7 }), n("s", "generate-script")], edges: [e("ci", "s")], target: "s", runs: 7 },
   { name: "a fresh Social Search on an Each wire", nodes: [n("ss", "social-search"), n("llm", "llm-chat")], edges: [e("ss", "llm", { outputMode: "each" })], target: "llm", runs: 5 },
   { name: "a clips plan at its default count", nodes: [n("p", "edit-plan", { mode: "clips" }), n("r", "apply-edl")], edges: [e("p", "r")], target: "r", runs: 8 },
+  // A fan-in node folds the wire it reads (FAN_IN_TARGETS): both engines run it ONCE over everything on it.
+  {
+    name: "Speaker Frames on a clips plan's edl: once for the whole pack",
+    nodes: [n("p", "edit-plan", { mode: "clips" }), n("sf", "speaker-frames")],
+    edges: [{ ...e("p", "sf"), sourceHandle: "edl", targetHandle: "edl" } as WorkflowEdge],
+    target: "sf",
+    runs: 1,
+  },
+  {
+    name: "Speaker Frames on a per-clip Camera Switch's edl: once for the whole pack",
+    nodes: [n("p", "edit-plan", { mode: "clips" }), n("cs", "camera-switch"), n("sf", "speaker-frames")],
+    edges: [{ ...e("p", "cs"), sourceHandle: "edl", targetHandle: "edl" } as WorkflowEdge, { ...e("cs", "sf"), sourceHandle: "edl", targetHandle: "edl" } as WorkflowEdge],
+    target: "sf",
+    runs: 1,
+  },
+  { name: "Choose Best on a List: once over every item", nodes: [n("l", "list", { items: "a\nb\nc" }), n("rd", "reduce")], edges: [e("l", "rd")], target: "rd", runs: 1 },
+  // The ESTIMATE's count, not the engines': both engines run a fan-in node once on ANY
+  // wire (their `isFanInNodeType` early return). The estimate skips only the folding
+  // wire, so on another Each wire it still multiplies — an over-quote, the safe side.
+  {
+    name: "the estimate still counts a List on a wire the node does not fold (Speaker Frames' transcript): an over-quote, the engines run it once",
+    nodes: [n("l", "list", { items: "a\nb" }), n("sf", "speaker-frames")],
+    edges: [{ ...e("l", "sf"), targetHandle: "transcript" } as WorkflowEdge],
+    target: "sf",
+    runs: 2,
+  },
 ]
 
 describe("the editor's estimate counts a node's runs with the listing's rule", () => {

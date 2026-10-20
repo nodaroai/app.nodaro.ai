@@ -173,6 +173,19 @@ export async function loadAvailabilityOverrides(): Promise<void> {
   })
 }
 
+/**
+ * For a one-off script that prices for everyone (a listing backfill): loads
+ * the deployment's overrides and WAITS for the read, unlike the boot load.
+ * True once they are loaded; false when the read failed — the cache then
+ * serves the factory sets, under which a node the admin switch hides from
+ * users reads as released, so such a script must refuse rather than price on it.
+ */
+export async function loadAvailabilityOverridesForScript(): Promise<boolean> {
+  await loadAvailabilityOverrides()
+  await (inflight ?? Promise.resolve())
+  return everLoaded
+}
+
 /** Test hook: await the in-flight DB read (tests that need loaded state). */
 export function __awaitAvailabilityRefreshForTests(): Promise<void> {
   return inflight ?? Promise.resolve()

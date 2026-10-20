@@ -80,6 +80,15 @@ describe("what the two readers save (pinned values)", () => {
     expect(unitSavedOutput(unit("episode-chapters"), data)).toBeUndefined()
   })
 
+  // A layout (Speaker Layout) has no plan: its `json` is the edit its render
+  // drew, held as is — never with the node's edit applied (a Tighten applies
+  // it). The editor's reader pins the same value (its use-case-unit-output-parity.test.ts).
+  it("Speaker Layout, reviewedPlan: the edit its render drew as held, never with the node's edit applied; a Tighten applies it", () => {
+    const data = SHAPES.reviewedPlan
+    expect(extractSavedNodeOutput({ id: "n", type: "speaker-layout", data } as never)).toEqual({ videoUrl: "https://r/g.mp4", json: data.generatedJson })
+    expect(extractSavedNodeOutput({ id: "n", type: "tighten-episode", data } as never)).toEqual({ videoUrl: "https://r/g.mp4", json: { version: 1, segments: [{ start: 20, end: 30 }], dropped: [] } })
+  })
+
   // A list result (Trailer's formats): the first delivery is the episode it
   // shows, its deliveries the node's own list. A failed format is a run-result
   // key, not a value it saves, so a partial run saves what it delivered.

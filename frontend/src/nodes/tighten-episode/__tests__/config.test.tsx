@@ -7,6 +7,22 @@ import { render, screen, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 vi.mock("@/components/editor/config-panels/run-up-to-here-notice", () => ({ RunUpToHereNotice: () => null }))
+// The viewer's answer: may they use Speaker Map (several recordings, decided 2026-10-19)? Not landed by default.
+const viewer = vi.hoisted(() => ({ state: "loading" as "loading" | "offered" | "withheld" }))
+vi.mock("@/lib/use-case-multicam-viewer", () => ({
+  usecaseMulticamOffered: () => viewer.state === "offered",
+  usecaseMulticamViewer: () => viewer.state,
+  useUseCaseMulticamViewer: () => viewer.state,
+}))
+
+// The viewer's answer: may they use Speaker Frames (an `auto` framing source follows faces, decided 2026-10-20)? Offered by default.
+const frames = vi.hoisted(() => ({ state: "offered" as "loading" | "offered" | "withheld" }))
+vi.mock("@/lib/use-case-frames-viewer", () => ({
+  usecaseFramesOffered: () => frames.state === "offered",
+  usecaseFramesWithheld: () => frames.state === "withheld",
+  usecaseFramesViewer: () => frames.state,
+  useUseCaseFramesViewer: () => frames.state,
+}))
 
 import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { tightenFramingLayouts } from "@nodaro/render-rules"
@@ -23,14 +39,15 @@ interface Options {
   readonly onUpdate?: (d: Record<string, unknown>) => void
   readonly nodes?: ReadonlyArray<Record<string, unknown>>
   readonly edges?: ReadonlyArray<Record<string, unknown>>
+  readonly sources?: ReadonlyArray<Record<string, unknown>>
 }
 
-function renderConfig({ data, onUpdate = () => {}, nodes = [], edges = [] }: Options) {
+function renderConfig({ data, onUpdate = () => {}, nodes = [], edges = [], sources = [] }: Options) {
   return render(
     <TightenEpisodeConfig
       data={{ label: "T", fieldMappings: {}, ...data } as TightenEpisodeData as never}
       onUpdate={onUpdate}
-      sources={[]}
+      sources={sources as never}
       fieldMappings={{}}
       onMapField={() => {}}
       nodes={nodes as unknown as WorkflowNode[]}
@@ -43,7 +60,10 @@ function renderConfig({ data, onUpdate = () => {}, nodes = [], edges = [] }: Opt
 
 const optionNames = () => screen.getAllByRole("option").map((o) => o.textContent)
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  viewer.state = "loading"
+})
 
 describe("TightenEpisodeConfig", () => {
   it("an audio recording forces an audio episode and hides captions", () => {
@@ -156,5 +176,153 @@ describe("TightenEpisodeConfig", () => {
       edges: [{ id: "e", source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" }],
     })
     expect(onUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("the Cameras section (decided 2026-10-17; shown only to a viewer who may use Speaker Map — 2026-10-19)", () => {
+  const cam = (id: string, type = "upload-video") => ({ id, type, data: { label: `cam-${id}` } })
+  const into = (id: string, handle = "media", sourceHandle = "video") => ({ id: `${id}-${handle}`, source: id, target: "t1", sourceHandle, targetHandle: handle })
+  const src = (id: string, handle = "media", type = "upload-video") => ({ id, type, label: `cam-${id}`, value: "", targetHandle: handle })
+  const three = {
+    nodes: [cam("a"), cam("b"), cam("c"), cam("mic", "upload-audio")],
+    edges: [into("a"), into("b"), into("c"), into("mic", "masterAudio", "audio")],
+    sources: [src("a"), src("b"), src("c"), src("mic", "masterAudio", "upload-audio")],
+  }
+
+  it("one recording: no Cameras section", () => {
+    viewer.state = "offered"
+    renderConfig({ data: {}, nodes: [cam("a")], edges: [into("a")], sources: [src("a")] })
+    expect(screen.queryByTestId("use-case-cameras")).toBeNull()
+  })
+
+  it("three recordings and a master: the recordings in mediaOrder, the wide camera, already in sync, and one override row per camera", async () => {
+    viewer.state = "offered"
+    renderConfig({ data: { mediaOrder: ["c", "a"] }, ...three })
+    const section = screen.getByTestId("use-case-cameras")
+    const text = section.textContent ?? ""
+    expect(text.indexOf("cam-c")).toBeLessThan(text.indexOf("cam-a"))
+    expect(text.indexOf("cam-a")).toBeLessThan(text.indexOf("cam-b"))
+    expect(text).toContain(t("proccfg.usecaseMasterAudio"))
+    expect(screen.getByRole("switch", { name: t("proccfg.usecaseSynced") })).toBeInTheDocument()
+    expect(screen.getAllByRole("combobox", { name: /^Speaker \d$/ })).toHaveLength(3)
+    await userEvent.click(screen.getByRole("combobox", { name: t("proccfg.usecaseWideCamera") }))
+    expect(optionNames()).toEqual(["None", "Camera 1", "Camera 2", "Camera 3"])
+  })
+
+  it("one override row per speaker of the last run's report; choosing Camera 2 for Speaker 1 writes it", async () => {
+    viewer.state = "offered"
+    const onUpdate = vi.fn()
+    const report = { speakers: [{ speaker: "speaker_0", ordinal: 1, camera: null, marginDb: 0.2 }, { speaker: "speaker_1", ordinal: 2, camera: 1, marginDb: 8 }], syncNotes: [], mapNotes: [] }
+    renderConfig({ data: { useCaseCameras: report }, onUpdate, ...three })
+    expect(screen.getAllByRole("combobox", { name: /^Speaker \d$/ })).toHaveLength(2)
+    await userEvent.click(screen.getByRole("combobox", { name: "Speaker 1" }))
+    await userEvent.click(screen.getByRole("option", { name: "Camera 2" }))
+    expect(onUpdate).toHaveBeenCalledWith({ cameras: { speakerCameras: { "1": 2 } } })
+  })
+
+  it("six recordings and no master: the refusal the run would give, in the panel", () => {
+    viewer.state = "offered"
+    const ids = ["a", "b", "c", "d", "e", "f"]
+    renderConfig({ data: {}, nodes: ids.map((id) => cam(id)), edges: ids.map((id) => into(id)), sources: ids.map((id) => src(id)) })
+    expect(screen.getByText(t("apiErr.reason.tooManyRecordings"))).toBeInTheDocument()
+  })
+
+  it("a viewer who may not use Speaker Map: no section; a note that the run reads the first recording only (two recordings, or one and a master)", () => {
+    viewer.state = "withheld"
+    renderConfig({ data: {}, ...three })
+    expect(screen.queryByTestId("use-case-cameras")).toBeNull()
+    expect(screen.getByText(t("proccfg.usecaseNeedsSpeakerMap"))).toBeInTheDocument()
+    cleanup()
+    renderConfig({ data: {}, nodes: [cam("a"), cam("mic", "upload-audio")], edges: [into("a"), into("mic", "masterAudio", "audio")], sources: [src("a"), src("mic", "masterAudio", "upload-audio")] })
+    expect(screen.getByText(t("proccfg.usecaseNeedsSpeakerMap"))).toBeInTheDocument()
+    cleanup()
+    renderConfig({ data: {}, nodes: [cam("a")], edges: [into("a")], sources: [src("a")] })
+    expect(screen.queryByText(t("proccfg.usecaseNeedsSpeakerMap"))).toBeNull()
+  })
+
+  it("until the viewer's availability has landed: neither (no flash)", () => {
+    renderConfig({ data: {}, ...three })
+    expect(screen.queryByTestId("use-case-cameras")).toBeNull()
+    expect(screen.queryByText(t("proccfg.usecaseNeedsSpeakerMap"))).toBeNull()
+  })
+
+  it("while the viewer's availability is loading, a sound-only recording first and a camera after forces nothing (an admin's run may read both)", () => {
+    const onUpdate = vi.fn()
+    const nodes = [cam("m", "upload-audio"), cam("a"), { id: "t1", type: "tighten-episode", data: {} }]
+    renderConfig({ data: { output: "video", captions: true }, onUpdate, nodes, edges: [into("m", "media", "audio"), into("a")], sources: [src("m", "media", "upload-audio"), src("a")] })
+    expect(onUpdate).not.toHaveBeenCalled()
+    cleanup()
+    // Every recording sound only: audio whichever the viewer turns out to be.
+    renderConfig({ data: { output: "video", captions: true }, onUpdate, nodes: [cam("m", "upload-audio"), { id: "t1", type: "tighten-episode", data: {} }], edges: [into("m", "media", "audio")], sources: [src("m", "media", "upload-audio")] })
+    expect(onUpdate).toHaveBeenCalledWith({ output: "audio", captions: false })
+  })
+
+  it("the panel writes no fail-safe for the Cameras settings (the store's invariant keeps them)", () => {
+    viewer.state = "offered"
+    const onUpdate = vi.fn()
+    renderConfig({ data: { output: "video", cameras: { wide: 9, speakerCameras: { "1": 7 } } }, onUpdate, ...three })
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("TightenEpisodeConfig: the framing source (decided 2026-10-17/20)", () => {
+  const FRAMED = { output: "video" as const, framing: { aspect: "9:16" as const, layout: "stacked" as const } }
+  const sourceBox = () => screen.queryByRole("combobox", { name: t("proccfg.usecaseFramingSource") })
+  afterEach(() => {
+    frames.state = "offered"
+  })
+
+  it("with a framing chosen: Automatic, Even split and Follow faces, with its hint", async () => {
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" } })
+    expect(sourceBox()).toHaveTextContent(t("proccfg.usecaseFramingAuto"))
+    expect(screen.getByText(t("proccfg.usecaseFramingHint"))).toBeInTheDocument()
+    await userEvent.click(sourceBox()!)
+    expect(optionNames()).toEqual([t("proccfg.usecaseFramingAuto"), t("proccfg.usecaseFramingStatic"), t("proccfg.usecaseFramingTracking")])
+  })
+
+  it("a saved node without one shows Even split — what it runs", () => {
+    renderConfig({ data: FRAMED })
+    expect(sourceBox()).toHaveTextContent(t("proccfg.usecaseFramingStatic"))
+  })
+
+  it("picking Even split writes static", async () => {
+    const onUpdate = vi.fn()
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" }, onUpdate })
+    await userEvent.click(sourceBox()!)
+    await userEvent.click(screen.getByRole("option", { name: t("proccfg.usecaseFramingStatic") }))
+    expect(onUpdate).toHaveBeenCalledWith({ framingSource: "static" })
+  })
+
+  it("no framing: no framing source", () => {
+    renderConfig({ data: { output: "video", framingSource: "auto" } })
+    expect(sourceBox()).toBeNull()
+  })
+
+  it("sound-only recordings (the audio lock): hidden with Framing, its value kept", () => {
+    const onUpdate = vi.fn()
+    renderConfig({
+      data: { ...FRAMED, framingSource: "tracking" },
+      onUpdate,
+      nodes: [{ id: "rec", type: "upload-audio", data: {} }, { id: "t1", type: "tighten-episode", data: {} }],
+      edges: [{ id: "e", source: "rec", target: "t1", sourceHandle: "audio", targetHandle: "media" }],
+    })
+    expect(sourceBox()).toBeNull()
+    expect(onUpdate.mock.calls.some(([patch]) => "framingSource" in (patch as object))).toBe(false)
+  })
+
+  it("Speaker Frames withheld from the viewer: no field (auto is the even split for them) — unless the node is set to follow faces, which a run refuses", () => {
+    frames.state = "withheld"
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" } })
+    expect(sourceBox()).toBeNull()
+    cleanup()
+    renderConfig({ data: { ...FRAMED, framingSource: "tracking" } })
+    expect(sourceBox()).toHaveTextContent(t("proccfg.usecaseFramingTracking"))
+    expect(screen.getByText(t("proccfg.usecaseFramingNeedsFrames"))).toBeInTheDocument()
+  })
+
+  it("while the viewer's availability is loading: no field yet (never a flash)", () => {
+    frames.state = "loading"
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" } })
+    expect(sourceBox()).toBeNull()
   })
 })

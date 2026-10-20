@@ -133,6 +133,12 @@ export {
   type ScheduleSpec,
   type LocalTime,
 } from "../schedule-rules.js"
+export {
+  SCHEDULE_RETRY_LIMITS,
+  SCHEDULE_RETRY_DEFAULTS,
+  normalizeScheduleRetry,
+  type ScheduleRetry,
+} from "../schedule-retry.js"
 export { VARIABLES_HANDLE_ID, buildConditionVariables } from "../condition-variables.js"
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "../generated-results.js"
 export { resolveFieldMappings, resolveLocationFields, type FieldEdgeSource } from "../resolve-field-mappings.js"

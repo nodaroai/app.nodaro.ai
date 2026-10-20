@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { clipRenderChain } from "../clip-chain"
+import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 // "Render final: Render Clip ×6 → Caption Clip ×6" (§4.2, A4-2): the nodes of
@@ -92,5 +93,30 @@ describe("clipRenderChain of a review-on Clip Pack node (its Render final contin
   it("is empty when the node has no Render final (its take on show is a Final)", () => {
     const finals = [0, 1].map((i) => ({ url: `https://cdn.test/f${i}.mp4`, quality: "final", jobId: WRAPPER }))
     expect(clipRenderChain("cp", [video, pack({ generatedResults: finals })], wire("video"))).toEqual([])
+  })
+
+  describe("on two cameras and a Master audio (decided 2026-10-17)", () => {
+    const cams = [node("rec", "upload-video", { url: "https://cdn.test/c1.mp4" }), node("rec2", "upload-video", { url: "https://cdn.test/c2.mp4" }), node("mix", "upload-audio", { url: "https://cdn.test/m.wav" })]
+    const wires = [edge("rec", "cp", "video", "media"), edge("rec2", "cp", "video", "media"), edge("mix", "cp", "audio", "masterAudio")]
+    const multicam = { ...SETTINGS, cameras: { wide: null, synced: false, speakerCameras: {} } }
+    const take = pack({ generatedResults: [0, 1].map((i) => ({ url: `https://cdn.test/p${i}.mp4`, quality: "proxy", jobId: WRAPPER, useCaseSettings: multicam })) })
+
+    it("a viewer who may use Speaker Map: Camera Switch again on each kept clip, then the render and the captions", () => {
+      __resetSurfaceAvailabilityForTests({ nodes: [], models: [] })
+      try {
+        expect(clipRenderChain("cp", [...cams, take], wires).map((s) => [s.label, s.times])).toEqual([["Cut To The Speaker", 2], ["Render Clip", 2], ["Caption Clip", 2]])
+      } finally {
+        __resetSurfaceAvailabilityForTests(null)
+      }
+    })
+
+    it("a viewer Speaker Map is withheld from reads the first recording only: no Camera Switch, exactly the one-recording chain", () => {
+      __resetSurfaceAvailabilityForTests({ nodes: ["speaker-map"], models: [] })
+      try {
+        expect(clipRenderChain("cp", [...cams, take], wires).map((s) => [s.label, s.times])).toEqual([["Render Clip", 2], ["Caption Clip", 2]])
+      } finally {
+        __resetSurfaceAvailabilityForTests(null)
+      }
+    })
   })
 })

@@ -6,6 +6,7 @@
  * The editor's half, held to the same bodies, is
  * frontend/src/__tests__/use-case-sent-settings.test.ts.
  */
+import { USE_CASE_RUN_VIEWER_AS_BEFORE } from "@nodaro/render-rules"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -28,7 +29,7 @@ describe("which settings a use-case run sends — the server's engine", () => {
   for (const c of CASES) {
     it(c.name, () => {
       const node = { id: "u1", type: c.type, data: { label: c.type, fieldMappings: {}, ...c.data } } as unknown as SimpleNode
-      expect(JSON.stringify(freshRunInputs(node, REC))).toBe(c.body)
+      expect(JSON.stringify(freshRunInputs(node, REC, USE_CASE_RUN_VIEWER_AS_BEFORE))).toBe(c.body)
     })
   }
 })

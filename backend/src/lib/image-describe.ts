@@ -14,6 +14,7 @@ import {
 } from "./llm-client.js"
 import { LLM_ROUTE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { resolveLlmParams, type LlmAdvancedInput } from "./llm-advanced-mode.js"
+import { cheapLanesParam, type LlmCheapLanesInput } from "./llm-cheap-lanes.js"
 
 export type ImageDescribeDetailLevel = "brief" | "detailed" | "structured"
 
@@ -37,6 +38,8 @@ export async function describeImageWithLlm(args: {
   customPrompt?: string
   reasoningEffort?: LlmRequest["reasoningEffort"]
   advanced?: LlmAdvancedInput
+  /** "Cheap lanes only" (lib/llm-cheap-lanes.ts): no direct-vendor fallback. */
+  lanes?: LlmCheapLanesInput
 }): Promise<LlmResponse> {
   const systemPrompt = args.customPrompt || IMAGE_DESCRIBE_SYSTEM_PROMPTS[args.detailLevel]
 
@@ -70,6 +73,7 @@ export async function describeImageWithLlm(args: {
       },
     ],
     ...resolveLlmParams(args.advanced ?? {}, LLM_ROUTE_DEFAULTS["image-to-text"]),
+    ...cheapLanesParam(args.lanes),
     reasoningEffort: args.reasoningEffort,
   })
 }

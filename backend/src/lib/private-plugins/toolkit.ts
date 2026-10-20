@@ -44,6 +44,8 @@ import {
 import { downloadYouTubeVideo, ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
 import { downloadSocialPostVideo, probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
+import { removeAudio } from "../../providers/video/remove-audio.js"
+import { pitchTempo } from "../../providers/video/pitch-tempo.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
@@ -66,6 +68,7 @@ import { storeImportedImageBuffer } from "../media-import.js"
 import { markProviderCallStart } from "../reconcile/persistence.js"
 import { sendInternalError } from "../http-errors.js"
 import { runPostProcessing } from "../post-processing-error.js"
+import { uploadJobScratchFile } from "../job-scratch.js"
 import {
   markJobCompletedDetailed,
   setJobProgress,
@@ -104,7 +107,10 @@ import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
-import { billingPairColumns } from "../insert-job.js"
+import { billingPairColumns, insertJobIdempotent } from "../insert-job.js"
+import { isGenerationSessionNotFound } from "../generation-session-error.js"
+import { CLIENT_ORIGIN_RULE, isInvalidClientOrigin } from "../client-origin-error.js"
+import { jobBlockOf, jobBlockedBody } from "../job-policy.js"
 import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.js"
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
@@ -124,7 +130,7 @@ import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { APPLY_EDL_LABEL, renderEdlTimeline } from "../../providers/video/edl-timeline.js"
 import { DeterministicJobError } from "../deterministic-job-error.js"
 import { llmCompleteStructured } from "../llm-client.js"
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { type LlmReasoningEffort, getLlmModel } from "@nodaro/shared/llm-models"
 import { ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared/entities"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
@@ -137,13 +143,14 @@ import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
 import { redactPrivateJobData } from "../public-job-data.js"
-import { withJobSubmissionContext } from "../job-submission-context.js"
+import { assertParentJobId, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
+import { PluginHttpError } from "./types.js"
 import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
@@ -943,6 +950,46 @@ async function readJob(jobId: string): Promise<PluginJobRow | null> {
 }
 
 /**
+ * The `PluginHttpError` for a refusal of the request itself, or null for any
+ * other failure. Each status + body is exactly the one `sendInternalError`
+ * (`lib/http-errors.ts`) answers for the same error, so a plugin route refuses
+ * like a core route does.
+ */
+function pluginHttpRefusalOf(err: unknown): PluginHttpError | null {
+  if (isGenerationSessionNotFound(err)) {
+    return new PluginHttpError(404, { error: { code: "not_found", message: err.message } }, err)
+  }
+  if (isInvalidClientOrigin(err)) {
+    return new PluginHttpError(400, {
+      error: { code: "validation_error", message: err.message, issues: [{ path: "origin", message: CLIENT_ORIGIN_RULE }] },
+    }, err)
+  }
+  const blocked = jobBlockOf(err)
+  if (blocked) return new PluginHttpError(422, jobBlockedBody({ userMessage: blocked.message }), err)
+  return null
+}
+
+/**
+ * `tk.http.insertJobWithProvenance` — `insertJobIdempotent` for a plugin
+ * route: the request's session, origin, surface and payer pair are stamped and
+ * the job-policy gate runs, exactly as for a core route's job. A refusal of the
+ * request becomes a sendable `PluginHttpError`; anything else is re-thrown.
+ */
+async function insertJobWithProvenance(
+  req: FastifyRequest,
+  row: Record<string, unknown> & { user_id: string },
+  idempotencyKey: string | null | undefined,
+): Promise<{ id: string; created: boolean }> {
+  try {
+    const result = await insertJobIdempotent<{ id: string }>(req, row, idempotencyKey)
+    return { id: result.row.id, created: result.created }
+  }
+  catch (err) {
+    throw pluginHttpRefusalOf(err) ?? err
+  }
+}
+
+/**
  * The typed error `tk.jobs.readJobStrict` throws when the DATABASE failed.
  * A plugin cannot import this class across the boundary, so it identifies it
  * the way it identifies `JobStopRequestedError`: by `.name === "JobReadError"`
@@ -1283,6 +1330,19 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
   }))
 }
 
+/**
+ * `tk.http.workerRequest` — `internalRequest` against the app the host binds
+ * (`BuildToolkitOptions.workerApp`). `parentJobId` rides into the submission
+ * scope through `withJobSubmissionContext`, never into a header or the body.
+ */
+function workerRequestVia(workerApp: () => Promise<FastifyInstance>) {
+  return async (opts: PluginInternalRequestOptions & { parentJobId?: string }) => {
+    // Refuse a malformed id before the worker builds its app for nothing.
+    if (opts.parentJobId !== undefined) assertParentJobId(opts.parentJobId)
+    return internalRequest(await workerApp(), opts)
+  }
+}
+
 function assertNotLeaseKey(key: string): void {
   if (key.startsWith(LEASE_KEY_PREFIX)) throw new Error(`keys under "${LEASE_KEY_PREFIX}" belong to tk.redis.lease`)
 }
@@ -1307,6 +1367,13 @@ export interface BuildToolkitOptions {
    * test pins the daemon host as the only caller.
    */
   role?: "daemon"
+  /**
+   * The app `tk.http.workerRequest` reaches. `load.ts` binds the API app in
+   * the API process and the worker passes `getWorkerApp` (`worker-app.ts`).
+   * Absent → no `workerRequest` member. Injected rather than imported: the
+   * toolkit must not depend on `app.ts`, which loads the plugins.
+   */
+  workerApp?: () => Promise<FastifyInstance>
 }
 
 export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
@@ -1435,6 +1502,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       proxyFrameToSourceMs,
       detectFaces,
       extractAudio,
+      removeAudio: ({ videoUrl }) => removeAudio({ videoUrl, workDirPrefix: "cast-swap" }),
+      // A pitch shift only; a PitchTempoInputError reaches the plugin unchanged.
+      pitchTempo: async ({ audioUrl, semitones }) => {
+        const { outputPath } = await pitchTempo({ audioUrl, semitones, tempo: 1, preserveFormants: true })
+        return { audioPath: outputPath }
+      },
       mixAudio,
       mergeVideoAudio,
       applyAudioFx,
@@ -1450,6 +1523,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       uploadBufferToR2,
       uploadFileToR2,
       runPostProcessing,
+      // Exactly four arguments: the job id is always the running job's
+      // (`getJobId()`), never one a plugin names.
+      uploadJobScratchFile: (filePath, name, ext, contentType) => uploadJobScratchFile(filePath, name, ext, contentType),
       // Mirrors `uploadToR2` (`lib/storage.ts:126`) narrowed to video.
       uploadVideoFromUrl: (url, jobId, trackUserId) => uploadToR2(url, jobId, "video", trackUserId),
       uploadFileWithKeyToR2,
@@ -1541,6 +1617,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       supabase,
       internalRequest,
+      ...(opts.workerApp ? { workerRequest: workerRequestVia(opts.workerApp) } : {}),
       supportsJobSubmissionContext: true,
       videoQueue,
       creditGuard,
@@ -1576,6 +1653,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         )
         return { id: row.id, created }
       },
+      insertJobWithProvenance,
       computeVoiceChangerProPricing: async (args) => {
         if (!hasCredits()) {
           throw new Error("computeVoiceChangerProPricing requires a Cloud-edition build")

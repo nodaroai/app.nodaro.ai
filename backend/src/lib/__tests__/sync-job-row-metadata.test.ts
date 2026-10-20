@@ -53,6 +53,12 @@ const MIXED_LANE_FILES: ReadonlyMap<string, { readonly queuedInserts: number; re
     queuedInserts: 1,
     why: "the Lottie render lane is queued (motion-graphics-lottie); the plan lane settles in-route",
   }],
+  ["lib/private-plugins/toolkit.ts", {
+    queuedInserts: 1,
+    why: "http.insertJobWithProvenance is a plugin route's QUEUED lane (insert pending -> reserve -> videoQueue.add; " +
+      "the worker's pickup stamps job_type/started_at); the file only settles through tk.jobs.markJobCompleted, " +
+      "the core completion funnel it hands to plugin worker handlers",
+  }],
 ])
 
 interface Site { readonly file: string; readonly line: number }

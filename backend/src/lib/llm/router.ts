@@ -11,7 +11,7 @@ import { deriveParams, resolveModel } from "./params.js"
 import { anthropicKeySet } from "./anthropic-availability.js"
 import { callKie, streamKie } from "./kie-lane.js"
 import { callAnthropicDirect, streamAnthropicDirect } from "./anthropic-lane.js"
-import { kieFallback, laneFallbackAllowed, serveFromFallback, streamWithFallback, withFallback } from "./lane-fallback.js"
+import { kieFallback, streamWithDirectFallback, streamWithFallback, withDirectFallback, withFallback } from "./lane-fallback.js"
 import {
   advancedModeRefusalOf,
   assertAdvancedModeServable,
@@ -104,17 +104,14 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
       return serveIfDirectLatched(ctx, "anthropic", exhaustionKieFallback(model, req)) ??
         withFallback(ctx, () => callAnthropicDirect(model, req), kieFallback(model, req))
     }
-    try {
-      return await callKie(model, req)
-    } catch (err) {
-      if (!laneFallbackAllowed(err)) throw err
-      // KIE proxy failure — the direct SDK is the reliability backstop.
-      return serveFromFallback(
-        { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
-        err,
-        () => callAnthropicDirect(model, req),
-      )
-    }
+    // KIE proxy failure — the direct SDK is the reliability backstop (not
+    // taken under `cheapLanesOnly`: the failure surfaces instead).
+    return withDirectFallback(
+      { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
+      req,
+      () => callKie(model, req),
+      () => callAnthropicDirect(model, req),
+    )
   }
 
   // Served on the vendor's own API and nowhere else: no KIE leg, primary or
@@ -131,8 +128,9 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
           () => callGeminiDirect(model, req, deriveParams(model, req)),
           kieFallback(model, req),
         )
-      : withFallback(
+      : withDirectFallback(
           { modelId: model.id, primary: "kie", fallback: "direct-gemini" },
+          req,
           () => callKie(model, req),
           () => callGeminiDirect(model, req, deriveParams(model, req)),
         )
@@ -351,19 +349,15 @@ export async function llmStream(
       )
     }
     // Fall back only if KIE fails BEFORE any token reached the caller — after
-    // that the stream is tainted and the error must surface.
-    let emitted = false
-    const wrapped = (chunk: string) => { emitted = true; onToken(chunk) }
-    try {
-      return await streamKie(model, req, wrapped, signal)
-    } catch (err) {
-      if (emitted || !laneFallbackAllowed(err)) throw err
-      return serveFromFallback(
-        { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
-        err,
-        () => streamAnthropicDirect(model, req, onToken, signal),
-      )
-    }
+    // that the stream is tainted and the error must surface. Not taken under
+    // `cheapLanesOnly`.
+    return streamWithDirectFallback(
+      { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
+      req,
+      (cb) => streamKie(model, req, cb, signal),
+      (cb) => streamAnthropicDirect(model, req, cb, signal),
+      onToken,
+    )
   }
 
   if (model.directOnly) {
@@ -375,14 +369,11 @@ export async function llmStream(
     const direct = (cb: (chunk: string) => void) =>
       streamGeminiDirect(model, req, deriveParams(model, req), cb, signal)
     const kie = config.KIE_API_KEY ? (cb: (chunk: string) => void) => streamKie(model, req, cb, signal) : undefined
-    return model.preferDirect
-      ? streamWithFallback({ modelId: model.id, primary: "direct-gemini", fallback: "kie" }, direct, kie, onToken)
-      : streamWithFallback(
-          { modelId: model.id, primary: kie ? "kie" : "direct-gemini", fallback: "direct-gemini" },
-          kie ?? direct,
-          kie ? direct : undefined,
-          onToken,
-        )
+    if (model.preferDirect) {
+      return streamWithFallback({ modelId: model.id, primary: "direct-gemini", fallback: "kie" }, direct, kie, onToken)
+    }
+    if (!kie) return direct(onToken)
+    return streamWithDirectFallback({ modelId: model.id, primary: "kie", fallback: "direct-gemini" }, req, kie, direct, onToken)
   }
 
   if (config.KIE_API_KEY) {

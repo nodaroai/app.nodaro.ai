@@ -68,7 +68,13 @@ export function loadRegistryInfo(repoRoot) {
   return { info, unitTypes }
 }
 
-export async function buildTestGraph(repoRoot, project) {
+// `options` (decided 2026-10-20, for the CI job-input guard,
+// tools/ci/job-inputs-check.mjs): `config` — a Vitest config file relative to
+// the project (the characterization suite has its own); `files` — only these
+// test files (project-relative), each of which must exist; `setupFiles` — also
+// summarize every setup file, marked `setup: true`. The defaults are the
+// engine's own graph, unchanged.
+export async function buildTestGraph(repoRoot, project, { config = null, files = null, setupFiles = false } = {}) {
   const missing = missingPackageBuilds(repoRoot, project)
   if (missing.length > 0) {
     const more = missing.length > 1 ? ` (and ${missing.length - 1} more)` : ""
@@ -83,11 +89,26 @@ export async function buildTestGraph(repoRoot, project) {
   let vitest
   process.chdir(root)
   try {
-    vitest = await createVitest("test", { watch: false, run: true, root }, {}, {})
+    vitest = await createVitest("test", { watch: false, run: true, root, ...(config ? { config: path.join(root, config) } : {}) }, {}, {})
     if (typeof vitest.specifications?.getTestDependencies !== "function") {
       throw new Error("vitest.specifications.getTestDependencies is unavailable — the Vitest API changed")
     }
-    const specs = await vitest.globTestSpecifications()
+    let specs = await vitest.globTestSpecifications(files ?? [])
+    if (files) {
+      // A Vitest filter is a substring match: keep exactly the files named.
+      const wanted = new Set(files.map((f) => path.join(root, f)))
+      specs = specs.filter((s) => wanted.has(s.moduleId))
+      const found = new Set(specs.map((s) => s.moduleId))
+      const missing = [...wanted].filter((f) => !found.has(f))
+      if (missing.length > 0) throw new Error(`Vitest does not collect ${rel(missing[0])} under ${project}/`)
+    }
+    if (setupFiles) {
+      // A setup file runs before every test, so what it imports is part of
+      // every test's graph — Vitest's walk starts at the test file and misses it.
+      for (const p of vitest.projects) {
+        for (const file of p.config.setupFiles ?? []) specs.push(Object.assign(p.createSpecification(file), { setup: true }))
+      }
+    }
     // One cache for the whole run — the tests' dependencies overlap heavily.
     const sources = new Map()
     const readSource = (abs) => {
@@ -107,7 +128,7 @@ export async function buildTestGraph(repoRoot, project) {
       const batch = await Promise.all(specs.slice(i, i + BATCH).map(async (spec) => {
         const walked = await walk?.(spec)
         const deps = walked?.deps ?? await vitest.specifications.getTestDependencies(spec)
-        return summarizeTest({
+        const summary = summarizeTest({
           registry: registryInfo && { ...registryInfo, via: walked ? await registryCut(walked, rel, registryInfo) : new Map() },
           file: rel(spec.moduleId),
           // The test file itself must be readable: an error here throws and
@@ -115,6 +136,7 @@ export async function buildTestGraph(repoRoot, project) {
           source: readFileSync(spec.moduleId, "utf8"),
           deps: [...deps].map((d) => ({ path: rel(d), source: readSource(d) })),
         })
+        return spec.setup ? { ...summary, setup: true } : summary
       }))
       tests.push(...batch)
     }

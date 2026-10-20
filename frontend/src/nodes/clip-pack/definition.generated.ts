@@ -6,7 +6,8 @@ export const definition = {
   "label": "Clip Pack",
   "category": "processing",
   "inputs": [
-    "media"
+    "media",
+    "masterAudio"
   ],
   "outputs": [
     "clips",
@@ -26,6 +27,7 @@ export const definition = {
     "captionStyle": "karaoke",
     "reviewBeforeRender": false,
     "planTier": "standard",
+    "framingSource": "auto",
     "instructions": "",
     "fieldMappings": {},
     "executionStatus": "idle"
@@ -56,9 +58,16 @@ export const definition = {
     "inputs": [
       {
         "id": "media",
-        "label": "Recording",
+        "label": "Recordings",
         "accepts": [
           "video",
+          "audio"
+        ]
+      },
+      {
+        "id": "masterAudio",
+        "label": "Master audio",
+        "accepts": [
           "audio"
         ]
       }

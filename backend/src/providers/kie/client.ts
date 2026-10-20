@@ -677,6 +677,16 @@ export async function createKieTask(
 }
 
 /**
+ * Options for `pollKieTask`. `onFail` lets a caller turn a terminal `fail`
+ * into its own typed error: it runs after the raw failCode/failMsg are logged,
+ * and an Error it returns is thrown INSTEAD of the generic upstream failure
+ * (`undefined` keeps the generic one). Omitted, nothing changes.
+ */
+export interface PollKieTaskOptions {
+  onFail?: (failCode: string, failMsg: string) => Error | undefined
+}
+
+/**
  * Poll an existing KIE task until success / fail / max attempts.
  * Mirrors the original `runKieTask` poll loop body verbatim — same retry
  * semantics for HTTP errors, JSON-parse errors, missing-state responses, and
@@ -687,6 +697,7 @@ export async function pollKieTask(
   taskId: string,
   maxAttempts: number = MAX_POLL_ATTEMPTS,
   onProgress?: ProgressCallback,
+  opts?: PollKieTaskOptions,
 ): Promise<{
   resultJson: KieResultJson
   /** Provider-reported generation time in seconds (KIE `costTime`). */
@@ -800,6 +811,8 @@ export async function pollKieTask(
       console.error(
         `  Full response: ${JSON.stringify(detailData, null, 2)}`
       )
+      const typed = opts?.onFail?.(failCode, failMsg)
+      if (typed) throw typed
       // Terminal upstream failure → reconcile fails fast + refunds.
       // Content-policy failures are a SUBSET of upstream failures (both flags
       // end up true). Classify the BARE failMsg here rather than letting the

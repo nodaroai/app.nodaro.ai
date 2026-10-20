@@ -48,8 +48,9 @@ const CLOUD_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   // The four bespoke operations (#643). They don't share the multi-track
   // finalizer — lyrics is text, separate is stems, music-video is a video,
   // convert-wav is a wav — so each has its own result adapter in
-  // workers/handlers/suno.ts feeding the SAME local persistence a KIE result
-  // would. The replay itself stays generic; only the result handling differs.
+  // workers/handlers/suno.ts (separate: suno-separate.ts) feeding the SAME
+  // local persistence a KIE result would. The replay itself stays generic;
+  // only the result handling differs.
   "suno-lyrics": "/v1/suno/lyrics",
   "suno-separate": "/v1/suno/separate",
   "suno-music-video": "/v1/suno/music-video",
@@ -104,7 +105,9 @@ const PAYLOAD_ADAPTERS: Readonly<
   // worker payload reads unambiguously. Replayed verbatim, the cloud's Zod
   // would silently drop `separateType` and DEFAULT the operation to
   // separate_vocal — a user's split_stem request would come back as a vocal
-  // split with no error anywhere.
+  // split with no error anywhere. The other fields keep their route names and
+  // pass through as `rest`: `stemName` and `fallbackToDemucs` verbatim, and
+  // `audioUrl` re-hosted by the URL_FIELD rule below.
   "suno-separate": ({ separateType, ...rest }) => ({
     ...rest,
     ...(typeof separateType === "string" ? { type: separateType } : {}),

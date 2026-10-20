@@ -22,7 +22,8 @@
  *    very edit a completed final already rendered is refused
  *    (`render_final_already_rendered`, naming it). A clip set's final whose
  *    review dropped every clip is refused (`use_case_nothing_kept`): there is
- *    nothing to render.
+ *    nothing to render. A layout's final takes no edit at all (it has no
+ *    plan): one sent with an edit is refused (`use_case_no_plan`).
  *
  * The graph is the earlier run's stored snapshot, verbatim: its stored hash is
  * the run's identity, so a rebuilt graph would be refused as another one.
@@ -35,10 +36,12 @@ import {
   renderFinalRunSet,
   renderRunOverrides,
   usecaseRenderNodeId,
+  usecasePlanNodeId,
   usecaseResultKind,
   usecaseRunPlan,
   usecaseRunType,
   usecaseDescriptor,
+  usecaseKindHasPlan,
   type StoredInlineGraph,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -111,6 +114,9 @@ export interface UseCaseContinuationRefusal {
   /** already_running: the continuation of this run that is under way or done. */
   readonly jobId?: string
 }
+
+/** A Render final sent with an edit, of a type whose result has no plan to edit (a layout). */
+export const USE_CASE_NO_PLAN = "use_case_no_plan"
 
 const NOT_FOUND: UseCaseContinuationRefusal = { ok: false, status: 404, code: "not_found", message: "That run was not found." }
 
@@ -243,27 +249,44 @@ async function loadUseCaseRun(input: { readonly nodeType: UseCaseNodeType; reado
  * quote read it.
  */
 function nothingKeptRefusal(graph: StoredInlineGraph, source: ContinuationSource | null, edit: unknown): UseCaseContinuationRefusal | null {
-  if (usecaseResultKind(graph.outputMap) !== "clips" || edit === undefined || edit === null) return null
-  const kept = resolveEditPlanOutput(usecaseRunPlan(source?.nodeStates?.[graph.outputMap.planNodeId]), edit).json
+  const planId = usecasePlanNodeId(graph.outputMap)
+  if (usecaseResultKind(graph.outputMap) !== "clips" || planId === null || edit === undefined || edit === null) return null
+  const kept = resolveEditPlanOutput(usecaseRunPlan(source?.nodeStates?.[planId]), edit).json
   return Array.isArray(kept) && kept.length === 0 ? { ok: false, status: 409, code: USE_CASE_NOTHING_KEPT, message: USE_CASE_NOTHING_KEPT_MESSAGE } : null
 }
 
 /**
- * The same refusal for a Render final started elsewhere (an app run's, which
- * continues the run `jobId` names through the node): asked before anything is
- * written or held, so a review that kept no clip is refused up front rather
- * than failing the final once it has started. Null when the run is not found
- * (the caller's own checks answer that) or the edit keeps a clip. Only a
- * clip set can keep nothing, so a node of any other result kind is answered
- * from its type alone, before the run is read (no read on a Tighten Episode,
- * Chapters or Trailer Render final).
+ * A Render final with an edit, of a type whose result has no plan (a layout,
+ * decided 2026-10-17): there is no edit to change, so it is refused (400
+ * `use_case_no_plan`) from the type alone, before anything is read, written or
+ * held. Null for no edit, or a type that has a plan.
  */
-export async function usecaseNothingKeptRefusal(input: {
+export function usecaseNoPlanRefusal(nodeType: UseCaseNodeType, editedEdl: unknown): UseCaseContinuationRefusal | null {
+  if (editedEdl === undefined || editedEdl === null) return null
+  const d = usecaseDescriptor(nodeType)
+  if (usecaseKindHasPlan(d.resultKind)) return null
+  return { ok: false, status: 400, code: USE_CASE_NO_PLAN, message: `${d.label} has no edit to change — run Render final without one.` }
+}
+
+/**
+ * The refusals of a Render final's edit for one started elsewhere (an app
+ * run's, which continues the run `jobId` names through the node): asked before
+ * anything is written or held, so an edit the final cannot take is refused up
+ * front rather than failing the final once it has started — an edit of a type
+ * with no plan (`usecaseNoPlanRefusal`), or a review that kept no clip. Null
+ * when the run is not found (the caller's own checks answer that) or the edit
+ * keeps a clip. Only a clip set can keep nothing, so a node of any other
+ * result kind is answered from its type alone, before the run is read (no read
+ * on a Tighten Episode, Chapters, Trailer or Speaker Layout Render final).
+ */
+export async function usecaseRenderFinalEditRefusal(input: {
   readonly nodeType: UseCaseNodeType
   readonly jobId: string
   readonly userId: string
   readonly editedEdl: unknown
 }): Promise<UseCaseContinuationRefusal | null> {
+  const noPlan = usecaseNoPlanRefusal(input.nodeType, input.editedEdl)
+  if (noPlan) return noPlan
   if (input.editedEdl === undefined || input.editedEdl === null) return null
   if (usecaseDescriptor(input.nodeType).resultKind !== "clips") return null
   const run = await loadUseCaseRun(input)
@@ -282,6 +305,11 @@ export async function resolveUseCaseContinuation(input: {
   readonly mode: UseCaseContinueMode
   readonly editedEdl?: unknown
 }): Promise<UseCaseContinuation | UseCaseContinuationRefusal> {
+  // A type with no plan takes no edit: refused before the run is read.
+  if (input.mode === "render-final") {
+    const noPlan = usecaseNoPlanRefusal(input.nodeType, input.editedEdl)
+    if (noPlan) return noPlan
+  }
   const run = await loadUseCaseRun(input)
   if (!run) return NOT_FOUND
   const { row, stored, sourceExecutionId, graph, source } = run
@@ -376,6 +404,8 @@ export async function resolveUseCaseContinuation(input: {
   const nothingKept = nothingKeptRefusal(graph, source, edit)
   if (nothingKept) return nothingKept
   const finalEdit = renderFinalEditKey(edit)
+  // A kind with no plan (a layout) has no edit to seed.
+  const planId = usecasePlanNodeId(graph.outputMap)
   const rendered = await alreadyRenderedRefusal(input.jobId, finalEdit, input.userId)
   if (rendered) return rendered
   return {
@@ -385,7 +415,7 @@ export async function resolveUseCaseContinuation(input: {
     nodeIds,
     inputOverrides: {
       ...renderRunOverrides(renderId, "final", runSet),
-      ...(edit !== undefined && edit !== null ? { [graph.outputMap.planNodeId]: { editedEdl: edit } } : {}),
+      ...(planId !== null && edit !== undefined && edit !== null ? { [planId]: { editedEdl: edit } } : {}),
     },
     feeCredits: 0,
     reviewBeforeRender: false,

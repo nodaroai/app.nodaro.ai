@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { usecaseViewerForEveryone } from "../lib/use-case/inner-availability.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared/apps"
 import { appListingPrice, relistedAppPrices, storedListingFinalCredits, storedListingFinalPerItem, storedListingFinalPerMinute, type StoredAppListing } from "../lib/app-listing-price.js"
@@ -722,6 +723,9 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       replaceableMediaNodeIds,
       exposedListNodeIds: exposedLists,
       snapshotSettings: published.settings as Record<string, unknown> | null,
+      // Shown to everyone: a general user's run — several recordings only while Speaker Map is every
+      // user's, an `auto` framing source as the even split while Speaker Frames is not (decided 2026-10-20).
+      ...usecaseViewerForEveryone(snapshotNodes as EstimateNode[]),
     })
     // No ceiling computed (none to compute): "up to" is the "from".
     const listingCeiling = listingSplit.ceiling ?? listingSplit

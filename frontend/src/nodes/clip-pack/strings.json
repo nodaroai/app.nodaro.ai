@@ -23,6 +23,8 @@
     "node.clipPackPlan": {"en": "Clip set (EDLs)", "he": "סט קליפים (EDL)", "ja": "クリップセット（EDL）", "ko": "클립 세트(EDL)", "pt-br": "Conjunto de clipes (EDLs)"}
   },
   "labels": {
-    "Clip Pack": {"he": "חבילת קליפים", "ja": "クリップパック", "ko": "클립 세트", "pt-br": "Pacote de clipes"}
+    "Clip Pack": {"he": "חבילת קליפים", "ja": "クリップパック", "ko": "클립 세트", "pt-br": "Pacote de clipes"},
+    "Recordings": {"he": "הקלטות", "ja": "録音", "ko": "녹음", "pt-br": "Gravações"},
+    "Master audio": {"he": "אודיו ראשי", "ja": "マスターオーディオ", "ko": "마스터 오디오", "pt-br": "Áudio principal"}
   }
 }

@@ -18,7 +18,9 @@ import {
 } from "../lib/llm-structured-request.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
-import { billedContentRefusal } from "../lib/llm-errors.js"
+import { billedContentRefusal, billedProviderCost } from "../lib/llm-errors.js"
+// From its own module, not the client facade a route test replaces.
+import { StructuredLlmError } from "../lib/llm/structured.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 
 /**
@@ -98,12 +100,25 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
       await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
-        const { output, inputTokens, outputTokens } = await runStructuredCompletion(parsed.data, prepared, input)
+        const { output, inputTokens, outputTokens, providerCost, lane } = await runStructuredCompletion(parsed.data, prepared, input)
         const usage = { inputTokens, outputTokens }
 
         await supabase
           .from("jobs")
-          .update({ status: "completed", ...completedJobColumns(), output_data: { output, ...usage } })
+          .update({
+            status: "completed",
+            ...completedJobColumns(),
+            output_data: { output, ...usage },
+            // Which LLM lane served the answer and what it cost the platform
+            // there (the direct rate table on the vendor's own API) — what the
+            // cost reports read; a row with only token counts was invisible to
+            // them (production cost audit, 2026-10-20). Both admin-only —
+            // outside PUBLIC_JOB_KEYS (routes/jobs.ts) and the browser's column
+            // grant on jobs (migration 347) — while output_data is owner-
+            // readable, so neither rides there.
+            provider: lane,
+            provider_cost: providerCost ?? null,
+          })
           .eq("id", job.id)
           .eq("user_id", userId)
         await commitReservedCreditsForJob(job.id)
@@ -114,7 +129,14 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
         return reply.send({ jobId: job.id, output, usage })
       } catch (err) {
         const message = userFacingMessage(err, "Structured generation failed")
-        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
+        // A failure that carried usage (a billed refusal, a cap stop, every
+        // attempt of a validation failure) was paid for: its cost stays on the
+        // row, with the lane that served the failing attempt when it is known.
+        const lane = err instanceof StructuredLlmError ? err.lane : undefined
+        await markJobFailed(job.id, {
+          error_message: message,
+          extra: { output_data: { error: message }, provider_cost: billedProviderCost(err), ...(lane ? { provider: lane } : {}) },
+        })
         // A content refusal the provider billed is a paid answer: committed, not refunded.
         if (billedContentRefusal(err)) await commitReservedCreditsForJob(job.id)
         else await refundReservedCreditsForJob(job.id)

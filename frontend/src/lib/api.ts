@@ -7,6 +7,8 @@ import {
   FLUX_LORA_CHARACTER_MODEL_ID,
   type VideoUpscaleProvider,
   type TtsProvider,
+  type SunoSeparateType,
+  type SunoStemName,
 } from "@nodaro/shared/models"
 import { isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared/captions"
 import { ugcFailure } from "@nodaro/shared/ugc"
@@ -5572,14 +5574,27 @@ export async function sunoLyricsApi(params: {
   })
 }
 
+/**
+ * Separate a Suno track (`taskId` + `audioId`) or any audio (`audioUrl`).
+ * `stemName` is the instrument "one instrument" mode isolates;
+ * `fallbackToDemucs` runs a refused vocals / stems split on Demucs instead.
+ */
 export async function sunoSeparateApi(params: {
-  taskId: string
-  audioId: string
-  type?: "separate_vocal" | "split_stem"
+  taskId?: string
+  audioId?: string
+  audioUrl?: string
+  type?: SunoSeparateType
+  stemName?: SunoStemName
+  fallbackToDemucs?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
+  const body: Record<string, unknown> = {}
+  if (params.taskId) body.taskId = params.taskId
+  if (params.audioId) body.audioId = params.audioId
+  if (params.audioUrl) body.audioUrl = params.audioUrl
   if (params.type) body.type = params.type
+  if (params.stemName) body.stemName = params.stemName
+  if (params.fallbackToDemucs !== undefined) body.fallbackToDemucs = params.fallbackToDemucs
   if (params.userId) body.userId = params.userId
   return apiJson("/v1/suno/separate", {
     body,
@@ -7976,6 +7991,8 @@ export interface WorkflowExecution {
   triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
+  /** A schedule's retry of a failed run (Retry on failure): which attempt of how many, and the run it retries. */
+  retry?: { attempt: number; maxAttempts: number; retryOf: string }
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
   /**

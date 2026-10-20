@@ -15,7 +15,7 @@
  * engine) and assert the matching contract goes FAIL.
  *
  * Scope on purpose: this file asserts the Scene3D, Video Overlay, Speaker Map, Site Capture,
- * Tighten Episode, Chapters, Trailer and Clip Pack contracts only. The stub is faithful enough for the
+ * Tighten Episode, Chapters, Trailer, Clip Pack and Speaker Layout contracts only. The stub is faithful enough for the
  * probe to reach them, not a second implementation of the platform — the
  * other contracts are asserted against the real image by
  * `.github/workflows/community-e2e.yml`.
@@ -57,6 +57,9 @@ const TRAILER = "Trailer on an unconnected install: hidden from discovery, refus
 
 /** The Clip Pack contract name, spelled exactly as the probe records it. */
 const CLIP_PACK = "Clip Pack on an unconnected install: hidden from discovery, refused 503 before any job"
+
+/** The Speaker Layout contract name, spelled exactly as the probe records it. */
+const SPEAKER_LAYOUT = "Speaker Layout on an unconnected install: hidden from discovery, refused 503 before any job"
 
 /** The entity search contract name, spelled exactly as the probe records it. */
 const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
@@ -165,6 +168,17 @@ function communityShape() {
     },
     // Trailer, unconnected: the same refusal, before any job.
     trailer: {
+      status: 503,
+      body: {
+        error: {
+          code: "nodaro_connection_required",
+          message: "This node runs on nodaro.ai. Connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API) and run again.",
+        },
+      },
+      createsJob: false,
+    },
+    // Speaker Layout, unconnected: the same refusal, before any job (one recording and several alike).
+    speakerLayout: {
       status: 503,
       body: {
         error: {
@@ -333,6 +347,11 @@ function stubServer(shape) {
       // ── Tighten Episode ───────────────────────────────────────────────────
       if (path === "/v1/jobs" && req.method === "GET") return send(200, { data: state.jobs, nextCursor: null })
       if (path === "/v1/tighten-episode" && req.method === "POST") {
+        // A multicam body (several recordings or a Master audio) may be answered on its own.
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.tightenMulticam) return send(shape.tightenMulticam.status, shape.tightenMulticam.body)
         if (shape.tighten.createsJob) {
           state.jobs = [{ id: "job_tighten", status: "processing", input_data: { type: "tighten-episode" } }, ...state.jobs]
         }
@@ -345,12 +364,32 @@ function stubServer(shape) {
         return send(shape.chapters.status, shape.chapters.body)
       }
       if (path === "/v1/clip-pack" && req.method === "POST") {
+        // A multicam body (several recordings or a Master audio) may be answered on its own.
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.clipPackMulticam) return send(shape.clipPackMulticam.status, shape.clipPackMulticam.body)
         if (shape.clipPack.createsJob) {
           state.jobs = [{ id: "job_clip_pack", status: "processing", input_data: { type: "clip-pack" } }, ...state.jobs]
         }
         return send(shape.clipPack.status, shape.clipPack.body)
       }
+      if (path === "/v1/speaker-layout" && req.method === "POST") {
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.speakerLayoutMulticam) return send(shape.speakerLayoutMulticam.status, shape.speakerLayoutMulticam.body)
+        if (shape.speakerLayout.createsJob) {
+          state.jobs = [{ id: "job_speaker_layout", status: "processing", input_data: { type: "speaker-layout" } }, ...state.jobs]
+        }
+        return send(shape.speakerLayout.status, shape.speakerLayout.body)
+      }
       if (path === "/v1/episode-trailer" && req.method === "POST") {
+        // A multicam body (several recordings or a Master audio) may be answered on its own.
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.trailerMulticam) return send(shape.trailerMulticam.status, shape.trailerMulticam.body)
         if (shape.trailer.createsJob) {
           state.jobs = [{ id: "job_trailer", status: "processing", input_data: { type: "episode-trailer" } }, ...state.jobs]
         }
@@ -622,6 +661,26 @@ test("a Tighten Episode run accepted with a job handle fails the Tighten Episode
   assertContract(out, TIGHTEN, "FAIL")
 })
 
+test("a multicam body refused 403 by a gate that runs before the connection check fails the Tighten Episode contract", async () => {
+  // Speaker Map is keyless and not withheld on a community install, so several
+  // recordings + a Master audio reach the same connection refusal as one: a 403
+  // means the install withheld it (or a new gate refused the body) instead.
+  const { out } = await probeWith((shape) => {
+    shape.tightenMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Tighten Episode on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("a multicam body accepted with a job handle fails the Tighten Episode contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.tightenMulticam = { status: 202, body: { jobId: "job_tighten", executionId: "exec_1" } }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
 test("a refusal that left a job row behind fails the Tighten Episode contract", async () => {
   // The honest-looking answer the job count exists for: the right status and
   // code, no handle in the body — but the wrapper was inserted before the
@@ -678,6 +737,28 @@ test("a Trailer run accepted with a job handle fails the Trailer contract", asyn
     shape.trailer = { status: 202, body: { jobId: "job_trailer", executionId: "exec_1" }, createsJob: true }
   })
   assertContract(out, TRAILER, "FAIL")
+})
+
+test("a Trailer multicam body refused 403 by a gate that runs before the connection check fails the Trailer contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.trailerMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Trailer on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, TRAILER, "FAIL")
+  assertContract(out, TIGHTEN, "PASS")
+})
+
+test("a Clip Pack multicam body refused 403 by a gate that runs before the connection check fails the Clip Pack contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.clipPackMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Clip Pack on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, CLIP_PACK, "FAIL")
+  assertContract(out, TRAILER, "PASS")
 })
 
 test("a Trailer refusal that left a job row behind fails the Trailer contract", async () => {
@@ -769,4 +850,43 @@ test("a comma that breaks the filter fails the entity search contract", async ()
       q.includes(",") ? { status: 500, body: { error: { code: "internal_error", message: "Failed to list characters" } } } : wordSearch(rows, q)
   })
   assertContract(out, ENTITY_SEARCH, "FAIL")
+})
+
+test("the keyless community shape passes the Speaker Layout contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, SPEAKER_LAYOUT, "PASS")
+})
+
+test("advertising speaker-layout on an unconnected install fails the Speaker Layout contract (and only it)", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.nodes.push({ type: "speaker-layout", label: "Speaker Layout", category: "processing", description: "d", outputType: "video" })
+  })
+  assertContract(out, SPEAKER_LAYOUT, "FAIL")
+  assertContract(out, CLIP_PACK, "PASS")
+  assertContract(out, TIGHTEN, "PASS")
+})
+
+test("a Speaker Layout run accepted with a job handle fails the Speaker Layout contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.speakerLayout = { status: 202, body: { jobId: "job_speaker_layout", executionId: "exec_1" }, createsJob: true }
+  })
+  assertContract(out, SPEAKER_LAYOUT, "FAIL")
+})
+
+test("a Speaker Layout multicam body refused 403 by a gate that runs before the connection check fails the Speaker Layout contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.speakerLayoutMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Speaker Layout on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, SPEAKER_LAYOUT, "FAIL")
+  assertContract(out, TRAILER, "PASS")
+})
+
+test("a Speaker Layout refusal that left a job row behind fails the Speaker Layout contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.speakerLayout = { ...shape.speakerLayout, createsJob: true }
+  })
+  assertContract(out, SPEAKER_LAYOUT, "FAIL")
 })

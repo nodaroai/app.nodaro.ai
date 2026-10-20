@@ -7,6 +7,7 @@ import { ConfigPanel as unit_episode_chapters } from "../episode-chapters/config
 import { ConfigPanel as unit_episode_trailer } from "../episode-trailer/config" // unit:episode-trailer
 import { ConfigPanel as unit_gif_to_video } from "../gif-to-video/config" // unit:gif-to-video
 import { ConfigPanel as unit_remove_audio } from "../remove-audio/config" // unit:remove-audio
+import { ConfigPanel as unit_speaker_layout } from "../speaker-layout/config" // unit:speaker-layout
 import { ConfigPanel as unit_speaker_map } from "../speaker-map/config" // unit:speaker-map
 import { ConfigPanel as unit_tighten_episode } from "../tighten-episode/config" // unit:tighten-episode
 
@@ -16,6 +17,7 @@ export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.as
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

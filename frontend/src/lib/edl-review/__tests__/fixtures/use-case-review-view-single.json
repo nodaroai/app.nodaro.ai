@@ -1,0 +1,851 @@
+{
+  "video": {
+    "renderId": "t1::uc-render",
+    "nodes": [
+      {
+        "id": "t1::uc-source",
+        "type": "upload-video",
+        "position": {
+          "x": 0,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Episode recording",
+          "assetId": "",
+          "url": "https://r2/ep.mp4"
+        }
+      },
+      {
+        "id": "t1::uc-transcribe",
+        "type": "transcribe",
+        "position": {
+          "x": 320,
+          "y": 0
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Transcribe",
+          "provider": "elevenlabs-stt",
+          "language": "auto",
+          "diarize": true,
+          "generatedJson": {
+            "version": 1,
+            "words": [
+              {
+                "text": "Hi",
+                "startMs": 0,
+                "endMs": 300,
+                "speaker": "A"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "t1::uc-silence",
+        "type": "silence-detect",
+        "position": {
+          "x": 320,
+          "y": 440
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Silence Detect",
+          "thresholdDb": -35,
+          "minSilenceMs": 700,
+          "padMs": 120
+        }
+      },
+      {
+        "id": "t1",
+        "type": "edit-plan",
+        "position": {
+          "x": 640,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Tighten Plan",
+          "mode": "tighten",
+          "planTier": "standard",
+          "instructions": "",
+          "sourceOrder": [
+            "t1::uc-source"
+          ],
+          "sourceConfig": {},
+          "generatedJson": {
+            "version": 1,
+            "sources": [
+              {
+                "id": "s0",
+                "url": "https://r2/ep.mp4",
+                "role": "master"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a",
+                "sourceId": "s0",
+                "inMs": 0,
+                "outMs": 4000
+              }
+            ],
+            "dropped": []
+          }
+        }
+      },
+      {
+        "id": "t1::uc-render",
+        "type": "apply-edl",
+        "position": {
+          "x": 960,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "t1::uc-e-uc-source-video-uc-transcribe-audio",
+        "source": "t1::uc-source",
+        "target": "t1::uc-transcribe",
+        "sourceHandle": "video",
+        "targetHandle": "audio"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-silence-in",
+        "source": "t1::uc-source",
+        "target": "t1::uc-silence",
+        "sourceHandle": "video",
+        "targetHandle": "in"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-plan-sources",
+        "source": "t1::uc-source",
+        "target": "t1",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-render-sources",
+        "source": "t1::uc-source",
+        "target": "t1::uc-render",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-plan-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      },
+      {
+        "id": "t1::uc-e-uc-silence-json-uc-plan-silence",
+        "source": "t1::uc-silence",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "silence"
+      },
+      {
+        "id": "t1::uc-e-uc-plan-edl-uc-render-edl",
+        "source": "t1",
+        "target": "t1::uc-render",
+        "sourceHandle": "edl",
+        "targetHandle": "edl"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-render-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1::uc-render",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      }
+    ]
+  },
+  "video, framed": {
+    "renderId": "t1::uc-render",
+    "nodes": [
+      {
+        "id": "t1::uc-source",
+        "type": "upload-video",
+        "position": {
+          "x": 0,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Episode recording",
+          "assetId": "",
+          "url": "https://r2/ep.mp4"
+        }
+      },
+      {
+        "id": "t1::uc-transcribe",
+        "type": "transcribe",
+        "position": {
+          "x": 320,
+          "y": 0
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Transcribe",
+          "provider": "elevenlabs-stt",
+          "language": "auto",
+          "diarize": true,
+          "generatedJson": {
+            "version": 1,
+            "words": [
+              {
+                "text": "Hi",
+                "startMs": 0,
+                "endMs": 300,
+                "speaker": "A"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "t1::uc-silence",
+        "type": "silence-detect",
+        "position": {
+          "x": 320,
+          "y": 440
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Silence Detect",
+          "thresholdDb": -35,
+          "minSilenceMs": 700,
+          "padMs": 120
+        }
+      },
+      {
+        "id": "t1",
+        "type": "edit-plan",
+        "position": {
+          "x": 640,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Tighten Plan",
+          "mode": "tighten",
+          "planTier": "standard",
+          "instructions": "",
+          "sourceOrder": [
+            "t1::uc-source"
+          ],
+          "sourceConfig": {},
+          "generatedJson": {
+            "version": 1,
+            "sources": [
+              {
+                "id": "s0",
+                "url": "https://r2/ep.mp4",
+                "role": "master"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a",
+                "sourceId": "s0",
+                "inMs": 0,
+                "outMs": 4000
+              }
+            ],
+            "dropped": []
+          }
+        }
+      },
+      {
+        "id": "t1::uc-render",
+        "type": "speaker-view",
+        "position": {
+          "x": 960,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Speaker Layout",
+          "quality": "final",
+          "targetAspect": "9:16",
+          "layout": "auto",
+          "autoRegions": true
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "t1::uc-e-uc-source-video-uc-transcribe-audio",
+        "source": "t1::uc-source",
+        "target": "t1::uc-transcribe",
+        "sourceHandle": "video",
+        "targetHandle": "audio"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-silence-in",
+        "source": "t1::uc-source",
+        "target": "t1::uc-silence",
+        "sourceHandle": "video",
+        "targetHandle": "in"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-plan-sources",
+        "source": "t1::uc-source",
+        "target": "t1",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-plan-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      },
+      {
+        "id": "t1::uc-e-uc-silence-json-uc-plan-silence",
+        "source": "t1::uc-silence",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "silence"
+      },
+      {
+        "id": "t1::uc-e-uc-plan-edl-uc-render-edl",
+        "source": "t1",
+        "target": "t1::uc-render",
+        "sourceHandle": "edl",
+        "targetHandle": "edl"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-render-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1::uc-render",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      }
+    ]
+  },
+  "audio": {
+    "renderId": "t1::uc-render",
+    "nodes": [
+      {
+        "id": "t1::uc-source",
+        "type": "upload-audio",
+        "position": {
+          "x": 0,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Episode recording",
+          "assetId": "",
+          "url": "https://r2/ep.m4a"
+        }
+      },
+      {
+        "id": "t1::uc-transcribe",
+        "type": "transcribe",
+        "position": {
+          "x": 320,
+          "y": 0
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Transcribe",
+          "provider": "elevenlabs-stt",
+          "language": "auto",
+          "diarize": true,
+          "generatedJson": {
+            "version": 1,
+            "words": [
+              {
+                "text": "Hi",
+                "startMs": 0,
+                "endMs": 300,
+                "speaker": "A"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "t1::uc-silence",
+        "type": "silence-detect",
+        "position": {
+          "x": 320,
+          "y": 440
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Silence Detect",
+          "thresholdDb": -35,
+          "minSilenceMs": 700,
+          "padMs": 120
+        }
+      },
+      {
+        "id": "t1",
+        "type": "edit-plan",
+        "position": {
+          "x": 640,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Tighten Plan",
+          "mode": "tighten",
+          "planTier": "standard",
+          "instructions": "",
+          "sourceOrder": [
+            "t1::uc-source"
+          ],
+          "sourceConfig": {},
+          "generatedJson": {
+            "version": 1,
+            "sources": [
+              {
+                "id": "s0",
+                "url": "https://r2/ep.mp4",
+                "role": "master"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a",
+                "sourceId": "s0",
+                "inMs": 0,
+                "outMs": 4000
+              }
+            ],
+            "dropped": []
+          }
+        }
+      },
+      {
+        "id": "t1::uc-render",
+        "type": "apply-edl",
+        "position": {
+          "x": 960,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Apply Cut",
+          "output": "audio",
+          "quality": "final",
+          "crossfadeMs": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "t1::uc-e-uc-source-audio-uc-transcribe-audio",
+        "source": "t1::uc-source",
+        "target": "t1::uc-transcribe",
+        "sourceHandle": "audio",
+        "targetHandle": "audio"
+      },
+      {
+        "id": "t1::uc-e-uc-source-audio-uc-silence-in",
+        "source": "t1::uc-source",
+        "target": "t1::uc-silence",
+        "sourceHandle": "audio",
+        "targetHandle": "in"
+      },
+      {
+        "id": "t1::uc-e-uc-source-audio-uc-plan-sources",
+        "source": "t1::uc-source",
+        "target": "t1",
+        "sourceHandle": "audio",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-source-audio-uc-render-sources",
+        "source": "t1::uc-source",
+        "target": "t1::uc-render",
+        "sourceHandle": "audio",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-plan-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      },
+      {
+        "id": "t1::uc-e-uc-silence-json-uc-plan-silence",
+        "source": "t1::uc-silence",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "silence"
+      },
+      {
+        "id": "t1::uc-e-uc-plan-edl-uc-render-edl",
+        "source": "t1",
+        "target": "t1::uc-render",
+        "sourceHandle": "edl",
+        "targetHandle": "edl"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-render-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1::uc-render",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      }
+    ]
+  },
+  "video, review on, captions": {
+    "renderId": "t1::uc-render",
+    "nodes": [
+      {
+        "id": "t1::uc-source",
+        "type": "upload-video",
+        "position": {
+          "x": 0,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Episode recording",
+          "assetId": "",
+          "url": "https://r2/ep.mp4"
+        }
+      },
+      {
+        "id": "t1::uc-transcribe",
+        "type": "transcribe",
+        "position": {
+          "x": 320,
+          "y": 0
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Transcribe",
+          "provider": "elevenlabs-stt",
+          "language": "auto",
+          "diarize": true,
+          "generatedJson": {
+            "version": 1,
+            "words": [
+              {
+                "text": "Hi",
+                "startMs": 0,
+                "endMs": 300,
+                "speaker": "A"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "t1::uc-silence",
+        "type": "silence-detect",
+        "position": {
+          "x": 320,
+          "y": 440
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Silence Detect",
+          "thresholdDb": -35,
+          "minSilenceMs": 700,
+          "padMs": 120
+        }
+      },
+      {
+        "id": "t1",
+        "type": "edit-plan",
+        "position": {
+          "x": 640,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Tighten Plan",
+          "mode": "tighten",
+          "planTier": "standard",
+          "instructions": "",
+          "sourceOrder": [
+            "t1::uc-source"
+          ],
+          "sourceConfig": {},
+          "generatedJson": {
+            "version": 1,
+            "sources": [
+              {
+                "id": "s0",
+                "url": "https://r2/ep.mp4",
+                "role": "master"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a",
+                "sourceId": "s0",
+                "inMs": 0,
+                "outMs": 4000
+              }
+            ],
+            "dropped": []
+          }
+        }
+      },
+      {
+        "id": "t1::uc-render",
+        "type": "apply-edl",
+        "position": {
+          "x": 960,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "proxy",
+          "crossfadeMs": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "t1::uc-e-uc-source-video-uc-transcribe-audio",
+        "source": "t1::uc-source",
+        "target": "t1::uc-transcribe",
+        "sourceHandle": "video",
+        "targetHandle": "audio"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-silence-in",
+        "source": "t1::uc-source",
+        "target": "t1::uc-silence",
+        "sourceHandle": "video",
+        "targetHandle": "in"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-plan-sources",
+        "source": "t1::uc-source",
+        "target": "t1",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-render-sources",
+        "source": "t1::uc-source",
+        "target": "t1::uc-render",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-plan-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      },
+      {
+        "id": "t1::uc-e-uc-silence-json-uc-plan-silence",
+        "source": "t1::uc-silence",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "silence"
+      },
+      {
+        "id": "t1::uc-e-uc-plan-edl-uc-render-edl",
+        "source": "t1",
+        "target": "t1::uc-render",
+        "sourceHandle": "edl",
+        "targetHandle": "edl"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-render-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1::uc-render",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      }
+    ]
+  },
+  "two cameras and a master, viewer not multicam": {
+    "renderId": "t1::uc-render",
+    "nodes": [
+      {
+        "id": "t1::uc-source",
+        "type": "upload-video",
+        "position": {
+          "x": 0,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Episode recording",
+          "assetId": "",
+          "url": "https://r2/ep.mp4"
+        }
+      },
+      {
+        "id": "t1::uc-transcribe",
+        "type": "transcribe",
+        "position": {
+          "x": 320,
+          "y": 0
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Transcribe",
+          "provider": "elevenlabs-stt",
+          "language": "auto",
+          "diarize": true,
+          "generatedJson": {
+            "version": 1,
+            "words": [
+              {
+                "text": "Hi",
+                "startMs": 0,
+                "endMs": 300,
+                "speaker": "A"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "t1::uc-silence",
+        "type": "silence-detect",
+        "position": {
+          "x": 320,
+          "y": 440
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Silence Detect",
+          "thresholdDb": -35,
+          "minSilenceMs": 700,
+          "padMs": 120
+        }
+      },
+      {
+        "id": "t1",
+        "type": "edit-plan",
+        "position": {
+          "x": 640,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Tighten Plan",
+          "mode": "tighten",
+          "planTier": "standard",
+          "instructions": "",
+          "sourceOrder": [
+            "t1::uc-source"
+          ],
+          "sourceConfig": {},
+          "generatedJson": {
+            "version": 1,
+            "sources": [
+              {
+                "id": "s0",
+                "url": "https://r2/ep.mp4",
+                "role": "master"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a",
+                "sourceId": "s0",
+                "inMs": 0,
+                "outMs": 4000
+              }
+            ],
+            "dropped": []
+          }
+        }
+      },
+      {
+        "id": "t1::uc-render",
+        "type": "apply-edl",
+        "position": {
+          "x": 960,
+          "y": 220
+        },
+        "data": {
+          "fieldMappings": {},
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "t1::uc-e-uc-source-video-uc-transcribe-audio",
+        "source": "t1::uc-source",
+        "target": "t1::uc-transcribe",
+        "sourceHandle": "video",
+        "targetHandle": "audio"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-silence-in",
+        "source": "t1::uc-source",
+        "target": "t1::uc-silence",
+        "sourceHandle": "video",
+        "targetHandle": "in"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-plan-sources",
+        "source": "t1::uc-source",
+        "target": "t1",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-source-video-uc-render-sources",
+        "source": "t1::uc-source",
+        "target": "t1::uc-render",
+        "sourceHandle": "video",
+        "targetHandle": "sources"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-plan-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      },
+      {
+        "id": "t1::uc-e-uc-silence-json-uc-plan-silence",
+        "source": "t1::uc-silence",
+        "target": "t1",
+        "sourceHandle": "json",
+        "targetHandle": "silence"
+      },
+      {
+        "id": "t1::uc-e-uc-plan-edl-uc-render-edl",
+        "source": "t1",
+        "target": "t1::uc-render",
+        "sourceHandle": "edl",
+        "targetHandle": "edl"
+      },
+      {
+        "id": "t1::uc-e-uc-transcribe-json-uc-render-transcript",
+        "source": "t1::uc-transcribe",
+        "target": "t1::uc-render",
+        "sourceHandle": "json",
+        "targetHandle": "transcript"
+      }
+    ]
+  }
+}

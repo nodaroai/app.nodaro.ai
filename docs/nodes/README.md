@@ -363,7 +363,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Text to Speech](./ai-audio/text-to-speech.md) | ElevenLabs TTS with 5 models, 46 languages | Convert text to natural speech with voice selection |
 | [Text to Audio](./ai-audio/text-to-audio.md) | Generate ambient audio and sound effects | Create SFX, ambient sounds, or background audio from description |
 | [Voice Extractor](./ai-audio/audio-isolation.md) | Isolate voice from mixed audio | Remove background noise, extract clean vocal track |
-| [Audio Separation](./ai-audio/audio-separation.md) | Separate any audio into stems (Demucs) | Vocal/instrumental split or full stems on any (non-Suno) audio |
+| [Audio Separation](./ai-audio/audio-separation.md) | Separate any audio into stems (Demucs) | Vocal/instrumental split or full stems on any audio, including commercially released recordings |
 | [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation (ElevenLabs Dialogue v3, the default, or Dialogue v4) — with per-line timings for captions on both models | Create conversations with different voices per speaker |
 | [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
 | [Voice Changer Pro](./ai-audio/voice-changer-pro.md) | Replace each speaker's voice independently in multi-speaker audio or video | Re-voice multi-speaker recordings with per-speaker voice mapping (self-host: via your nodaro.ai connection) |
@@ -386,7 +386,7 @@ Dedicated suite for music creation, editing, and manipulation powered by Suno AI
 | [Suno Cover](./suno-music/suno-cover.md) | Create cover version of existing song | Re-record existing audio in a new style or voice |
 | [Suno Extend](./suno-music/suno-extend.md) | Continue/extend existing Suno track | Add more content to a Suno-generated track |
 | [Suno Lyrics](./suno-music/suno-lyrics.md) | Generate song lyrics from prompt | AI-write lyrics with structure (verse, chorus, bridge) |
-| [Suno Separate](./suno-music/suno-separate.md) | Separate vocals and stems | Extract vocal/instrumental or full 12-stem separation |
+| [Suno Separate](./suno-music/suno-separate.md) | Separate any audio into vocals, stems or one instrument | Extract vocal/instrumental, every stem, or one named instrument and the song without it |
 | [Suno Music Video](./suno-music/suno-music-video.md) | Generate music video for track | Auto-create visual accompaniment for Suno audio |
 | [Suno Mashup](./suno-music/suno-mashup.md) | Blend two tracks together | Combine two audio tracks into a mashup |
 | [Suno Replace Section](./suno-music/suno-replace-section.md) | Replace section of track | Re-generate a specific time range within a track |
@@ -574,6 +574,7 @@ Helpers for debugging and workflow organization.
 <!-- gen:units start -->
 | Node | Description | When to Use |
 |------|-------------|-------------|
+| [Speaker Layout](./processing-video/speaker-layout.md) | Frame a whole recording by speaker — the same length, no cut: one recording framed in turn, or several cameras of one conversation lined up with each speaker on their own camera. Its steps are priced at their own rates, plus a per-run fee. | A whole podcast or interview framed for 9:16 (or any shape) by speaker, nothing cut; with several cameras, each speaker on their own camera. Not yet enabled on nodaro.ai |
 | [Speaker Map](./processing-audio/speaker-map.md) | Work out which camera each speaker is on, from the cameras' own microphones: 2–6 recordings, their Audio Sync offsets and a diarized transcript. | Tell Camera Switch whose camera is whose in a multicam podcast, without filling in the speaker table by hand |
 <!-- gen:units end -->
 

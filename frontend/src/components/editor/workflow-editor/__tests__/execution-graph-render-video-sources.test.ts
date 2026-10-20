@@ -16,8 +16,8 @@ import { VIDEO_SOURCE_TYPES_FOR_RENDER, collectMediaAssets, detectPreviewItemTyp
  * contract.producer is "video" (decided 2026-10-18). The legacy rows below are
  * origin/dev's literal, less gif-to-video, which left it when it became a unit
  * (decided 2026-10-18) and stays a member through its contract.producer
- * "video". Trailer, remove-audio and gif-to-video are the real units that
- * join (tighten-episode is "dynamic", episode-chapters has no producer).
+ * "video". Trailer, remove-audio, gif-to-video and Speaker Layout are the real
+ * units that join (tighten-episode is "dynamic", episode-chapters has no producer).
  */
 const LEGACY_RENDER_VIDEO_SOURCES = [
   "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "generate-video-pro",
@@ -33,9 +33,9 @@ const node = (id: string, type: string, data: Record<string, unknown> = {}) =>
   ({ id, type, position: { x: 0, y: 0 }, data: { label: type, ...data } }) as any
 
 describe("VIDEO_SOURCE_TYPES_FOR_RENDER", () => {
-  it("is the legacy rows, unchanged and in order, then the video-producing units (episode-trailer, gif-to-video, remove-audio)", () => {
+  it("is the legacy rows, unchanged and in order, then the video-producing units (episode-trailer, gif-to-video, remove-audio, speaker-layout)", () => {
     expect([...VIDEO_SOURCE_TYPES_FOR_RENDER].slice(0, LEGACY_RENDER_VIDEO_SOURCES.length)).toEqual(LEGACY_RENDER_VIDEO_SOURCES)
-    expect([...VIDEO_SOURCE_TYPES_FOR_RENDER].slice(LEGACY_RENDER_VIDEO_SOURCES.length).sort()).toEqual(["episode-trailer", "gif-to-video", "remove-audio"])
+    expect([...VIDEO_SOURCE_TYPES_FOR_RENDER].slice(LEGACY_RENDER_VIDEO_SOURCES.length).sort()).toEqual(["episode-trailer", "gif-to-video", "remove-audio", "speaker-layout"])
   })
 
   it("leaves out a dynamic-producer unit and a unit with no producer", () => {

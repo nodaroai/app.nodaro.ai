@@ -143,7 +143,6 @@
  "backend/src/routes/__tests__/scene-graph-ai.test.ts",
  "backend/src/routes/__tests__/seedance2-ref-video-billing.test.ts",
  "backend/src/routes/__tests__/three-d-title-ai.test.ts",
- "backend/src/routes/__tests__/tighten-episode.test.ts",
  "backend/src/routes/__tests__/ugc-photo-sentinel-publish.test.ts",
  "backend/src/routes/__tests__/ugc-photo-sentinel-refusal.test.ts",
  "backend/src/routes/__tests__/video-routes-validation.test.ts",

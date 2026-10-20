@@ -1,15 +1,14 @@
 import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 import { variantJobId } from "@nodaro/shared/workflow"
-import { config } from "../../lib/config.js"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import {
-  sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate, sunoMusicVideo,
+  sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoMusicVideo,
   sunoMashup, sunoReplaceSection, sunoAddInstrumental, sunoAddVocals, sunoConvertWav, sunoUploadExtend,
   sunoCreditType,
-  type SunoModel, type SunoAddTrackModel, type SunoSeparateType, type SunoTaskResult,
-  type SunoLyricsResult, type SunoSeparateResult, type SunoMusicVideoResult, type SunoConvertWavResult,
+  type SunoModel, type SunoAddTrackModel, type SunoTaskResult,
+  type SunoLyricsResult, type SunoMusicVideoResult, type SunoConvertWavResult,
 } from "../../providers/kie/suno-client.js"
 import {
   commitJobCredits,
@@ -26,6 +25,8 @@ import {
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
+import { cloudTaskId, maybeSunoCloudOutput, shouldRunSunoOnCloud, type SunoProviderUsed } from "./suno-cloud.js"
+import { handleSunoSeparate } from "./suno-separate.js"
 
 /**
  * Upload every Suno track to R2 in parallel under variant-suffixed keys and
@@ -78,13 +79,6 @@ async function runSunoOnCloud(
   }
 }
 
-/** True when this install has no KIE key and a live nodaro.ai connection. */
-async function shouldRunSunoOnCloud(): Promise<boolean> {
-  if (config.KIE_API_KEY) return false
-  const { isNodaroConnected } = await import("../../lib/nodaro-connect.js")
-  return isNodaroConnected().catch(() => false)
-}
-
 async function uploadAllSunoTracks(
   result: SunoTaskResult,
   jobId: string,
@@ -120,19 +114,6 @@ async function uploadAllSunoTracks(
     trackCount: validTracks.length,
   }
 }
-
-/**
- * Who actually ran this Suno job — written to `jobs.provider` (#753).
- *
- * The jobs.provider vocabulary, not the reconcile ProviderKind
- * (`providerKindForSuno()` returns "kie-suno", which keys the reconcile
- * probes): "kie" matches the KIE registry id, "nodaro" matches
- * NODARO_PROVIDER_ID — the same values every router-finalized job records.
- * REQUIRED on every finalize tail so tsc forces the next completion path
- * added here to attribute itself; suno.ts finalizes via markJobCompleted
- * directly (never through job-finalize.ts), so this is the only writer.
- */
-type SunoProviderUsed = "nodaro" | "kie"
 
 /**
  * Shared tail for every multi-track Suno handler: progress 50→100, persist,
@@ -177,31 +158,6 @@ async function maybeRunSunoOnCloud(
   )
   await finalizeSunoJob(job, ctx, result, emptyTracksLabel, "nodaro")
   return true
-}
-
-/**
- * Cloud output for the four BESPOKE Suno operations (#643) — lyrics, separate,
- * music-video, convert-wav. They don't share the multi-track finalizer, so
- * instead of reshaping into a SunoTaskResult this hands the caller the cloud's
- * raw `output_data`; the per-operation adapter in each handler then feeds the
- * SAME local persistence tail a KIE result would take. Returns null when this
- * install should run the operation itself (has a key, or isn't connected).
- */
-async function maybeSunoCloudOutput(
-  job: Job,
-  ctx: JobContext,
-  jobType: string,
-): Promise<Record<string, unknown> | null> {
-  if (!(await shouldRunSunoOnCloud())) return null
-  const { runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
-  return runJobOnCloud(jobType, job.data as Record<string, unknown>, (p) =>
-    setJobProgress(job, ctx.jobId, Math.min(45, Math.round(p * 0.45))),
-  )
-}
-
-/** The cloud's `sunoTaskId`, or a marker when the field didn't survive. */
-function cloudTaskId(output: Record<string, unknown>): string {
-  return typeof output.sunoTaskId === "string" ? output.sunoTaskId : "cloud"
 }
 
 const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx) {
@@ -328,87 +284,6 @@ const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
     () => sunoLyrics({ prompt }, { onTaskCreated, modelKey: "suno-lyrics" }),
   )
   await finalizeSunoLyrics(job, ctx, result, "kie")
-}
-
-const STEM_FIELDS = [
-  "vocalUrl", "instrumentalUrl", "backingVocalsUrl", "drumsUrl",
-  "bassUrl", "guitarUrl", "pianoUrl", "keyboardUrl",
-  "percussionUrl", "stringsUrl", "synthUrl", "fxUrl",
-  "brassUrl", "woodwindsUrl",
-] as const
-
-/**
- * Shared tail for suno-separate: uploads whichever stems the result carries —
- * KIE-delivered or the connected cloud's R2 — into THIS instance's R2 under
- * `<jobId>-<stem>` keys and persists the same output_data either way.
- */
-async function finalizeSunoSeparate(
-  job: Job,
-  ctx: JobContext,
-  result: SunoSeparateResult,
-  sepType: SunoSeparateType,
-  provider: SunoProviderUsed,
-): Promise<void> {
-  await setJobProgress(job, ctx.jobId, 50)
-
-  const outputData: Record<string, unknown> = {
-    separateType: sepType,
-    sunoTaskId: result.taskId,
-  }
-
-  // Upload stems in parallel. POST-PROVIDER: stems are the delivered Suno
-  // separation result (billed) — an R2 upload failure here skips the refund.
-  const uploadPromises = STEM_FIELDS
-    .filter(field => result[field])
-    .map(async (field) => {
-      const url = result[field] as string
-      const stemName = field.replace("Url", "")
-      const r2Url = await uploadToR2(url, `${ctx.jobId}-${stemName}`, "audio", ctx.jobUserId)
-      return { field, r2Url }
-    })
-  const uploaded = await runPostProcessing(() => Promise.all(uploadPromises))
-  for (const { field, r2Url } of uploaded) {
-    outputData[field] = r2Url
-  }
-
-  // Set primary audioUrl for downstream routing
-  outputData.audioUrl = outputData.vocalUrl ?? outputData.instrumentalUrl
-
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData, provider })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${uploaded.length} stem(s) uploaded`)
-}
-
-const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx) {
-  const { taskId: sunoTaskId, audioId, separateType } = job.data as {
-    jobId: string; taskId: string; audioId: string; separateType?: SunoSeparateType; usageLogId?: string
-  }
-  const sepType = separateType ?? "separate_vocal"
-  console.log(`[worker] suno-separate ${ctx.jobId} (type: ${sepType}, audioId: ${audioId})`)
-  const cloud = await maybeSunoCloudOutput(job, ctx, "suno-separate")
-  if (cloud) {
-    // The cloud's output_data carries the SAME stem field names with URLs on
-    // ITS storage; the shared tail re-downloads them under this instance's
-    // keys. An empty separation is a failure, not an empty success.
-    const stems: Partial<Record<(typeof STEM_FIELDS)[number], string>> = {}
-    for (const field of STEM_FIELDS) {
-      const url = cloud[field]
-      if (typeof url === "string" && url) stems[field] = url
-    }
-    if (Object.keys(stems).length === 0) throw new Error("nodaro.ai returned no stems")
-    return finalizeSunoSeparate(job, ctx, { taskId: cloudTaskId(cloud), ...stems }, sepType, "nodaro")
-  }
-  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    () => sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType }, { onTaskCreated, modelKey: sepType === "split_stem" ? "suno-separate-stem" : "suno-separate" }),
-  )
-  await finalizeSunoSeparate(job, ctx, result, sepType, "kie")
 }
 
 /** Shared tail for suno-music-video: upload to this instance's R2, thumbnail, persist. */

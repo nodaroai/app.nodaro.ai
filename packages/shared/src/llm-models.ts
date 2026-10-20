@@ -1063,6 +1063,37 @@ export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
 )
 
 /**
+ * Models {@link STRUCTURED_VISION_MODELS} carries that describe-to-picker does
+ * NOT offer. Its analyzer prompt is a rendered catalog legend — tens of
+ * thousands of input tokens per read — and on these models a single read
+ * costs far above what any of the node's credit rungs covers (production cost
+ * audit, 2026-10-20; the basis is in backend/src/ee/billing/credits.ts).
+ * Withheld from this feature only: the scrapers' per-post analysis reads a
+ * frame and a caption, not a legend, and keeps the whole list.
+ */
+export const DESCRIBE_TO_PICKER_WITHHELD_MODELS: ReadonlySet<string> = new Set(["claude-fable-5"])
+
+/**
+ * The same models, withheld from the other legend-sized structured reads for
+ * the same reason: `POST /v1/text-to-picker` (describe-to-picker's text twin,
+ * whose default run analyzes every picker's legend) and `POST /v1/llm/structured`
+ * (a caller's own legend-sized system prompt). One set, so a model withheld
+ * from one read of that size is withheld from all of them.
+ */
+export const LLM_STRUCTURED_WITHHELD_MODELS: ReadonlySet<string> = DESCRIBE_TO_PICKER_WITHHELD_MODELS
+
+/**
+ * The models describe-to-picker offers and accepts: the structured vision
+ * models minus {@link DESCRIBE_TO_PICKER_WITHHELD_MODELS}. The ONE list the
+ * route gate, the config panel and the quick strip read, so a model the route
+ * refuses is never offered and a saved node naming one is snapped to the
+ * default (the route answers it with a `validation_error`).
+ */
+export const DESCRIBE_TO_PICKER_MODELS = STRUCTURED_VISION_MODELS.filter(
+  (m) => !DESCRIBE_TO_PICKER_WITHHELD_MODELS.has(m.id),
+)
+
+/**
  * Vendor presentation order + labels for model pickers. Every LlmVendor MUST
  * appear in the order list (guarded by a registry test) so a new vendor can't
  * ship with its models silently sorted to the end of every menu unlabeled.
@@ -1177,9 +1208,14 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   // runs once per returned ad — volume, not depth. Must stay an image-capable
   // structured-output model (STRUCTURED_VISION_MODELS); a registry test pins it.
   "meta-ads-analysis": "gemini-3.6-flash",
-  // Moved from claude-opus-5 on 2026-10-08 (decided: Opus 5.5 takes the Opus 5
-  // defaults). Still an image-capable structured model — a registry test pins it.
-  "describe-to-picker": "claude-opus-5.5",
+  // Economy by decision (2026-10-20, from a production cost audit): the
+  // analyzer's legend-sized prompt made the former default, Opus 5.5 at high
+  // on Anthropic's own API, the platform's most expensive read per run. Gemini
+  // 3.8 Flash reads it on the aggregator at the cheapest rung; Opus 5.5 at
+  // high stays available by choice (LLM_FEATURE_DEFAULT_EFFORTS). Still an
+  // image-capable structured model (DESCRIBE_TO_PICKER_MODELS) — a registry
+  // test pins it.
+  "describe-to-picker": "gemini-3.8-flash",
   "qa-check": "gemini-3.6-flash",
   "generate-script": "gemini-3.6-flash",
   "translate": "gemini-3.6-flash",
@@ -1209,39 +1245,43 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
 export const DESCRIBE_TO_PICKER_FALLBACK_MODEL = "gemini-3.8-flash"
 
 /**
- * Feature → the reasoning effort its DEFAULT model runs at when the caller
- * sends none. Read it through {@link defaultReasoningEffort}, never directly:
- * the effort belongs to the default model, so a call on any other model must
- * not pick it up.
+ * Feature → ONE model with a recipe: the reasoning effort it runs at on that
+ * feature when the caller sends none. Read it through
+ * {@link defaultReasoningEffort}, never directly: the effort belongs to that
+ * model, so a call on any other model — the feature's default included, when
+ * it is a different model — must not pick it up.
  */
-export const LLM_FEATURE_DEFAULT_EFFORTS: Partial<Record<LlmFeature, LlmReasoningEffort>> = {
+export const LLM_FEATURE_DEFAULT_EFFORTS: Partial<Record<LlmFeature, { model: string; effort: LlmReasoningEffort }>> = {
   // Decided 2026-10-09 from the picker bake-off v2: Opus 5.5 at `high` read
   // 4/4 portraits with the most attributes per image, ~9 s a read. Its effort
-  // only takes effect on Anthropic's own API (`effortRequiresDirect`), so the
-  // default analysis runs direct — and bills as such (`llmServesDirect`).
-  "describe-to-picker": "high",
+  // only takes effect on Anthropic's own API (`effortRequiresDirect`), so a
+  // read on it runs direct — and bills as such (`llmServesDirect`). It was the
+  // feature's default model until 2026-10-20 (see LLM_FEATURE_DEFAULTS); the
+  // recipe stays with the model, so choosing Opus 5.5 still reads at high.
+  "describe-to-picker": { model: "claude-opus-5.5", effort: "high" },
 }
 
 /**
  * The reasoning effort a `feature` call runs at when the caller sends none:
- * the feature's default effort ({@link LLM_FEATURE_DEFAULT_EFFORTS}), but ONLY
- * while the call runs on the feature's default model — named, or omitted
- * (`undefined` / `""`) so the default model applies. A caller who picked
- * another model and no effort gets `undefined`: that model's Auto, as before.
+ * the recipe effort ({@link LLM_FEATURE_DEFAULT_EFFORTS}), but ONLY while the
+ * call runs on the recipe's model — named, or reached because the model was
+ * omitted (`undefined` / `""`) and it is the feature's default. A caller on
+ * any other model with no effort gets `undefined`: that model's Auto.
  *
- * WHY only on the default model: the default effort is part of the default
- * model's recipe, not a global policy. Forcing `high` on a Gemini or GPT call
- * that never asked for it would change the timing of every existing workflow
- * that picked one (and, on a Claude model, its lane and its bill).
+ * WHY only on that model: the effort is part of that model's recipe, not a
+ * feature policy. Forcing `high` on a Gemini or GPT call that never asked for
+ * it would change the timing of every existing workflow that picked one (and,
+ * on a Claude model, its lane and its bill) — which is also why the feature's
+ * default model gets it only when it IS the recipe's model.
  *
  * The one place the route, the node's credit badge and its effort pickers
  * read, so what runs, what is billed and what is shown cannot disagree.
  */
 export function defaultReasoningEffort(feature: string, modelId?: string): LlmReasoningEffort | undefined {
-  const effort = LLM_FEATURE_DEFAULT_EFFORTS[feature as LlmFeature]
-  if (!effort) return undefined
-  if (!modelId) return effort
-  return getLlmModel(modelId)?.id === LLM_FEATURE_DEFAULTS[feature as LlmFeature] ? effort : undefined
+  const recipe = LLM_FEATURE_DEFAULT_EFFORTS[feature as LlmFeature]
+  if (!recipe) return undefined
+  const effective = modelId || LLM_FEATURE_DEFAULTS[feature as LlmFeature]
+  return getLlmModel(effective)?.id === recipe.model ? recipe.effort : undefined
 }
 
 /**

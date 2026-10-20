@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -430,8 +430,8 @@ export function getModelIdentifier(
   }
 
   // LLM-powered nodes: use composite credit identifier based on selected model tier.
-  // An unset effort is the one the run uses — the feature's default on its
-  // default model (describe-to-picker's high), else none.
+  // An unset effort is the one the run uses — the model's recipe effort for
+  // the feature (describe-to-picker's high on Opus 5.5), else none.
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
   if (llmFeature) {
     const llmModel = data.llmModel as string | undefined
@@ -451,9 +451,9 @@ export function getModelIdentifier(
     return sunoCreditType(data.model as string | undefined, nodeType)
   }
 
-  // Suno separate: "split_stem" costs more than "separate_vocal"
+  // Suno separate: each mode has its own price (the shared rule)
   if (nodeType === "suno-separate") {
-    return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+    return sunoSeparateCreditId(data.type)
   }
 
   // Audio separation (Demucs): "best" quality costs more

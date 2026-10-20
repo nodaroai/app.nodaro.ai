@@ -38,6 +38,16 @@ export function usecaseBody(p: UseCaseApiParams): Record<string, unknown> {
   }
 }
 
+/**
+ * The key of the list-driven refusal (`use_case_list_driven`) for a use-case
+ * type: one that takes the several recordings of one conversation is told one
+ * run is one episode, never that it takes one recording (decided 2026-10-20) —
+ * the editor's twin of `usecaseListDrivenMessageOf`.
+ */
+export function usecaseListDrivenKey(type: UseCaseNodeType): "nodeRun.usecaseListDriven" | "nodeRun.usecaseListDrivenEpisode" {
+  return usecaseDescriptor(type).maxRecordings > 1 ? "nodeRun.usecaseListDrivenEpisode" : "nodeRun.usecaseListDriven"
+}
+
 /** The node type's label in the reader's language, for a message that names it (`{label}`). */
 export function usecaseLabelVars(type: UseCaseNodeType): { label: string } {
   return { label: localizeNodeLabel(usecaseDescriptor(type).label, useLocaleStore.getState().locale) }

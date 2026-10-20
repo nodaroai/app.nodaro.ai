@@ -17,9 +17,11 @@ import {
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseFanOutRefusalOf,
-  usecaseRecordingsOf,
+  usecaseKindHasPlan,
+  usecaseRunRecordings,
   usecaseSentSettings,
   type UseCaseNodeType,
+  type UseCaseRunViewer,
 } from "@nodaro/render-rules"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../../lib/render-final-codes.js"
 import { usecaseBodyTakesEmpty, usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
@@ -92,32 +94,50 @@ export function failedAttemptOf(
 
 /**
  * What a fresh run of the node sends its type's route, without the lane: its
- * wired recordings in the node's order, as many as its type takes (one for
- * every type before its multicam work: the first), the music, intro card and
- * Master audio where the type takes them, and its settings — the node's data
- * as this run holds it, its input overrides merged. Key order: the
+ * wired recordings in the node's order, the music, intro card and Master
+ * audio where the type takes them, and its settings — the node's data as this
+ * run holds it, its input overrides merged. How many recordings, whether the
+ * master and the Cameras settings ride, is both engines' one rule
+ * (`usecaseRunRecordings`): several recordings and a master only when
+ * `viewer.multicam` (the run's viewer may use Speaker Map, `usecaseMulticamAvailable`),
+ * else the first recording alone, exactly as before multicam; an `auto`
+ * framing source (written, or absent on a type whose absent default is
+ * `auto`) is sent as the even split unless `viewer.framesAvailable`
+ * (`usecaseFramingForViewer`). Key order: the
  * recordings, music, intro card, master, then the settings. Throws when no
  * recording is wired. Also what a failed attempt's inputs are held to before
  * it is resumed (failed-attempt.ts `attemptRanWithInputs`).
  */
-export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs): Record<string, unknown> {
+export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs, viewer: UseCaseRunViewer): Record<string, unknown> {
   const type = node.type as UseCaseNodeType
   const d = usecaseDescriptor(type)
   const data = (node.data ?? {}) as Record<string, unknown>
-  const recordings = usecaseRecordingsOf(resolvedInputs.useCaseMedia, data, d.maxRecordings)
-  if (recordings.length === 0) throw new Error(`${d.label} needs a recording wired into Media`)
   // The type's own settings (its request body, lib/use-case/bodies.ts), by
   // both engines' rule (usecaseSentSettings), its nulls and empty strings
   // asked of the body itself.
-  const settings = usecaseSentSettings(type, d.settingKeys, data, {
+  const sent = usecaseSentSettings(type, d.settingKeys, data, {
     null: (k) => usecaseBodyTakesNull(type, k),
     empty: (k) => usecaseBodyTakesEmpty(type, k),
   })
+  // The recordings, the master and the Cameras settings: both engines' one rule.
+  const run = usecaseRunRecordings({
+    wired: resolvedInputs.useCaseMedia,
+    data,
+    maxRecordings: d.maxRecordings,
+    takesMaster: d.inputs.includes("masterAudio"),
+    master: resolvedInputs.useCaseMasterAudio ? { nodeId: resolvedInputs.useCaseMasterAudioNodeId ?? "", url: resolvedInputs.useCaseMasterAudio } : undefined,
+    multicam: viewer.multicam,
+    framesAvailable: viewer.framesAvailable,
+    absentFramingSource: d.absentFramingSource,
+    settings: sent,
+  })
+  if (run.recordings.length === 0) throw new Error(`${d.label} needs a recording wired into Media`)
+  const settings = run.settings
   return {
-    mediaUrls: recordings.map((m) => m.url),
+    mediaUrls: run.recordings.map((m) => m.url),
     ...(resolvedInputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: resolvedInputs.useCaseMusic } : {}),
     ...(resolvedInputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: resolvedInputs.useCaseIntroCard } : {}),
-    ...(resolvedInputs.useCaseMasterAudio && d.inputs.includes("masterAudio") ? { masterAudioUrl: resolvedInputs.useCaseMasterAudio } : {}),
+    ...(run.masterAudioUrl ? { masterAudioUrl: run.masterAudioUrl } : {}),
     ...settings,
   }
 }
@@ -128,6 +148,8 @@ export function requestOf(
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
   failedAttempt: string | null,
+  /** What the run's viewer may use: Speaker Map (every recording and the master) and Speaker Frames (`auto` follows faces) — `freshRunInputs`. */
+  viewer: UseCaseRunViewer,
 ): UseCaseRequest {
   const type = node.type as UseCaseNodeType
   const d = usecaseDescriptor(type)
@@ -145,12 +167,13 @@ export function requestOf(
   }
   const cont = continuationOf(data)
   if (cont) {
-    // The reviewer's edit of the plan: what the person authored, sent with a Render final only.
+    // The reviewer's edit of the plan: what the person authored, sent with a Render final only — and
+    // only by a type that has a plan to edit (a layout has none: a stray saved edit is never sent).
     const edited = data.editedEdl
-    const edit = cont.mode === "render-final" && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
+    const edit = cont.mode === "render-final" && usecaseKindHasPlan(d.resultKind) && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
     return { path: continuePath, label: d.label, body: { jobId: cont.jobId, mode: cont.mode, ...edit, ...lane } }
   }
-  const fresh = (): UseCaseRequest => ({ path: d.route, label: d.label, body: { ...freshRunInputs(node, resolvedInputs), ...lane } })
+  const fresh = (): UseCaseRequest => ({ path: d.route, label: d.label, body: { ...freshRunInputs(node, resolvedInputs, viewer), ...lane } })
   if (failedAttempt) return { path: continuePath, label: d.label, body: { jobId: failedAttempt, mode: "from-failed", ...lane }, fallback: fresh }
   return fresh()
 }

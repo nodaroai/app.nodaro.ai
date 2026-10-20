@@ -16,7 +16,11 @@
  */
 import { describe, expect, it, vi } from "vitest"
 
-const store = vi.hoisted(() => ({ nodes: [] as unknown[], updateNodeData: vi.fn() }))
+const store = vi.hoisted(() => ({ nodes: [] as unknown[], updateNodeData: vi.fn(), multicam: false, frames: false }))
+// The viewer's answer: may they use Speaker Map (several recordings, decided 2026-10-19)?
+vi.mock("@/lib/use-case-multicam-viewer", () => ({ usecaseMulticamOffered: () => store.multicam }))
+// …and Speaker Frames (an `auto` framing source follows faces, decided 2026-10-20)?
+vi.mock("@/lib/use-case-frames-viewer", () => ({ usecaseFramesOffered: () => store.frames }))
 
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) } }),
@@ -31,17 +35,17 @@ vi.mock("../poll-job", () => ({
   },
 }))
 
-import { usecaseDescriptor, type UseCaseDescriptor } from "@nodaro/render-rules"
 import { executeUseCase } from "../use-case-executor"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const REC = { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] }
 
-async function bodyOf(data: Record<string, unknown>, inputs: Record<string, unknown> = REC): Promise<string> {
+async function bodyOf(data: Record<string, unknown>, inputs: Record<string, unknown> = REC, multicam = false, type = "tighten-episode"): Promise<string> {
+  store.multicam = multicam
   const f = vi.fn().mockResolvedValue({ ok: true, status: 202, json: async () => ({ jobId: "job-1" }) })
   vi.stubGlobal("fetch", f)
   try {
-    const node = { id: "t1", type: "tighten-episode", position: { x: 0, y: 0 }, data: { label: "Tighten Episode", fieldMappings: {}, ...data } }
+    const node = { id: "t1", type, position: { x: 0, y: 0 }, data: { label: type, fieldMappings: {}, ...data } }
     store.nodes = [node]
     await executeUseCase(node as never, inputs as never, { userId: USER, isWorkflowStale: () => false } as never)
     return (f.mock.calls[0]![1] as RequestInit).body as string
@@ -91,28 +95,100 @@ describe("a stored null on a setting whose body takes no null", () => {
   })
 })
 
-describe("recordings and Master audio (every type takes one recording in this phase)", () => {
+describe("recordings and Master audio (decided 2026-10-19: several only for a viewer who may use Speaker Map)", () => {
   const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+  const FIRST = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }
+  const MIC = { useCaseMasterAudio: "https://r2/m.wav", useCaseMasterAudioNodeId: "mic" }
 
-  it("a type that takes one recording sends the first in mediaOrder; the first wire when no order is set", async () => {
+  it("a viewer who may not use Speaker Map: the first recording in mediaOrder alone, its master and Cameras settings ignored — the server's engine's rule", async () => {
     expect(JSON.parse(await bodyOf({ mediaOrder: ["b"] }, TWO)).mediaUrls).toEqual(["https://r2/b.mp4"])
-    expect(JSON.parse(await bodyOf({}, TWO)).mediaUrls).toEqual(["https://r2/a.mp4"])
+    expect(await bodyOf({ ...DEFAULTS, cameras: "not cameras" }, { ...TWO, ...MIC })).toBe(await bodyOf(DEFAULTS, FIRST))
   })
 
-  it("a wired Master audio is not sent by a type whose descriptor does not take it (none does yet)", async () => {
-    expect(await bodyOf(DEFAULTS, { ...REC, useCaseMasterAudio: "https://r2/m.wav" })).not.toContain("masterAudioUrl")
+  it("a viewer who may use Speaker Map: every recording in mediaOrder, then the rest in wire order, with the Cameras settings", async () => {
+    expect(JSON.parse(await bodyOf({ mediaOrder: ["b"] }, TWO, true)).mediaUrls).toEqual(["https://r2/b.mp4", "https://r2/a.mp4"])
+    expect(JSON.parse(await bodyOf({ cameras: { wide: 2 } }, TWO, true))).toMatchObject({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { wide: 2 } })
   })
 
-  it("a type that takes Master audio sends it after the other optional inputs, before the settings", async () => {
-    const d = usecaseDescriptor("tighten-episode") as { -readonly [K in keyof UseCaseDescriptor]: UseCaseDescriptor[K] }
-    const inputs = d.inputs
-    d.inputs = [...inputs, "masterAudio"]
-    try {
-      expect(await bodyOf({ output: "audio" }, { ...REC, useCaseMusic: "https://r2/bed.mp3", useCaseMasterAudio: "https://r2/m.wav" })).toBe(
-        `{"mediaUrls":["https://r2/ep.mp4"],"musicUrl":"https://r2/bed.mp3","masterAudioUrl":"https://r2/m.wav","output":"audio","userId":"${USER}"}`,
-      )
-    } finally {
-      d.inputs = inputs
-    }
+  it("Tighten takes Master audio and sends it, for such a viewer, after the other optional inputs, before the settings", async () => {
+    expect(await bodyOf({ output: "audio" }, { ...REC, useCaseMusic: "https://r2/bed.mp3", ...MIC }, true)).toBe(
+      `{"mediaUrls":["https://r2/ep.mp4"],"musicUrl":"https://r2/bed.mp3","masterAudioUrl":"https://r2/m.wav","output":"audio","userId":"${USER}"}`,
+    )
+  })
+
+  it("a Master audio from the node a recording comes from is not sent (decided 2026-10-19, compared by NODE): the run is built as with none", async () => {
+    expect(await bodyOf({ output: "video" }, { ...REC, useCaseMasterAudio: "https://r2/ep.mp4", useCaseMasterAudioNodeId: "rec" }, true)).toBe(await bodyOf({ output: "video" }, REC, true))
+    expect(await bodyOf({ output: "video" }, { ...TWO, useCaseMasterAudio: "https://r2/b.mp4", useCaseMasterAudioNodeId: "b" }, true)).toBe(await bodyOf({ output: "video" }, TWO, true))
+  })
+
+  it("a Split Media's audio into Master audio beside its own video into Recordings is that camera's track: no master, the one-recording body", async () => {
+    const split = { useCaseMedia: [{ nodeId: "split", url: "https://r2/split-video.mp4" }], useCaseMasterAudio: "https://r2/split-audio.m4a", useCaseMasterAudioNodeId: "split" }
+    expect(await bodyOf({ ...DEFAULTS, cameras: { synced: true } }, split, true)).toBe(await bodyOf(DEFAULTS, { useCaseMedia: split.useCaseMedia }, true))
   })
 })
+
+describe("the framing source (decided 2026-10-17/20)", () => {
+  const FRAMED = { output: "video", framing: { aspect: "9:16", layout: "stacked" } }
+  const HEAD = `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","framing":{"aspect":"9:16","layout":"stacked"}`
+  const framed = async (data: Record<string, unknown>, frames: boolean) => {
+    store.frames = frames
+    try {
+      return await bodyOf({ ...FRAMED, ...data })
+    } finally {
+      store.frames = false
+    }
+  }
+  it("a node without one sends none — the body as before, whoever the viewer", async () => {
+    expect(await framed({}, true)).toBe(`${HEAD},"userId":"${USER}"}`)
+    expect(await framed({}, false)).toBe(`${HEAD},"userId":"${USER}"}`)
+  })
+  it("tracking is sent as tracking, whoever the viewer", async () => {
+    expect(await framed({ framingSource: "tracking" }, true)).toBe(`${HEAD},"framingSource":"tracking","userId":"${USER}"}`)
+    expect(await framed({ framingSource: "tracking" }, false)).toBe(`${HEAD},"framingSource":"tracking","userId":"${USER}"}`)
+  })
+  it("auto: as auto to a viewer who may use Speaker Frames, as the even split to anyone else (the server's engine's rule)", async () => {
+    expect(await framed({ framingSource: "auto" }, true)).toBe(`${HEAD},"framingSource":"auto","userId":"${USER}"}`)
+    expect(await framed({ framingSource: "auto" }, false)).toBe(`${HEAD},"framingSource":"static","userId":"${USER}"}`)
+  })
+  it("none on a type whose absent default is auto (Speaker Layout): none to a viewer who may use Speaker Frames, the even split to anyone else (decided 2026-10-20)", async () => {
+    const layout = async (frames: boolean) => {
+      store.frames = frames
+      try {
+        return await bodyOf({}, REC, false, "speaker-layout")
+      } finally {
+        store.frames = false
+      }
+    }
+    expect(await layout(true)).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"userId":"${USER}"}`)
+    expect(await layout(false)).toBe(`{"mediaUrls":["https://r2/ep.mp4"],"framingSource":"static","userId":"${USER}"}`)
+  })
+})
+
+/**
+ * Trailer and Clip Pack take several recordings too (decided 2026-10-17): the
+ * same rule, read off each type's descriptor — the server's engine body for
+ * each viewer (use-case-request-body.test.ts on the server).
+ */
+for (const [type, settings, optional] of [
+  ["episode-trailer", { formats: ["9:16"], planTier: "standard", instructions: "" }, { useCaseIntroCard: "https://r2/card.mp4" }],
+  ["clip-pack", { count: 8, captions: true, planTier: "standard", instructions: "", framingSource: "static" }, {}],
+] as const) {
+  describe(`${type}: recordings and Master audio for each viewer`, () => {
+    const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+    const FIRST = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }
+    const MIC = { useCaseMasterAudio: "https://r2/m.wav", useCaseMasterAudioNodeId: "mic" }
+    it("a viewer who may not use Speaker Map: two cameras, a master and Cameras settings (an object, null or \"\") send the one-recording body, byte for byte", async () => {
+      const one = await bodyOf(settings, { ...FIRST, ...optional }, false, type)
+      for (const cameras of [{ wide: 2, synced: true }, null, ""]) {
+        expect(await bodyOf({ ...settings, cameras }, { ...TWO, ...MIC, ...optional }, false, type), JSON.stringify(cameras)).toBe(one)
+      }
+    })
+    it("a viewer who may use Speaker Map: every recording, the master and the Cameras settings", async () => {
+      expect(JSON.parse(await bodyOf({ ...settings, cameras: { wide: 2 } }, { ...TWO, ...MIC, ...optional }, true, type))).toMatchObject({
+        mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+        masterAudioUrl: "https://r2/m.wav",
+        cameras: { wide: 2 },
+      })
+    })
+  })
+}

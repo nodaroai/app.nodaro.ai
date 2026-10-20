@@ -1,4 +1,5 @@
 import type { CaptionStyle } from "@nodaro/shared/captions"
+import type { UseCaseCamerasInput, UseCaseCamerasReport } from "@nodaro/render-rules"
 import type { FieldMappings, GeneratedResult } from "@/types/nodes"
 
 /** Tighten Episode (podcast use-case node): one recording in, the tightened
@@ -11,11 +12,15 @@ export type TightenEpisodeData = {
   fieldMappings: FieldMappings
   /** The recordings' order (their upstream node ids): the run sends and builds them in it; a wired recording it does not list follows in wire order. */
   mediaOrder?: string[]
+  /** On two or more recordings or a Master audio: the wide shot (a camera's position), recordings already in sync, and who is on which camera (speaker ordinal → camera position, 0 = the wide shot). Read only by a multicam run. */
+  cameras?: UseCaseCamerasInput
   output?: "video" | "audio"
   /** Frame the episode with Speaker View: an output aspect and a layout, on
    *  automatic boxes — the shipped default boxes over the speakers on screen,
    *  tracked speakers followed. null/absent = no framing. */
   framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null
+  /** With a framing: where its boxes come from — "static" the even split by speaker, "tracking" Speaker Frames following faces, "auto" following faces while Speaker Frames is offered to the run's user (else the even split). Absent = "static" (a saved node keeps its run); a new node starts on "auto". */
+  framingSource?: "auto" | "static" | "tracking"
   captions?: boolean
   captionStyle?: CaptionStyle
   reviewBeforeRender?: boolean
@@ -37,6 +42,8 @@ export type TightenEpisodeData = {
   generatedVideoUrl?: string
   generatedAudioUrl?: string
   generatedResults?: readonly GeneratedResult[]
+  /** The last multicam run's report: who was put on which camera, and Audio Sync's and Speaker Map's notes. */
+  useCaseCameras?: UseCaseCamerasReport
   activeResultIndex?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

@@ -1055,6 +1055,63 @@ const SPEAKER_MAP_TOOL_BYTES = 3_371 + 63
 // by the canvas's own rule) and saying what "" means in `speaker_map`. No tool was added, so the
 // fixture does NOT move. Measured by this suite: 455_060 total − 454_570 = 490 B.
 const SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES = 490
+// RAISED 2026-10-19 by `tighten_episode` taking several recordings (`media_urls`, `master_audio_url`,
+// `cameras`, from the shared module verbs-use-case-recordings.ts that the other use-case verbs will
+// reuse) and its description saying they need Speaker Map (refused 403 where it is withheld) and
+// naming `output_data.cameras`. No tool was added, so the fixture does NOT move. Measured by this
+// suite on the same tree: 462_651 total − 460_990 before = 1_661 B (tighten_episode 3_871 → 5_532,
+// under the per-tool budget); the 103 B of headroom carry across.
+const TIGHTEN_RECORDINGS_BYTES = 1_661
+// RAISED 2026-10-20 by `media_urls`' description naming the five-camera cap without a Master audio
+// (two or more cameras keep one place for the sound) — one clause, one tool. Measured by this suite:
+// 462_730 total − 462_651 = 79 B (tighten_episode 5_532 → 5_611); the 103 B of headroom carry across.
+const TIGHTEN_CAMERA_CAP_BYTES = 79
+// RAISED 2026-10-20 by `make_trailer` taking several recordings (`media_urls`, `master_audio_url`,
+// `cameras`, the same shared module verbs-use-case-recordings.ts `tighten_episode` reads — `media_url`
+// becomes optional) and its description saying they need Speaker Map (refused 403 where it is withheld)
+// and naming `output_data.cameras`. No tool was added, so the fixture does NOT move. Measured by this
+// suite on the same tree: 464_477 total − 462_730 before = 1_747 B (make_trailer 3_543 → 5_290, under
+// the per-tool budget); the 103 B of headroom carry across.
+const TRAILER_RECORDINGS_BYTES = 1_747
+// RAISED 2026-10-20 by `make_trailer`'s own `media_url` description saying the recording is a video
+// (audio-only is refused) instead of the shared "video or audio". Measured by this suite on the same
+// tree: 465_357 total − 465_341 before = 16 B (make_trailer 5_290 → 5_306); the 103 B of headroom carry across.
+const TRAILER_MEDIA_URL_VIDEO_BYTES = 16
+// RAISED 2026-10-20 by `tighten_episode` taking `framing_source` (auto / static / tracking, from the
+// shared module verbs-use-case-framing.ts that Clip Pack and Speaker Layout will reuse) and its
+// description saying what each does, what tracking is charged and when it is refused. No tool was
+// added, so the fixture does NOT move. Measured by this suite on the same tree, after dev's Trailer
+// raises above: 465_895 total − 465_357 before = 538 B; the 103 B of headroom carry across.
+const TIGHTEN_FRAMING_SOURCE_BYTES = 538
+// RAISED 2026-10-20 by `make_clip_pack` taking several recordings (`media_urls`, `master_audio_url`,
+// `cameras` — the shared verbs-use-case-recordings.ts module; `media_url` becomes optional) and
+// `framing_source` (the shared verbs-use-case-framing.ts module), and its description saying several
+// recordings need Speaker Map (refused 403 where it is withheld), naming `output_data.cameras`, and that
+// a clip not cut between cameras is skipped like one not rendered. No tool was added, so the fixture
+// does NOT move. Measured by this suite on the same tree: 468_268 total − 465_895 before = 2_373 B
+// (make_clip_pack to 8_229, under the per-tool budget); the 103 B of headroom carry across.
+const CLIP_PACK_RECORDINGS_BYTES = 2_373
+// RAISED 2026-10-20 by `speaker_layout`, Speaker Layout's own verb (verbs-use-case-speaker-layout.ts:
+// one recording or several, the shape, layout, switch, emphasis, framing source and review), and by
+// `continue_use_case` naming Speaker Layout among the runs it continues; nothing else. The fixture
+// gains `speaker_layout` on both editions. Measured by this suite on the tree merged with dev:
+// 474_485 total − 468_268 before = 6_217 B: speaker_layout 6_201 B (under the per-tool budget) and
+// continue_use_case's label list + 16 B ("Trailer or Clip Pack" → "Trailer, Clip Pack or Speaker
+// Layout"). The 103 B of headroom carry across.
+const SPEAKER_LAYOUT_TOOL_BYTES = 6_217
+
+// RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
+// added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
+// (audio_asset_id is now optional — exactly one of the two), the one-instrument
+// mode, `stem_name` and `fallback_to_demucs`, and its description says what it
+// takes and what Suno refuses; separate_audio's description no longer says Suno
+// needs a Suno track. `stem_name` is a plain string, not the 98-name enum the
+// route validates (decided 2026-10-19: the enum alone was ~1.2 KB of every
+// session's tools/list; the route's 400 lists the valid names). Measured by this
+// suite on the same tree with and without the change: 447_037 total − 446_173 =
+// 864 B (suno_separate_stems 1_310 -> 2_151, separate_audio 1_774 -> 1_797); the
+// 27 B of headroom the list had before is carried across.
+const SUNO_SEPARATE_ANY_AUDIO_BYTES = 864
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
@@ -1179,8 +1236,16 @@ export const TOOL_WIRE_BUDGET = {
     RUN_WORKFLOW_NODE_IDS_BYTES +
     RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
     RETRY_APP_RUN_BYTES +
+    SUNO_SEPARATE_ANY_AUDIO_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
-    SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES,
+    SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
+    TIGHTEN_RECORDINGS_BYTES +
+    TIGHTEN_CAMERA_CAP_BYTES +
+    TRAILER_RECORDINGS_BYTES +
+    TRAILER_MEDIA_URL_VIDEO_BYTES +
+    TIGHTEN_FRAMING_SOURCE_BYTES +
+    CLIP_PACK_RECORDINGS_BYTES +
+    SPEAKER_LAYOUT_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

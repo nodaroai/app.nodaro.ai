@@ -25,28 +25,43 @@ This recipe covers:
 Each of them ends the same way: **render a Preview, review it with the user, then render
 the final.**
 
-## One step: Tighten Episode, Clip Pack, Trailer, Chapters
+## One step: Tighten Episode, Clip Pack, Trailer, Chapters, Speaker Layout
 
 Each podcast use-case has a one-node verb. Reach for it first when it is in your tool list:
 
 - **`tighten_episode`** — a plain "tighten this episode" is one call: pass the recording's `media_url` — it runs the whole
-  chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job.
+  chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job. A
+  conversation on several cameras is one call too: `media_urls` + `master_audio_url` (see [Multicam](#multicam-several-cameras-one-conversation)).
   Set `review_before_render: true` to stop at a preview; then `continue_use_case` with `mode: "render-final"`.
 - **`make_clip_pack`** — "make clips from this episode" is one call: pass the recording's `media_url` and, optionally,
   `count` (default 8) and `target_length_sec` (default 60). It runs transcribe → plan in `clips` mode → one render per
   clip (framed 9:16 with the speakers stacked by default; `framing: null` keeps the recording's shape) → captions per
   clip. An audio recording makes audio clips. The clips are `output_data.clips` (`[{ url, title?, hook?, clipKey,
-  thumbnailUrl?, captionsFailed? }]`); a clip that could not be rendered is skipped and counted in `output_data.failedClips`. Set
+  thumbnailUrl?, captionsFailed? }]`); a clip that could not be rendered is skipped and counted in `output_data.failedClips`.
+  A conversation on several cameras is one call too: `media_urls` + `master_audio_url` (and `cameras`), as on
+  `tighten_episode` — each clip then cuts to whoever is talking; it needs Speaker Map (refused `403 node_not_available`
+  where it is not available). `framing_source: "tracking"` follows faces (one Speaker Frames run for the whole pack). Set
   `review_before_render: true` to stop at previews; then `continue_use_case` with `mode: "render-final"` and an
   `edited_edl` that keeps the clips the user wants (at least one) renders only those.
 - **`make_trailer`** — "a trailer for this episode" is one call: pass the recording's `media_url` (a video) and,
   optionally, `formats` (default 9:16, 1:1, 4:5; also 16:9) and an `intro_card_url` (a short video, 15 s at most). It
   runs transcribe → plan in `trailer` mode (20–40 s) → render → one padded format per choice. The trailers are
   `output_data.formats` (`[{ format, url }]`), the first also `output_data.videoUrl`. Set `review_before_render: true`
-  to stop at a preview of the trailer; then `continue_use_case` with `mode: "render-final"` makes every format.
+  to stop at a preview of the trailer; then `continue_use_case` with `mode: "render-final"` makes every format. A
+  conversation on several cameras is one call too: `media_urls` + `master_audio_url` (and `cameras`), as on
+  `tighten_episode` — it needs Speaker Map (refused `403 node_not_available` where it is not available).
 - **`make_chapters`** — "chapters for this episode" is one call: pass the recording's `media_url` (transcribe → plan
   in `chapters` mode; nothing renders). The show notes are `output_data.text` (one `0:00 Title` line per chapter),
   the list is `output_data.json` (`[{ startMs, title }]`). A run that finds no chapters fails, and its fee is refunded.
+- **`speaker_layout`** — "make this whole episode vertical, framed on the speakers" (nothing cut) is one call: pass the
+  recording's `media_url` (a video) and, optionally, `target_aspect` (default 9:16), `layout` (default stacked),
+  the switch at each speaker change (default cut), `emphasis` (default scale). It runs transcribe → Speaker View over the whole recording; the
+  framed video is `output_data.videoUrl`, as long as the recording. `framing_source` defaults to auto (follows faces
+  where Speaker Frames is available, else the even split). A conversation on several cameras is one call too:
+  `media_urls` + `master_audio_url` (and `cameras`) — each speaker is shown on their own camera; it needs Speaker Map
+  (refused `403 node_not_available` where it is not available). Set `review_before_render: true` to stop at a preview;
+  then `continue_use_case` with `mode: "render-final"` and no `edited_edl` (there is no cut to edit). To cut the episode
+  as well, use `tighten_episode` with a framing instead. Not yet enabled on nodaro.ai.
 
 A failed run of any of them continues with `continue_use_case` and `mode: "from-failed"` — finished steps are kept. The
 primitive chains below are the advanced path: use them when you need control the one-node verbs do not give (several
@@ -124,6 +139,20 @@ The one call is `make_clip_pack` (above); these are the steps it runs, for when 
 the user (or a description field) as-is.
 
 ## Multicam (several cameras, one conversation)
+
+**One step first: `tighten_episode` with `media_urls`.** Pass the cameras' recordings in order as
+`media_urls` (Camera 1, Camera 2…; one may be sound only), the mic recorder as `master_audio_url`,
+and optionally `cameras` (`wide_camera`: which recording is the wide shot; `already_synced`;
+`speaker_cameras`: speaker number → recording number, 0 = the wide shot, to override the
+automatic map). It lines the recordings up, transcribes the sound, works out who is on which
+camera (Speaker Map), plans the tightened cut, switches to whoever is talking and renders it —
+the steps below, as one job. Read `output_data.cameras` back to the user: who went on which
+camera (`camera: null` = the wide shot) and the line-up and map notes. Several recordings or a
+Master audio need Speaker Map; where it is not available to the user (not yet on nodaro.ai) the
+call is refused `403 node_not_available` — then use the steps below, or send one recording.
+
+The steps by hand, when you need more control (a hand-edited switch, clips or chapters of a
+multicam recording):
 
 Each device started recording at a different moment, so the files are on different
 clocks. The plan is always timed on ONE clock — the **master**: the source with

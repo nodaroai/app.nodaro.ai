@@ -1,6 +1,6 @@
 // `nodaro edit`'s use-case node commands (the podcast nodes that run a whole
 // chain in one step): tighten-episode, episode-chapters, episode-trailer,
-// clip-pack, and continue-use-case for their runs. Registered on the `edit`
+// clip-pack, speaker-layout, and continue-use-case for their runs. Registered on the `edit`
 // command by edit.ts, in this order, after apply-edl.
 import type { Command } from "commander"
 import {
@@ -21,6 +21,7 @@ import {
   type ClipPackInput,
   type EpisodeChaptersInput,
   type EpisodeTrailerInput,
+  type SpeakerLayoutInput,
   type TightenEpisodeInput,
   type TrailerFormat,
   type UseCaseNodeType,
@@ -31,6 +32,7 @@ import pc from "picocolors"
 import { emit, warn } from "../output.js"
 import { reportQueuedJob } from "../util.js"
 import { readJsonFile, refuseUnknownPlanTier, type GlobalOpts, type WatchOpts } from "./edit-shared.js"
+import { recordingsInput, withRecordingsOptions, type RecordingsOpts } from "./edit-recordings.js"
 
 /** The emphasis values Speaker View draws: "none", or its atoms joined with "+" (each once). */
 const EMPHASIS_HELP = `none, or ${SPEAKER_EMPHASIS_STYLES.filter((s) => s !== "none").join(", ")} joined with "+" (each once)`
@@ -46,14 +48,21 @@ const CONTINUATION_NEXT_STEP: Readonly<Record<string, (jobId: string) => string>
 export function registerUseCaseCommands(cmd: Command): void {
   // ── tighten-episode (podcast use-case node) ─────────────────────────────
   const framingLayouts: readonly string[] = ["auto", ...SPEAKER_LAYOUT_IDS]
-  cmd
-    .command("tighten-episode")
-    .description("tighten a podcast recording in one step (transcribe, cut silences, render; optional captions, music and framing)")
-    .requiredOption("--media <url>", "the recording (video or audio URL, up to 3 hours)")
+  /** The body's framing sources, every one of `TightenEpisodeInput["framingSource"]` (a Record, so a new one fails typecheck here). */
+  const FRAMING_SOURCES = Object.keys({ auto: true, static: true, tracking: true } satisfies Record<NonNullable<TightenEpisodeInput["framingSource"]>, true>)
+  withRecordingsOptions(
+    cmd
+      .command("tighten-episode")
+      .description("tighten a podcast recording in one step (transcribe, cut silences, render; optional captions, music and framing)"),
+  )
     .option("--music <url>", "optional music bed, ducked under the voice")
     .option("--output <kind>", "video | audio (an audio recording always makes an audio episode)")
     .option("--framing <aspect>", `frame a video episode on its speakers: ${EDL_TARGET_ASPECTS.join(" | ")}`)
     .option("--layout <layout>", `layout with --framing (default auto): ${framingLayouts.join(" | ")}`)
+    .option(
+      "--framing-source <source>",
+      `with --framing, how it follows the speakers: ${FRAMING_SOURCES.join(" | ")} (default static: the even split; tracking follows faces with Speaker Frames, charged per started block of 1,000 sampled frames; auto follows faces while Speaker Frames is available to you)`,
+    )
     .option("--no-captions", "no captions on a video episode")
     .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
     .option("--plan-tier <tier>", EDIT_PLAN_TIERS.join(" | "))
@@ -65,12 +74,13 @@ export function registerUseCaseCommands(cmd: Command): void {
     .action(
       async (
         opts: GlobalOpts &
-          WatchOpts & {
-            media: string
+          WatchOpts &
+          RecordingsOpts & {
             music?: string
             output?: string
             framing?: string
             layout?: string
+            framingSource?: string
             captions: boolean
             review?: boolean
             planTier?: string
@@ -95,16 +105,26 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--layout must be ${framingLayouts.join(", ")} (got "${opts.layout}")`)
           process.exit(1)
         }
+        if (opts.framingSource !== undefined && opts.framing === undefined) {
+          warn("--framing-source applies with --framing only (it picks how the framing follows the speakers)")
+          process.exit(1)
+        }
+        if (opts.framingSource !== undefined && !(FRAMING_SOURCES as readonly string[]).includes(opts.framingSource)) {
+          warn(`--framing-source must be ${FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
+          process.exit(1)
+        }
+        const recordings = recordingsInput(opts)
         type Framing = NonNullable<TightenEpisodeInput["framing"]>
         try {
           const client = buildClient(opts.profile)
           const result = await client.edit.tightenEpisode({
-            mediaUrl: opts.media,
+            ...recordings,
             ...(opts.music ? { musicUrl: opts.music } : {}),
             ...(opts.output ? { output: opts.output as "video" | "audio" } : {}),
             ...(opts.framing
               ? { framing: { aspect: opts.framing as Framing["aspect"], layout: (opts.layout ?? "auto") as Framing["layout"] } }
               : {}),
+            ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<TightenEpisodeInput["framingSource"]> } : {}),
             // commander's --no-captions defaults `captions` to true: send it only when turned off.
             ...(opts.captions === false ? { captions: false } : {}),
             ...(opts.review ? { reviewBeforeRender: true } : {}),
@@ -170,10 +190,11 @@ export function registerUseCaseCommands(cmd: Command): void {
     )
 
   // ── episode-trailer (podcast use-case node) ─────────────────────────────
-  cmd
-    .command("episode-trailer")
-    .description("cut a 20–40 second trailer of a recording and deliver it in each chosen social format, in one step")
-    .requiredOption("--media <url>", "the recording (a video URL, up to 3 hours)")
+  withRecordingsOptions(
+    cmd
+      .command("episode-trailer")
+      .description("cut a 20–40 second trailer of a recording and deliver it in each chosen social format, in one step"),
+  )
     .option("--intro-card <url>", "an optional short video (15 s at most) played before the trailer")
     .option("--formats <list>", `comma-separated, at least one: ${TRAILER_FORMATS.join(",")} (default 9:16,1:1,4:5)`)
     .option("--review", "stop at a preview to review (render every format with `nodaro edit continue-use-case <jobId> --mode render-final`)")
@@ -188,8 +209,8 @@ export function registerUseCaseCommands(cmd: Command): void {
     .action(
       async (
         opts: GlobalOpts &
-          WatchOpts & {
-            media: string
+          WatchOpts &
+          RecordingsOpts & {
             introCard?: string
             formats?: string
             review?: boolean
@@ -205,11 +226,12 @@ export function registerUseCaseCommands(cmd: Command): void {
           process.exit(1)
         }
         refuseUnknownPlanTier(opts.planTier)
+        const recordings = recordingsInput(opts)
         try {
           const client = buildClient(opts.profile)
           const result = await client.edit.episodeTrailer(
             {
-              mediaUrl: opts.media,
+              ...recordings,
               ...(opts.introCard ? { introCardUrl: opts.introCard } : {}),
               ...(formats ? { formats: formats as TrailerFormat[] } : {}),
               ...(opts.review ? { reviewBeforeRender: true } : {}),
@@ -246,16 +268,21 @@ export function registerUseCaseCommands(cmd: Command): void {
   // ── clip-pack (podcast use-case node) ──────────────────────────────────
   const isWhole = (v: string | undefined, min: number, max: number): boolean =>
     v !== undefined && /^\d+$/.test(v.trim()) && Number(v) >= min && Number(v) <= max
-  cmd
-    .command("clip-pack")
-    .description("cut a recording into a pack of short clips in one step (find the best moments, render each — framed and captioned by default)")
-    .requiredOption("--media <url>", "the recording (video or audio URL, up to 3 hours; an audio recording makes audio clips)")
+  withRecordingsOptions(
+    cmd
+      .command("clip-pack")
+      .description("cut a recording into a pack of short clips in one step (find the best moments, render each — framed and captioned by default; several cameras cut to the speaker in every clip)"),
+  )
     .option("--count <n>", `how many clips, 1–${EDIT_PLAN_MAX_CLIP_COUNT} (default 8; the plan may find fewer)`)
     .option("--length <sec>", `each clip's target length in seconds, ${CLIP_PACK_MIN_TARGET_SEC}–${CLIP_PACK_MAX_TARGET_SEC} (default 60)`)
     .option("--framing <aspect>", `frame each clip on its speakers: ${EDL_TARGET_ASPECTS.join(" | ")}, or none for the recording's shape (default 9:16)`)
     .option("--layout <layout>", `layout with --framing <aspect> (default stacked): ${framingLayouts.join(" | ")}`)
     .option("--switch <id>", `the switch at each speaker change, with --framing <aspect> (default pan): cut | pan | zoom | xfade:<transition>, e.g. xfade:fade`)
     .option("--emphasis <style>", `how the speaker talking is emphasised, with --framing <aspect> (default scale): ${EMPHASIS_HELP}`)
+    .option(
+      "--framing-source <source>",
+      `how the framing follows the speakers (not with --framing none): ${FRAMING_SOURCES.join(" | ")} (default static: the even split; tracking follows faces with one Speaker Frames run over the whole pack, charged per started block of 1,000 sampled frames; auto follows faces while Speaker Frames is available to you)`,
+    )
     .option("--no-captions", "no captions on the clips")
     .option("--caption-style <style>", `the captions' look (default karaoke): ${ALL_CAPTION_STYLES.join(" | ")}`)
     .option("--review", "stop at previews to review (render the kept clips with `nodaro edit continue-use-case <jobId> --mode render-final`)")
@@ -269,7 +296,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     .option("--json")
     .action(
       async (
-        opts: GlobalOpts & WatchOpts & { media: string; count?: string; length?: string; framing?: string; layout?: string; switch?: string; emphasis?: string } & {
+        opts: GlobalOpts & WatchOpts & RecordingsOpts & { count?: string; length?: string; framing?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string } & {
           captions: boolean; captionStyle?: string; review?: boolean; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string
         },
       ) => {
@@ -307,6 +334,15 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--emphasis must be ${EMPHASIS_HELP} (got "${opts.emphasis}")`)
           process.exit(1)
         }
+        // Clip Pack frames by default: the framing source applies unless the framing is none.
+        if (opts.framingSource !== undefined && opts.framing === "none") {
+          warn("--framing-source applies with a framing only (not with --framing none)")
+          process.exit(1)
+        }
+        if (opts.framingSource !== undefined && !(FRAMING_SOURCES as readonly string[]).includes(opts.framingSource)) {
+          warn(`--framing-source must be ${FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
+          process.exit(1)
+        }
         if (opts.captionStyle !== undefined && opts.captions === false) {
           warn("--caption-style applies with captions on (drop --no-captions)")
           process.exit(1)
@@ -316,12 +352,13 @@ export function registerUseCaseCommands(cmd: Command): void {
           process.exit(1)
         }
         refuseUnknownPlanTier(opts.planTier)
+        const recordings = recordingsInput(opts)
         type Framing = NonNullable<ClipPackInput["framing"]>
         try {
           const client = buildClient(opts.profile)
           const result = await client.edit.clipPack(
             {
-              mediaUrl: opts.media,
+              ...recordings,
               ...(opts.count !== undefined ? { count: Number(opts.count) } : {}),
               ...(opts.length !== undefined ? { targetDurationSec: Number(opts.length) } : {}),
               // none = the recording's shape; an aspect alone leaves the layout to the route (stacked).
@@ -337,6 +374,7 @@ export function registerUseCaseCommands(cmd: Command): void {
                       },
                     }
                   : {}),
+              ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<ClipPackInput["framingSource"]> } : {}),
               // commander's --no-captions defaults `captions` to true: send it only when turned off.
               ...(opts.captions === false ? { captions: false } : {}),
               ...(opts.captionStyle ? { captionStyle: opts.captionStyle as NonNullable<ClipPackInput["captionStyle"]> } : {}),
@@ -373,12 +411,93 @@ export function registerUseCaseCommands(cmd: Command): void {
       },
     )
 
+  // ── speaker-layout (podcast use-case node) ─────────────────────────────
+  /** Speaker Layout's framing sources, every one of `SpeakerLayoutInput["framingSource"]` (a Record, so a new one fails typecheck here). */
+  const LAYOUT_FRAMING_SOURCES = Object.keys({ auto: true, static: true, tracking: true } satisfies Record<NonNullable<SpeakerLayoutInput["framingSource"]>, true>)
+  withRecordingsOptions(
+    cmd
+      .command("speaker-layout")
+      .description("frame a whole recording by speaker in one step — the same length, nothing cut (several recordings: each speaker on their own camera)"),
+  )
+    .option("--aspect <aspect>", `the video's shape (default 9:16): ${EDL_TARGET_ASPECTS.join(" | ")}`)
+    .option("--layout <layout>", `how the speakers are laid out (default stacked): ${framingLayouts.join(" | ")}`)
+    .option("--switch <id>", "the switch at each speaker change (default cut): cut | pan | zoom | xfade:<transition>, e.g. xfade:fade")
+    .option("--emphasis <style>", `how the speaker talking is emphasised (default scale): ${EMPHASIS_HELP}`)
+    .option(
+      "--framing-source <source>",
+      `how the speakers are followed: ${LAYOUT_FRAMING_SOURCES.join(" | ")} (default auto: follows faces with Speaker Frames while it is available to you, else the even split; static: the even split; tracking: follows faces, charged per started block of 1,000 sampled frames)`,
+    )
+    .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
+    .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--watch", "poll the job until it finishes, then print the framed video's URL")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts &
+          RecordingsOpts & { aspect?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string; review?: boolean; idempotencyKey?: string },
+      ) => {
+        if (opts.aspect !== undefined && !(EDL_TARGET_ASPECTS as readonly string[]).includes(opts.aspect)) {
+          warn(`--aspect must be ${EDL_TARGET_ASPECTS.join(", ")} (got "${opts.aspect}")`)
+          process.exit(1)
+        }
+        if (opts.layout !== undefined && !framingLayouts.includes(opts.layout)) {
+          warn(`--layout must be ${framingLayouts.join(", ")} (got "${opts.layout}")`)
+          process.exit(1)
+        }
+        if (opts.switch !== undefined && !SPEAKER_SWITCH_IDS.includes(opts.switch)) {
+          warn(`--switch must be one of ${SPEAKER_SWITCH_IDS.join(", ")} (got "${opts.switch}")`)
+          process.exit(1)
+        }
+        if (opts.emphasis !== undefined && !isKnownSpeakerEmphasisStyle(opts.emphasis)) {
+          warn(`--emphasis must be ${EMPHASIS_HELP} (got "${opts.emphasis}")`)
+          process.exit(1)
+        }
+        if (opts.framingSource !== undefined && !LAYOUT_FRAMING_SOURCES.includes(opts.framingSource)) {
+          warn(`--framing-source must be ${LAYOUT_FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
+          process.exit(1)
+        }
+        const recordings = recordingsInput(opts)
+        type In = SpeakerLayoutInput
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.edit.speakerLayout(
+            {
+              ...recordings,
+              ...(opts.aspect ? { targetAspect: opts.aspect as NonNullable<In["targetAspect"]> } : {}),
+              ...(opts.layout ? { layout: opts.layout as NonNullable<In["layout"]> } : {}),
+              ...(opts.switch ? { switchType: opts.switch as NonNullable<In["switchType"]> } : {}),
+              ...(opts.emphasis ? { emphasisStyle: opts.emphasis as NonNullable<In["emphasisStyle"]> } : {}),
+              ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<In["framingSource"]> } : {}),
+              ...(opts.review ? { reviewBeforeRender: true } : {}),
+            },
+            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
+          )
+          const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: "speaker-layout",
+          })
+          if (opts.json) return
+          // The framed video (a preview with --review); --json already printed the whole job.
+          const url = (done?.data.output_data as { videoUrl?: unknown } | null | undefined)?.videoUrl
+          if (done?.data.status === "completed" && typeof url === "string") console.log(url)
+          if (opts.review) console.log(pc.dim(`  render the final after your review: nodaro edit continue-use-case ${result.jobId} --mode render-final`))
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
   // ── continue-use-case (podcast use-case runs) ───────────────────────────
   cmd
     .command("continue-use-case <jobId>")
-    .description("continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a new job: from where it failed, or its Render final after a review")
+    .description("continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or its Render final after a review")
     .requiredOption("--mode <mode>", "from-failed | render-final")
-    .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
+    .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL); a Speaker Layout run has no plan to edit")
     .option(
       "--type <type>",
       `the run's node type (${USE_CASE_NODE_TYPES.join(" | ")}); without it the job is read for its type, which needs the jobs:read scope`,

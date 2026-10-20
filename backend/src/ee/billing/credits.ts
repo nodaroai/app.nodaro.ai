@@ -57,6 +57,7 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
+  sunoSeparateCreditId,
 } from "@nodaro/shared/models"
 import {
   CAMERA_SWITCH_CREDIT_ID,
@@ -85,7 +86,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -1634,6 +1635,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "suno-lyrics": 10,
   "suno-separate": 40,            // matches model_pricing (mig 059); held by re-baseline (unclear)
   "suno-separate-stem": 130,      // base
+  "suno-separate-single": 80,     // one instrument (split_stem_advanced; mig 545)
   "audio-separation": 30,         // Demucs (ryan5453) on Replicate, fixed reserved tier (Auto/Fast)
   "audio-separation:best": 80,    // htdemucs_ft (~4× compute), fixed reserved tier
   "audio-separation:stems": 60,   // htdemucs_6s (6-stem, heavier than base) — conservative estimate, tune via audit-credits
@@ -2003,16 +2005,52 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "image-to-text": 3,
   "image-to-text:economy": 1,
   "image-to-text:premium": 4,
-  "describe-to-picker": 10,
+  // Describe to Picker — repriced 2026-10-20 from a production cost audit
+  // (migration 546). The analyzer's prompt is a rendered catalog legend, so a
+  // read is ~35k input tokens on Opus 5.5, ~53k on Fable 5, ~20k on Gemini
+  // 3.8 Flash (jobs.output_data.usage, ~130 runs since 2026-10-01). The rows
+  // were flat 10 (charged 11 ≈ $0.07) while a read cost the platform ~$0.007
+  // on Gemini 3.8 Flash, ~$0.035 on Sonnet 5.5 and ~$0.075 on an Opus-class
+  // model on KIE. Each rung is set for ≥ 25% headroom over its worst-case
+  // cost at the lowest credit value ($0.0025): charged 11 / 20 / 40 at the
+  // deployment's 10% markup (base × 1.1, rounded up). Fable 5 ($0.60–0.90 a
+  // read) is withheld from the node (DESCRIBE_TO_PICKER_WITHHELD_MODELS).
+  // The default read moved to Gemini 3.8 Flash the same day.
+  "describe-to-picker": 18,
   "describe-to-picker:economy": 10,
-  "describe-to-picker:premium": 10,
+  "describe-to-picker:premium": 36,
+  // The direct rung is set EXPLICITLY (charged 150), not derived from premium
+  // × LLM_PREMIUM_DIRECT_MULTIPLIER: a read on Anthropic's own API — Advanced
+  // mode, or any Claude effort (Opus 5.5 at high, the former default) — cost
+  // $0.17–0.28 on Opus 5.5 at the direct rates, which the 2.5× rule (90,
+  // charged 99 ≈ $0.25) does not cover. Listed in
+  // LLM_PREMIUM_DIRECT_EXPLICIT so the rung guard knows it is a decision.
+  "describe-to-picker:premium-direct": 136,
+  // Text to Picker (POST /v1/text-to-picker) — its OWN feature id since the
+  // same audit (migration 546; it billed describe-to-picker's rungs before).
+  // Its default run analyzes EVERY picker — ~99k input tokens over the family
+  // batches (the route's own header) — so describe-to-picker's rows did not
+  // cover it: ~$0.035 on Gemini 3.8 Flash (KIE), ~$0.09 on Sonnet 5.5 (KIE),
+  // ~$0.18 on an Opus-class model (KIE) and ~$0.44 on Opus 5.5 on Anthropic's
+  // own API, against 11 / 150 charged. Each rung is set for ≥ 25% headroom
+  // over its worst-case cost at $0.0025 a credit: charged 18 / 46 / 90 / 220
+  // (base × 1.1, rounded up). The direct rung is stated
+  // (LLM_PREMIUM_DIRECT_EXPLICIT), not the 2.5× derivation (203, charged 224
+  // ≈ $0.56 — covers it, but a stated row keeps the basis with the price).
+  "text-to-picker:economy": 16,
+  "text-to-picker": 41,
+  "text-to-picker:premium": 81,
+  "text-to-picker:premium-direct": 200,
   // POST /v1/llm/structured — its own feature id, not llm-chat's: a rendered
-  // catalog legend as the system prompt is several times a chat turn. Flat per
-  // tier at describe-to-picker parity (migration 358).
-  // owner-tunable; confirm at PR review.
-  "llm-structured": 10,
+  // catalog legend as the system prompt is several times a chat turn. Priced
+  // at describe-to-picker's rungs: the same legend-sized read on the same
+  // models (migration 358 seeded it flat at 10; repriced with describe-to-
+  // picker in migration 546 — the premium-direct row stated, see
+  // LLM_PREMIUM_DIRECT_EXPLICIT). Fable 5 is withheld from it too.
+  "llm-structured": 18,
   "llm-structured:economy": 10,
-  "llm-structured:premium": 10,
+  "llm-structured:premium": 36,
+  "llm-structured:premium-direct": 136,
   "image-critic": 20,
   "image-critic:economy": 10,
   "image-critic:premium": 40,
@@ -2184,10 +2222,34 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
  * @nodaro/shared). The direct lane bills ~2.5× the aggregator per token, and a
  * premium model had no rung above it, so its direct call cost the same as its
  * aggregator call. Every tier-priced LLM feature gets one, DERIVED from its own
- * premium price so a new feature or a repriced premium can't leave it stale.
- * The seed migration (490) applies the same multiplier to the live prices.
+ * premium price so a new feature or a repriced premium can't leave it stale —
+ * unless the feature is in {@link LLM_PREMIUM_DIRECT_EXPLICIT}, whose rung is
+ * a stated row with its own cost basis. The seed migration (490) applied the
+ * same multiplier to the live prices.
  */
 export const LLM_PREMIUM_DIRECT_MULTIPLIER = 2.5
+
+/**
+ * Features whose `premium-direct` row is SET, not derived: the multiplier
+ * understates what their direct call costs, so the row carries a measured
+ * basis instead (the comment on its STATIC_CREDIT_COSTS entry). Each maps to
+ * the migration that states the row, so the rung guard can hold the static
+ * row to it; the derivation loop below never overwrites a stated row (`??=`).
+ */
+export const LLM_PREMIUM_DIRECT_EXPLICIT: Readonly<Record<string, { migration: string; reason: string }>> = {
+  "describe-to-picker": {
+    migration: "546_describe_to_picker_reprice.sql",
+    reason: "a legend-sized read on Anthropic's own API costs well over 2.5× its aggregator read (production cost audit, 2026-10-20)",
+  },
+  "llm-structured": {
+    migration: "546_describe_to_picker_reprice.sql",
+    reason: "the same legend-sized read as describe-to-picker, on the caller's own schema and system prompt — priced at its rungs (production cost audit, 2026-10-20)",
+  },
+  "text-to-picker": {
+    migration: "546_describe_to_picker_reprice.sql",
+    reason: "an all-picker text read is ~99k input tokens; its direct rung is stated on the measured Opus 5.5 cost (production cost audit, 2026-10-20)",
+  },
+}
 
 /**
  * The features whose credit id is built by `buildLlmCreditIdentifier` with the
@@ -2199,7 +2261,7 @@ export const LLM_DIRECT_RUNG_FEATURES: readonly string[] = [
   "prompt-helper", "ai-writer", "llm-chat", "translate", "scene-graph-ai", "video-composer",
   "after-effects", "lottie-overlay", "3d-title", "motion-graphics", "motion-graphics-lottie",
   "3d-scene", "reduce:pick-best-llm", "generate-script", "qa-check", "image-to-text",
-  "describe-to-picker", "llm-structured", "image-critic", "content-recipe", "content-ideas",
+  "describe-to-picker", "text-to-picker", "llm-structured", "image-critic", "content-recipe", "content-ideas",
   "content-ideas:10",
 ]
 
@@ -4158,6 +4220,26 @@ export type WorkflowEstimateOptions = {
    *  chain and fee stay out of the sum; they still run, so every price that
    *  reads the run set reads them as running. */
   pricedElsewhereNodeIds?: ReadonlySet<string>
+  /** The run's viewer may use Speaker Map (`usecaseMulticamAvailable`): a
+   *  use-case node is priced on every recording it reads and its Master audio,
+   *  as the run reads them. Absent: its first recording only, as before
+   *  multicam (decided 2026-10-19). */
+  multicam?: boolean
+  /** Speaker Frames is withheld from the run's viewer (`usecaseViewerEstimateFor`):
+   *  a use-case node's `auto` framing source is priced as its run reads it,
+   *  the even split. Absent: available — `auto` priced following faces
+   *  (decided 2026-10-20). */
+  framesWithheld?: boolean
+}
+
+/**
+ * The expansion's viewer flags from an estimate's options: only the `true`
+ * ones, and none at all (`undefined`) when neither is set — a graph priced
+ * for a viewer who reads the node as before is expanded exactly as before.
+ */
+function usecaseExpandFlags(flags: UseCaseViewerFlags | undefined): UseCaseViewerFlags | undefined {
+  if (!flags?.multicam && !flags?.framesWithheld) return undefined
+  return { ...(flags.multicam ? { multicam: true } : {}), ...(flags.framesWithheld ? { framesWithheld: true } : {}) }
 }
 
 /**
@@ -4265,7 +4347,7 @@ function sumWorkflowEstimate(
   // A use-case node is priced as the chain it builds, wired to its real
   // source, plus its fee (decided 2026-10-13): the one expansion every
   // estimator shares. The expanded graph holds no use-case node.
-  const uc = expandUseCaseNodes(nodes, edges ?? [])
+  const uc = expandUseCaseNodes(nodes, edges ?? [], usecaseExpandFlags(options))
   if (uc.expanded) {
     const runSet = options?.runNodeIds
     const opts = runSet ? { ...options, runNodeIds: withUseCaseMembers(runSet, uc.members) } : options
@@ -5155,15 +5237,19 @@ function listingEstimate(
   replaceableMediaNodeIds?: ReadonlySet<string>,
   /** An app's or component's List inputs its user fills (`exposedListNodeIds`). */
   exposedListNodeIds?: ReadonlySet<string>,
+  /** A general user's answers (`usecaseViewerForEveryone`): Speaker Map, Speaker Frames. */
+  viewer?: UseCaseViewerFlags,
 ): AppListingEstimate {
   // A use-case node lists as the chain it builds (decided 2026-10-13): the
   // preview part is what its run executes (a review-on node stops at its
   // proxy render) plus its fee; each Render final is its whole chain's, the
-  // render at final and what follows it, with no fee.
-  const uc = expandUseCaseNodes(nodes, edges)
+  // render at final and what follows it, with no fee. Its recordings are a
+  // general user's run's (decided 2026-10-20): several only with `multicam`.
+  // The expanded graphs below hold no use-case node, so they need no flag.
+  const uc = expandUseCaseNodes(nodes, edges, usecaseExpandFlags(viewer))
   if (uc.expanded) {
     const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
-    const whole = expandUseCaseNodes(nodes, edges, { chain: "whole" })
+    const whole = expandUseCaseNodes(nodes, edges, { chain: "whole", ...usecaseExpandFlags(viewer) })
     const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
     // Each fee counts once per run its node makes (a List's items, Each wires, repeats).
     const reruns = new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
@@ -5450,10 +5536,12 @@ function getNodeModelIdentifier(
   }
 
   // Describe to Picker: the model and effort the route resolves — the stored
-  // model, else the analyzer's default, and the stored effort, else that
-  // model's default effort (Opus 5.5 at high, decided 2026-10-09, which runs on
-  // Anthropic's own API and reserves premium-direct). Mirrors the editor's
-  // getModelIdentifier; the bare node-type row it used to fall to quoted 10.
+  // model, else the analyzer's default (Gemini 3.8 Flash at Auto since
+  // 2026-10-20, reserving economy on the aggregator), and the stored effort,
+  // else the model's recipe effort when it has one (Opus 5.5 at high, decided
+  // 2026-10-09, which runs on Anthropic's own API and reserves premium-direct).
+  // Mirrors the editor's getModelIdentifier; the bare node-type row it used
+  // to fall to quoted the standard rung whatever the model.
   if (nodeType === "describe-to-picker") {
     const llmModel = data.llmModel as string | undefined
     const reasoningEffort = (data.reasoningEffort as string | undefined) ?? defaultReasoningEffort("describe-to-picker", llmModel)
@@ -5479,9 +5567,9 @@ function getNodeModelIdentifier(
     return sunoCreditType(data.model as string | undefined, nodeType)
   }
 
-  // Suno separate: "split_stem" costs more
+  // Suno separate: each mode has its own price (the shared rule)
   if (nodeType === "suno-separate") {
-    return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+    return sunoSeparateCreditId(data.type)
   }
 
   // Audio separation (Demucs): "best" quality costs more
@@ -5765,11 +5853,14 @@ export function estimateRunSetCredits(
   runNodeIds: ReadonlySet<string>,
   /** Use-case nodes of the run the caller prices itself (`WorkflowEstimateOptions.pricedElsewhereNodeIds`). */
   pricedElsewhereNodeIds?: ReadonlySet<string>,
+  /** What the run's viewer may use (`WorkflowEstimateOptions.multicam` / `.framesWithheld`, `usecaseViewerEstimateFor`). */
+  viewer?: UseCaseViewerFlags,
 ): Promise<number> {
   // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
   return estimateRunGraphCredits(nodes, edges, {
     runNodeIds,
     ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
+    ...usecaseExpandFlags(viewer),
   })
 }
 
@@ -5784,11 +5875,13 @@ export async function estimateRunSetCreditsWithoutUgc(
   nodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge>,
   runNodeIds: ReadonlySet<string>,
+  /** What the run's viewer may use (`WorkflowEstimateOptions.multicam` / `.framesWithheld`). */
+  viewer?: UseCaseViewerFlags,
 ): Promise<number> {
   const edges = bypassTeleports(nodes, rawEdges)
   const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
   const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
-  return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
+  return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds, ...usecaseExpandFlags(viewer) }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
 }
 
 /**
@@ -5915,6 +6008,18 @@ export type ListingEstimateOptions = {
     /** An app's or component's List inputs (`exposedListNodeIds`): priced per
      *  further item beyond the saved count. Ignored for a template. */
     readonly exposedListNodeIds?: ReadonlySet<string>
+    /** A listing is shown to everyone, so it is a GENERAL user's run (decided
+     *  2026-10-20): every listing site passes `usecaseViewerForEveryone(nodes)`
+     *  (this flag and `framesWithheld`) — a use-case node lists on several
+     *  recordings only while Speaker Map is available to users, never by who
+     *  publishes it. Absent: its first
+     *  recording only. (Passed in, not read here: the availability modules
+     *  import the node registry, which imports this module.) */
+    readonly multicam?: boolean
+    /** A general user's Speaker Frames answer (`usecaseViewerForEveryone`, decided
+     *  2026-10-20): an `auto` framing source lists as the even split while
+     *  Speaker Frames is withheld from users. Absent: following faces. */
+    readonly framesWithheld?: boolean
 }
 
 /**
@@ -5939,7 +6044,7 @@ async function listingPricer(
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)
   return (graph: ReadonlyArray<EstimateNode>): AppListingEstimate => {
-    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds)
+    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, usecaseExpandFlags(options))
     return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
   }
 }

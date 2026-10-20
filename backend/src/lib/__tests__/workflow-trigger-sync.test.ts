@@ -75,6 +75,32 @@ describe("normalizeScheduleConfig — the node's schedule as the rules the cron 
       .toEqual({ rules: [{ id: "rule-1", kind: "minutes", every: 5 }] })
   })
 
+  it("Retry on failure rides along normalised; absent on the node is absent on the row — the feature off", () => {
+    const retry = { afterMinutes: 45, maxAttempts: 2, cheapLanesOnly: false }
+    expect(normalizeScheduleConfig({ rules: [{ kind: "minutes", every: 5 }], retry })).toEqual({
+      rules: [{ id: "rule-1", kind: "minutes", every: 5 }],
+      retry,
+    })
+    // A half-typed policy is clamped and defaulted, never dropped.
+    expect(normalizeScheduleConfig({ rules: [{ kind: "minutes", every: 5 }], retry: { afterMinutes: 1 } })?.retry)
+      .toEqual({ afterMinutes: 5, maxAttempts: 3, cheapLanesOnly: true })
+    for (const data of [{ rules: [{ kind: "minutes", every: 5 }] }, { rules: [{ kind: "minutes", every: 5 }], retry: null }, { rules: [{ kind: "minutes", every: 5 }], retry: true }]) {
+      expect(normalizeScheduleConfig(data)).not.toHaveProperty("retry")
+    }
+  })
+
+  it("round trip: the node's retry policy reaches the row and is read back as the policy the sweep runs", async () => {
+    const { normalizeScheduleRetry } = await import("@nodaro/shared/workflow")
+    const retry = { afterMinutes: 60, maxAttempts: 4, cheapLanesOnly: true }
+    const [want] = desiredTriggersFromGraph([scheduleNode("s1", { rules: [{ kind: "hours", every: 2 }], retry, active: true })])
+    const row = mergeTriggerConfig({ nodeId: "s1", executionCount: 3 }, want.config, "s1")
+    expect(row).toEqual({ rules: [{ id: "rule-1", kind: "hours", every: 2, minute: 0 }], retry, nodeId: "s1", executionCount: 3 })
+    expect(normalizeScheduleRetry(row.retry)).toEqual(retry)
+    // Switching it off on the node takes it off the row on the next save.
+    const [off] = desiredTriggersFromGraph([scheduleNode("s1", { rules: [{ kind: "hours", every: 2 }], active: true })])
+    expect(mergeTriggerConfig(row, off.config, "s1")).toEqual({ rules: [{ id: "rule-1", kind: "hours", every: 2, minute: 0 }], nodeId: "s1", executionCount: 3 })
+  })
+
   it("refuses a timezone the runtime cannot read — never a silent UTC fallback", () => {
     expect(normalizeScheduleConfig({ rules: [{ kind: "days", hour: 9 }], timezone: "Jerusalem" })).toBeNull()
     expect(normalizeScheduleConfig({ interval: "1h", timezone: "Not/AZone" })).toBeNull()

@@ -43,6 +43,7 @@ import { scene3dHandlers } from "./handlers/scene3d.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
+import { getWorkerApp } from "../lib/private-plugins/worker-app.js"
 import { withEditPlanModeGate } from "../lib/private-plugins/edit-plan-mode-gate.js"
 import { plannableEditPlanModes } from "../lib/private-plugins/plannable-edit-plan-modes.js"
 import { withPreTaskHeartbeat } from "./pre-task-heartbeat.js"
@@ -91,7 +92,22 @@ const allHandlers: Record<string, HandlerFn> = {
 // alongside the other static `...xHandlers` spreads above.
 // Loads first: it records the plugins' `supports()` declaration, which
 // `plannableEditPlanModes` reads on nodaro.ai.
-const { handlers: privatePluginHandlers, engines } = await loadPrivatePlugins({})
+// `workerApp`: what the plugins' `tk.http.workerRequest` reaches from a
+// handler — the API app, built in this process (`worker-app.ts`). It
+// registers no routes here; only `app` would.
+const { handlers: privatePluginHandlers, engines, loaded: loadedPrivatePlugins } = await loadPrivatePlugins({ workerApp: getWorkerApp })
+// Build that app NOW, at boot, not on a handler's first call: `buildApp` exits
+// the process on a config fault (surface profile, payer, a plugin load
+// failure), and mid-job that would kill every concurrent job on this replica.
+// Not caught on purpose — a failed build exits this worker before it takes a
+// job. That does NOT fail the deploy: start.sh's `supervise` restarts the
+// worker every 10 s (a crash-loop in the logs) while `/health`, served by
+// server.js, stays green — so watch the worker logs after a deploy. Only when
+// plugins loaded (cloud): the transport serves plugin handlers and nothing
+// else. `buildApp` loads the overlay and the mainline prompt policies here,
+// before `worker.ts`'s own calls; `loadOverlay` is once per process, so the
+// overlay registers once and the order stays [overlay…, minor-age floor].
+if (loadedPrivatePlugins.length > 0) await getWorkerApp()
 // 4b: the exclusive-node RELAY handlers, self-hosted editions only. Merged
 // BEFORE privatePluginHandlers so that on cloud (where the loader returns
 // real handlers) the plugin implementations win the keys unconditionally —

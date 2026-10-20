@@ -1,6 +1,7 @@
 import { tx, type MessageKey } from "@/lib/i18n"
 import { DICTS } from "@/lib/i18n/dicts"
 import { useLocaleStore } from "@/lib/locale-store"
+import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
 
 /**
  * The text of a failed API call, in the interface language.
@@ -83,6 +84,8 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   render_final_already_rendered: "runContinuation.alreadyRendered",
   // A clip set's Render final whose review dropped every clip.
   use_case_nothing_kept: "runContinuation.nothingKept",
+  // A use-case run's recordings that cannot run (decided 2026-10-17): refused before anything is written.
+  ...USE_CASE_RECORDINGS_REASON_KEYS,
   // Its run's earlier finals could not be read (transient): try again.
   run_finals_unavailable: "apiErr.reason.server",
   conflict: "apiErr.reason.changedElsewhere",

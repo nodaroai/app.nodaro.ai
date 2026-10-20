@@ -648,7 +648,7 @@ describe("a review-on Tighten Episode fed by a list is refused where it would fa
     mocks.workflows.set("wf-3", { ...graph, nodes: graph.nodes.map((n) => (n.id === "t1" ? { ...n, type: "episode-trailer" } : n)) })
     await processWorkflowExecution(listJob())
     expect(ran()).toEqual([])
-    expect(states().t1).toMatchObject({ status: "failed", errorCode: USE_CASE_LIST_DRIVEN, error: "Trailer takes one recording. Use a separate workflow run for each recording." })
+    expect(states().t1).toMatchObject({ status: "failed", errorCode: USE_CASE_LIST_DRIVEN, error: "Trailer takes the recordings of one conversation. Use a separate workflow run for each episode." })
     expect(states().fmt?.status).not.toBe("completed")
   })
 })

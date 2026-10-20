@@ -15,19 +15,20 @@ import {
 import {
   STATIC_CREDIT_COSTS,
   LLM_DIRECT_RUNG_FEATURES,
+  LLM_PREMIUM_DIRECT_EXPLICIT,
   NO_DIRECT_RUNG,
   LLM_PREMIUM_DIRECT_MULTIPLIER,
   llmTierPricedFeatures,
   CreditsService,
 } from "../credits.js"
 
-const MIGRATION = readFileSync(
-  join(__dirname, "../../../../../supabase/migrations/490_llm_premium_direct_rung.sql"),
-  "utf8",
-)
+const MIGRATIONS_DIR = join(__dirname, "../../../../../supabase/migrations")
+const MIGRATION = readFileSync(join(MIGRATIONS_DIR, "490_llm_premium_direct_rung.sql"), "utf8")
 
 const excluded = (feature: string) =>
   NO_DIRECT_RUNG.some((entry) => (entry.endsWith(":") ? feature.startsWith(entry) : feature === entry))
+/** The features whose rung is derived from their premium row (every one not stated explicitly). */
+const derived = LLM_DIRECT_RUNG_FEATURES.filter((f) => !(f in LLM_PREMIUM_DIRECT_EXPLICIT))
 
 describe("premium-direct rung (decided 2026-10-08)", () => {
   it("every tier-priced feature is either given the rung or excluded with a reason", () => {
@@ -35,19 +36,48 @@ describe("premium-direct rung (decided 2026-10-08)", () => {
     expect(undecided, "add each to LLM_DIRECT_RUNG_FEATURES or NO_DIRECT_RUNG in credits.ts").toEqual([])
   })
 
-  it("prices every rung at CEIL(premium × multiplier)", () => {
-    for (const f of LLM_DIRECT_RUNG_FEATURES) {
+  it("prices every derived rung at CEIL(premium × multiplier)", () => {
+    for (const f of derived) {
       expect(STATIC_CREDIT_COSTS[`${f}:premium-direct`], f).toBe(
         Math.ceil(STATIC_CREDIT_COSTS[`${f}:premium`]! * LLM_PREMIUM_DIRECT_MULTIPLIER),
       )
     }
   })
 
-  it("migration 490 seeds every rung at the same value, and only those", () => {
-    const seeded = [...MIGRATION.matchAll(/\('([^']+):premium-direct', (\d+), true/g)].map((m) => [m[1], Number(m[2])])
-    expect(Object.fromEntries(seeded)).toEqual(
-      Object.fromEntries(LLM_DIRECT_RUNG_FEATURES.map((f) => [f, STATIC_CREDIT_COSTS[`${f}:premium-direct`]])),
+  it("migration 490 seeds every derived rung at the same value, and only rung features (a feature added since states its own row)", () => {
+    const seeded = [...MIGRATION.matchAll(/\('([^']+):premium-direct', (\d+), true/g)].map((m) => [m[1], Number(m[2])] as const)
+    for (const [f] of seeded) expect(LLM_DIRECT_RUNG_FEATURES, f).toContain(f)
+    expect(Object.fromEntries(seeded.filter(([f]) => derived.includes(f)))).toEqual(
+      Object.fromEntries(derived.map((f) => [f, STATIC_CREDIT_COSTS[`${f}:premium-direct`]])),
     )
+  })
+
+  // A stated rung is a decision with a cost basis, not a rule: it must be a
+  // rung feature, must NOT sit at the derived value (or the entry is noise),
+  // and its migration must state the static row's value, so the row cannot be
+  // changed in code alone.
+  it("every explicitly priced rung is a rung feature, differs from the derivation, and is stated by its migration", () => {
+    for (const [f, { migration, reason }] of Object.entries(LLM_PREMIUM_DIRECT_EXPLICIT)) {
+      expect(LLM_DIRECT_RUNG_FEATURES, f).toContain(f)
+      expect(reason.length, f).toBeGreaterThan(0)
+      const stated = STATIC_CREDIT_COSTS[`${f}:premium-direct`]!
+      expect(stated, f).not.toBe(Math.ceil(STATIC_CREDIT_COSTS[`${f}:premium`]! * LLM_PREMIUM_DIRECT_MULTIPLIER))
+      const sql = readFileSync(join(MIGRATIONS_DIR, migration), "utf8")
+      const id = `${f}:premium-direct`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      // An UPDATE of an existing row, or a seed tuple for a new id — either states the value.
+      expect(sql, `${migration} must set ${f}:premium-direct to ${stated}`).toMatch(
+        new RegExp(`credit_cost\\s*=\\s*${stated}\\s+WHERE\\s+model_identifier\\s*=\\s*'${id}'|\\('${id}',\\s*${stated},\\s*true`),
+      )
+    }
+  })
+
+  it("the legend-sized reads' rungs are stated by migration 546 (decided 2026-10-20)", () => {
+    for (const f of ["describe-to-picker", "llm-structured", "text-to-picker"]) {
+      expect(LLM_PREMIUM_DIRECT_EXPLICIT[f]?.migration, f).toBe("546_describe_to_picker_reprice.sql")
+    }
+    expect(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"]).toBe(136)
+    expect(STATIC_CREDIT_COSTS["llm-structured:premium-direct"]).toBe(136)
+    expect(STATIC_CREDIT_COSTS["text-to-picker:premium-direct"]).toBe(200)
   })
 
   it("every id the LLM credit builder can produce for these features is priced (no 503 price_not_configured)", () => {

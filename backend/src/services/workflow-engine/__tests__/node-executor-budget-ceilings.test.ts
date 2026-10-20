@@ -467,10 +467,13 @@ describe("every registered budgeted job is dispatched under its node type's own 
     }),
   }
 
-  // A budgeted job registered before its node exists (none today: Speaker
-  // Frames' node landed in P3.6). The tripwire: a name listed here that has
-  // become a Nodaro-exclusive node fails until its fixture replaces it.
-  const AWAITING_NODE: Record<string, string> = {}
+  // A budgeted job registered before its node exists (Speaker Frames' node
+  // landed in P3.6; Cast Swap's budget leads its node). The tripwire: a name
+  // listed here that has become a Nodaro-exclusive node fails until its
+  // fixture replaces it.
+  const AWAITING_NODE: Record<string, string> = {
+    "cast-swap": "node lands in Plan 3",
+  }
 
   it("a budget awaiting its node is not a node yet", () => {
     for (const [name, why] of Object.entries(AWAITING_NODE)) {

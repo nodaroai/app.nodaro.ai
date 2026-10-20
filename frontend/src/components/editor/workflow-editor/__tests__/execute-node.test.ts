@@ -275,7 +275,8 @@ import {
   rejectManualEdit,
   rejectAllManualEdits,
 } from "../execute-node"
-import { generateMusicApi } from "@/lib/api"
+import { generateMusicApi, sunoSeparateApi } from "@/lib/api"
+import sunoSeparateSourceCases from "../../../../../../packages/render-rules/fixtures/suno-separate-source.cases.json"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -3523,15 +3524,122 @@ describe("suno-lyrics", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-separate", () => {
-  it("rejects when no task ID", async () => {
+  it("execute-node rejects with noAudioForSunoSeparate when nothing is connected", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("suno-separate", {}),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No task ID")
-    expect(mockToastError).toHaveBeenCalled()
+    await expect(promise).rejects.toThrow("No audio to separate")
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining("Connect a Suno track or any audio to separate."))
+    expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+  })
+
+  it("execute-node runs suno-separate on a non-Suno upstream audio via audioUrl", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://cdn.test/upload.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-separate", { type: "split_stem_advanced", stemName: "Bass", fallbackToDemucs: true }),
+      makeCtx(),
+    )
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(vi.mocked(sunoSeparateApi)).toHaveBeenCalledWith({
+      audioUrl: "https://cdn.test/upload.mp3",
+      type: "split_stem_advanced",
+      stemName: "Bass",
+      fallbackToDemucs: true,
+      userId: "u1",
+    })
+  })
+
+  it("a Suno track's ids win over its audio URL; a missing audio id is the task id (legacy)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ sunoTaskId: "task-123", audioUrl: "https://cdn.test/track.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-separate", { type: "split_stem" }), makeCtx())
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(vi.mocked(sunoSeparateApi)).toHaveBeenCalledWith({
+      taskId: "task-123",
+      audioId: "task-123",
+      type: "split_stem",
+      stemName: undefined,
+      fallbackToDemucs: false,
+      userId: "u1",
+    })
+  })
+
+  // A real node's default data holds `taskId: ""` / `audioId: ""` — blanks, not ids.
+  it("a typed task id with a blank audio id sends the task id as the audio id", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-separate", { type: "separate_vocal", taskId: " task-9 ", audioId: "" }), makeCtx())
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(vi.mocked(sunoSeparateApi).mock.calls.at(-1)?.[0]).toMatchObject({ taskId: "task-9", audioId: "task-9" })
+  })
+
+  it("blank default ids with nothing wired still reject with noAudioForSunoSeparate", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(makeNode("suno-separate", { taskId: "", audioId: "" }), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No audio to separate")
+  })
+
+  it("blank default ids with any audio wired separate that audio", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://cdn.test/upload.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-separate", { taskId: "", audioId: "" }), makeCtx())
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    const sent = vi.mocked(sunoSeparateApi).mock.calls.at(-1)?.[0]
+    expect(sent).toMatchObject({ audioUrl: "https://cdn.test/upload.mp3" })
+    expect(sent?.taskId).toBeUndefined()
+  })
+
+  // The same cases payload-builder.test.ts runs through the server engine —
+  // both must send the identical source (@nodaro/render-rules
+  // suno-separate-source.ts).
+  describe("source parity with the server (shared fixture)", () => {
+    const sourceOf = (sent: Record<string, unknown>) =>
+      Object.fromEntries(["taskId", "audioId", "audioUrl"].filter((k) => Object.hasOwn(sent, k)).map((k) => [k, sent[k]]))
+
+    it.each(sunoSeparateSourceCases.cases.map((c) => [c.name, c] as const))("%s", async (_name, c) => {
+      vi.mocked(sunoSeparateApi).mockClear()
+      mockResolveNodeInputs.mockReturnValue(c.inputs)
+      mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+      const promise = executeNode(makeNode("suno-separate", c.data), makeCtx())
+      if (c.expected === null) {
+        promise.catch(() => {})
+        await expect(promise).rejects.toThrow("No audio to separate")
+        expect(vi.mocked(sunoSeparateApi)).not.toHaveBeenCalled()
+        return
+      }
+      await promise
+      const apiCall = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+      await apiCall()
+      const sent = vi.mocked(sunoSeparateApi).mock.calls.at(-1)![0] as unknown as Record<string, unknown>
+      expect(sourceOf(sent)).toStrictEqual(c.expected)
+    })
+  })
+
+  it("copies every stem, take and run fact the job returned onto the node", async () => {
+    mockResolveNodeInputs.mockReturnValue({ sunoTaskId: "task-123", sunoTrackId: "track-123" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-separate", {}), makeCtx())
+    const extra = mockPollJobWithNodeUpdate.mock.calls[0][5] as (od: Record<string, unknown>) => Record<string, unknown>
+    expect(extra({
+      audioUrl: "V", vocalUrl: "V", backingVocalsUrl: "B", otherUrl: "O", isolatedUrl: "I", without2Url: "W2",
+      engineUsed: "demucs", sunoRefused: true, fallbackReason: "too_large", separateType: "split_stem", sunoTaskId: "t",
+    })).toEqual({
+      vocalUrl: "V", backingVocalsUrl: "B", otherUrl: "O", isolatedUrl: "I", without2Url: "W2",
+      engineUsed: "demucs", sunoRefused: true, fallbackReason: "too_large", separateType: "split_stem",
+    })
+    // …and every field this run did not return goes as undefined, clearing the last run's.
+    const fields = extra({ audioUrl: "I", isolatedUrl: "I", withoutUrl: "W" })
+    expect(Object.hasOwn(fields, "vocalUrl") && fields.vocalUrl === undefined).toBe(true)
+    expect(Object.hasOwn(fields, "sunoRefused") && fields.sunoRefused === undefined).toBe(true)
   })
 
   it("calls pollJobWithNodeUpdate on valid input", async () => {

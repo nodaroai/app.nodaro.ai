@@ -64,7 +64,7 @@ describe("registration", () => {
   it("lists every use-case tool under workflows:execute, with the job output schema", async () => {
     const { server } = await setup()
     const names = (await listTools(server)).map((t) => t.name)
-    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_trailer", "make_clip_pack", "continue_use_case"]))
+    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_trailer", "make_clip_pack", "speaker_layout", "continue_use_case"]))
   })
   it("names the gap when a built package carries a builder with no MCP verb", () => {
     h.builder = "no-such-builder"
@@ -79,6 +79,7 @@ describe("registration", () => {
     expect(names).not.toContain("make_chapters")
     expect(names).not.toContain("make_trailer")
     expect(names).not.toContain("make_clip_pack")
+    expect(names).not.toContain("speaker_layout")
     expect(names).not.toContain("continue_use_case")
   })
   it("lists none when this deployment offers no use-case node", async () => {
@@ -89,6 +90,7 @@ describe("registration", () => {
     expect(names).not.toContain("make_chapters")
     expect(names).not.toContain("make_trailer")
     expect(names).not.toContain("make_clip_pack")
+    expect(names).not.toContain("speaker_layout")
     expect(names).not.toContain("continue_use_case")
   })
   it("make_clip_pack is not listed when the Clip Pack node is denied; the others still are, and continue_use_case does not name it", async () => {
@@ -98,7 +100,7 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("make_clip_pack")
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_trailer", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters or Trailer run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters, Trailer or Speaker Layout run as a NEW job/)
     expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Clip Pack/)
   })
   it("make_trailer is not listed when the Trailer node is denied; the others still are", async () => {
@@ -108,7 +110,7 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("make_trailer")
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "make_clip_pack", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters or Clip Pack run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Chapters, Clip Pack or Speaker Layout run as a NEW job/)
     expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Trailer/)
   })
   it("make_chapters is not listed when the Chapters node is denied; continue_use_case still is, for Tighten Episode", async () => {
@@ -118,7 +120,7 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("make_chapters")
     expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_trailer", "make_clip_pack", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Trailer or Clip Pack run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode, Trailer, Clip Pack or Speaker Layout run as a NEW job/)
     expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Chapters/)
   })
   it("tighten_episode is not listed when only Tighten Episode is denied; make_chapters and continue_use_case are", async () => {
@@ -128,12 +130,12 @@ describe("registration", () => {
     const names = tools.map((t) => t.name)
     expect(names).not.toContain("tighten_episode")
     expect(names).toEqual(expect.arrayContaining(["make_chapters", "make_trailer", "make_clip_pack", "continue_use_case"]))
-    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Chapters, Trailer or Clip Pack run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Chapters, Trailer, Clip Pack or Speaker Layout run as a NEW job/)
   })
   it("continue_use_case names the use-case nodes this deployment offers", async () => {
     const { server } = await setup()
     const tool = (await listTools(server)).find((t) => t.name === "continue_use_case")
-    expect(tool?.description).toMatch(/^Continue a Tighten Episode, Chapters, Trailer or Clip Pack run as a NEW job \(see `mode`\)/)
+    expect(tool?.description).toMatch(/^Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a NEW job \(see `mode`\)/)
     expect(tool?.description).toMatch(/Render final applies only to a run made with a review \(`review_before_render`\); Chapters has none\./)
   })
   it("says a layout without an aspect is ignored, and what each continue mode does", async () => {
@@ -236,6 +238,107 @@ describe("tighten_episode", () => {
   })
 })
 
+describe("tighten_episode's framing source (decided 2026-10-17/20)", () => {
+  it("sends framing_source as framingSource with a framing", async () => {
+    const { server, seen } = await setup()
+    for (const framing_source of ["auto", "static", "tracking"] as const) {
+      await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", framing_aspect: "9:16", framing_layout: "stacked", framing_source })
+      expect(seen.body).toEqual({
+        mediaUrls: ["https://r2/ep.mp4"],
+        framing: { aspect: "9:16", layout: "stacked" },
+        framingSource: framing_source,
+        mcp_client: "Claude",
+        userId: "u1",
+      })
+    }
+  })
+
+  it("left out, nothing is sent (the even split, as before)", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", framing_aspect: "9:16" })
+    expect(seen.body).not.toHaveProperty("framingSource")
+  })
+
+  it("refuses any other value in the schema", async () => {
+    const { server, seen } = await setup()
+    expect((await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", framing_aspect: "9:16", framing_source: "faces" })).isError).toBe(true)
+    expect(seen.url).toBeUndefined()
+  })
+})
+
+describe("tighten_episode on several recordings (decided 2026-10-19)", () => {
+  it("posts the recordings in order, the Master audio and the Cameras settings camelCased", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", {
+      media_urls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      master_audio_url: "https://r2/m.wav",
+      cameras: { wide_camera: 3, already_synced: false, speaker_cameras: { "1": 2 } },
+    })
+    expect(res.isError).toBeFalsy()
+    expect(seen.body).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 3, synced: false, speakerCameras: { "1": 2 } },
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+  })
+
+  it("sends only the Cameras settings the caller set", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { wide_camera: 2 } })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { wide: 2 }, mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("one recording in media_urls is the same request as media_url", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_urls: ["https://r2/ep.mp4"] })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("media_url and media_urls together are a tool error before any request", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", { media_url: "https://r2/a.mp4", media_urls: ["https://r2/b.mp4"] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toMatch(/media_url or media_urls, not both/)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("neither media_url nor media_urls is a tool error before any request", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", { master_audio_url: "https://r2/m.wav" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toMatch(/Pass media_url/)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("more recordings than a run takes, or a speaker past the last, are refused by the schema", async () => {
+    const { server, seen } = await setup()
+    const seven = Array.from({ length: 7 }, (_, i) => `https://r2/${i}.mp4`)
+    expect((await callTool(server, "tighten_episode", { media_urls: seven })).isError).toBe(true)
+    const badSpeaker = await callTool(server, "tighten_episode", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"], cameras: { speaker_cameras: { "7": 1 } } })
+    expect(badSpeaker.isError).toBe(true)
+    expect(seen.url).toBeUndefined()
+  })
+
+  it("a refusal for a caller without Speaker Map reaches the agent with its code and message", async () => {
+    const message = "Tighten Episode on several recordings or with a Master audio is not available on this deployment yet. Send one recording."
+    const { server } = await setup(403, { error: { code: "node_not_available", message } })
+    const res = await callTool(server, "tighten_episode", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("node_not_available")
+    expect(textOf(res)).toContain("Send one recording")
+  })
+
+  it("the description says several recordings need Speaker Map and names the cameras report", async () => {
+    const { server } = await setup()
+    const tool = (await listTools(server)).find((t) => t.name === "tighten_episode")
+    expect(tool?.description).toMatch(/Speaker Map/)
+    expect(tool?.description).toMatch(/403/)
+    expect(tool?.description).toContain("output_data.cameras")
+  })
+})
+
 describe("make_chapters", () => {
   it("posts the recording and the plan settings to /v1/episode-chapters, with the client's idempotency key", async () => {
     const { server, seen } = await setup(202, { jobId: "00000000-0000-4000-8000-0000000000cc" })
@@ -279,6 +382,61 @@ describe("make_chapters", () => {
     const res = await callTool(server, "make_chapters", { media_url: "https://r2/ep.mp4" })
     expect(res.isError).toBe(true)
     expect(textOf(res)).toContain("nodaro_connection_required")
+  })
+})
+
+describe("make_trailer on several recordings (decided 2026-10-20)", () => {
+  it("posts the recordings in order, the Master audio and the Cameras settings camelCased, beside the formats", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "make_trailer", {
+      media_urls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      master_audio_url: "https://r2/m.wav",
+      cameras: { wide_camera: 3, speaker_cameras: { "1": 2 } },
+      formats: ["16:9"],
+    })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/episode-trailer")
+    expect(seen.body).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 3, speakerCameras: { "1": 2 } },
+      formats: ["16:9"],
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+  })
+  it("media_url alone is the one-recording request it always was; both or neither is a tool error before any request", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "make_trailer", { media_url: "https://r2/ep.mp4" })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], mcp_client: "Claude", userId: "u1" })
+    const fresh = await setup()
+    const both = await callTool(fresh.server, "make_trailer", { media_url: "https://r2/a.mp4", media_urls: ["https://r2/b.mp4"] })
+    expect(both.isError).toBe(true)
+    const neither = await callTool(fresh.server, "make_trailer", { formats: ["9:16"] })
+    expect(neither.isError).toBe(true)
+    expect(textOf(neither)).toMatch(/Pass media_url/)
+    expect(fresh.seen.url).toBeUndefined()
+  })
+  it("a refusal for a caller without Speaker Map reaches the agent with its code and message", async () => {
+    const message = "Trailer on several recordings or with a Master audio is not available on this deployment yet. Send one recording."
+    const { server } = await setup(403, { error: { code: "node_not_available", message } })
+    const res = await callTool(server, "make_trailer", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("node_not_available")
+    expect(textOf(res)).toContain("Send one recording")
+  })
+  it("the description says several recordings need Speaker Map and names the cameras report", async () => {
+    const { server } = await setup()
+    const tool = (await listTools(server)).find((t) => t.name === "make_trailer")
+    expect(tool?.description).toMatch(/media_urls/)
+    expect(tool?.description).toMatch(/Speaker Map/)
+    expect(tool?.description).toContain("output_data.cameras")
+  })
+  it("its media_url is a video (audio-only is refused), never the shared \"video or audio\"", async () => {
+    const { server } = await setup()
+    const props = (await listTools(server)).find((t) => t.name === "make_trailer")?.inputSchema as { properties: Record<string, { description?: string }> }
+    expect(props.properties.media_url!.description).toMatch(/a video URL/)
+    expect(props.properties.media_url!.description).not.toMatch(/video or audio/)
   })
 })
 
@@ -607,7 +765,7 @@ describe("continue_use_case", () => {
     })
     const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
     expect(res.isError).toBe(true)
-    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode, Chapters, Trailer or Clip Pack\)/)
+    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout\)/)
     expect(seen.url).toBeUndefined()
   })
 

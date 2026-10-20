@@ -3,8 +3,9 @@
 // builder (a USE_CASE_SPECS key), label and input pips. use-case-rows.ts composes them.
 
 export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<"media" | "music" | "introCard" | "masterAudio"> }> = [
-  { type: "tighten-episode", builder: "tighten", label: "Tighten Episode", inputs: ["media", "music"] }, // unit:tighten-episode
+  { type: "tighten-episode", builder: "tighten", label: "Tighten Episode", inputs: ["media", "music", "masterAudio"] }, // unit:tighten-episode
   { type: "episode-chapters", builder: "chapters", label: "Chapters", inputs: ["media"] }, // unit:episode-chapters
-  { type: "episode-trailer", builder: "trailer", label: "Trailer", inputs: ["media", "introCard"] }, // unit:episode-trailer
-  { type: "clip-pack", builder: "clipPack", label: "Clip Pack", inputs: ["media"] }, // unit:clip-pack
+  { type: "episode-trailer", builder: "trailer", label: "Trailer", inputs: ["media", "introCard", "masterAudio"] }, // unit:episode-trailer
+  { type: "clip-pack", builder: "clipPack", label: "Clip Pack", inputs: ["media", "masterAudio"] }, // unit:clip-pack
+  { type: "speaker-layout", builder: "speakerLayout", label: "Speaker Layout", inputs: ["media", "masterAudio"] }, // unit:speaker-layout
 ]

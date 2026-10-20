@@ -332,3 +332,30 @@ describe("a use-case Render final that starts nothing never wipes a List's rows"
     expect(rowsTouched()).toBe(false)
   })
 })
+
+describe("Render final on a Speaker Layout node (a layout: no plan, no review)", () => {
+  const JOB = "00000000-0000-4000-8000-0000000000a1"
+  // A stray edit on the node (written as workflow JSON or by an agent): a layout has none to send.
+  const SL = n("sl1", "speaker-layout", {
+    reviewBeforeRender: true, useCaseJobId: JOB, editedEdl: EDIT,
+    generatedJson: { version: 1, segments: [{ start: 0, end: 60 }], dropped: [] },
+    generatedResults: [{ url: "https://r2/p.mp4", quality: "proxy", jobId: JOB }],
+  })
+  const CAP = n("cap", "add-captions")
+
+  beforeEach(() => {
+    mockNodes = [REC, SL, CAP]
+    mockEdges = [
+      { id: "a", source: "rec", target: "sl1", sourceHandle: "video", targetHandle: "media" },
+      { id: "b", source: "sl1", target: "cap", sourceHandle: "media", targetHandle: "in" },
+    ]
+  })
+
+  it("the bar's click continues the Preview's own run (render-final, its job) and runs every node after it — no edit in the override", async () => {
+    await handleRenderFinal("sl1", "final", makeCtx() as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    const [, ids, , opts] = mockRunWorkflow.mock.calls[0]!
+    expect([...(ids as string[])].sort()).toEqual(["cap", "sl1"])
+    expect(opts).toEqual({ inputOverrides: { sl1: { useCaseContinue: { mode: "render-final", jobId: JOB } } } })
+  })
+})

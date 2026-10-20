@@ -25,16 +25,25 @@
  *    still — and the wrapper job. The clips themselves (with each one's title
  *    and hook) ride on `clips`, how many could not be rendered on
  *    `failedClips`, and how many came uncaptioned (their captions could not
- *    be added) on `failedCaptions`.
+ *    be added) on `failedCaptions`. A run on several recordings or a Master
+ *    audio reports its cameras (who was put on which camera, the sync and map
+ *    notes) on `useCaseCameras`, the node's saved field of that name.
+ *    A layout (Speaker Layout) lands as an episode does: its framed video,
+ *    the edit its render drew on `json`, the transcript, the take's quality
+ *    and render basis, its length, its cameras report.
  *  - `usecaseSavedNodeOutput`: the saved-data reader, read off what the node
  *    holds — the use-case branch of `extractSavedNodeOutput`, ahead of its
- *    unit branch.
+ *    unit branch. It reads by the type's result kind (a layout's `json` is its
+ *    `generatedJson` as held), never through a unit output's `from`.
  */
 import { editPlanSavedOutput } from "@nodaro/shared/edl"
-import { usecaseListsItsResult } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseCamerasReportOf, usecaseDescriptor, usecaseKindHasPlan, usecaseListsItsResult } from "@nodaro/render-rules"
 import type { NodeOutput } from "./types.js"
 
 const url = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+
+/** Is a node of `type` a use-case node whose result has no plan (a layout: its one render's video and drawn edit)? */
+const usecaseResultHasNoPlan = (type: string): boolean => isUseCaseNodeType(type) && !usecaseKindHasPlan(usecaseDescriptor(type).resultKind)
 
 export function usecaseJobOutput(
   outputData: Readonly<Record<string, unknown>>,
@@ -71,6 +80,7 @@ export function usecaseJobOutput(
   const failedCaptions = typeof outputData.failedCaptions === "number" && Number.isInteger(outputData.failedCaptions) && outputData.failedCaptions > 0
     ? outputData.failedCaptions
     : undefined
+  const useCaseCameras = usecaseCamerasReportOf(outputData.cameras)
   const failedFormats = Array.isArray(outputData.failedFormats)
     ? (outputData.failedFormats as unknown[]).filter((f): f is string => typeof f === "string" && f.length > 0)
     : []
@@ -90,6 +100,7 @@ export function usecaseJobOutput(
       ? { listResults: rows, listResultStamps: rows.map(() => ({ ...(quality ? { quality } : {}), ...(planBasis ? { planBasis } : {}), ...(renderBasis ? { renderBasis } : {}), ...(jobId ? { jobId } : {}) })), formats: delivered }
       : {}),
     ...(failedFormats.length > 0 ? { failedFormats } : {}),
+    ...(useCaseCameras ? { useCaseCameras } : {}),
     // Every row is its own clip's take: its own quality, clip key and render's bases.
     ...(clips.length > 0
       ? {
@@ -146,8 +157,9 @@ function clipRowsOf(raw: readonly unknown[]): ClipRow[] {
 export function usecaseSavedNodeOutput(data: Record<string, unknown>, type: string): NodeOutput | undefined {
   const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
   const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
-  // A plan held as null is no plan: nothing on `json`, never the text "null".
-  const json = editPlanSavedOutput(data)?.json ?? undefined
+  // A plan held as null is no plan: nothing on `json`, never the text "null". A layout (Speaker
+  // Layout) has no plan: its `json` is the edit its render drew, held as is — no review applies.
+  const json = (usecaseResultHasNoPlan(type) ? data.generatedJson : editPlanSavedOutput(data)?.json) ?? undefined
   const text = typeof data.generatedText === "string" && data.generatedText ? data.generatedText : undefined
   // A list result (Trailer's formats): its last run's deliveries, the node's own list (as UGC Finish's).
   const saved = usecaseListsItsResult(type) ? data.__listResults : undefined

@@ -10,6 +10,10 @@
  *   source → transcribe (diarized, word timings) → edit-plan (trailer) → apply-edl
  *   source ──────────────────────────────────────→ edit-plan, apply-edl (their source)
  *   apply-edl [→ combine-videos ← intro card] → one social-media-format per format
+ *
+ * Two or more recordings or a Master audio (decided 2026-10-17) build the
+ * multicam chain instead (episode-trailer-multicam.ts): the same tail after a
+ * plan over every recording and, with two or more cameras, Camera Switch.
  */
 import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import type {
@@ -18,27 +22,16 @@ import type {
   UseCaseGraph,
   UseCaseGraphEdge,
   UseCaseGraphNode,
-  UseCaseHandleRef,
   UseCaseMediaKind,
   UseCaseMediaSource,
 } from "./use-case-graph"
 import { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
-import { usecaseTypeOfBuilder } from "./use-case-rows"
+import { TRAILER_FORMATS, TRAILER_NODE_IDS, TRAILER_RENDER_TYPE, withTrailerTail, type TrailerFormat } from "./episode-trailer-parts"
+import { buildTrailerMulticamGraph } from "./episode-trailer-multicam"
+import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
+import { usecaseIsMulticam } from "./use-case-multicam"
 
-/** The render step: the shipped Apply EDL node, as in the template. */
-const RENDER_TYPE = "apply-edl"
-
-/** The formats a trailer is delivered in, in the order they are delivered. */
-export const TRAILER_FORMATS = ["9:16", "1:1", "4:5", "16:9"] as const
-export type TrailerFormat = (typeof TRAILER_FORMATS)[number]
-
-/** Each format's platform spec (the template's three, and a 1920×1080 landscape) and the node that delivers it. */
-export const TRAILER_FORMAT_SPECS = Object.freeze({
-  "9:16": { specKey: "instagram:story-reel", platform: "instagram", contentType: "story-reel", label: "Story / Reel (9:16)", nodeId: "uc-format-9x16" },
-  "1:1": { specKey: "instagram:feed-square", platform: "instagram", contentType: "feed-square", label: "Square Feed (1:1)", nodeId: "uc-format-1x1" },
-  "4:5": { specKey: "instagram:feed-portrait", platform: "instagram", contentType: "feed-portrait", label: "Portrait Feed (4:5)", nodeId: "uc-format-4x5" },
-  "16:9": { specKey: "x:x-video", platform: "x", contentType: "x-video", label: "Landscape (16:9)", nodeId: "uc-format-16x9" },
-} as const)
+export { TRAILER_FORMATS, TRAILER_FORMAT_SPECS, TRAILER_NODE_IDS, type TrailerFormat } from "./episode-trailer-parts"
 
 /** The longest intro card a Trailer takes, in seconds (decided 2026-10-18): a title card, never a second episode. */
 export const TRAILER_INTRO_CARD_MAX_SEC = 15
@@ -49,6 +42,12 @@ export interface EpisodeTrailerSettings {
   readonly planTier: PlanTier
   readonly instructions: string
   readonly styleGuide: string
+  /**
+   * The Cameras settings, resolved only for two or more recordings or a Master
+   * audio (absent otherwise, so a one-recording run's settings are what they
+   * always were); the builder reads absent as the defaults.
+   */
+  readonly cameras?: UseCaseCameras
 }
 
 export const EPISODE_TRAILER_DEFAULTS: EpisodeTrailerSettings = Object.freeze({
@@ -59,19 +58,14 @@ export const EPISODE_TRAILER_DEFAULTS: EpisodeTrailerSettings = Object.freeze({
   styleGuide: "",
 })
 
-export const TRAILER_NODE_IDS = Object.freeze({
-  source: "uc-source",
-  transcribe: "uc-transcribe",
-  plan: "uc-plan",
-  render: "uc-render",
-  intro: "uc-intro",
-  combine: "uc-combine",
-} as const)
-
 export interface EpisodeTrailerSources {
   readonly media: UseCaseMediaSource
   /** A short title-card video that plays before the trailer, with its probed length when known. */
   readonly introCard?: { readonly url: string; readonly durationSec?: number }
+  /** Recordings 2..n, in order (decided 2026-10-17): the cameras of the same conversation. */
+  readonly moreMedia?: readonly UseCaseMediaSource[]
+  /** The mixer or recorder track every recording is lined up to, and the trailer's sound. */
+  readonly masterAudio?: UseCaseMediaSource
 }
 
 /** Trailer's graph: one delivery per chosen format. */
@@ -87,11 +81,14 @@ export type EpisodeTrailerGraph = UseCaseGraph & { readonly outputMap: FormatsOu
  * deliberate: the route is the one place a caller can send an empty list on
  * purpose (and is told so), while every other reader (an estimate, the
  * expansion, a node an agent or an import wrote) gets a buildable graph. The
- * config panel never lets the last format be unticked.
+ * config panel never lets the last format be unticked. `shape` (how many
+ * recordings, whether a Master audio is wired) decides whether the Cameras
+ * settings are resolved at all.
  */
 export function resolveEpisodeTrailerSettings(
   raw: Readonly<Record<string, unknown>> | undefined,
   _mediaKind: UseCaseMediaKind,
+  shape?: UseCaseSourcesShape,
 ): EpisodeTrailerSettings {
   const r = raw ?? {}
   const d = EPISODE_TRAILER_DEFAULTS
@@ -103,11 +100,17 @@ export function resolveEpisodeTrailerSettings(
     planTier: typeof r.planTier === "string" && (EDIT_PLAN_TIERS as readonly string[]).includes(r.planTier) ? (r.planTier as PlanTier) : d.planTier,
     instructions: typeof r.instructions === "string" ? r.instructions : d.instructions,
     styleGuide: typeof r.styleGuide === "string" ? r.styleGuide : d.styleGuide,
+    ...(usecaseShapeIsMulticam(shape) ? { cameras: resolveUseCaseCameras(r.cameras, shape) } : {}),
   }
 }
 
-/** The chain one Trailer run executes, built from resolved settings and its recording (and intro card). */
+/**
+ * The chain one Trailer run executes, built from resolved settings and its
+ * inputs. Two or more recordings or a Master audio: the multicam chain
+ * (episode-trailer-multicam.ts); one recording: P2's chain below, unchanged.
+ */
 export function buildEpisodeTrailerGraph(settings: EpisodeTrailerSettings, sources: EpisodeTrailerSources): EpisodeTrailerGraph {
+  if (usecaseIsMulticam(sources)) return buildTrailerMulticamGraph(settings, sources)
   const ID = TRAILER_NODE_IDS
   const pip = sources.media.kind === "audio" ? "audio" : "video"
   const quality = settings.reviewBeforeRender ? "proxy" : "final"
@@ -119,7 +122,7 @@ export function buildEpisodeTrailerGraph(settings: EpisodeTrailerSettings, sourc
       ...(settings.styleGuide ? { styleGuide: settings.styleGuide } : {}),
       sourceOrder: [ID.source], sourceConfig: {},
     }),
-    usecaseNode(ID.render, RENDER_TYPE, 3, 1, { label: "Apply Cut", output: "video", quality, crossfadeMs: 0 }),
+    usecaseNode(ID.render, TRAILER_RENDER_TYPE, 3, 1, { label: "Apply Cut", output: "video", quality, crossfadeMs: 0 }),
   ]
   const edges: UseCaseGraphEdge[] = [
     usecaseEdge(ID.source, pip, ID.transcribe, "audio"),
@@ -128,44 +131,5 @@ export function buildEpisodeTrailerGraph(settings: EpisodeTrailerSettings, sourc
     usecaseEdge(ID.transcribe, "json", ID.plan, "transcript"),
     usecaseEdge(ID.plan, "edl", ID.render, "edl"),
   ]
-  let trailer: UseCaseHandleRef = { nodeId: ID.render, handle: "media" }
-  if (sources.introCard) {
-    nodes.push(
-      usecaseNode(ID.intro, "upload-video", 3, 3, {
-        label: "Intro card", assetId: "", url: sources.introCard.url,
-        // Its probed length, declared as the recording's is (usecaseSourceNode): what Combine Videos is quoted on.
-        ...(typeof sources.introCard.durationSec === "number" && sources.introCard.durationSec > 0
-          ? { metadata: { durationSeconds: sources.introCard.durationSec } }
-          : {}),
-      }),
-      usecaseNode(ID.combine, "combine-videos", 4, 1, {
-        label: "Add Intro Card", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeDuration: 0.5,
-        trimEndFrames: 0, trimStartFrames: 0, smartCutFramesPrev: 8, smartCutFramesNext: 8, clipOrder: [ID.intro, ID.render],
-      }),
-    )
-    edges.push(usecaseEdge(ID.intro, "video", ID.combine, "in"), usecaseEdge(ID.render, "media", ID.combine, "in"))
-    trailer = { nodeId: ID.combine, handle: "video" }
-  }
-  for (const [row, format] of settings.formats.entries()) {
-    const spec = TRAILER_FORMAT_SPECS[format]
-    nodes.push(usecaseNode(spec.nodeId, "social-media-format", 5, row, {
-      label: spec.label, platform: spec.platform, contentType: spec.contentType, specKey: spec.specKey,
-      method: "pad", padColor: "#000000", formattedText: "",
-    }))
-    edges.push(usecaseEdge(trailer.nodeId, trailer.handle, spec.nodeId, "media"))
-  }
-  return {
-    nodeType: usecaseTypeOfBuilder("trailer"),
-    nodes,
-    edges,
-    outputMap: {
-      kind: "formats",
-      formats: settings.formats.map((format) => ({ format, ref: { nodeId: TRAILER_FORMAT_SPECS[format].nodeId, handle: "media" } })),
-      preview: { nodeId: ID.render, handle: "media" },
-      json: { nodeId: ID.plan, handle: "edl" },
-      transcript: { nodeId: ID.transcribe, handle: "json" },
-      planNodeId: ID.plan,
-      renderNodeId: ID.render,
-    },
-  }
+  return withTrailerTail(settings, sources, { nodes, edges, renderColumn: 3 })
 }

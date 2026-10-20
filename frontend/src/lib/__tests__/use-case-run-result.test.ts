@@ -122,3 +122,30 @@ describe("a Chapters run (a text result) lands on the node through the same mapp
     expect(applyEdlTakeTranscriptField("episode-chapters", { text: NOTES, json: ROWS }, "https://r2/x.mp4")).toBeUndefined()
   })
 })
+
+describe("a multicam run's cameras report lands on the node (useCaseCameras), in every lane", () => {
+  const REPORT = { speakers: [{ speaker: "speaker_0", ordinal: 1, camera: 2, marginDb: 7.5 }], syncNotes: [], mapNotes: [] }
+  it("the wrapper job's `cameras` (the canvas run, a reopen, a reconcile)", () => {
+    expect(applyEdlRunCutFields("tighten-episode", { videoUrl: "https://r2/ep.mp4", json: PLAN, cameras: REPORT }, {})).toMatchObject({ useCaseCameras: REPORT })
+  })
+  it("the server engine's node output `useCaseCameras` (a server run's node state)", () => {
+    expect(applyEdlRunCutFields("tighten-episode", { videoUrl: "https://r2/ep.mp4", json: PLAN, useCaseCameras: REPORT }, {})).toMatchObject({ useCaseCameras: REPORT })
+  })
+  it("a later episode with no report clears an earlier one; a node that holds none gets no key at all", () => {
+    expect(applyEdlRunCutFields("tighten-episode", { videoUrl: "https://r2/ep.mp4", json: PLAN }, { useCaseCameras: REPORT })).toHaveProperty("useCaseCameras", undefined)
+    expect(applyEdlRunCutFields("tighten-episode", { videoUrl: "https://r2/ep.mp4", json: PLAN }, {})).not.toHaveProperty("useCaseCameras")
+  })
+  it("a report of another shape is not landed", () => {
+    expect(applyEdlRunCutFields("tighten-episode", { videoUrl: "https://r2/ep.mp4", json: PLAN, cameras: { speakers: "x" } }, {})).not.toHaveProperty("useCaseCameras")
+  })
+  it("a failed run that got as far as its cameras keeps their report", () => {
+    expect(usecaseFailedRunFields("tighten-episode", { cameras: REPORT }, {}, "job-1")).toMatchObject({ useCaseCameras: REPORT })
+  })
+  it("Trailer (a list of formats): its run's report lands; a later run that delivered formats with no report clears it", () => {
+    const formats = [{ format: "9:16", url: "https://r2/a.mp4" }]
+    const out = (more: Record<string, unknown>) => ({ videoUrl: "https://r2/a.mp4", formats, json: PLAN, ...more }) as Parameters<typeof applyEdlRunCutFields>[1]
+    expect(applyEdlRunCutFields("episode-trailer", out({ cameras: REPORT }), {})).toMatchObject({ useCaseCameras: REPORT })
+    expect(applyEdlRunCutFields("episode-trailer", out({}), { useCaseCameras: REPORT })).toHaveProperty("useCaseCameras", undefined)
+    expect(applyEdlRunCutFields("episode-trailer", out({}), {})).not.toHaveProperty("useCaseCameras")
+  })
+})

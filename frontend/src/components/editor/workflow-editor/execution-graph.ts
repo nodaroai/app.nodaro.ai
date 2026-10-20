@@ -8,7 +8,7 @@ import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared
 import { isExpandedClone, aggregateByType, buildChildrenByParent, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member } from "@nodaro/shared/workflow";
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs";
 import { getOutputType } from "@nodaro/shared/apps";
-import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared/models";
+import { ASPECT_RATIO_DIMENSIONS, sunoSeparateHandleUrl } from "@nodaro/shared/models";
 import { overlayVariantIdFromHandle } from "@nodaro/shared/media";
 import { featuredMetaAdOutputs, featuredInstagramOutputs, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, telegramPostsFrom } from "@nodaro/shared/social";
 import { resolveVideoLinkOutput } from "@nodaro/shared/video";
@@ -456,19 +456,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedVideoUrl as string | undefined)
     );
   }
-  // Suno-separate: support stem routing via sourceHandle (matches backend).
-  // The Batch 2 rename normalized vocal-out → vocals and
-  // instrumental-out → instrumental; accept both spellings as a safety net
-  // for edges that bypass loadWorkflow's migration (MCP-built workflows
-  // etc.).
+  // Suno-separate: each handle reads its own stem through the shared rule
+  // (`sunoSeparateHandleUrl`, @nodaro/shared). A stem that did not come back
+  // is empty — a full-stems run's `instrumental` used to fall back to the main
+  // audio, which is the vocals. The old handle spellings (vocal-out,
+  // instrumental-out) are accepted for edges that bypass loadWorkflow's
+  // migration (MCP-built workflows etc.).
   if (type === "suno-separate") {
-    if (sourceHandle === "vocals" || sourceHandle === "vocal" || sourceHandle === "vocal-out") {
-      return (data.vocalUrl as string | undefined) ??
-        (data.generatedAudioUrl as string | undefined);
-    }
-    if (sourceHandle === "instrumental" || sourceHandle === "instrumental-out") {
-      return (data.instrumentalUrl as string | undefined) ??
-        (data.generatedAudioUrl as string | undefined);
+    if (sourceHandle) {
+      return sunoSeparateHandleUrl({ ...data, audioUrl: data.generatedAudioUrl }, sourceHandle);
     }
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

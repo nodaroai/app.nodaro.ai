@@ -25,6 +25,20 @@ describe("Speaker Frames in the editor's estimate", () => {
     expect(getExactPricingUnits(sf, [long, sf], videoIn, NO_RERUNS)).toBe(6)
   })
 
+  it("quotes an edit an Edit Plan is about to make from its recording's length (decided 2026-10-17)", () => {
+    const up = node("up", "upload-video", { url: "https://m.test/a.mp4", metadata: { durationSeconds: 3600 } })
+    const tx = node("tx", "transcribe")
+    const plan = node("plan", "edit-plan", { mode: "tighten" })
+    const edges = [
+      { id: "e1", source: "up", sourceHandle: "video", target: "plan", targetHandle: "sources" },
+      { id: "e2", source: "up", sourceHandle: "video", target: "tx", targetHandle: "audio" },
+      { id: "e3", source: "tx", sourceHandle: "json", target: "plan", targetHandle: "transcript" },
+      { id: "e4", source: "plan", sourceHandle: "edl", target: "sf", targetHandle: "edl" },
+    ] as unknown as WorkflowEdge[]
+    // One hour on one camera, with the 2 s margins: 7,208 frames, 8 blocks — not the 130-block ceiling.
+    expect(getExactPricingUnits(sf, [up, tx, plan, sf], edges, new Set(["tx", "plan"]))).toBe(8)
+  })
+
   it("quotes the 130-block ceiling only when no length is known", () => {
     const link = node("up", "upload-video", { url: "https://m.test/a.mp4" })
     expect(getExactPricingUnits(sf, [link, sf], videoIn, NO_RERUNS)).toBe(130)

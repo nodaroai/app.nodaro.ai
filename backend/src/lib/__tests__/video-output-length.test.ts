@@ -50,7 +50,7 @@ import {
   type WireInput,
   type WireLength,
 } from "../video-output-length.js"
-import { USE_CASE_SPECS, editPlanRenderEstimateLength, renderLengthSec, TRAILER_MAX_SEC } from "@nodaro/render-rules"
+import { USE_CASE_SPECS, editPlanRenderEstimateLength, renderLengthSec, TRAILER_MAX_SEC, usecaseTypeOfBuilder } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "../seedance-extend-model.js"
 import { generateVideoProClampedSec, generateVideoProLengthSec } from "../generate-video-pro-length.js"
 import { computeGenerateVideoProPricing } from "../../ee/billing/generate-video-pro-credits.js"
@@ -411,7 +411,7 @@ describe("Trailer: the teaser at its render's estimated length, after its intro 
   const length = USE_CASE_SPECS.trailer.outputLength!
   it("its spec's output length is the teaser's estimated length, after the intro card", () => {
     expect(teaserSec).toBe(TRAILER_MAX_SEC)
-    expect(length).toEqual({ fixedSec: teaserSec, after: "introCard" })
+    expect(length).toEqual({ kind: "fixed", fixedSec: teaserSec, after: "introCard" })
   })
   it("no intro card: the teaser's estimated length, whatever the recording's length", () => {
     expect(usecaseLength(length, [video(episode, "media")])).toEqual({ fixedSec: teaserSec, perEpisodeSec: 0 })
@@ -424,5 +424,24 @@ describe("Trailer: the teaser at its render's estimated length, after its intro 
     expect(run("episode-trailer", [video(episode, "media")])).toEqual({ fixedSec: teaserSec, perEpisodeSec: 0 })
     expect(run("episode-trailer", [video(episode, "media"), video(fixed(4), "introCard")])).toEqual({ fixedSec: teaserSec + 4, perEpisodeSec: 0 })
     expect(run("episode-trailer", [video(episode, "media"), video("unknown", "introCard")])).toBe("unknown")
+  })
+})
+
+describe("Speaker Layout: its recording's own length (decided 2026-10-17)", () => {
+  // Read through its spec's output length (no central row); its type from its builder key.
+  const type = usecaseTypeOfBuilder("speakerLayout")
+  it("its spec's output length is the clock's", () => {
+    expect(USE_CASE_SPECS.speakerLayout.outputLength).toEqual({ kind: "clock" })
+  })
+  it("one recording: that recording's length, per minute of the episode included", () => {
+    expect(run(type, [video(fixed(3600), "media")])).toEqual(fixed(3600))
+    expect(run(type, [video(episode, "media")])).toEqual(episode)
+  })
+  it("several cameras: the longest; a Master audio: its length", () => {
+    expect(run(type, [video(fixed(3000), "media"), wire("video", fixed(3600), "media", "cam-2")])).toEqual(fixed(3600))
+    expect(run(type, [video(fixed(3600), "media"), audio(fixed(3700), "masterAudio")])).toEqual(fixed(3700))
+  })
+  it("a recording whose length is not known: unknown", () => {
+    expect(run(type, [video("unknown", "media")])).toBe("unknown")
   })
 })

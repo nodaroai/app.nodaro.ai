@@ -52,14 +52,16 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODELS, type LlmFeature, type LlmModelDef, orderedLlmModels, STRUCTURED_VISION_MODELS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
+import { availableReasoningEfforts, defaultReasoningEffort, DESCRIBE_TO_PICKER_MODELS, LLM_FEATURE_DEFAULTS, LLM_MODELS, type LlmFeature, type LlmModelDef, orderedLlmModels, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
 import {
   isSeedanceVideoEditProvider,
   DEFAULT_TTS_PROVIDER,
   DEFAULT_DIALOGUE_PROVIDER,
   VOICE_CHANGER_MODELS,
   DEFAULT_VOICE_CHANGER_MODEL,
+  SUNO_SEPARATE_TYPES,
 } from "@nodaro/shared/models"
+import { SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import {
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
@@ -479,18 +481,27 @@ const reasoningEffortControl = (feature?: LlmFeature): QuickConfigControl => {
 
 /** Vision LLM model dropdown (writes `data.llmModel`). The describe-to-picker
  *  analyzer forces a schema over an image, so the strip offers exactly the
- *  vision models that can return guaranteed structured output (Anthropic +
- *  Gemini) — the shared {@link STRUCTURED_VISION_MODELS} list the route gate
- *  also enforces, so the picker and the gate can't drift. */
+ *  vision models that can return guaranteed structured output and that the
+ *  node offers — the shared {@link DESCRIBE_TO_PICKER_MODELS} list the route
+ *  gate also enforces, so the picker and the gate can't drift. A stored model
+ *  outside it (Claude Fable 5, withheld 2026-10-20) is snapped by the generic
+ *  fail-safe to the first option — the default, see `snap` below. */
 const visionModelControl = (): QuickConfigControl => ({
   field: "llmModel",
   ariaLabel: tx("field.model"),
   icon: Sparkles,
-  options: orderedLlmModels(STRUCTURED_VISION_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
-  retainedOptions: retiredLlmOptions(STRUCTURED_VISION_MODELS),
+  options: orderedLlmModels(DESCRIBE_TO_PICKER_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
+  retainedOptions: retiredLlmOptions(DESCRIBE_TO_PICKER_MODELS),
   // A node with no stored model runs on the analyzer's default model — show
   // that, not whichever vision model happens to be listed first.
   defaultValue: LLM_FEATURE_DEFAULTS["describe-to-picker"],
+  // A stale model the node no longer offers snaps to the analyzer's default,
+  // the model the run would use anyway — not to the first listed vendor's —
+  // and choosing or snapping to the default leaves the field UNSET: the
+  // default is never stored (DescribeToPickerData), so a later default move
+  // reaches the node, exactly as the config panel's clear does.
+  snap: () => LLM_FEATURE_DEFAULTS["describe-to-picker"],
+  write: (v) => ({ llmModel: v === LLM_FEATURE_DEFAULTS["describe-to-picker"] ? undefined : v }),
   // Same rationale as llmModelControl: a stranded advancedMode fails an
   // orchestrated run invisibly, so clear it on any model switch.
   additionalClear: ["advancedMode"],
@@ -679,14 +690,12 @@ const scene3dDurationControl = (): QuickConfigControl => ({
   customRange: { min: SCENE3D_LIMITS.minDurationSeconds, max: SCENE3D_LIMITS.maxDurationSeconds, unit: "s" },
 })
 
-/** Suno Separate: vocals + instrumental, or the 12-stem split — the panel's
- *  two choices (the split prices higher; the run reads `type`). */
+/** Suno Separate: vocals + instrumental, the full-stems split, or one
+ *  instrument — the panel's modes, from the shared list (each prices
+ *  differently; the run reads `type`). */
 const sunoSeparateTypeControl = (): QuickConfigControl => ({
   field: "type", ariaLabel: tx("audiocfg.separationType"), icon: Layers,
-  options: [
-    { value: "separate_vocal", label: tx("audiocfg.vocalInstrumental") },
-    { value: "split_stem", label: tx("audiocfg.twelveStems") },
-  ],
+  options: SUNO_SEPARATE_TYPES.map((type) => ({ value: type, label: tx(SUNO_SEPARATE_TYPE_LABEL_KEYS[type]) })),
 })
 /** Voice Changer / Voice Changer Pro speech-to-speech model — the shared list
  *  the panels render; an unset node runs the default model. */

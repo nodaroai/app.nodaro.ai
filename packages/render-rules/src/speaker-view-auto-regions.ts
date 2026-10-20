@@ -107,7 +107,8 @@ export interface SpeakerViewAutoSpeakers { readonly camera: string; readonly spe
  * camera, or `undefined` when it draws no box at all (flag off, drawn
  * regions, no edit, several cameras, a pack with no transcript, one speaker,
  * more than `AUTO_REGIONS_MAX_SPEAKERS`, a set that would be all whole frame).
- * One edit: the speakers on screen on its one camera. A clip pack (a list
+ * One edit: the speakers on screen on its one camera (with
+ * `autoRegionsTalkFloor`, only those over the talk-time floor). A clip pack (a list
  * row, or the batch the panel and the region editor read): the episode's
  * speakers who really talk, first heard first (`speakerViewPackSpeakers`).
  * The region editor deals its own default boxes over this very list, so it
@@ -142,7 +143,12 @@ function editFraming(data: SpeakerViewNodeSettings, ctx: SpeakerViewContext): Sp
   const coerced = coerceSpeakerViewEdl(clip.edl)
   if ("problem" in coerced) return undefined
   const camera = clip.cameraIds[0]!
-  return { camera, speakers: speakerViewCameraSpeakers(speakerViewOnScreen(coerced.edl, ctx.transcript, normalizeSpeakerViewData(data, ctx).data), camera) }
+  const onScreen = speakerViewCameraSpeakers(speakerViewOnScreen(coerced.edl, ctx.transcript, normalizeSpeakerViewData(data, ctx).data), camera)
+  // Speaker Layout (decided 2026-10-18): a speaker under the talk-time floor (a
+  // stray diarizer label) gets no box of their own — the floor a clip pack's boxes use.
+  if (data.autoRegionsTalkFloor !== true) return { camera, speakers: onScreen }
+  const talk = new Set(speakerViewPackSpeakers(ctx.transcript))
+  return { camera, speakers: onScreen.filter((s) => talk.has(s)) }
 }
 
 /**

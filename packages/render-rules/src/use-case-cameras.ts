@@ -11,10 +11,16 @@
  * the recordings' order) everywhere a person or an agent names one; a builder
  * turns a position into the id.
  */
+import type { UseCaseMediaSource } from "./use-case-graph"
 import { orderSourceRows } from "./unit-input-lanes"
 
 export const USE_CASE_MAX_RECORDINGS = 6
 export const USE_CASE_MASTER_NODE_ID = "uc-master"
+
+/** Every recording of a run, the first first, in the order it is built in (`UseCaseSources`' media, then moreMedia). */
+export function usecaseRecordings(sources: { readonly media: UseCaseMediaSource; readonly moreMedia?: readonly UseCaseMediaSource[] }): readonly UseCaseMediaSource[] {
+  return [sources.media, ...(sources.moreMedia ?? [])]
+}
 
 /** The built node recording `index` (0-based) stands for. */
 export function usecaseRecordingNodeId(index: number): string {
@@ -48,6 +54,13 @@ export interface UseCaseCameras {
   readonly speakerCameras: Readonly<Record<string, number>>
 }
 
+/** The Cameras settings as a node stores them (what `resolveUseCaseCameras` reads; anything it cannot read falls back). */
+export interface UseCaseCamerasInput {
+  readonly wide?: number | null
+  readonly synced?: boolean
+  readonly speakerCameras?: Readonly<Record<string, number>>
+}
+
 export const USE_CASE_CAMERAS_DEFAULTS: UseCaseCameras = Object.freeze({ wide: null, synced: false, speakerCameras: Object.freeze({}) })
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
@@ -56,13 +69,22 @@ const isPlainRecord = (v: unknown): v is Record<string, unknown> => !!v && typeo
 const isSpeakerOrdinal = (s: string): boolean => /^[1-9]\d*$/.test(s) && Number(s) <= USE_CASE_MAX_RECORDINGS
 
 /**
+ * Whether a run of this shape is built with the multicam front: two or more
+ * recordings, or a Master audio. One rule for the Cameras resolver and for
+ * the builders that carry `cameras` in their resolved settings only then.
+ */
+export function usecaseShapeIsMulticam(shape: UseCaseSourcesShape | undefined): boolean {
+  return (shape?.recordings ?? 1) >= 2 || !!shape?.masterAudio
+}
+
+/**
  * The node's raw `cameras` as a run reads them: anything unknown or out of
  * range falls back (never passed on). One recording without a master has
  * nothing to line up: the defaults.
  */
 export function resolveUseCaseCameras(raw: unknown, shape: UseCaseSourcesShape | undefined): UseCaseCameras {
   const n = shape?.recordings ?? 1
-  if (n < 2 && !shape?.masterAudio) return USE_CASE_CAMERAS_DEFAULTS
+  if (!usecaseShapeIsMulticam(shape)) return USE_CASE_CAMERAS_DEFAULTS
   const r = isPlainRecord(raw) ? raw : {}
   const wide = isInt(r.wide) && r.wide >= 1 && r.wide <= n ? r.wide : null
   const speakerCameras: Record<string, number> = {}

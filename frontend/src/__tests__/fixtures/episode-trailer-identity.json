@@ -5,7 +5,8 @@
     "category": "processing",
     "inputs": [
       "media",
-      "introCard"
+      "introCard",
+      "masterAudio"
     ],
     "outputs": [
       "media",
@@ -58,11 +59,15 @@
   "targetHandles": [
     {
       "handleId": "media",
-      "label": "Recording"
+      "label": "Recordings"
     },
     {
       "handleId": "introCard",
       "label": "Intro card"
+    },
+    {
+      "handleId": "masterAudio",
+      "label": "Master audio"
     }
   ],
   "executable": true,

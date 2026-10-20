@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Current-run build reuse only. Dependencies remain clean npm ci installs.
+// @reads-none reads only build outputs (untracked dist/) and the CI artifact directory
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'

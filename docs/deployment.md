@@ -1674,21 +1674,26 @@ successful preparation from the same workflow run. After artifact expiry,
 choose “Re-run all jobs” to regenerate the outputs. Full reruns replace the
 artifacts for that run; artifacts are never reused across workflow runs.
 
-A private-repository runner pilot can route the two main test suites to runners
-labelled `self-hosted,linux,x64,nodaro-ci` by setting the repository variable
-`CI_RAILWAY_PILOT_BRANCH` to a same-repository PR branch. After verifying the
-pool's capacity and unattended scheduling, `CI_RAILWAY_ENABLED=true` enables
-routing for trusted PRs and post-merge production tests. Public forks and
-mirrors stay hosted. Clear both variables and rerun to return tests to hosted
-runners. Docker build contexts exclude local session state, reports
+A private-repository runner pool can run CI's heavy Linux Node jobs (the test
+shards, Prepare Shared Packages, Type Check, the backend build, the boot smoke
+and the test de-dup harness) on runners labelled
+`self-hosted,linux,x64,nodaro-ci`. Setting the repository
+variable `CI_RAILWAY_PILOT_BRANCH` to a same-repository PR branch routes that
+branch only; `CI_RAILWAY_ENABLED=true` routes trusted PRs and pushes to `main`
+and `dev`. Public forks and mirrors stay hosted, and so do the short source guards and
+fan-in checks (a pool hop queues longer than they run, and no repository secret
+reaches the pool) and the jobs that need Docker (database and Redis services,
+the ffmpeg characterization container), the `gh` CLI, a browser (the Remotion
+render test), or production credentials. Clear both variables and rerun to
+return every job to its hosted runner. Docker build contexts exclude local session state, reports
 and test files; the full CI test and typecheck jobs continue to use the checkout.
 
 The optional disposable Railway runner pool is documented in
 [`tools/ci-runner/README.md`](../tools/ci-runner/README.md). Its controller holds
 the administrative credentials; each runner receives only a single-use job
 identity and exits after one job. Deploying the pool does not enable CI routing.
-Railway test runners restore npm downloads from the hosted preparation cache
-without saving a second copy. Cache misses still use a clean `npm ci`.
+Railway runners restore npm downloads from the cache Prepare Shared Packages
+maintains, without saving a second copy. Cache misses still use a clean `npm ci`.
 
 ## External customer wallets
 

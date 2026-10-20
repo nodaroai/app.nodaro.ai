@@ -4,11 +4,12 @@ import type { NodeProps } from "@xyflow/react"
 import type { WorkflowNode } from "@/types/nodes"
 
 /**
- * Decided 2026-10-09: an untouched Describe to Picker node runs Opus 5.5 at
- * effort high — on Anthropic's own API, so the run reserves the direct rung.
- * The node stores no effort, so its badge has to quote the default the run
- * uses, and quote the SAME row the panel and the run estimate do
- * (`getModelIdentifier`), or one node shows two prices.
+ * Decided 2026-10-20: an untouched Describe to Picker node runs Gemini 3.8
+ * Flash at Auto on the aggregator, the economy rung. Opus 5.5, when chosen,
+ * keeps its 2026-10-09 recipe — effort high on Anthropic's own API, the direct
+ * rung. The node stores neither the default model nor the recipe effort, so
+ * its badge has to quote what the run uses, and quote the SAME row the panel
+ * and the run estimate do (`getModelIdentifier`), or one node shows two prices.
  */
 
 const quoted: string[] = []
@@ -49,11 +50,15 @@ function badgeRow(data: Record<string, unknown>): string {
 }
 
 describe("Describe to Picker — the credit badge quotes the effort the run uses", () => {
-  it("an untouched node quotes Opus 5.5 at high: the direct rung the run reserves", () => {
-    expect(badgeRow({})).toBe("describe-to-picker:premium-direct")
+  it("an untouched node quotes Gemini 3.8 Flash at Auto: the economy rung the run reserves", () => {
+    expect(badgeRow({})).toBe("describe-to-picker:economy")
+  })
+
+  it("Opus 5.5 with no effort quotes its recipe, high: the direct rung the run reserves", () => {
+    expect(badgeRow({ llmModel: "claude-opus-5.5" })).toBe("describe-to-picker:premium-direct")
   })
 
   it("another model with no effort quotes that model's Auto price", () => {
-    expect(badgeRow({ llmModel: "gemini-3.8-flash" })).toBe("describe-to-picker:economy")
+    expect(badgeRow({ llmModel: "claude-opus-5" })).toBe("describe-to-picker:premium")
   })
 })

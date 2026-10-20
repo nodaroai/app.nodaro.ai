@@ -1038,16 +1038,23 @@ await check("Edit Plan is a Nodaro-exclusive: omitted from discovery, run refuse
   return "edit-plan absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
-// The podcast use-case nodes (Tighten Episode, Chapters, Trailer, Clip Pack) each build and run a
+// The podcast use-case nodes (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout) each build and run a
 // chain whose planning step is Nodaro-EXCLUSIVE. Unconnected, discovery omits
 // them and a run is refused 503 nodaro_connection_required BEFORE its wrapper
 // job, its fee hold or any inner job exists — and before the recording is
 // fetched, so the example.com URL below is never read.
-for (const [type, label] of [
-  ["tighten-episode", "Tighten Episode"],
-  ["episode-chapters", "Chapters"],
-  ["episode-trailer", "Trailer"],
-  ["clip-pack", "Clip Pack"],
+// A node that takes several recordings (Tighten Episode, Trailer, Clip Pack, Speaker Layout) is asked twice: its
+// one-recording body and its multicam body (two recordings + a Master audio).
+// Speaker Map, which several recordings need, is keyless and offered on a
+// community install, so the multicam body must be refused the same way: 503
+// before any job — not a 403 (Speaker Map withheld) and never a job.
+const MULTICAM_BODY = { mediaUrls: ["https://example.com/cam-a.mp4", "https://example.com/cam-b.mp4"], masterAudioUrl: "https://example.com/master.wav" }
+for (const [type, label, multicam] of [
+  ["tighten-episode", "Tighten Episode", true],
+  ["episode-chapters", "Chapters", false],
+  ["episode-trailer", "Trailer", true],
+  ["clip-pack", "Clip Pack", true],
+  ["speaker-layout", "Speaker Layout", true],
 ]) {
   const name = `${label} on an unconnected install: hidden from discovery, refused 503 before any job`
   await check(name, async () => {
@@ -1062,22 +1069,25 @@ for (const [type, label] of [
     const before = await api("/v1/jobs?limit=100", { token: ctx.token })
     assert(before.status === 200, `GET /v1/jobs expected 200, got ${before.status}: ${before.text.slice(0, 200)}`)
     const seen = new Set((before.json?.data ?? []).map((j) => j?.id))
-    const run = await api(`/v1/${type}`, {
-      method: "POST",
-      token: ctx.token,
-      headers: { "idempotency-key": `community-smoke-${type}-${Date.now()}` },
-      body: { mediaUrls: ["https://example.com/episode.mp4"] },
-    })
-    assert(run.status === 503, `POST /v1/${type} expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
-    assert(
-      run.json?.error?.code === "nodaro_connection_required",
-      `expected error.code "nodaro_connection_required", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`,
-    )
-    assert(
-      run.json?.jobId === undefined && run.json?.id === undefined,
-      `the refusal carried a job handle — a refused ${type} must create nothing: ${run.text.slice(0, 200)}`,
-    )
-    assertActionable(run.json?.error?.message, `${type} refusal`)
+    const bodies = [["one recording", { mediaUrls: ["https://example.com/episode.mp4"] }], ...(multicam ? [["several recordings + Master audio", MULTICAM_BODY]] : [])]
+    for (const [what, body] of bodies) {
+      const run = await api(`/v1/${type}`, {
+        method: "POST",
+        token: ctx.token,
+        headers: { "idempotency-key": `community-smoke-${type}-${Date.now()}` },
+        body,
+      })
+      assert(run.status === 503, `POST /v1/${type} (${what}) expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
+      assert(
+        run.json?.error?.code === "nodaro_connection_required",
+        `${what}: expected error.code "nodaro_connection_required", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`,
+      )
+      assert(
+        run.json?.jobId === undefined && run.json?.id === undefined,
+        `the refusal carried a job handle — a refused ${type} (${what}) must create nothing: ${run.text.slice(0, 200)}`,
+      )
+      assertActionable(run.json?.error?.message, `${type} refusal (${what})`)
+    }
     // No row either: a job created and then refused would not carry a handle
     // but would still show up here (the newest jobs come first).
     const after = await api("/v1/jobs?limit=100", { token: ctx.token })
@@ -1087,7 +1097,7 @@ for (const [type, label] of [
       created.length === 0,
       `a refused ${type} created ${created.length} job(s): ${created.map((j) => `${j?.id} (${j?.input_data?.type ?? "?"})`).join(", ")}`,
     )
-    return `${type} absent from discovery + POST refused 503 nodaro_connection_required; no job created`
+    return `${type} absent from discovery + POST refused 503 nodaro_connection_required${multicam ? " (one recording and several + Master audio)" : ""}; no job created`
   })
 }
 

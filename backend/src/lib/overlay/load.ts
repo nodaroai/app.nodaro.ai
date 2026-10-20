@@ -49,9 +49,33 @@ export interface LoadOverlayResult {
   loaded: string | null
 }
 
-export async function loadOverlay(opts: LoadOverlayOpts = {}): Promise<LoadOverlayResult> {
+/**
+ * ONCE PER PROCESS. Several entrypoints reach this more than once in one
+ * process: a cloud video worker builds the API app at boot (`buildApp` →
+ * `loadOverlay`, `video-worker.ts`'s warm of `getWorkerApp`) while `worker.ts`'s
+ * static imports evaluate, then `worker.ts` itself calls `loadOverlay()`. The
+ * overlay's `register()` must run exactly once: `registerPromptPolicy` APPENDS,
+ * so a second run would leave [overlay, minor-age floor, overlay] — breaking the
+ * invariant that mainline's floor runs after every overlay policy. So the first
+ * load's promise is kept and every later call returns it (concurrent first calls
+ * share it too). An unset / blank name has no side effects and is not cached.
+ * A failed load exits the process, so its result needs no retry path.
+ */
+let overlayLoad: Promise<LoadOverlayResult> | undefined
+
+export function loadOverlay(opts: LoadOverlayOpts = {}): Promise<LoadOverlayResult> {
   const name = (opts.packageName ?? process.env[OVERLAY_PACKAGE_ENV] ?? "").trim()
-  if (!name) return { loaded: null }
+  if (!name) return Promise.resolve({ loaded: null })
+  overlayLoad ??= loadOverlayOnce(name, opts)
+  return overlayLoad
+}
+
+/** Test hook: forget the once-per-process load, so a test can load again. */
+export function resetOverlayLoadForTests(): void {
+  overlayLoad = undefined
+}
+
+async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<LoadOverlayResult> {
 
   const importer = opts.importer ?? ((n: string) => import(n))
   const exit = opts.exit ?? process.exit

@@ -11,6 +11,7 @@
  * Drives `processWorkflowExecution` with only leaf I/O mocked (the harness of
  * preview-gate-orchestrator.test.ts).
  */
+import { USE_CASE_RUN_VIEWER_AS_BEFORE } from "@nodaro/render-rules"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { Job } from "bullmq"
 import {
@@ -331,7 +332,7 @@ describe("the run that finishes a Tighten Episode review hold, from the API", ()
     expect(ran()).toEqual(["cap", "t"])
     const call = mocks.executeNode.mock.calls.find((c) => (c[0] as { id: string }).id === "t") as unknown as [never, unknown, unknown, unknown, unknown, never]
     const [node, , , , , ctx] = call
-    const request = requestOf(node, inputsOf("t")!, ctx, failedAttemptOf(node, ctx, undefined, []))
+    const request = requestOf(node, inputsOf("t")!, ctx, failedAttemptOf(node, ctx, undefined, []), USE_CASE_RUN_VIEWER_AS_BEFORE)
     expect(request.path).toBe("/v1/tighten-episode/continue")
     expect(request.body).toMatchObject({ jobId: WRAP_H, mode: "render-final" })
     expect(request.fallback).toBeUndefined()
@@ -961,7 +962,7 @@ describe("continue-from-failed of a saved workflow's run", () => {
       const [node, , , , , ctx] = tCall() as [never, unknown, unknown, unknown, unknown, never]
       const attempt = failedAttemptOf(node, ctx, undefined, [])
       expect(attempt).toBe("wrap-a")
-      const request = requestOf(node, { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as never, ctx, attempt)
+      const request = requestOf(node, { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as never, ctx, attempt, USE_CASE_RUN_VIEWER_AS_BEFORE)
       expect(request.path).toMatch(/\/continue$/)
       expect(request.body).toMatchObject({ jobId: "wrap-a", mode: "from-failed" })
     })
@@ -1000,7 +1001,7 @@ describe("continue-from-failed of a saved workflow's run", () => {
     const tResumesA = () => {
       const [node, , , , , ctx] = tCall() as [never, unknown, unknown, unknown, unknown, never]
       expect(failedAttemptOf(node, ctx, undefined, [])).toBe("wrap-a")
-      return attemptRanWithInputs("tighten-episode", ranWithOfA, "video", freshRunInputs(node, inputsOf("t")!))
+      return attemptRanWithInputs("tighten-episode", ranWithOfA, "video", freshRunInputs(node, inputsOf("t")!, USE_CASE_RUN_VIEWER_AS_BEFORE))
     }
     const fixedUrl = "https://r2/ep-fixed.mp4"
 

@@ -11,6 +11,9 @@
  *   [captions]  render's media + render's transcript → add-captions
  *   [music]     render's media + music → mix (ducked under the render, ends with it)
  *               video: (captions | render) + mix → merge-video-audio (no original audio)
+ *   [frames]    framed and following faces (`framingSource: "tracking"`):
+ *               Speaker Frames on the plan's edit and the transcript, its
+ *               tracks into Speaker View (use-case-framing.ts)
  *   review on   the render is a proxy preview (`quality: "proxy"`).
  */
 import {
@@ -30,12 +33,16 @@ import type {
   UseCaseGraph,
   UseCaseGraphEdge,
   UseCaseGraphNode,
-  UseCaseHandleRef,
   UseCaseMediaKind,
   UseCaseMediaSource,
 } from "./use-case-graph"
 import { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
-import { usecaseTypeOfBuilder } from "./use-case-rows"
+import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, withTightenTail } from "./tighten-episode-parts"
+import { buildTightenMulticamGraph } from "./tighten-episode-multicam"
+import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
+import { usecaseIsMulticam } from "./use-case-multicam"
+import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires, type UseCaseFramingSource } from "./use-case-framing"
+import type { UseCaseSources } from "./use-case-registry"
 
 export type { PlanTier, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
 
@@ -61,7 +68,28 @@ export interface TightenEpisodeSettings {
   readonly instructions: string
   readonly styleGuide: string
   readonly musicDuckAmount: number
+  /**
+   * The Cameras settings, resolved only for two or more recordings or a Master
+   * audio (absent otherwise, so a one-recording run's settings are what they
+   * always were); a builder reads absent as the defaults.
+   */
+  readonly cameras?: UseCaseCameras
+  /**
+   * Framed and following faces (decided 2026-10-17): Speaker Frames' tracks
+   * feed Speaker View. Resolved only when a framed video episode's framing
+   * source is `tracking` (absent otherwise: the even split, so every run's
+   * settings before it existed read as they always did).
+   */
+  readonly framingSource?: "tracking"
 }
+
+/**
+ * What a Tighten node or body that names no framing source reads (decided
+ * 2026-10-17): the even split it always had, so a saved node and an API caller
+ * keep their run. The ONE value: its spec's `absentFramingSource` is this, and
+ * the resolver reads it for a direct call.
+ */
+export const TIGHTEN_ABSENT_FRAMING_SOURCE: UseCaseFramingSource = "static"
 
 export const TIGHTEN_EPISODE_DEFAULTS: TightenEpisodeSettings = Object.freeze({
   output: "video",
@@ -80,21 +108,11 @@ export interface TightenEpisodeSources {
   readonly music?: { readonly url: string }
 }
 
-export const TIGHTEN_NODE_IDS = Object.freeze({
-  source: "uc-source",
-  transcribe: "uc-transcribe",
-  silence: "uc-silence",
-  plan: "uc-plan",
-  render: "uc-render",
-  captions: "uc-captions",
-  music: "uc-music",
-  mix: "uc-mix",
-  merge: "uc-merge",
-} as const)
+export { TIGHTEN_NODE_IDS } from "./tighten-episode-parts"
 
 const ID = TIGHTEN_NODE_IDS
-const RENDER_TYPE = "apply-edl"
-const FRAMED_RENDER_TYPE = "speaker-view"
+const RENDER_TYPE = TIGHTEN_RENDER_TYPE
+const FRAMED_RENDER_TYPE = TIGHTEN_FRAMED_RENDER_TYPE
 const includes = (list: readonly string[], v: unknown): boolean => typeof v === "string" && list.includes(v)
 const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback)
 
@@ -123,11 +141,13 @@ export function tightenFramingLayouts(aspect: TightenFramingAspect): TightenFram
  * value falls back to its default (never passed on), and a framing layout
  * Speaker View does not draw at its aspect is snapped as the render snaps it.
  * An audio recording makes an audio episode; an audio episode has no captions
- * and no framing.
+ * and no framing. `shape` (how many recordings, whether a Master audio is
+ * wired) decides whether the Cameras settings are resolved at all.
  */
 export function resolveTightenEpisodeSettings(
   raw: Readonly<Record<string, unknown>> | undefined,
   mediaKind: UseCaseMediaKind,
+  shape?: UseCaseSourcesShape,
 ): TightenEpisodeSettings {
   const r = raw ?? {}
   const d = TIGHTEN_EPISODE_DEFAULTS
@@ -150,14 +170,22 @@ export function resolveTightenEpisodeSettings(
     instructions: str(r.instructions, d.instructions),
     styleGuide: str(r.styleGuide, d.styleGuide),
     musicDuckAmount: duck,
+    ...(usecaseShapeIsMulticam(shape) ? { cameras: resolveUseCaseCameras(r.cameras, shape) } : {}),
+    // Absent reads the spec's absent default (written in by the descriptor); a direct call reads the same value.
+    ...(framing && resolveUseCaseFramingSource(r.framingSource, TIGHTEN_ABSENT_FRAMING_SOURCE) === "tracking" ? { framingSource: "tracking" as const } : {}),
   }
 }
 
 /** Tighten Episode's graph: one delivered episode (its output map names no kind, as every P1 snapshot). */
 export type TightenEpisodeGraph = UseCaseGraph & { readonly outputMap: EpisodeOutputMap }
 
-/** The chain one Tighten Episode run executes, built from resolved settings and its inputs. */
-export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sources: TightenEpisodeSources): TightenEpisodeGraph {
+/**
+ * The chain one Tighten Episode run executes, built from resolved settings and
+ * its inputs. Two or more recordings or a Master audio: the multicam chain
+ * (tighten-episode-multicam.ts); one recording: P1's chain below, unchanged.
+ */
+export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sources: TightenEpisodeSources | UseCaseSources): TightenEpisodeGraph {
+  if (usecaseIsMulticam(sources)) return buildTightenMulticamGraph(settings, sources)
   const audioIn = sources.media.kind === "audio"
   const framing = settings.output === "video" ? settings.framing : null
   const quality = settings.reviewBeforeRender ? "proxy" : "final"
@@ -188,50 +216,10 @@ export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sourc
     usecaseEdge(ID.plan, "edl", ID.render, "edl"),
     usecaseEdge(ID.transcribe, "json", ID.render, "transcript"),
   ]
-  const renderMediaHandle = framing ? "video" : "media"
-  let media: UseCaseHandleRef = { nodeId: ID.render, handle: renderMediaHandle }
-
-  if (settings.output === "video" && settings.captions) {
-    nodes.push(usecaseNode(ID.captions, "add-captions", 4, 0, {
-      label: "Add Captions", style: settings.captionStyle, wordLevel: false, position: "bottom", fontSize: 24, color: "#ffffff",
-    }))
-    // Apply EDL's remapped transcript is its `json`; Speaker View's is its `transcript` pip.
-    edges.push(usecaseEdge(ID.render, renderMediaHandle, ID.captions, "in"), usecaseEdge(ID.render, framing ? "transcript" : "json", ID.captions, "transcript"))
-    media = { nodeId: ID.captions, handle: "video-out" }
+  // Following faces: Speaker Frames after the render, so the even split's graph is unchanged.
+  if (framing && settings.framingSource === "tracking") {
+    nodes.push(usecaseFramesNode(3, 2))
+    edges.push(...usecaseFramesWires({ edl: { nodeId: ID.plan, handle: "edl" }, transcript: { nodeId: ID.transcribe, handle: "json" }, renderId: ID.render }))
   }
-
-  if (sources.music) {
-    nodes.push(
-      usecaseNode(ID.music, "upload-audio", 3, 3, { label: "Music bed", assetId: "", url: sources.music.url }),
-      usecaseNode(ID.mix, "mix-audio", 4, 2, {
-        label: "Music under episode", trackCount: 2, trackVolumes: {}, trackOrder: [ID.render, ID.music],
-        duckUnder: ID.render, duckAmount: settings.musicDuckAmount, endAt: "voice",
-      }),
-    )
-    edges.push(usecaseEdge(ID.render, renderMediaHandle, ID.mix, "in"), usecaseEdge(ID.music, "audio", ID.mix, "in"))
-    if (settings.output === "video") {
-      nodes.push(usecaseNode(ID.merge, "merge-video-audio", 5, 1, {
-        label: "Episode with music", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30,
-        keepOriginalAudio: false, originalAudioVolume: 30, originalAudioRole: "background", trackSettings: {},
-      }))
-      edges.push(usecaseEdge(media.nodeId, media.handle, ID.merge, "in"), usecaseEdge(ID.mix, "audio-out", ID.merge, "in"))
-      media = { nodeId: ID.merge, handle: "video-out" }
-    } else {
-      media = { nodeId: ID.mix, handle: "audio-out" }
-    }
-  }
-
-  return {
-    nodeType: usecaseTypeOfBuilder("tighten"),
-    nodes,
-    edges,
-    outputMap: {
-      media,
-      preview: { nodeId: ID.render, handle: renderMediaHandle },
-      json: { nodeId: ID.plan, handle: "edl" },
-      transcript: { nodeId: ID.transcribe, handle: "json" },
-      planNodeId: ID.plan,
-      renderNodeId: ID.render,
-    },
-  }
+  return withTightenTail(settings, sources, { nodes, edges, framed: !!framing })
 }

@@ -31,6 +31,7 @@ To try the branch right now without turning the schedule on, use **Run from here
 | Trigger rules | One or more rules, each with its own interval and fields (below). The last rule cannot be removed. |
 | Timezone | The clock the rules are read in — a searchable list of every timezone, your own offered first. UTC when not set. |
 | Max executions | Stop after this many runs. Leave empty for unlimited. |
+| Retry on failure | Run a scheduled run that failed again later — see [below](#retry-on-failure). Off by default. |
 | Switch | Active / Paused — see above |
 
 ### Rules
@@ -50,12 +51,34 @@ To try the branch right now without turning the schedule on, use **Run from here
 
 The panel shows what the rules mean before you save: the schedule in words, how many runs a day, today's runs on a 24-hour bar (past grey, upcoming pink — today in the schedule's timezone) and the next three runs with how far away they are. The node card shows the same headline, the next run and the Active / Paused state. Everything shown is computed with the arithmetic the server uses, so the preview is what will happen.
 
+### Retry on failure
+
+Nobody watches a scheduled run, so a failure that would pass on its own — a model provider down for a while — is otherwise a run lost until the next scheduled time. With **Retry on failure** on, a scheduled run that ends *failed* (a run the server timed out counts; a run you cancelled never does) is run again later:
+
+| Field | What it does |
+|-------|--------------|
+| Retry after (minutes) | How long after the failure the retry may start, 5–1440. Default 30. |
+| Attempts (at most) | How many retries one failed scheduled run may get, 1–5. Default 3. The original run is not an attempt. |
+| Cheap lanes only | Don't use the vendor's direct API as a fallback; a failed run waits for the retry instead — see below. Default on. |
+
+What a retry does:
+
+- It runs the same branch the schedule runs, with the same previous-run time (`{{trigger.last_triggered_at}}` reads the same value the failed run read, so a "newer than the previous run" filter fetches the same window). The run history shows it with a **Retry 1 of 3** badge beside the *Scheduled* badge, and the API lists it with `retry: { attempt, maxAttempts, retryOf }`.
+- A retry that fails is retried again, up to *Attempts*; a retry that succeeds ends the chain. Only the schedule's **latest** run is ever retried: once the schedule has fired again, an older failure is left alone, and a failure older than two days is not retried.
+- A retry waits while any run of yours of this workflow is still going, and is refused for the same reasons a fire is (you lost the right to run the workflow, the branch stops at a Preview render).
+- Retries do not count toward *Max executions*, and the retry policy is read from the node as it is **now**: switching it off (and saving) stops a chain at once.
+- **A retry re-runs the whole branch and is billed like any run.** The failed run's reservation was refunded when it failed; each retry reserves and charges the branch again, so a run that fails three times and then succeeds pays for the nodes that completed in each attempt plus the successful one.
+- For a schedule written before rules existed (an interval such as "5m"), a retry counts as the schedule's latest run: the next interval is measured from the retry.
+
+**Cheap lanes only.** A model call made by one of these nodes in a scheduled run — Generate Text, AI Writer, Image to Text, Generate Script, Motion Graphics (Lottie engine) — is served on the platform's aggregator lane first, and when that lane fails the platform normally re-asks the vendor's own API as a fallback, at a higher price to the platform. With *Cheap lanes only* on, none of those calls in the scheduled run — nor in its retries — takes that fallback: a call the cheap lane fails simply fails, the run fails, and the retry runs it again later when the lane is back. The option changes what the platform pays, not what you are charged per run (see the billing note above); an unattended run simply never pays the expensive lane for a transient failure. A call that must run on the vendor's own API by its own settings — Advanced mode, or a Claude model with a reasoning effort — still does; the option removes only the fallback. Model calls made by other node types keep their usual fallback for now: Describe to Picker, QA Check, Image Critic, After Effects, Lottie Overlay, 3D Title, Motion Graphics (elements engine), Scene Graph, Video Composer, Text to Picker, Reduce's AI pick, the UGC nodes and Video Analysis.
+
 ## How it fires
 
 - The server checks once every minute and runs the workflow when a rule matches that minute. A minute is never fired twice — a restart, a second server, or the clocks falling back cannot double a run; a minute the clocks jump over is skipped that day.
 - If the previous run of this workflow is still going, that minute is skipped.
 - After *Max executions* runs the schedule stops firing (it stays registered; raise or clear the cap to continue).
 - A schedule whose node **you added in the editor** counts as your own run for a stored HTTP credential (see [Webhook Output](../output/webhook-output.md)); one created through the API, or one that was already in the workflow when you opened it, does not.
+- With *Retry on failure* on, the same once-a-minute check also looks for a failed scheduled run whose wait has passed and runs it again (above). Two servers cannot both retry the same failure: a retry's identity is fixed by the failed run and its attempt number.
 
 ## Registration details
 
@@ -64,7 +87,7 @@ Every save projects the graph's trigger nodes onto the server's schedule registr
 - **A node that cannot run is parked** — a cron rule with no expression, a weekly rule with no weekday, or a timezone the server cannot read (a typo, a city name instead of `Area/City`). Nothing is guessed: a schedule it already had is kept paused with nothing to run, a new one is not registered, and the card says *Won't run* while the switch is on. Fix it and save again.
 - **Schedules you created by hand** against `POST /v1/workflow-triggers` are left alone by saves — they belong to no node.
 - `PATCH /v1/workflow-triggers/<id>` with `{ "isActive": false }` pauses a row until the next save, which applies the node's switch again. Use the switch for anything you want to stick.
-- Inspect what a workflow has with `GET /v1/workflows/<id>/triggers`; the API shape of a schedule's `config` is in [API integration](../../api-integration.md).
+- Inspect what a workflow has with `GET /v1/workflows/<id>/triggers`; the API shape of a schedule's `config` — its `retry` policy included — is in [API integration](../../api-integration.md).
 
 ## Older schedules
 

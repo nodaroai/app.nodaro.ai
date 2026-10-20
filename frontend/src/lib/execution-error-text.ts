@@ -35,11 +35,13 @@ import {
   usecaseCancelledMessage,
   usecaseDescriptor,
   usecaseListDrivenMessage,
+  usecaseListDrivenMessageOf,
   usecaseListsItsResult,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
-import { usecaseLabelVars } from "@/lib/use-case-request-body"
+import { usecaseLabelVars, usecaseListDrivenKey } from "@/lib/use-case-request-body"
 import { tx, type MessageKey } from "@/lib/i18n"
+import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
 import { previewRefusalText } from "@/lib/preview-refusal-text"
 
 /** The continue route's code for a Render final of a run that made no Preview (backend render-final-run.ts). */
@@ -87,7 +89,11 @@ const CODE_TEXT: Readonly<Record<string, MessageKey>> = {
  * known here and shown with the localized label.
  */
 const LIST_DRIVEN_TYPE_BY_MESSAGE: ReadonlyMap<string, UseCaseNodeType> = new Map(
-  USE_CASE_NODE_TYPES.filter((t) => usecaseListsItsResult(t)).map((t) => [usecaseListDrivenMessage(usecaseDescriptor(t).label), t] as const),
+  USE_CASE_NODE_TYPES.filter((t) => usecaseListsItsResult(t)).flatMap((t) => [
+    [usecaseListDrivenMessageOf(t), t] as const,
+    // A refusal stored before the type took several recordings, in its words then.
+    [usecaseListDrivenMessage(usecaseDescriptor(t).label), t] as const,
+  ]),
 )
 
 /**
@@ -103,7 +109,7 @@ function knownText(message: string): string | null {
   const key = CODE_TEXT[message]
   if (key) return tx(key)
   const listDriven = LIST_DRIVEN_TYPE_BY_MESSAGE.get(message)
-  if (listDriven) return tx("nodeRun.usecaseListDriven", usecaseLabelVars(listDriven))
+  if (listDriven) return tx(usecaseListDrivenKey(listDriven), usecaseLabelVars(listDriven))
   const cancelled = CANCELLED_TYPE_BY_MESSAGE.get(message)
   if (cancelled) return tx("nodeRun.usecaseCancelled", usecaseLabelVars(cancelled))
   // A clip set none of whose clips rendered: the count, and the render's own reason (itself localized when known).
@@ -151,6 +157,8 @@ function nodeFailuresText(message: string): string | null {
 const NODE_CODE_TEXT: Readonly<Record<string, MessageKey>> = {
   // A review-on use-case node about to run once per list item.
   [USE_CASE_REVIEW_LIST_DRIVEN]: "nodeRun.tightenReviewListDriven",
+  // A use-case run's recordings that cannot run (usecaseRecordingsProblem, and a Master audio that is not audio).
+  ...USE_CASE_RECORDINGS_REASON_KEYS,
 }
 
 /**
@@ -163,7 +171,7 @@ export function nodeErrorCodeText(code: string, nodeType?: string | null): strin
   const known = NODE_CODE_TEXT[code]
   if (known) return tx(known)
   // A use-case node whose own result is a list, about to run once per list item: named by its type.
-  if (code === USE_CASE_LIST_DRIVEN && isUseCaseNodeType(nodeType)) return tx("nodeRun.usecaseListDriven", usecaseLabelVars(nodeType))
+  if (code === USE_CASE_LIST_DRIVEN && isUseCaseNodeType(nodeType)) return tx(usecaseListDrivenKey(nodeType), usecaseLabelVars(nodeType))
   if (!REVIEW_HOLDING_USE_CASE_TYPES.has(nodeType ?? "")) return null
   const refusal = previewRefusalOfCode(code)
   return refusal ? previewRefusalText(refusal.family, "review") : null

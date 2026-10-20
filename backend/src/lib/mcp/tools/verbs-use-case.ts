@@ -52,6 +52,9 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { creditsOf } from "./_credit-hint.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
+import { framingSourceInputShape, framingSourcePayload } from "./verbs-use-case-framing.js"
+import { RECORDINGS_SENTENCE, recordingsInputShape, recordingsPayload } from "./verbs-use-case-recordings.js"
+import { registerSpeakerLayout } from "./verbs-use-case-speaker-layout.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
@@ -154,6 +157,7 @@ const REGISTER_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, (ctx: RegisterCtx)
   chapters: registerMakeChapters,
   trailer: registerMakeTrailer,
   clipPack: registerMakeClipPack,
+  speakerLayout: (ctx) => registerSpeakerLayout(ctx, { priceSentence, refusalText }),
 }
 
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {
@@ -234,7 +238,10 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
       description:
         "Tighten a podcast or interview recording in one call: transcribes it (speakers labelled), finds the silences, " +
         "plans the tightened cut, renders it, and optionally adds captions and a music bed ducked under the voice. " +
-        "Pass `media_url` (a video or audio recording, up to 3 hours). `output`: `video` (default) or `audio` — an audio " +
+        "Pass `media_url` (a video or audio recording, up to 3 hours), or `media_urls` (several cameras of one conversation) " +
+        "and optionally `master_audio_url`. " +
+        RECORDINGS_SENTENCE +
+        " `output`: `video` (default) or `audio` — an audio " +
         "recording always makes an audio episode. `review_before_render: true` stops at a quick proxy preview: inspect " +
         "`output_data.json` (the edit), then call `continue_use_case` with `mode: \"render-final\"` (optionally `edited_edl`). " +
         "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish — " +
@@ -242,7 +249,7 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
         "(`output_data.videoUrl` or `audioUrl`), the edit is `output_data.json`." +
         priceSentence(usecaseTypeOfBuilder("tighten")),
       inputSchema: {
-        media_url: z.string().url().describe("The recording (video or audio URL)."),
+        ...recordingsInputShape,
         music_url: z.string().url().optional().describe("Optional music bed, ducked under the voice and ending with the episode."),
         output: z.enum(["video", "audio"]).optional().describe("video (default) or an audio-only episode."),
         framing_aspect: z
@@ -253,6 +260,7 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
           .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
           .optional()
           .describe("Layout when framing_aspect is set (default auto; one the shape does not draw is snapped). Ignored without framing_aspect."),
+        ...framingSourceInputShape,
         captions: z.boolean().optional().describe(`Burn captions into a video episode (default ${D.captions}).`),
         caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${D.captionStyle}).`),
         review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${D.reviewBeforeRender}).`),
@@ -271,17 +279,20 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const recordings = recordingsPayload(args)
+      if ("error" in recordings) return recordings.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/tighten-episode",
         label: TIGHTEN.label,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
+          ...recordings.payload,
           ...(args.music_url ? { musicUrl: args.music_url } : {}),
           ...(args.output ? { output: args.output } : {}),
           ...(args.framing_aspect ? { framing: { aspect: args.framing_aspect, layout: args.framing_layout ?? "auto" } } : {}),
+          ...framingSourcePayload(args),
           ...(args.captions !== undefined ? { captions: args.captions } : {}),
           ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
           ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
@@ -299,7 +310,8 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
         widgetKind: args.output === "audio" ? "audio" : "video",
         widgetData: { prompt: "(tighten episode)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }
 
@@ -360,7 +372,10 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
       description:
         "Cut a 20–40 second trailer from a podcast or interview recording in one call and deliver it in each chosen social format: " +
         "transcribes it, plans the trailer from its strongest moments, renders it, and pads it to every format (never cropped). " +
-        "Pass `media_url` (a video recording, up to 3 hours; an audio-only recording is refused). `formats` (default 9:16, 1:1, 4:5; also 16:9). " +
+        "Pass `media_url` (a video recording, up to 3 hours; an audio-only recording is refused), or `media_urls` (several cameras of one " +
+        "conversation) and optionally `master_audio_url`. " +
+        RECORDINGS_SENTENCE +
+        " `formats` (default 9:16, 1:1, 4:5; also 16:9). " +
         "`intro_card_url`: an optional short video (15 s at most) played first. `review_before_render: true` stops at a quick proxy preview " +
         "of the trailer (`output_data.videoUrl`; `formats` is empty until the final): inspect `output_data.json`, then `continue_use_case` " +
         "with `mode: \"render-final\"`. Returns a job id: the trailers are `output_data.formats` (`[{ format, url }]`, in format order), " +
@@ -371,7 +386,9 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
         "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("trailer")),
       inputSchema: {
-        media_url: z.string().url().describe("The recording (a video URL)."),
+        ...recordingsInputShape,
+        // Every format is a video: Trailer's recording is a video (an audio-only one is refused).
+        media_url: recordingsInputShape.media_url.describe("The recording (a video URL; audio-only is refused). Or `media_urls`."),
         intro_card_url: z.string().url().optional().describe("Optional intro card: a short video (15 s at most), the recording's size and shape."),
         formats: z
           .array(z.enum(tuple(TRAILER_FORMATS)))
@@ -390,14 +407,16 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const recordings = recordingsPayload(args)
+      if ("error" in recordings) return recordings.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/episode-trailer",
         label: TRAILER.label,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
+          ...recordings.payload,
           ...(args.intro_card_url ? { introCardUrl: args.intro_card_url } : {}),
           ...(args.formats ? { formats: args.formats } : {}),
           ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
@@ -412,7 +431,8 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
         widgetKind: "video",
         widgetData: { prompt: "(trailer)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }
 
@@ -431,12 +451,15 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         "Cut a podcast or interview recording into a pack of short clips in one call: finds the best moments " +
         `(\`count\`, default ${CLIP_PACK_DEFAULTS.count}; \`target_length_sec\`, default ${CLIP_PACK_DEFAULTS.targetDurationSec}), renders each — ` +
         `framed for ${F.aspect} with the speakers ${F.layout} by default (\`framing\`, or \`null\` for the recording's shape) — ` +
-        "and captions each clip (`captions`, default on). Pass `media_url` (a video or audio recording, up to 3 hours); " +
-        "an audio recording makes audio clips, with no framing or captions. `review_before_render: true` stops at quick proxy " +
+        "and captions each clip (`captions`, default on); `framing_source` follows faces. Pass `media_url` (a video or audio recording, up to 3 hours; " +
+        "an audio recording makes audio clips, with no framing or captions), or `media_urls` (several cameras of one conversation: each clip " +
+        "cuts to whoever is talking) and optionally `master_audio_url`. " +
+        RECORDINGS_SENTENCE +
+        " `review_before_render: true` stops at quick proxy " +
         "previews: inspect `output_data.json` (one EDL per clip), then `continue_use_case` with `mode: \"render-final\"` and an " +
         "`edited_edl` that keeps or drops clips (keep at least one); Render final renders only the kept clips, with no fee. " +
         "Returns a job id: the clips are `output_data.clips` (`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]`), " +
-        "the first also `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried: one that cannot be rendered is " +
+        "the first also `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried: one that cannot be rendered (or cut between cameras) is " +
         "skipped and not charged, counted in `output_data.failedClips`, and the pack completes with the others, its fee kept, so it " +
         "has no `from-failed`: render the missing clip yourself from its EDL in `output_data.json` (Apply EDL or Speaker View, then " +
         "Add Captions; no fee), or start a new run. A clip whose captions could " +
@@ -445,7 +468,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("clipPack")),
       inputSchema: {
-        media_url: z.string().url().describe("The recording (video or audio URL)."),
+        ...recordingsInputShape,
         count: z
           .number()
           .int()
@@ -478,6 +501,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
           .nullable()
           .optional()
           .describe(`Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default ${F.aspect}, ${F.layout}). null: the recording's shape.`),
+        ...framingSourceInputShape,
         captions: z.boolean().optional().describe(`Caption each video clip (default ${CLIP_PACK_DEFAULTS.captions}).`),
         caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${CLIP_PACK_DEFAULTS.captionStyle}).`),
         review_before_render: z.boolean().optional().describe(`Stop at proxy previews for review (default ${CLIP_PACK_DEFAULTS.reviewBeforeRender}).`),
@@ -490,14 +514,16 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const recordings = recordingsPayload(args)
+      if ("error" in recordings) return recordings.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/clip-pack",
         label: CLIP_PACK_LABEL,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
+          ...recordings.payload,
           ...(args.count !== undefined ? { count: args.count } : {}),
           ...(args.target_length_sec !== undefined ? { targetDurationSec: args.target_length_sec } : {}),
           // null = no framing; a field left out takes the route's default (layout: stacked).
@@ -513,6 +539,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
                   },
                 }
               : {}),
+          ...framingSourcePayload(args),
           ...(args.captions !== undefined ? { captions: args.captions } : {}),
           ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
           ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
@@ -527,6 +554,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         widgetKind: "video",
         widgetData: { prompt: "(clip pack)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }

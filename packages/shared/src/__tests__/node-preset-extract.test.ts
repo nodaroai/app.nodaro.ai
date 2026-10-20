@@ -140,6 +140,16 @@ describe("an audio-locked use-case node's memory is never a preset setting", () 
     expect(tighten).not.toHaveProperty("settingsBeforeAudio")
     expect(PRESET_EXCLUDED_KEYS.has("settingsBeforeAudio")).toBe(true)
   })
+
+  it("a preset saved from a use-case node carries neither its recordings order (this node's wiring) nor its last run's cameras report", () => {
+    const tighten = extractPresetData({
+      label: "T", output: "video", cameras: { wide: 2 }, mediaOrder: ["cam-a", "cam-b"],
+      useCaseCameras: { speakers: [{ speaker: "speaker_0", ordinal: 1, camera: 2, marginDb: 7 }], syncNotes: [], mapNotes: [] },
+    }, "tighten-episode")
+    expect(tighten).toEqual({ output: "video", cameras: { wide: 2 } })
+    expect(PRESET_EXCLUDED_KEYS.has("mediaOrder")).toBe(true)
+    expect(PRESET_EXCLUDED_KEYS.has("useCaseCameras")).toBe(true)
+  })
 })
 
 describe("PRESET_EXCLUDED_KEYS ⊇ PRESET_APPLY_CLEAR_KEYS", () => {

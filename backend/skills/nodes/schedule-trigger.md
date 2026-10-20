@@ -1,7 +1,7 @@
 ---
 node_type: schedule-trigger
-generated_at: 2026-09-27T12:51:22.400Z
-generated_from: c607aa02c
+generated_at: 2026-10-19T22:47:48.948Z
+generated_from: 1b877ca03
 ---
 
 # Schedule Trigger
@@ -20,6 +20,7 @@ generated_from: c607aa02c
 - `rules?: ScheduleRule[]`
 - `timezone?: string`
 - `maxExecutions?: number`
+- `retry?: ScheduleRetry`
 - `active?: boolean`
 - `interval?: string`
 - `cron?: string`
@@ -50,6 +51,8 @@ To run a workflow (or one branch of it) on a schedule with no outside system: ev
 
 Wire the trigger's `payload` output into the first node of the branch it should run: a wired trigger runs only that branch (its downstream nodes plus what they need); a trigger wired to nothing runs the whole workflow.
 
+**Retry on failure** (`retry`, optional — absent means none): `{ "afterMinutes": 30, "maxAttempts": 3, "cheapLanesOnly": true }`. A scheduled run that ends failed (or timed out; never cancelled) is run again `afterMinutes` (5–1440) after it ended, up to `maxAttempts` (1–5) times — a retry re-runs and re-bills the whole branch. `cheapLanesOnly` keeps the model calls of the scheduled run and its retries that honour it off the direct-vendor fallback (a call the aggregator lane fails simply fails, and the retry runs it later); today: Generate Text, AI Writer, Image to Text, Generate Script and Motion Graphics (Lottie engine) — the docs page lists them. Write all three fields; a missing one takes its default. The run history shows a retry with "Retry n of m".
+
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
@@ -58,7 +61,8 @@ Wire the trigger's `payload` output into the first node of the branch it should 
 - `interval` and `cron` at the top level of `data` are the PRE-rules fields; they still convert on save, but write `rules` instead. Never write both.
 - A timezone the server cannot read, an empty `weekdays` on a `weeks` rule, or a `cron` that is not 5 fields PARKS the node: a schedule it already had is kept paused with nothing to run, a new one is not registered — nothing is guessed. Fix the data and save again.
 - "Every Nth day / week / month" counts from a fixed calendar origin (weeks start on Monday), not from the save; a re-save never shifts the phase.
-- `maxExecutions` stops the schedule after that many runs; leave it out for unlimited.
+- `maxExecutions` stops the schedule after that many runs; leave it out for unlimited. Retries (`retry`) do not count toward it.
+- Only the schedule's LATEST run is ever retried: once the schedule fired again, an older failure is left alone; a failure older than two days is never retried; a retry waits while any run of the owner's of this workflow is still going.
 - The switch is per node: a workflow may carry several Schedule Triggers, each running its own branch, each on or off on its own.
 
 <!-- AUTO-GEN:START examples -->

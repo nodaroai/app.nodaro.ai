@@ -37,6 +37,7 @@ import { failedAttemptJobIdOf } from "../../services/workflow-engine/failed-atte
 import { getListFanOutForNode, resolveNodeInputs } from "../../services/workflow-engine/input-resolver.js"
 import { isSourceNode } from "../../services/workflow-engine/execution-graph.js"
 import { MAX_GENERATION_HOPS, attemptStillApplies } from "../../services/workflow-engine/use-case-node.js"
+import { usecaseRunViewer } from "./inner-availability.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../../services/workflow-engine/types.js"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../render-final-codes.js"
 import { resolveUseCaseContinuation } from "./continuation.js"
@@ -121,6 +122,8 @@ export async function resumedUseCaseCredits(input: {
       const type = byId.get(id)?.type ?? ""
       return !runSet.has(id) || isSourceNode(type) || PARAMETER_NODE_TYPES.has(type)
     }
+    // The decision the run will make: it reads the recordings and framing source its viewer's run reads.
+    const viewer = await usecaseRunViewer(input.userId)
     const seeds = continuationSeeds(nodes, input.source, runSet, input.sentOverrides)
     const seeded: Record<string, NodeExecutionState> = Object.fromEntries(seeds)
 
@@ -134,7 +137,7 @@ export async function resumedUseCaseCredits(input: {
         )
         if (fanOut) continue
         const resolved = resolveNodeInputs(node, edges, seeded, nodes)
-        if ((await attemptStillApplies(attempt, node, resolved, input.userId)) !== true) continue
+        if ((await attemptStillApplies(attempt, node, resolved, input.userId, viewer)) !== true) continue
         const credits = await resumeCredits(node.type as UseCaseNodeType, attempt, input.userId)
         if (credits !== null) out.set(node.id, credits)
       } catch {

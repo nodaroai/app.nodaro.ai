@@ -16,7 +16,10 @@ import {
   initialRunNodeIds,
   toStoredInlineGraph,
   usecaseDescriptor,
+  usecaseDistinctMaster,
   usecaseFeeCreditId,
+  usecaseFramingForViewer,
+  usecaseFramingIsAuto,
   type UseCaseMediaSource,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -47,16 +50,32 @@ import {
   usecaseKeyedRunIsOwn,
   usecaseUnavailable,
 } from "../lib/use-case/lanes.js"
-import { prepareUseCase, usecaseReviewerPresent, type PreparedUseCase } from "../lib/use-case/request.js"
-import { usecaseSourcesOf } from "../lib/use-case/sources.js"
+import { prepareUseCase, usecaseReviewerPresent, usecaseWholeClipUrl, type PreparedUseCase, type PrepareUseCaseOptions } from "../lib/use-case/request.js"
+import { measureClip, peekClip } from "../lib/clip-measure.js"
+import { clipMeasureStartLimiter } from "../lib/clip-measure-limit.js"
+import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
+import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+
+/**
+ * The per-user limit on starting a measurement of a recording (decided
+ * 2026-10-20): the SAME counter `POST /v1/media/clip-length` and `POST
+ * /v1/speaker-view` draw on, so the doors share one allowance.
+ */
+const measureStartLimit = clipMeasureStartLimiter()
+
+/** An estimate reads the cache only: it never downloads a recording. */
+const ESTIMATE_MEASURE: PrepareUseCaseOptions = { measureWholeClip: (url) => peekClip(url).catch(() => null) }
+/** A run measures as its dispatch does (`measureClip(url)`, no options): the same cache key, so the dispatch reuses it. */
+const RUN_MEASURE: PrepareUseCaseOptions = { measureWholeClip: (url) => measureClip(url) }
 
 type Ready = { readonly userId: string; readonly body: UseCaseBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
 
 /**
  * The refusals both of a type's routes share, in order: body, identity, deny,
  * nesting depth, the snapshot columns, (the run route) a review-on run nobody
- * can review, the connection, then the recording itself. Sends the answer and
+ * can review, the connection, (the run route) the measurement start limit,
+ * then the recording itself. Sends the answer and
  * returns null; nothing is written either way.
  */
 async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: FastifyReply, opts: { readonly run: boolean }): Promise<Ready | null> {
@@ -75,7 +94,18 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([type]) } })
     return null
   }
-  const body = parsed.data as UseCaseBody
+  // An `auto` framing source — sent, or absent on a type whose absent default is `auto` — follows
+  // faces only for a caller who may use Speaker Frames; for anyone else it is the even split,
+  // silently (decided 2026-10-20). An explicit `tracking` is kept: the inner-step check below
+  // refuses it for such a caller. Availability is read only for a body that chooses `auto`.
+  const sent = parsed.data as UseCaseBody
+  const body = usecaseFramingIsAuto(sent, d) ? usecaseFramingForViewer(sent, await usecaseFramesAvailable(userId), d) : sent
+  // Several recordings or a Master audio asked for by a caller who may not use Speaker Map: refused before anything is probed.
+  const multicamDenied = await usecaseMulticamDenial(type, body, userId)
+  if (multicamDenied) {
+    reply.status(multicamDenied.status).send({ error: { code: multicamDenied.code, message: multicamDenied.message } })
+    return null
+  }
   const internal = isInternal(req)
   if (internal && (body.componentDepth ?? 0) >= USE_CASE_MAX_DEPTH) {
     reply.status(400).send({ error: { code: "nesting_too_deep", message: `Nodes inside components can nest ${USE_CASE_MAX_DEPTH} levels deep.` } })
@@ -99,9 +129,10 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
   // out to be audio (where the run would drop it), so an unconnected self-host
   // may refuse such a request that would have run. Its sources are built as
   // the run builds them (usecaseSourcesOf), from the unprobed inputs.
+  const masterAudioUrl = usecaseDistinctMaster(body.masterAudioUrl, body.mediaUrls)
   const { sources: unprobed, shape } = usecaseSourcesOf({
     recordings: body.mediaUrls.map((url) => ({ url, kind: "video" as const })) as [UseCaseMediaSource, ...UseCaseMediaSource[]],
-    ...(body.masterAudioUrl ? { masterAudio: { url: body.masterAudioUrl, kind: "audio" as const } } : {}),
+    ...(masterAudioUrl ? { masterAudio: { url: masterAudioUrl, kind: "audio" as const } } : {}),
     ...(body.musicUrl ? { musicUrl: body.musicUrl } : {}),
     ...(body.introCardUrl ? { introCard: { url: body.introCardUrl } } : {}),
   })
@@ -111,9 +142,23 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
     return null
   }
-  const prep = await prepareUseCase(type, body)
+  // A run that will measure its one recording (a whole-clip render): a start costs a download, so it is
+  // limited per user — 429 before any probe, row or hold. An address already measured costs nothing.
+  // An estimate never measures (it reads the cache only), so it is never limited.
+  const wholeClipUrl = opts.run ? usecaseWholeClipUrl(type, body) : null
+  if (wholeClipUrl !== null && !(await peekClip(wholeClipUrl).catch(() => null))) {
+    await measureStartLimit(req, reply)
+    if (reply.sent) return null
+  }
+  const prep = await prepareUseCase(type, body, opts.run ? RUN_MEASURE : ESTIMATE_MEASURE)
   if (!prep.ok) {
     reply.status(prep.status).send({ error: { code: prep.code, message: prep.message } })
+    return null
+  }
+  // A step of the chain this caller may not run (Speaker Map, on several cameras) refuses the run and its estimate alike.
+  const denial = await usecaseInnerDenial(type, prep.graph.nodes, userId)
+  if (denial) {
+    reply.status(denial.status).send({ error: { code: denial.code, message: denial.message } })
     return null
   }
   return { userId, body, prep }
@@ -126,7 +171,7 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
   app.post(`${d.route}/estimate`, async (req, reply) => {
     const p = await prepared(type, req, reply, { run: false })
     if (!p) return
-    const durationSec = p.prep.sources.media.durationSec ?? null
+    const durationSec = usecaseClockSec(p.prep.sources) ?? null
     if (!hasCredits()) return { data: { totalCredits: 0, stepsCredits: 0, feeCredits: 0, durationSec } }
     const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
     return { data: { ...(await estimateUseCaseCredits(p.prep.graph)), durationSec } }
@@ -171,7 +216,9 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
       mediaUrl: prep.sources.media.url,
       ...(prep.sources.music ? { musicUrl: prep.sources.music.url } : {}),
       ...(prep.sources.introCard ? { introCardUrl: prep.sources.introCard.url } : {}),
-      durationSec: prep.sources.media.durationSec ?? null,
+      // Several recordings or a Master audio: every recording, the master and the run's kind (a continuation's resume match reads them).
+      ...usecaseWrapperRecordings(prep.sources),
+      durationSec: usecaseClockSec(prep.sources) ?? null,
       _feeCredits: feeCredits,
     }
     // Never `workflow_execution_id`: the wrapper reaches its run only through

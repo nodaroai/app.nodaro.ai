@@ -1,7 +1,7 @@
 // @registry-enumerates registers plugin prices into STATIC_CREDIT_COSTS (registerStaticCreditCosts checks each id against the whole table)
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../config.js"
-import { buildToolkit } from "./toolkit.js"
+import { buildToolkit, type BuildToolkitOptions } from "./toolkit.js"
 import { daemonListProblem } from "./daemons.js"
 import { CONTRACT_VERSION } from "./types.js"
 import type {
@@ -36,6 +36,15 @@ export interface LoadPrivatePluginsOpts {
    * process (Stage 1 Task 10) only needs handlers, not an HTTP app.
    */
   app?: FastifyInstance
+  /**
+   * The app the plugins' `tk.http.workerRequest` reaches, for a process with
+   * no `app` of its own: the video worker passes `getWorkerApp`
+   * (`worker-app.ts`). The loader never calls it — the worker warms it at
+   * boot itself, once plugins loaded. Never registers routes —
+   * only `app` does. When omitted, `workerRequest` is bound to `app`, and is
+   * absent when neither is given.
+   */
+  workerApp?: () => Promise<FastifyInstance>
   /** Injectable for tests. Defaults to `process.exit`. */
   exit?: (code: number) => never
   /** Injectable for tests. Defaults to a real dynamic `import()`. */
@@ -180,12 +189,22 @@ function handleLoadFailure(
  * Lazily assembles (and memoizes) the toolkit handed to plugins — only built
  * if a loaded plugin actually needs one, and never rebuilt once built.
  */
-function makeToolkitGetter(override: PluginToolkit | undefined): () => PluginToolkit {
+function makeToolkitGetter(
+  override: PluginToolkit | undefined,
+  options: BuildToolkitOptions,
+): () => PluginToolkit {
   let toolkit = override
   return () => {
-    if (!toolkit) toolkit = buildToolkit()
+    if (!toolkit) toolkit = buildToolkit(options)
     return toolkit
   }
+}
+
+/** `workerRequest`'s app: the worker's provider, else the API app, else none. */
+function workerAppOf(opts: LoadPrivatePluginsOpts): BuildToolkitOptions["workerApp"] {
+  if (opts.workerApp) return opts.workerApp
+  const app = opts.app
+  return app ? async () => app : undefined
 }
 
 /**
@@ -252,7 +271,8 @@ export async function loadPrivatePlugins(
   )
 
   const plugins: NodaroPrivatePlugin[] = mod.plugins
-  const getToolkit = makeToolkitGetter(opts.toolkit)
+  const workerApp = workerAppOf(opts)
+  const getToolkit = makeToolkitGetter(opts.toolkit, workerApp ? { workerApp } : {})
   const handlers: Record<string, PluginHandlerFn> = {}
   const loaded: string[] = []
   const engines: PluginEngines = {}

@@ -40,6 +40,7 @@ export type {
   ClipPackInput,
   EpisodeChaptersInput,
   EpisodeTrailerInput,
+  SpeakerLayoutInput,
   TrailerFormat,
   TightenEpisodeInput,
   TightenEpisodeJobResult,
@@ -48,6 +49,7 @@ export type {
   UseCaseEstimate,
   UseCaseJobResult,
   UseCaseNodeType,
+  UseCaseRecordingsInput,
   UseCaseRequestOptions,
 } from "../resources/edit.js"
 

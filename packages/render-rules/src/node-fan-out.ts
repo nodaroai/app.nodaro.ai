@@ -16,6 +16,7 @@ import {
   COLLECTION_READ_LIMIT_MAX,
   defaultEdgeOutputMode,
   FAN_OUT_EACH_TYPES,
+  isFanInEdge,
   listResultsServeHandle,
 } from "@nodaro/shared/nodes"
 import {
@@ -231,6 +232,11 @@ export function baseFanOut(
   if (incoming.some((e) => eachWireCarriesNothing(e, nodes, edges, rerunIds, planOutputOf))) return 0
 
   for (const edge of incoming) {
+    // A wire a fan-in node folds (FAN_IN_TARGETS: Speaker Frames' edl, Choose Best, the list operators, …)
+    // never fans it out: both engines run it once over everything the wire carries. The engines
+    // run a fan-in node once on ANY wire (`isFanInNodeType`); counting its other Each wires here
+    // over-quotes it, the safe side.
+    if (isFanInEdge(node.type, edge.targetHandle)) continue
     const source = nodes.find((n) => n.id === edge.source)
     if (!source) continue
     const mode = edgeMode(edge, source)

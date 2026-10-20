@@ -18,7 +18,7 @@
 import { isRenderNodeType, withRunOverrides } from "@nodaro/shared/nodes"
 import { expandUseCaseNodes, isUseCaseNodeType, usecaseFinalRunSet, usecaseRenderFinalOverrides } from "@nodaro/render-rules"
 import { renderFinalRunSet, renderRunOverrides } from "@/components/editor/workflow-editor/render-final-set"
-import { runNodeLabel } from "@/components/editor/workflow-editor/estimate-run-credits"
+import { runNodeLabel, usecaseEditorExpandOptions } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
 import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { getCostFactors } from "@/components/editor/workflow-editor/types"
@@ -65,7 +65,8 @@ function usecaseClipChain(nodeId: string, nodes: WorkflowNode[], edges: Workflow
   const target = usecaseRenderFinalTarget(nodes.find((n) => n.id === nodeId))
   if (!target || !usecaseReviewable(nodeId, nodes, edges)) return []
   const outer = withRunOverrides(nodes, usecaseRenderFinalOverrides(nodeId, target))
-  const expansion = expandUseCaseNodes(outer, edges)
+  // As the estimate expands it for this viewer: a multicam pack's per-clip Camera Switch is a step of its final.
+  const expansion = expandUseCaseNodes(outer, edges, usecaseEditorExpandOptions())
   const runSet = usecaseFinalRunSet(nodeId, nodes, edges)
   const runs = new Set([...(expansion.members.get(nodeId) ?? []), ...runSet])
   runs.delete(nodeId)

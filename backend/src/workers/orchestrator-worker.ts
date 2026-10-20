@@ -538,6 +538,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // A person is at this run (the editor's own): UGC Creator draws every option for the pick.
     reviewerPresent: job.data.reviewerPresent === true,
     webFreeMode: job.data.webFreeMode === true,
+    // A scheduled run under a "cheap lanes only" retry policy: no model call
+    // of this run pays the direct-vendor fallback (see the job field).
+    ...(job.data.cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
     // Resolved at enqueue, coalesced here ONCE (absent = personal, the
     // normative rule — a payload from pre-P14 code or a rollback window).
     // Nothing below this line re-resolves the payer.
@@ -2167,7 +2170,11 @@ async function executeNodeForList(
   // front, so a row that fails still names its clip (decided 2026-10-06). On
   // the list rows, never `i` — the same rule each iteration's payload stamps
   // (`applyEdlClipKey`).
-  const rowSent = applyEdlRowSentStamps(node, allNodes, edges, nodeStates, plan.rows)
+  // A node that tries every item (a Clip Pack's per-clip Camera Switch) has no
+  // render stamp to carry, but its rows are still stamped up front (empty), so
+  // a row a Stop never started reads `cancelled` — never a failed clip.
+  const triesEvery = ctx.triesEvery?.has(node.id) === true
+  const rowSent = applyEdlRowSentStamps(node, allNodes, edges, nodeStates, plan.rows) ?? (triesEvery ? items.map(() => ({})) : undefined)
 
   let iterationCompleted = 0
   const cancelRef = { cancelled: false }
@@ -2222,7 +2229,7 @@ async function executeNodeForList(
   })
 
   // Fail-fast unless this node tries every item (a Clip Pack's clips).
-  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef, !ctx.triesEvery?.has(node.id))
+  const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef, !triesEvery)
 
   // Assemble per-iteration results + apply failure propagation. Throws the
   // first genuine failure when NOTHING succeeded (so the orchestrator marks

@@ -61,7 +61,7 @@ import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { personalPayer, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
-import { usecaseNothingKeptRefusal } from "../lib/use-case/continuation.js"
+import { usecaseRenderFinalEditRefusal } from "../lib/use-case/continuation.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -248,11 +248,13 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "locked_field", message: describeLockedOverrides(locked) } })
     }
 
-    // A Clip Pack whose stored review keeps no clip has nothing to render:
-    // refused here, before anything is written or held, as its continue route
-    // refuses it (the node would otherwise fail inside a final already started).
+    // An edit the use-case final cannot take — a Clip Pack whose stored review
+    // keeps no clip (nothing to render), or any edit of a type with no plan (a
+    // Speaker Layout) — is refused here, before anything is written or held,
+    // as its continue route refuses it (the node would otherwise fail inside a
+    // final already started).
     if (useCaseTarget && isUseCaseNodeType(render?.type)) {
-      const nothingKept = await usecaseNothingKeptRefusal({
+      const nothingKept = await usecaseRenderFinalEditRefusal({
         nodeType: render.type,
         jobId: useCaseTarget.jobId,
         userId,

@@ -47,8 +47,9 @@ function clampInt(raw: string, lo: number, hi: number): number | null {
  * in-range value is committed as it is typed (the preview follows along),
  * anything else waits for blur / Enter and is then clamped into range — so
  * "35" in a 1–31 field is not rewritten to "31" under the cursor.
+ * Shared with the panel's Retry on failure section.
  */
-function NumberField({
+export function NumberField({
   id,
   label,
   value,

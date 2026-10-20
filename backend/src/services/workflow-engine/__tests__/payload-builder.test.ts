@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import sunoSeparateSourceCases from "../../../../../packages/render-rules/fixtures/suno-separate-source.cases.json"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1014,10 +1015,100 @@ describe("buildPayload", () => {
     })
 
     it("suno-separate", () => {
-      const n = node("n1", "suno-separate", { sunoTaskId: "task-1", type: "separate_vocal" })
-      const result = buildPayload(n, jobId, {})
+      const n = node("n1", "suno-separate", { type: "separate_vocal" })
+      const result = buildPayload(n, jobId, { sunoTaskId: "task-1", sunoTrackId: "track-1" })
       expect(result.jobName).toBe("suno-separate")
-      expect(result.payload.type).toBe("separate_vocal")
+      // The worker reads `separateType` — a `type` key was ignored, so every
+      // server-run split ran as vocals + instrumental.
+      expect(result.payload.separateType).toBe("separate_vocal")
+      expect(result.payload).not.toHaveProperty("type")
+    })
+
+    it("suno-separate forwards resolved audioUrl, stemName, fallbackToDemucs; prices via sunoSeparateCreditId", () => {
+      const n = node("n1", "suno-separate", { type: "split_stem_advanced", stemName: "Piano", fallbackToDemucs: true })
+      const result = buildPayload(n, jobId, { audioUrl: "u" }, "usage-1")
+      expect(result.modelIdentifier).toBe("suno-separate-single")
+      expect(result.payload).toEqual({
+        jobId,
+        audioUrl: "u",
+        separateType: "split_stem_advanced",
+        stemName: "Piano",
+        fallbackToDemucs: true,
+        usageLogId: "usage-1",
+      })
+    })
+
+    it("suno-separate defaults the stem to Lead Vocal in one-instrument mode, and sends none in any other", () => {
+      const single = buildPayload(node("n1", "suno-separate", { type: "split_stem_advanced" }), jobId, { audioUrl: "u" })
+      expect(single.payload.stemName).toBe("Lead Vocal")
+      const stems = buildPayload(node("n1", "suno-separate", { type: "split_stem", stemName: "Piano" }), jobId, { audioUrl: "u" })
+      expect(stems.modelIdentifier).toBe("suno-separate-stem")
+      expect(stems.payload).not.toHaveProperty("stemName")
+      expect(stems.payload).not.toHaveProperty("fallbackToDemucs")
+    })
+
+    it("Suno ids win and are forwarded alone — the URL is not sent beside them", () => {
+      const n = node("n1", "suno-separate", { type: "split_stem" })
+      const result = buildPayload(n, jobId, { sunoTaskId: "task-1", sunoTrackId: "track-1", audioUrl: "u" })
+      expect(result.payload).toMatchObject({ taskId: "task-1", audioId: "track-1", separateType: "split_stem" })
+      expect(result.payload).not.toHaveProperty("audioUrl")
+      // The node's own ids (typed in, or a saved node) count as a Suno track too.
+      const manual = buildPayload(node("n1", "suno-separate", { taskId: "t-m", audioId: "a-m" }), jobId, {})
+      expect(manual.payload).toMatchObject({ taskId: "t-m", audioId: "a-m", separateType: "separate_vocal" })
+    })
+
+    it("suno-separate throws audio_required with neither a task id nor audio", () => {
+      expect(() => buildPayload(node("n1", "suno-separate", {}), jobId, {})).toThrow(/audio_required/)
+      // An audio id alone is no source; a blank typed task id is no id.
+      expect(() => buildPayload(node("n1", "suno-separate", { audioId: "a" }), jobId, { sunoTrackId: "t" })).toThrow(/audio_required/)
+      expect(() => buildPayload(node("n1", "suno-separate", { taskId: "  " }), jobId, {})).toThrow(/audio_required/)
+    })
+
+    // A task id alone is a Suno track — the editor's rule, decided 2026-10-19.
+    it("suno-separate: a task id alone runs the Suno lane with the task id as the audio id", () => {
+      const wired = buildPayload(node("n1", "suno-separate", {}), jobId, { sunoTaskId: "task-1" })
+      expect(wired.payload).toMatchObject({ taskId: "task-1", audioId: "task-1" })
+      const typed = buildPayload(node("n1", "suno-separate", { taskId: "t-m" }), jobId, { audioUrl: "u" })
+      expect(typed.payload).toMatchObject({ taskId: "t-m", audioId: "t-m" })
+      expect(typed.payload).not.toHaveProperty("audioUrl")
+    })
+
+    // Workflow JSON written by MCP or an import never met the route's Zod:
+    // coerce, never pass an unknown mode or instrument to the provider.
+    it("suno-separate coerces an unknown mode to separate_vocal, priced as separate_vocal", () => {
+      const r = buildPayload(node("n1", "suno-separate", { type: "karaoke", stemName: "Piano" }), jobId, { audioUrl: "u" })
+      expect(r.payload.separateType).toBe("separate_vocal")
+      expect(r.modelIdentifier).toBe("suno-separate")
+      expect(r.payload).not.toHaveProperty("stemName")
+    })
+
+    it("suno-separate coerces an unknown instrument to Lead Vocal in one-instrument mode", () => {
+      const r = buildPayload(
+        node("n1", "suno-separate", { type: "split_stem_advanced", stemName: "Kazoo Orchestra" }),
+        jobId,
+        { audioUrl: "u" },
+      )
+      expect(r.payload).toMatchObject({ separateType: "split_stem_advanced", stemName: "Lead Vocal" })
+      expect(r.modelIdentifier).toBe("suno-separate-single")
+      const nonString = buildPayload(node("n1", "suno-separate", { type: "split_stem_advanced", stemName: 42 }), jobId, { audioUrl: "u" })
+      expect(nonString.payload.stemName).toBe("Lead Vocal")
+    })
+
+    // The same cases execute-node.test.ts runs through the editor — both
+    // engines must send the identical source (@nodaro/render-rules
+    // suno-separate-source.ts).
+    describe("suno-separate source parity with the editor (shared fixture)", () => {
+      const sourceOf = (sent: Record<string, unknown>) =>
+        Object.fromEntries(["taskId", "audioId", "audioUrl"].filter((k) => Object.hasOwn(sent, k)).map((k) => [k, sent[k]]))
+
+      it.each(sunoSeparateSourceCases.cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
+        const build = () => buildPayload(node("n1", "suno-separate", c.data), jobId, c.inputs as ResolvedInputs)
+        if (c.expected === null) {
+          expect(build).toThrow(/audio_required/)
+          return
+        }
+        expect(sourceOf(build().payload)).toStrictEqual(c.expected)
+      })
     })
 
     it("suno-mashup", () => {

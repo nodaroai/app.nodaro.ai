@@ -27,7 +27,7 @@ import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
 import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
-import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields, sunoSeparateRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
@@ -587,6 +587,7 @@ export function applyBackendExecutionState(
         // Choose Best (reduce): the winner + the strategy's meta — the live lane's mapping.
         Object.assign(data, reduceRunOutputFields(nodeType, state.output))
         Object.assign(data, splitMediaRunOutputFields(nodeType, state.output))
+        Object.assign(data, sunoSeparateRunOutputFields(nodeType, state.output))
 
         // Build generated result entries from the output
         const listResultUrls = (state.output.listResults ?? []).filter(
@@ -851,6 +852,7 @@ export function applyCompletedExecutionResults(
     // Choose Best (reduce): winner + the judge's reasoning — the live lane's mapping.
     Object.assign(newData, reduceRunOutputFields(nodeType, state.output))
     Object.assign(newData, splitMediaRunOutputFields(nodeType, state.output))
+    Object.assign(newData, sunoSeparateRunOutputFields(nodeType, state.output))
 
     // Handle fan-out list results — create a generatedResult entry for each URL
     const listResultUrls = (state.output.listResults ?? []).filter(

@@ -69,6 +69,8 @@ vi.mock("@nodaro/shared/workflow", async (importOriginal) => {
 
 import { pollJobToCompletion, pollJobWithNodeUpdate, pollImageRefineToNode } from "../poll-job"
 import type { ExecutionContext } from "../types"
+import { sunoSeparateHandleUrl } from "@nodaro/shared/models"
+import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs"
 
 function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
@@ -385,6 +387,51 @@ describe("pollJobWithNodeUpdate", () => {
     await promise
 
     expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", { currentJobProgress: 50 })
+  })
+
+  it("a Suno Separate re-run clears the last run's stems and fallback facts off the node", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({
+      status: "completed",
+      output_data: {
+        audioUrl: "https://cdn.test/iso.mp3",
+        isolatedUrl: "https://cdn.test/iso.mp3",
+        withoutUrl: "https://cdn.test/without.mp3",
+        separateType: "split_stem_advanced",
+        stemName: "Bass",
+        engineUsed: "suno",
+      },
+    })
+    mockNodes.push({
+      id: "n1",
+      type: "suno-separate",
+      data: {
+        generatedResults: [],
+        stemName: "Piano",
+        vocalUrl: "https://cdn.test/old-vocals.mp3",
+        instrumentalUrl: "https://cdn.test/old-inst.mp3",
+        otherUrl: "https://cdn.test/old-other.mp3",
+        sunoRefused: true,
+        fallbackReason: "catalog",
+        engineUsed: "demucs",
+      },
+    })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedAudioUrl", "Suno Separate", makeCtx(), (od) => sunoSeparateRunOutputFields("suno-separate", od))
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+
+    const data = mockNodes[0]!.data
+    for (const stale of ["vocalUrl", "instrumentalUrl", "otherUrl", "sunoRefused", "fallbackReason"]) {
+      expect(data[stale], stale).toBeUndefined()
+    }
+    expect(data).toMatchObject({ isolatedUrl: "https://cdn.test/iso.mp3", withoutUrl: "https://cdn.test/without.mp3", engineUsed: "suno", stemName: "Piano" })
+    // The handles read the node through the shared rule: vocals / instrumental route nothing.
+    const routed = { ...data, audioUrl: data.generatedAudioUrl }
+    expect(sunoSeparateHandleUrl(routed, "vocals")).toBeUndefined()
+    expect(sunoSeparateHandleUrl(routed, "instrumental")).toBeUndefined()
+    expect(sunoSeparateHandleUrl(routed, "isolated")).toBe("https://cdn.test/iso.mp3")
   })
 
   it("calls extraOutputFields when provided", async () => {

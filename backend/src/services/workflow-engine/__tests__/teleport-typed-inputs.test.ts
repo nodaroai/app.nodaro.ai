@@ -5,6 +5,7 @@
  * these cases hold the engine to "through the pair = the direct wire" for every
  * kind of value, fan-out included.
  */
+import { USE_CASE_RUN_VIEWER_AS_BEFORE } from "@nodaro/render-rules"
 import { describe, it, expect } from "vitest"
 import { bypassTeleports, carriedNodeSettings } from "@nodaro/render-rules"
 import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
@@ -263,6 +264,6 @@ describe("the orchestrator's graph through a Teleport pair", () => {
     const carried = carriedNodeSettings(consumer, edges)
     expect((carried.data as Record<string, unknown>).mediaOrder).toEqual(["o"])
     const inputs = resolveNodeInputs(carried, edges, {}, [...nodes, carried])
-    expect(freshRunInputs(carried, inputs).mediaUrls).toEqual(["https://r2/o.mp4"])
+    expect(freshRunInputs(carried, inputs, USE_CASE_RUN_VIEWER_AS_BEFORE).mediaUrls).toEqual(["https://r2/o.mp4"])
   })
 })

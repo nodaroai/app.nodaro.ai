@@ -8,7 +8,10 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared/models"
+import {
+  SUNO_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars,
+  SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, sunoSeparateCreditId,
+} from "@nodaro/shared/models"
 import {
   sunoStyleBoost,
   sunoVoiceValidate,
@@ -29,6 +32,8 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { resolveRequestOrigin } from "../lib/client-origin-scope.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import type { SunoSeparateJobData } from "../workers/handlers/suno-separate.js"
+import { pickSunoSeparateSource } from "@nodaro/render-rules"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -142,12 +147,32 @@ const sunoLyricsBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
-const sunoSeparateBody = z.object({
-  taskId: z.string().min(1),
-  audioId: z.string().min(1),
-  type: z.enum(["separate_vocal", "split_stem"]).optional().default("separate_vocal"),
-  userId: z.string().uuid().optional(),
-})
+// The source is a Suno track by its task id (`audioId` defaults to the task
+// id) or any audio by URL. With both, the ids win and the URL is not enqueued
+// — the rule the editor and workflow runs apply (@nodaro/render-rules
+// suno-separate-source.ts). `stemName` only means something in one-instrument
+// mode (`split_stem_advanced`), where the handler defaults it.
+const sunoSeparateSourceOf = (body: { taskId?: string; audioId?: string; audioUrl?: string }) =>
+  pickSunoSeparateSource({ taskIds: [body.taskId], audioIds: [body.audioId], audioUrl: body.audioUrl })
+
+const sunoSeparateBody = z
+  .object({
+    taskId: z.string().min(1).optional(),
+    audioId: z.string().min(1).optional(),
+    audioUrl: safeUrlSchema.optional(),
+    type: z.enum(SUNO_SEPARATE_TYPES).optional().default("separate_vocal"),
+    stemName: z.enum(SUNO_STEM_NAMES).optional(),
+    fallbackToDemucs: z.boolean().optional().default(false),
+    userId: z.string().uuid().optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (sunoSeparateSourceOf(body)) return
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["audioUrl"],
+      message: "Pass a Suno track (taskId, with its audioId) or any audio as audioUrl",
+    })
+  })
 
 const sunoMusicVideoBody = z.object({
   taskId: z.string().min(1),
@@ -587,10 +612,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/separate",
     {
-      preHandler: creditGuard((req) => {
-        const body = req.body as { type?: string }
-        return body.type === "split_stem" ? "suno-separate-stem" : "suno-separate"
-      }),
+      preHandler: creditGuard((req) => sunoSeparateCreditId((req.body as { type?: unknown } | undefined)?.type)),
     },
     async (req, reply) => {
       const parsed = sunoSeparateBody.safeParse(req.body)
@@ -600,7 +622,15 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const { taskId, audioId, type } = parsed.data
+      const { type, fallbackToDemucs } = parsed.data
+      // Never null after the schema's refine; the check narrows it.
+      const source = sunoSeparateSourceOf(parsed.data)
+      if (!source) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "Pass a Suno track (taskId, with its audioId) or any audio as audioUrl" },
+        })
+      }
+      const stemName = type === "split_stem_advanced" ? (parsed.data.stemName ?? DEFAULT_SUNO_STEM_NAME) : undefined
       const userId = req.userId
 
       if (!userId) {
@@ -617,7 +647,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "suno-separate"), separateType: type },
+          input_data: { ...buildJobInputData(parsed.data, "suno-separate"), separateType: type, stemName },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -625,18 +655,24 @@ export async function sunoRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, error, "Failed to create job")
       }
 
-      const creditType = type === "split_stem" ? "suno-separate-stem" : "suno-separate"
+      const creditType = sunoSeparateCreditId(type)
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-separate", {
+      // Exactly the `SunoSeparateJobData` keys, each only when it says
+      // something — a Suno-track vocals/stems run enqueues what it always did.
+      // The source is the ids or the URL, never both, and always both ids, so
+      // the job also replays on a connected cloud that still requires them.
+      const jobData: SunoSeparateJobData = {
         jobId: job.id,
-        taskId,
-        audioId,
+        ...source,
         separateType: type,
+        ...(stemName ? { stemName } : {}),
+        ...(fallbackToDemucs ? { fallbackToDemucs: true } : {}),
         usageLogId,
-      })
+      }
+      await videoQueue.add("suno-separate", jobData)
 
       return { jobId: job.id }
     }

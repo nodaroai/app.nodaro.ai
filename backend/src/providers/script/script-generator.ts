@@ -1,4 +1,5 @@
 import { resolveLlmParams, type LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
+import { cheapLanesParam, type LlmCheapLanesInput } from "../../lib/llm-cheap-lanes.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { getLlmModel, LLM_FEATURE_DEFAULTS, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_DEFAULT } from "@nodaro/shared/nodes"
@@ -158,6 +159,8 @@ export async function generateScript(
   advanced?: LlmAdvancedInput,
   /** The node's style guide: how the script should read and look. */
   brief?: { styleGuide?: string },
+  /** "Cheap lanes only" (lib/llm-cheap-lanes.ts): no direct-vendor fallback. */
+  lanes?: LlmCheapLanesInput,
 ): Promise<GeneratedScript> {
   const resolvedModelId = resolveScriptModelId(provider, llmModel)
 
@@ -182,6 +185,7 @@ export async function generateScript(
     messages: [{ role: "user", content: userPrompt }],
     reasoningEffort: reasoningEffort as LlmReasoningEffort | undefined,
     ...resolveLlmParams(advanced ?? {}, { maxTokens: Math.min(modelMaxTokens, 16384) }),
+    ...cheapLanesParam(lanes),
   })
 
   const raw = response.text

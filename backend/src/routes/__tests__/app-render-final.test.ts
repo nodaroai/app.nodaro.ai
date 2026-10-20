@@ -43,7 +43,7 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => mocks.flag }))
 vi.mock("@/lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: mocks.queueAdd } }))
 vi.mock("@/lib/access-blocks.js", () => ({ isUserBlocked: vi.fn().mockResolvedValue(false) }))
-vi.mock("@/lib/use-case/continuation.js", () => ({ usecaseNothingKeptRefusal: mocks.nothingKept }))
+vi.mock("@/lib/use-case/continuation.js", () => ({ usecaseRenderFinalEditRefusal: mocks.nothingKept }))
 vi.mock("@/middleware/credit-guard.js", () => ({ resolveWebSurfaceFlag: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { checkAppRunEligibility: mocks.eligibility } }))
 vi.mock("@/lib/idempotent-insert.js", () => ({

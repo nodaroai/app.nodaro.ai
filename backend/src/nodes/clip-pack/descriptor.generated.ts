@@ -11,7 +11,8 @@ export const descriptor = {
     "after": "episode-trailer"
   },
   "inputs": [
-    "media"
+    "media",
+    "masterAudio"
   ],
   "outputs": [
     "clips",
@@ -21,9 +22,16 @@ export const descriptor = {
     "inputs": [
       {
         "id": "media",
-        "label": "Recording",
+        "label": "Recordings",
         "accepts": [
           "video",
+          "audio"
+        ]
+      },
+      {
+        "id": "masterAudio",
+        "label": "Master audio",
+        "accepts": [
           "audio"
         ]
       }

@@ -82,6 +82,7 @@ import {
   type ContinueFromFailedStamp,
   type SupersedingRun,
 } from "../lib/continue-from-failed-lineage.js"
+import { retryStampOf } from "../lib/schedule-retry.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -1580,7 +1581,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 1: workflow_executions ---
     let execQuery = supabase
       .from("workflow_executions")
-      .select("id, status, trigger_type, mcp_client, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      // trigger_data: read for a schedule retry's "Retry n of m" only (executionRetryOf); never sent.
+      .select("id, status, trigger_type, trigger_data, mcp_client, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
@@ -1716,7 +1718,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 1: workflow_executions ---
     let execQuery = supabase
       .from("workflow_executions")
-      .select("id, workflow_id, user_id, status, trigger_type, mcp_client, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
+      .select("id, workflow_id, user_id, status, trigger_type, trigger_data, mcp_client, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, started_at, completed_at, created_at")
       .order("created_at", { ascending: false })
       .limit(limit + 1)
 
@@ -1871,7 +1873,19 @@ function stripNodeStateInputs(nodeStates: unknown): unknown {
   return out
 }
 
+/**
+ * A schedule retry's place in its chain, for the run history's "Retry 2 of 3"
+ * — read only off a `schedule` row, whose `trigger_data` is the platform's
+ * own (a webhook body could post the same shape). Absent on every other run.
+ */
+function executionRetryOf(row: Record<string, unknown>): { attempt: number; maxAttempts: number; retryOf: string } | undefined {
+  if (row.trigger_type !== "schedule") return undefined
+  const stamp = retryStampOf(row.trigger_data)
+  return stamp ? { attempt: stamp.attempt, maxAttempts: stamp.maxAttempts, retryOf: stamp.retryOf } : undefined
+}
+
 function toExecutionResponse(row: Record<string, unknown>) {
+  const retry = executionRetryOf(row)
   return {
     id: row.id,
     kind: "execution" as const,
@@ -1882,6 +1896,7 @@ function toExecutionResponse(row: Record<string, unknown>) {
     outcome: executionOutcome(row.status, row.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
+    ...(retry ? { retry } : {}),
     // `triggerData` (top-level) is debug-only and not read by any poll
     // consumer (verified across frontend/backend), so it's omitted here to
     // trim the hot-path detail/poll response. The per-node `inputs` blobs are
@@ -1904,6 +1919,7 @@ function toExecutionResponse(row: Record<string, unknown>) {
 }
 
 export function toExecutionSummary(row: Record<string, unknown>) {
+  const retry = executionRetryOf(row)
   return {
     id: row.id,
     kind: "execution" as const,
@@ -1911,6 +1927,7 @@ export function toExecutionSummary(row: Record<string, unknown>) {
     outcome: executionOutcome(row.status, row.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
+    ...(retry ? { retry } : {}),
     // Strip the per-node `inputs` blob (resolved upstream inputs — large,
     // debug-only) exactly as toExecutionResponse does. The list row + node-info
     // modal render status/type/timing/error/output, never `inputs`, so this

@@ -173,6 +173,24 @@ export const SYNC_HTTP_NODES = new Set([
 ])
 
 /**
+ * Sync-HTTP routes whose Zod takes `cheapLanesOnly` (the LLM routes that
+ * honour it — see `WorkflowExecutionJob.cheapLanesOnly`). The flag rides the
+ * body only to these: a route that does not declare the key may be strict,
+ * and a 400 mid-run for a key it never reads would be worse than a fallback.
+ * Add a route here once its Zod declares the field. Exported for the dispatch test.
+ */
+export const CHEAP_LANES_BODY_NODES: ReadonlySet<string> = new Set(["llm-chat", "ai-writer", "image-to-text"])
+
+/** The body a sync-HTTP call sends, with `cheapLanesOnly` when the run is kept to the cheap lanes and the route reads it. */
+export function withCheapLanesOnly(
+  nodeType: string,
+  body: Record<string, unknown>,
+  ctx: Pick<OrchestratorContext, "cheapLanesOnly">,
+): Record<string, unknown> {
+  return ctx.cheapLanesOnly === true && CHEAP_LANES_BODY_NODES.has(nodeType) ? { ...body, cheapLanesOnly: true } : body
+}
+
+/**
  * Sync-HTTP nodes whose route takes an `Idempotency-Key`: the orchestrator sends
  * `wf-<executionId>-<nodeId>[-<iteration>]`, so a re-pick of the node buys /
  * writes once. Exported for the dispatch test.
@@ -813,13 +831,14 @@ async function executeSyncHttpNode(
       : []
 
   // Build request body from node data + resolved inputs
-  const body = isScene3D
+  const builtBody = isScene3D
     ? buildScene3DHttpBody(node, resolvedInputs, ctx, {
         settings: ctx.workflowSettings as WorkflowSettings | undefined,
         nodes: allNodes, edges, nodeStates, authoredData,
         viewer: await viewerForNode(node.type, ctx.userId),
       }, userPromptTemplate)
     : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes, authoredData)
+  const body = withCheapLanesOnly(node.type, builtBody, ctx)
 
   // Polling sources (Telegram Channel Feed): the ROUTE owns the durable cursor
   // (node_cursors) since PR 2 — it reads and advances the position itself from
@@ -2351,8 +2370,15 @@ async function executeWorkerNode(
     }
   }
 
-  // 4. Update payload with usageLogId
-  const enrichedPayload = { ...payload, usageLogId, ...(refVideoDurationsSec ? { refVideoDurationsSec } : {}) }
+  // 4. Update payload with usageLogId. A run kept to the cheap lanes says so
+  // on every worker payload (a handler that makes a model call reads it;
+  // every other one ignores the key), so no node type has to be listed.
+  const enrichedPayload = {
+    ...payload,
+    usageLogId,
+    ...(refVideoDurationsSec ? { refVideoDurationsSec } : {}),
+    ...(ctx.cheapLanesOnly ? { cheapLanesOnly: true } : {}),
+  }
 
   // 5. Enqueue to BullMQ (lower priority than interactive single-node runs)
   const queue = queueName === "video-render" ? renderQueue : videoQueue
@@ -2873,6 +2899,8 @@ async function executeComponentNode(
         // rule does not apply to (queued before the deploy) would still have
         // its component refused. The route honors it on the internal lane only.
         previewStopRule: ctx.previewStopRule === true,
+        // A run kept to the cheap lanes keeps its component's inner run there too.
+        ...(ctx.cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
         // P14: the component route replies 202 and starts a SEPARATE execution
         // in the background — a header would die with this wrapper request, so
         // the parent's resolved payer rides the BODY into the child execution's

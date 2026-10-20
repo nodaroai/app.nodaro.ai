@@ -1,3 +1,5 @@
+import { SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "@nodaro/shared/models"
+
 /**
  * A finished node's NAMED side outputs, under the keys its card and its output
  * handles read.
@@ -73,4 +75,38 @@ export interface SplitMediaRunOutput {
 export function splitMediaRunOutputFields(nodeType: string | null | undefined, output: SplitMediaRunOutput): Record<string, unknown> {
   if (nodeType !== "split-media") return {}
   return { generatedVideoUrls: output.videoUrls ? [...output.videoUrls] : undefined, generatedAudioUrls: output.audioUrls ? [...output.audioUrls] : undefined }
+}
+
+/**
+ * What a Suno Separate run records about how it ran: its engine, a Demucs
+ * fallback's `sunoRefused` / `fallbackReason`, and its mode. Not `stemName` —
+ * that is the node's instrument SETTING; the run only echoes the value it was
+ * sent, and writing it back would undo an instrument changed mid-run.
+ */
+export const SUNO_SEPARATE_RUN_FACTS: readonly string[] = SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName")
+
+/**
+ * Suno Separate: every stem, both one-instrument takes and the run's facts, under
+ * the field names the run's output already uses — which are the names the
+ * node's handles and card read. The single-node Run's callback (execute-node.ts)
+ * and the same three lanes call it, so a run that finished with the tab closed
+ * comes back with its `isolated` / `without` handles and its stems.
+ *
+ * EVERY field is written, a missing (or empty) one as `undefined`: a stem that
+ * did not come back is empty. Writing only what came back left the previous
+ * run's fields in place — a vocals run's `vocalUrl` / `instrumentalUrl` kept
+ * feeding those pips after a one-instrument run, and a fallback's
+ * `sunoRefused` outlived the next normal run.
+ */
+export function sunoSeparateRunOutputFields(
+  nodeType: string | null | undefined,
+  output: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  if (nodeType !== "suno-separate") return {}
+  const fields: Record<string, unknown> = {}
+  for (const key of [...SUNO_SEPARATE_RESULT_FIELDS, ...SUNO_SEPARATE_RUN_FACTS]) {
+    const value = output[key]
+    fields[key] = value === null || value === "" ? undefined : value
+  }
+  return fields
 }

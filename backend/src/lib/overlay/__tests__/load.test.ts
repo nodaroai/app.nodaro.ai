@@ -1,5 +1,14 @@
-import { describe, it, expect, vi } from "vitest"
-import { loadOverlay, OVERLAY_CONTRACT_VERSION } from "../load.js"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { loadOverlay, OVERLAY_CONTRACT_VERSION, resetOverlayLoadForTests } from "../load.js"
+import {
+  clearPromptPolicies,
+  getRegisteredPromptPolicyIds,
+  registerPromptPolicy,
+} from "../../prompt-policy.js"
+import { minorAgeFloorPolicy, registerMainlinePromptPolicies } from "../../prompt-policies/index.js"
+
+// loadOverlay is once per process; each case starts from a fresh process view.
+beforeEach(() => resetOverlayLoadForTests())
 
 describe("loadOverlay — inert when unset", () => {
   it("returns { loaded: null } and never imports when packageName is undefined", async () => {
@@ -85,5 +94,52 @@ describe("loadOverlay — load, validate, register", () => {
     const result = await loadOverlay({ importer, exit, packageName: "acme-overlay" })
     expect(exit).toHaveBeenCalledExactlyOnceWith(1)
     expect(result).toEqual({ loaded: null })
+  })
+})
+
+describe("loadOverlay — once per process", () => {
+  afterEach(() => clearPromptPolicies())
+
+  it("a second call does not import or register again, and returns the first result", async () => {
+    const register = vi.fn()
+    const importer = vi.fn(async () => goodModule(register))
+    const exit = vi.fn(() => undefined as never)
+    const first = await loadOverlay({ importer, exit, packageName: "acme-overlay" })
+    const second = await loadOverlay({ importer, exit, packageName: "acme-overlay" })
+    expect(importer).toHaveBeenCalledTimes(1)
+    expect(register).toHaveBeenCalledTimes(1)
+    expect(second).toEqual(first)
+    expect(second).toEqual({ loaded: "acme-overlay" })
+  })
+
+  it("concurrent first calls share one load", async () => {
+    const register = vi.fn(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+    })
+    const importer = vi.fn(async () => goodModule(register))
+    const exit = vi.fn(() => undefined as never)
+    await Promise.all([
+      loadOverlay({ importer, exit, packageName: "acme-overlay" }),
+      loadOverlay({ importer, exit, packageName: "acme-overlay" }),
+    ])
+    expect(register).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the policy order [overlay, minor-age floor] when a process boots through buildApp and then worker.ts", async () => {
+    // The cloud video worker's boot: buildApp (overlay, then mainline policies)
+    // runs while worker.ts's imports evaluate, then worker.ts does both again.
+    clearPromptPolicies()
+    const register = () =>
+      registerPromptPolicy({ id: "acme-overlay-policy", apply: (a) => a })
+    const opts = {
+      importer: async () => goodModule(register),
+      exit: (() => undefined) as never,
+      packageName: "acme-overlay",
+    }
+    await loadOverlay(opts)
+    registerMainlinePromptPolicies()
+    await loadOverlay(opts)
+    registerMainlinePromptPolicies()
+    expect(getRegisteredPromptPolicyIds()).toEqual(["acme-overlay-policy", minorAgeFloorPolicy.id])
   })
 })

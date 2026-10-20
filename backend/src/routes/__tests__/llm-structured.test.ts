@@ -79,7 +79,7 @@ beforeEach(async () => {
   mocks.commitReservedCreditsForJob.mockResolvedValue(undefined)
   mocks.refundReservedCreditsForJob.mockResolvedValue(0)
   mocks.markProviderCallStart.mockResolvedValue(undefined)
-  mocks.llmCompleteStructured.mockResolvedValue({ output: { title: "Rain in Rome" }, inputTokens: 14000, outputTokens: 9000 })
+  mocks.llmCompleteStructured.mockResolvedValue({ output: { title: "Rain in Rome" }, inputTokens: 14000, outputTokens: 9000, providerCost: 0.0312, lane: "kie" })
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -144,6 +144,16 @@ describe("POST /v1/llm/structured — refusals that cost nothing", () => {
     expect(mocks.insertJob).not.toHaveBeenCalled()
   })
 
+  // Decided 2026-10-20 (production cost audit): Claude Fable 5 is withheld from
+  // every legend-sized structured read, this route included.
+  it("400s Claude Fable 5 with a validation_error, before reserving credits", async () => {
+    const res = await post({ ...VALID, llmModel: "claude-fable-5" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
   it("400s Advanced mode on a model with no direct lane", async () => {
     // Claude gained a direct lane for Advanced (decided 2026-10-08); GPT has none.
     const res = await post({ ...VALID, llmModel: "gpt-6-astra", advancedMode: true })
@@ -181,7 +191,7 @@ describe("POST /v1/llm/structured — the successful call", () => {
   })
 
   it("reserves against the model's own llm-structured tier and commits on success", async () => {
-    await post({ ...VALID, llmModel: "claude-fable-5" })
+    await post({ ...VALID, llmModel: "claude-opus-5" })
     expect(mocks.reserveCreditsForJob).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "job-1", "llm-structured:premium",
     )
@@ -212,7 +222,7 @@ describe("POST /v1/llm/structured — the successful call", () => {
   })
 
   it("passes a caller's maxTokens through to the model OUTSIDE Advanced mode", async () => {
-    await post({ ...VALID, llmModel: "claude-fable-5", maxTokens: 16384, maxRetries: 2 })
+    await post({ ...VALID, llmModel: "claude-opus-5", maxTokens: 16384, maxRetries: 2 })
     const request = mocks.llmCompleteStructured.mock.calls[0][0] as Record<string, unknown>
     expect(request.maxTokens).toBe(16384)
     // Not the client's 120s default: a 12k-token forced-schema completion
@@ -224,14 +234,22 @@ describe("POST /v1/llm/structured — the successful call", () => {
     expect(mocks.llmCompleteStructured.mock.calls[0][2]).toEqual({ schemaName: undefined, maxRetries: 2 })
   })
 
-  it("marks the job completed with the output and usage", async () => {
+  it("marks the job completed with the output and usage, and records the lane and the provider cost (admin-only columns)", async () => {
     await post(VALID)
     expect(mocks.jobUpdate).toHaveBeenCalledWith({
       status: "completed",
       progress: 100,
       completed_at: expect.any(String),
       output_data: { output: { title: "Rain in Rome" }, inputTokens: 14000, outputTokens: 9000 },
+      provider: "kie",
+      provider_cost: 0.0312,
     })
+  })
+
+  it("a lane that reported no cost writes null, never a made-up figure; the lane is still named", async () => {
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { title: "Rain in Rome" }, inputTokens: 1, outputTokens: 1, lane: "direct-anthropic" })
+    await post(VALID)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "completed", provider: "direct-anthropic", provider_cost: null }))
   })
 })
 
@@ -246,9 +264,24 @@ describe("POST /v1/llm/structured — the failed call", () => {
       error_message: "llm-structured: validation failed after 3 attempt(s): (root): Invalid input",
       completed_at: expect.any(String),
       output_data: { error: "llm-structured: validation failed after 3 attempt(s): (root): Invalid input" },
+      // A plain Error reports no usage: nothing was shown to be paid for.
+      provider_cost: null,
     })
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  // Every validation attempt is a paid call: the client sums their usage and
+  // cost on the error, and the failed row keeps it for the cost reports.
+  it("a failure that carried usage keeps its provider cost — and the lane that served it — on the failed row", async () => {
+    const { StructuredLlmError } = await import("../../lib/llm/structured.js")
+    mocks.llmCompleteStructured.mockRejectedValue(
+      new StructuredLlmError("llm-structured: validation failed after 3 attempt(s): x", { inputTokens: 42_000, outputTokens: 27_000, providerCost: 0.0936, complete: true }, { lane: "kie" }),
+    )
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(502)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", provider_cost: 0.0936, provider: "kie" }))
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
   })
 
   // A content refusal the provider billed is a paid answer (decided 2026-10-16).

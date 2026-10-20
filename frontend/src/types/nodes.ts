@@ -47,6 +47,9 @@ import {
   type QaCheckProvider,
   type SunoModel,
   type SunoAddTrackModel,
+  type SunoSeparateType,
+  type SunoStemName,
+  type SunoSeparateResultField,
   type VoiceDesignModel,
   type VoiceChangerModel
 } from "@nodaro/shared/models"
@@ -87,7 +90,7 @@ import {
 } from "@nodaro/prompts/pickers"
 import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
 import type { ImageCriticMode, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState } from "@nodaro/shared/pipeline"
-import type { ReduceStrategyId, ReduceMeta, SelectorConfig, ScheduleRule } from "@nodaro/shared/workflow"
+import type { ReduceStrategyId, ReduceMeta, SelectorConfig, ScheduleRetry, ScheduleRule } from "@nodaro/shared/workflow"
 import type { CharacterAspectRatio, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared/entities"
 import type {
   VideoAnalysisResult,
@@ -3260,7 +3263,11 @@ export type SunoLyricsData = PromptAffixFields & {
 export type SunoSeparateData = {
   [key: string]: unknown
   label: string
-  type: "separate_vocal" | "split_stem"
+  type: SunoSeparateType
+  /** The instrument "one instrument" mode (`split_stem_advanced`) isolates. */
+  stemName?: SunoStemName
+  /** "If Suno refuses, use Demucs": a refused vocals / stems run runs on Demucs instead of failing. */
+  fallbackToDemucs?: boolean
   taskId: string
   audioId: string
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3268,13 +3275,15 @@ export type SunoSeparateData = {
   generatedAudioUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  vocalUrl?: string
-  instrumentalUrl?: string
   stems?: Record<string, string>
+  /** How the last run ran: on Suno, or on Demucs after Suno refused (and why). */
+  engineUsed?: "suno" | "demucs"
+  sunoRefused?: boolean
+  fallbackReason?: "catalog" | "too_large"
   currentJobId?: string
   currentJobProgress?: number
   fieldMappings?: FieldMappings
-}
+} & Partial<Record<SunoSeparateResultField, string>>
 
 export type AudioSeparationData = {
   [key: string]: unknown
@@ -3748,12 +3757,14 @@ export type ImageToTextData = PromptAffixFields & {
 export type DescribeToPickerData = {
   [key: string]: unknown
   label: string
-  /** Vision model id (STRUCTURED_VISION_MODELS). Unset = the analyzer's
-   *  default, `LLM_FEATURE_DEFAULTS["describe-to-picker"]` — never stored, so
-   *  a later default move reaches every node. */
+  /** Vision model id (DESCRIBE_TO_PICKER_MODELS). Unset = the analyzer's
+   *  default, `LLM_FEATURE_DEFAULTS["describe-to-picker"]` (Gemini 3.8 Flash
+   *  since 2026-10-20) — never stored, so a later default move reaches every
+   *  node. */
   llmModel?: string
-  /** Unset = the effort the run uses: `defaultReasoningEffort` — `high` on the
-   *  default model (decided 2026-10-09), the model's Auto on any other. */
+  /** Unset = the effort the run uses: `defaultReasoningEffort` — `high` on
+   *  Claude Opus 5.5 (its recipe, decided 2026-10-09), the model's Auto on any
+   *  other, the default included. */
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
    *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
@@ -3891,6 +3902,10 @@ export type SpeakerViewData = {
    *  transcript's speakers who talk at least 10 s or 5% of the episode, first
    *  heard first (decided 2026-10-14, 2026-10-18). Drawn regions always win. */
   autoRegions?: boolean
+  /** Speaker Layout sets it: with `autoRegions`, speakers under the talk-time
+   *  floor (10 s or 5% of the talk) get no box of their own on one edit too
+   *  (decided 2026-10-18). Never sent to the renderer. */
+  autoRegionsTalkFloor?: boolean
   /** The `speakerRegions` rows the region editor saved as untouched default
    *  thirds (their `speakerRegionKey`s). Default thirds frame but never label
    *  a face track (P3-4 rung 2); every other row counts as drawn. App-only:
@@ -7033,6 +7048,15 @@ export type ScheduleTriggerData = {
   /** Stop after this many runs; missing = unlimited. */
   maxExecutions?: number
   /**
+   * Retry on failure: a scheduled run that fails is run again after
+   * `afterMinutes`, up to `maxAttempts` times; `cheapLanesOnly` keeps the
+   * model calls of the run (and its retries) that honour it off the
+   * direct-vendor fallback (the node types that do are listed on the
+   * Schedule Trigger's docs page). Missing = no retry (model:
+   * `@nodaro/shared` schedule-retry).
+   */
+  retry?: ScheduleRetry
+  /**
    * The switch. The schedule fires only while this is `true` — a new schedule
    * starts paused; saving alone never arms it.
    */
@@ -8877,8 +8901,8 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Suno Separate",
     category: "ai",
     inputs: ["audio"],
-    outputs: ["instrumental", "vocals"],
-    defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
+    outputs: ["instrumental", "vocals", "isolated", "without"],
+    defaultData: { label: "Suno Separate", type: "separate_vocal", stemName: "Lead Vocal", fallbackToDemucs: false, taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
   },
   {
     type: "suno-music-video",

@@ -48,6 +48,7 @@ import {
   type NodeState,
 } from "@/components/editor/execution-utils"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
+import { RetryBadge } from "@/components/library/triggers/RetryBadge"
 import { ExecutionDetailModal } from "@/components/editor/execution-detail-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { getJobStatus, type GlobalExecution } from "@/lib/api"
@@ -438,6 +439,7 @@ function GlobalExecutionRow({
         )}
         <td className="px-4 py-3">
           <TriggerBadge triggerType={exec.triggerType} mcpClient={exec.mcpClient} />
+          <RetryBadge retry={exec.retry} className="ms-1.5" />
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">

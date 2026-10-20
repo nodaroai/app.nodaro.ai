@@ -33,8 +33,9 @@
 import { toast } from "sonner"
 import {
   usecaseDescriptor,
+  usecaseKindHasPlan,
   usecaseListsItsResult,
-  usecaseRecordingsOf,
+  usecaseRunRecordings,
   usecaseSentSettings,
   type UseCaseNodeType,
   type UseCaseResultKind,
@@ -42,6 +43,8 @@ import {
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED } from "@nodaro/shared/nodes"
 import { continueUseCase, getJobStatus, runUseCase, type UseCaseApiParams } from "@/lib/api"
 import { executionErrorText } from "@/lib/execution-error-text"
+import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
+import { usecaseFramesOffered } from "@/lib/use-case-frames-viewer"
 import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseListLandingFields, usecaseRunResultFields, usecaseTakeResultFields } from "@/lib/use-case-run-result"
 import { isInputWarningCode } from "@/lib/input-warning-codes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -77,6 +80,7 @@ export interface UseCaseInputs {
   readonly useCaseMusic?: string
   readonly useCaseIntroCard?: string
   readonly useCaseMasterAudio?: string
+  readonly useCaseMasterAudioNodeId?: string
 }
 
 export interface UseCaseContinueParams {
@@ -385,7 +389,8 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
       toast.error(message)
       return Promise.reject(new Error(message))
     }
-    const edit = cont.mode === "render-final" ? (cont.editedEdl ?? data.editedEdl) : undefined
+    // A kind with no plan (a layout) has no edit to send: the server refuses one (`use_case_no_plan`), so a stray edit on the node is never sent.
+    const edit = cont.mode === "render-final" && usecaseKindHasPlan(d.resultKind) ? (cont.editedEdl ?? data.editedEdl) : undefined
     return runUseCaseContinue(node.id, type, { jobId: cont.jobId, mode: cont.mode, ...(edit ? { editedEdl: edit } : {}) }, ctx, opts.idempotencyKey)
   }
   // A fresh run: the previous run is no longer this node's to continue. Its
@@ -394,22 +399,36 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
   if (data.useCaseJobId !== undefined || data.useCaseExecutionId !== undefined) {
     useWorkflowStore.getState().updateNodeData(node.id, { useCaseJobId: undefined, useCaseExecutionId: undefined })
   }
-  // The recordings in the node's order, as many as its type takes (the server's engine's rule).
-  const recordings = usecaseRecordingsOf(inputs.useCaseMedia, data, d.maxRecordings)
-  if (recordings.length === 0) {
+  // The recordings in the node's order, the master and the Cameras settings — the server's engine's rule
+  // (usecaseRunRecordings): several recordings and a master only for a viewer who may use Speaker Map, an
+  // `auto` framing source as the even split for one Speaker Frames is withheld from.
+  const run = usecaseRunRecordings({
+    wired: inputs.useCaseMedia,
+    data,
+    maxRecordings: d.maxRecordings,
+    takesMaster: d.inputs.includes("masterAudio"),
+    master: inputs.useCaseMasterAudio ? { nodeId: inputs.useCaseMasterAudioNodeId ?? "", url: inputs.useCaseMasterAudio } : undefined,
+    multicam: usecaseMulticamOffered(),
+    framesAvailable: usecaseFramesOffered(),
+    absentFramingSource: d.absentFramingSource,
+    // Both engines' rule (usecaseSentSettings): unset not sent, a null or "" only where the body takes one, the rest as held.
+    settings: usecaseSentSettings(type, d.settingKeys, data),
+  })
+  if (run.recordings.length === 0) {
     // Names the node's type in the reader's language; the node's own name heads the message.
     toast.error(nodeRunError(data.label, "nodeRun.usecaseNeedsRecording", usecaseLabelVars(type)))
     return Promise.reject(new Error(`No recording wired into ${d.label}`))
   }
-  // Both engines' rule (usecaseSentSettings): unset not sent, a null or "" only where the body takes one, the rest as held.
-  const settings = usecaseSentSettings(type, d.settingKeys, data)
+  const settings = run.settings
+  const mediaUrls = run.recordings.map((m) => m.url)
+  const masterAudioUrl = run.masterAudioUrl
   return runUseCaseFresh(
     node,
     {
-      mediaUrls: recordings.map((m) => m.url),
+      mediaUrls,
       ...(inputs.useCaseMusic && d.inputs.includes("music") ? { musicUrl: inputs.useCaseMusic } : {}),
       ...(inputs.useCaseIntroCard && d.inputs.includes("introCard") ? { introCardUrl: inputs.useCaseIntroCard } : {}),
-      ...(inputs.useCaseMasterAudio && d.inputs.includes("masterAudio") ? { masterAudioUrl: inputs.useCaseMasterAudio } : {}),
+      ...(masterAudioUrl ? { masterAudioUrl } : {}),
       settings,
     },
     ctx,

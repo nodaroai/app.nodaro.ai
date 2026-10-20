@@ -5,6 +5,7 @@ import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError } from "../lib/llm-advanced-mode.js"
+import { LLM_CHEAP_LANES_SHAPE } from "../lib/llm-cheap-lanes.js"
 import { resolveScriptModelId } from "../providers/script/script-generator.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -31,6 +32,7 @@ const generateScriptBody = z.object({
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
   reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
   ...LLM_ADVANCED_SHAPE,
+  ...LLM_CHEAP_LANES_SHAPE,
 })
 
 export async function generateScriptRoutes(app: FastifyInstance) {
@@ -91,6 +93,8 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       // the worker, not here, so dropping it would make orchestrated runs
       // silently differ from what the user configured.
       advanced: { advancedMode: parsed.data.advancedMode, temperature: parsed.data.temperature, maxTokens: parsed.data.maxTokens },
+      // Same reason: the lane rule rides the payload to the worker's call.
+      ...(parsed.data.cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
       usageLogId,
     })
 

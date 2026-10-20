@@ -3,7 +3,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { renderSummary } from "../test-select/summary.mjs"
 import { failedFiles } from "../test-select/failed-files.mjs"
-import { buildAttributionComment } from "../test-select/attribution.mjs"
+import { buildAttributionComment, failedJobsFrom } from "../test-select/attribution.mjs"
 import { readFailedLists } from "../test-select/failed-lists.mjs"
 import { compareShadow, runShadowCheck } from "../test-select/shadow-check.mjs"
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
@@ -224,4 +224,27 @@ test("attribution: the wording follows the previous dev commit's result", () => 
   assert.match(buildAttributionComment({ ...base, previousConclusion: "failure" }), /already red/)
   assert.match(buildAttributionComment({ ...base, previousConclusion: "none" }), /cannot be attributed with certainty/)
   assert.match(buildAttributionComment({ ...base, previousConclusion: "success" }), /- frontend: `src\/a\.test\.ts`/)
+})
+
+// The jobs gated by tools/ci/job-inputs.json upload no file lists: a failure
+// of one is named, never read as "not captured" or as a flake (decided 2026-10-20).
+test("attribution: a failed gated job is named; a skipped or passing one is not a failure", () => {
+  assert.deepEqual(failedJobsFrom({
+    "frontend-tests": { result: "success" }, "backend-tests": { result: "skipped" },
+    "remotion-tests": { result: "skipped" }, characterize: { result: "failure" },
+    "migration-behavior": { result: "cancelled" }, "ffmpeg-ledger-redis": { result: "failure" },
+  }), ["characterize", "ffmpeg-ledger-redis"])
+  assert.deepEqual(failedJobsFrom(undefined), [])
+  const base = { sha: "abc1234def", before: "999aaaa111", runUrl: "u", previousConclusion: "success", failed: { frontend: [], backend: [] } }
+  const only = buildAttributionComment({ ...base, failedJobs: ["characterize"] })
+  assert.match(only, /Failed jobs \(see the run for their output\):\n- `characterize`\n/)
+  assert.doesNotMatch(only, /not captured/)
+  assert.match(only, /this merge is the likely cause/)
+  // a gated job's failure is never masked by a suite file that passed alone
+  const withFlake = buildAttributionComment({ ...base, failedJobs: ["remotion-tests", "frontend-tests"], flaky: { frontend: ["src/a.test.ts"], backend: [] } })
+  assert.doesNotMatch(withFlake, /looks flaky/)
+  assert.match(withFlake, /- `remotion-tests`/)
+  assert.doesNotMatch(withFlake, /- `frontend-tests`/, "a suite's failure is told by its files")
+  // a suite failure with no captured file still says so
+  assert.match(buildAttributionComment({ ...base, failedJobs: ["backend-tests", "characterize"] }), /not captured — see the run/)
 })

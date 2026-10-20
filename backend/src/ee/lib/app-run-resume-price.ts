@@ -14,7 +14,7 @@
  * The hold is what the run reserves while its clips render (each at the plugin's hold factor), the
  * figure a balance is checked against. Neither is ever below what the run charges.
  */
-import { ugcClipTicketQuote, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { ugcClipTicketQuote, ugcChainInput, ugcChains, ugcSumPerNode, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { ugcClipBody, ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { estimateRunSetCreditsWithoutUgc } from "../billing/credits.js"
 import { estimateUgcRun, quoteUgcTickets } from "./ugc-estimate.js"
@@ -61,9 +61,11 @@ export async function appRunResumeCredits(input: {
   readonly sourceStates: Readonly<Record<string, State>>
   /** The run key the Retry's UGC Clip sends: the chain root. */
   readonly runKey: string
+  /** What the runner may use (`usecaseViewerEstimateFor`): a use-case node is priced on the recordings and framing source their run reads. */
+  readonly viewer?: UseCaseViewerFlags
 }): Promise<AppRunResumeCredits> {
   const { caller, nodes, edges, runNodeIds, sourceStates, runKey } = input
-  const rest = await estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds)
+  const rest = await (input.viewer ? estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds, input.viewer) : estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds))
   const byId = new Map(nodes.map((n) => [n.id, n] as const))
   const keeps = (id: string, type: "ugc-script" | "ugc-creator") => ugcKeptOutputs(type, byId.get(id)?.data ?? {}) !== null
   const prices: Array<{ id: string; credits: number }> = []

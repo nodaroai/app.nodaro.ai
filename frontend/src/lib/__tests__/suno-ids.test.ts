@@ -4,7 +4,7 @@
  * reads, and the upstream lookup the panels and the resolver share.
  */
 import { describe, expect, it } from "vitest"
-import { findUpstreamSunoIds, readSunoIds, sunoVariantFields } from "../suno-ids"
+import { findUpstreamSunoIds, readSunoIds, sunoSeparateLane, sunoVariantFields } from "../suno-ids"
 
 const output = {
   audioUrls: ["https://cdn/a-v0.mp3", "https://cdn/a-v1.mp3"],
@@ -112,5 +112,49 @@ describe("sunoVariantFields — URL keyed", () => {
     expect(fields(0, "https://cdn/a-v1.mp3")).toEqual({ sunoTrackId: "track-2" })
     // Unknown URL: position is the fallback.
     expect(fields(1, "https://elsewhere/x.mp3")).toEqual({ sunoTrackId: "track-2" })
+  })
+})
+
+describe("sunoSeparateLane — which lane a Suno Separate run takes, as execute-node decides it", () => {
+  const nodes = [
+    { id: "gen", type: "suno-generate", data: { label: "Suno Generate", sunoTrackId: "track-1", sunoTaskId: "task-9" } },
+    // A track id alone does not make the Suno lane: the run separates by task id, else by URL.
+    { id: "cov", type: "suno-cover", data: { label: "Suno Cover", sunoTrackId: "cover-1" } },
+    { id: "up", type: "audio-upload", data: { label: "Song", audioUrl: "https://cdn/song.mp3" } },
+    { id: "sep", type: "suno-separate", data: { label: "Separate" } },
+  ]
+
+  it("is the Suno lane when a wired Suno source hands it a task id", () => {
+    expect(sunoSeparateLane("sep", nodes, [{ source: "gen", target: "sep" }])).toBe("suno")
+  })
+
+  it("is the Suno lane on a typed task id, wired or not", () => {
+    expect(sunoSeparateLane("sep", nodes, [], "typed-task")).toBe("suno")
+    expect(sunoSeparateLane("sep", nodes, [{ source: "up", target: "sep" }], "typed-task")).toBe("suno")
+  })
+
+  it("is the upload lane when other audio is wired and no task id is known", () => {
+    expect(sunoSeparateLane("sep", nodes, [{ source: "up", target: "sep" }])).toBe("upload")
+    expect(sunoSeparateLane("sep", nodes, [{ source: "cov", target: "sep" }], "  ")).toBe("upload")
+  })
+
+  it("is the Suno lane for a wired Suno source that has not run yet: a workflow run hands its ids on", () => {
+    const graph = [...nodes, { id: "fresh", type: "suno-generate", data: { label: "Suno Generate" } }]
+    expect(sunoSeparateLane("sep", graph, [{ source: "fresh", target: "sep" }])).toBe("suno")
+  })
+
+  it("is no lane when nothing is wired and no task id is typed", () => {
+    expect(sunoSeparateLane("sep", nodes, [])).toBeNull()
+    expect(sunoSeparateLane("sep", nodes, [{ source: "gen", target: "other" }], "")).toBeNull()
+    expect(sunoSeparateLane("sep", nodes, undefined)).toBeNull()
+  })
+
+  it("follows a Teleport pair like the run does", () => {
+    const graph = [...nodes, { id: "s", type: "teleport-send", data: {} }, { id: "r", type: "teleport-receive", data: {} }]
+    expect(sunoSeparateLane("sep", graph, [
+      { source: "gen", sourceHandle: "audio", target: "s", targetHandle: "in" },
+      { source: "s", sourceHandle: "out", target: "r", targetHandle: "in" },
+      { source: "r", sourceHandle: "out", target: "sep", targetHandle: "audio" },
+    ] as never)).toBe("suno")
   })
 })

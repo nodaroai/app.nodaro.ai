@@ -10,6 +10,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../ee/billing/credits.js"
 import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_ADVANCED_SHAPE, advancedModeError } from "../lib/llm-advanced-mode.js"
+import { LLM_CHEAP_LANES_SHAPE } from "../lib/llm-cheap-lanes.js"
 import { describeImageWithLlm } from "../lib/image-describe.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -32,6 +33,7 @@ const imageToTextBody = z.object({
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
   reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
   ...LLM_ADVANCED_SHAPE,
+  ...LLM_CHEAP_LANES_SHAPE,
 })
 
 export async function imageToTextRoutes(app: FastifyInstance) {
@@ -117,6 +119,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
           customPrompt,
           reasoningEffort: parsed.data.reasoningEffort,
           advanced: parsed.data,
+          lanes: parsed.data,
         })
 
         const generatedText = response.text

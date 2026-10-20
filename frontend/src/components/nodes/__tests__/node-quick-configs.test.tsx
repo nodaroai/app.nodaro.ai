@@ -521,10 +521,12 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
   })
 })
 
-// Decided 2026-10-09: describe-to-picker defaults to Opus 5.5 at effort high.
-// The node stores neither — both come from the shared defaults, so a later
-// default move reaches every saved node — so the strip must SHOW them: an
-// untouched node runs Opus 5.5 at High, not "the first model, no effort lever".
+// Decided 2026-10-20: describe-to-picker defaults to Gemini 3.8 Flash at Auto;
+// Opus 5.5 keeps its 2026-10-09 recipe, effort high, when chosen. The node
+// stores neither the default model nor the recipe effort — both come from the
+// shared defaults, so a later default move reaches every saved node — so the
+// strip must SHOW them: an untouched node runs Gemini 3.8 Flash at Auto, not
+// "the first model, no effort lever".
 describe("describe-to-picker quick configs — the strip shows the default the run uses", () => {
   const [modelControl, effortControl] = NODE_QUICK_CONFIGS()["describe-to-picker"]
   const optionsOf = (control: QuickConfigControl, data: Record<string, unknown>) =>
@@ -535,37 +537,56 @@ describe("describe-to-picker quick configs — the strip shows the default the r
     expect(optionsOf(modelControl, {}).map((o) => o.value)).toContain(modelControl.defaultValue)
   })
 
-  // Decided 2026-10-09 (Tal): no Auto on the default model. An omitted effort
-  // runs at High there, so Auto would be a second name for the default.
-  it("an untouched node offers the default model's effort levels, without Auto, and reads High", () => {
-    expect(optionsOf(effortControl, {}).map((o) => o.value)).toEqual(["low", "medium", "high", "xhigh", "max"])
+  // Decided 2026-10-20: Claude Fable 5 is withheld from the node. The strip no
+  // longer offers it, and a saved node still naming it snaps to the default —
+  // the model the run would use anyway — not to the first listed vendor's.
+  it("does not offer Claude Fable 5, and snaps a node still naming it to the default model — stored as UNSET, like the panel", () => {
+    expect(optionsOf(modelControl, {}).map((o) => o.value)).not.toContain("claude-fable-5")
+    expect(modelControl.retainedOptions?.map((o) => o.value) ?? []).not.toContain("claude-fable-5")
+    expect(modelControl.snap?.("claude-fable-5", {})).toBe(LLM_FEATURE_DEFAULTS["describe-to-picker"])
+    render(<QuickConfigSelect nodeId="n1" control={modelControl} value="claude-fable-5" data={{ llmModel: "claude-fable-5" }} />)
+    // The default is never stored (DescribeToPickerData): the snap clears the field.
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { llmModel: undefined })
+    expect(updateNodeData).not.toHaveBeenCalledWith("n1", expect.objectContaining({ llmModel: LLM_FEATURE_DEFAULTS["describe-to-picker"] }))
+  })
+
+  it("choosing the default model from the strip leaves the field unset; choosing another stores it", () => {
+    expect(modelControl.write?.(LLM_FEATURE_DEFAULTS["describe-to-picker"])).toEqual({ llmModel: undefined })
+    expect(modelControl.write?.("claude-opus-5.5")).toEqual({ llmModel: "claude-opus-5.5" })
+  })
+
+  // Decided 2026-10-09: no Auto on the recipe model. An omitted effort runs at
+  // High there, so Auto would be a second name for the recipe.
+  it("Opus 5.5 offers its effort levels, without Auto, and reads High", () => {
     expect(optionsOf(effortControl, { llmModel: "claude-opus-5.5" }).map((o) => o.value)).toEqual(["low", "medium", "high", "xhigh", "max"])
-    expect(readQuickConfigValue(effortControl, {})).toBe("high")
     expect(readQuickConfigValue(effortControl, { llmModel: "claude-opus-5.5" })).toBe("high")
   })
 
-  it("a stale stored effort on the default model snaps to the default, High — not to the lowest level", () => {
+  it("a stale stored effort on the recipe model snaps to the recipe, High — not to the lowest level", () => {
     // "none" is no Opus 5.5 level (a leftover from a model that offers it).
-    expect(effortControl.snap?.("none", {})).toBe("high")
-    render(<QuickConfigSelect nodeId="n1" control={effortControl} value="none" data={{ reasoningEffort: "none" }} />)
+    expect(effortControl.snap?.("none", { llmModel: "claude-opus-5.5" })).toBe("high")
+    render(<QuickConfigSelect nodeId="n1" control={effortControl} value="none" data={{ llmModel: "claude-opus-5.5", reasoningEffort: "none" }} />)
     expect(updateNodeData).toHaveBeenCalledWith("n1", { reasoningEffort: "high" })
   })
 
   it("a chosen effort reads as chosen, so the user can lower it", () => {
-    expect(readQuickConfigValue(effortControl, { reasoningEffort: "low" })).toBe("low")
+    expect(readQuickConfigValue(effortControl, { llmModel: "claude-opus-5.5", reasoningEffort: "low" })).toBe("low")
   })
 
-  it("another model with no effort reads unset (Auto): the default effort never follows a model switch", () => {
+  it("an untouched node, or another model, with no effort reads unset (Auto): the recipe effort never follows a model switch", () => {
+    expect(optionsOf(effortControl, {}).map((o) => o.value)).toEqual(["auto", "low", "high"])
+    expect(readQuickConfigValue(effortControl, {})).toBe("")
     expect(optionsOf(effortControl, { llmModel: "gemini-3.8-flash" }).map((o) => o.value)).toEqual(["auto", "low", "high"])
     expect(readQuickConfigValue(effortControl, { llmModel: "gemini-3.8-flash" })).toBe("")
+    expect(readQuickConfigValue(effortControl, { llmModel: "claude-opus-5" })).toBe("")
   })
 
-  it("rendered on an untouched node, the model reads Claude Opus 5.5 and the effort High, and nothing is written", () => {
+  it("rendered on an untouched node, the model reads Gemini 3.8 Flash and the effort Auto, and nothing is written", () => {
     const model = render(<QuickConfigSelect nodeId="n1" control={modelControl} value={readQuickConfigValue(modelControl, {})} data={{}} />)
-    expect(model.getByTestId("select-trigger").textContent).toContain("Claude Opus 5.5")
+    expect(model.getByTestId("select-trigger").textContent).toContain("Gemini 3.8 Flash")
     model.unmount()
     const effort = render(<QuickConfigSelect nodeId="n1" control={effortControl} value={readQuickConfigValue(effortControl, {})} data={{}} />)
-    expect(effort.getByTestId("select-trigger").textContent).toContain("High")
+    expect(effort.getByTestId("select-trigger").textContent).toContain("Auto")
     expect(updateNodeData).not.toHaveBeenCalled()
   })
 })

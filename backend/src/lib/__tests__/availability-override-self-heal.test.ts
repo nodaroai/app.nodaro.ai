@@ -28,6 +28,7 @@ vi.mock("../node-registry.js", () => ({
 
 import {
   availabilityOverride,
+  loadAvailabilityOverridesForScript,
   __resetAvailabilityOverridesForTests,
   __awaitAvailabilityRefreshForTests,
 } from "../availability-override.js"
@@ -98,5 +99,19 @@ describe("the standalone orchestrator loads the admin switch at boot", () => {
     expect(load, "orchestrator.ts no longer loads the availability override").toBeGreaterThan(-1)
     expect(start).toBeGreaterThan(-1)
     expect(load).toBeLessThan(start)
+  })
+})
+
+describe("a one-off script waits for the overrides (a listing backfill prices for everyone)", () => {
+  it("resolves true only once the read has landed, with the switch in the cache", async () => {
+    db.select.mockResolvedValueOnce({ data: [{ kind: "nodes", enabled: ["generate-image"] }], error: null })
+    expect(await loadAvailabilityOverridesForScript()).toBe(true)
+    expect(availabilityOverride("nodes")).toEqual(new Set(["generate-image"]))
+  })
+  it("resolves false when the read fails: the caller must refuse, not price on the factory sets", async () => {
+    db.select.mockResolvedValueOnce({ data: null, error: { message: "down" } })
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    expect(await loadAvailabilityOverridesForScript()).toBe(false)
+    error.mockRestore()
   })
 })

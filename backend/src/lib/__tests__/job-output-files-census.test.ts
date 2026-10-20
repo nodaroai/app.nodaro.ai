@@ -170,6 +170,7 @@ const CLEANED_AT_JOB_END: Readonly<Record<string, string>> = {
  * job's id. A new call site fails this census until someone checks which.
  */
 const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
+  "lib/private-plugins/toolkit.ts :: name": "the plugin toolkit's `storage.uploadJobScratchFile`: a plugin's job handler, which the video worker runs inside `runWithJobCancellation` (the running job's id; the member takes no job id)",
   "providers/kie/image.ts :: \"prepared-mask\"": "Ideogram edit's prepared mask (resized to the image, inverted to Ideogram's black = edit): the KIE image provider runs only inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"lip-sync-trimmed\"": "KIE lip-sync's trimmed audio: the KIE video provider runs only inside a video-worker job (the running job's id)",
   "providers/kie/video.ts :: \"motion-trimmed\"": "KIE motion control's trimmed video: inside a video-worker job (the running job's id)",

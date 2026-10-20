@@ -10,6 +10,7 @@ export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "au
   ["tighten-episode", "dynamic"], // unit:tighten-episode
   ["episode-trailer", "video"], // unit:episode-trailer
   ["clip-pack", "dynamic"], // unit:clip-pack
+  ["speaker-layout", "video"], // unit:speaker-layout
   ["remove-audio", "video"], // unit:remove-audio
   ["gif-to-video", "video"], // unit:gif-to-video
 ]
@@ -20,6 +21,7 @@ export const UNIT_USE_CASE_TYPES = [
   "episode-chapters", // unit:episode-chapters
   "episode-trailer", // unit:episode-trailer
   "clip-pack", // unit:clip-pack
+  "speaker-layout", // unit:speaker-layout
 ] as const
 
 // What each JSON (look) output pip carries (contract.jsonPips) — json-kinds.ts composes these.
@@ -28,13 +30,16 @@ export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonl
   ["episode-chapters", { "json": "other" }], // unit:episode-chapters
   ["episode-trailer", { "json": "edl" }], // unit:episode-trailer
   ["clip-pack", { "json": "edl" }], // unit:clip-pack
+  ["speaker-layout", { "json": "edl" }], // unit:speaker-layout
   ["speaker-map", { "edl": "edl", "json": "other" }], // unit:speaker-map
 ]
 
 // Input pips that are never a prompt lane (contract.nonPromptInputs) — fan-out-rows.ts composes these.
 export const UNIT_NON_PROMPT_INPUTS: ReadonlyArray<readonly [type: string, handles: ReadonlyArray<string>]> = [
-  ["tighten-episode", ["music"]], // unit:tighten-episode
-  ["episode-trailer", ["introCard"]], // unit:episode-trailer
+  ["tighten-episode", ["music", "masterAudio"]], // unit:tighten-episode
+  ["episode-trailer", ["introCard", "masterAudio"]], // unit:episode-trailer
+  ["clip-pack", ["masterAudio"]], // unit:clip-pack
+  ["speaker-layout", ["masterAudio"]], // unit:speaker-layout
 ]
 
 // Use-case units whose review-on run ends at a Preview that holds what follows (contract.reviewHold) — preview-gate.ts.
@@ -42,6 +47,7 @@ export const UNIT_REVIEW_HOLDS: ReadonlyArray<string> = [
   "tighten-episode", // unit:tighten-episode
   "episode-trailer", // unit:episode-trailer
   "clip-pack", // unit:clip-pack
+  "speaker-layout", // unit:speaker-layout
 ]
 
 // How a published app shows each unit's result where the producer sets do not decide it (contract.presents) — presentation-utils.ts.

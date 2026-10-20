@@ -13,6 +13,7 @@ import {
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
   LLM_REASONING_EFFORTS,
+  LLM_STRUCTURED_WITHHELD_MODELS,
   type LlmModelDef,
 } from "@nodaro/shared/llm-models"
 import {
@@ -218,6 +219,12 @@ export function prepareStructuredRequest(body: LlmStructuredBody): PreparedStruc
   const model = getLlmModel(llmModelId)
   if (!model) {
     return { ok: false, status: 400, error: { code: "validation_error", message: "Unknown llmModel" } }
+  }
+  // The models withheld from every legend-sized structured read (Claude Fable
+  // 5 — production cost audit, 2026-10-20): the same 400 as an unknown model,
+  // here so the sync route, the jobs route and the worker refuse alike.
+  if (LLM_STRUCTURED_WITHHELD_MODELS.has(model.id)) {
+    return { ok: false, status: 400, error: { code: "validation_error", message: `llmModel ${model.id} is not offered on llm-structured` } }
   }
   const advancedError = advancedModeError(body, model.id)
   if (advancedError) return { ok: false, status: 400, error: advancedError }

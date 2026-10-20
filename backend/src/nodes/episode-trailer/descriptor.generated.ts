@@ -12,7 +12,8 @@ export const descriptor = {
   },
   "inputs": [
     "media",
-    "introCard"
+    "introCard",
+    "masterAudio"
   ],
   "outputs": [
     "media",
@@ -22,7 +23,7 @@ export const descriptor = {
     "inputs": [
       {
         "id": "media",
-        "label": "Recording",
+        "label": "Recordings",
         "accepts": [
           "video"
         ]
@@ -32,6 +33,13 @@ export const descriptor = {
         "label": "Intro card",
         "accepts": [
           "video"
+        ]
+      },
+      {
+        "id": "masterAudio",
+        "label": "Master audio",
+        "accepts": [
+          "audio"
         ]
       }
     ],

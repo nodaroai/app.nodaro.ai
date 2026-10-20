@@ -215,13 +215,15 @@ describe("node-registry credit bands are derived from the price table", () => {
     expect(deriveBand("text-to-dialogue")).toBe(25)
   })
 
-  it("describe-to-picker advertises its whole ladder, premium-direct included: an untouched node reserves it", () => {
-    // Decided 2026-10-09: the default read is Opus 5.5 at effort high, which runs
-    // on Anthropic's own API and reserves describe-to-picker:premium-direct. The
-    // node-type row the enrichment would supply on its own quoted 10.
+  it("describe-to-picker advertises its whole ladder, premium-direct included", () => {
+    // Repriced 2026-10-20 (migration 546): economy 10 (the Gemini 3.8 Flash
+    // default) up to the stated premium-direct 136 — a premium model on the
+    // vendor's own API (Opus 5.5 at its recipe effort high reserves it). The
+    // node-type row the enrichment would supply on its own quotes only the
+    // standard rung.
     expect(CREDIT_BAND_SOURCES["describe-to-picker"]?.ids).toContain("describe-to-picker:premium-direct")
     expect(NODE_REGISTRY.find((d) => d.type === "describe-to-picker")!.creditCost).toBe(deriveBand("describe-to-picker"))
-    expect(deriveBand("describe-to-picker")).toBe("10-25")
+    expect(deriveBand("describe-to-picker")).toBe("10-136")
   })
 })
 

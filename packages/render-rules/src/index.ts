@@ -7,7 +7,8 @@
  * runs it, and how many times any node runs (the editor's run estimate and the stored listing), and the episode length the template gallery sorts at,
  * and UGC Creator's round (what it draws and how it treats a blocked, failed or refused option), and a graph's UGC videos and what of their estimates a run executes,
  * and which keys are a run's result (the editor's Clear results), which nodes are a UGC video's join, overlay and captions (the newer-run lanes), and a UGC video as it is published (the publish strip),
- * and the chain a use-case node (Tighten Episode) is built into, with the snapshot a run stores of it and the expansion every estimator prices it by. In-repo workspace package under the root license;
+ * and the chain a use-case node (Tighten Episode) is built into, with the snapshot a run stores of it and the expansion every estimator prices it by,
+ * and which audio a Suno Separate run separates. In-repo workspace package under the root license;
  * never published to npm.
  */
 // A Teleport pair passes on exactly what entered it: both engines and the canvas read the bypassed graph.
@@ -75,6 +76,7 @@ export {
   resolveEditPlanEpisodeSec,
   resolveEditPlanEstimateDurationSec,
   resolveGraphOrigin,
+  speakerMapClockOrigin,
   type EditPlanOutputReader,
   type EstimateGraphEdge,
   type EstimateGraphNode,
@@ -408,6 +410,29 @@ export {
   speakerFramesEstimateBlocks,
   speakerFramesScopeFrames,
 } from "./speaker-frames-pricing"
+export { editPlanProducerKind, editPlanSourceKind, type EditPlanSourceKind } from "./edit-plan-source-kind"
+export {
+  USE_CASE_FRAMES_TYPE,
+  USE_CASE_RUN_VIEWER_AS_BEFORE,
+  usecaseFramesAvailableFor,
+  usecaseFramingForViewer,
+  usecaseFramingIsAuto,
+  type UseCaseFramingDefault,
+  type UseCaseRunViewer,
+  type UseCaseViewerFlags,
+} from "./use-case-framing-viewer"
+export {
+  USE_CASE_FRAMES_NODE_ID,
+  USE_CASE_FRAMING_SOURCES,
+  isUseCaseFramingSource,
+  resolveUseCaseFramingSource,
+  usecaseFramingChoice,
+  usecaseAutoFraming,
+  usecaseFramesNode,
+  usecaseFramesWires,
+  type ResolvedFramingSource,
+  type UseCaseFramingSource,
+} from "./use-case-framing"
 export {
   SPEAKER_VIEW_MOTIONS,
   SPEAKER_VIEW_TRACKED_DEFAULT_MOTION,
@@ -500,6 +525,8 @@ export {
   toStoredInlineGraph,
   usecaseFeeCreditId,
   usecaseGraphHash,
+  usecaseKindHasPlan,
+  usecasePlanNodeId,
   usecaseRenderNodeId,
   usecaseResultKind,
   usecaseRunType,
@@ -507,6 +534,7 @@ export {
   type ClipsOutputMap,
   type EpisodeOutputMap,
   type FormatsOutputMap,
+  type LayoutOutputMap,
   type StoredInlineGraph,
   type UseCaseFeeCreditId,
   type UseCaseGraph,
@@ -542,8 +570,30 @@ export {
   usecaseRecordingPosition,
   usecaseRecordingsOf,
   type UseCaseCameras,
+  type UseCaseCamerasInput,
   type UseCaseSourcesShape,
 } from "./use-case-cameras"
+// The multicam front every use-case builder puts before its plan (decided 2026-10-17).
+export { usecaseShapeIsMulticam } from "./use-case-cameras"
+export { usecaseCamerasReportOf, type UseCaseCameraSpeaker, type UseCaseCamerasReport } from "./use-case-cameras-report"
+export {
+  MULTICAM_NODE_IDS,
+  MULTICAM_SPEAKER_MAP_TYPE,
+  usecaseDistinctMaster,
+  usecaseIsMulticam,
+  usecaseMulticamFront,
+  usecaseMulticamSoundNode,
+  usecaseRecordingsKind,
+  usecaseRecordingsProblem,
+  usecaseRunMaxRecordings,
+  usecaseRunRecordings,
+  usecaseSoundRecordingIndex,
+  usecaseSwitchNode,
+  usecaseSwitchWires,
+  type MulticamFront,
+  type MulticamSourceRole,
+  type UseCaseRecordingsProblem,
+} from "./use-case-multicam"
 export { USE_CASE_ROWS, composeUseCaseRows, usecaseRowOf, usecaseTypeOfBuilder, type UseCaseRow } from "./use-case-rows"
 export { USE_CASE_SPECS, type UseCaseBuilderKey, type UseCaseBuilderSpec } from "./use-case-specs"
 export {
@@ -561,6 +611,7 @@ export {
   usecaseFanOutRefusalOf,
   usecaseFanOutRefused,
   usecaseListDrivenMessage,
+  usecaseListDrivenMessageOf,
 } from "./use-case-fan-out"
 export { clipPackNoneRenderedMessage, parseClipPackNoneRendered, usecaseCancelledMessage } from "./use-case-messages"
 export {
@@ -615,6 +666,7 @@ export {
   type TrailerFormat,
 } from "./episode-trailer-graph"
 export {
+  CLIP_PACK_ABSENT_FRAMING_SOURCE,
   CLIP_PACK_DEFAULTS,
   CLIP_PACK_EMPHASIS_REFUSAL,
   CLIP_PACK_DEFAULT_FRAMING,
@@ -631,6 +683,14 @@ export {
 } from "./clip-pack-graph"
 export { chapterRowsOf, chapterTimestamp, formatChapterListText, type ChapterRow } from "./chapter-list-text"
 export { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
+export {
+  SPEAKER_LAYOUT_DEFAULTS,
+  SPEAKER_LAYOUT_NODE_IDS,
+  buildSpeakerLayoutGraph,
+  resolveSpeakerLayoutSettings,
+  type SpeakerLayoutGraph,
+  type SpeakerLayoutSettings,
+} from "./speaker-layout-graph"
 export {
   DUBBING_MAX_SPAN_MINUTES,
   dubbingMinutes,
@@ -656,6 +716,14 @@ export {
 } from "./free-video-limits"
 // The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).
 export { wholeEpisodeEdl, type WholeEpisodeEdlSource } from "./whole-episode-edl"
+// Which audio a Suno Separate run separates: the editor's run and lane hint, the workflow payload, the route and the worker.
+export {
+  pickSunoSeparateSource,
+  sunoSeparateSourceLane,
+  type SunoSeparateSource,
+  type SunoSeparateSourceCandidates,
+  type SunoSeparateSourceLane,
+} from "./suno-separate-source"
 // Where a node unit's JSON and many-wire inputs land (both engines' resolvers).
 export {
   orderSourceRows,

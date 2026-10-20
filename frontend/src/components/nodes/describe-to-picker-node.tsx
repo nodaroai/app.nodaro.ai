@@ -21,8 +21,9 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as DescribeToPickerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  // An unset effort quotes the effort the run uses: the default model's
-  // default (Opus 5.5 at high, which runs and bills direct).
+  // An unset effort quotes the effort the run uses: the model's recipe effort
+  // when it has one (Opus 5.5 at high, which runs and bills direct), else
+  // Auto — the default, Gemini 3.8 Flash, quotes the economy rung.
   const credits = useModelCredits(
     buildLlmCreditIdentifier(
       "describe-to-picker",

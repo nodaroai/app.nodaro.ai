@@ -6,12 +6,14 @@ import {
   USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
   usecaseFanOutRefusalOf,
   usecaseFanOutRefused,
+  usecaseDescriptor,
   usecaseListDrivenMessage,
+  usecaseListDrivenMessageOf,
   usecaseListsItsResult,
 } from "@nodaro/render-rules"
 
-/** The refusal's words for Trailer (decided 2026-10-18). */
-const TRAILER_LIST_DRIVEN = "Trailer takes one recording. Use a separate workflow run for each recording."
+/** The refusal's words for Trailer (decided 2026-10-18; it takes the recordings of one conversation since 2026-10-20). */
+const TRAILER_LIST_DRIVEN = "Trailer takes the recordings of one conversation. Use a separate workflow run for each episode."
 import { usecaseFanOutRefusal } from "../../services/workflow-engine/use-case-request.js"
 
 describe("a review-on use-case node is refused where an engine would fan it out over a list", () => {
@@ -51,8 +53,8 @@ describe("a use-case node whose own result is a list is never fanned out over a 
     expect(err?.errorCode).toBe(USE_CASE_LIST_DRIVEN)
     expect(err?.message).toBe(TRAILER_LIST_DRIVEN)
   })
-  it("a Clip Pack (a clip set) is refused the same way, in its own words", () => {
-    const words = "Clip Pack takes one recording. Use a separate workflow run for each recording."
+  it("a Clip Pack (a clip set) is refused the same way, in its own words (it takes the recordings of one conversation since 2026-10-20)", () => {
+    const words = "Clip Pack takes the recordings of one conversation. Use a separate workflow run for each episode."
     expect(usecaseFanOutRefusalOf({ type: "clip-pack", data: {} })).toEqual({ code: USE_CASE_LIST_DRIVEN, message: words })
     expect(usecaseFanOutRefusalOf({ type: "clip-pack", data: { reviewBeforeRender: true } })?.code).toBe(USE_CASE_LIST_DRIVEN)
     const err = usecaseFanOutRefusal({ id: "cp", type: "clip-pack", data: {} })
@@ -60,7 +62,15 @@ describe("a use-case node whose own result is a list is never fanned out over a 
     expect(err?.message).toBe(words)
   })
   it("the copy names the node's own type, never another node", () => {
-    expect(usecaseListDrivenMessage("Trailer")).toBe(TRAILER_LIST_DRIVEN)
+    expect(usecaseListDrivenMessage("Trailer", true)).toBe(TRAILER_LIST_DRIVEN)
+    expect(usecaseListDrivenMessageOf("episode-trailer")).toBe(TRAILER_LIST_DRIVEN)
     expect(TRAILER_LIST_DRIVEN).not.toMatch(/Tighten/)
+  })
+  it("a type that takes several recordings is never told it takes one (decided 2026-10-20); a type that takes one still is", () => {
+    for (const type of USE_CASE_NODE_TYPES.filter((t) => usecaseListsItsResult(t))) {
+      const several = usecaseDescriptor(type).maxRecordings > 1
+      expect(usecaseListDrivenMessageOf(type).includes("takes one recording"), type).toBe(!several)
+    }
+    expect(usecaseListDrivenMessage("Trailer")).toBe("Trailer takes one recording. Use a separate workflow run for each recording.")
   })
 })

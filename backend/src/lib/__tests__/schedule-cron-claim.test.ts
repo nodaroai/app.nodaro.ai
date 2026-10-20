@@ -253,6 +253,27 @@ describe("checkScheduledTriggers — a tick fires only after it claims the tick"
     ])
   })
 
+  it("a trigger whose retry policy says cheap lanes only fires its SCHEDULED run with the flag; one without says nothing", async () => {
+    seed(PREVIOUS, { interval: "1m", nodeId: "sched-node", retry: { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: true } })
+    await checkScheduledTriggers(NOW)
+    expect(mockQueueAdd).toHaveBeenCalledTimes(1)
+    expect((mockQueueAdd.mock.calls[0] as unknown as [string, Record<string, unknown>])[1]).toMatchObject({ triggerType: "schedule", cheapLanesOnly: true })
+
+    mockQueueAdd.mockClear()
+    db.listed = null
+    db.executionKeys = new Set()
+    seed(PREVIOUS, { interval: "1m", nodeId: "sched-node", retry: { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: false } })
+    await checkScheduledTriggers(NOW)
+    expect((mockQueueAdd.mock.calls[0] as unknown as [string, Record<string, unknown>])[1]).not.toHaveProperty("cheapLanesOnly")
+
+    mockQueueAdd.mockClear()
+    db.listed = null
+    db.executionKeys = new Set()
+    seed(PREVIOUS)
+    await checkScheduledTriggers(NOW)
+    expect((mockQueueAdd.mock.calls[0] as unknown as [string, Record<string, unknown>])[1]).not.toHaveProperty("cheapLanesOnly")
+  })
+
   it("a duplicate idempotency key keeps the claim: that tick already ran, and the schedule moves on instead of colliding every minute", async () => {
     seed(PREVIOUS)
     db.executionKeys.add(`owner-1|schedule:trig-1:${PREVIOUS}`)

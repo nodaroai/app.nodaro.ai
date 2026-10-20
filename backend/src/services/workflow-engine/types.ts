@@ -9,7 +9,7 @@ import type { ErrorHint } from "../../lib/safety-block.js"
 import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason } from "@nodaro/shared/workflow"
 import type { VideoOverlayWarning } from "@nodaro/shared/video"
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared/nodes"
-import type { UnitInputValue } from "@nodaro/render-rules"
+import type { UnitInputValue, UseCaseCamerasReport } from "@nodaro/render-rules"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -81,6 +81,27 @@ export interface NodeOutput {
   otherUrl?: string
   guitarUrl?: string
   pianoUrl?: string
+  /** suno-separate's other full-stems outputs (`SUNO_SEPARATE_STEM_FIELDS`). */
+  backingVocalsUrl?: string
+  keyboardUrl?: string
+  percussionUrl?: string
+  stringsUrl?: string
+  synthUrl?: string
+  fxUrl?: string
+  brassUrl?: string
+  woodwindsUrl?: string
+  /** suno-separate one-instrument mode: take 1 (the `isolated` / `without`
+   *  handles) and take 2 (kept, not wireable) — `SUNO_SEPARATE_TAKE_FIELDS`. */
+  isolatedUrl?: string
+  withoutUrl?: string
+  isolated2Url?: string
+  without2Url?: string
+  /** How a suno-separate run ran (`SUNO_SEPARATE_META_FIELDS`). */
+  separateType?: string
+  stemName?: string
+  engineUsed?: string
+  sunoRefused?: boolean
+  fallbackReason?: string
   splitResults?: string[]
   combinedText?: string
   kieTaskId?: string
@@ -138,6 +159,8 @@ export interface NodeOutput {
   formats?: ReadonlyArray<{ readonly format: string; readonly url: string }>
   /** Trailer: the formats whose render failed (the others were delivered). */
   failedFormats?: readonly string[]
+  /** A use-case run on several recordings or a Master audio: who was put on which camera, and Audio Sync's and Speaker Map's notes (the node's saved `useCaseCameras`). */
+  useCaseCameras?: UseCaseCamerasReport
   /** A use-case node whose result is a clip set (Clip Pack): each clip's file and take stamps, with its title and hook, in plan order. */
   clips?: ReadonlyArray<{
     readonly url: string
@@ -460,6 +483,21 @@ export interface WorkflowExecutionJob {
   /** Spend-surface flag captured at run creation (see OrchestratorContext.webFreeMode). */
   webFreeMode?: boolean
   /**
+   * Every model call this run makes stays on the aggregator lane: a KIE
+   * failure is NOT re-asked on the vendor's own, pricier API — it fails, and
+   * the schedule's retry sweep runs the workflow again later (decided
+   * 2026-10-20: scheduled automations should wait for the cheap lane instead
+   * of paying the direct fallback). The primary lane is never changed: a call
+   * that must run direct by its own settings (Advanced mode, a Claude model
+   * with a reasoning effort) still does. Set only by the schedule fire path
+   * (`lib/schedule-fire.ts`) from the trigger's retry policy
+   * (`config.retry.cheapLanesOnly`), on the scheduled run and its retries
+   * alike; absent = today's behaviour. Reaches the LLM routes as the body
+   * field `cheapLanesOnly` and the worker handlers as a payload key
+   * (`OrchestratorContext.cheapLanesOnly`).
+   */
+  cheapLanesOnly?: boolean
+  /**
    * Who pays for this execution, resolved ONCE at enqueue (P14) — a new
    * producer is compile-forced to answer it, which is why the field is
    * REQUIRED here. On the wire it may still be absent (a payload enqueued by
@@ -708,6 +746,8 @@ export interface ResolvedInputs {
   useCaseIntroCard?: string
   /** A use-case node's optional `masterAudio` — the separate audio its recordings are synced to (a type whose descriptor takes it). */
   useCaseMasterAudio?: string
+  /** The upstream node `useCaseMasterAudio` comes from: a master from the node a recording comes from is no master (`usecaseRunRecordings`). */
+  useCaseMasterAudioNodeId?: string
   /** A node unit's JSON inputs (accepts "look": the wired JSON string; "" when
    *  wired but its upstream produced nothing — the unit refuses the run) and
    *  many-wire inputs (one row per upstream node, in edge-list order), by
@@ -884,6 +924,10 @@ export interface OrchestratorContext {
    *  resolves downstream (credits layer / RPC self-gate); free users and
    *  subscribers are unaffected, so the flag threads unconditionally. */
   webFreeMode?: boolean
+  /** Copied from the job at pickup — see WorkflowExecutionJob.cheapLanesOnly.
+   *  Inline sub-workflows share this context; a component's inner run is a
+   *  new job, so the component dispatch sends it across the HTTP hop. */
+  cheapLanesOnly?: boolean
   /**
    * The execution's resolved payer (P14), coalesced from the payload by the
    * worker — never absent past that point. Sub-workflows and every node

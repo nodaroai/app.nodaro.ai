@@ -7,6 +7,7 @@
  * The editor's half, held to the same values, is
  * frontend/src/__tests__/use-case-media-order.test.ts.
  */
+import { USE_CASE_RUN_VIEWER_AS_BEFORE } from "@nodaro/render-rules"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -45,7 +46,7 @@ describe("which recording a use-case run sends — the server's engine and the e
   for (const c of CASES) {
     it(c.name, () => {
       const inputs = { useCaseMedia: c.wired.map((id) => ({ nodeId: id, url: urlOf(id) })) } as ResolvedInputs
-      const body = freshRunInputs(nodeOf(c) as unknown as SimpleNode, inputs)
+      const body = freshRunInputs(nodeOf(c) as unknown as SimpleNode, inputs, USE_CASE_RUN_VIEWER_AS_BEFORE)
       expect(body.mediaUrls).toEqual(c.sent.map(urlOf))
       expect(estimatedSources(c)).toEqual([c.sent[0]])
     })

@@ -103,6 +103,64 @@ export function laneFallbackAllowed(err: unknown): boolean {
   return !(err instanceof LlmOutputTruncatedError) && !(err instanceof LlmContentRefusalError)
 }
 
+/**
+ * May a KIE-primary call's failure be re-asked on the vendor's own (direct)
+ * lane? Everything {@link laneFallbackAllowed} says, and not under
+ * `cheapLanesOnly` (`LlmRequest`): then the failure surfaces as it is, with
+ * one greppable warn line saying the direct leg was there and not taken — a
+ * run kept to the cheap lanes on purpose must still be tellable from a run
+ * with no direct lane at all. Never consulted for a direct-primary call's
+ * fallback TO KIE: that leg goes toward the cheap lane.
+ */
+export function directFallbackAllowed(ctx: LaneFallbackCtx, req: LlmRequest, err: unknown): boolean {
+  if (!laneFallbackAllowed(err)) return false
+  if (req.cheapLanesOnly !== true) return true
+  const msg = err instanceof LlmLaneError ? err.internalDetails : err instanceof Error ? err.message : String(err)
+  const head = msg.length > 300 ? `${msg.slice(0, 300)}…` : msg
+  console.warn(
+    `[llm-lane-fallback] ${ctx.modelId}: ${ctx.primary} lane failed, cheap lanes only — not served from ${ctx.fallback} — ${head}`,
+  )
+  return false
+}
+
+/**
+ * Run a KIE-primary call, falling back to the direct lane on failure — unless
+ * the request is kept to the cheap lanes ({@link directFallbackAllowed}).
+ * The ONE way every KIE→direct leg is taken, so none can forget the rule.
+ */
+export async function withDirectFallback(
+  ctx: LaneFallbackCtx,
+  req: LlmRequest,
+  primary: () => Promise<LlmResponse>,
+  direct: (() => Promise<LlmResponse>) | undefined,
+): Promise<LlmResponse> {
+  if (!direct) return primary()
+  try {
+    return await primary()
+  } catch (err) {
+    if (!directFallbackAllowed(ctx, req, err)) throw err
+    return serveFromFallback(ctx, err, direct)
+  }
+}
+
+/** Streaming twin of {@link withDirectFallback}: as {@link streamWithFallback}, only before the first token. */
+export async function streamWithDirectFallback(
+  ctx: LaneFallbackCtx,
+  req: LlmRequest,
+  primary: (onToken: (chunk: string) => void) => Promise<LlmResponse>,
+  direct: ((onToken: (chunk: string) => void) => Promise<LlmResponse>) | undefined,
+  onToken: (chunk: string) => void,
+): Promise<LlmResponse> {
+  if (!direct) return primary(onToken)
+  let emitted = false
+  try {
+    return await primary((chunk) => { emitted = true; onToken(chunk) })
+  } catch (err) {
+    if (emitted || !directFallbackAllowed(ctx, req, err)) throw err
+    return serveFromFallback(ctx, err, () => direct(onToken))
+  }
+}
+
 /** Run `primary`, falling back to `secondary` on failure (warn-logged). With no
  *  secondary the original error propagates untouched. */
 export async function withFallback(

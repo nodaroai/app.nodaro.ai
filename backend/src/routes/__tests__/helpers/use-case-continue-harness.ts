@@ -159,6 +159,8 @@ export const src = {
 export const m = {
   credits: true,
   denied: false,
+  /** Inner step types withheld from the caller (a hidden Speaker Map). */
+  deniedTypes: [] as string[],
   absent: false,
   authKind: "jwt" as "jwt" | "internal" | "api_token",
   reserveSeen: [] as Array<{ billingContext: unknown; creditOverride: unknown }>,
@@ -185,7 +187,7 @@ vi.mock("@/lib/dedup-fingerprint.js", async (orig) => ({
   findJobByIdempotencyKey: async () => m.existingByKey,
 }))
 vi.mock("@/lib/config.js", async (orig) => ({ ...(await orig<typeof import("@/lib/config.js")>()), hasCredits: () => m.credits }))
-vi.mock("@/lib/availability-viewer.js", () => ({ isNodeDeniedForUser: async () => m.denied }))
+vi.mock("@/lib/availability-viewer.js", () => ({ isNodeDeniedForUser: async (type: string) => m.denied || m.deniedTypes.includes(type) }))
 vi.mock("@/lib/execution-inline-graph.js", () => ({
   ensureInlineGraphColumns: async () => !m.absent,
   inlineGraphColumnAbsent: () => false,
@@ -343,7 +345,7 @@ export const nothingWritten = () => {
 }
 
 beforeEach(() => {
-  Object.assign(m, { credits: true, denied: false, absent: false, authKind: "jwt", reserveSeen: [], existingByKey: null, stampThrows: false, guardCalls: 0, payer: undefined, seq: 0 })
+  Object.assign(m, { credits: true, denied: false, deniedTypes: [], absent: false, authKind: "jwt", reserveSeen: [], existingByKey: null, stampThrows: false, guardCalls: 0, payer: undefined, seq: 0 })
   Object.assign(src, {
     wrapper: failedWrapper, wrapperError: null, graph, source: failedSource,
     finalCredits: { estimatedCredits: 600, sufficient: true, available: 5000 }, finalCreditsArgs: [], foundExec: null, graphReads: [],

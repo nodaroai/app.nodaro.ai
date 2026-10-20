@@ -31,6 +31,7 @@ import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits, type EstimateNode } from "../ee/billing/credits.js"
+import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
@@ -691,6 +692,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // the author's placeholder (lib/exposed-text-caps.ts).
       const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges, {
         speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
+        // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
+        ...(await usecaseViewerEstimateFor(nodes as EstimateNode[], resolved.userId)),
       })
 
       const inputs = sortedInputs.map((node) => {

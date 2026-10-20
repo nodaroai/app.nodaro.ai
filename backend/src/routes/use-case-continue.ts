@@ -23,7 +23,7 @@
  */
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
-import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseFeeCreditId, usecaseRunPlan, type UseCaseNodeType } from "@nodaro/render-rules"
+import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseFeeCreditId, usecasePlanNodeId, usecaseRunPlan, type UseCaseNodeType } from "@nodaro/render-rules"
 import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
 import { hasCredits } from "../lib/config.js"
@@ -55,6 +55,7 @@ import {
 import { usecaseContinueBody, usecaseReviewerPresent } from "../lib/use-case/request.js"
 import { resolveUseCaseContinuation, type UseCaseContinuation } from "../lib/use-case/continuation.js"
 import { fromFailedCover } from "../lib/use-case/continue-credits.js"
+import { usecaseInnerDenial } from "../lib/use-case/inner-availability.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 
@@ -113,6 +114,12 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
       } catch (err) {
         return sendInternalError(reply, req, err, "Failed to continue the run")
       }
+      // A step it would run that this caller may not (Speaker Map, withheld
+      // since the run started) refuses before any balance check or claim. Only
+      // the steps it runs: a Render final re-runs no Speaker Map.
+      const runs = new Set(plan.nodeIds)
+      const denial = await usecaseInnerDenial(type, plan.graph.nodes.filter((n) => runs.has(n.id)), userId)
+      if (denial) return reply.status(denial.status).send({ error: { code: denial.code, message: denial.message } })
       // A resumed preview inside another run with nobody to review it would
       // hold a preview no one sees — refused as the run route refuses it.
       if (internal && plan.reviewBeforeRender && body.reviewerPresent !== true) {
@@ -147,8 +154,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         try {
           // The run's plan on its plan node (this quote only), under the reviewer's
           // edit: the final is quoted on the edited cut, as its steps then hold.
-          const planNodeId = plan.graph.outputMap.planNodeId
-          const runPlan = usecaseRunPlan(plan.source.nodeStates?.[planNodeId])
+          const planNodeId = usecasePlanNodeId(plan.graph.outputMap)
+          const runPlan = planNodeId !== null ? usecaseRunPlan(plan.source.nodeStates?.[planNodeId]) : undefined
           const credits = await renderFinalCredits({
             userId,
             nodes: plan.graph.nodes.map((n) => ({
@@ -182,6 +189,10 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         mediaUrl: plan.input.mediaUrl ?? null,
         ...(plan.input.musicUrl !== undefined ? { musicUrl: plan.input.musicUrl } : {}),
         ...(plan.input.introCardUrl !== undefined ? { introCardUrl: plan.input.introCardUrl } : {}),
+        // A run on several recordings or a Master audio: what it ran on, as its source recorded it.
+        ...(plan.input.mediaUrls !== undefined ? { mediaUrls: plan.input.mediaUrls } : {}),
+        ...(plan.input.masterAudioUrl !== undefined ? { masterAudioUrl: plan.input.masterAudioUrl } : {}),
+        ...(plan.input.mediaKind !== undefined ? { mediaKind: plan.input.mediaKind } : {}),
         ...(plan.input.durationSec !== undefined ? { durationSec: plan.input.durationSec } : {}),
         ...(plan.finalChain ? { _finalChain: true } : {}),
         ...(plan.finalOf ? { _finalOf: plan.finalOf } : {}),

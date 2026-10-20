@@ -3,40 +3,13 @@
 // come in, a decision comes out. Every rule that cannot be sure says "full".
 import { readFileSync } from "node:fs"
 import { matchesAny } from "./glob.mjs"
+import { MAX_VISIBLE_CHANGES, isGlobalTrigger } from "./global-triggers.mjs"
 import { outputsBuiltFrom } from "./package-chunks.mjs"
 import { TEST_FILE, TEST_SIDE_HELPER } from "./test-node.mjs"
 import { unitOf } from "./registry.mjs"
 
-// Changing any of these can change the outcome of ANY test — through
-// dependencies, configuration, the shared setup, or this engine itself.
-export const GLOBAL_TRIGGERS = [
-  "package.json", "**/package.json", "package-lock.json",
-  "**/vitest.config.*", "**/vitest.*.config.*", "**/vite.config.*", "**/tsconfig*.json",
-  "frontend/src/test/**", "backend/src/test/**",
-  ".github/workflows/ci.yml", ".github/actions/**",
-  // this engine: its code, the script that runs every suite, and the data its
-  // code reads (decided 2026-10-18 — not its README, its type declarations or
-  // the burn-down lists only the tools/__tests__ guards read;
-  // test-select-triggers.test.mjs classifies every file here)
-  "tools/test-select/**/*.{mjs,js,ts}", "tools/test-select/run-suite.sh", "tools/test-select/declared-test-data.json",
-  // the registry rule's side-effect check (G7's predicate, registry.mjs (d)),
-  // and the composer list graph.mjs reads for it
-  "tools/units/structure.mjs", "tools/units/registry-composers.json",
-  // pin the ffmpeg binary the backend's real-ffmpeg e2e tests run against
-  "Dockerfile", "tools/install-pinned-ffmpeg.sh",
-]
-// A vitest/vite config under tools/__tests__/fixtures/ is a fixture that a
-// tool's own node tests load (the test-dedup harness), never the config of a
-// suite (decided 2026-10-18). It is judged like any other file: the tests
-// that import or watch it are selected. Only there: a config anywhere else,
-// even inside a test directory, stays a trigger.
-const FIXTURE_CONFIGS = ["tools/__tests__/fixtures/**/{vitest.config.*,vitest.*.config.*,vite.config.*}"]
+export { GLOBAL_TRIGGERS, MAX_VISIBLE_CHANGES, isGlobalTrigger } from "./global-triggers.mjs"
 export const NOT_VERSION_ONLY = "more than versions and workspace ranges changed"
-export function isGlobalTrigger(path) {
-  return matchesAny(path, GLOBAL_TRIGGERS) && !matchesAny(path, FIXTURE_CONFIGS)
-}
-// The GitHub files API stops at 3000 entries; past this we cannot see the diff.
-export const MAX_VISIBLE_CHANGES = 2900
 // Test data whose every reader is known (decided 2026-10-15): generated goldens
 // that tests either import (the graph sees it) or declare with @test-watches.
 // test-data-readers-guard.test.mjs proves no other file names them, so a

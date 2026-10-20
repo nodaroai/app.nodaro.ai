@@ -18,6 +18,8 @@
  * this stays in CORE — the live-cost cache lives under `@/ee` (credits are an
  * enterprise concern) and only the already-allowlisted callers reach into it.
  */
+import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
+import { usecaseFramesWithheld } from "@/lib/use-case-frames-viewer"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
@@ -255,8 +257,19 @@ interface ExpandedGraph {
  * final: its final chain from the render on, no fee). In the editor's node and
  * edge shape (inner ids are `<node>::<id>`). `null` when there is none.
  */
+/**
+ * The editor viewer's expansion flags: several recordings and a master only
+ * for a viewer who may use Speaker Map, an `auto` framing source as the even
+ * split only for one Speaker Frames is withheld from — so the run reads what
+ * the quote prices, and every editor surface that names a run's steps (the
+ * Render final footer) names the ones the quote prices.
+ */
+export function usecaseEditorExpandOptions(): { readonly multicam: boolean; readonly framesWithheld?: true } {
+  return { multicam: usecaseMulticamOffered(), ...(usecaseFramesWithheld() ? { framesWithheld: true as const } : {}) }
+}
+
 function expandedForEditor(nodes: WorkflowNode[], edges: WorkflowEdge[]): ExpandedGraph | null {
-  const expansion = expandUseCaseNodes(nodes, edges)
+  const expansion = expandUseCaseNodes(nodes, edges, usecaseEditorExpandOptions())
   if (!expansion.expanded) return null
   return {
     expansion,

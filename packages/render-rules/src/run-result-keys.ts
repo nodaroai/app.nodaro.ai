@@ -13,6 +13,7 @@
  */
 import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
 import { UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared/ugc"
+import { SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "@nodaro/shared/models"
 import { USE_CASE_NODE_TYPES } from "./use-case-graph"
 import { usecaseDescriptor } from "./use-case-registry"
 import { USE_CASE_RESULT_KEYS } from "./use-case-result-keys"
@@ -155,9 +156,17 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "ugc-clips": ["quote", "result", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["result", "ugcOutputs"],
-  // A use-case node's failure code (a refused Render final), and what a list
-  // kind could not deliver (its result kind's keys): its last run's, gone with it.
-  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => [t, ["errorCode", ...USE_CASE_RESULT_KEYS[usecaseDescriptor(t).resultKind]]])),
+  // Suno Separate: every stem and take (each stem is an output handle — one left
+  // behind keeps feeding last run's audio) and how the run ran. Not `stemName`:
+  // the run echoes the instrument it was sent, which is the node's own setting.
+  "suno-separate": [...SUNO_SEPARATE_RESULT_FIELDS, ...SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName")],
+  // A use-case node's failure code (a refused Render final), its cameras report
+  // (a type that takes several recordings), and what a list kind could not
+  // deliver (its result kind's keys): its last run's, gone with it.
+  ...Object.fromEntries(USE_CASE_NODE_TYPES.map((t) => {
+    const d = usecaseDescriptor(t)
+    return [t, ["errorCode", ...(d.maxRecordings > 1 ? ["useCaseCameras"] : []), ...USE_CASE_RESULT_KEYS[d.resultKind]]]
+  })),
 }
 
 const RESULT_KEYS: ReadonlySet<string> = new Set([

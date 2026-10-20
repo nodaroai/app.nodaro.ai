@@ -5,11 +5,13 @@ import type { UnitUseCase } from "../kit.js"
 import { useCase as unit_clip_pack } from "../clip-pack/use-case.js" // unit:clip-pack
 import { useCase as unit_episode_chapters } from "../episode-chapters/use-case.js" // unit:episode-chapters
 import { useCase as unit_episode_trailer } from "../episode-trailer/use-case.js" // unit:episode-trailer
+import { useCase as unit_speaker_layout } from "../speaker-layout/use-case.js" // unit:speaker-layout
 import { useCase as unit_tighten_episode } from "../tighten-episode/use-case.js" // unit:tighten-episode
 
 export const UNIT_USE_CASES: Readonly<Record<string, UnitUseCase>> = Object.assign(Object.create(null), {
   "clip-pack": unit_clip_pack, // unit:clip-pack
   "episode-chapters": unit_episode_chapters, // unit:episode-chapters
   "episode-trailer": unit_episode_trailer, // unit:episode-trailer
+  "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

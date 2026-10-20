@@ -6,5 +6,17 @@ export const labels = {
     "ja": "クリップパック",
     "ko": "클립 세트",
     "pt-br": "Pacote de clipes"
+  },
+  "Master audio": {
+    "he": "אודיו ראשי",
+    "ja": "マスターオーディオ",
+    "ko": "마스터 오디오",
+    "pt-br": "Áudio principal"
+  },
+  "Recordings": {
+    "he": "הקלטות",
+    "ja": "録音",
+    "ko": "녹음",
+    "pt-br": "Gravações"
   }
 } as const

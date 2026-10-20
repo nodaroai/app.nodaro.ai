@@ -281,6 +281,25 @@ export {
 export * from "../provider-directive-defaults.js"
 export * from "../lora-routing.js"
 export { SUNO_TRACK_SOURCE_TYPES } from "../suno-track-sources.js"
+// Suno Separate's public contract: modes, stem names, each mode's credit id, result + handle fields.
+export {
+  SUNO_SEPARATE_TYPES,
+  SUNO_STEM_NAMES,
+  DEFAULT_SUNO_STEM_NAME,
+  sunoSeparateCreditId,
+  SUNO_SEPARATE_STEM_FIELDS,
+  SUNO_SEPARATE_TAKE_FIELDS,
+  SUNO_SEPARATE_RESULT_FIELDS,
+  SUNO_SEPARATE_META_FIELDS,
+  sunoSeparateHandleUrl,
+  sunoSeparatePrimaryUrl,
+} from "../suno-separate.js"
+export type {
+  SunoSeparateType,
+  SunoStemName,
+  SunoSeparateStemField,
+  SunoSeparateResultField,
+} from "../suno-separate.js"
 export {
   VOICE_CHANGER_MODELS,
   VOICE_CHANGER_MODEL_IDS,

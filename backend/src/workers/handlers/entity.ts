@@ -236,7 +236,7 @@ async function shouldRunLlmOnCloud(): Promise<boolean> {
 }
 
 const handleGenerateScript: HandlerFn = async function handleGenerateScript(job, ctx) {
-  const { prompt, sceneCount, tone, targetDuration, styleGuide, provider, llmModel, reasoningEffort, advanced } = job.data as {
+  const { prompt, sceneCount, tone, targetDuration, styleGuide, provider, llmModel, reasoningEffort, advanced, cheapLanesOnly } = job.data as {
     jobId: string
     prompt: string
     sceneCount?: number
@@ -247,6 +247,8 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
     llmModel?: string
     reasoningEffort?: string
     advanced?: LlmAdvancedInput
+    /** The run is kept to the cheap lanes (`WorkflowExecutionJob.cheapLanesOnly`, or the route's body field). */
+    cheapLanesOnly?: boolean
   }
   console.log(`[worker] generate-script ${ctx.jobId} (model: ${llmModel ?? provider ?? "default"})`)
 
@@ -258,7 +260,7 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
         "generate-script",
         job.data as Record<string, unknown>,
       )).script as Awaited<ReturnType<typeof generateScript>>)
-    : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced, { styleGuide })
+    : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced, { styleGuide }, { cheapLanesOnly })
   await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return

@@ -1,0 +1,1 @@
+{"code":200,"msg":"success","data":{"taskId":"c0ffee00000000000000000000000413","model":"ai-music-api/separate-vocals","state":"fail","resultJson":null,"failCode":"413","failMsg":"This audio matches an existing recording in our catalog."}}

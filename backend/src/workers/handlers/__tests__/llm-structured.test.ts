@@ -69,7 +69,7 @@ const prepared = { ok: true as const, model: { id: "m" }, schema: {}, modelIdent
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.prepareStructuredRequest.mockReturnValue(prepared)
-  mocks.runStructuredCompletion.mockResolvedValue({ output: { title: "Rain" }, inputTokens: 10, outputTokens: 5 })
+  mocks.runStructuredCompletion.mockResolvedValue({ output: { title: "Rain" }, inputTokens: 10, outputTokens: 5, providerCost: 0.0021, lane: "kie" })
   mocks.markJobCompleted.mockResolvedValue(true)
 })
 
@@ -153,7 +153,12 @@ describe("handleLlmStructured", () => {
     await handleLlmStructured(job(base), ctx)
     expect(mocks.runStructuredCompletion).toHaveBeenCalledWith(expect.objectContaining({ system: "SYS" }), prepared, "Draft this.")
     expect(mocks.jobUpdate).toHaveBeenCalledWith({ output_data: { stage: "drafting" } })
-    expect(mocks.markJobCompleted).toHaveBeenCalledWith("parent-1", { output_data: { output: { title: "Rain" }, inputTokens: 10, outputTokens: 5 } })
+    // The lane and the cost ride the sync route's admin-only columns, never output_data.
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith("parent-1", {
+      output_data: { output: { title: "Rain" }, inputTokens: 10, outputTokens: 5 },
+      provider: "kie",
+      provider_cost: 0.0021,
+    })
     expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("parent-1")
     expect(mocks.markProviderCallStart).not.toHaveBeenCalledWith("parent-1", "anthropic-sync")
   })
@@ -166,6 +171,8 @@ describe("handleLlmStructured", () => {
     expect(mocks.jobUpdate).toHaveBeenCalledWith({ output_data: { stage: "drafting", analysisJobId: "child-1", analysisCredits: 60 } })
     expect(mocks.markJobCompleted).toHaveBeenCalledWith("parent-1", {
       output_data: { output: { title: "Rain" }, inputTokens: 10, outputTokens: 5, analysisJobId: "child-1", analysisCredits: 60 },
+      provider: "kie",
+      provider_cost: 0.0021,
     })
   })
   it("a REUSED analysis: waits (returns at once), composes, and reports NO analysis price — the run that made it paid", async () => {
@@ -175,6 +182,8 @@ describe("handleLlmStructured", () => {
     expect(mocks.jobUpdate).toHaveBeenCalledWith({ output_data: { stage: "drafting", analysisJobId: "child-1" } })
     expect(mocks.markJobCompleted).toHaveBeenCalledWith("parent-1", {
       output_data: { output: { title: "Rain" }, inputTokens: 10, outputTokens: 5, analysisJobId: "child-1" },
+      provider: "kie",
+      provider_cost: 0.0021,
     })
   })
   it("a pre-flight refusal at run time fails the job with its message (no completion, no commit)", async () => {
@@ -183,6 +192,25 @@ describe("handleLlmStructured", () => {
     expect(mocks.markJobCompleted).not.toHaveBeenCalled()
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
   })
+  // The worker funnel fails and refunds the row but records no provider cost;
+  // a failure that carried usage writes its cost and lane before it propagates.
+  it("a failure that carried usage records its provider cost and lane on the row, then propagates", async () => {
+    const { StructuredLlmError } = await import("../../../lib/llm/structured.js")
+    mocks.runStructuredCompletion.mockRejectedValue(
+      new StructuredLlmError("llm-structured: validation failed after 3 attempt(s): x", { inputTokens: 40_000, outputTokens: 9_000, providerCost: 0.0871, complete: true }, { lane: "direct-anthropic" }),
+    )
+    await expect(handleLlmStructured(job(base), ctx)).rejects.toThrow("validation failed")
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ provider_cost: 0.0871, provider: "direct-anthropic" })
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a failure that reported no usage writes nothing extra and propagates", async () => {
+    mocks.runStructuredCompletion.mockRejectedValue(new Error("boom"))
+    await expect(handleLlmStructured(job(base), ctx)).rejects.toThrow("boom")
+    expect(mocks.jobUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ provider_cost: expect.anything() }))
+  })
+
   it("never commits when the completion CAS loses (cancelled mid-flight)", async () => {
     mocks.markJobCompleted.mockResolvedValue(false)
     await handleLlmStructured(job(base), ctx)

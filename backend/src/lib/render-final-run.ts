@@ -14,6 +14,7 @@
  * that run produced. It sends nothing else: the server names the nodes and
  * the one override (the render at Final, for this run only).
  */
+import { usecaseViewerEstimateFor } from "./use-case/inner-availability.js"
 import { z } from "zod"
 import { PREVIEW_RENDER_NODE_TYPES, RENDER_FINAL_NODE_NOT_FOUND, RENDER_FINAL_NOT_A_RENDER, withRunOverrides } from "@nodaro/shared/nodes"
 import { isUseCaseNodeType, renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
@@ -144,6 +145,8 @@ export async function renderFinalCredits(input: {
       input.edges as unknown as Parameters<typeof estimateRunSetCredits>[1],
       new Set(input.runNodeIds),
       new Set(resumed.keys()),
+      // A use-case node reads the recordings and framing source its user's run reads: priced as it runs.
+      await usecaseViewerEstimateFor(priced as unknown as Parameters<typeof estimateRunSetCredits>[0], input.userId),
     )) + [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
   const check = await checkRunSetCredits(input.userId, estimatedCredits, {
     billingContext: input.surface.billingContext,

@@ -1,6 +1,6 @@
 // @registry-lookup reads the JSON of the one node unit a wire leaves from (unitDefinitionOf(src.type))
 import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared/edl"
-import { isUseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseDescriptor, usecaseKindHasPlan, type UseCaseNodeType } from "@nodaro/render-rules"
 import { unitDefinitionOf } from "./unit-definitions"
 import { unitPipJson } from "./unit-compose"
 
@@ -39,11 +39,14 @@ export function editPlanOutputOf(data: Readonly<Record<string, unknown>>): EditP
 /**
  * A use-case node's plan as its `json` pip hands it on (Chapters: its chapter
  * list): the person's review applied, a clip-set edit of a chapter list
- * included, and a plan held as null is none — never the text "null". The read
- * the server's saved branch makes (`use-case-output.ts ::
+ * included, and a plan held as null is none — never the text "null". A type
+ * whose result kind has no plan (a layout: Speaker Layout's json is the edit
+ * its render drew) hands on what it holds, as held — no review applies to it.
+ * The read the server's saved branch makes (`use-case-output.ts ::
  * usecaseSavedNodeOutput`), for the scalar and the JSON consumers alike.
  */
-export function usecaseJsonOf(data: Readonly<Record<string, unknown>>): unknown {
+export function usecaseJsonOf(nodeType: string | null | undefined, data: Readonly<Record<string, unknown>>): unknown {
+  if (isUseCaseNodeType(nodeType ?? undefined) && !usecaseKindHasPlan(usecaseDescriptor(nodeType as UseCaseNodeType).resultKind)) return data.generatedJson ?? undefined
   return editPlanOutputOf(data)?.json ?? undefined
 }
 
@@ -73,7 +76,7 @@ export function unitSourceJsonOf(src: { readonly type?: string; readonly data: u
 export function sourceJsonOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle?: string | null): unknown {
   const data = src.data as Readonly<Record<string, unknown>>
   if (src.type === "edit-plan") return editPlanOutputOf(data)?.json
-  if (isUseCaseNodeType(src.type)) return usecaseJsonOf(data)
+  if (isUseCaseNodeType(src.type)) return usecaseJsonOf(src.type, data)
   const unit = unitSourceJsonOf(src, sourceHandle)
   if (unit) return unit.value
   return data.generatedJson

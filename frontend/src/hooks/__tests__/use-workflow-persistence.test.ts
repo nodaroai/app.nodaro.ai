@@ -1624,6 +1624,24 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
   describe("named side outputs come back under the names their readers use", () => {
     const sideOutputs = {
       sep: { status: "completed", startedAt: RAN_AT, output: { audioUrl: "https://cdn.test/mix.mp3", vocalUrl: "https://cdn.test/vocals.mp3", instrumentalUrl: "https://cdn.test/inst.mp3" } },
+      // Suno Separate's other stems, its one-instrument takes and how it ran —
+      // reopen after a finished server run keeps isolated/without and the stems.
+      sepAll: {
+        status: "completed",
+        startedAt: RAN_AT,
+        output: {
+          audioUrl: "https://cdn.test/iso.mp3",
+          backingVocalsUrl: "https://cdn.test/backing.mp3",
+          drumsUrl: "https://cdn.test/drums.mp3",
+          isolatedUrl: "https://cdn.test/iso.mp3",
+          withoutUrl: "https://cdn.test/without.mp3",
+          isolated2Url: "https://cdn.test/iso2.mp3",
+          without2Url: "https://cdn.test/without2.mp3",
+          separateType: "split_stem_advanced",
+          stemName: "Bass",
+          engineUsed: "suno",
+        },
+      },
       align: { status: "completed", startedAt: RAN_AT, output: { alignment: [{ word: "hi", start: 0, end: 1 }] } },
       combine: { status: "completed", startedAt: RAN_AT, output: { combinedText: "a b" } },
       split: { status: "completed", startedAt: RAN_AT, output: { splitResults: ["a", "b"] } },
@@ -1634,6 +1652,21 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
         name: "WF",
         nodes: [
           makeNode({ id: "sep", type: "suno-separate", data: { label: "Sep" } }),
+          // Holds a previous vocals run that fell back to Demucs: the new run's
+          // patch must take those off, and leave the instrument setting alone.
+          makeNode({
+            id: "sepAll",
+            type: "suno-separate",
+            data: {
+              label: "Sep all",
+              stemName: "Piano",
+              vocalUrl: "https://cdn.test/old-vocals.mp3",
+              instrumentalUrl: "https://cdn.test/old-inst.mp3",
+              otherUrl: "https://cdn.test/old-other.mp3",
+              sunoRefused: true,
+              fallbackReason: "catalog",
+            },
+          }),
           makeNode({ id: "align", type: "forced-alignment", data: { label: "Align" } }),
           makeNode({ id: "combine", type: "combine-text", data: { label: "Combine" } }),
           makeNode({ id: "split", type: "split-text", data: { label: "Split" } }),
@@ -1652,6 +1685,20 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
     const expectReadable = (byId: Record<string, Record<string, unknown>>) => {
       expect(byId.sep.vocalUrl).toBe("https://cdn.test/vocals.mp3")
       expect(byId.sep.instrumentalUrl).toBe("https://cdn.test/inst.mp3")
+      expect(byId.sepAll).toMatchObject({
+        backingVocalsUrl: "https://cdn.test/backing.mp3",
+        drumsUrl: "https://cdn.test/drums.mp3",
+        isolatedUrl: "https://cdn.test/iso.mp3",
+        withoutUrl: "https://cdn.test/without.mp3",
+        isolated2Url: "https://cdn.test/iso2.mp3",
+        without2Url: "https://cdn.test/without2.mp3",
+        separateType: "split_stem_advanced",
+        stemName: "Piano",
+        engineUsed: "suno",
+      })
+      for (const stale of ["vocalUrl", "instrumentalUrl", "otherUrl", "sunoRefused", "fallbackReason"]) {
+        expect(byId.sepAll[stale], `sepAll.${stale}`).toBeUndefined()
+      }
       expect(byId.align.alignmentResults).toEqual([{ word: "hi", start: 0, end: 1 }])
       expect(byId.combine.combinedText).toBe("a b")
       expect(byId.combine.generatedText).toBe("a b")

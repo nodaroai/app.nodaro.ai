@@ -3,7 +3,7 @@
 
 ## Overview
 
-The Audio Separation node (internally `audio-separation`) uses Demucs (Meta's Hybrid-Transformer source-separation model) on Replicate to split **any** audio into its component stems. Unlike [Suno Separate](../suno-music/suno-separate.md) — which only works on Suno-generated tracks — Audio Separation accepts any uploaded or upstream audio (a song, a recording, an extracted video track, etc.).
+The Audio Separation node (internally `audio-separation`) uses Demucs (Meta's Hybrid-Transformer source-separation model) on Replicate to split **any** audio into its component stems. It accepts any uploaded or upstream audio (a song, a recording, an extracted video track, etc.), including commercially released recordings, which [Suno Separate](../suno-music/suno-separate.md) refuses.
 
 It has two modes:
 
@@ -31,16 +31,18 @@ Outputs not produced by the chosen mode/model are inactive. Wire each stem from 
 
 Fixed per run (reserved tier, not metered):
 
-| Quality | Credits |
-|---------|---------|
-| Auto / Fast | **33**<!-- credits: audio-separation --> |
-| Best | **88**<!-- credits: audio-separation:best --> |
+| Mode | Quality | Credits |
+|------|---------|---------|
+| Vocal / Instrumental | Auto / Fast | **33**<!-- credits: audio-separation --> |
+| Vocal / Instrumental | Best | **88**<!-- credits: audio-separation:best --> |
+| Full stems | Auto / Best | **66**<!-- credits: audio-separation:stems --> |
+| Full stems | Fast | **33**<!-- credits: audio-separation --> |
 
 ## Best Practices
 
 - Use **Vocal / Instrumental** mode for karaoke/instrumental beds and acapella extraction.
 - Use **Full stems** with **Auto** quality to get guitar/piano stems (htdemucs_6s).
-- For a non-Suno song you want to split, this is the node to use — Suno Separate will not accept it.
+- For a commercially released song, this is the node to use — Suno Separate refuses those recordings (or, with **If Suno refuses, use Demucs** on, hands them to Demucs at this node's price).
 - For a clean voice **only** (noise/music removed, no instrumental track), use [Voice Extractor](./audio-isolation.md) instead.
 
 ## Common Use Cases

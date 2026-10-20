@@ -4,7 +4,8 @@
     "label": "Clip Pack",
     "category": "processing",
     "inputs": [
-      "media"
+      "media",
+      "masterAudio"
     ],
     "outputs": [
       "clips",
@@ -24,6 +25,7 @@
       "captionStyle": "karaoke",
       "reviewBeforeRender": false,
       "planTier": "standard",
+      "framingSource": "auto",
       "instructions": "",
       "fieldMappings": {},
       "executionStatus": "idle"
@@ -67,7 +69,11 @@
   "targetHandles": [
     {
       "handleId": "media",
-      "label": "Recording"
+      "label": "Recordings"
+    },
+    {
+      "handleId": "masterAudio",
+      "label": "Master audio"
     }
   ],
   "executable": true,

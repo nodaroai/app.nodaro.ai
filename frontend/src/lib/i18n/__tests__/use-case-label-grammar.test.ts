@@ -27,6 +27,8 @@ const PT_BR_MASCULINE_SINGULAR: ReadonlySet<string> = new Set([
   "Trailer do episódio",
   // Clip Pack: headed by "pacote" (masculine singular) — "o Pacote de clipes", "ao Pacote de clipes".
   "Pacote de clipes",
+  // Speaker Layout: headed by "layout" (masculine singular in Brazilian Portuguese) — "o Layout de locutores", "ao Layout de locutores".
+  "Layout de locutores",
 ])
 
 /** Whether a Hangul syllable has no final consonant (batchim). */

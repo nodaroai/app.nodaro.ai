@@ -2,7 +2,13 @@
 
 import { useMemo } from "react"
 import { Plus } from "lucide-react"
-import { nodeFeedsAnything, normalizeScheduleRules, type FeedNode, type ScheduleRule } from "@nodaro/shared/workflow"
+import {
+  nodeFeedsAnything,
+  normalizeScheduleRetry,
+  normalizeScheduleRules,
+  type FeedNode,
+  type ScheduleRule,
+} from "@nodaro/shared/workflow"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -31,6 +37,7 @@ import type { ScheduleTriggerData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { ScheduleWhenItRuns } from "./schedule-when-it-runs"
 import { ScheduleRuleEditor } from "./schedule-rule-editor"
+import { ScheduleRetrySection } from "./schedule-retry-section"
 import { TimezoneSelect } from "./timezone-select"
 
 const PRESET_LABEL: Readonly<Record<SchedulePresetId, MessageKey>> = {
@@ -81,6 +88,9 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
   const timezoneReadable = isScheduleTimezoneReadable(data)
   const active = isScheduleActive(data)
   const preset = presetMatching(runnableRules)
+  // Retry on failure: shown as the server will run it (clamped); the section
+  // writes the whole policy, so a partial object never reaches the row.
+  const retry = useMemo(() => normalizeScheduleRetry(data.retry), [data.retry])
 
   const writeRules = (next: ReadonlyArray<ScheduleRule>) => onUpdate(scheduleRulesPatch(next))
   const replaceRule = (index: number, next: ScheduleRule) => writeRules(rules.map((r, i) => (i === index ? next : r)))
@@ -200,6 +210,11 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
           />
           <p className="text-[11px] text-muted-foreground">{t("cfgext.trigLeaveEmptyUnlimited")}</p>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <SectionTitle>{t("sched.retrySection")}</SectionTitle>
+        <ScheduleRetrySection retry={retry} onChange={(next) => onUpdate({ retry: next })} />
       </div>
 
       <p className="text-center text-[11px] text-muted-foreground" data-testid="schedule-summary">

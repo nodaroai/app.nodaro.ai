@@ -1522,13 +1522,13 @@ describe("suno_upload_extend verb", () => {
   })
 })
 
-// suno_separate_stems / suno_extend error-path coverage requires a
-// supabase mock that matches resolveSunoIds' specific column selection
-// (output_data, user_id, is_public, status). The shared file-level mock
-// stubs maybeSingle() with data:null but the chain hangs on these tools
-// when invoked through the SDK's tools/call dispatcher. Happy paths for
-// these two are exercised through suno_cover (same audio-resolution
-// helper) + manual smoke after deploy.
+// suno_separate_stems is covered in suno-separate-stems.test.ts, which mocks
+// `../../../supabase.js` (the module verbs-audio.ts imports) and the asset
+// resolver. This file's `../../supabase.js` mock resolves to a module that does
+// not exist, so a verb that reads supabase (resolveSunoIds) reaches the real
+// client and hangs here. suno_extend's error path is still uncovered for that
+// reason; its happy path is exercised through suno_cover (same
+// audio-resolution helper) + manual smoke after deploy.
 
 describe("suno_cover verb", () => {
   it("calls /v1/suno/cover with prompt + uploadUrl", async () => {

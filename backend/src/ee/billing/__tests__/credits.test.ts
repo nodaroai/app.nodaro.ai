@@ -840,6 +840,12 @@ describe("CreditsService", () => {
       ])).toBe(130) // base
     })
 
+    it("estimator: suno-separate split_stem_advanced → suno-separate-single", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "suno-separate", data: { type: "split_stem_advanced", stemName: "Bass" } },
+      ])).toBe(80)
+    })
+
     it("resolves suno-separate default type", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "suno-separate", data: { type: "separate" } },
@@ -1044,16 +1050,41 @@ describe("CreditsService", () => {
 
   // ════════════════════════════════════════════════════════════════════════
   // estimateWorkflowBaseCredits — describe-to-picker quotes the run it reserves
-  // (decided 2026-10-09: an untouched node runs Opus 5.5 at effort high, which
-  // runs on Anthropic's own API and reserves describe-to-picker:premium-direct;
-  // the bare node-type row it used to fall through to quoted 10.)
+  // (decided 2026-10-20: an untouched node runs Gemini 3.8 Flash at Auto on the
+  // aggregator and reserves describe-to-picker:economy; Opus 5.5, when chosen,
+  // keeps its 2026-10-09 recipe — effort high on Anthropic's own API, the
+  // premium-direct row. The bare node-type row it used to fall through to
+  // quoted the standard rung whatever the model.)
   // ════════════════════════════════════════════════════════════════════════
 
   describe("estimateWorkflowBaseCredits — describe-to-picker resolves the default model and effort", () => {
-    it("an untouched node quotes Opus 5.5 at high: the premium-direct row", () => {
+    it("an untouched node quotes Gemini 3.8 Flash at Auto: the economy row", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([{ type: "describe-to-picker", data: {} }]))
+        .toBe(STATIC_CREDIT_COSTS["describe-to-picker:economy"])
+      expect(STATIC_CREDIT_COSTS["describe-to-picker:economy"]).toBe(10)
+    })
+
+    it("Opus 5.5 chosen with no effort quotes its recipe, high: the stated premium-direct row (migration 546)", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "describe-to-picker", data: { llmModel: "claude-opus-5.5" } }]))
         .toBe(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"])
-      expect(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"]).toBe(25)
+      expect(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"]).toBe(136)
+      expect(STATIC_CREDIT_COSTS["describe-to-picker"]).toBe(18)
+      expect(STATIC_CREDIT_COSTS["describe-to-picker:premium"]).toBe(36)
+    })
+
+    // The two other legend-sized structured reads (migration 546): llm-structured
+    // at describe-to-picker's rungs, text-to-picker (an all-picker read, several
+    // times the tokens) on its own rows.
+    it("llm-structured carries describe-to-picker's rungs and text-to-picker its own, every rung priced", () => {
+      for (const rung of ["economy", "standard", "premium", "premium-direct"] as const) {
+        const id = (f: string) => (rung === "standard" ? f : `${f}:${rung}`)
+        expect(STATIC_CREDIT_COSTS[id("llm-structured")], rung).toBe(STATIC_CREDIT_COSTS[id("describe-to-picker")])
+        expect(STATIC_CREDIT_COSTS[id("text-to-picker")], rung).toBeGreaterThan(STATIC_CREDIT_COSTS[id("describe-to-picker")]!)
+      }
+      expect([
+        STATIC_CREDIT_COSTS["text-to-picker:economy"], STATIC_CREDIT_COSTS["text-to-picker"],
+        STATIC_CREDIT_COSTS["text-to-picker:premium"], STATIC_CREDIT_COSTS["text-to-picker:premium-direct"],
+      ]).toEqual([16, 41, 81, 200])
     })
 
     it("another model with no effort keeps its Auto price: the default effort never follows a model switch", () => {

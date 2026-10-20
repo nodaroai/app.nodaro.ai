@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => {
   const mockSunoCover = vi.fn()
   const mockSunoExtend = vi.fn()
   const mockSunoLyrics = vi.fn()
-  const mockSunoSeparate = vi.fn()
   const mockSunoMusicVideo = vi.fn()
   const mockSunoMashup = vi.fn()
   const mockSunoReplaceSection = vi.fn()
@@ -30,7 +29,7 @@ const mocks = vi.hoisted(() => {
   const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
 
   return {
-    mockSunoGenerate, mockSunoCover, mockSunoExtend, mockSunoLyrics, mockSunoSeparate, mockSunoMusicVideo,
+    mockSunoGenerate, mockSunoCover, mockSunoExtend, mockSunoLyrics, mockSunoMusicVideo,
     mockSunoMashup, mockSunoReplaceSection, mockSunoAddInstrumental, mockSunoAddVocals, mockSunoConvertWav, mockSunoUploadExtend,
     mockUploadToR2, mockCommitJobCredits, mockShouldSaveJobResult,
     mockMarkJobCompleted,
@@ -49,7 +48,6 @@ vi.mock("@/providers/kie/suno-client.js", () => ({
   sunoCover: mocks.mockSunoCover,
   sunoExtend: mocks.mockSunoExtend,
   sunoLyrics: mocks.mockSunoLyrics,
-  sunoSeparate: mocks.mockSunoSeparate,
   sunoMusicVideo: mocks.mockSunoMusicVideo,
   sunoMashup: mocks.mockSunoMashup,
   sunoReplaceSection: mocks.mockSunoReplaceSection,
@@ -95,11 +93,6 @@ beforeEach(() => {
   mocks.mockSunoCover.mockResolvedValue(SUNO_RESULT)
   mocks.mockSunoExtend.mockResolvedValue(SUNO_RESULT)
   mocks.mockSunoLyrics.mockResolvedValue({ taskId: "suno-task-1", lyrics: "La la la" })
-  mocks.mockSunoSeparate.mockResolvedValue({
-    taskId: "suno-task-1",
-    vocalUrl: "https://suno.example.com/vocal.mp3",
-    instrumentalUrl: "https://suno.example.com/instrumental.mp3",
-  })
   mocks.mockSunoMusicVideo.mockResolvedValue({ taskId: "suno-task-1", videoUrl: "https://suno.example.com/video.mp4" })
   mocks.mockSunoMashup.mockResolvedValue(SUNO_RESULT)
   mocks.mockSunoReplaceSection.mockResolvedValue(SUNO_RESULT)
@@ -298,32 +291,6 @@ describe("suno-lyrics handler", () => {
     }))
     expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
-  })
-})
-
-describe("suno-separate handler", () => {
-  const handler = sunoHandlers["suno-separate"]
-
-  it("happy path: uploads available stems", async () => {
-    mocks.mockUploadToR2
-      .mockResolvedValueOnce("https://r2.example.com/audio/job-1-vocal.mp3")
-      .mockResolvedValueOnce("https://r2.example.com/audio/job-1-instrumental.mp3")
-
-    const job = makeJob("suno-separate", { taskId: "suno-task-1", audioId: "audio-1" })
-    await handler(job as never, makeCtx())
-
-    expect(mocks.mockSunoSeparate).toHaveBeenCalledWith(
-      { taskId: "suno-task-1", audioId: "audio-1", type: "separate_vocal" },
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
-    )
-    expect(mocks.mockUploadToR2).toHaveBeenCalledTimes(2)
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: expect.objectContaining({
-        separateType: "separate_vocal",
-        vocalUrl: "https://r2.example.com/audio/job-1-vocal.mp3",
-        instrumentalUrl: "https://r2.example.com/audio/job-1-instrumental.mp3",
-      }),
-    }))
   })
 })
 
@@ -540,32 +507,6 @@ describe("bespoke operations replay on the connected cloud when this install has
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
   })
 
-  it("suno-separate: cloud stems are re-hosted into THIS instance's R2 under stem keys", async () => {
-    mocks.mockRunJobOnCloud.mockResolvedValueOnce({
-      separateType: "separate_vocal",
-      vocalUrl: "https://cloud.example.com/v.mp3",
-      instrumentalUrl: "https://cloud.example.com/i.mp3",
-      audioUrl: "https://cloud.example.com/v.mp3",
-      sunoTaskId: "cloud-task-9",
-    })
-    await sunoHandlers["suno-separate"]!(
-      makeJob("suno-separate", { taskId: "t-1", audioId: "a-1", separateType: "separate_vocal" }) as never,
-      makeCtx() as never,
-    )
-
-    expect(mocks.mockSunoSeparate).not.toHaveBeenCalled()
-    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://cloud.example.com/v.mp3", "job-1-vocal", "audio", "user-1")
-    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://cloud.example.com/i.mp3", "job-1-instrumental", "audio", "user-1")
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: expect.objectContaining({
-        separateType: "separate_vocal",
-        sunoTaskId: "cloud-task-9",
-        vocalUrl: "https://r2.example.com/audio/job-1.mp3",
-        audioUrl: "https://r2.example.com/audio/job-1.mp3",
-      }),
-    }))
-  })
-
   it("suno-music-video: cloud video is re-hosted and the thumbnail regenerated locally", async () => {
     mocks.mockRunJobOnCloud.mockResolvedValueOnce({
       videoUrl: "https://cloud.example.com/mv.mp4",
@@ -621,9 +562,6 @@ describe("bespoke operations replay on the connected cloud when this install has
       sunoHandlers["suno-lyrics"]!(makeJob("suno-lyrics", { prompt: "p" }) as never, makeCtx() as never),
     ).rejects.toThrow("no lyrics")
     await expect(
-      sunoHandlers["suno-separate"]!(makeJob("suno-separate", { taskId: "t", audioId: "a" }) as never, makeCtx() as never),
-    ).rejects.toThrow("no stems")
-    await expect(
       sunoHandlers["suno-music-video"]!(makeJob("suno-music-video", { taskId: "t", audioId: "a" }) as never, makeCtx() as never),
     ).rejects.toThrow("no music video")
     await expect(
@@ -639,7 +577,7 @@ describe("bespoke operations replay on the connected cloud when this install has
 // this proves the WORKER HANDLER threads it (it used to pass bare
 // `{ onTaskCreated }` → the seam saw modelKey:null on a billed create). The key
 // mirrors each route's reservation identifier EXACTLY: version-aware for
-// generate/cover/extend, sepType-aware for separate, op-key elsewhere.
+// generate/cover/extend, op-key elsewhere (separate: suno-separate.test.ts).
 // ---------------------------------------------------------------------------
 describe("B3 egress: handlers thread OUR modelKey into the create funnel", () => {
   const mockFor: Record<string, ReturnType<typeof vi.fn>> = {
@@ -647,7 +585,6 @@ describe("B3 egress: handlers thread OUR modelKey into the create funnel", () =>
     "suno-cover": mocks.mockSunoCover,
     "suno-extend": mocks.mockSunoExtend,
     "suno-lyrics": mocks.mockSunoLyrics,
-    "suno-separate": mocks.mockSunoSeparate,
     "suno-music-video": mocks.mockSunoMusicVideo,
     "suno-mashup": mocks.mockSunoMashup,
     "suno-replace-section": mocks.mockSunoReplaceSection,
@@ -670,8 +607,6 @@ describe("B3 egress: handlers thread OUR modelKey into the create funnel", () =>
     ["suno-extend", { audioId: "a-1", model: "V5_5" }, "suno-v5_5"],
     ["suno-extend", { audioId: "a-1" }, "suno-extend"],
     ["suno-lyrics", { prompt: "p" }, "suno-lyrics"],
-    ["suno-separate", { taskId: "t", audioId: "a" }, "suno-separate"], // default separate_vocal
-    ["suno-separate", { taskId: "t", audioId: "a", separateType: "split_stem" }, "suno-separate-stem"],
     ["suno-music-video", { taskId: "t", audioId: "a" }, "suno-music-video"],
     ["suno-mashup", { uploadUrlList: ["https://x/a.mp3", "https://x/b.mp3"] }, "suno-mashup"],
     ["suno-replace-section", { taskId: "t", audioId: "a", infillStartS: 1, infillEndS: 2, prompt: "p", tags: "r" }, "suno-replace-section"],
@@ -682,7 +617,7 @@ describe("B3 egress: handlers thread OUR modelKey into the create funnel", () =>
   ]
 
   for (const [jobType, data, expected] of cases) {
-    const label = data.model ? `${jobType} (model ${data.model})` : data.separateType ? `${jobType} (${data.separateType})` : jobType
+    const label = data.model ? `${jobType} (model ${data.model})` : jobType
     it(`${label} → modelKey "${expected}"`, async () => {
       await sunoHandlers[jobType]!(makeJob(jobType, data) as never, makeCtx() as never)
       const mock = mockFor[jobType]!
@@ -707,7 +642,6 @@ describe("jobs.provider attribution (#753)", () => {
     const cases: Array<[string, Record<string, unknown>]> = [
       ["suno-generate", { prompt: "p" }],                       // finalizeSunoJob
       ["suno-lyrics", { prompt: "p" }],                         // finalizeSunoLyrics
-      ["suno-separate", { taskId: "t", audioId: "a" }],         // finalizeSunoSeparate
       ["suno-music-video", { taskId: "t", audioId: "a" }],      // finalizeSunoMusicVideo
       ["suno-convert-wav", { taskId: "t", audioId: "a" }],      // finalizeSunoConvertWav
     ]

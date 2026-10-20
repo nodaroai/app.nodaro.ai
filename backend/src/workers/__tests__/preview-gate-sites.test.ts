@@ -40,7 +40,8 @@ describe("every enqueue producer answers reviewerPresent", () => {
   // run's Retry that continues its failed execution (decided 2026-10-18).
   const PRODUCERS = [
     "lib/plugin-triggers.ts",
-    "lib/schedule-cron.ts",
+    // The schedule lane's one enqueue (the cron's fires and the retry sweep's retries).
+    "lib/schedule-fire.ts",
     "routes/api-tokens.ts",
     "routes/app-run-resume.ts",
     "routes/app-runner.ts",
@@ -139,6 +140,8 @@ describe("every enqueue producer answers reviewerPresent", () => {
         /(?:\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),[\s\S]*){3}/,
         /reviewerPresent: true,\n\s*mcp_client: session\.clientName,/,
       ],
+      // speaker_layout (its own module, decided 2026-10-17) forwards the caller's own ask, as the verbs above.
+      "lib/mcp/tools/verbs-use-case-speaker-layout.ts": [/\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),/],
     }
     // A file that calls a use-case route names one: a route literal, or the
     // type's route through the registry. A schema field (`reviewerPresent: z…`)

@@ -43,9 +43,9 @@ interface ReasoningEffortSelectProps {
 /** Effort picker for reasoning-capable models. Renders nothing when the
  *  active model declares no levels on the active lane; clears a stale value on
  *  model OR lane switch (Provider Enum Sync pitfall 12b). "Auto" sends nothing
- *  → the vendor default. On a feature's default model that has a default
- *  effort (`defaultReasoningEffort` — describe-to-picker's Opus 5.5 at high),
- *  an omitted effort runs at that default instead, so the picker shows it and
+ *  → the vendor default. On a model with a recipe effort for the feature
+ *  (`defaultReasoningEffort` — describe-to-picker's Opus 5.5 at high), an
+ *  omitted effort runs at that recipe instead, so the picker shows it and
  *  offers no Auto, which would only be a second name for it (decided
  *  2026-10-09). */
 export function ReasoningEffortSelect({ feature, modelId, advanced, value, onChange }: ReasoningEffortSelectProps) {
@@ -66,9 +66,9 @@ export function ReasoningEffortSelect({ feature, modelId, advanced, value, onCha
   // runs there and bills one tier more (llmServesDirect) — say so where the
   // choice is made. Advanced on: the toggle's own hint already says it.
   const effortRunsDirect = !advanced && Boolean(getLlmModel(effectiveModel)?.effortRequiresDirect)
-  // An unset effort shows the one the run uses: the feature's default on its
-  // default model (describe-to-picker's high), else Auto. Display only —
-  // nothing is written until the user picks.
+  // An unset effort shows the one the run uses: the model's recipe effort for
+  // the feature (describe-to-picker's high on Opus 5.5), else Auto. Display
+  // only — nothing is written until the user picks.
   const featureDefault = defaultReasoningEffort(feature, modelId)
   const shown = value ?? featureDefault ?? AUTO
 

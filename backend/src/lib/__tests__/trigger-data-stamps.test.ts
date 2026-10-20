@@ -115,7 +115,10 @@ function writesOf(sf: ts.SourceFile): { values: string[]; lanes: string[] } {
 const WRITERS: Record<string, { readonly kind: "stamp" | "fixed" | "caller"; readonly values: readonly string[] }> = {
   "lib/continuation-run-root.ts": { kind: "stamp", values: ["{ ...kept, [STAMP_KEY]: { executionId: root } }"] },
   "lib/plugin-triggers.ts": { kind: "caller", values: ["triggerData"] },
-  "lib/schedule-cron.ts": { kind: "fixed", values: ["{ timestamp: now.toISOString(), cron: config.cron, rules:…"] },
+  // The schedule lane's fire (the cron's fires and the retry sweep's retries): the fire time, the
+  // schedule, the previous fire and a retry's own stamp (`retry`, lib/schedule-retry.ts) — read only
+  // off a `schedule` row, which no caller can write.
+  "lib/schedule-fire.ts": { kind: "fixed", values: ["{ timestamp: now.toISOString(), cron: config.cron, rules:…"] },
   "lib/trigger-fire-refusal.ts": { kind: "fixed", values: ["{ triggerId: args.triggerId }"] },
   "routes/webhook-triggers.ts": { kind: "caller", values: ["triggerData"] },
   "routes/telegram-webhook.ts": { kind: "fixed", values: ["triggerData"] },

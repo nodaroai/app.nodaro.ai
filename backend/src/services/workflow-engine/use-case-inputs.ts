@@ -23,6 +23,7 @@ export function routeUseCaseInput(inputs: ResolvedInputs, edge: SimpleEdge, sour
   }
   if (edge.targetHandle === "masterAudio") {
     inputs.useCaseMasterAudio = output
+    inputs.useCaseMasterAudioNodeId = sourceId
     return true
   }
   return false
