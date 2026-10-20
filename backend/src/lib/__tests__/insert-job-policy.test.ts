@@ -152,6 +152,47 @@ describe("immutable server submission context", () => {
   })
 })
 
+describe("the parent of a child job (server-only scope)", () => {
+  const PARENT = "00000000-0000-4000-8000-0000000000b2"
+  const request = { ...req, userId: "u1" } as FastifyRequest
+  const scope = { method: "POST", url: request.url, userId: "u1", parentJobId: PARENT }
+
+  it("every request lane stamps parent_job_id from the scope, and no submission_context", async () => {
+    await withJobSubmissionContext(scope, async () => {
+      await insertJob(request, row)
+      await insertJobs(request, [row, row])
+      await insertJobIdempotent(request, row, "key")
+    })
+    expect(insertMock.mock.calls[0]![0]).toMatchObject({ parent_job_id: PARENT })
+    expect(insertMock.mock.calls[0]![0]).not.toHaveProperty("submission_context")
+    for (const r of insertMock.mock.calls[1]![0] as unknown[]) expect(r).toMatchObject({ parent_job_id: PARENT })
+    expect(idempotentMock.mock.calls[0]![1]).toMatchObject({ parent_job_id: PARENT })
+  })
+
+  it("the scope's parent wins over a caller-supplied one", async () => {
+    await withJobSubmissionContext(scope, () => insertJob(request, { ...row, parent_job_id: "caller-claim" }))
+    expect(insertMock.mock.calls[0]![0]).toMatchObject({ parent_job_id: PARENT })
+  })
+
+  it("stamps nothing outside the scope, for another route, in a nested unannotated request, or for an internal creator", async () => {
+    await insertJob(request, row)
+    await withJobSubmissionContext({ ...scope, url: "/v1/other" }, () => insertJob(request, row))
+    await withJobSubmissionContext(scope, async () => {
+      await withJobSubmissionContext({ method: "POST", url: request.url, userId: "u1" }, () => insertJob(request, row))
+      await insertInternalJob("test", row)
+    })
+    for (const [value] of insertMock.mock.calls) expect(value).not.toHaveProperty("parent_job_id")
+    expect(insertMock).toHaveBeenCalledTimes(4)
+  })
+
+  it("refuses a request that authenticated as someone else, before insertion", async () => {
+    const other = { ...req, userId: "other" } as FastifyRequest
+    await expect(withJobSubmissionContext(scope, () => insertJob(other, { ...row, user_id: "other" })))
+      .resolves.toMatchObject({ data: null, error: { message: expect.stringContaining("identity") } })
+    expect(insertMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("a BLOCKING policy", () => {
   beforeEach(() => {
     registerJobPolicy({

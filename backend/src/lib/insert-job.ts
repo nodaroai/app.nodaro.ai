@@ -32,7 +32,7 @@ import { supabase } from "./supabase.js"
 import { insertWithIdempotencyKey, type IdempotentInsertResult } from "./idempotent-insert.js"
 import { jobSourceColumns } from "./job-source.js"
 import { extractMcpClient } from "./extract-mcp-client.js"
-import { JobSubmissionIdentityError, jobSubmissionColumns, withoutJobSubmissionContext } from "./job-submission-context.js"
+import { JobSubmissionIdentityError, jobSubmissionColumns, jobSubmissionParentJobId, withoutJobSubmissionContext } from "./job-submission-context.js"
 import type { BillingContext } from "./billing-context.js"
 import {
   ALL_POLICIES_ALLOWED_ID,
@@ -92,6 +92,12 @@ export function billingPairColumns(ctx: BillingContext | undefined): Record<stri
  * below), and a `session_id` in the caller's row is dropped. Nor is
  * `input_data.origin`: it is the request's validated client app
  * (`resolveRequestOrigin`, also passed in), or absent.
+ *
+ * `parent_job_id` is spread AFTER the caller's row when the request carries
+ * one in its server-only submission scope (`tk.http.workerRequest`): a child
+ * job is tied to the job that asked for it by the scope, never by a body field
+ * (the DB trigger of migration 480 holds the parent to the same owner). With
+ * no scope it adds nothing, so a caller's own column is left as it was.
  */
 export function withJobProvenance(
   req: FastifyRequest,
@@ -100,12 +106,14 @@ export function withJobProvenance(
   origin: string | null = null,
 ): Record<string, unknown> {
   const mcpClient = extractMcpClient(req.body)
+  const parentJobId = jobSubmissionParentJobId(req)
   return {
     ...jobSourceColumns(req),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
     ...withRequestOrigin(withoutSessionColumn(withoutJobSubmissionContext(row)), origin),
     ...billingPairColumns(req.billingContext),
     ...jobSubmissionColumns(req, row),
+    ...(parentJobId ? { parent_job_id: parentJobId } : {}),
     ...sessionColumns(sessionId),
   }
 }

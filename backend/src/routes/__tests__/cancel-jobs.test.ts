@@ -148,7 +148,9 @@ function jobsHandler(opts: {
     // cancel-all list chain: select().eq().in(status).or(pre-call | in-recovery)
     const orForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
     const inForList = vi.fn().mockReturnValue({ or: orForList })
-    const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList })
+    // single-cancel children sweep: select("id").eq(user).eq(parent).in(status) — none here
+    const noChildren = { in: vi.fn().mockResolvedValue({ data: [], error: null }) }
+    const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList, eq: vi.fn().mockReturnValue(noChildren) })
     const select = vi.fn().mockReturnValue({ eq: eqAfterSelect })
 
     // CAS update chains (audit D2 + tenant scoping):
@@ -452,7 +454,9 @@ describe("POST /v1/jobs/:jobId/cancel — a parent takes its analysis child with
         const row = queue.shift()
         return row ? { data: row, error: null } : { data: null, error: { message: "not found" } }
       })
-      const select = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) })
+      // The children sweep (select("id").eq(user).eq(parent).in(status)) finds none.
+      const noChildren = { in: vi.fn().mockResolvedValue({ data: [], error: null }) }
+      const select = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single, eq: vi.fn().mockReturnValue(noChildren) }) })
       const updateSelect = vi.fn().mockImplementation(async () => ({ data: [{ id: "flipped" }], error: null }))
       const inFn = vi.fn().mockReturnValue({ select: updateSelect })
       const eq2 = vi.fn().mockReturnValue({ in: inFn })
@@ -606,5 +610,142 @@ describe("POST /v1/jobs/cancel-all — use-case wrappers", () => {
     expect(mockCancelInnerRun).toHaveBeenCalledTimes(1)
     expect(mockCancelInnerRun).toHaveBeenCalledWith("exec-inner", TEST_USER_ID, expect.any(String))
     expect(mockRefundCredits).toHaveBeenCalledWith("fee-log")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Ruling 22 — cancelling a parent cancels its still-running child jobs (rows
+// whose `parent_job_id` names it), each through the same single-job cancel.
+// A finished child is left alone, and the sweep reads only the caller's rows.
+// The "jobs" table here is a tiny in-memory fake that honours eq / in filters,
+// so the ownership and status filters are exercised, not just asserted.
+// ---------------------------------------------------------------------------
+describe("POST /v1/jobs/:jobId/cancel — a parent takes its still-running children with it", () => {
+  const PARENT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  const PENDING_CHILD = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  const DONE_CHILD = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  const FOREIGN_CHILD = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+  const USER = "user-123"
+  const OTHER = "user-999"
+
+  type Row = Record<string, unknown> & { id: string }
+
+  function fakeJobs(rows: Row[]) {
+    const updates: Array<{ patch: Record<string, unknown>; ids: string[] }> = []
+    const selects: Array<Array<[string, string, unknown]>> = []
+    const matches = (row: Row, filters: Array<[string, string, unknown]>) =>
+      filters.every(([op, col, val]) => (op === "eq" ? row[col] === val : (val as unknown[]).includes(row[col])))
+    const handler = () => ({
+      select: () => {
+        const filters: Array<[string, string, unknown]> = []
+        selects.push(filters)
+        const b: Record<string, unknown> = {
+          eq: (col: string, val: unknown) => { filters.push(["eq", col, val]); return b },
+          in: (col: string, val: unknown[]) => { filters.push(["in", col, val]); return b },
+          single: async () => {
+            const hit = rows.find((r) => matches(r, filters))
+            return hit ? { data: { ...hit }, error: null } : { data: null, error: { message: "not found" } }
+          },
+          then: (resolve: (v: unknown) => void) =>
+            resolve({ data: rows.filter((r) => matches(r, filters)).map((r) => ({ id: r.id })), error: null }),
+        }
+        return b
+      },
+      update: (patch: Record<string, unknown>) => {
+        const filters: Array<[string, string, unknown]> = []
+        const b: Record<string, unknown> = {
+          eq: (col: string, val: unknown) => { filters.push(["eq", col, val]); return b },
+          in: (col: string, val: unknown[]) => { filters.push(["in", col, val]); return b },
+          select: async () => {
+            const hit = rows.filter((r) => matches(r, filters))
+            for (const r of hit) Object.assign(r, patch)
+            updates.push({ patch, ids: hit.map((r) => r.id) })
+            return { data: hit.map((r) => ({ id: r.id })), error: null }
+          },
+        }
+        return b
+      },
+    })
+    return { handler, updates, selects }
+  }
+
+  const job = (id: string, status: string, extra: Record<string, unknown> = {}): Row => ({
+    id, status, user_id: USER, input_data: {}, provider: null, provider_task_id: null, reconcile_attempts: 0, parent_job_id: null, ...extra,
+  })
+
+  it("cancels a pending child with its parent, and refunds it too", async () => {
+    const rows = [job(PARENT, "processing"), job(PENDING_CHILD, "pending", { parent_job_id: PARENT })]
+    const fake = fakeJobs(rows)
+    setupTableMocks({ jobs: fake.handler, usage_logs: usageLogsHandler([{ id: "usage-log-1" }]) })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 1, inFlight: false })
+    expect(rows.map((r) => r.status)).toEqual(["cancelled", "cancelled"])
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith(PENDING_CHILD)
+    expect(mockRefundCredits).toHaveBeenCalledTimes(2)
+  })
+
+  it("leaves a completed child alone", async () => {
+    const rows = [job(PARENT, "processing"), job(DONE_CHILD, "completed", { parent_job_id: PARENT })]
+    const fake = fakeJobs(rows)
+    setupTableMocks({ jobs: fake.handler, usage_logs: usageLogsHandler([{ id: "usage-log-1" }]) })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.statusCode).toBe(200)
+    expect(rows.find((r) => r.id === DONE_CHILD)?.status).toBe("completed")
+    expect(fake.updates.flatMap((u) => u.ids)).toEqual([PARENT])
+    expect(tryRemoveFromQueue).toHaveBeenCalledTimes(1)
+    expect(mockRefundCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("never touches another user's job, even one naming this parent", async () => {
+    const rows = [
+      job(PARENT, "processing"),
+      job(FOREIGN_CHILD, "pending", { parent_job_id: PARENT, user_id: OTHER }),
+    ]
+    const fake = fakeJobs(rows)
+    setupTableMocks({ jobs: fake.handler, usage_logs: usageLogsHandler([{ id: "usage-log-1" }]) })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.statusCode).toBe(200)
+    expect(rows.find((r) => r.id === FOREIGN_CHILD)?.status).toBe("pending")
+    expect(fake.updates.flatMap((u) => u.ids)).toEqual([PARENT])
+    // The owner filter is in the children query itself, not a post-filter.
+    const childQuery = fake.selects.find((f) => f.some(([, col]) => col === "parent_job_id"))
+    expect(childQuery).toContainEqual(["eq", "user_id", USER])
+    expect(tryRemoveFromQueue).not.toHaveBeenCalledWith(FOREIGN_CHILD)
+  })
+
+  it("does not sweep children when the parent itself was not cancelled (in flight)", async () => {
+    const rows = [
+      job(PARENT, "processing", { provider_task_id: "task-1" }),
+      job(PENDING_CHILD, "pending", { parent_job_id: PARENT }),
+    ]
+    const fake = fakeJobs(rows)
+    setupTableMocks({ jobs: fake.handler, usage_logs: usageLogsHandler([]) })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.json()).toEqual({ success: true, cancelled: 0, inFlight: true })
+    expect(rows.find((r) => r.id === PENDING_CHILD)?.status).toBe("pending")
+  })
+
+  it("an analysis child that is also a parent_job_id child is cancelled once", async () => {
+    const rows = [
+      job(PARENT, "processing", { input_data: { analysisJobId: PENDING_CHILD } }),
+      job(PENDING_CHILD, "processing", { parent_job_id: PARENT }),
+    ]
+    const fake = fakeJobs(rows)
+    setupTableMocks({ jobs: fake.handler, usage_logs: usageLogsHandler([]) })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.statusCode).toBe(200)
+    expect(rows.map((r) => r.status)).toEqual(["cancelled", "cancelled"])
+    expect(vi.mocked(tryRemoveFromQueue).mock.calls.filter(([id]) => id === PENDING_CHILD)).toHaveLength(1)
   })
 })

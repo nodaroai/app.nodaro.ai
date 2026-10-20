@@ -1382,7 +1382,8 @@ export interface PluginJobsToolkit {
    * the QUERY, never a post-filter in JS: a read that fetches rows it must
    * then throw away is one refactor away from keeping them.
    *
-   * `output_data` comes back through `redactPrivateJobData`, for the same
+   * `output_data` comes back through `redactPrivateJobOutput` (its `__`
+   * server-only keys dropped, then `redactPrivateJobData`), for the same
    * reason every other job reader applies it — it can carry server-only
    * fields, and a landed result is persisted on a document that can later be
    * shared by link. An empty id list issues no query. A read ERROR throws

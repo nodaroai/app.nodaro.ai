@@ -187,3 +187,68 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
 
   return { kind: "cancelled", analysisJobId }
 }
+
+/**
+ * Cancel the still-running child jobs of a parent that was just cancelled —
+ * the rows whose `parent_job_id` names it (a worker-side handler's internal
+ * requests, a render a parent spawned). Each goes through `cancelOwnedJob`,
+ * so a child gets exactly the single-job cancel: queue removal, the CAS flip,
+ * its own refund, a held child's withdrawal, and a child already out at the
+ * provider left to finish (`in_flight`), like any in-flight job.
+ *
+ * A finished child is left alone: only in-flight statuses are read. The owner
+ * filter is part of the QUERY — another user's row is never read, whatever
+ * `parent_job_id` it carries — and `cancelOwnedJob` checks ownership again.
+ * `analysisJobId` is the other kind of child: the `video-analysis` job a
+ * `POST /v1/llm/structured/jobs` parent names in `input_data.analysisJobId`
+ * (`CancelOwnedJobResult.analysisJobId`). It goes first, the same way, and is
+ * not cancelled twice when it also carries `parent_job_id`.
+ *
+ * The ONE child sweep every cancel path runs once it has cancelled a parent
+ * (the single-job cancel route, MCP `tasks/cancel`) — never re-implement it.
+ *
+ * Best effort and never throws: a read error or one child's failure is logged
+ * and the rest go on. Answers how many children it cancelled. One level deep.
+ */
+export async function cancelRunningChildJobs(
+  parentJobId: string,
+  userId: string,
+  opts: { analysisJobId?: string | null } = {},
+): Promise<number> {
+  let cancelled = 0
+  const { analysisJobId } = opts
+  if (analysisJobId) {
+    try {
+      const result = await cancelOwnedJob(analysisJobId, userId)
+      if (result.kind === "cancelled") cancelled++
+    } catch (err) {
+      console.error(`[cancel-job] child ${analysisJobId} of ${parentJobId}:`, err)
+    }
+  }
+
+  let children: Array<{ id: string }>
+  try {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("parent_job_id", parentJobId)
+      .in("status", [...IN_FLIGHT_JOB_STATUSES])
+    if (error) throw error
+    children = (data ?? []) as Array<{ id: string }>
+  } catch (err) {
+    console.error(`[cancel-job] could not read the children of ${parentJobId}:`, err)
+    return cancelled
+  }
+
+  for (const { id } of children) {
+    if (id === analysisJobId) continue
+    try {
+      const result = await cancelOwnedJob(id, userId)
+      if (result.kind === "cancelled") cancelled++
+    } catch (err) {
+      console.error(`[cancel-job] child ${id} of ${parentJobId}:`, err)
+    }
+  }
+  return cancelled
+}

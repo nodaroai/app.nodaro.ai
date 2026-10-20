@@ -1176,6 +1176,25 @@ describe("createAssetFromJob", () => {
     await expect(createAssetFromJob("job-1", "user-1")).resolves.toBeUndefined()
   })
 
+  // A child job (`parent_job_id` set) is a step of its parent's run — the
+  // parent's result is what reaches the Library, never each step.
+  it("createAssetFromJob skips a child job", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: {
+        status: "completed",
+        output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
+        parent_job_id: "00000000-0000-4000-8000-0000000000b2",
+      },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+
+    expect(mocks.mockSelect).toHaveBeenCalledWith(expect.stringContaining("parent_job_id"))
+    expect(mocks.mockInsert).not.toHaveBeenCalled()
+  })
+
   // THE DURABLE RELAY MARKER (migration 384). `assets.job_id` is ON DELETE SET
   // NULL, so the job row's own `relay_job_id` stops being reachable the moment
   // the user deletes the job from history — while the library row, and the

@@ -319,7 +319,9 @@ describe("tk.jobs.readJobsOwnedBy", () => {
         {
           id: "job-1",
           status: "completed",
-          output_data: { videoUrl: "https://cdn/a.mp4", unscoredUrl: "https://cdn/private.mp4" },
+          // `__checkpoint`: a server-only output key (a plugin's resume state)
+          // — a landed result reaches a user's document, so it is stripped too.
+          output_data: { videoUrl: "https://cdn/a.mp4", unscoredUrl: "https://cdn/private.mp4", __checkpoint: { stage: 2 } },
           error_message: null,
         },
       ],

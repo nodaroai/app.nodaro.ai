@@ -1003,6 +1003,84 @@ describe("GET /v1/jobs/:id — job_type", () => {
   })
 })
 
+// Ruling 21: a top-level `__` key in output_data is server-only (a plugin's
+// resume checkpoint). Stripped on read, from every job read, admins included.
+describe("server-only `__` output keys are never returned", () => {
+  const withCheckpoint = {
+    imageUrl: "https://public.example/i.png",
+    _single: "kept",
+    __checkpoint: { stage: 2, secret: "resume-state" },
+  }
+  const expectedOutput = { imageUrl: "https://public.example/i.png", _single: "kept" }
+
+  it("GET /v1/jobs/:id", async () => {
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: { ...sampleJob, user_id: TEST_USER_ID, output_data: withCheckpoint }, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.output_data).toEqual(expectedOutput)
+    expect(res.body).not.toContain("__checkpoint")
+  })
+
+  it("GET /v1/jobs (the list)", async () => {
+    seedJobsList([{ ...executionJob("job-1", null), output_data: withCheckpoint }])
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data[0].output_data).toEqual(expectedOutput)
+    expect(res.body).not.toContain("__checkpoint")
+  })
+
+  it("GET /v1/jobs/:id/status", async () => {
+    const row = { id: "job-a", user_id: TEST_USER_ID, status: "completed", progress: 100, output_data: withCheckpoint, error_message: null, reconcile_attempts: 0 }
+    let chain: Record<string, unknown>
+    chain = new Proxy({}, {
+      get(_target, prop) {
+        if (prop === "single") return vi.fn().mockResolvedValue({ data: row, error: null })
+        return vi.fn().mockReturnValue(chain)
+      },
+    })
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-a/status?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.output_data).toEqual(expectedOutput)
+  })
+
+  it("GET /v1/jobs/status and POST /v1/jobs/batch-status", async () => {
+    seedJobs([{ id: "job-a", user_id: TEST_USER_ID, status: "completed", output_data: withCheckpoint }])
+
+    const batchPoll = await app.inject({ method: "GET", url: `/v1/jobs/status?ids=job-a&__userId=${TEST_USER_ID}` })
+    expect(batchPoll.statusCode).toBe(200)
+    expect(batchPoll.json().jobs[0].output_data).toEqual(expectedOutput)
+
+    const batch = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/batch-status?__userId=${TEST_USER_ID}`,
+      payload: { jobIds: ["job-a"] },
+    })
+    expect(batch.statusCode).toBe(200)
+    expect(batch.json().data[0].output_data).toEqual(expectedOutput)
+  })
+
+  it("sanitizeJobForPublic strips them for an admin too, and leaves input_data's own keys alone", () => {
+    const row = { ...sampleJob, input_data: { prompt: "p", __internal: 1 }, output_data: withCheckpoint }
+    expect(sanitizeJobForPublic(row, true).output_data).toEqual(expectedOutput)
+    expect(sanitizeJobForPublic(row, true).input_data).toEqual({ prompt: "p", __internal: 1 })
+    expect(sanitizeJobForPublic(row, false).output_data).toEqual(expectedOutput)
+  })
+})
+
 /**
  * A held job over the wire (spec D6, D14).
  *

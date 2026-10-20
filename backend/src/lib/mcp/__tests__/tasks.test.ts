@@ -19,6 +19,8 @@ const taskDb = vi.hoisted(() => ({
   cancelFlipped: [] as Array<{ id: string }>,
   /** The single-job cancel helper the held path must delegate to. */
   cancelOwnedJob: vi.fn(),
+  /** The shared child sweep every cancel path runs after cancelling a parent. */
+  cancelRunningChildJobs: vi.fn(),
 }))
 
 // `lib/cancel-job.js` transitively imports `lib/queue.js`, which opens a real
@@ -26,6 +28,7 @@ const taskDb = vi.hoisted(() => ({
 // the held-cancel test assert delegation rather than a raw UPDATE.
 vi.mock("../../cancel-job.js", () => ({
   cancelOwnedJob: taskDb.cancelOwnedJob,
+  cancelRunningChildJobs: taskDb.cancelRunningChildJobs,
 }))
 
 // Mock supabase so cancelTask -> markJobCancelled is a no-op in unit tests.
@@ -63,6 +66,7 @@ describe("task lifecycle", () => {
     taskDb.row = null
     taskDb.cancelFlipped = [{ id: "flipped" }]
     taskDb.cancelOwnedJob.mockReset().mockResolvedValue({ kind: "cancelled", analysisJobId: null })
+    taskDb.cancelRunningChildJobs.mockReset().mockResolvedValue(0)
   })
 
   it("registers a task and retrieves it", () => {
@@ -105,12 +109,13 @@ describe("task lifecycle", () => {
     expect(getTask("j4")).toBeNull()
   })
 
-  it("redacts private remux bases from tasks/result output", async () => {
+  it("redacts private remux bases and server-only __ keys from tasks/result output", async () => {
     taskDb.row = {
       status: "completed",
       output_data: {
         videoUrl: "https://public.example/final.mp4",
         pro: { unscoredUrl: "https://private.example/base.mp4" },
+        __checkpoint: { stage: 2 },
       },
       error_message: null,
     }
@@ -133,6 +138,7 @@ describe("task lifecycle", () => {
     expect(JSON.stringify(result)).toContain("https://public.example/final.mp4")
     expect(JSON.stringify(result)).not.toContain("unscoredUrl")
     expect(JSON.stringify(result)).not.toContain("private.example")
+    expect(JSON.stringify(result)).not.toContain("__checkpoint")
   })
 
   /** Wire the four tasks/* handlers and hand back the map, keyed by schema. */
@@ -222,6 +228,46 @@ describe("task lifecycle", () => {
     await cancelTask("j-live", "u1")
 
     expect(taskDb.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  // Ruling 23: cancelling a parent cancels its still-running children on EVERY
+  // cancel path — MCP tasks/cancel runs the same shared sweep as the route.
+  it("a parent the fast CAS flipped takes its children with it (the shared sweep)", async () => {
+    taskDb.cancelFlipped = [{ id: "j-parent" }]
+    registerTask({ taskId: "j-parent", userId: "u1", kind: "video" })
+
+    await cancelTask("j-parent", "u1")
+
+    expect(taskDb.cancelRunningChildJobs).toHaveBeenCalledWith("j-parent", "u1", { analysisJobId: null })
+  })
+
+  it("the fast path hands the flipped row's analysis child to the sweep", async () => {
+    taskDb.cancelFlipped = [{ id: "j-draft", input_data: { analysisJobId: "j-analysis" } } as never]
+    registerTask({ taskId: "j-draft", userId: "u1", kind: "video" })
+
+    await cancelTask("j-draft", "u1")
+
+    expect(taskDb.cancelRunningChildJobs).toHaveBeenCalledWith("j-draft", "u1", { analysisJobId: "j-analysis" })
+  })
+
+  it("a parent cancelOwnedJob cancelled (held / use-case path) takes its children too", async () => {
+    taskDb.cancelFlipped = []
+    taskDb.cancelOwnedJob.mockResolvedValue({ kind: "cancelled", analysisJobId: "j-analysis" })
+    registerTask({ taskId: "j-held-parent", userId: "u1", kind: "video" })
+
+    await cancelTask("j-held-parent", "u1")
+
+    expect(taskDb.cancelRunningChildJobs).toHaveBeenCalledWith("j-held-parent", "u1", { analysisJobId: "j-analysis" })
+  })
+
+  it("no child sweep when the parent was not cancelled (terminal / in flight)", async () => {
+    taskDb.cancelFlipped = []
+    taskDb.cancelOwnedJob.mockResolvedValue({ kind: "invalid_status", status: "completed" })
+    registerTask({ taskId: "j-done", userId: "u1", kind: "video" })
+
+    await cancelTask("j-done", "u1")
+
+    expect(taskDb.cancelRunningChildJobs).not.toHaveBeenCalled()
   })
 
   it("registers timestamp and a fresh AbortController per task", () => {

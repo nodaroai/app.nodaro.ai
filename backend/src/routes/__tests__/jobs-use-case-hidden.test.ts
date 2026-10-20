@@ -107,3 +107,21 @@ describe("GET /v1/jobs — a use-case node's hidden run", () => {
     expect(String(select?.args[0])).toContain("workflow_executions!workflow_execution_id(is_component_execution, trigger_type)")
   })
 })
+
+/**
+ * A child job (`parent_job_id` set: a step a worker-side handler ran for its
+ * parent) is shown only through that parent. The filter is in the query, so
+ * the keyset cursor stays correct; the mocked builder returns every row, so
+ * what is asserted is the query call itself.
+ */
+describe("GET /v1/jobs — child jobs", () => {
+  it("GET /v1/jobs excludes child jobs", async () => {
+    await app.inject({ method: "GET", url: "/v1/jobs?limit=10" })
+    expect(calls).toContainEqual({ method: "is", args: ["parent_job_id", null] })
+  })
+
+  it("excludes them under every filter too", async () => {
+    await app.inject({ method: "GET", url: "/v1/jobs?limit=10&status=completed&type=text-to-video" })
+    expect(calls).toContainEqual({ method: "is", args: ["parent_job_id", null] })
+  })
+})

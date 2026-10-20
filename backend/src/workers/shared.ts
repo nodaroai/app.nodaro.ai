@@ -1049,11 +1049,13 @@ export async function createAssetFromJob(
       .from("jobs")
       // `relay_job_id` (migration 383) rides along so the asset can carry the
       // DURABLE half of the relay delete rule — see the insert below.
-      .select("output_data, status, source, source_detail, relay_job_id, job_type")
+      // `parent_job_id`: a child job (a step a worker-side handler ran for its
+      // parent) files nothing — the parent's result is what reaches the Library.
+      .select("output_data, status, source, source_detail, relay_job_id, job_type, parent_job_id")
       .eq("id", jobId)
       .single()
 
-    if (!job || job.status !== "completed") return
+    if (!job || job.status !== "completed" || job.parent_job_id) return
 
     const output = job.output_data as Record<string, unknown> | null
     if (!output) return

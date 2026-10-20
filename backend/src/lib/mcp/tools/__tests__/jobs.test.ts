@@ -31,15 +31,19 @@ beforeEach(() => {
 })
 
 function mockListJobs(rows: unknown[]) {
-  ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
-        }),
-      }),
+  // `.is("parent_job_id", null)`: the shared list filters leave out child jobs.
+  const is = vi.fn()
+  is.mockReturnValue({
+    order: vi.fn().mockReturnValue({
+      limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
     }),
   })
+  ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ is }),
+    }),
+  })
+  return { is }
 }
 
 function mockGetJob(row: unknown | null) {
@@ -78,6 +82,14 @@ describe("list_jobs tool", () => {
     const result = await callTool(server, "list_jobs", { limit: 10 })
     expect(result.isError).toBeUndefined()
     expect(result.content[0]?.text).toContain("\"j1\"")
+  })
+
+  it("leaves out child jobs (a step a worker-side handler ran for its parent)", async () => {
+    const { is } = mockListJobs([])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    await callTool(server, "list_jobs", { limit: 10 })
+    expect(is).toHaveBeenCalledWith("parent_job_id", null)
   })
 
   it("does NOT register without jobs:read scope", async () => {
@@ -523,6 +535,7 @@ function mockJobsAndUsage(jobRows: unknown[], usageLogs: Array<{ id: string }>) 
     const chain: Record<string, unknown> = {}
     chain.select = vi.fn().mockReturnValue(chain)
     chain.eq = vi.fn().mockReturnValue(chain)
+    chain.is = vi.fn().mockReturnValue(chain)
     chain.order = vi.fn().mockReturnValue(chain)
     chain.limit = vi.fn().mockImplementation(next)
     chain.maybeSingle = vi.fn().mockImplementation(next)
@@ -753,5 +766,45 @@ describe("list_jobs and Apply EDL renders", () => {
     expect(arrays.image).not.toMatch(/RENDER_NODE_TYPE_IDS|["']apply-edl["']/)
     expect(block.match(/RENDER_NODE_TYPE_IDS/g)).toHaveLength(2)
     expect(block).not.toMatch(/["']apply-edl["']/)
+  })
+})
+
+// Ruling 21: a top-level `__` key in output_data is server-only (a plugin's
+// resume checkpoint) — no MCP job read returns one; normal keys stay.
+describe("MCP job reads never return server-only `__` output keys", () => {
+  const output = { videoUrl: "https://r2/x.mp4", __checkpoint: { stage: 2, secret: "resume-state" } }
+  const row = { id: JOB, user_id: "u1", status: "completed", job_type: "generate-video", progress: 100, output_data: output, error_message: null, created_at: "2026-04-01T00:00:00Z" }
+
+  it("get_job: neither the text nor the envelope carries them", async () => {
+    mockGetJob(row)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const text = JSON.parse(result.content[0]!.text as string) as { data: Record<string, unknown> }
+    expect(text.data.output_data).toEqual({ videoUrl: "https://r2/x.mp4" })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.outputData).toEqual({ videoUrl: "https://r2/x.mp4" })
+    expect(sc.outputUrl).toBe("https://r2/x.mp4")
+    expect(JSON.stringify(result)).not.toContain("__checkpoint")
+  })
+
+  it("list_jobs", async () => {
+    mockListJobs([row])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "list_jobs", { limit: 10 })
+    expect(result.content[0]?.text).toContain("https://r2/x.mp4")
+    expect(JSON.stringify(result)).not.toContain("__checkpoint")
+  })
+
+  it("wait_for_job", async () => {
+    mockJobReads([row, row])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("completed")
+    expect(sc.outputData).toEqual({ videoUrl: "https://r2/x.mp4" })
+    expect(JSON.stringify(result)).not.toContain("__checkpoint")
   })
 })

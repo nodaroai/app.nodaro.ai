@@ -1530,6 +1530,13 @@ job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 `GET /v1/jobs/:id/status` carries `completed_at` — when the job finished, on
 the server's clock (`null` until it has) — as `GET /v1/jobs/:id` does.
 
+A child job (one a job started internally as a step of its own work) is not
+listed by `GET /v1/jobs`; output keys whose name starts with `__` are
+server-only and no job read ever returns them; and cancelling a job
+(`POST /v1/jobs/:id/cancel`) also cancels its still-running child jobs — a
+finished child is left as it is, and one already at the provider finishes, as
+any in-flight job does.
+
 `GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and
 `GET /v1/jobs/status` also carry `credit_status: "reserved" | "committed" |
 "refunded" | null` — the job's credit reservation lifecycle, derived

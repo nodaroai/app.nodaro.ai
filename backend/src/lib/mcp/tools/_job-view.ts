@@ -10,7 +10,7 @@
  */
 import { z } from "zod"
 import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts/prompt-builder"
-import { redactPrivateJobData } from "../../public-job-data.js"
+import { redactPrivateJobData, redactPrivateJobOutput } from "../../public-job-data.js"
 import { failureGuidance } from "./_job-error.js"
 import { isPreviewRender } from "../../preview-render.js"
 
@@ -177,7 +177,7 @@ export interface JobRowLike {
 /** Normalise a jobs row (public columns) into the envelope. Private remux bases are redacted. */
 export function jobView(row: JobRowLike): JobView {
   const status = row.status ?? "pending"
-  const out = row.output_data ? redactPrivateJobData(row.output_data as Record<string, unknown>) : null
+  const out = row.output_data ? redactPrivateJobOutput(row.output_data as Record<string, unknown>) : null
   const view: JobView = {
     jobId: row.id,
     status,

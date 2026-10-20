@@ -18,7 +18,7 @@
  * see below.
  */
 import { supabase } from "../../supabase.js"
-import { redactPrivateJobData } from "../../public-job-data.js"
+import { redactPrivateJobOutput } from "../../public-job-data.js"
 import { isParkedJobStatus, TERMINAL_JOB_STATUSES } from "../../job-status.js"
 import { resolveOutputUrl } from "./_job-view.js"
 
@@ -135,7 +135,7 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
       }
 
       if (TERMINAL_STATUSES.has(status)) {
-        const out = redactPrivateJobData((data.output_data ?? {}) as Record<string, unknown>)
+        const out = redactPrivateJobOutput((data.output_data ?? {}) as Record<string, unknown>)
         return {
           status: status as "completed" | "failed" | "cancelled",
           outputUrl: resolveOutputUrl(out),
