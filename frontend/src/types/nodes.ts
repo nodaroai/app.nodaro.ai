@@ -87,7 +87,7 @@ import {
 } from "@nodaro/prompts/pickers"
 import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
 import type { ImageCriticMode, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState } from "@nodaro/shared/pipeline"
-import type { ReduceStrategyId, ReduceMeta, SelectorConfig, ScheduleRule } from "@nodaro/shared/workflow"
+import type { ReduceStrategyId, ReduceMeta, SelectorConfig, ScheduleRetry, ScheduleRule } from "@nodaro/shared/workflow"
 import type { CharacterAspectRatio, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared/entities"
 import type {
   VideoAnalysisResult,
@@ -7032,6 +7032,15 @@ export type ScheduleTriggerData = {
   timezone?: string
   /** Stop after this many runs; missing = unlimited. */
   maxExecutions?: number
+  /**
+   * Retry on failure: a scheduled run that fails is run again after
+   * `afterMinutes`, up to `maxAttempts` times; `cheapLanesOnly` keeps the
+   * model calls of the run (and its retries) that honour it off the
+   * direct-vendor fallback (the node types that do are listed on the
+   * Schedule Trigger's docs page). Missing = no retry (model:
+   * `@nodaro/shared` schedule-retry).
+   */
+  retry?: ScheduleRetry
   /**
    * The switch. The schedule fires only while this is `true` — a new schedule
    * starts paused; saving alone never arms it.

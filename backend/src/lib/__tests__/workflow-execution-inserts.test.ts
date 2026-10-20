@@ -62,7 +62,7 @@ const STAMP_BUILDERS = new Set(["appRunStamp", "appRunResumeStamp", "appRenderFi
  */
 const INSERTS: Record<string, readonly string[]> = {
   "lib/plugin-triggers.ts": ["lane"],
-  "lib/schedule-cron.ts": ['"schedule"'],
+  "lib/schedule-fire.ts": ['"schedule"'],
   "lib/trigger-fire-refusal.ts": ["args.triggerType"],
   "routes/api-tokens.ts": ['"api"'],
   "routes/app-run-resume.ts": ['"app_run"'],

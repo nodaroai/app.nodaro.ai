@@ -16,6 +16,7 @@
 import { LLM_ROUTE_DEFAULTS, LLM_FEATURE_DEFAULTS, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { applySlots } from "@nodaro/shared/media"
 import { resolveLlmParams, type LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
+import { cheapLanesParam } from "../../lib/llm-cheap-lanes.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { validateLottieGraphic } from "../../lib/lottie-graphic-validator.js"
@@ -43,6 +44,8 @@ interface MotionGraphicsLottiePayload {
   llmModel?: string
   advanced?: LlmAdvancedInput
   reasoningEffort?: string
+  /** The run is kept to the cheap lanes (`WorkflowExecutionJob.cheapLanesOnly`): no direct-vendor fallback. */
+  cheapLanesOnly?: boolean
   /** Regeneration hint (Phase 2) — accepted from day 1. */
   previousSids?: string[]
   usageLogId?: string
@@ -63,7 +66,7 @@ function buildUserMessage(p: {
 }
 
 const handleMotionGraphicsLottie: HandlerFn = async function handleMotionGraphicsLottie(job, ctx) {
-  const { prompt, fps, width, height, durationInFrames, backgroundColor, llmModel, reasoningEffort, previousSids, advanced } =
+  const { prompt, fps, width, height, durationInFrames, backgroundColor, llmModel, reasoningEffort, previousSids, advanced, cheapLanesOnly } =
     job.data as MotionGraphicsLottiePayload
   const modelId = llmModel ?? LLM_FEATURE_DEFAULTS["motion-graphics-lottie"]
   console.log(`[worker] motion-graphics-lottie ${ctx.jobId} (model: ${modelId})`)
@@ -80,6 +83,7 @@ const handleMotionGraphicsLottie: HandlerFn = async function handleMotionGraphic
       system: LOTTIE_GRAPHIC_SYSTEM_PROMPT,
       messages,
       ...resolveLlmParams(advanced ?? {}, { ...LLM_ROUTE_DEFAULTS["motion-graphics-lottie"], maxTokens: LOTTIE_MAX_TOKENS }),
+      ...cheapLanesParam({ cheapLanesOnly }),
       timeoutMs: LOTTIE_LLM_TIMEOUT_MS,
       reasoningEffort: reasoningEffort as LlmReasoningEffort | undefined,
     })

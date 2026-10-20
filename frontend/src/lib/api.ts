@@ -7976,6 +7976,8 @@ export interface WorkflowExecution {
   triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
+  /** A schedule's retry of a failed run (Retry on failure): which attempt of how many, and the run it retries. */
+  retry?: { attempt: number; maxAttempts: number; retryOf: string }
   triggerData?: Record<string, unknown>
   nodeStates?: Record<string, unknown>
   /**

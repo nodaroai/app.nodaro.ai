@@ -35,6 +35,11 @@ const bodySchema = z.object({
    *  forwarded by the orchestrator's component dispatch. Honored ONLY on the
    *  internal lane: from any other caller it would switch the gate off. */
   previewStopRule: z.boolean().optional(),
+  /** The parent execution's "cheap lanes only" (a scheduled run under a retry
+   *  policy), forwarded by the orchestrator's component dispatch. Honored ONLY
+   *  on the internal lane; it only ever reduces spend, but only the
+   *  orchestrator sets it. */
+  cheapLanesOnly: z.boolean().optional(),
   /** P14 — the parent execution's resolved payer, forwarded by the
    *  orchestrator's component dispatch. Honored ONLY on the internal lane
    *  (see below); shape-guarded, never trusted from the type alone. */
@@ -89,6 +94,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // caller sending `false` would switch the gate off for its own run).
     const forwardedPreviewStopRule =
       req.authKind === "internal" ? parsed.data.previewStopRule : undefined
+    const forwardedCheapLanesOnly = req.authKind === "internal" && parsed.data.cheapLanesOnly === true
 
     // Look up published app by slug. snapshot_nodes + snapshot_edges are
     // needed for compound output handles (sub-workflow-output ports) — they
@@ -242,6 +248,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           webFreeMode: req.webFreeMode === true,
           billingContext: runBillingContext,
           ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
+          ...(forwardedCheapLanesOnly ? { cheapLanesOnly: true } : {}),
         })
 
         // Stamp the nested execution id on the wrapper IMMEDIATELY (it was

@@ -538,6 +538,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // A person is at this run (the editor's own): UGC Creator draws every option for the pick.
     reviewerPresent: job.data.reviewerPresent === true,
     webFreeMode: job.data.webFreeMode === true,
+    // A scheduled run under a "cheap lanes only" retry policy: no model call
+    // of this run pays the direct-vendor fallback (see the job field).
+    ...(job.data.cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
     // Resolved at enqueue, coalesced here ONCE (absent = personal, the
     // normative rule — a payload from pre-P14 code or a rollback window).
     // Nothing below this line re-resolves the payer.

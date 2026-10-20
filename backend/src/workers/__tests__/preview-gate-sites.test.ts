@@ -40,7 +40,8 @@ describe("every enqueue producer answers reviewerPresent", () => {
   // run's Retry that continues its failed execution (decided 2026-10-18).
   const PRODUCERS = [
     "lib/plugin-triggers.ts",
-    "lib/schedule-cron.ts",
+    // The schedule lane's one enqueue (the cron's fires and the retry sweep's retries).
+    "lib/schedule-fire.ts",
     "routes/api-tokens.ts",
     "routes/app-run-resume.ts",
     "routes/app-runner.ts",

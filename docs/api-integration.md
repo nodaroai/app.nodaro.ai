@@ -1307,8 +1307,8 @@ workflow never changes or removes them.
 
 A schedule's `config` carries `rules` — the same model the Schedule Trigger
 node uses — plus an optional `timezone` (a zone name the server can read,
-such as `Asia/Jerusalem`; the clock the rules are read in, UTC when omitted)
-and `maxExecutions`:
+such as `Asia/Jerusalem`; the clock the rules are read in, UTC when omitted),
+`maxExecutions`, and an optional `retry` policy:
 
 ```json
 {
@@ -1319,10 +1319,23 @@ and `maxExecutions`:
       { "kind": "days", "every": 1, "hour": 9, "minute": 0 },
       { "kind": "weeks", "every": 2, "weekdays": [1, 3], "hour": 18, "minute": 30 }
     ],
-    "timezone": "Asia/Jerusalem"
+    "timezone": "Asia/Jerusalem",
+    "retry": { "afterMinutes": 30, "maxAttempts": 3, "cheapLanesOnly": true }
   }
 }
 ```
+
+`retry` is the node's **Retry on failure** (see [Schedule Trigger](./nodes/input/schedule-trigger.md#retry-on-failure)):
+a scheduled run that ends `failed` or `timed_out` is run again `afterMinutes`
+(5–1440, default 30) after it ended, up to `maxAttempts` times (1–5, default
+3), and with `cheapLanesOnly` (default `true`) the model calls of the
+scheduled run and its retries that honour it do not take the direct-vendor
+fallback (the node types that honour it are listed on the Schedule Trigger
+page). A field left out takes its
+default; a value out of range is refused with a 400. Omit `retry` for no
+retry; in a `PATCH`, `"retry": null` switches it off. A retry run is listed
+by `GET /v1/workflows/<id>/executions` with `retry: { "attempt": 1,
+"maxAttempts": 3, "retryOf": "<the failed execution's id>" }`.
 
 | `kind` | Fields | Runs |
 |--------|--------|------|

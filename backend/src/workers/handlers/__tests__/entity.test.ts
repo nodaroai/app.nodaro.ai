@@ -476,7 +476,7 @@ describe("generate-script handler", () => {
     const job = makeJob("generate-script", { prompt: "a story about adventure" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined })
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined }, { cheapLanesOnly: undefined })
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { script: { title: "My Script", scenes: [{ description: "Scene 1" }] } },
     }))
@@ -501,6 +501,25 @@ describe("generate-script handler", () => {
       "max",
       undefined,
       { styleGuide: undefined },
+      { cheapLanesOnly: undefined },
+    )
+  })
+
+  it("a run kept to the cheap lanes (the orchestrator's payload key) reaches generateScript as its lane rule", async () => {
+    const job = makeJob("generate-script", { prompt: "a story", cheapLanesOnly: true })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith(
+      "a story",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { styleGuide: undefined },
+      { cheapLanesOnly: true },
     )
   })
 
@@ -518,6 +537,7 @@ describe("generate-script handler", () => {
       undefined,
       undefined,
       { styleGuide: "noir, short lines" },
+      { cheapLanesOnly: undefined },
     )
   })
 })

@@ -13,6 +13,7 @@ import type { LlmContentBlock } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps } from "@nodaro/shared/llm-models"
 import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
+import { LLM_CHEAP_LANES_SHAPE, cheapLanesParam } from "../lib/llm-cheap-lanes.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -41,6 +42,7 @@ const llmChatBody = z.object({
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
   reasoningEffort: z.enum(LLM_REASONING_EFFORTS).optional(),
   advancedMode: z.boolean().optional(),
+  ...LLM_CHEAP_LANES_SHAPE,
 })
 
 function buildUserContent(
@@ -158,6 +160,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
           system: systemPrompt,
           messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
           ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
+          ...cheapLanesParam(parsed.data),
           reasoningEffort: parsed.data.reasoningEffort,
         })
 
@@ -293,6 +296,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
             system: systemPrompt,
             messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
             ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
+            ...cheapLanesParam(parsed.data),
             reasoningEffort: parsed.data.reasoningEffort,
           },
           (delta) => {

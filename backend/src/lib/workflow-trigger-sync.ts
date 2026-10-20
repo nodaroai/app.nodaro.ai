@@ -36,6 +36,7 @@ import {
   isCronExpression,
   isValidTimezone,
   legacyScheduleToRules,
+  normalizeScheduleRetry,
   normalizeScheduleRules,
   type ScheduleRule,
 } from "@nodaro/shared/workflow"
@@ -127,6 +128,10 @@ function trimmed(value: unknown): string {
  * A timezone the runtime cannot read is a refusal, not a fallback — a
  * schedule that ran at UTC hours its owner never asked for is worse than one
  * that waits to be fixed.
+ *
+ * The node's "Retry on failure" (`data.retry`, @nodaro/shared `ScheduleRetry`)
+ * rides along normalised; absent on the node, absent on the row — the retry
+ * sweep reads the row, so a node that turned it off turns it off on save.
  */
 export function normalizeScheduleConfig(
   data: Record<string, unknown>,
@@ -140,12 +145,14 @@ export function normalizeScheduleConfig(
   if (timezone && !isValidTimezone(timezone)) return null
 
   const maxExecutions = data.maxExecutions
+  const retry = normalizeScheduleRetry(data.retry)
   return {
     rules,
     ...(timezone ? { timezone } : {}),
     ...(typeof maxExecutions === "number" && Number.isInteger(maxExecutions) && maxExecutions > 0
       ? { maxExecutions }
       : {}),
+    ...(retry ? { retry } : {}),
   }
 }
 
@@ -296,11 +303,12 @@ export function desiredTriggersFromGraph(nodes: readonly GraphNode[] | undefined
 }
 
 /**
- * Every key that describes the schedule. Runtime state the cron writes back
- * onto `config` (`executionCount`) is everything else, and a re-save must not
- * clobber it.
+ * Every key that describes the schedule — its retry policy included, so a
+ * node that switched Retry on failure off takes it off the row. Runtime state
+ * the cron writes back onto `config` (`executionCount`) is everything else,
+ * and a re-save must not clobber it.
  */
-const SCHEDULE_CONFIG_KEYS = ["rules", "cron", "interval", "timezone", "maxExecutions"] as const
+const SCHEDULE_CONFIG_KEYS = ["rules", "cron", "interval", "timezone", "maxExecutions", "retry"] as const
 
 /**
  * Desired config merged onto the stored one: runtime state (`executionCount`)

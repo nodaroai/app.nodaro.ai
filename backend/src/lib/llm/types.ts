@@ -187,6 +187,21 @@ export interface LlmRequest {
    * every other wire and by the direct lane.
    */
   thinkingFlag?: boolean
+  /**
+   * Never pay the direct-vendor fallback (decided 2026-10-20): a call whose
+   * PRIMARY lane is KIE is not re-asked on the vendor's own API when KIE
+   * fails — it fails, and the caller's retry (a scheduled run's retry sweep)
+   * handles it later. Removes exactly the KIE→direct legs: the failure
+   * fallback of `llmComplete` / `llmStream` / the structured stream, and the
+   * direct-tool backup of a structured call KIE never answered well. The
+   * primary lane is never changed — a call that must run direct by its own
+   * settings (Advanced mode, a reasoning effort on a Claude model, a direct
+   * pin) still does, and a direct lane's own fallback TO KIE (the cheaper
+   * leg) stays. Set by the orchestrator for a run under a "cheap lanes only"
+   * schedule retry policy (`WorkflowExecutionJob.cheapLanesOnly`); default off
+   * = today's routing.
+   */
+  cheapLanesOnly?: boolean
 }
 
 /**

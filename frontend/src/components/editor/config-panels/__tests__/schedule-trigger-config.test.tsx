@@ -59,7 +59,7 @@ describe("ScheduleTriggerConfig", () => {
     const onUpdate = renderPanel(DAILY)
     expect(screen.getByText("Schedule is paused")).toBeInTheDocument()
     expect(screen.getAllByText(/Every day at 9:00\s?AM/).length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole("switch"))
+    fireEvent.click(within(screen.getByTestId("schedule-switch-card")).getByRole("switch"))
     expect(onUpdate).toHaveBeenCalledWith({ active: true })
   })
 
@@ -184,6 +184,44 @@ describe("ScheduleTriggerConfig", () => {
     expect(screen.getByTestId("schedule-timezone-unreadable")).toBeInTheDocument()
     expect(screen.queryByTestId("run-mark-upcoming")).toBeNull()
     expect(screen.getByRole("combobox", { name: "Timezone" })).toHaveAttribute("aria-invalid", "true")
+  })
+
+  it("Retry on failure: off by default; the switch writes the whole default policy, and off writes the field away", () => {
+    const onUpdate = renderPanel(DAILY)
+    expect(screen.getByText("Retry on failure")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Retry after (minutes)")).toBeNull()
+    const retrySwitch = within(screen.getByTestId("schedule-retry-card")).getByRole("switch")
+    expect(retrySwitch).toHaveAttribute("aria-checked", "false")
+    fireEvent.click(retrySwitch)
+    expect(onUpdate).toHaveBeenLastCalledWith({ retry: { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: true } })
+    cleanup()
+
+    const off = renderPanel({ ...DAILY, retry: { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: true } })
+    fireEvent.click(within(screen.getByTestId("schedule-retry-card")).getByRole("switch"))
+    expect(off).toHaveBeenLastCalledWith({ retry: undefined })
+  })
+
+  it("Retry on failure: the wait, the attempts and Cheap lanes only each write the whole policy, within their ranges", () => {
+    const onUpdate = renderPanel({ ...DAILY, retry: { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: true } })
+    const after = screen.getByLabelText("Retry after (minutes)")
+    expect(after).toHaveValue(30)
+    fireEvent.change(after, { target: { value: "90" } })
+    expect(onUpdate).toHaveBeenLastCalledWith({ retry: { afterMinutes: 90, maxAttempts: 3, cheapLanesOnly: true } })
+    onUpdate.mockClear()
+    fireEvent.change(after, { target: { value: "2" } }) // under the floor — still typing
+    expect(onUpdate).not.toHaveBeenCalled()
+    fireEvent.blur(after)
+    expect(onUpdate).toHaveBeenLastCalledWith({ retry: { afterMinutes: 5, maxAttempts: 3, cheapLanesOnly: true } })
+
+    const attempts = screen.getByLabelText("Attempts (at most)")
+    fireEvent.change(attempts, { target: { value: "5" } })
+    expect(onUpdate).toHaveBeenLastCalledWith({ retry: { afterMinutes: 30, maxAttempts: 5, cheapLanesOnly: true } })
+
+    const cheap = screen.getByRole("checkbox", { name: "Cheap lanes only" })
+    expect(cheap).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByText("Don't use the vendor's direct API as a fallback; a failed run waits for the retry instead.")).toBeInTheDocument()
+    fireEvent.click(cheap)
+    expect(onUpdate).toHaveBeenLastCalledWith({ retry: { afterMinutes: 30, maxAttempts: 3, cheapLanesOnly: false } })
   })
 
   it("the timezone and the run cap write their fields; an empty cap means unlimited", () => {

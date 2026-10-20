@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ExecutionDetailModal } from "./execution-detail-modal"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
+import { RetryBadge } from "@/components/library/triggers/RetryBadge"
 import {
   isExecutedNodeEntry,
   skipReasonLabel,
@@ -551,6 +552,7 @@ function ExecutionRow({
         </td>
         <td className="px-4 py-3">
           <TriggerBadge triggerType={exec.triggerType} mcpClient={exec.mcpClient} />
+          <RetryBadge retry={exec.retry} className="ms-1.5" />
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">

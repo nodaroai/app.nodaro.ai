@@ -462,6 +462,21 @@ export interface WorkflowExecutionJob {
   /** Spend-surface flag captured at run creation (see OrchestratorContext.webFreeMode). */
   webFreeMode?: boolean
   /**
+   * Every model call this run makes stays on the aggregator lane: a KIE
+   * failure is NOT re-asked on the vendor's own, pricier API — it fails, and
+   * the schedule's retry sweep runs the workflow again later (decided
+   * 2026-10-20: scheduled automations should wait for the cheap lane instead
+   * of paying the direct fallback). The primary lane is never changed: a call
+   * that must run direct by its own settings (Advanced mode, a Claude model
+   * with a reasoning effort) still does. Set only by the schedule fire path
+   * (`lib/schedule-fire.ts`) from the trigger's retry policy
+   * (`config.retry.cheapLanesOnly`), on the scheduled run and its retries
+   * alike; absent = today's behaviour. Reaches the LLM routes as the body
+   * field `cheapLanesOnly` and the worker handlers as a payload key
+   * (`OrchestratorContext.cheapLanesOnly`).
+   */
+  cheapLanesOnly?: boolean
+  /**
    * Who pays for this execution, resolved ONCE at enqueue (P14) — a new
    * producer is compile-forced to answer it, which is why the field is
    * REQUIRED here. On the wire it may still be absent (a payload enqueued by
@@ -888,6 +903,10 @@ export interface OrchestratorContext {
    *  resolves downstream (credits layer / RPC self-gate); free users and
    *  subscribers are unaffected, so the flag threads unconditionally. */
   webFreeMode?: boolean
+  /** Copied from the job at pickup — see WorkflowExecutionJob.cheapLanesOnly.
+   *  Inline sub-workflows share this context; a component's inner run is a
+   *  new job, so the component dispatch sends it across the HTTP hop. */
+  cheapLanesOnly?: boolean
   /**
    * The execution's resolved payer (P14), coalesced from the payload by the
    * worker — never absent past that point. Sub-workflows and every node

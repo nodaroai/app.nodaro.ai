@@ -6,7 +6,6 @@
  */
 
 import {
-  SCHEDULE_TRIGGER_NODE_TYPE,
   localMinuteKey,
   localTimeIn,
   matchesCronField,
@@ -15,13 +14,17 @@ import {
 } from "@nodaro/shared/workflow"
 import { scheduleTriggersEnabled } from "./config.js"
 import { supabase } from "./supabase.js"
-import { orchestrationQueue } from "./orchestration-queue.js"
-import { canRunWorkflow } from "./workflow-access.js"
-import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
-import { billingPairColumns } from "./insert-job.js"
-import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
-import { refusePreviewFire } from "./preview-fire-refusal.js"
-import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import {
+  admitScheduleTrigger,
+  claimTick,
+  createScheduleExecution,
+  hasActiveExecution,
+  releaseTick,
+  resolveScheduleBilling,
+  scheduleNodeGone,
+  type ScheduleTriggerRow,
+} from "./schedule-fire.js"
+import { sweepScheduleRetries } from "./schedule-retry-sweep.js"
 
 export { matchesCronField }
 
@@ -52,6 +55,10 @@ export function msUntilNextTick(nowMs = Date.now()): number {
  * unevaluated (with every rule a per-minute question, that is a missed run).
  * A tick landing while the previous one is still running is skipped; the
  * next tick catches its minutes up.
+ *
+ * Then the retry sweep, once per tick (not per caught-up minute: "has the
+ * wait passed" is a question about now, not about a minute). Same process,
+ * same gate (`scheduleTriggersEnabled`), same claim-before-enqueue path.
  */
 async function tick(): Promise<void> {
   if (inFlight) return
@@ -60,13 +67,21 @@ async function tick(): Promise<void> {
     const nowMs = Date.now()
     const thisMinute = Math.floor(nowMs / 60_000)
     const firstMinute = lastCheckedMinute === null ? thisMinute : Math.max(lastCheckedMinute + 1, thisMinute - MAX_CATCH_UP_MINUTES)
+    // The active schedules the last check listed: the sweep reads the same
+    // rows, so it takes that list instead of asking the database again.
+    let triggers: readonly ScheduleTriggerRow[] = []
     for (let minute = firstMinute; minute <= thisMinute; minute += 1) {
       try {
-        await checkScheduledTriggers(minute === thisMinute ? new Date(nowMs) : new Date(minute * 60_000))
+        triggers = await checkScheduledTriggers(minute === thisMinute ? new Date(nowMs) : new Date(minute * 60_000))
       } catch (err) {
         console.error("[schedule-cron] Check failed:", err)
       }
       lastCheckedMinute = minute
+    }
+    try {
+      await sweepScheduleRetries(new Date(), triggers)
+    } catch (err) {
+      console.error("[schedule-retry] Sweep failed:", err)
     }
   } finally {
     inFlight = false
@@ -129,28 +144,12 @@ export function stopScheduleCron(): void {
 // Core cron check
 // ---------------------------------------------------------------------------
 
-/** True only when the graph was read and carries no schedule-trigger node with this id. */
-async function scheduleNodeGone(workflowId: string, nodeId: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.from("workflows").select("nodes").eq("id", workflowId).maybeSingle()
-    if (error || !data || !Array.isArray(data.nodes)) return false
-    const nodes = data.nodes as Array<{ id?: unknown; type?: unknown }>
-    return !nodes.some((n) => n.id === nodeId && n.type === SCHEDULE_TRIGGER_NODE_TYPE)
-  } catch {
-    return false
-  }
-}
-
-let provenanceWarned = false
-/** Once per process: the flag read failing every minute is one fact, not sixty log lines an hour. */
-function warnProvenanceUnreadableOnce(reason: string): void {
-  if (provenanceWarned) return
-  provenanceWarned = true
-  console.warn(`[schedule-cron] workflow_triggers.owner_initiated unreadable (${reason}) — schedules run as not owner-initiated until migration 436 is on this database`)
-}
-
-/** Evaluate every active schedule at `now` (a tick passes the minute it is catching up on). */
-export async function checkScheduledTriggers(now: Date = new Date()): Promise<void> {
+/**
+ * Evaluate every active schedule at `now` (a tick passes the minute it is
+ * catching up on). Returns the active schedules it listed and did NOT drop as
+ * orphans, for the retry sweep that follows on the tick.
+ */
+export async function checkScheduledTriggers(now: Date = new Date()): Promise<readonly ScheduleTriggerRow[]> {
   // Fetch active schedule triggers
   const { data: triggers, error } = await supabase
     .from("workflow_triggers")
@@ -158,8 +157,9 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
     .eq("type", "schedule")
     .eq("is_active", true)
 
-  if (error || !triggers) return
+  if (error || !triggers) return []
 
+  const dropped = new Set<string>()
   for (const trigger of triggers) {
     try {
       const config = trigger.config as Record<string, unknown>
@@ -174,6 +174,7 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
       const nodeId = typeof config.nodeId === "string" ? config.nodeId : null
       if (nodeId && (await scheduleNodeGone(trigger.workflow_id, nodeId))) {
         await supabase.from("workflow_triggers").delete().eq("id", trigger.id)
+        dropped.add(trigger.id as string)
         console.warn(`[schedule-cron] dropped orphan schedule ${trigger.id}: node ${nodeId} is no longer on workflow ${trigger.workflow_id}`)
         continue
       }
@@ -185,116 +186,60 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
         continue
       }
 
-      // Does the trigger's owner STILL have the right to run this workflow?
-      //
-      // The same question the webhook fire path asks, for the same reason: a
-      // trigger outlives the session that created it, and a collaborator who
-      // created one can later lose the grant, be suspended, or watch the
-      // workspace be archived. Without this the schedule keeps firing on its
-      // interval forever, running the current graph and writing outputs its
-      // owner can still read. Skipped, not deactivated — `canRunWorkflow`
-      // returns false for a transient outage too, and a cron that turned a
-      // Redis blip into a permanently dead schedule would be worse than one
-      // that quietly skips a tick and tries again next interval.
-      if (!(await canRunWorkflow(trigger.user_id, trigger.workflow_id))) {
-        // P14/W6: leave the owner ONE visible failed row (deduped) instead of
-        // a schedule that silently stops producing history.
-        await recordTriggerFireRefusal({
-          workflowId: trigger.workflow_id,
-          userId: trigger.user_id,
-          triggerType: "schedule",
-          triggerId: trigger.id,
-        })
-        continue
-      }
-
-      // The branch this tick runs stops at a Preview render nobody is there
-      // to review: skip the tick, leaving the owner one deduped failed row.
-      if (
-        await refusePreviewFire({
-          workflowId: trigger.workflow_id,
-          userId: trigger.user_id,
-          triggerType: "schedule",
-          triggerId: trigger.id,
-          triggerNodeId: nodeId,
-        })
-      ) {
-        continue
-      }
-
-      // Check for an execution THIS OWNER already has running. Scoped to them
-      // like the webhook path and the run route: before workflows were shared,
-      // "an active execution of this workflow" and "an active execution of
-      // mine" were the same set, and leaving it workflow-wide would let one
-      // member's manual run suppress another member's scheduled one.
-      const { data: activeExec } = await supabase
-        .from("workflow_executions")
-        .select("id")
-        .eq("workflow_id", trigger.workflow_id)
-        .eq("user_id", trigger.user_id)
-        .in("status", ["pending", "running"])
-        .limit(1)
-
-      if (activeExec && activeExec.length > 0) continue
-
+      // Every skip check comes BEFORE the claim, so a skipped tick never
+      // consumes it (schedule-fire.ts, shared with the retry sweep): the owner
+      // may still run the workflow, no Preview stops the branch, no run of
+      // theirs is active, the payer resolves.
       // Snapshot the previous fire time before the claim overwrites it — this
       // is what `{{trigger.last_triggered_at}}` filters compare against (e.g.
       // "fetch items newer than the previous run").
-      const previousLastTriggeredAt = trigger.last_triggered_at as string | null
-
-      // P14: payer resolved at FIRE TIME (same rule as the webhook fire);
-      // the row carries the pair (W7), the payload carries the context.
-      const billingContext = await resolveBillingContext({
-        userId: trigger.user_id,
-        workflowId: trigger.workflow_id,
-      })
-      // P14: a DEGRADED resolve on WORKSPACE-HOMED (or unreadable-home)
-      // work skips the tick (the next interval retries) rather than billing
-      // the owner's pocket — the ONE fail-closed probe.
-      if (await shouldRefuseDegradedRunFor(billingContext, trigger.workflow_id)) {
-        console.error(`[schedule-cron] degraded billing resolve on workspace workflow ${trigger.workflow_id} — tick skipped`)
-        continue
+      const previousLastTriggeredAt = (trigger.last_triggered_at as string | null) ?? null
+      const row: ScheduleTriggerRow = {
+        id: trigger.id, workflow_id: trigger.workflow_id, user_id: trigger.user_id, config, last_triggered_at: previousLastTriggeredAt,
       }
+      if (!(await admitScheduleTrigger(row, nodeId))) continue
+      if (await hasActiveExecution(row)) continue
+
+      const billingContext = await resolveScheduleBilling(row, "[schedule-cron]")
+      if (!billingContext) continue
 
       // Claim the tick: move `last_triggered_at` from the value this tick READ
-      // to now, atomically. Every process that reads the row (two replicas,
-      // or two installs sharing one database) races here, and only one update
-      // can match — zero rows back means someone else fired, so skip. Made
-      // after every skip check above, so a skipped tick never consumes it.
+      // to now, atomically (schedule-fire.ts — the retry sweep takes the SAME
+      // claim, so a fire and a retry of one trigger serialize on one row).
+      // Every process that reads the row (two replicas, or two installs
+      // sharing one database) races here, and only one update can match —
+      // zero rows back means someone else fired, so skip.
       const claimedAt = now.toISOString()
       const claimed = await claimTick(trigger.id, previousLastTriggeredAt, claimedAt)
       if (!claimed) continue
 
-      // Create execution. The idempotency key stays as a second line behind
-      // the claim: the unique (user_id, idempotency_key) index rejects a
-      // duplicate for the same previous fire whatever wrote it.
-      const idempotencyKey = `schedule:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`
-      const { data: execution, error: execError } = await supabase
-        .from("workflow_executions")
-        .insert({
-          workflow_id: trigger.workflow_id,
-          user_id: trigger.user_id,
-          status: "pending",
-          trigger_type: "schedule",
-          ...billingPairColumns(billingContext),
-          trigger_data: {
-            timestamp: now.toISOString(),
-            cron: config.cron,
-            rules: config.rules,
-            last_triggered_at: previousLastTriggeredAt,
-          },
-          idempotency_key: idempotencyKey,
-        })
-        .select("id")
-        .single()
+      // A sibling run (a retry the sweep just made, a manual run) may have
+      // started between the check above and the claim: asked again under the
+      // claim, and the claim given back when so.
+      if (await hasActiveExecution(row)) {
+        await releaseTick(trigger.id, claimedAt, previousLastTriggeredAt)
+        continue
+      }
 
-      if (execError || !execution) {
+      // Create the execution and enqueue it. The idempotency key stays as a
+      // second line behind the claim: the unique (user_id, idempotency_key)
+      // index rejects a duplicate for the same previous fire whatever wrote it.
+      const created = await createScheduleExecution({
+        trigger: row,
+        nodeId,
+        now,
+        previousLastTriggeredAt,
+        billingContext,
+        idempotencyKey: `schedule:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`,
+      })
+
+      if (!created.ok) {
         // A duplicate key means this previous fire already has its run: keep
         // the claim, so the schedule moves on instead of colliding with that
         // key every minute. Any other failure leaves the schedule as it was
         // (the run never existed), so the next tick may retry — released only
         // while the row still carries THIS claim.
-        if (execError?.code !== UNIQUE_VIOLATION) {
+        if (!created.duplicate) {
           await releaseTick(trigger.id, claimedAt, previousLastTriggeredAt)
         }
         continue
@@ -306,52 +251,6 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
         .update({ config: { ...config, executionCount: execCount + 1 } })
         .eq("id", trigger.id)
 
-      // Whether this schedule's runs count as the workflow OWNER'S OWN — the
-      // only lane a PLAIN stored credential may travel on (plan D3) — is a
-      // stored fact about the trigger, writable only by the backend
-      // (migration 436): stamped when the owner's own browser session created
-      // the row — the editor's sync after a save that ADDED the node
-      // (POST /v1/workflows/:id/sync-triggers), or POST /v1/workflow-triggers.
-      // A token's or an app's graph write, and every other lane, leaves the
-      // default. Never re-derived here: uuid equality would say "owner" for a
-      // token-created schedule too. Read best-effort: on a database the column
-      // has not reached yet this fails closed and the schedule still fires.
-      let ownerInitiated = false
-      try {
-        const { data: provenance, error: provenanceError } = await supabase
-          .from("workflow_triggers")
-          .select("owner_initiated")
-          .eq("id", trigger.id)
-          .maybeSingle()
-        if (provenanceError) warnProvenanceUnreadableOnce(provenanceError.message)
-        ownerInitiated = provenance?.owner_initiated === true
-      } catch (err) {
-        warnProvenanceUnreadableOnce(err instanceof Error ? err.message : String(err))
-      }
-
-      // Enqueue orchestration (payer resolved above, before the row).
-      const jobData: WorkflowExecutionJob = {
-        executionId: execution.id,
-        workflowId: trigger.workflow_id,
-        userId: trigger.user_id,
-        triggerType: "schedule",
-        ownerInitiated,
-        // The node this row was projected from: the worker runs the branch
-        // behind it (`triggerRunScope`). A hand-made row names none.
-        ...(nodeId ? { triggerNodeId: nodeId } : {}),
-        triggerData: {
-          timestamp: now.toISOString(),
-          last_triggered_at: previousLastTriggeredAt,
-        },
-        billingContext,
-        // Nobody watches a scheduled run: it cannot review a Preview render.
-        reviewerPresent: false,
-      }
-
-      await orchestrationQueue.add("workflow-execution", jobData, {
-        jobId: execution.id,
-      })
-
       console.log(
         `[schedule-cron] Fired trigger ${trigger.id} for workflow ${trigger.workflow_id}`,
       )
@@ -359,35 +258,22 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
       console.error(`[schedule-cron] Error processing trigger ${trigger.id}:`, err)
     }
   }
+  return triggers
+    .filter((t) => !dropped.has(t.id as string))
+    .map((t) => ({
+      id: t.id as string,
+      workflow_id: t.workflow_id as string,
+      user_id: t.user_id as string,
+      config: (t.config ?? {}) as Record<string, unknown>,
+      // The value this check READ; a fire this check made has moved the row on,
+      // so the sweep's claim on such a trigger fails — as it should: that
+      // trigger's run is the fire that just started.
+      last_triggered_at: (t.last_triggered_at as string | null) ?? null,
+    }))
 }
 
-const UNIQUE_VIOLATION = "23505"
-
-/**
- * The atomic tick claim: `last_triggered_at` moves from `previous` to
- * `claimedAt` only if it still holds `previous`. True when this call won.
- * A failed write claims nothing (the tick is skipped, the next one retries).
- */
-async function claimTick(triggerId: string, previous: string | null, claimedAt: string): Promise<boolean> {
-  const update = supabase.from("workflow_triggers").update({ last_triggered_at: claimedAt }).eq("id", triggerId)
-  const conditional = previous === null ? update.is("last_triggered_at", null) : update.eq("last_triggered_at", previous)
-  const { data, error } = await conditional.select("id")
-  if (error) {
-    console.error(`[schedule-cron] could not claim trigger ${triggerId}: ${error.message}`)
-    return false
-  }
-  return Array.isArray(data) && data.length > 0
-}
-
-/** Give a claim back — only while the row still carries it, so a later fire is never undone. */
-async function releaseTick(triggerId: string, claimedAt: string, previous: string | null): Promise<void> {
-  const { error } = await supabase
-    .from("workflow_triggers")
-    .update({ last_triggered_at: previous })
-    .eq("id", triggerId)
-    .eq("last_triggered_at", claimedAt)
-  if (error) console.error(`[schedule-cron] could not release the claim on trigger ${triggerId}: ${error.message}`)
-}
+// `claimTick` / `releaseTick` (the per-trigger claim, shared with the retry
+// sweep) and `scheduleNodeGone` live in ./schedule-fire.ts.
 
 // ---------------------------------------------------------------------------
 // Cron matching

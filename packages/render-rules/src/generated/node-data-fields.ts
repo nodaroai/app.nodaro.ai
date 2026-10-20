@@ -144,7 +144,7 @@ export const NODE_DATA_FIELDS: Readonly<Record<string, NodeDataFieldSpec>> = {
   "save-to-storage": { declared: true, fields: ["currentJobId", "errorMessage", "executionStatus", "fieldMappings", "filename", "format", "generatedResults", "label", "quality", "savedUrl"] },
   "scene": { declared: true, fields: ["cast_keys", "composite_video", "continuity_from_prev", "description", "duration_seconds", "emotional_beat", "generated_clips", "generated_keyframes", "image_model", "is_stale", "label", "last_frame", "location_key", "object_keys", "pipeline_entity_id", "pipeline_id", "pipeline_owned", "pipeline_state", "scene_anchor_keyframe", "scene_audio_track", "scene_index", "shot_input_mode", "shots", "video_model", "view_mode"] },
   "scene-count": { declared: true, fields: ["count", "label"] },
-  "schedule-trigger": { declared: true, fields: ["active", "cron", "interval", "label", "maxExecutions", "rules", "timezone"] },
+  "schedule-trigger": { declared: true, fields: ["active", "cron", "interval", "label", "maxExecutions", "retry", "rules", "timezone"] },
   "selector": { declared: true, fields: ["__pickedResults", "__pickedTotal", "__restResults", "__restTotal", "config", "errorMessage", "executionStatus", "label", "pickedResults", "restResults"] },
   "setting": { declared: true, fields: ["hintMode", "label", "postText", "preText", "setting"] },
   "silence-detect": { declared: true, fields: ["currentJobId", "currentJobProgress", "errorMessage", "executionStatus", "fieldMappings", "generatedJson", "label", "minSilenceMs", "padMs", "thresholdDb"] },
