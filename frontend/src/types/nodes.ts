@@ -3757,12 +3757,14 @@ export type ImageToTextData = PromptAffixFields & {
 export type DescribeToPickerData = {
   [key: string]: unknown
   label: string
-  /** Vision model id (STRUCTURED_VISION_MODELS). Unset = the analyzer's
-   *  default, `LLM_FEATURE_DEFAULTS["describe-to-picker"]` — never stored, so
-   *  a later default move reaches every node. */
+  /** Vision model id (DESCRIBE_TO_PICKER_MODELS). Unset = the analyzer's
+   *  default, `LLM_FEATURE_DEFAULTS["describe-to-picker"]` (Gemini 3.8 Flash
+   *  since 2026-10-20) — never stored, so a later default move reaches every
+   *  node. */
   llmModel?: string
-  /** Unset = the effort the run uses: `defaultReasoningEffort` — `high` on the
-   *  default model (decided 2026-10-09), the model's Auto on any other. */
+  /** Unset = the effort the run uses: `defaultReasoningEffort` — `high` on
+   *  Claude Opus 5.5 (its recipe, decided 2026-10-09), the model's Auto on any
+   *  other, the default included. */
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
    *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not

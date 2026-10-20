@@ -3,6 +3,9 @@ import {
   LLM_MODEL_IDS,
   LLM_FEATURE_DEFAULTS,
   DESCRIBE_TO_PICKER_FALLBACK_MODEL,
+  DESCRIBE_TO_PICKER_MODELS,
+  DESCRIBE_TO_PICKER_WITHHELD_MODELS,
+  LLM_STRUCTURED_WITHHELD_MODELS,
   LLM_FEATURE_DEFAULT_EFFORTS,
   defaultReasoningEffort,
   STRUCTURED_VISION_MODELS,
@@ -475,11 +478,16 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     }
   })
 
-  it('"describe-to-picker" defaults to "claude-opus-5.5" (premium vision)', () => {
-    expect(LLM_FEATURE_DEFAULTS["describe-to-picker"]).toBe("claude-opus-5.5")
-    expect(getLlmTier(LLM_FEATURE_DEFAULTS["describe-to-picker"])).toBe("premium")
-    // The default MUST be an accepted analyzer model (vision + structured output).
-    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("claude-opus-5.5")
+  it('"describe-to-picker" defaults to "gemini-3.8-flash" (economy vision; decided 2026-10-20 from a production cost audit)', () => {
+    expect(LLM_FEATURE_DEFAULTS["describe-to-picker"]).toBe("gemini-3.8-flash")
+    expect(getLlmTier(LLM_FEATURE_DEFAULTS["describe-to-picker"])).toBe("economy")
+    // The default MUST be an accepted analyzer model (vision + structured output, offered by the node).
+    expect(DESCRIBE_TO_PICKER_MODELS.map((m) => m.id)).toContain("gemini-3.8-flash")
+    // And it bills the cheapest rung on the aggregator: no effort, no direct lane.
+    const effort = defaultReasoningEffort("describe-to-picker", undefined)
+    expect(effort).toBeUndefined()
+    expect(llmServesDirect("gemini-3.8-flash", effort)).toBe(false)
+    expect(buildLlmCreditIdentifier("describe-to-picker", "gemini-3.8-flash", effort)).toBe("describe-to-picker:economy")
   })
 
   it("the describe-to-picker fallback is an accepted analyzer from another vendor, billed on the cheapest rung", () => {
@@ -521,17 +529,22 @@ describe("LLM_FEATURE_DEFAULTS", () => {
 // defaultReasoningEffort — a feature's default effort rides its default model
 // ---------------------------------------------------------------------------
 describe("defaultReasoningEffort", () => {
-  it('"describe-to-picker" runs at "high" on its default model, named or omitted (decided 2026-10-09)', () => {
-    expect(defaultReasoningEffort("describe-to-picker", undefined)).toBe("high")
+  it('"describe-to-picker" on Claude Opus 5.5 runs at "high" when named (the 2026-10-09 recipe stays with the model)', () => {
+    expect(LLM_FEATURE_DEFAULT_EFFORTS["describe-to-picker"]).toEqual({ model: "claude-opus-5.5", effort: "high" })
     expect(defaultReasoningEffort("describe-to-picker", "claude-opus-5.5")).toBe("high")
-    // An unset model in node data can be "" — the same "use the default" the
-    // `llmModel || LLM_FEATURE_DEFAULTS[…]` reads give it.
-    expect(defaultReasoningEffort("describe-to-picker", "")).toBe("high")
   })
 
-  it("names the default model by any of its accepted ids", () => {
+  it("names the recipe model by any of its accepted ids", () => {
     // The dash alias getLlmModel resolves to the canonical claude-opus-5.5.
     expect(defaultReasoningEffort("describe-to-picker", "claude-opus-5-5")).toBe("high")
+  })
+
+  it("the feature's default model, omitted or named, gets no effort: it is not the recipe's model (decided 2026-10-20)", () => {
+    expect(defaultReasoningEffort("describe-to-picker", undefined)).toBeUndefined()
+    // An unset model in node data can be "" — the same "use the default" the
+    // `llmModel || LLM_FEATURE_DEFAULTS[…]` reads give it.
+    expect(defaultReasoningEffort("describe-to-picker", "")).toBeUndefined()
+    expect(defaultReasoningEffort("describe-to-picker", LLM_FEATURE_DEFAULTS["describe-to-picker"])).toBeUndefined()
   })
 
   it("a caller who picked another model and no effort keeps that model's Auto", () => {
@@ -545,21 +558,51 @@ describe("defaultReasoningEffort", () => {
     expect(defaultReasoningEffort("no-such-feature", undefined)).toBeUndefined()
   })
 
-  it("every declared default effort is a level its default model offers, on the aggregator lane and direct", () => {
+  it("every declared recipe effort is a level its model offers, on the aggregator lane and direct, and that model is a registered one", () => {
     // The effort pickers show this level as selected — one the model does not
     // offer would leave them blank (and the quick strip's fail-safe snapping).
-    for (const [feature, effort] of Object.entries(LLM_FEATURE_DEFAULT_EFFORTS)) {
-      const model = LLM_FEATURE_DEFAULTS[feature as LlmFeature]
-      expect(availableReasoningEfforts(model), feature).toContain(effort)
-      expect(availableReasoningEfforts(model, true), feature).toContain(effort)
+    for (const [feature, recipe] of Object.entries(LLM_FEATURE_DEFAULT_EFFORTS)) {
+      expect(getLlmModel(recipe.model)?.id, feature).toBe(recipe.model)
+      expect(availableReasoningEfforts(recipe.model), feature).toContain(recipe.effort)
+      expect(availableReasoningEfforts(recipe.model, true), feature).toContain(recipe.effort)
     }
   })
 
-  it("the describe-to-picker default runs and bills direct: Opus 5.5's effort only works on Anthropic's API", () => {
-    const model = LLM_FEATURE_DEFAULTS["describe-to-picker"]
+  it("describe-to-picker on Opus 5.5 runs and bills direct: its effort only works on Anthropic's API", () => {
+    const model = LLM_FEATURE_DEFAULT_EFFORTS["describe-to-picker"]!.model
     const effort = defaultReasoningEffort("describe-to-picker", model)
     expect(llmServesDirect(model, effort)).toBe(true)
     expect(buildLlmCreditIdentifier("describe-to-picker", model, effort)).toBe("describe-to-picker:premium-direct")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DESCRIBE_TO_PICKER_MODELS — what the node offers and its route accepts
+// ---------------------------------------------------------------------------
+describe("DESCRIBE_TO_PICKER_MODELS", () => {
+  it("is the structured vision list minus the withheld models, and withholds Claude Fable 5 (decided 2026-10-20)", () => {
+    expect(DESCRIBE_TO_PICKER_WITHHELD_MODELS).toEqual(new Set(["claude-fable-5"]))
+    const ids = DESCRIBE_TO_PICKER_MODELS.map((m) => m.id)
+    expect(ids).not.toContain("claude-fable-5")
+    expect(ids.sort()).toEqual(
+      STRUCTURED_VISION_MODELS.map((m) => m.id).filter((id) => !DESCRIBE_TO_PICKER_WITHHELD_MODELS.has(id)).sort(),
+    )
+  })
+
+  it("every withheld id is a registered model (a typo would withhold nothing)", () => {
+    for (const id of DESCRIBE_TO_PICKER_WITHHELD_MODELS) expect(getLlmModel(id)?.id, id).toBe(id)
+  })
+
+  it("the other legend-sized structured reads (text-to-picker, llm-structured) withhold the same models", () => {
+    expect(LLM_STRUCTURED_WITHHELD_MODELS).toBe(DESCRIBE_TO_PICKER_WITHHELD_MODELS)
+    expect(LLM_STRUCTURED_WITHHELD_MODELS.has("claude-fable-5")).toBe(true)
+  })
+
+  it("offers the default, the fallback and the Opus 5.5 recipe model", () => {
+    const ids = DESCRIBE_TO_PICKER_MODELS.map((m) => m.id)
+    expect(ids).toContain(LLM_FEATURE_DEFAULTS["describe-to-picker"])
+    expect(ids).toContain(DESCRIBE_TO_PICKER_FALLBACK_MODEL)
+    expect(ids).toContain(LLM_FEATURE_DEFAULT_EFFORTS["describe-to-picker"]!.model)
   })
 })
 

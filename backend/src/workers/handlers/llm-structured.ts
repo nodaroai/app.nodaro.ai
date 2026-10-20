@@ -13,6 +13,8 @@ import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { commitReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { prepareStructuredRequest, runStructuredCompletion } from "../../lib/llm-structured-request.js"
+import { billedProviderCost } from "../../lib/llm-errors.js"
+import { StructuredLlmError } from "../../lib/llm/structured.js"
 import { markJobCompleted, setJobProgress, type HandlerFn, type JobContext } from "../shared.js"
 import type { LlmStructuredBody } from "../../lib/llm-structured-request.js"
 
@@ -175,7 +177,7 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
       .eq("id", ctx.jobId)
     await setJobProgress(job, ctx.jobId, DRAFT_PROGRESS)
 
-    const { output, inputTokens, outputTokens } = await runStructuredCompletion(p, prepared, input)
+    const { output, inputTokens, outputTokens, providerCost, lane } = await runStructuredCompletion(p, prepared, input)
 
     // markJobCompleted REPLACES output_data — the ids must ride this write.
     const ok = await markJobCompleted(ctx.jobId, {
@@ -186,11 +188,32 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
         ...(p.analysisJobId ? { analysisJobId: p.analysisJobId } : {}),
         ...(analysisCredits != null ? { analysisCredits } : {}),
       },
+      // The lane that served the draft and what it cost the platform there —
+      // the sync route's columns, so the async path is not blind to the cost
+      // reports. Admin-only columns, never in output_data.
+      provider: lane,
+      provider_cost: providerCost ?? null,
     })
     if (!ok) return // cancelled mid-flight — the cancel route owns the refund
     // Flat per tier, exactly as the synchronous route commits.
     await commitReservedCreditsForJob(ctx.jobId)
     console.log(`[worker] Job ${ctx.jobId} completed: llm-structured (${inputTokens} in / ${outputTokens} out${p.analysisJobId ? `, analysis ${p.analysisJobId}` : ""})`)
+  } catch (err) {
+    // The worker funnel fails and refunds the row; it records no provider
+    // cost, so a failure that carried usage (every attempt of a validation
+    // failure, a billed refusal, a cap stop) writes its cost — and the lane
+    // that served it — here first, as the sync route does. Best-effort: the
+    // failure itself is what must reach the funnel.
+    const cost = billedProviderCost(err)
+    const lane = err instanceof StructuredLlmError ? err.lane : undefined
+    if (cost !== null || lane) {
+      const { error } = await supabase
+        .from("jobs")
+        .update({ provider_cost: cost, ...(lane ? { provider: lane } : {}) })
+        .eq("id", ctx.jobId)
+      if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record the failed draft's provider cost: ${error.message}`)
+    }
+    throw err
   } finally {
     clearInterval(heartbeat)
   }

@@ -2892,16 +2892,32 @@ Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, def
 
 `POST /v1/text-to-picker` fills pickers from a free-text scene/shot
 description — the "AI Fill" behind Nodaro Cine. Authenticated,
-credit-billed (an LLM call; same credit id as describe-to-picker).
+credit-billed (one LLM call per family batch, one charge per run) under its
+own `text-to-picker` feature id. The rung follows the selected model's tier
+and the lane the call runs on, exactly as
+[Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost) decides
+it, but on this route's own rows — a default run reads every picker's catalog,
+several times the text of one image read:
+
+| Rung | When | Credits |
+|------|------|---------|
+| `text-to-picker:economy` | an economy model (Gemini 3.8 Flash — the default — and the other Flash, Haiku, Luna and DeepSeek models) | **18**<!-- credits: text-to-picker:economy --> |
+| `text-to-picker` | a standard model (Claude Sonnet, GPT-5.6 Terra, Grok) | **46**<!-- credits: text-to-picker --> |
+| `text-to-picker:premium` | a premium model (Claude Opus, Gemini 3.1 Pro, GPT-5.4/5.5/Sol/Astra, Kimi K3) on the aggregator, or a standard one at `xhigh`/`max` | **90**<!-- credits: text-to-picker:premium --> |
+| `text-to-picker:premium-direct` | a premium call on the provider's own API — Advanced mode, Claude Opus 5.5 at its default `"high"` (or any Claude effort on a premium Claude model), Gemini 4 Argon | **220**<!-- credits: text-to-picker:premium-direct --> |
+
+Worked examples: no `llmModel` (Gemini 3.8 Flash at Auto) → 18 credits<!-- credits: text-to-picker:economy -->;
+`llmModel: "claude-sonnet-5.5"` → 46 credits<!-- credits: text-to-picker -->;
+`llmModel: "claude-opus-5.5"` with no effort (it runs at `"high"` on
+Anthropic's own API) → 220 credits<!-- credits: text-to-picker:premium-direct -->.
+Claude Fable 5 is not offered on this route (`400 validation_error`).
 
 Body: `{ text, targetPickers?, instructions?, origin?, llmModel?,
 reasoningEffort? }` — omit `targetPickers` to analyze ALL analyzable
 pickers (the server fans out per family and merges). With no `llmModel` and
-no `reasoningEffort` the run is Claude Opus 5.5 at `"high"`, the same default
-as describe-to-picker: it runs on Anthropic's own API and bills
-`describe-to-picker:premium-direct` (28 credits<!-- credits: describe-to-picker:premium-direct -->, one charge however many
-batches it fans out to). Another model with no effort keeps Auto (see
-[Describe to Picker — Credit Cost](nodes/ai-image/describe-to-picker.md#credit-cost)). Returns
+no `reasoningEffort` the run is Gemini 3.8 Flash at Auto, the same default as
+describe-to-picker. `llmModel: "claude-opus-5.5"` with no effort runs at
+`"high"` on Anthropic's own API; any other model with no effort keeps Auto. Returns
 `{ jobId, pickerJson, gaps? }`: `pickerJson` is
 `pickerType → dimension → chosen catalog id(s)` (the same shape as
 describe-to-picker — hydrate pickers from it verbatim), and `gaps` lists
@@ -2913,9 +2929,18 @@ CLI: `nodaro pickers analyze "<text>"`.
 
 `POST /v1/llm/structured` runs one LLM call whose answer is forced to the
 JSON Schema you supply, validated against it, and handed back as an object.
-Authenticated and credit-billed under its own `llm-structured` feature id
-(priced per model tier). It is the generic primitive behind schema-authoring
-clients — Nodaro Studio composes a whole production plan with it.
+Authenticated and credit-billed under its own `llm-structured` feature id,
+priced per model tier and lane like [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost)
+(the same legend-sized read, on your own schema): `llm-structured:economy`
+11 credits<!-- credits: llm-structured:economy --> (an economy model — the default, Gemini 3.6 Flash, included),
+`llm-structured` 20 credits<!-- credits: llm-structured --> (a standard model),
+`llm-structured:premium` 40 credits<!-- credits: llm-structured:premium --> (a premium model on the
+aggregator, or a standard one at `xhigh`/`max`), and `llm-structured:premium-direct`
+150 credits<!-- credits: llm-structured:premium-direct --> (a premium call on the provider's own API —
+Advanced mode, any Claude effort on a premium Claude model, Gemini 4 Argon).
+Claude Fable 5 is not offered on this route (`400 validation_error`). It is
+the generic primitive behind schema-authoring clients — Nodaro Studio composes
+a whole production plan with it.
 
 Body: `{ system, input, jsonSchema, schemaName?, llmModel?, reasoningEffort?,
 maxRetries?, origin?, advancedMode?, temperature?, maxTokens? }`. `system` and

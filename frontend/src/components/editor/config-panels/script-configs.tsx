@@ -33,7 +33,7 @@ import type {
   DescribeToPickerData,
 } from "@/types/nodes"
 import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared/pipeline"
-import { STRUCTURED_VISION_MODELS } from "@nodaro/shared/llm-models"
+import { DESCRIBE_TO_PICKER_MODELS } from "@nodaro/shared/llm-models"
 import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 import { useShallow } from "zustand/react/shallow"
@@ -594,6 +594,16 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useCarriedEdges()
   const wiredPickers = useMemo(() => pickerFanoutTargets(nodeId ?? "", edges, nodes), [nodeId, edges, nodes])
+  // Fail-safe (Provider Enum Sync pitfall 5): a stored model the node no
+  // longer offers — Claude Fable 5, withheld 2026-10-20 — is cleared so the
+  // analyzer's default applies (unset = default, never the default's id), the
+  // same answer the route gives such a model (a `validation_error`). The set
+  // is the one list the route gate and the quick strip read.
+  const storedModel = data.llmModel
+  useEffect(() => {
+    if (storedModel && !DESCRIBE_TO_PICKER_MODELS.some((m) => m.id === storedModel)) onUpdate({ llmModel: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedModel])
   return (
     <div className="flex flex-col gap-3">
       <div className="text-xs text-muted-foreground">
@@ -606,12 +616,13 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
           t("scriptcfg.connectPickerHint", { types: analyzablePickerHint(locale) })
         )}
       </div>
-      {/* Anthropic-only: the analyzer uses forced tool-use (Anthropic-direct only). */}
+      {/* The vision models with guaranteed structured output that the node offers
+          (DESCRIBE_TO_PICKER_MODELS) — the same list the route gate enforces. */}
       <LlmModelSelect
         feature="describe-to-picker"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
-        filter={(m) => STRUCTURED_VISION_MODELS.some((v) => v.id === m.id)}
+        filter={(m) => DESCRIBE_TO_PICKER_MODELS.some((v) => v.id === m.id)}
       />
       <ReasoningEffortSelect
         feature="describe-to-picker"

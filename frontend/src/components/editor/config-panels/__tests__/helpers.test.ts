@@ -329,17 +329,23 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(node)).toBe("llm-chat:premium")
   })
 
-  // Decided 2026-10-09: an untouched describe-to-picker node runs Opus 5.5 at
-  // effort high, which runs on Anthropic's own API — the run reserves the
-  // direct rung, so the pre-run estimate must quote it too.
-  it("describe-to-picker: an untouched node quotes its default (Opus 5.5 at high) on the direct rung the run reserves", () => {
+  // Decided 2026-10-20: an untouched describe-to-picker node runs Gemini 3.8
+  // Flash at Auto on the aggregator — the economy rung. Opus 5.5, when chosen,
+  // keeps its 2026-10-09 recipe (effort high on Anthropic's own API), so the
+  // pre-run estimate quotes the direct rung there.
+  it("describe-to-picker: an untouched node quotes its default (Gemini 3.8 Flash at Auto) on the economy rung the run reserves", () => {
     const node = makeNode({ type: "describe-to-picker", data: { label: "Describe" } } as Partial<WorkflowNode>)
+    expect(getModelIdentifier(node)).toBe("describe-to-picker:economy")
+  })
+
+  it("describe-to-picker: Opus 5.5 with no effort quotes its recipe (high) on the direct rung the run reserves", () => {
+    const node = makeNode({ type: "describe-to-picker", data: { label: "Describe", llmModel: "claude-opus-5.5" } } as Partial<WorkflowNode>)
     expect(getModelIdentifier(node)).toBe("describe-to-picker:premium-direct")
   })
 
-  it("describe-to-picker: another model with no effort keeps its Auto price — the default effort never follows a model switch", () => {
-    const node = makeNode({ type: "describe-to-picker", data: { label: "Describe", llmModel: "gemini-3.8-flash" } } as Partial<WorkflowNode>)
-    expect(getModelIdentifier(node)).toBe("describe-to-picker:economy")
+  it("describe-to-picker: another model with no effort keeps its Auto price — the recipe effort never follows a model switch", () => {
+    const node = makeNode({ type: "describe-to-picker", data: { label: "Describe", llmModel: "claude-opus-5" } } as Partial<WorkflowNode>)
+    expect(getModelIdentifier(node)).toBe("describe-to-picker:premium")
   })
 
   it("bumps the lottie-engine motion-graphics identifier on max effort", () => {

@@ -1,0 +1,5 @@
+---
+"@nodaro/shared": minor
+---
+
+`LLM_FEATURE_DEFAULTS["describe-to-picker"]` is now `gemini-3.8-flash` (it was `claude-opus-5.5`), so a Describe to Picker or Text to Picker call that omits `llmModel` runs on Gemini 3.8 Flash at Auto. `LLM_FEATURE_DEFAULT_EFFORTS` changes shape: each entry is now `{ model, effort }` — the model the effort belongs to — instead of a bare effort (a consumer reading the table directly must read `.effort`; `defaultReasoningEffort(feature, modelId)`, the sanctioned reader, keeps its signature and now returns `"high"` only for `claude-opus-5.5` on `describe-to-picker` — every other model, the default included, gets `undefined`, Auto). New: `DESCRIBE_TO_PICKER_MODELS`, the models the node offers and its route accepts (the structured vision models minus `DESCRIBE_TO_PICKER_WITHHELD_MODELS` — Claude Fable 5), and `LLM_STRUCTURED_WITHHELD_MODELS`, the same set as every legend-sized structured read (`POST /v1/text-to-picker`, `POST /v1/llm/structured`) withholds it.

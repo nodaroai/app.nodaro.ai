@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, applyMinorAgeFloorToPickerValues, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts/picker-catalogs"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, DESCRIBE_TO_PICKER_FALLBACK_MODEL, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, DESCRIBE_TO_PICKER_FALLBACK_MODEL, DESCRIBE_TO_PICKER_MODELS, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import Anthropic from "@anthropic-ai/sdk"
 import { supabase } from "../lib/supabase.js"
 import { insertSyncJob } from "../lib/insert-job.js"
@@ -26,15 +26,18 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 // From their own modules, not the client facade a route test replaces.
 import { LLM_STRUCTURED_DEFAULT_ATTEMPTS, StructuredLlmError } from "../lib/llm/structured.js"
 import { LLM_MAX_LANES_PER_CALL } from "../lib/llm/router.js"
-import { billedContentRefusal, describeErrorChain, LlmAdvancedModeUnavailableError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError } from "../lib/llm-errors.js"
+import { billedContentRefusal, billedProviderCost, describeErrorChain, LlmAdvancedModeUnavailableError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 
 /** Models the analyzer accepts: vision-capable AND able to return guaranteed
- *  structured output (Anthropic forced-tool or Gemini `response_format`). Derived
- *  from the SAME shared list the model picker offers, so the UI options and this
- *  route gate can't drift. */
-const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
+ *  structured output (Anthropic forced-tool or Gemini `response_format`), minus
+ *  the ones withheld from this feature (Claude Fable 5 — its legend-sized read
+ *  costs far above every rung; `DESCRIBE_TO_PICKER_WITHHELD_MODELS`). Derived
+ *  from the SAME shared list the model picker offers, so the UI options and
+ *  this route gate can't drift; a saved node naming a withheld model is
+ *  refused with the same `validation_error` as any unsupported model. */
+const DESCRIBE_TO_PICKER_MODEL_IDS = new Set(DESCRIBE_TO_PICKER_MODELS.map((m) => m.id))
 
 const describeToPickerBody = z
   .object({
@@ -240,8 +243,18 @@ interface AnalyzerAnswer {
   output: unknown
   inputTokens: number
   outputTokens: number
+  /** What the answer cost the platform in USD, as the LLM client costed it on
+   *  the lane that served it (the direct rate table on Anthropic's own API);
+   *  undefined when no lane reported a cost. A fallback answer carries the
+   *  failed Claude read's billed cost on top of its own. */
+  providerCost?: number
   lane: LlmServedLane
   answeredBy: LlmModelDef
+}
+
+/** `a + b`, or whichever is known; undefined when neither is. */
+function sumKnown(a: number | undefined, b: number | undefined): number | undefined {
+  return a === undefined ? b : b === undefined ? a : a + b
 }
 
 /** The answer's picker sections, without `gaps`, after the minor-age floor. */
@@ -270,12 +283,24 @@ export function isEmptyPickerRead(pickerJson: Record<string, unknown>, targetPic
 /** The message a person reads when the analysis read nothing in the photo. */
 export const EMPTY_PICKER_READ_MESSAGE = "We couldn't read anything in this photo — try a clearer photo of one person. You weren't charged."
 
-/** A completed analysis with no picker value at all: the job fails and the reservation is refunded. */
+/** A completed analysis with no picker value at all: the job fails and the
+ *  reservation is refunded. Carries the read's usage so the failed row still
+ *  records what the empty answer cost the platform (`billedProviderCost`). */
 class EmptyPickerReadError extends Error {
-  constructor(readonly answeredBy: string, readonly lane: LlmServedLane) {
+  readonly usage: { inputTokens: number; outputTokens: number; providerCost?: number }
+  constructor(readonly answeredBy: string, readonly lane: LlmServedLane, usage: { inputTokens: number; outputTokens: number; providerCost?: number }) {
     super(EMPTY_PICKER_READ_MESSAGE)
     this.name = "EmptyPickerReadError"
+    this.usage = usage
   }
+}
+
+/** The lane a failure names, when it names one in the served-lane vocabulary
+ *  (a fallback failure names the fallback's lane, through its cause). */
+function failedOnLane(err: unknown): LlmServedLane | undefined {
+  const inner = err instanceof PickerFallbackFailedError ? err.cause : err
+  if (inner instanceof EmptyPickerReadError || inner instanceof StructuredLlmError) return inner.lane
+  return undefined
 }
 
 /**
@@ -366,21 +391,51 @@ async function analyze(analysis: Analysis, onToolJson?: (partialJson: string) =>
   let wrote = false
   const forward = onToolJson && ((partialJson: string) => { wrote = true; onToolJson(partialJson) })
   let reason: string | undefined
+  // What the Claude read cost before Gemini was asked: an empty KIE answer was
+  // still a paid call, and a failure may carry billed usage. It rides the
+  // fallback's cost so the row's provider_cost is the run's whole spend.
+  let spentBefore: number | undefined
   try {
     const result = await runAnalyzer(analysis, { model: requested, reasoningEffort: analysis.reasoningEffort, advanced: true, imageBlock }, forward)
     const kieEmpty = requested.vendor === "anthropic" && result.lane === "kie" &&
       isEmptyPickerRead(flooredPickers(result.output).pickerJson, analysis.targetPickers)
     if (!kieEmpty || wrote) return { ...result, answeredBy: requested }
     reason = "the KIE retry answered empty"
+    spentBefore = result.providerCost
   } catch (err) {
     reason = wrote ? undefined : pickerFallbackReason(requested, err)
     if (!reason) throw err
+    spentBefore = billedProviderCost(err) ?? undefined
   }
   const fallback = getLlmModel(DESCRIBE_TO_PICKER_FALLBACK_MODEL)!
   console.warn(`[picker-fallback] ${requested.id} → ${fallback.id}: ${reason} (job ${analysis.jobId})`)
   const timeoutMs = fallbackLaneTimeoutMs(Date.now() - startedAt)
-  const result = await runAnalyzer(analysis, { model: fallback, reasoningEffort: undefined, advanced: false, imageBlock, timeoutMs }, onToolJson)
-  return { ...result, answeredBy: fallback }
+  let result: Awaited<ReturnType<typeof runAnalyzer>>
+  try {
+    result = await runAnalyzer(analysis, { model: fallback, reasoningEffort: undefined, advanced: false, imageBlock, timeoutMs }, onToolJson)
+  } catch (err) {
+    // Gemini failed too: the run's spend is both reads' — the paid Claude
+    // failure and whatever Gemini's failure billed — so the failed row keeps it.
+    const spent = sumKnown(spentBefore, billedProviderCost(err) ?? undefined)
+    throw spent === undefined ? err : new PickerFallbackFailedError(err, spent)
+  }
+  return { ...result, providerCost: sumKnown(spentBefore, result.providerCost), answeredBy: fallback }
+}
+
+/**
+ * The Gemini fallback failed after a paid Claude read: Gemini's failure as
+ * the `cause` (so the message, the code and a billed refusal are read off it
+ * as before — every reader walks the chain), and the run's WHOLE spend as
+ * `usage.providerCost`, where `billedProviderCost` reads it.
+ */
+export class PickerFallbackFailedError extends Error {
+  readonly usage: { inputTokens: number; outputTokens: number; providerCost: number }
+  constructor(cause: unknown, providerCost: number) {
+    super(cause instanceof Error ? cause.message : "the fallback analysis failed", { cause })
+    this.name = "PickerFallbackFailedError"
+    const usage = (cause as { usage?: { inputTokens?: number; outputTokens?: number } } | null)?.usage
+    this.usage = { inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0, providerCost }
+  }
 }
 
 /**
@@ -412,10 +467,12 @@ export function fallbackLaneTimeoutMs(elapsedMs: number): number {
 
 /** Floor, persist, bill and record catalog gaps, in that order, then return
  *  the answer's body. An answer with no picker value fails instead. */
-async function completeAnalysis(analysis: Analysis, { output, inputTokens, outputTokens, lane, answeredBy }: AnalyzerAnswer) {
+async function completeAnalysis(analysis: Analysis, { output, inputTokens, outputTokens, providerCost, lane, answeredBy }: AnalyzerAnswer) {
   const { jobId, userId, imageUrl, targetPickers } = analysis
   const { pickerJson: flooredPickerJson, gaps } = flooredPickers(output)
-  if (isEmptyPickerRead(flooredPickerJson, targetPickers)) throw new EmptyPickerReadError(answeredBy.id, lane)
+  if (isEmptyPickerRead(flooredPickerJson, targetPickers)) {
+    throw new EmptyPickerReadError(answeredBy.id, lane, { inputTokens, outputTokens, providerCost })
+  }
 
   await supabase
     .from("jobs")
@@ -425,11 +482,16 @@ async function completeAnalysis(analysis: Analysis, { output, inputTokens, outpu
       // `answeredBy`: the model whose answer this is — the requested one, or
       // the fallback that answered when it could not.
       output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens }, answeredBy: answeredBy.id },
-      // Which LLM lane served the answer, a fallback included.
-      // `provider` is admin-only — outside PUBLIC_JOB_KEYS (routes/jobs.ts) and
-      // outside the browser's column grant on jobs (migration 347) — while
-      // output_data is owner-readable through both, so the lane never rides there.
+      // Which LLM lane served the answer, a fallback included, and what the
+      // run cost the platform on it (the direct rate table on Anthropic's own
+      // API) — what every cost report reads; a run that wrote neither was
+      // invisible to them (production cost audit, 2026-10-20).
+      // `provider` and `provider_cost` are admin-only — outside PUBLIC_JOB_KEYS
+      // (routes/jobs.ts) and outside the browser's column grant on jobs
+      // (migration 347) — while output_data is owner-readable through both, so
+      // neither ever rides there.
       provider: lane,
+      provider_cost: providerCost ?? null,
     })
     .eq("id", jobId)
     .eq("user_id", userId)
@@ -477,7 +539,14 @@ async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
   // whose own message is that sentence used to leave no log line at all.
   const message = userFacingMessage(err, "Picker analysis failed")
   console.error(`[describe-to-picker] job ${analysis.jobId} failed — ${describeErrorChain(err)}`)
-  await markJobFailed(analysis.jobId, { error_message: message, extra: { output_data: { error: message } } })
+  // A failure that carried usage was a paid call (an empty read, a billed
+  // refusal, a cap stop): its cost and lane stay on the row, as a completed
+  // run's do, so the spend never vanishes from the cost reports.
+  const lane = failedOnLane(err)
+  await markJobFailed(analysis.jobId, {
+    error_message: message,
+    extra: { output_data: { error: message }, provider_cost: billedProviderCost(err), ...(lane ? { provider: lane } : {}) },
+  })
   if (billedContentRefusal(err)) await commitReservedCreditsForJob(analysis.jobId)
   else await refundReservedCreditsForJob(analysis.jobId)
   return message
@@ -536,10 +605,11 @@ async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<
 /**
  * The raw body with the defaults the handler applies before it reserves: an
  * omitted model is the analyzer's default, and an omitted effort is that
- * model's default effort. The credit guard prices the raw body before
- * validation, so without these it pre-checked a default read at the bare id
- * (10) while the job reserved premium-direct (25), and a balance in between
- * passed the check, then failed the reservation with a 500 instead of a 402.
+ * model's recipe effort when it has one. The credit guard prices the raw body
+ * before validation, so without these it pre-checked a default read at the
+ * bare id (the standard rung) while the job reserved the rung the resolved
+ * model and effort bill, and a balance in between passed the check, then
+ * failed the reservation with a 500 instead of a 402.
  *
  * Shared by the two routes that bill this feature, this one and its text twin
  * text-to-picker. It lives with them, not in the shared `resolveLlmCreditId`
@@ -588,19 +658,20 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
 
       const llmModelId = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["describe-to-picker"]
       const model = getLlmModel(llmModelId)
-      if (!model || !STRUCTURED_VISION_MODEL_IDS.has(model.id)) {
-        return reply.status(400).send({ error: { code: "validation_error", message: "describe-to-picker requires a vision-capable model with structured output (Anthropic or Gemini)" } })
+      if (!model || !DESCRIBE_TO_PICKER_MODEL_IDS.has(model.id)) {
+        return reply.status(400).send({ error: { code: "validation_error", message: `describe-to-picker requires a vision-capable model with structured output that the node offers${model ? ` (${model.id} is not offered on it)` : ""}` } })
       }
       // A latched-out Anthropic account is not refused here: the client refuses the
       // Advanced call mid-flight, and the Gemini fallback answers (analyze). A
       // missing key is still a 400.
       const advancedError = advancedModeError(parsed.data, model.id, { ignoreLatch: true })
       if (advancedError) return reply.status(400).send({ error: advancedError })
-      // No effort sent: the default model runs at its default effort (Opus 5.5
-      // at high, decided 2026-10-09); any other model keeps its Auto. Resolved
-      // ONCE and used for both the request and the credit id, so the bill and
-      // the wire agree — Opus 5.5 with an effort runs on Anthropic's own API
-      // and bills on the direct rung, as intended.
+      // No effort sent: a model with a recipe effort runs at it (Opus 5.5 at
+      // high, decided 2026-10-09); every other model — the default, Gemini 3.8
+      // Flash, included (decided 2026-10-20) — keeps its Auto. Resolved ONCE
+      // and used for both the request and the credit id, so the bill and the
+      // wire agree — Opus 5.5 with an effort runs on Anthropic's own API and
+      // bills on the direct rung, as intended.
       const reasoningEffort = parsed.data.reasoningEffort ?? defaultReasoningEffort("describe-to-picker", parsed.data.llmModel)
       const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, reasoningEffort, parsed.data.advancedMode)
 

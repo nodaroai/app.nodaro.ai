@@ -188,7 +188,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   "forced-alignment": 30,
   "audio-isolation": 80,
   "image-to-text": 3,
-  "describe-to-picker": 10,
+  // The standard rung (migration 546); the badge and the run estimate quote the model's own rung.
+  "describe-to-picker": 18,
   "text-to-dialogue": 25,
   "transcode-video": 10,
   "sub-workflow": 0,

@@ -2005,16 +2005,52 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "image-to-text": 3,
   "image-to-text:economy": 1,
   "image-to-text:premium": 4,
-  "describe-to-picker": 10,
+  // Describe to Picker — repriced 2026-10-20 from a production cost audit
+  // (migration 546). The analyzer's prompt is a rendered catalog legend, so a
+  // read is ~35k input tokens on Opus 5.5, ~53k on Fable 5, ~20k on Gemini
+  // 3.8 Flash (jobs.output_data.usage, ~130 runs since 2026-10-01). The rows
+  // were flat 10 (charged 11 ≈ $0.07) while a read cost the platform ~$0.007
+  // on Gemini 3.8 Flash, ~$0.035 on Sonnet 5.5 and ~$0.075 on an Opus-class
+  // model on KIE. Each rung is set for ≥ 25% headroom over its worst-case
+  // cost at the lowest credit value ($0.0025): charged 11 / 20 / 40 at the
+  // deployment's 10% markup (base × 1.1, rounded up). Fable 5 ($0.60–0.90 a
+  // read) is withheld from the node (DESCRIBE_TO_PICKER_WITHHELD_MODELS).
+  // The default read moved to Gemini 3.8 Flash the same day.
+  "describe-to-picker": 18,
   "describe-to-picker:economy": 10,
-  "describe-to-picker:premium": 10,
+  "describe-to-picker:premium": 36,
+  // The direct rung is set EXPLICITLY (charged 150), not derived from premium
+  // × LLM_PREMIUM_DIRECT_MULTIPLIER: a read on Anthropic's own API — Advanced
+  // mode, or any Claude effort (Opus 5.5 at high, the former default) — cost
+  // $0.17–0.28 on Opus 5.5 at the direct rates, which the 2.5× rule (90,
+  // charged 99 ≈ $0.25) does not cover. Listed in
+  // LLM_PREMIUM_DIRECT_EXPLICIT so the rung guard knows it is a decision.
+  "describe-to-picker:premium-direct": 136,
+  // Text to Picker (POST /v1/text-to-picker) — its OWN feature id since the
+  // same audit (migration 546; it billed describe-to-picker's rungs before).
+  // Its default run analyzes EVERY picker — ~99k input tokens over the family
+  // batches (the route's own header) — so describe-to-picker's rows did not
+  // cover it: ~$0.035 on Gemini 3.8 Flash (KIE), ~$0.09 on Sonnet 5.5 (KIE),
+  // ~$0.18 on an Opus-class model (KIE) and ~$0.44 on Opus 5.5 on Anthropic's
+  // own API, against 11 / 150 charged. Each rung is set for ≥ 25% headroom
+  // over its worst-case cost at $0.0025 a credit: charged 18 / 46 / 90 / 220
+  // (base × 1.1, rounded up). The direct rung is stated
+  // (LLM_PREMIUM_DIRECT_EXPLICIT), not the 2.5× derivation (203, charged 224
+  // ≈ $0.56 — covers it, but a stated row keeps the basis with the price).
+  "text-to-picker:economy": 16,
+  "text-to-picker": 41,
+  "text-to-picker:premium": 81,
+  "text-to-picker:premium-direct": 200,
   // POST /v1/llm/structured — its own feature id, not llm-chat's: a rendered
-  // catalog legend as the system prompt is several times a chat turn. Flat per
-  // tier at describe-to-picker parity (migration 358).
-  // owner-tunable; confirm at PR review.
-  "llm-structured": 10,
+  // catalog legend as the system prompt is several times a chat turn. Priced
+  // at describe-to-picker's rungs: the same legend-sized read on the same
+  // models (migration 358 seeded it flat at 10; repriced with describe-to-
+  // picker in migration 546 — the premium-direct row stated, see
+  // LLM_PREMIUM_DIRECT_EXPLICIT). Fable 5 is withheld from it too.
+  "llm-structured": 18,
   "llm-structured:economy": 10,
-  "llm-structured:premium": 10,
+  "llm-structured:premium": 36,
+  "llm-structured:premium-direct": 136,
   "image-critic": 20,
   "image-critic:economy": 10,
   "image-critic:premium": 40,
@@ -2186,10 +2222,34 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
  * @nodaro/shared). The direct lane bills ~2.5× the aggregator per token, and a
  * premium model had no rung above it, so its direct call cost the same as its
  * aggregator call. Every tier-priced LLM feature gets one, DERIVED from its own
- * premium price so a new feature or a repriced premium can't leave it stale.
- * The seed migration (490) applies the same multiplier to the live prices.
+ * premium price so a new feature or a repriced premium can't leave it stale —
+ * unless the feature is in {@link LLM_PREMIUM_DIRECT_EXPLICIT}, whose rung is
+ * a stated row with its own cost basis. The seed migration (490) applied the
+ * same multiplier to the live prices.
  */
 export const LLM_PREMIUM_DIRECT_MULTIPLIER = 2.5
+
+/**
+ * Features whose `premium-direct` row is SET, not derived: the multiplier
+ * understates what their direct call costs, so the row carries a measured
+ * basis instead (the comment on its STATIC_CREDIT_COSTS entry). Each maps to
+ * the migration that states the row, so the rung guard can hold the static
+ * row to it; the derivation loop below never overwrites a stated row (`??=`).
+ */
+export const LLM_PREMIUM_DIRECT_EXPLICIT: Readonly<Record<string, { migration: string; reason: string }>> = {
+  "describe-to-picker": {
+    migration: "546_describe_to_picker_reprice.sql",
+    reason: "a legend-sized read on Anthropic's own API costs well over 2.5× its aggregator read (production cost audit, 2026-10-20)",
+  },
+  "llm-structured": {
+    migration: "546_describe_to_picker_reprice.sql",
+    reason: "the same legend-sized read as describe-to-picker, on the caller's own schema and system prompt — priced at its rungs (production cost audit, 2026-10-20)",
+  },
+  "text-to-picker": {
+    migration: "546_describe_to_picker_reprice.sql",
+    reason: "an all-picker text read is ~99k input tokens; its direct rung is stated on the measured Opus 5.5 cost (production cost audit, 2026-10-20)",
+  },
+}
 
 /**
  * The features whose credit id is built by `buildLlmCreditIdentifier` with the
@@ -2201,7 +2261,7 @@ export const LLM_DIRECT_RUNG_FEATURES: readonly string[] = [
   "prompt-helper", "ai-writer", "llm-chat", "translate", "scene-graph-ai", "video-composer",
   "after-effects", "lottie-overlay", "3d-title", "motion-graphics", "motion-graphics-lottie",
   "3d-scene", "reduce:pick-best-llm", "generate-script", "qa-check", "image-to-text",
-  "describe-to-picker", "llm-structured", "image-critic", "content-recipe", "content-ideas",
+  "describe-to-picker", "text-to-picker", "llm-structured", "image-critic", "content-recipe", "content-ideas",
   "content-ideas:10",
 ]
 
@@ -5461,10 +5521,12 @@ function getNodeModelIdentifier(
   }
 
   // Describe to Picker: the model and effort the route resolves — the stored
-  // model, else the analyzer's default, and the stored effort, else that
-  // model's default effort (Opus 5.5 at high, decided 2026-10-09, which runs on
-  // Anthropic's own API and reserves premium-direct). Mirrors the editor's
-  // getModelIdentifier; the bare node-type row it used to fall to quoted 10.
+  // model, else the analyzer's default (Gemini 3.8 Flash at Auto since
+  // 2026-10-20, reserving economy on the aggregator), and the stored effort,
+  // else the model's recipe effort when it has one (Opus 5.5 at high, decided
+  // 2026-10-09, which runs on Anthropic's own API and reserves premium-direct).
+  // Mirrors the editor's getModelIdentifier; the bare node-type row it used
+  // to fall to quoted the standard rung whatever the model.
   if (nodeType === "describe-to-picker") {
     const llmModel = data.llmModel as string | undefined
     const reasoningEffort = (data.reasoningEffort as string | undefined) ?? defaultReasoningEffort("describe-to-picker", llmModel)

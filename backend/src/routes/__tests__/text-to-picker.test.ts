@@ -52,7 +52,8 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-import { batchTargetPickers, mergeGaps, servedLanes, textToPickerRoutes } from "../text-to-picker.js"
+import { batchTargetPickers, mergeGaps, servedLanes, settledProviderCost, textToPickerRoutes } from "../text-to-picker.js"
+import { StructuredLlmError } from "../../lib/llm/structured.js"
 import { PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType } from "@nodaro/prompts/picker-catalogs"
 
 describe("batchTargetPickers", () => {
@@ -105,11 +106,12 @@ describe("mergeGaps", () => {
   })
 })
 
-// Decided 2026-10-09: text-to-picker matches describe-to-picker. Both bill the
-// describe-to-picker feature, so its default — Opus 5.5 at effort "high" —
-// applies here too, resolved ONCE for the request, the reservation and the
-// guard's pre-check alike.
-describe("POST /v1/text-to-picker — the default reasoning effort", () => {
+// Decided 2026-10-09: text-to-picker matches describe-to-picker's defaults —
+// Gemini 3.8 Flash at Auto since 2026-10-20, and Opus 5.5's recipe effort
+// "high" when it is chosen — resolved ONCE for the request, the reservation
+// and the guard's pre-check alike. Since 2026-10-20 it bills its OWN feature
+// id (`text-to-picker:*`, migration 546): a default run reads every picker.
+describe("POST /v1/text-to-picker — the default model and reasoning effort", () => {
   const USER_ID = "00000000-0000-4000-8000-000000000001"
   const VALID = { text: "A woman in a red coat on a rainy street at dusk.", targetPickers: ["person"], userId: USER_ID }
 
@@ -148,47 +150,113 @@ describe("POST /v1/text-to-picker — the default reasoning effort", () => {
 
   afterEach(async () => { await app.close() })
 
-  it("no model and no effort: Opus 5.5 at high, reserved — and pre-checked — on premium-direct", async () => {
+  it("no model and no effort: Gemini 3.8 Flash at Auto, reserved — and pre-checked — on economy", async () => {
     expect((await post(VALID)).statusCode).toBe(200)
-    const { request, creditId, guardId } = sent()
-    expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "high" })
-    expect(creditId).toBe("describe-to-picker:premium-direct")
-    expect(guardId).toBe(creditId)
-  })
-
-  it("another model with no effort keeps its Auto: no effort sent, no direct bump", async () => {
-    expect((await post({ ...VALID, llmModel: "gemini-3.8-flash" })).statusCode).toBe(200)
     const { request, creditId, guardId } = sent()
     expect(request.modelId).toBe("gemini-3.8-flash")
     expect(request.reasoningEffort).toBeUndefined()
-    expect(creditId).toBe("describe-to-picker:economy")
+    expect(creditId).toBe("text-to-picker:economy")
     expect(guardId).toBe(creditId)
   })
 
-  it("an explicit effort wins over the default", async () => {
-    expect((await post({ ...VALID, reasoningEffort: "low" })).statusCode).toBe(200)
+  it("Opus 5.5 with no effort runs at its recipe, high, reserved — and pre-checked — on premium-direct", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-opus-5.5" })).statusCode).toBe(200)
+    const { request, creditId, guardId } = sent()
+    expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "high" })
+    expect(creditId).toBe("text-to-picker:premium-direct")
+    expect(guardId).toBe(creditId)
+  })
+
+  it("another Claude model with no effort keeps its Auto: no effort sent, no direct bump", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-opus-5" })).statusCode).toBe(200)
+    const { request, creditId, guardId } = sent()
+    expect(request.modelId).toBe("claude-opus-5")
+    expect(request.reasoningEffort).toBeUndefined()
+    expect(creditId).toBe("text-to-picker:premium")
+    expect(guardId).toBe(creditId)
+  })
+
+  it("a standard model bills the bare text-to-picker id", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-sonnet-5.5" })).statusCode).toBe(200)
+    const { creditId, guardId } = sent()
+    expect(creditId).toBe("text-to-picker")
+    expect(guardId).toBe(creditId)
+  })
+
+  it("an explicit effort wins over the recipe", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-opus-5.5", reasoningEffort: "low" })).statusCode).toBe(200)
     const { request, creditId, guardId } = sent()
     expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "low" })
     // Any Claude effort runs on Anthropic's own API, so low bills direct too.
-    expect(creditId).toBe("describe-to-picker:premium-direct")
+    expect(creditId).toBe("text-to-picker:premium-direct")
     expect(guardId).toBe(creditId)
   })
 
+  // Decided 2026-10-20 (production cost audit): Claude Fable 5 is withheld from
+  // every legend-sized structured read. Refused before any row or reservation.
+  it("refuses Claude Fable 5 with a validation_error before reserving, like an unknown model", async () => {
+    const res = await post({ ...VALID, llmModel: "claude-fable-5" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.llmCompleteStructured).not.toHaveBeenCalled()
+  })
+
+  /** The failed job row as the route wrote it. */
+  function failedRow(): Record<string, unknown> {
+    const failed = mocks.jobUpdate.mock.calls.map(([row]) => row as Record<string, unknown>).find((row) => row.status === "failed")
+    expect(failed).toBeDefined()
+    return failed as Record<string, unknown>
+  }
+
+  it("a failure that carried usage keeps its cost AND the lane that served it on the failed row", async () => {
+    mocks.llmCompleteStructured.mockRejectedValue(
+      new StructuredLlmError("llm-structured: validation failed after 3 attempt(s): x", { inputTokens: 90_000, outputTokens: 2_000, providerCost: 0.0412, complete: true }, { lane: "direct-anthropic" }),
+    )
+    expect((await post(VALID)).statusCode).toBe(502)
+    expect(failedRow()).toMatchObject({ provider_cost: 0.0412, provider: "direct-anthropic" })
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+  })
+
+  it("a failure that reported no usage writes a null cost and names no lane", async () => {
+    mocks.llmCompleteStructured.mockRejectedValue(new Error("The model stopped responding"))
+    expect((await post(VALID)).statusCode).toBe(502)
+    expect(failedRow().provider_cost).toBeNull()
+    expect(failedRow()).not.toHaveProperty("provider")
+  })
+
+  // Promise.all would have dropped the cost of every batch that answered
+  // before another failed; the run's spend is every settled batch's.
+  it("a fanned-out run with one failed batch records the cost of the batches that answered too", async () => {
+    mocks.llmCompleteStructured
+      .mockResolvedValueOnce({ output: {}, inputTokens: 1, outputTokens: 1, lane: "kie", providerCost: 0.004 })
+      .mockRejectedValueOnce(new StructuredLlmError("x", { inputTokens: 1, outputTokens: 1, providerCost: 0.002, complete: true }, { lane: "kie" }))
+      .mockResolvedValue({ output: {}, inputTokens: 1, outputTokens: 1, lane: "kie", providerCost: 0.003 })
+    expect((await post({ text: VALID.text, userId: USER_ID })).statusCode).toBe(502)
+    const batches = batchTargetPickers([...PICKER_TYPES]).length
+    expect(batches).toBeGreaterThan(2)
+    expect(failedRow().provider_cost).toBeCloseTo(0.004 + 0.002 + 0.003 * (batches - 2), 9)
+    expect(failedRow().provider).toBe("kie")
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
   it("every batch of a fanned-out read runs at the resolved effort", async () => {
-    expect((await post({ text: VALID.text, userId: USER_ID })).statusCode).toBe(200)
+    expect((await post({ text: VALID.text, userId: USER_ID, llmModel: "claude-opus-5.5" })).statusCode).toBe(200)
     const calls = mocks.llmCompleteStructured.mock.calls as Array<[Record<string, unknown>]>
     expect(calls.length).toBeGreaterThan(1)
     for (const [request] of calls) expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "high", timeoutMs: 240_000 })
   })
 
   // The same effort-aware timeout as describe-to-picker, from the effort the
-  // run RESOLVES to: a default run goes out at high and gets high's 240 s.
-  it("asks the LLM client for the effort's timeout: 240 s for a default run, none for another model with no effort", async () => {
-    expect((await post(VALID)).statusCode).toBe(200)
+  // run RESOLVES to: an Opus 5.5 run goes out at high and gets high's 240 s.
+  it("asks the LLM client for the effort's timeout: 240 s for an Opus 5.5 run, none for a default run", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-opus-5.5" })).statusCode).toBe(200)
     expect(sent().request).toMatchObject({ reasoningEffort: "high", timeoutMs: 240_000 })
 
     vi.clearAllMocks()
-    expect((await post({ ...VALID, llmModel: "gemini-3.8-flash" })).statusCode).toBe(200)
+    expect((await post(VALID)).statusCode).toBe(200)
     expect(sent().request).not.toHaveProperty("timeoutMs")
 
     vi.clearAllMocks()
@@ -223,6 +291,35 @@ describe("POST /v1/text-to-picker — the default reasoning effort", () => {
     const batches = (row.output_data as { usage: { batches: number } }).usage.batches
     expect(batches).toBeGreaterThan(1)
     expect(row.provider).toBe(["kie", "direct-gemini", ...Array(batches - 2).fill("kie")].join(","))
+  })
+
+  // What the run cost the platform, summed over its batches (production cost
+  // audit, 2026-10-20: a row with token counts alone is invisible to the cost reports).
+  it("records the batches' summed provider cost in the admin-only provider_cost column, null when none reported one", async () => {
+    mocks.llmCompleteStructured
+      .mockResolvedValueOnce({ output: {}, inputTokens: 1, outputTokens: 1, lane: "kie", providerCost: 0.004 })
+      .mockResolvedValueOnce({ output: {}, inputTokens: 1, outputTokens: 1, lane: "kie", providerCost: 0.003 })
+      .mockResolvedValue({ output: {}, inputTokens: 1, outputTokens: 1, lane: "kie" })
+    expect((await post({ text: VALID.text, userId: USER_ID })).statusCode).toBe(200)
+    expect(completedRow().provider_cost).toBeCloseTo(0.007, 9)
+
+    vi.clearAllMocks()
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: { age: "age-30s" } }, inputTokens: 1, outputTokens: 1, lane: "kie" })
+    expect((await post(VALID)).statusCode).toBe(200)
+    expect(completedRow().provider_cost).toBeNull()
+  })
+})
+
+describe("settledProviderCost", () => {
+  const ok = (providerCost?: number): PromiseSettledResult<{ providerCost?: number }> => ({ status: "fulfilled", value: { providerCost } })
+  const failed = (reason: unknown): PromiseSettledResult<{ providerCost?: number }> => ({ status: "rejected", reason })
+  it("sums the answered batches' cost with a failed batch's billed usage", () => {
+    const billed = new StructuredLlmError("x", { inputTokens: 1, outputTokens: 1, providerCost: 0.02, complete: true })
+    expect(settledProviderCost([ok(0.01), failed(billed), ok(0.03)])).toBeCloseTo(0.06, 9)
+  })
+  it("a failure with no usage adds nothing; a run where nothing reported a cost is null", () => {
+    expect(settledProviderCost([ok(0.01), failed(new Error("boom"))])).toBeCloseTo(0.01, 9)
+    expect(settledProviderCost([ok(), failed(new Error("boom"))])).toBeNull()
   })
 })
 

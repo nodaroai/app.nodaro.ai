@@ -242,7 +242,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "image-critic": { ids: familyIds("image-critic") },
   "describe-to-picker": {
     ids: familyIds("describe-to-picker"),
-    note: "The three tier rungs share one price; the top of the band is premium-direct, which an untouched node reserves (Opus 5.5 at effort high runs on Anthropic's own API).",
+    note: "Four rungs by the model's tier and lane: an untouched node reserves economy (Gemini 3.8 Flash at Auto, on the aggregator); the top of the band is premium-direct — a premium model on the vendor's own API (Advanced mode, or Opus 5.5 at its recipe effort high).",
   },
   "transcribe": {
     ids: familyIds(...TRANSCRIBE_PROVIDERS),

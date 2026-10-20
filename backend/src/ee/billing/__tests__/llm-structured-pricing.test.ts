@@ -19,8 +19,12 @@ const MIGRATION = join(
 const TIER_IDS = ["llm-structured", "llm-structured:economy", "llm-structured:premium"] as const
 
 describe("llm-structured pricing", () => {
+  // Parity with describe-to-picker is the invariant (same legend-sized prompt);
+  // the figures themselves moved with the 2026-10-20 reprice (migration 546).
   it.each(TIER_IDS)("%s is in STATIC_CREDIT_COSTS at describe-to-picker parity", (id) => {
-    expect(STATIC_CREDIT_COSTS[id]).toBe(10)
+    const twin = id.replace("llm-structured", "describe-to-picker")
+    expect(STATIC_CREDIT_COSTS[id]).toBe(STATIC_CREDIT_COSTS[twin])
+    expect(STATIC_CREDIT_COSTS[id]).toBeGreaterThanOrEqual(10)
   })
 
   it("migration 358 seeds every tier row idempotently", () => {

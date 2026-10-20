@@ -430,8 +430,8 @@ export function getModelIdentifier(
   }
 
   // LLM-powered nodes: use composite credit identifier based on selected model tier.
-  // An unset effort is the one the run uses — the feature's default on its
-  // default model (describe-to-picker's high), else none.
+  // An unset effort is the one the run uses — the model's recipe effort for
+  // the feature (describe-to-picker's high on Opus 5.5), else none.
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
   if (llmFeature) {
     const llmModel = data.llmModel as string | undefined

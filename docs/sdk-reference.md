@@ -1356,7 +1356,11 @@ await client.jobs.delete(jobId)
 ### `client.llm`
 
 Structured LLM output: your system prompt and JSON Schema in, a validated
-object out. Billed under `llm-structured` per model tier.
+object out. Billed under `llm-structured` per model tier and lane (see
+[Structured LLM output](api-integration.md#structured-llm-output-any-schema)):
+economy 11 credits<!-- credits: llm-structured:economy -->, standard 20 credits<!-- credits: llm-structured -->,
+premium 40 credits<!-- credits: llm-structured:premium -->, premium-direct 150 credits<!-- credits: llm-structured:premium-direct -->.
+Claude Fable 5 is not offered (`400 validation_error`).
 
 #### `structured(input)`
 
@@ -2517,9 +2521,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > [Generate Text node docs](nodes/ai-text/llm-chat.md#model-selector)). Omit
 > it — or pick a level the model doesn't support — for the vendor default
 > ("Auto"). One exception: `POST /v1/describe-to-picker` and its text twin
-> `POST /v1/text-to-picker`, on their default model (Claude Opus 5.5, whether
-> named or omitted), run at `"high"` when the field is omitted — send another
-> level to change it; any other model keeps Auto (see
+> `POST /v1/text-to-picker` run Claude Opus 5.5 at `"high"` when the field is
+> omitted on that model — send another level to change it; any other model,
+> their default Gemini 3.8 Flash included, keeps Auto (see
 > [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost) for
 > what that run costs). `xhigh` and `max` bill **one tier up** (economy → standard,
 > standard → premium); see
@@ -6959,7 +6963,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (28 credits<!-- credits: describe-to-picker:premium-direct -->); another model with no effort keeps Auto. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature (a default run reads every picker's catalog) on the rung the model's tier and lane decide, as for Describe to Picker: economy 18 credits<!-- credits: text-to-picker:economy -->, standard 46 credits<!-- credits: text-to-picker -->, premium 90 credits<!-- credits: text-to-picker:premium -->, premium-direct 220 credits<!-- credits: text-to-picker:premium-direct -->. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the economy rung. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API, the premium-direct rung; any other model with no effort keeps Auto. Claude Fable 5 is not offered (`400 validation_error`). |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —

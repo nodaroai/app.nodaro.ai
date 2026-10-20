@@ -22,18 +22,26 @@ import { ReasoningEffortSelect } from "../reasoning-effort-select"
 const AUTO = "__auto__"
 
 describe("ReasoningEffortSelect — the effort a node that stores none runs at", () => {
-  it("describe-to-picker on its default model selects High, the effort the run uses (decided 2026-10-09)", () => {
-    render(<ReasoningEffortSelect feature="describe-to-picker" onChange={() => {}} />)
+  it("describe-to-picker on Claude Opus 5.5 selects High, the recipe effort the run uses (decided 2026-10-09)", () => {
+    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="claude-opus-5.5" onChange={() => {}} />)
     expect(screen.getByTestId("select")).toHaveAttribute("data-value", "high")
   })
 
-  it("describe-to-picker on another model selects Auto: the default effort never follows a model switch", () => {
-    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="gemini-3.8-flash" onChange={() => {}} />)
+  it("describe-to-picker on its default model, unset or named, selects Auto (Gemini 3.8 Flash, decided 2026-10-20)", () => {
+    for (const modelId of [undefined, "gemini-3.8-flash"]) {
+      const { unmount } = render(<ReasoningEffortSelect feature="describe-to-picker" modelId={modelId} onChange={() => {}} />)
+      expect(screen.getByTestId("select"), String(modelId)).toHaveAttribute("data-value", AUTO)
+      unmount()
+    }
+  })
+
+  it("describe-to-picker on another Claude model selects Auto: the recipe effort never follows a model switch", () => {
+    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="claude-opus-5" onChange={() => {}} />)
     expect(screen.getByTestId("select")).toHaveAttribute("data-value", AUTO)
   })
 
   it("a chosen effort is selected as chosen, so the user can lower it", () => {
-    render(<ReasoningEffortSelect feature="describe-to-picker" value="low" onChange={() => {}} />)
+    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="claude-opus-5.5" value="low" onChange={() => {}} />)
     expect(screen.getByTestId("select")).toHaveAttribute("data-value", "low")
   })
 
@@ -42,29 +50,30 @@ describe("ReasoningEffortSelect — the effort a node that stores none runs at",
     expect(screen.getByTestId("select")).toHaveAttribute("data-value", AUTO)
   })
 
-  it("showing the default writes nothing to the node", () => {
+  it("showing the recipe writes nothing to the node", () => {
     const onChange = vi.fn()
-    render(<ReasoningEffortSelect feature="describe-to-picker" onChange={onChange} />)
+    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="claude-opus-5.5" onChange={onChange} />)
     expect(onChange).not.toHaveBeenCalled()
   })
 })
 
-// Decided 2026-10-09 (Tal): on describe-to-picker's default model, Auto is not
-// offered. An omitted effort runs at the default, High, so Auto would be a
-// second name for it; every level there runs on Anthropic's own API.
-describe("ReasoningEffortSelect — no Auto on a model whose run has a default effort", () => {
-  it("describe-to-picker on its default model lists the levels without Auto, unset or named", () => {
-    for (const modelId of [undefined, "claude-opus-5.5"]) {
-      const { unmount } = render(<ReasoningEffortSelect feature="describe-to-picker" modelId={modelId} onChange={() => {}} />)
-      expect(screen.queryByTestId(`item-${AUTO}`), String(modelId)).toBeNull()
-      for (const level of ["low", "medium", "high", "xhigh", "max"]) expect(screen.getByTestId(`item-${level}`)).toBeInTheDocument()
-      unmount()
-    }
+// Decided 2026-10-09: on a model with a recipe effort for the feature (Opus 5.5
+// on describe-to-picker), Auto is not offered. An omitted effort runs at the
+// recipe, High, so Auto would be a second name for it; every level there runs
+// on Anthropic's own API.
+describe("ReasoningEffortSelect — no Auto on a model whose run has a recipe effort", () => {
+  it("describe-to-picker on Opus 5.5 lists the levels without Auto", () => {
+    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="claude-opus-5.5" onChange={() => {}} />)
+    expect(screen.queryByTestId(`item-${AUTO}`)).toBeNull()
+    for (const level of ["low", "medium", "high", "xhigh", "max"]) expect(screen.getByTestId(`item-${level}`)).toBeInTheDocument()
   })
 
-  it("describe-to-picker on gemini-3.8-flash still offers Auto", () => {
-    render(<ReasoningEffortSelect feature="describe-to-picker" modelId="gemini-3.8-flash" onChange={() => {}} />)
-    expect(screen.getByTestId(`item-${AUTO}`)).toBeInTheDocument()
+  it("describe-to-picker on its default model (Gemini 3.8 Flash), unset or named, offers Auto", () => {
+    for (const modelId of [undefined, "gemini-3.8-flash"]) {
+      const { unmount } = render(<ReasoningEffortSelect feature="describe-to-picker" modelId={modelId} onChange={() => {}} />)
+      expect(screen.getByTestId(`item-${AUTO}`), String(modelId)).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it("another feature on a Claude model still offers Auto", () => {
@@ -72,8 +81,8 @@ describe("ReasoningEffortSelect — no Auto on a model whose run has a default e
     expect(screen.getByTestId(`item-${AUTO}`)).toBeInTheDocument()
   })
 
-  it("the direct-lane hint on the default model says every run goes there, not that Auto avoids it", () => {
-    const { unmount } = render(<ReasoningEffortSelect feature="describe-to-picker" onChange={() => {}} />)
+  it("the direct-lane hint on the recipe model says every run goes there, not that Auto avoids it", () => {
+    const { unmount } = render(<ReasoningEffortSelect feature="describe-to-picker" modelId="claude-opus-5.5" onChange={() => {}} />)
     expect(screen.getByText(/always carries an effort/)).toBeInTheDocument()
     expect(screen.queryByText(/choosing an effort runs the call/)).toBeNull()
     unmount()
