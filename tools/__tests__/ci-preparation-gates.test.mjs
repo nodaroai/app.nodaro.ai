@@ -121,29 +121,128 @@ test('expensive test steps stop on superseding cancellation', () => {
   }
 })
 
-for (const name of ['frontend-test-shards', 'backend-test-shards']) test(`${name} preserves hosted fallback and excludes untrusted routing`, () => {
-  const expression = jobs[name].match(/^    runs-on: \$\{\{ (.+) \}\}$/m)[1]
+// Runners (decided 2026-10-20): every job either routes to the Railway pool
+// through the one shared expression, or is listed here as hosted, with why.
+// The value of a Railway job is its GitHub-hosted fallback — today's label, so
+// clearing CI_RAILWAY_ENABLED restores the hosted runners exactly.
+const RAILWAY_JOBS = {
+  'prepare-packages': 'ubuntu-latest',
+  'frontend-test-shards': 'ubuntu-latest',
+  'backend-test-shards': 'ubuntu-latest',
+  'test-dedup-harness': 'ubuntu-latest',
+  typecheck: 'ubuntu-latest',
+  'build-backend': 'ubuntu-latest',
+  'backend-boot-smoke': 'ubuntu-latest',
+}
+// Only jobs that do nothing on a verified tree may drop to ubuntu-slim in that
+// mode: Type Check and the builds do their full work on a verified main push.
+const VERIFIED_ON_SLIM = ['frontend-test-shards', 'backend-test-shards']
+// A hosted job keeps exactly its own runner (decided 2026-10-20: the pool gets
+// the heavy jobs only). Key: job, value: [its runner, why it stays hosted].
+const SHORT = 'short: a pool hop queues longer than the job runs'
+const HOSTED_JOBS = {
+  'frontend-tests': ['ubuntu-slim', `the fan-in check, at the tail of every run; ${SHORT}`],
+  'backend-tests': ['ubuntu-slim', `the fan-in check, at the tail of every run; ${SHORT}`],
+  'tenant-scope-lint': ['ubuntu-slim', SHORT],
+  'chrome-i18n-coverage': ['ubuntu-slim', SHORT],
+  'check-no-internal-specs': ['ubuntu-slim', SHORT],
+  'check-ee-imports': ['ubuntu-slim', `${SHORT}; it reads secrets.PRIVATE_LEAK_SYMBOLS, and no secret reaches the pool`],
+  'check-surface-funnel': ['ubuntu-slim', SHORT],
+  'check-pricing-leaks': ['ubuntu-slim', SHORT],
+  'check-public-surface': ['ubuntu-slim', SHORT],
+  'check-billing-dumps': ['ubuntu-slim', SHORT],
+  'changeset-guard': ['ubuntu-slim', SHORT],
+  changes: ['ubuntu-slim', 'runs the gh CLI (the runner image has none) and heads every path'],
+  'attribute-dev-failure': ['ubuntu-latest', 'runs the gh CLI (the runner image has none)'],
+  'remotion-tests': ['ubuntu-latest', "renders with the hosted runner's Chrome; the image has neither Chrome nor its shared libraries"],
+  'ffmpeg-ledger-redis': ['ubuntu-latest', 'a Redis service container (no Docker on the pool)'],
+  'migration-behavior': ['ubuntu-latest', 'a Postgres service container (no Docker on the pool)'],
+  characterize: ['ubuntu-latest', 'a job container (no Docker on the pool)'],
+  migrate: ['ubuntu-latest', 'production database credentials'],
+}
+const POOL = `fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]')`
+const VERIFIED_PREFIX = "needs.changes.outputs.mode == 'verified' && 'ubuntu-slim' || "
+const runsOn = (name) => jobs[name].match(/^    runs-on: (.+)$/m)?.[1]
+const expressionOf = (name) => runsOn(name).match(/^\$\{\{ (.+) \}\}$/)?.[1]
+// The routing condition with the verified prefix and the hosted fallback removed.
+const coreOf = (name) => {
+  let expression = expressionOf(name)
+  if (VERIFIED_ON_SLIM.includes(name)) expression = expression.slice(VERIFIED_PREFIX.length)
+  return expression.slice(0, -` || '${RAILWAY_JOBS[name]}'`.length)
+}
+
+test('every job is either routed to the Railway pool or listed as hosted, with a reason', () => {
+  const all = Object.keys(jobs).filter((name) => runsOn(name))
+  for (const name of all) assert.ok((name in RAILWAY_JOBS) !== (name in HOSTED_JOBS), `${name}: list it in exactly one of RAILWAY_JOBS / HOSTED_JOBS`)
+  for (const name of [...Object.keys(RAILWAY_JOBS), ...Object.keys(HOSTED_JOBS)]) assert.ok(all.includes(name), `${name} is listed but is not a job`)
+  for (const [name, [label, why]] of Object.entries(HOSTED_JOBS)) assert.equal(runsOn(name), label, `${name} stays on ${label}: ${why}`)
+  // What the pool cannot do keeps a job hosted: Docker (services, a job
+  // container) and the gh CLI.
+  for (const name of Object.keys(RAILWAY_JOBS)) {
+    assert.doesNotMatch(jobs[name], /^    (services|container):/m, `${name} needs Docker, which the pool lacks`)
+    assert.doesNotMatch(jobs[name], /\bgh (api|pr|run)\b|ci-mode\.mjs/, `${name} runs the gh CLI, which the runner image lacks`)
+    // No repository secret reaches the pool (decided 2026-10-20); github.token
+    // is the job's own short-lived token, not a repository secret.
+    assert.doesNotMatch(jobs[name], /secrets\./, `${name} reads a repository secret; keep it hosted`)
+  }
+})
+
+test('every Railway job routes through the one shared expression', () => {
+  const reference = coreOf('frontend-test-shards')
+  assert.ok(reference.startsWith("github.repository == 'nodaroai/app.nodaro.ai-internal' && "), reference)
+  assert.ok(reference.endsWith(` && ${POOL}`), reference)
+  for (const name of Object.keys(RAILWAY_JOBS)) {
+    const expression = expressionOf(name)
+    assert.ok(expression, `${name}: runs-on must be a single expression`)
+    assert.equal(expression.startsWith(VERIFIED_PREFIX), VERIFIED_ON_SLIM.includes(name),
+      `${name}: only ${VERIFIED_ON_SLIM.join(', ')} drop to ubuntu-slim on a verified tree`)
+    assert.ok(expression.endsWith(` || '${RAILWAY_JOBS[name]}'`), `${name}: its hosted fallback stays ${RAILWAY_JOBS[name]}`)
+    assert.equal(coreOf(name), reference, `${name}: copy the routing expression verbatim from frontend-test-shards`)
+  }
+})
+
+// Prepare Shared Packages keeps the npm download cache current (setup-node
+// saves it on a miss, hosted or not); every other job only restores it, so a
+// Railway runner never uploads a second copy on its completion path.
+test('one job saves the npm download cache; Railway jobs restore it', () => {
+  assert.match(jobs['prepare-packages'], /^          cache: npm$/m)
+  for (const name of Object.keys(RAILWAY_JOBS).filter((n) => n !== 'prepare-packages' && /run: npm ci$/m.test(jobs[n]))) {
+    assert.doesNotMatch(jobs[name], /^          cache: npm$/m, `${name}: cache only on hosted runners`)
+    assert.match(jobs[name], /^          cache: \$\{\{ runner\.environment == 'github-hosted' && 'npm' \|\| '' \}\}\n          package-manager-cache: false$/m, name)
+    assert.match(jobs[name], /- name: Restore npm downloads on Railway\n(?: {8}if: .*\n)? {8}uses: actions\/cache\/restore@v4\n {8}continue-on-error: true\n {8}timeout-minutes: 2\n {8}with:\n {10}path: ~\/\.npm\n {10}key: node-cache-\$\{\{ runner\.os \}\}-x64-npm-\$\{\{ hashFiles\('package-lock\.json'\) \}\}\n/, name)
+  }
+})
+
+for (const name of Object.keys(RAILWAY_JOBS)) test(`${name} preserves hosted fallback and excludes untrusted routing`, () => {
+  const expression = expressionOf(name)
+  const hosted = RAILWAY_JOBS[name]
   const repository = 'nodaroai/app.nodaro.ai-internal'
   const base = { repository, event_name: 'pull_request', ref: 'refs/pull/1/merge', head_ref: 'feat/pilot',
     event: { pull_request: { head: { repo: { full_name: repository } } } } }
   const route = (github, vars, mode = 'affected') => Function('github', 'vars', 'fromJSON', 'needs', `return (${expression})`)(github,
     { CI_RAILWAY_ENABLED: '', CI_RAILWAY_PILOT_BRANCH: '', ...vars }, JSON.parse, { changes: { outputs: { mode } } })
-  assert.equal(route(base, {}), 'ubuntu-latest')
-  assert.equal(route(base, { CI_RAILWAY_PILOT_BRANCH: 'another-branch' }), 'ubuntu-latest')
+  assert.equal(route(base, {}), hosted)
+  assert.equal(route(base, { CI_RAILWAY_PILOT_BRANCH: 'another-branch' }), hosted)
   assert.deepEqual(route(base, { CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
   assert.deepEqual(route(base, { CI_RAILWAY_ENABLED: 'true' }), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
-  assert.equal(route({ ...base, repository: 'public/mirror' }, { CI_RAILWAY_ENABLED: 'true' }), 'ubuntu-latest')
+  assert.equal(route({ ...base, repository: 'public/mirror' }, { CI_RAILWAY_ENABLED: 'true' }), hosted)
   assert.equal(route({ ...base, event: { pull_request: { head: { repo: { full_name: 'outsider/fork' } } } } },
-    { CI_RAILWAY_ENABLED: 'true', CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), 'ubuntu-latest')
+    { CI_RAILWAY_ENABLED: 'true', CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), hosted)
   const main = { ...base, event_name: 'push', ref: 'refs/heads/main', head_ref: '', event: {} }
-  assert.equal(route(main, { CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), 'ubuntu-latest')
+  assert.equal(route(main, { CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), hosted)
   assert.deepEqual(route(main, { CI_RAILWAY_ENABLED: 'true' }), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
-  assert.equal(route({ ...main, ref: 'refs/heads/other' }, { CI_RAILWAY_ENABLED: 'true' }), 'ubuntu-latest')
+  assert.equal(route({ ...main, ref: 'refs/heads/other' }, { CI_RAILWAY_ENABLED: 'true' }), hosted)
   // The post-merge dev run uses the same pool as main.
   assert.deepEqual(route({ ...main, ref: 'refs/heads/dev' }, { CI_RAILWAY_ENABLED: 'true' }, 'post-merge'), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
-  // A verified tree only prints its reason: the cheapest runner, whatever the routing.
-  assert.equal(route(main, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), 'ubuntu-slim')
-  assert.equal(route(base, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), 'ubuntu-slim')
+  if (VERIFIED_ON_SLIM.includes(name)) {
+    // A verified tree only prints its reason: the cheapest runner, whatever the routing.
+    assert.equal(route(main, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), 'ubuntu-slim')
+    assert.equal(route(base, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), 'ubuntu-slim')
+  } else {
+    // Everything else does its full work on a verified main push.
+    assert.deepEqual(route(main, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
+    assert.equal(route(main, {}, 'verified'), hosted)
+  }
 })
 
 // decided 2026-10-13: PRs into dev run in shadow mode until the repository

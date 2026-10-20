@@ -36,6 +36,28 @@ env:
   # binaries the package already carries, so every install skips it.
   ONNXRUNTIME_NODE_INSTALL: skip
 
+# Runners. The heavy Docker-free jobs (the test shards, Prepare Shared
+# Packages, Type Check, Build Backend Once, the boot smoke, the test de-dup
+# harness) run on the disposable Railway pool (tools/ci-runner/, labels
+# self-hosted/linux/x64/nodaro-ci) through ONE expression, copied verbatim into
+# each `runs-on:` because YAML cannot share it (decided 2026-10-20):
+#   - only this repository, only pushes to main/dev and same-repository PRs
+#     (forks and the public mirror stay hosted), and only while the repository
+#     variable CI_RAILWAY_ENABLED is `true` (or the PR branch is
+#     CI_RAILWAY_PILOT_BRANCH);
+#   - otherwise the job's own GitHub-hosted label, so turning the pool off
+#     restores the hosted runners exactly;
+#   - the test shards, which do nothing on a `verified` tree, go to ubuntu-slim
+#     in that mode first. No other job may: Type Check and the builds do their
+#     full work on a verified main push.
+# Every other job keeps its own hosted runner: the short guards and the two
+# fan-ins on ubuntu-slim (a pool hop costs more queue time than they run, and
+# no repository secret reaches the pool), Diff Gate and Attribute Dev Failure
+# (the `gh` CLI, absent from the runner image), Remotion Tests (the hosted
+# Chrome), the jobs with service or job containers (no Docker on the pool),
+# and Push Database Migrations (production credentials).
+# tools/__tests__/ci-preparation-gates.test.mjs holds every copy identical and
+# lists every hosted job with its reason.
 jobs:
   # Classifies the PR's changed paths so the two expensive suites only run
   # when their tree (or anything shared) changed. Frontend Tests + Backend
@@ -156,7 +178,7 @@ jobs:
 
   prepare-packages:
     name: Prepare Shared Packages
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
@@ -454,7 +476,7 @@ jobs:
     name: Test De-dup Harness
     needs: [changes]
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.testdedup != 'false') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -463,8 +485,19 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: false
           cache-dependency-path: package-lock.json
+      # Prepare Shared Packages keeps the npm download cache current; a Railway
+      # runner only restores it (no upload on this job's completion path).
+      - name: Restore npm downloads on Railway
+        if: runner.environment == 'self-hosted'
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/.npm
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
       - name: Pin npm 11
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
@@ -1007,7 +1040,7 @@ jobs:
     name: Type Check
     needs: [changes, prepare-packages]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
     env:
       YOUTUBE_DL_SKIP_DOWNLOAD: true
       # A per-process ceiling for the Node-based checks below (gen-skills, the
@@ -1026,8 +1059,19 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: false
           cache-dependency-path: package-lock.json
+      # Prepare Shared Packages keeps the npm download cache current; a Railway
+      # runner only restores it (no upload on this job's completion path).
+      - name: Restore npm downloads on Railway
+        if: runner.environment == 'self-hosted'
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/.npm
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
       - name: Pin npm 11
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
@@ -1051,7 +1095,8 @@ jobs:
       #    measured 2026-10-13); one at a time with GOMEMLIMIT=4GiB (a soft
       #    cap: the Go GC works harder near it, it never fails a run) peaks
       #    ~4.7 GB in ~31 s on 4 cores, leaving the other three checks (~1.4-
-      #    1.8 GB each) room on this runner (private repo: 2 vCPU / 8 GB).
+      #    1.8 GB each) room on this runner (private repo: 2 vCPU / 8 GB, the
+      #    same size as a Railway pool slot).
       #    The whole step passed in a 2-CPU / 7 GB container, peak 6.2 GB.
       #    The parity tests get the CPU first: the checker runs at
       #    `nice -n 19`, gen-skills and the surface report at `nice -n 10`,
@@ -1485,7 +1530,7 @@ jobs:
     name: Build Backend Once
     needs: [prepare-packages]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - name: Require successful preparation
@@ -1498,8 +1543,19 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: false
           cache-dependency-path: package-lock.json
+      # Prepare Shared Packages keeps the npm download cache current; a Railway
+      # runner only restores it (no upload on this job's completion path).
+      - name: Restore npm downloads on Railway
+        if: runner.environment == 'self-hosted'
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/.npm
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
       - name: Pin npm 11
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
@@ -1536,7 +1592,7 @@ jobs:
     # the job fails — surfacing the exact class of bug that took down prod on
     # 2026-05-21 (Collect node strategies shipped with extensionless imports).
     name: Backend Boot Smoke Test (${{ matrix.edition }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
     # Only the compiled backend is an input — Type Check is not, so the boot
     # starts as soon as Build Backend Once is done (merging still needs Type
     # Check: it is a required check and `migrate` lists it).
@@ -1582,8 +1638,19 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: false
           cache-dependency-path: package-lock.json
+      # Prepare Shared Packages keeps the npm download cache current; a Railway
+      # runner only restores it (no upload on this job's completion path).
+      - name: Restore npm downloads on Railway
+        if: runner.environment == 'self-hosted'
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/.npm
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
       - name: Pin npm 11
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
