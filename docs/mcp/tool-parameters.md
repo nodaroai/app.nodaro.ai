@@ -787,6 +787,20 @@ Needs `workflows:execute`.
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 
+## `estimate_trend`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The trend's slug (from list_trends). |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish. |
+| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
+| `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
+| `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
+| `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Default true; only at 480p. |
+
 ## `export_workflow`
 
 Needs `workflows:read`.
@@ -1525,6 +1539,14 @@ Always visible · Nodaro Cloud only.
 |---|---|---|---|
 | `part` | string |  | operating = the tool map, loop and edit vocabulary (default); authoring = the plan format; catalog = every picker/model/enum; schema = the JSON Schema. One of `operating`, `authoring`, `catalog`, `schema`. |
 
+## `get_trend`
+
+Needs `jobs:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The trend's slug (from list_trends). |
+
 ## `get_workflow`
 
 Needs `workflows:read`.
@@ -1908,6 +1930,17 @@ Needs `workflows:read` · Nodaro Cloud only.
 |---|---|---|---|
 | `limit` | integer |  | Default 25. From 1 to 100. |
 | `cursor` | string |  | `nextCursor` from a prior result — an opaque page token. |
+
+## `list_trends`
+
+Needs `jobs:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `query` | string |  | Search words. At most 200 characters. |
+| `tag` | string |  | From 1 to 100 characters. |
+| `favorites` | boolean |  | true = only the user's favorites. |
+| `cursor` | string |  | next from the previous call. At most 500 characters. |
 
 ## `list_voices`
 
@@ -2522,6 +2555,23 @@ Needs `workflows:execute`.
 | `component_id` | string | yes | Component slug (matches the published_apps.slug). At least 1 character. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 | `inputs` | object (map of any) |  | Flat input map keyed by schema key (from get_component_inputs). Omit to use defaults. |
+
+## `run_trend`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The trend's slug (from list_trends). |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish. |
+| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
+| `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
+| `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
+| `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Default true; only at 480p. |
+| `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `run_workflow`
 

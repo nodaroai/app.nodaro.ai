@@ -141,6 +141,14 @@ nodaro recast estimate --analysis-job <id>              # quote credits before c
 nodaro recast create --workflow <id> --analysis-job <id>   # BUYS THE PLAN
 nodaro recast start <recastId> && nodaro recast status <recastId>
 
+# Trends — ready-made Cast Swap recipes: put your own pictures in a trend (Cloud)
+nodaro trends list [--search <text>] [--favorites]      # the catalog
+nodaro trends get <slug>                                # its slots, examples, resolutions
+nodaro trends estimate <slug> --slot person=<url>,<url> --choice person.outfit=original   # free quote
+nodaro trends run <slug> --slot person=<url>            # SPENDS CREDITS; prints the job id (--session: accepted, not yet applied)
+nodaro trends runs [--trend <slug>]
+nodaro trends favorite <slug> | unfavorite <slug>
+
 nodaro executions get <id>
 nodaro executions get <id> --watch
 nodaro executions cancel <id> [--mode cancelled|stopping]

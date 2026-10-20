@@ -42,6 +42,7 @@
 | `shots` | Saved shots: prompt, references, results; private or public |
 | `recast` | Recast runs: quote, buy, follow, answer picks, import a script |
 | `castSwap` | Cast Swap: replace the people and/or location in a short video — `run`, `estimate` (Cloud) |
+| `trends` | Trends: ready-made Cast Swap recipes — browse (`list`, `get`), `estimate`, `run` with your own pictures, your `runs`, `favorite` / `unfavorite` (Cloud) |
 | `studio` | Studio productions: plan, edit, stills and clips, share, copy |
 | `copilot` | Copilot threads and streamed turns (signed-in session only) |
 | `community` | Shared characters/locations/objects: browse, clone, favorites |

@@ -240,6 +240,11 @@
       "import": "./dist/entries/templates.js",
       "require": "./dist/entries/templates.cjs"
     },
+    "./trends": {
+      "types": "./dist/entries/trends.d.ts",
+      "import": "./dist/entries/trends.js",
+      "require": "./dist/entries/trends.cjs"
+    },
     "./tutorials": {
       "types": "./dist/entries/tutorials.d.ts",
       "import": "./dist/entries/tutorials.js",

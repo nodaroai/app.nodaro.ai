@@ -18,6 +18,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
   - [`client.castSwap`](#clientcastswap)
+  - [`client.trends`](#clienttrends)
   - [`client.studio`](#clientstudio)
   - [`client.copilot`](#clientcopilot)
   - [`client.executions`](#clientexecutions)
@@ -66,7 +67,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -142,12 +143,12 @@ const client = createClient({
 | `workspaceId` | `string` | no | The workspace every request acts in, sent as `X-Nodaro-Workspace`. See [`client.withWorkspace`](#clientwithworkspaceworkspaceid). Omit for the caller's personal space. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
-The instance exposes 36 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 37 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
 `oauth`, `voices`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
 `presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `castSwap`,
-`studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
+`trends`, `studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
 
@@ -1968,6 +1969,133 @@ const params: CastSwapParams = {
 }
 const quote = await client.castSwap.estimate(params)
 const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
+```
+
+---
+
+### `client.trends`
+
+Trends: ready-made Cast Swap recipes. A trend is a short clip with slots (the
+people, pets, products and place you can replace); fill its slots with your own
+pictures and run it. **Cloud edition only**: these routes 404 on self-hosted
+installs. Only published trends exist: a draft, unpublished or unknown slug is a
+`404` on every method. Also importable as `@nodaro/sdk/trends`. Routes:
+[Trends](./api-integration.md#13g-trends-cloud-edition).
+
+```ts
+list(params?: ListTrendsParams): Promise<TrendPage<TrendCard>>                  // GET /v1/trends
+get(slug: string, params?: { locale?: string }): Promise<TrendDetail>           // GET /v1/trends/:slug
+estimate(slug: string, request: TrendRunRequest): Promise<TrendEstimate>        // POST /v1/trends/:slug/estimate, free
+run(slug: string, request: TrendRunRequest, options?: { idempotencyKey?: string }): Promise<{ jobId: string }> // POST /v1/trends/:slug/runs → 202
+runs(params?: ListTrendRunsParams): Promise<TrendPage<TrendRun>>               // GET /v1/trends/runs
+favorite(slug: string): Promise<void>                                           // PUT /v1/trends/:slug/favorite → 204
+unfavorite(slug: string): Promise<void>                                         // DELETE /v1/trends/:slug/favorite → 204
+```
+
+`list()` and `runs()` resolve to the page as it arrives (`{ data, next }`; pass
+`next` back as `cursor`, `null` on the last page). `get()`, `estimate()` and
+`run()` resolve to the payload, out of the route's `{ data }` envelope.
+
+```ts
+type TrendSlotKind = "person" | "location" | "product" | "pet"
+type TrendChoice = "new" | "original"       // make the trait anew from your pictures, or keep the clip's
+// The chips of a slot's kind: person body/outfit/hair, pet body/coat, product shape/finish, location none
+interface TrendChips { body?: TrendChoice; outfit?: TrendChoice; hair?: TrendChoice; coat?: TrendChoice; shape?: TrendChoice; finish?: TrendChoice }
+
+interface ListTrendsParams {
+  q?: string; tag?: string
+  favorites?: boolean   // true → only yours (sent as favorites=1)
+  locale?: string       // default: your profile's language, then English
+  cursor?: string; limit?: number  // 1–60, default 30
+}
+
+interface TrendCard {
+  id: string; slug: string; name: string; description?: string
+  tags: string[]; badges: string[]
+  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example
+  needs: Record<TrendSlotKind, number>   // slots of each kind
+  durationSec: number
+  isFavorite: boolean
+}
+
+interface TrendDetail extends TrendCard {
+  version: number
+  previewSec: 4 | null                   // 4 when a 4 s preview run is offered
+  resolutions: ("480p" | "720p" | "1080p")[]
+  slots: Array<{ key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string; defaults?: TrendChips }>
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
+}
+
+interface TrendRunRequest {
+  slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + its kind's chips
+  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1
+  details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
+  preview?: boolean     // 4 s run, when previewSec is 4
+  resolution?: "480p" | "720p" | "1080p" // default "480p"
+  draft?: boolean       // only at 480p; default true there
+  sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
+  projectId?: string    // accepted, but not used by the run today
+}
+
+interface TrendEstimate {
+  expectedCredits: number            // what the run is expected to be charged
+  holdCredits: number                // what is reserved when it starts
+  breakdown: Record<string, number>  // the parts of the quote
+}
+
+interface TrendRun {
+  jobId: string; status: string; progress: number | null
+  error: { code?: string; message: string } | null
+  createdAt: string; completedAt: string | null
+  trend: { id: string; slug: string; version: number; name: string } // the version it ran
+  example: number
+  slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
+  details?: string
+  preview: boolean; resolution: string; draft: boolean
+  videoUrl: string | null; posterUrl: string | null  // once completed
+  creditsCharged: number | null
+  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  fullQualityUntil: string | null    // until when a completed draft can be redone in Full Quality
+}
+```
+
+A required slot left empty is refused with `400 missing_slot`; an optional one
+left out takes the chosen example's pictures (`fromExample: true` on the run),
+or is refused with `missing_slot` when that example has none for it
+(`example_out_of_range` when the trend has no such example).
+`estimate()` and `run()` answer `400` before charging for `missing_slot`,
+`unknown_slot`, `invalid_choice` (a chip the slot's kind does not take),
+`example_out_of_range`, `preview_unavailable`, `invalid_slot_mention` (a
+`{slot:<key>}` naming no slot), `prompt_too_long` and `validation_error`; the
+slot errors carry the key as `slot`. Other refusals: `401`, `404 not_found`
+(the trend is not published; for `run()` also a `sessionId` you may not use),
+`502 engine_error`, `503 engine_unsupported` / `trend_unavailable` /
+`not_available`. When the video engine refuses, `estimate()` / `run()` get the
+trend routes' OWN codes with fixed messages, never the engine's text or
+`issues`: `400 trend_run_rejected` (or `clip_out_of_range`,
+`preview_out_of_range`, `video_unreadable`, `unsafe_url`,
+`raw_reference_token`), `402 insufficient_credits` (or a workspace cap) as
+given, `413 storage_limit_exceeded`, `422 job_blocked`, `429 rate_limited`,
+`503 engine_unsupported` / `estimate_unavailable`, else `502 engine_error`.
+`"runs"` is never a slug: `get()`, `estimate()`, `run()`, `favorite()` and
+`unfavorite()` throw a `TypeError` for it before any request. The full table
+is in the [route reference](./api-integration.md#13g-trends-cloud-edition).
+
+`run()` returns a job id; follow it with `client.jobs.get(jobId)`, or read it
+back with `runs()`. Pass `{ idempotencyKey }` (`TrendRunOptions`) to make a
+retry safe: it is sent unchanged as the `Idempotency-Key` header (8–200
+characters, else `400`), and a repeat with the same key answers with the first
+run's `jobId`; nothing new is started or charged.
+
+```ts
+const { data: cards } = await client.trends.list({ tag: "dance" })
+const trend = await client.trends.get(cards[0].slug)
+const request: TrendRunRequest = {
+  slots: { [trend.slots[0].key]: { images: [myPhotoUrl] } },
+  preview: trend.previewSec === 4,
+}
+const quote = await client.trends.estimate(trend.slug, request)
+const { jobId } = await client.trends.run(trend.slug, request, { idempotencyKey: crypto.randomUUID() })
 ```
 
 ---

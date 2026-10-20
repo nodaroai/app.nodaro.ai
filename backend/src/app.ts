@@ -165,6 +165,8 @@ import { generateLocationMotionRoutes } from "./routes/generate-location-motion.
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
+import { trendRoutes } from "./ee/routes/trends.js"
+import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -693,6 +695,10 @@ export async function buildApp() {
   if (hasCredits()) for (const route of Object.values(UNIT_EE_ROUTES)) await app.register(route)
   // Marketing-email consent prompt + Loops sync (Cloud-only).
   if (hasCredits()) await app.register(consentRoutes)
+  // Trends: the public catalog and trend runs (Cast Swap recipes; ee/lib/trends).
+  if (hasCredits()) await app.register(trendRoutes)
+  // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
+  if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
   // The Users page's linked-account marking rides on the same clusters RPC.

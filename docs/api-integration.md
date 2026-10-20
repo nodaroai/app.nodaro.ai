@@ -3927,6 +3927,100 @@ Refusals, all before anything is charged (bodies are
 | `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
 | `503` | `estimate_unavailable` | The video model's price cannot be quoted right now (`/estimate` only); try again shortly. |
 
+## 13g. Trends (Cloud edition)
+
+A trend is a ready-made [Cast Swap](#13f-cast-swap-cloud-edition) recipe: a
+short clip with slots (the people, pets, products and place you can replace).
+Fill its slots with your own pictures and run it to get the clip back with
+them in it. The routes are part of Nodaro Cloud and answer 404 on self-hosted
+installs (SDK: [`client.trends`](./sdk-reference.md#clienttrends), MCP: the
+[`list_trends`, `get_trend`, `estimate_trend` and `run_trend`](./mcp/tools.md) verbs).
+
+Only **published** trends exist here: a draft, an unpublished or an unknown
+slug is a `404` on every route.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length and resolutions). Query: `locale`. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. |
+| `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
+| `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
+| `PUT` | `/v1/trends/:slug/favorite` | Add the trend to your favorites. `204`. |
+| `DELETE` | `/v1/trends/:slug/favorite` | Remove it from your favorites. `204`. |
+
+Names, descriptions, slot labels and hints come in `?locale=` when it is a
+platform language, else your profile's language, else English.
+
+The estimate and run body is
+`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId? }`:
+
+- `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
+  required slot needs images; an optional slot left out takes the pictures of
+  example `example` (1-based, default 1). The chips are the slot kind's own,
+  each `"new"` (from your pictures) or `"original"` (as in the clip): a person
+  `body` / `outfit` / `hair`, a pet `body` / `coat`, a product `shape` /
+  `finish`, a location none.
+- `details`: your own words, at most 1,000 characters; mention a slot as
+  `{slot:<key>}`.
+- `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
+- `resolution`: `"480p"` (default), `"720p"` or `"1080p"`. `draft` (default
+  `true`) is only available at 480p.
+- `sessionId`: one of your generation sessions. Accepted (one you may not
+  use is still a `404`), but not yet applied: trend runs are not filed into
+  sessions yet.
+- `projectId`: accepted, but not used by the run today.
+
+An OAuth app needs `jobs:read` to read, `workflows:execute` to estimate or
+run (plus `assets:write` to pass a `sessionId`), and `assets:write` for
+favorites.
+
+Refusals (bodies are `{ error: { code, message } }`; the slot errors also
+carry the slot's key as `slot`). The `400`s on estimate and run come before
+anything is charged:
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `validation_error` | The body or a query does not validate, or the `cursor` is not one this list gave. |
+| `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
+| `400` | `unknown_slot` | `slots` names a key the trend does not have. |
+| `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
+| `400` | `example_out_of_range` | `example` names an example the trend does not have, or an optional slot is left empty and the trend has no example (1, by default) to fill it. |
+| `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
+| `400` | `invalid_slot_mention` | `details` mentions `{slot:<key>}` with a key the trend does not have. |
+| `400` | `prompt_too_long` | `details` is too long for this trend; shorten it. |
+| `400` | `validation_error` | (`/runs`) The `Idempotency-Key` is not 8–200 characters. |
+| `401` | `unauthorized` | No authenticated user. |
+| `404` | `not_found` | The trend is not published, or `sessionId` names a session you may not use (`/runs` only). |
+| `502` | `engine_error` | The video engine answered unexpectedly (estimate and run). |
+| `503` | `engine_unsupported` | This platform version cannot run trends yet. |
+| `503` | `trend_unavailable` | The trend cannot be run right now. |
+| `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs`). |
+
+When the video engine refuses an estimate or a run, the trend routes answer
+with their OWN codes and fixed messages; the engine's message and any
+`issues` are never passed on (they would describe the trend's hidden recipe):
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `trend_run_rejected` | The engine refused these inputs, for any reason not listed below. |
+| `400` | `clip_out_of_range` / `preview_out_of_range` / `video_unreadable` | This trend's own clip cannot be run as it is. |
+| `400` | `unsafe_url` | A picture is not a public http(s) address. |
+| `400` | `raw_reference_token` | `details` contains `{image:`, `{video:` or `{audio:`. |
+| `402` | `insufficient_credits` | Your credits (or a workspace cap: `budget_exceeded`, `member_cap_exceeded`, `user_allowance_exceeded`) cannot cover the run. Passed on as the engine gave it. |
+| `413` | `storage_limit_exceeded` | Your storage is full. |
+| `422` | `job_blocked` | The job policy blocked the run. |
+| `429` | `rate_limited` | Too many requests; try again shortly. |
+| `503` | `engine_unsupported` | This platform version cannot run trends yet. |
+| `503` | `estimate_unavailable` | The price cannot be quoted right now; try again shortly. |
+| `502` | `engine_error` | Anything else. |
+
+A run in `GET /v1/trends/runs` that did not finish has
+`error: { code, message }`: the message is always the same fixed sentence
+(the job's own failure text is never passed on), and the code is
+`safety-block` or `policy-block` when the job was blocked, else `cancelled` or
+`failed`. A run that did not fail or get cancelled has `error: null`.
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

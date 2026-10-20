@@ -11462,6 +11462,8 @@ export const en = {
   "apiErr.deleteCategory": "Failed to delete category",
   "apiErr.listTemplates": "Failed to list templates",
   "apiErr.updateTutorialFlag": "Failed to update tutorial flag",
+  "apiErr.loadTrends": "Failed to load trends",
+  "apiErr.saveTrend": "Failed to save the trend",
   "apiErr.updateTemplateListing": "Failed to update the template",
   "apiErr.estimateVideoCredits": "Failed to estimate video credits",
   "apiErr.loadCredentials": "Failed to load credentials",

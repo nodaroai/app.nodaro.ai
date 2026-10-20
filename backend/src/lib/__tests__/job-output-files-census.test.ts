@@ -107,6 +107,8 @@ const NOT_A_JOB = "not written for a job: the key carries no job id and the obje
 const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "ee/pipelines/_freecut-timeline.ts :: r2Key": `${UPLOAD} (a pipeline export filed as an asset)`,
   "ee/pipelines/services/pipeline-extract-beat-grid.ts :: r2Key": `${UPLOAD} (the trimmed pipeline music asset)`,
+  "ee/lib/trends/media.ts :: trendMediaKey(trendId, sniffed.ext) → url":
+    `${NOT_A_JOB} (a trend's catalog media, \`trends/<trendId>/<uuid>.<ext>\`: the trend owns it, never a job — an example keeps its own copy so a deleted job never breaks a trend)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
   "lib/media-import.ts :: r2Key": UPLOAD,
   "lib/media-import.ts :: thumbKey": UPLOAD,

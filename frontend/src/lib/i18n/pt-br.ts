@@ -11162,6 +11162,8 @@ export const ptBR: ChromeDict = {
   "apiErr.deleteCategory": "Não foi possível excluir a categoria",
   "apiErr.listTemplates": "Não foi possível listar os templates",
   "apiErr.updateTutorialFlag": "Não foi possível atualizar a marcação de tutorial",
+  "apiErr.loadTrends": "Não foi possível carregar as tendências",
+  "apiErr.saveTrend": "Não foi possível salvar a tendência",
   "apiErr.updateTemplateListing": "Não foi possível atualizar o template",
   "apiErr.estimateVideoCredits": "Não foi possível estimar os créditos do vídeo",
   "apiErr.loadCredentials": "Não foi possível carregar as credenciais",

@@ -11162,6 +11162,8 @@ export const ja: ChromeDict = {
   "apiErr.deleteCategory": "カテゴリーを削除できませんでした",
   "apiErr.listTemplates": "テンプレートの一覧を取得できませんでした",
   "apiErr.updateTutorialFlag": "チュートリアルフラグを更新できませんでした",
+  "apiErr.loadTrends": "トレンドを読み込めませんでした",
+  "apiErr.saveTrend": "トレンドを保存できませんでした",
   "apiErr.updateTemplateListing": "テンプレートを更新できませんでした",
   "apiErr.estimateVideoCredits": "動画のクレジットを見積もれませんでした",
   "apiErr.loadCredentials": "認証情報を読み込めませんでした",

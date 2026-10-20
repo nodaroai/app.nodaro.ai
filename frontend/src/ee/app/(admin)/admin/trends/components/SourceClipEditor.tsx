@@ -1,0 +1,181 @@
+// The trend's source clip (4–30 s, never shown to users) and where its 4 s
+// preview starts: scrub the clip, mark the window, play it back.
+
+import { useEffect, useRef, useState } from "react"
+import { Crosshair, Play } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import type { AdminTrendSource } from "@/lib/api"
+import { useTrendMedia } from "@/ee/hooks/queries/use-admin-queries"
+import { PREVIEW_SECONDS, clampPreview, formatSeconds } from "../model"
+import { MediaPicker } from "./MediaPicker"
+import { uploadLocalFile } from "./uploads"
+
+interface Props {
+  readonly trendId: string
+  readonly source: AdminTrendSource | null
+  readonly previewStart: number | null
+  readonly onChange: (next: { source: AdminTrendSource | null; previewStart: number | null }) => void
+}
+
+export function SourceClipEditor({ trendId, source, previewStart, onChange }: Props) {
+  const media = useTrendMedia(trendId)
+  const [uploading, setUploading] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const stopAt = useRef<number | null>(null)
+
+  const busy = uploading || media.isPending
+  const duration = source?.durationSec ?? 0
+  const maxStart = Math.max(0, duration - PREVIEW_SECONDS)
+
+  const store = async (url: string) => {
+    try {
+      const stored = await media.mutateAsync({ url, kind: "source" })
+      if (stored.durationSec === undefined) throw new Error("The clip's length could not be read.")
+      const next: AdminTrendSource = {
+        videoUrl: stored.url,
+        durationSec: stored.durationSec,
+        ...(stored.width !== undefined ? { width: stored.width } : {}),
+        ...(stored.height !== undefined ? { height: stored.height } : {}),
+      }
+      onChange({ source: next, previewStart: clampPreview(previewStart, next.durationSec) })
+      toast.success(`Source clip set (${formatSeconds(next.durationSec)}). Save the draft to keep it.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not store the clip")
+    }
+  }
+
+  const fromFile = async (file: File) => {
+    setUploading(true)
+    try {
+      await store(await uploadLocalFile(file))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Down to a tenth: rounding up could push the window past the clip's end (7.86 s clip → 3.9).
+  const setStart = (s: number) => onChange({ source, previewStart: Math.floor(Math.min(Math.max(0, s), maxStart) * 10) / 10 })
+
+  const playWindow = () => {
+    const v = videoRef.current
+    if (!v || previewStart === null) return
+    v.currentTime = previewStart
+    stopAt.current = previewStart + PREVIEW_SECONDS
+    void v.play().catch(() => {})
+  }
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    const onTime = () => {
+      if (stopAt.current !== null && v.currentTime >= stopAt.current) {
+        v.pause()
+        stopAt.current = null
+      }
+    }
+    v.addEventListener("timeupdate", onTime)
+    return () => v.removeEventListener("timeupdate", onTime)
+  }, [source?.videoUrl])
+
+  return (
+    <div className="flex flex-col gap-3">
+      {source ? (
+        <>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <video
+              ref={videoRef}
+              key={source.videoUrl}
+              src={source.videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-80 w-full rounded-md bg-black sm:w-auto sm:max-w-[50%]"
+            />
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              <dt className="text-muted-foreground">Length</dt>
+              <dd>{formatSeconds(source.durationSec)}</dd>
+              {source.width && source.height ? (
+                <>
+                  <dt className="text-muted-foreground">Size</dt>
+                  <dd>
+                    {source.width}×{source.height}
+                  </dd>
+                </>
+              ) : null}
+              <dt className="text-muted-foreground">File</dt>
+              <dd className="min-w-0 break-all">
+                <a href={source.videoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                  open
+                </a>
+              </dd>
+            </dl>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-md border p-3">
+            <label className="flex min-h-9 items-center gap-2 text-sm">
+              <Switch
+                aria-label="Offer a 4 s preview"
+                checked={previewStart !== null}
+                onCheckedChange={(on) => onChange({ source, previewStart: on ? 0 : null })}
+              />
+              Offer a {PREVIEW_SECONDS} s preview
+            </label>
+            {previewStart !== null && (
+              <>
+                <div className="relative h-3 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <div
+                    className="absolute inset-y-0 rounded-full bg-primary/70"
+                    style={{
+                      left: `${duration ? (previewStart / duration) * 100 : 0}%`,
+                      width: `${duration ? Math.min(100, (PREVIEW_SECONDS / duration) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <input
+                  type="range"
+                  aria-label="Preview start"
+                  min={0}
+                  max={maxStart}
+                  step={0.1}
+                  value={previewStart}
+                  onChange={(e) => setStart(Number(e.target.value))}
+                  className="h-9 w-full"
+                />
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="tabular-nums">
+                    Preview: {formatSeconds(previewStart)} – {formatSeconds(previewStart + PREVIEW_SECONDS)}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-9"
+                    onClick={() => setStart(videoRef.current?.currentTime ?? 0)}
+                  >
+                    <Crosshair className="mr-1 h-4 w-4" /> Start at the playhead
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="min-h-9" onClick={playWindow}>
+                    <Play className="mr-1 h-4 w-4" /> Play the window
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">No source clip yet. Upload one (4–30 s) or paste a library video's URL.</p>
+      )}
+      <MediaPicker
+        accept="video/*"
+        uploadLabel={source ? "Replace clip" : "Upload clip"}
+        busy={busy}
+        onFiles={(files) => void fromFile(files[0]!)}
+        onUrl={(url) => void store(url)}
+      />
+    </div>
+  )
+}

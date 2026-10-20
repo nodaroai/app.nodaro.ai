@@ -1073,6 +1073,47 @@ describe("server-only `__` output keys are never returned", () => {
     expect(batch.json().data[0].output_data).toEqual(expectedOutput)
   })
 
+  // Review Focus 1 (trends): a trend run's hidden inputs live in `__` keys of
+  // its input_data; the job read keeps the public stamp and drops them all.
+  it("GET /v1/jobs/:id on a trend run drops __videoUrl / __roles / __postPrompt / __references", async () => {
+    const source = "https://cdn.example/trends/t1/HIDDEN-SOURCE.mp4"
+    const trendRun = {
+      type: "cast-swap",
+      trend: { id: "t1", slug: "neon-dance", version: 2, name: "Neon Dance" },
+      example: 1,
+      slots: [{ key: "lead", label: "Lead", kind: "person", images: ["https://u.example/me.png"], fromExample: false }],
+      details: "wave at {slot:lead}",
+      preview: false,
+      previewStart: 2,
+      resolution: "480p",
+      draft: true,
+      sourceDurationSec: 12,
+      __videoUrl: source,
+      __roles: [{ kind: "person", name: "HIDDEN-ROLE the woman on the left", images: [] }],
+      __references: [{ images: ["https://cdn.example/HIDDEN-REF.png"], line: "HIDDEN-REF-LINE" }],
+      __postPrompt: "HIDDEN-PROMPT",
+    }
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({
+          data: { ...sampleJob, user_id: TEST_USER_ID, input_data: trendRun, output_data: { videoUrl: "https://out.example/r.mp4" } },
+          error: null,
+        }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    const input = res.json().data.input_data
+    expect(input).toMatchObject({ type: "cast-swap", trend: trendRun.trend, slots: trendRun.slots, draft: true })
+    for (const k of ["__videoUrl", "__roles", "__postPrompt", "__references"]) expect(input).not.toHaveProperty(k)
+    for (const hidden of [source, "HIDDEN-ROLE", "HIDDEN-REF", "HIDDEN-PROMPT", "__"]) expect(res.body).not.toContain(hidden)
+  })
+
   it("sanitizeJobForPublic strips them for an admin too, from output_data and input_data alike", () => {
     const row = { ...sampleJob, input_data: { prompt: "p", __internal: 1 }, output_data: withCheckpoint }
     expect(sanitizeJobForPublic(row, true).output_data).toEqual(expectedOutput)

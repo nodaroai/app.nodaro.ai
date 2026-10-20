@@ -4,8 +4,10 @@ const adminCache = new Map<string, { isAdmin: boolean; expiresAt: number }>()
 const CACHE_TTL_MS = 300_000 // 5 minutes — role changes are rare
 
 /** Single source of truth for which `profiles.role` values count as admin. */
+export const ADMIN_ROLES: readonly string[] = ["admin", "super_admin"]
+
 export function roleIsAdmin(role: string | null | undefined): boolean {
-  return role === "admin" || role === "super_admin"
+  return typeof role === "string" && ADMIN_ROLES.includes(role)
 }
 
 export async function checkIsAdmin(userId: string): Promise<boolean> {

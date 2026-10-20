@@ -669,6 +669,34 @@ The paid operation is asynchronous; poll `client.recast.get(recastId)` until
 [Recast SDK reference](./sdk-reference.md#clientrecast) for replacements,
 manifest semantics, and conflict handling.
 
+### Run a trend with your own picture (Cloud)
+
+A trend is a ready-made Cast Swap recipe with slots to fill. Pick one, put your
+pictures in its slots, quote the run, then start it and follow the job:
+
+```ts
+import type { TrendRunRequest } from "@nodaro/sdk"
+
+const { data: cards } = await client.trends.list({ q: "dance" })
+const trend = await client.trends.get(cards[0].slug)
+
+const request: TrendRunRequest = {
+  // Every required slot needs 1–3 pictures; optional slots left out take the example's.
+  slots: Object.fromEntries(
+    trend.slots.filter((s) => s.required).map((s) => [s.key, { images: [myPhotoUrl] }]),
+  ),
+}
+const quote = await client.trends.estimate(trend.slug, request)
+console.log(`about ${quote.expectedCredits} credits, ${quote.holdCredits} held while it runs`)
+
+const { jobId } = await client.trends.run(trend.slug, request, { idempotencyKey: crypto.randomUUID() })
+const job = await client.jobs.get(jobId)
+```
+
+Your past runs, with their pictures and results, come back from
+`client.trends.runs({ trend: trend.slug })`. See
+[SDK Reference → client.trends](./sdk-reference.md#clienttrends).
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,

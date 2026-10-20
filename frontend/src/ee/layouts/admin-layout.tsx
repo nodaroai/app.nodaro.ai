@@ -91,6 +91,7 @@ const ADMIN_NAV = [
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
   { href: "/admin/stuck-pipelines", label: "Stuck Pipelines", icon: AlertTriangle },
   { href: "/admin/templates", label: "Templates", icon: LayoutTemplate },
+  ...(hasCredits() ? [{ href: "/admin/trends", label: "Trends", icon: TrendingUp }] : []),
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },

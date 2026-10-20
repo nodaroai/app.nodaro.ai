@@ -1,0 +1,315 @@
+import type { NodaroClientCore } from "../core.js"
+
+/**
+ * Trends — ready-made Cast Swap recipes. A trend is a short clip with slots
+ * (the people, pets, products and place you can replace); fill its slots with
+ * your own pictures and run it to get the clip back with them in it.
+ *
+ * Cloud edition only: `/v1/trends` 404s on self-hosted installs. Only
+ * published trends exist here: a draft, unpublished or unknown slug is a 404
+ * on every route. `"runs"` is never a slug (`/v1/trends/runs` is the run
+ * list): the slug methods throw a `TypeError` for it before any request. `run()` answers 202 with a job id; follow it with
+ * `client.jobs.get(jobId)` / `client.jobs.getStatus(jobId)` like any other
+ * job, or read it back as a trend run with `runs()`.
+ *
+ * Repeats: pass `{ idempotencyKey }` to `run()` and it is sent as the
+ * `Idempotency-Key` header. A repeat with the same key answers with the first
+ * run's `jobId`; nothing new is started or charged.
+ *
+ * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`):
+ * - 400 `validation_error` (the body, a query, or a bad `cursor`);
+ *   `estimate()` / `run()` only, before anything is charged:
+ *   `missing_slot` (a required slot without pictures, or an optional one
+ *   left empty that the chosen example has no pictures for), `unknown_slot`,
+ *   `invalid_choice` (a chip the slot's kind does not take),
+ *   `example_out_of_range` (`example` names none, or an optional slot is left
+ *   empty and the trend has no example to fill it), `preview_unavailable` (the trend offers no
+ *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
+ *   slot), `prompt_too_long` (shorten `details`). The slot errors carry the
+ *   slot's key as `slot`.
+ * - 401 `unauthorized`.
+ * - 404 `not_found`: the trend is not published (every method), or `run()`'s
+ *   `sessionId` is not a session you may use.
+ * - 502 `engine_error` (`estimate()` / `run()`).
+ * - 503 `engine_unsupported` (this platform version cannot run trends yet),
+ *   `trend_unavailable` (`estimate()` / `run()`), `not_available` (this
+ *   server has no trend catalog yet).
+ * - `estimate()` / `run()` answer the video engine's refusals with the trend
+ *   routes' OWN codes and fixed messages — never the engine's text or
+ *   `issues`: 400 `trend_run_rejected` (the inputs could not run), or
+ *   `clip_out_of_range` / `preview_out_of_range` / `video_unreadable` (this
+ *   trend's clip), `unsafe_url` (a picture is not a public http(s) address),
+ *   `raw_reference_token` (`details` holds `{image:` / `{video:` /
+ *   `{audio:`); 402 `insufficient_credits` (or a workspace cap) as given;
+ *   413 `storage_limit_exceeded`; 422 `job_blocked` (the job policy
+ *   blocked it); 429 `rate_limited`; 503 `engine_unsupported`,
+ *   `estimate_unavailable`; 502 `engine_error` for anything else. `run()`
+ *   also answers 400 `validation_error` for an `idempotencyKey` outside
+ *   8–200 characters.
+ */
+
+/** `/v1/trends/runs` is the run list, so `"runs"` can never be a trend's slug. */
+function trendPath(slug: string, rest = ""): string {
+  if (slug === "runs") throw new TypeError('"runs" is not a trend slug (it is reserved for the run list; use runs())')
+  return `/v1/trends/${encodeURIComponent(slug)}${rest}`
+}
+
+/** What a slot holds. */
+export type TrendSlotKind = "person" | "location" | "product" | "pet"
+
+/** A chip: make this trait anew from your pictures (`"new"`), or keep the clip's (`"original"`). */
+export type TrendChoice = "new" | "original"
+
+/**
+ * The chips a slot can take, by its kind: a person `body` / `outfit` / `hair`,
+ * a pet `body` / `coat`, a product `shape` / `finish`, a location none.
+ */
+export interface TrendChips {
+  body?: TrendChoice
+  outfit?: TrendChoice
+  hair?: TrendChoice
+  coat?: TrendChoice
+  shape?: TrendChoice
+  finish?: TrendChoice
+}
+
+export type TrendResolution = "480p" | "720p" | "1080p"
+
+/** A trend in the catalog (`list()`). Text is in the resolved locale. */
+export interface TrendCard {
+  id: string
+  slug: string
+  name: string
+  description?: string
+  tags: string[]
+  /** e.g. `"trending"`, `"new"`. */
+  badges: string[]
+  /** The trend's first example (never the clip it recasts). */
+  cover: { videoUrl: string; posterUrl?: string; width: number; height: number }
+  /** How many slots of each kind the trend has. */
+  needs: Record<TrendSlotKind, number>
+  /** The length of a full run, in seconds. */
+  durationSec: number
+  isFavorite: boolean
+}
+
+/** One slot of a trend: what it asks you for. */
+export interface TrendDetailSlot {
+  /** The key to fill in {@link TrendRunRequest.slots}, and to mention in `details` as `{slot:<key>}`. */
+  key: string
+  label: string
+  kind: TrendSlotKind
+  /** A required slot needs pictures; an optional one left empty takes the chosen example's. */
+  required: boolean
+  hint?: string
+  /** The chips this slot starts with (only its kind's own). */
+  defaults?: TrendChips
+}
+
+/** A finished run shown on a trend's page, with the pictures it used per slot. */
+export interface TrendExample {
+  videoUrl: string
+  posterUrl?: string
+  width: number
+  height: number
+  /** Slot key → the pictures this example used for it. */
+  slots: Record<string, string[]>
+}
+
+/** A trend's page (`get()`). */
+export interface TrendDetail extends TrendCard {
+  /** The published version this page shows. */
+  version: number
+  /** `4` when the trend offers a 4-second preview run, else `null`. */
+  previewSec: 4 | null
+  resolutions: TrendResolution[]
+  slots: TrendDetailSlot[]
+  examples: TrendExample[]
+}
+
+/** What you put in one slot of a run: 1–3 pictures, and the chips of the slot's kind. */
+export interface TrendRunSlot extends TrendChips {
+  images?: string[]
+}
+
+/** The body of `estimate()` and `run()`. */
+export interface TrendRunRequest {
+  /**
+   * Slot key → what you put in it. Every required slot needs pictures; an
+   * optional slot left out takes the chosen example's. 1–3 pictures per slot.
+   */
+  slots: Record<string, TrendRunSlot>
+  /** 1-based example whose pictures fill the optional slots you leave empty. Default 1. */
+  example?: number
+  /** Your own words, at most 1,000 characters. Mention a slot as `{slot:<key>}`. */
+  details?: string
+  /** `true` runs a 4-second preview (only when the trend's `previewSec` is `4`). */
+  preview?: boolean
+  /** Default `"480p"`. */
+  resolution?: TrendResolution
+  /** A draft run, only at 480p. Default `true` at 480p. */
+  draft?: boolean
+  /**
+   * A generation session of yours. Accepted (and checked: one you may not use
+   * is a 404), but not yet applied: trend runs are not filed into sessions yet.
+   */
+  sessionId?: string
+  /** Accepted, but not used by the run today. */
+  projectId?: string
+}
+
+/** What a run would cost, in credits (`estimate()`). */
+export interface TrendEstimate {
+  /** The charge the run is expected to come to. */
+  expectedCredits: number
+  /** What is reserved when the run starts; the run is charged what it actually costs. */
+  holdCredits: number
+  /** The parts of the quote, by name. */
+  breakdown: Record<string, number>
+}
+
+/** Per-call options for {@link TrendsResource.run}. */
+export interface TrendRunOptions {
+  /**
+   * Sent as the `Idempotency-Key` header, unchanged (an empty string sends no
+   * header). The server takes 8–200 characters and answers 400 for any other
+   * length. Reuse it when retrying the same run.
+   */
+  idempotencyKey?: string
+}
+
+/** One slot of a past run, as it was run. Labels are English. */
+export interface TrendRunDisplaySlot extends TrendChips {
+  key: string
+  label: string
+  kind: TrendSlotKind
+  images: string[]
+  /** `true` when the slot was left empty and the example's pictures filled it. */
+  fromExample: boolean
+}
+
+/** One of your trend runs (`runs()`). Stays readable after the trend moves on or is unpublished. */
+export interface TrendRun {
+  jobId: string
+  status: string
+  progress: number | null
+  error: { code?: string; message: string } | null
+  createdAt: string
+  completedAt: string | null
+  /** The trend and version it ran (name in English). */
+  trend: { id: string; slug: string; version: number; name: string }
+  /** The 1-based example used for empty optional slots. */
+  example: number
+  slots: TrendRunDisplaySlot[]
+  details?: string
+  preview: boolean
+  resolution: string
+  draft: boolean
+  /** The result, once completed. */
+  videoUrl: string | null
+  posterUrl: string | null
+  creditsCharged: number | null
+  /** The Full Quality redo of this draft, if one was made. */
+  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  /** Until when a completed draft can be redone in Full Quality; `null` otherwise. */
+  fullQualityUntil: string | null
+}
+
+export interface ListTrendsParams {
+  /** Search text. */
+  q?: string
+  tag?: string
+  /** `true` lists only your favorites. */
+  favorites?: boolean
+  /** A platform language for names and descriptions; default your profile's, then English. */
+  locale?: string
+  /** The previous page's `next`. */
+  cursor?: string
+  /** Page size, 1–60 (server default 30). */
+  limit?: number
+}
+
+export interface ListTrendRunsParams {
+  /** Only runs of this trend (its slug). */
+  trend?: string
+  /** The previous page's `next`. */
+  cursor?: string
+  /** Page size, 1–60 (server default 30). */
+  limit?: number
+}
+
+export interface TrendPage<T> {
+  data: T[]
+  /** Pass back as `cursor` for the next page; `null` on the last one. */
+  next: string | null
+}
+
+export class TrendsResource {
+  constructor(private client: NodaroClientCore) {}
+
+  /** The published catalog in its curated order (`GET /v1/trends`), a page at a time. */
+  list(params: ListTrendsParams = {}): Promise<TrendPage<TrendCard>> {
+    const query: Record<string, string> = {}
+    if (params.q) query.q = params.q
+    if (params.tag) query.tag = params.tag
+    if (params.favorites) query.favorites = "1"
+    if (params.locale) query.locale = params.locale
+    if (params.cursor) query.cursor = params.cursor
+    if (params.limit !== undefined) query.limit = String(params.limit)
+    return this.client.request("GET", "/v1/trends", { query })
+  }
+
+  /** A published trend's page (`GET /v1/trends/:slug`). */
+  async get(slug: string, params: { locale?: string } = {}): Promise<TrendDetail> {
+    const query: Record<string, string> = {}
+    if (params.locale) query.locale = params.locale
+    const res = await this.client.request<{ data: TrendDetail }>("GET", trendPath(slug), { query })
+    return res.data
+  }
+
+  /** Quote a run before starting it (`POST /v1/trends/:slug/estimate`); spends nothing. */
+  async estimate(slug: string, request: TrendRunRequest): Promise<TrendEstimate> {
+    const res = await this.client.request<{ data: TrendEstimate }>(
+      "POST",
+      trendPath(slug, "/estimate"),
+      { body: request },
+    )
+    return res.data
+  }
+
+  /**
+   * Start a run (`POST /v1/trends/:slug/runs`, 202). Returns the job to follow.
+   * With `options.idempotencyKey` (sent as the `Idempotency-Key` header) a
+   * repeat with the same key answers with the first run's `jobId`.
+   */
+  async run(slug: string, request: TrendRunRequest, options?: TrendRunOptions): Promise<{ jobId: string }> {
+    const res = await this.client.request<{ data: { jobId: string } }>(
+      "POST",
+      trendPath(slug, "/runs"),
+      {
+        body: request,
+        ...(options?.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+      },
+    )
+    return res.data
+  }
+
+  /** Your trend runs, newest first (`GET /v1/trends/runs`). A Full Quality redo is folded into its draft. */
+  runs(params: ListTrendRunsParams = {}): Promise<TrendPage<TrendRun>> {
+    const query: Record<string, string> = {}
+    if (params.trend) query.trend = params.trend
+    if (params.cursor) query.cursor = params.cursor
+    if (params.limit !== undefined) query.limit = String(params.limit)
+    return this.client.request("GET", "/v1/trends/runs", { query })
+  }
+
+  /** Add a trend to your favorites (`PUT /v1/trends/:slug/favorite`). */
+  async favorite(slug: string): Promise<void> {
+    await this.client.request<void>("PUT", trendPath(slug, "/favorite"))
+  }
+
+  /** Remove a trend from your favorites (`DELETE /v1/trends/:slug/favorite`). */
+  async unfavorite(slug: string): Promise<void> {
+    await this.client.request<void>("DELETE", trendPath(slug, "/favorite"))
+  }
+}

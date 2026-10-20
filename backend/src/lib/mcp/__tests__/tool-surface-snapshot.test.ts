@@ -1107,6 +1107,22 @@ const SPEAKER_LAYOUT_TOOL_BYTES = 6_217
 // 465_864 total − 462_730 = 3_134 B, far under the per-tool budget; the 103 B of headroom the list
 // had before is carried across. The route's rules live in docs/api-integration.md.
 const CAST_SWAP_TOOL_BYTES = 3_134
+// RAISED 2026-10-20 by four NEW tools, the trend verbs (the MCP face of /v1/trends): list_trends
+// and get_trend (jobs:read, read-only) and estimate_trend / run_trend (workflows:execute; run_trend
+// quotes without `confirm`, as cast_swap), and nothing else. All four are registered inside
+// hasCredits() (the routes are Cloud-only), so the cloud/all fixture gains the four names and
+// cloud/jobs the two reads. Measured by this suite on the same tree with and without them:
+// 483_972 total − 478_015 = 5_957 B (list_trends 763, get_trend 587, estimate_trend 1_913,
+// run_trend 2_694), each far under the per-tool budget; the 103 B of headroom the list had before
+// is carried across. The routes' rules live in docs/api-integration.md §13g.
+const TRENDS_TOOL_BYTES = 5_957
+// RAISED 2026-10-20 by the trend verbs' wording fixes, and nothing else. No tool was added, so the
+// fixture does NOT move: estimate_trend / run_trend say only an OPTIONAL slot left out takes the
+// example's pictures, and run_trend's `session_id` says it is accepted but not applied yet (the
+// `runs` slug refusal adds nothing to the wire). Measured by this suite on the same tree with and
+// without the change: 484_060 total − 483_972 = 88 B (estimate_trend 1_913 -> 1_935, run_trend
+// 2_694 -> 2_760); the 103 B of headroom the list had before is carried across.
+const TRENDS_WORDING_BYTES = 88
 
 // RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
 // added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
@@ -1272,7 +1288,9 @@ export const TOOL_WIRE_BUDGET = {
     TIGHTEN_FRAMING_SOURCE_BYTES +
     CLIP_PACK_RECORDINGS_BYTES +
     SPEAKER_LAYOUT_TOOL_BYTES +
-    CAST_SWAP_TOOL_BYTES,
+    CAST_SWAP_TOOL_BYTES +
+    TRENDS_TOOL_BYTES +
+    TRENDS_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

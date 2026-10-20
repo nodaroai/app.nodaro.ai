@@ -420,6 +420,12 @@ export const queryKeys = {
       ["admin", "workflow-templates", { page: "templates", ...filters }] as const,
     nodeDefaults: () => ["admin", "node-defaults"] as const,
     clientApps: () => ["admin", "client-apps"] as const,
+    /** Admin → Trends. Everything under ["admin", "trends"], so one invalidation refreshes the list and the open trend. */
+    trends: () => ["admin", "trends"] as const,
+    trend: (id: string) => ["admin", "trends", "one", id] as const,
+    trendTestRuns: (id: string) => ["admin", "trends", "one", id, "test-runs"] as const,
+    trendRunPrompt: (jobId: string) => ["admin", "trends", "run-prompt", jobId] as const,
+    trendEngineEnvironments: () => ["admin", "trends", "engine-environments"] as const,
   },
 
   nodeDefaults: {

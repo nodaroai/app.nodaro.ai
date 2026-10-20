@@ -302,6 +302,21 @@ nodaro recast create --workflow <id> --analysis-job <id> [--rights-attested] [--
 nodaro recast start <recastId> [--segment-pack scenes-max|scenes|max] [--json]   # render a planned run (idempotent)
 nodaro recast status <recastId> [--json]                # poll status + any pending interactive step
 
+# Trends — ready-made Cast Swap recipes: fill a trend's slots with your own pictures (Cloud edition)
+nodaro trends list [--search <text>] [--tag <tag>] [--favorites] [--locale <l>] [--limit <n>] [--cursor <c>] [--json]
+nodaro trends get <slug> [--locale <l>] [--json]          # its slots (key, kind, required), examples, preview, resolutions
+nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice <key>.<chip>=new|original] [--example <n>] [--details "…"] [--preview] [--resolution 480p|720p|1080p] [--no-draft] [--json]
+#   free quote: "about N credits (up to M held while it runs)". --slot is repeatable (1-3 pictures per slot;
+#   pictures are split where a new http(s) URL starts, so a URL holding commas stays whole; a slot key is
+#   1-32 of a-z, 0-9 and _, checked before anything is sent);
+#   --choice keeps a trait of the clip (original) or makes it anew from your pictures (new): a person's
+#   body / outfit / hair, a pet's body / coat, a product's shape / finish. Default 480p draft.
+nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-key <key>] [--json]
+#   SPENDS CREDITS — run `estimate` first; prints the job id (follow it with `nodaro jobs get <id>`).
+#   --session is accepted but not yet applied: trend runs are not filed into sessions yet
+nodaro trends runs [--trend <slug>] [--limit <n>] [--cursor <c>] [--json]   # your trend runs, newest first (--limit 1-60, here and on list)
+nodaro trends favorite <slug>                            # and: nodaro trends unfavorite <slug>
+
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
 nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>]   # interactive Q&A; node picker if --node-type omitted
 nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # return guided questions

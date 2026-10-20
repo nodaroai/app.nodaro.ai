@@ -14,6 +14,26 @@ import {
   fetchAdminNodeDefaults,
   updateAdminNodeDefault,
   deleteAdminNodeDefault,
+  fetchAdminTrends,
+  createAdminTrend,
+  fetchAdminTrend,
+  patchAdminTrend,
+  saveAdminTrendDraft,
+  storeAdminTrendMedia,
+  fetchAdminTrendTestRuns,
+  startAdminTrendTestRun,
+  fetchAdminTrendRunPrompt,
+  promoteAdminTrendExample,
+  reorderAdminTrendExamples,
+  removeAdminTrendExample,
+  publishAdminTrend,
+  unpublishAdminTrend,
+  fetchTrendEngineEnvironments,
+  type AdminTrendData,
+  type AdminTrendRun,
+  type TrendBadge,
+  type TrendLocalizedText,
+  type TrendTestRunRequest,
 } from "@/lib/api"
 
 /**
@@ -1452,5 +1472,183 @@ export function useToggleClientAppMutation() {
       qc.invalidateQueries({ queryKey: queryKeys.clientApps.all })
       qc.invalidateQueries({ queryKey: queryKeys.workflows.all })
     },
+  })
+}
+
+// --- Trends (EE admin: build, test, promote examples, publish) ---
+//
+// Every draft write carries the revision the screen holds and returns the new
+// one; the screen keeps its own copy (never one from a background refetch), so
+// a write after someone else's edit is a 409 `draft_conflict`, not a silent
+// overwrite. `isDraftConflict` tells the screen to reload.
+
+/** A run that has not ended yet: the test list polls while one is in flight. */
+const TREND_RUN_ENDED = new Set(["completed", "failed", "cancelled"])
+export const isTrendRunInFlight = (run: Pick<AdminTrendRun, "status">) => !TREND_RUN_ENDED.has(run.status)
+
+/**
+ * The trend screens show every write's refusal themselves (a conflict reloads,
+ * a blocked publish lists its reasons, the rest toast the server's message),
+ * so the app-wide mutation toast (lib/query-client.ts) must not add a second.
+ */
+const handledByScreen = () => {}
+
+export function isDraftConflict(err: unknown): boolean {
+  return err instanceof Error && (err as { code?: unknown }).code === "draft_conflict"
+}
+
+export function useAdminTrends() {
+  return useQuery({
+    queryKey: queryKeys.admin.trends(),
+    queryFn: fetchAdminTrends,
+    enabled: hasAdmin(),
+    staleTime: 30_000,
+  })
+}
+
+export function useAdminTrend(id: string) {
+  return useQuery({
+    queryKey: queryKeys.admin.trend(id),
+    queryFn: () => fetchAdminTrend(id),
+    enabled: hasAdmin() && id.length > 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useCreateTrend() {
+  const qc = useQueryClient()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (input: { slug: string; name: TrendLocalizedText }) => createAdminTrend(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.trends() }),
+  })
+}
+
+/** Refresh the open trend and the list after a write. */
+/**
+ * Refresh the open trend and the list after a write. The returned promise
+ * settles once the open trend has been refetched, and each hook returns it
+ * from `onSuccess`: the mutation stays pending (its buttons off) until the
+ * screen shows the data its new revision belongs to, and the screen's own
+ * `onSuccess` (which adopts that revision) runs only then. A fresh revision
+ * is never paired with a stale list (a second reorder or remove built from
+ * the old order would be accepted against the new one).
+ */
+function useInvalidateTrend() {
+  const qc = useQueryClient()
+  return (id: string): Promise<void> => {
+    void qc.invalidateQueries({ queryKey: queryKeys.admin.trends(), exact: true })
+    return qc.invalidateQueries({ queryKey: queryKeys.admin.trend(id), exact: true })
+  }
+}
+
+export function useSaveTrendDraft(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ data, revision }: { data: Omit<AdminTrendData, "examples">; revision: string }) =>
+      saveAdminTrendDraft(id, data, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function usePatchTrend(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (patch: { slug?: string; tags?: string[]; badges?: TrendBadge[]; sortOrder?: number }) =>
+      patchAdminTrend(id, patch),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+/** Copy an uploaded file's URL into the trend's storage (a source clip or a reference picture). */
+export function useTrendMedia(id: string) {
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (input: { url: string; kind: "source" | "reference" }) => storeAdminTrendMedia(id, input),
+  })
+}
+
+export function useTrendTestRuns(id: string) {
+  return useQuery({
+    queryKey: queryKeys.admin.trendTestRuns(id),
+    queryFn: () => fetchAdminTrendTestRuns(id),
+    enabled: hasAdmin() && id.length > 0,
+    refetchInterval: (q) => (q.state.data?.some(isTrendRunInFlight) ? 5_000 : false),
+  })
+}
+
+export function useStartTrendTestRun(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (body: TrendTestRunRequest) => startAdminTrendTestRun(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.trendTestRuns(id) }),
+  })
+}
+
+export function useTrendRunPrompt(jobId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.admin.trendRunPrompt(jobId ?? ""),
+    queryFn: () => fetchAdminTrendRunPrompt(jobId!),
+    enabled: hasAdmin() && !!jobId,
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
+export function usePromoteExample(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (jobId: string) => promoteAdminTrendExample(id, jobId),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function useReorderExamples(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ order, revision }: { order: number[]; revision: string }) => reorderAdminTrendExamples(id, order, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function useRemoveExample(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ index, revision }: { index: number; revision: string }) => removeAdminTrendExample(id, index, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function usePublishTrend(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: (revision?: string) => publishAdminTrend(id, revision),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function useUnpublishTrend(id: string) {
+  const invalidate = useInvalidateTrend()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: () => unpublishAdminTrend(id),
+    onSuccess: () => invalidate(id),
+  })
+}
+
+export function useEngineEnvironments() {
+  return useQuery({
+    queryKey: queryKeys.admin.trendEngineEnvironments(),
+    queryFn: fetchTrendEngineEnvironments,
+    enabled: hasAdmin(),
+    staleTime: 60_000,
   })
 }
