@@ -47,6 +47,8 @@ const CONTINUATION_NEXT_STEP: Readonly<Record<string, (jobId: string) => string>
 export function registerUseCaseCommands(cmd: Command): void {
   // ── tighten-episode (podcast use-case node) ─────────────────────────────
   const framingLayouts: readonly string[] = ["auto", ...SPEAKER_LAYOUT_IDS]
+  /** The body's framing sources, every one of `TightenEpisodeInput["framingSource"]` (a Record, so a new one fails typecheck here). */
+  const FRAMING_SOURCES = Object.keys({ auto: true, static: true, tracking: true } satisfies Record<NonNullable<TightenEpisodeInput["framingSource"]>, true>)
   withRecordingsOptions(
     cmd
       .command("tighten-episode")
@@ -56,6 +58,10 @@ export function registerUseCaseCommands(cmd: Command): void {
     .option("--output <kind>", "video | audio (an audio recording always makes an audio episode)")
     .option("--framing <aspect>", `frame a video episode on its speakers: ${EDL_TARGET_ASPECTS.join(" | ")}`)
     .option("--layout <layout>", `layout with --framing (default auto): ${framingLayouts.join(" | ")}`)
+    .option(
+      "--framing-source <source>",
+      `with --framing, how it follows the speakers: ${FRAMING_SOURCES.join(" | ")} (default static: the even split; tracking follows faces with Speaker Frames, charged per started block of 1,000 sampled frames; auto follows faces while Speaker Frames is available to you)`,
+    )
     .option("--no-captions", "no captions on a video episode")
     .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
     .option("--plan-tier <tier>", EDIT_PLAN_TIERS.join(" | "))
@@ -73,6 +79,7 @@ export function registerUseCaseCommands(cmd: Command): void {
             output?: string
             framing?: string
             layout?: string
+            framingSource?: string
             captions: boolean
             review?: boolean
             planTier?: string
@@ -97,6 +104,14 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--layout must be ${framingLayouts.join(", ")} (got "${opts.layout}")`)
           process.exit(1)
         }
+        if (opts.framingSource !== undefined && opts.framing === undefined) {
+          warn("--framing-source applies with --framing only (it picks how the framing follows the speakers)")
+          process.exit(1)
+        }
+        if (opts.framingSource !== undefined && !(FRAMING_SOURCES as readonly string[]).includes(opts.framingSource)) {
+          warn(`--framing-source must be ${FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
+          process.exit(1)
+        }
         const recordings = recordingsInput(opts)
         type Framing = NonNullable<TightenEpisodeInput["framing"]>
         try {
@@ -108,6 +123,7 @@ export function registerUseCaseCommands(cmd: Command): void {
             ...(opts.framing
               ? { framing: { aspect: opts.framing as Framing["aspect"], layout: (opts.layout ?? "auto") as Framing["layout"] } }
               : {}),
+            ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<TightenEpisodeInput["framingSource"]> } : {}),
             // commander's --no-captions defaults `captions` to true: send it only when turned off.
             ...(opts.captions === false ? { captions: false } : {}),
             ...(opts.review ? { reviewBeforeRender: true } : {}),

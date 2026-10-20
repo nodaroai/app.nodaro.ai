@@ -14,7 +14,7 @@
 //   when `output` is audio or the recording has no picture, which is why that pip is
 //   runtimeTyped — and the plan (an EDL) on `json`.
 import { z } from "zod"
-import { SPEAKER_VIEW_LAYOUT_SETTINGS } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_LAYOUT_SETTINGS, USE_CASE_FRAMING_SOURCES } from "@nodaro/render-rules"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../../lib/url-validator.js"
@@ -36,6 +36,15 @@ export const body = z.object({
     aspect: z.enum(EDL_TARGET_ASPECTS as unknown as [string, ...string[]]),
     layout: z.enum(SPEAKER_VIEW_LAYOUT_SETTINGS as unknown as [string, ...string[]]),
   }).nullable().optional(),
+  /**
+   * Where a framed episode's boxes come from (decided 2026-10-17): `static`,
+   * the even split by speaker; `tracking`, Speaker Frames follows faces and
+   * its tracks feed Speaker View; `auto`, tracking while Speaker Frames is
+   * available to the caller, else static (decided 2026-10-20 — the route
+   * rewrites it before anything is built). Absent = static (a caller that never sends it keeps its run).
+   * Read only with a framing.
+   */
+  framingSource: z.enum(USE_CASE_FRAMING_SOURCES as unknown as [string, ...string[]]).optional(),
   captions: z.boolean().optional(),
   captionStyle: z.enum(ALL_CAPTION_STYLES as unknown as [string, ...string[]]).optional(),
   reviewBeforeRender: z.boolean().optional(),
@@ -54,6 +63,7 @@ export const useCase: UnitUseCase = {
       { key: "musicUrl", type: "audio-url" },
       { key: "output", type: "select", options: ["video", "audio"] },
       { key: "framing", type: "object" },
+      { key: "framingSource", type: "select", options: USE_CASE_FRAMING_SOURCES as unknown as string[] },
       { key: "captions", type: "boolean" },
       { key: "captionStyle", type: "select", options: ALL_CAPTION_STYLES as unknown as string[] },
       { key: "reviewBeforeRender", type: "boolean" },

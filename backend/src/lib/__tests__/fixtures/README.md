@@ -234,3 +234,10 @@ audio). Several recordings are read only for a viewer who may use Speaker Map;
 every engine and estimate call these fixtures make is a viewer who may not, so
 every body and expansion row — the two-recording rows included — is the run
 exactly as before, unchanged.
+
+The same record was corrected by hand again, never re-recorded, when Tighten
+Episode came to take a framing source (ruled 2026-10-17), recomputed with the
+test's own function: `bodySchemas["tighten-episode"]` gains `framingSource`
+(`auto`, `static` or `tracking`). Absent reads `static`, the even split, and
+the resolved settings carry it only when a framed episode follows faces, so
+every other row is unchanged.

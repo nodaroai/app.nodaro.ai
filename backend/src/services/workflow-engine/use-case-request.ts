@@ -20,6 +20,7 @@ import {
   usecaseRunRecordings,
   usecaseSentSettings,
   type UseCaseNodeType,
+  type UseCaseRunViewer,
 } from "@nodaro/render-rules"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../../lib/render-final-codes.js"
 import { usecaseBodyTakesEmpty, usecaseBodyTakesNull } from "../../lib/use-case/bodies.js"
@@ -97,13 +98,15 @@ export function failedAttemptOf(
  * run holds it, its input overrides merged. How many recordings, whether the
  * master and the Cameras settings ride, is both engines' one rule
  * (`usecaseRunRecordings`): several recordings and a master only when
- * `multicam` (the run's viewer may use Speaker Map, `usecaseMulticamAvailable`),
- * else the first recording alone, exactly as before multicam. Key order: the
+ * `viewer.multicam` (the run's viewer may use Speaker Map, `usecaseMulticamAvailable`),
+ * else the first recording alone, exactly as before multicam; an `auto`
+ * framing source is sent as the even split unless `viewer.framesAvailable`
+ * (`usecaseFramingForViewer`). Key order: the
  * recordings, music, intro card, master, then the settings. Throws when no
  * recording is wired. Also what a failed attempt's inputs are held to before
  * it is resumed (failed-attempt.ts `attemptRanWithInputs`).
  */
-export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs, multicam = false): Record<string, unknown> {
+export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs, viewer: UseCaseRunViewer): Record<string, unknown> {
   const type = node.type as UseCaseNodeType
   const d = usecaseDescriptor(type)
   const data = (node.data ?? {}) as Record<string, unknown>
@@ -121,7 +124,8 @@ export function freshRunInputs(node: SimpleNode, resolvedInputs: ResolvedInputs,
     maxRecordings: d.maxRecordings,
     takesMaster: d.inputs.includes("masterAudio"),
     master: resolvedInputs.useCaseMasterAudio ? { nodeId: resolvedInputs.useCaseMasterAudioNodeId ?? "", url: resolvedInputs.useCaseMasterAudio } : undefined,
-    multicam,
+    multicam: viewer.multicam,
+    framesAvailable: viewer.framesAvailable,
     settings: sent,
   })
   if (run.recordings.length === 0) throw new Error(`${d.label} needs a recording wired into Media`)
@@ -141,8 +145,8 @@ export function requestOf(
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
   failedAttempt: string | null,
-  /** The run's viewer may use Speaker Map: the node reads every recording and its master (`freshRunInputs`). */
-  multicam = false,
+  /** What the run's viewer may use: Speaker Map (every recording and the master) and Speaker Frames (`auto` follows faces) — `freshRunInputs`. */
+  viewer: UseCaseRunViewer,
 ): UseCaseRequest {
   const type = node.type as UseCaseNodeType
   const d = usecaseDescriptor(type)
@@ -165,7 +169,7 @@ export function requestOf(
     const edit = cont.mode === "render-final" && edited !== undefined && edited !== null ? { editedEdl: edited } : {}
     return { path: continuePath, label: d.label, body: { jobId: cont.jobId, mode: cont.mode, ...edit, ...lane } }
   }
-  const fresh = (): UseCaseRequest => ({ path: d.route, label: d.label, body: { ...freshRunInputs(node, resolvedInputs, multicam), ...lane } })
+  const fresh = (): UseCaseRequest => ({ path: d.route, label: d.label, body: { ...freshRunInputs(node, resolvedInputs, viewer), ...lane } })
   if (failedAttempt) return { path: continuePath, label: d.label, body: { jobId: failedAttempt, mode: "from-failed", ...lane }, fallback: fresh }
   return fresh()
 }

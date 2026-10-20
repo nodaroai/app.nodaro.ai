@@ -52,6 +52,7 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { creditsOf } from "./_credit-hint.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
+import { framingSourceInputShape, framingSourcePayload } from "./verbs-use-case-framing.js"
 import { RECORDINGS_SENTENCE, recordingsInputShape, recordingsPayload } from "./verbs-use-case-recordings.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -257,6 +258,7 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
           .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
           .optional()
           .describe("Layout when framing_aspect is set (default auto; one the shape does not draw is snapped). Ignored without framing_aspect."),
+        ...framingSourceInputShape,
         captions: z.boolean().optional().describe(`Burn captions into a video episode (default ${D.captions}).`),
         caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${D.captionStyle}).`),
         review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${D.reviewBeforeRender}).`),
@@ -288,6 +290,7 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
           ...(args.music_url ? { musicUrl: args.music_url } : {}),
           ...(args.output ? { output: args.output } : {}),
           ...(args.framing_aspect ? { framing: { aspect: args.framing_aspect, layout: args.framing_layout ?? "auto" } } : {}),
+          ...framingSourcePayload(args),
           ...(args.captions !== undefined ? { captions: args.captions } : {}),
           ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
           ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),

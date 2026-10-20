@@ -12063,6 +12063,14 @@
             }
           ]
         },
+        "framingSource": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "static",
+            "tracking"
+          ]
+        },
         "captions": {
           "type": "boolean"
         },

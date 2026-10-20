@@ -17,7 +17,16 @@
  * for several itself is refused before anything is probed
  * (`usecaseMulticamDenial`).
  */
-import { MULTICAM_SPEAKER_MAP_TYPE, isUseCaseNodeType, usecaseDescriptor, usecaseDistinctMaster, type UseCaseNodeType } from "@nodaro/render-rules"
+import {
+  MULTICAM_SPEAKER_MAP_TYPE,
+  USE_CASE_FRAMES_TYPE,
+  isUseCaseNodeType,
+  usecaseDescriptor,
+  usecaseDistinctMaster,
+  type UseCaseNodeType,
+  type UseCaseRunViewer,
+  type UseCaseViewerFlags,
+} from "@nodaro/render-rules"
 import { isNodeDeniedForUser } from "../availability-viewer.js"
 import { isNodeDenied, USER_VIEWER } from "../surface-deny.js"
 
@@ -65,6 +74,72 @@ export async function usecaseMulticamEstimateFor(
  */
 export function usecaseMulticamForEveryone(nodes: ReadonlyArray<{ readonly type?: unknown }>): boolean {
   return takesSeveralRecordings(nodes) && !isNodeDenied(MULTICAM_SPEAKER_MAP_TYPE, USER_VIEWER)
+}
+
+/**
+ * Whether `userId`'s run of a use-case node follows faces when its framing
+ * source is `auto` (decided 2026-10-20): only while Speaker Frames is
+ * available to them; otherwise `auto` is the even split, silently
+ * (`usecaseFramingForViewer`). An answer that cannot be read is "no": the
+ * even split, nothing charged that was not asked for, never a refusal.
+ */
+export async function usecaseFramesAvailable(userId: string | null | undefined): Promise<boolean> {
+  try {
+    return !(await isNodeDeniedForUser(USE_CASE_FRAMES_TYPE, userId))
+  } catch {
+    return false
+  }
+}
+
+/** Both answers a run of a use-case node reads for `userId` (`UseCaseRunViewer`). */
+export async function usecaseRunViewer(userId: string | null | undefined): Promise<UseCaseRunViewer> {
+  const [multicam, framesAvailable] = await Promise.all([usecaseMulticamAvailable(userId), usecaseFramesAvailable(userId)])
+  return { multicam, framesAvailable }
+}
+
+/**
+ * What an estimate of `nodes` made for `userId` reads of its use-case nodes
+ * (`WorkflowEstimateOptions.multicam` / `.framesWithheld`): several
+ * recordings only for a viewer who may use Speaker Map
+ * (`usecaseMulticamEstimateFor`), and an `auto` framing source as the even
+ * split only for a viewer Speaker Frames is withheld from. Only `true` flags
+ * are set, so a graph with no use-case node — or a viewer who may use both —
+ * is priced as it always was. An answer that cannot be read leaves Speaker
+ * Frames available: the estimate quotes the tracking chain, never under the
+ * run's hold.
+ */
+export async function usecaseViewerEstimateFor(
+  nodes: ReadonlyArray<{ readonly type?: unknown }>,
+  userId: string | null | undefined,
+): Promise<UseCaseViewerFlags> {
+  const multicam = await usecaseMulticamEstimateFor(nodes, userId)
+  let framesWithheld = false
+  if (framesSourced(nodes)) {
+    try {
+      framesWithheld = await isNodeDeniedForUser(USE_CASE_FRAMES_TYPE, userId)
+    } catch {
+      framesWithheld = false
+    }
+  }
+  return { ...(multicam ? { multicam: true } : {}), ...(framesWithheld ? { framesWithheld: true } : {}) }
+}
+
+/**
+ * `usecaseViewerEstimateFor` for a figure shown to EVERYONE (a published
+ * app's, component's or template's stored listing, decided 2026-10-20): a
+ * general user's answers — several recordings while Speaker Map is available
+ * to users (`usecaseMulticamForEveryone`), and `auto` as the even split while
+ * Speaker Frames is withheld from them. Never the publisher's own.
+ */
+export function usecaseViewerForEveryone(nodes: ReadonlyArray<{ readonly type?: unknown }>): UseCaseViewerFlags {
+  const multicam = usecaseMulticamForEveryone(nodes)
+  const framesWithheld = framesSourced(nodes) && isNodeDenied(USE_CASE_FRAMES_TYPE, USER_VIEWER)
+  return { ...(multicam ? { multicam: true } : {}), ...(framesWithheld ? { framesWithheld: true } : {}) }
+}
+
+/** The graph holds a use-case node whose framing source a viewer's availability can decide. */
+function framesSourced(nodes: ReadonlyArray<{ readonly type?: unknown }>): boolean {
+  return nodes.some((n) => typeof n.type === "string" && isUseCaseNodeType(n.type) && usecaseDescriptor(n.type).settingKeys.includes("framingSource"))
 }
 
 /** The graph holds a use-case node that can read several recordings. */

@@ -41,6 +41,8 @@ import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import { ALL_NODE_HANDLES } from "../node-handles.js"
 
 const FRAMINGS = [null, { aspect: "9:16", layout: "stacked" }, { aspect: "16:9", layout: "side-by-side" }, { aspect: "1:1", layout: "grid" }] as const
+/** Where a framed render's boxes come from (decided 2026-10-17): absent (a saved node), the even split, or Speaker Frames following faces. */
+const FRAMING_SOURCES = [undefined, "static", "tracking"] as const
 
 function* settingsSpace() {
   for (const kind of ["video", "audio"] as const)
@@ -50,10 +52,11 @@ function* settingsSpace() {
           for (const planTier of ["economy", "standard", "premium"] as const)
             for (const music of [false, true])
               for (const durationSec of [undefined, 60, 3600])
-                for (const framing of FRAMINGS) {
-                  const raw = { ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, planTier, framing }
-                  yield { kind, music, durationSec, raw, settings: resolveTightenEpisodeSettings(raw, kind) }
-                }
+                for (const framing of FRAMINGS)
+                  for (const framingSource of FRAMING_SOURCES) {
+                    const raw = { ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, planTier, framing, ...(framingSource ? { framingSource } : {}) }
+                    yield { kind, music, durationSec, raw, settings: resolveTightenEpisodeSettings(raw, kind) }
+                  }
 }
 
 type SettingsCase = { readonly raw: UseCaseSettings; readonly kind: UseCaseMediaKind; readonly sources: UseCaseSources }
@@ -84,6 +87,7 @@ function* multicamSpace(): Generator<SettingsCase & { readonly name: string }> {
       for (const wide of [null, recs.length])
         for (const speakerCameras of [{}, { "1": 2, "2": 0 }])
           for (const framing of [null, { aspect: "9:16", layout: "stacked" }])
+            for (const framingSource of FRAMING_SOURCES)
             for (const captions of [true, false])
               for (const reviewBeforeRender of [true, false])
                 for (const output of ["video", "audio"] as const) {
@@ -92,7 +96,7 @@ function* multicamSpace(): Generator<SettingsCase & { readonly name: string }> {
                   const music = synced && captions
                   yield {
                     name,
-                    raw: { ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, framing, cameras },
+                    raw: { ...TIGHTEN_EPISODE_DEFAULTS, output, captions, reviewBeforeRender, framing, cameras, ...(framingSource ? { framingSource } : {}) },
                     kind: usecaseRecordingsKind(kinds)!,
                     sources: { ...sources, ...(music ? { music: { url: "https://r2/bed.mp3" } } : {}) },
                   }
@@ -257,6 +261,7 @@ function problems(g: UseCaseGraph): string[] {
 describe("use-case graphs are runnable graphs (every setting combination)", () => {
   it("Tighten Episode", () => {
     let count = 0
+    let tracked = 0
     for (const c of settingsSpace()) {
       const g = buildTightenEpisodeGraph(c.settings, {
         media: { url: "https://r2/ep", kind: c.kind, ...(c.durationSec ? { durationSec: c.durationSec } : {}) },
@@ -264,8 +269,11 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
       })
       expect(problems(g), JSON.stringify({ ...c, settings: undefined })).toEqual([])
       count++
+      if (g.nodes.some((n) => n.type === "speaker-frames")) tracked++
     }
-    expect(count).toBe(1152)
+    expect(count).toBe(3456) // 1152 × 3 framing sources
+    // Framed (3 framings) × tracking × video output × video recording: 2 captions × 2 review × 3 tiers × 2 music × 3 lengths each.
+    expect(tracked).toBe(3 * 72)
   })
 
   it("Tighten Episode on several recordings or a Master audio (every set the route lets run)", () => {
@@ -276,8 +284,8 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
       expect(problems(g), JSON.stringify({ name: c.name, raw: c.raw })).toEqual([])
       count++
     }
-    // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 framings × 2 captions × 2 review × 2 outputs, none refused.
-    expect(count).toBe(1024)
+    // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 framings × 3 framing sources × 2 captions × 2 review × 2 outputs, none refused.
+    expect(count).toBe(3072)
   })
 
   it("Trailer on several recordings or a Master audio (every set the route lets run)", () => {

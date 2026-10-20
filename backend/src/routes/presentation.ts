@@ -23,7 +23,7 @@ import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
-import { usecaseMulticamEstimateFor } from "../lib/use-case/inner-availability.js"
+import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
@@ -232,8 +232,8 @@ export async function presentationRoutes(app: FastifyInstance) {
     const wfEstimateEdges = (workflow.edges ?? []) as EstimateEdge[]
     const estimatedCost = await estimateWorkflowCredits(shown, wfEstimateEdges, {
       speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, shown),
-      // A use-case node is priced on several recordings only for a viewer who may use Speaker Map (decided 2026-10-19).
-      ...((await usecaseMulticamEstimateFor(shown, req.userId)) ? { multicam: true } : {}),
+      // A use-case node is priced on the recordings and framing source the viewer's run reads (decided 2026-10-19/20).
+      ...(await usecaseViewerEstimateFor(shown, req.userId)),
     })
 
     // Extract presentation settings from workflow settings

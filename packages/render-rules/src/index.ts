@@ -409,6 +409,25 @@ export {
   speakerFramesEstimateBlocks,
   speakerFramesScopeFrames,
 } from "./speaker-frames-pricing"
+export { editPlanProducerKind, editPlanSourceKind, type EditPlanSourceKind } from "./edit-plan-source-kind"
+export {
+  USE_CASE_FRAMES_TYPE,
+  USE_CASE_RUN_VIEWER_AS_BEFORE,
+  usecaseFramesAvailableFor,
+  usecaseFramingForViewer,
+  type UseCaseRunViewer,
+  type UseCaseViewerFlags,
+} from "./use-case-framing-viewer"
+export {
+  USE_CASE_FRAMES_NODE_ID,
+  USE_CASE_FRAMING_SOURCES,
+  resolveUseCaseFramingSource,
+  usecaseAutoFraming,
+  usecaseFramesNode,
+  usecaseFramesWires,
+  type ResolvedFramingSource,
+  type UseCaseFramingSource,
+} from "./use-case-framing"
 export {
   SPEAKER_VIEW_MOTIONS,
   SPEAKER_VIEW_TRACKED_DEFAULT_MOTION,

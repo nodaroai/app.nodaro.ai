@@ -43,6 +43,7 @@ import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED } from "@nodaro/shared/n
 import { continueUseCase, getJobStatus, runUseCase, type UseCaseApiParams } from "@/lib/api"
 import { executionErrorText } from "@/lib/execution-error-text"
 import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
+import { usecaseFramesOffered } from "@/lib/use-case-frames-viewer"
 import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseListLandingFields, usecaseRunResultFields, usecaseTakeResultFields } from "@/lib/use-case-run-result"
 import { isInputWarningCode } from "@/lib/input-warning-codes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -397,7 +398,8 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
     useWorkflowStore.getState().updateNodeData(node.id, { useCaseJobId: undefined, useCaseExecutionId: undefined })
   }
   // The recordings in the node's order, the master and the Cameras settings — the server's engine's rule
-  // (usecaseRunRecordings): several recordings and a master only for a viewer who may use Speaker Map.
+  // (usecaseRunRecordings): several recordings and a master only for a viewer who may use Speaker Map, an
+  // `auto` framing source as the even split for one Speaker Frames is withheld from.
   const run = usecaseRunRecordings({
     wired: inputs.useCaseMedia,
     data,
@@ -405,6 +407,7 @@ export function executeUseCase(node: WorkflowNode, inputs: UseCaseInputs, ctx: E
     takesMaster: d.inputs.includes("masterAudio"),
     master: inputs.useCaseMasterAudio ? { nodeId: inputs.useCaseMasterAudioNodeId ?? "", url: inputs.useCaseMasterAudio } : undefined,
     multicam: usecaseMulticamOffered(),
+    framesAvailable: usecaseFramesOffered(),
     // Both engines' rule (usecaseSentSettings): unset not sent, a null or "" only where the body takes one, the rest as held.
     settings: usecaseSentSettings(type, d.settingKeys, data),
   })

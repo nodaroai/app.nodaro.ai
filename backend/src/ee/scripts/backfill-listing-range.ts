@@ -45,7 +45,7 @@ import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../../
 import { appListingMaxColumns, type AppListingSplit } from "../../lib/app-listing-price.js"
 import { MAX_COLUMNS } from "../../lib/listing-max-columns.js"
 import { estimateWorkflowListingCredits, type EstimateEdge, type EstimateNode, type ListingPublishType } from "../billing/credits.js"
-import { usecaseMulticamForEveryone } from "../../lib/use-case/inner-availability.js"
+import { usecaseViewerForEveryone } from "../../lib/use-case/inner-availability.js"
 import { loadAvailabilityOverridesForScript } from "../../lib/availability-override.js"
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ async function ceilingOf(row: ListingRow, publishType: ListingPublishType): Prom
     ...(publishType === "template" ? {} : { exposedListNodeIds: exposedListNodeIds(settings, nodes) }),
     snapshotSettings: settings,
     // As a republish prices it: a general user's run (decided 2026-10-20).
-    ...(usecaseMulticamForEveryone(nodes) ? { multicam: true } : {}),
+    ...usecaseViewerForEveryone(nodes),
   })
   return listing.ceiling ?? listing
 }
@@ -146,8 +146,8 @@ export async function runRangeBackfill(opts: RangeBackfillOptions): Promise<{ ok
     console.error("Refusing: this environment is not the Cloud edition (set EDITION=cloud). Outside it the estimate prices unmarked and without the admin price overrides.")
     return { ok: false, written: 0, rows: 0 }
   }
-  // A listing is priced as a general user's run (usecaseMulticamForEveryone): read the
-  // deployment's availability first — a cold cache would read Speaker Map as released.
+  // A listing is priced as a general user's run (usecaseViewerForEveryone: Speaker Map and
+  // Speaker Frames): read the deployment's availability first — a cold cache would read both as released.
   if (!(await loadAvailabilityOverridesForScript())) {
     console.error("Refusing: the deployment's availability (Admin → Availability) could not be read. Without it a node hidden from users reads as released, and a listing would be priced as their run is not.")
     return { ok: false, written: 0, rows: 0 }

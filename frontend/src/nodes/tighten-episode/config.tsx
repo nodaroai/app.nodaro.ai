@@ -22,6 +22,7 @@ import { RunUpToHereNotice } from "@/components/editor/config-panels/run-up-to-h
 import { CAPTION_STYLE_LABEL_KEYS } from "@/components/editor/config-panels/caption-style-labels"
 import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
 import { UseCaseCamerasFields } from "@/components/editor/config-panels/use-case-cameras-fields"
+import { UseCaseFramingSourceField } from "@/components/editor/config-panels/use-case-framing-source-field"
 import { usecaseWiredMediaKind } from "@/lib/use-case-audio-lock"
 import { useUseCaseMulticamViewer } from "@/lib/use-case-multicam-viewer"
 import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
@@ -45,7 +46,10 @@ const D = TIGHTEN_EPISODE_DEFAULTS
  *  - framing offers only the layouts Speaker View draws at the chosen shape,
  *    and a stored layout it does not draw is snapped as the run snaps it;
  *  - a stored framing the run would not read at all (a shape it has no
- *    renderer for) is cleared, as the run's resolver clears it.
+ *    renderer for) is cleared, as the run's resolver clears it;
+ *  - with a framing chosen, its source (`UseCaseFramingSourceField`): a saved
+ *    node without one shows — and runs — the even split; a new node starts on
+ *    automatic (unit.json). Hidden with Framing under the audio lock, kept.
  * Two or more recordings or a Master audio show the Cameras section
  * (`UseCaseCamerasFields`) and badge what the run would refuse
  * (`usecaseRecordingsProblem`) — only to a viewer who may use Speaker Map;
@@ -154,6 +158,11 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources
           )}
           <p className="text-xs text-muted-foreground">{t("proccfg.tightenFramingHint")}</p>
         </div>
+      )}
+
+      {/* Only with a framing chosen; hidden with Framing under the audio lock — never cleared. */}
+      {output === "video" && framing && (
+        <UseCaseFramingSourceField value={data.framingSource} onChange={(framingSource) => onUpdate({ framingSource })} absent="static" />
       )}
 
       {output === "video" && (

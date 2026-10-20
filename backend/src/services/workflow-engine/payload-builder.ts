@@ -57,7 +57,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, pickSunoSeparateSource } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, pickSunoSeparateSource } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -4556,7 +4556,7 @@ export function buildPayload(
         const src: Record<string, unknown> = {
           id: row.nodeId,
           url: row.url,
-          kind: c.kind === "audio" || c.kind === "video" ? c.kind : row.kind,
+          kind: editPlanSourceKind(c.kind, row.kind),
         }
         if (typeof c.role === "string" && c.role) src.role = c.role
         if (Array.isArray(c.speakers) && c.speakers.length > 0) {

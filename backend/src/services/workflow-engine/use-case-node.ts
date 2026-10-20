@@ -40,7 +40,7 @@ import { DrainAbortError, isWorkerDraining } from "../../lib/worker-drain.js"
 import { cancelOwnedJob } from "../../lib/cancel-job.js"
 import { IN_FLIGHT_JOB_STATUSES } from "../../lib/job-status.js"
 import { USE_CASE_MAX_DEPTH } from "../../lib/use-case/lanes.js"
-import { usecaseMulticamAvailable } from "../../lib/use-case/inner-availability.js"
+import { usecaseRunViewer } from "../../lib/use-case/inner-availability.js"
 import { syncHttpIdempotencyKey } from "./idempotency-key.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
 import { usecaseJobOutput } from "./use-case-output.js"
@@ -48,7 +48,7 @@ import { executionCancelledNow } from "./execution-cancel-check.js"
 import { askRoute, coded, continuingGeneration, failedAttemptOf, freshRunInputs, requestOf, type CodedError, type UseCaseRequest } from "./use-case-request.js"
 import { attemptMediaKind, attemptRanWithInputs } from "./failed-attempt.js"
 import { loadExecutionForWrapper } from "../../lib/execution-inline-graph.js"
-import type { UseCaseNodeType } from "@nodaro/render-rules"
+import type { UseCaseNodeType, UseCaseRunViewer } from "@nodaro/render-rules"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS, type NodeOutput, type OrchestratorContext, type ResolvedInputs, type SimpleNode } from "./types.js"
 
 /** How long a continue answered "still settling" (or a wrapper not written yet) waits before it asks again. */
@@ -140,8 +140,8 @@ export async function attemptStillApplies(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   userId: string,
-  /** Whether the run's viewer may use Speaker Map: what a fresh run of the node would read (`freshRunInputs`). */
-  multicam = false,
+  /** What the run's viewer may use (Speaker Map, Speaker Frames): what a fresh run of the node would read (`freshRunInputs`). */
+  viewer: UseCaseRunViewer,
 ): Promise<boolean | undefined> {
   const row = await readWrapper(jobId, userId)
   if (row === undefined) return undefined
@@ -160,7 +160,7 @@ export async function attemptStillApplies(
   if (!kind) return false
   let now: Record<string, unknown>
   try {
-    now = freshRunInputs(node, resolvedInputs, multicam)
+    now = freshRunInputs(node, resolvedInputs, viewer)
   } catch {
     return false
   }
@@ -188,9 +188,10 @@ export async function executeUseCaseNode(
   const key = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
   const label = usecaseNodeLabel(node.type)
   const failedAttempt = failedAttemptOf(node, ctx, iterationIndex, idempotencyScope)
-  // Several recordings and a Master audio are read only for a viewer who may use Speaker Map (decided 2026-10-19).
-  const multicam = await usecaseMulticamAvailable(ctx.userId)
-  let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttempt, multicam)
+  // Several recordings and a Master audio are read only for a viewer who may use Speaker Map (decided
+  // 2026-10-19); an `auto` framing source follows faces only for one who may use Speaker Frames (2026-10-20).
+  const viewer = await usecaseRunViewer(ctx.userId)
+  let request: UseCaseRequest = requestOf(node, resolvedInputs, ctx, failedAttempt, viewer)
   /** A failed attempt this call would resume, not yet held to the node's current inputs. */
   let attemptToCheck = failedAttempt !== null && request.fallback ? failedAttempt : null
   let target: Target | undefined
@@ -256,7 +257,7 @@ export async function executeUseCaseNode(
       }
     } else if (attemptToCheck) {
       // The attempt is resumed only on the inputs it ran with; else a fresh run.
-      const applies = await attemptStillApplies(attemptToCheck, node, resolvedInputs, ctx.userId, multicam)
+      const applies = await attemptStillApplies(attemptToCheck, node, resolvedInputs, ctx.userId, viewer)
       if (applies !== undefined) {
         attemptToCheck = null
         if (!applies) request = request.fallback!()

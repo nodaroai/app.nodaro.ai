@@ -26,8 +26,10 @@ const {
 }))
 
 // Several recordings are priced only for a caller who may use Speaker Map (decided 2026-10-19).
-const multicamViewer = vi.hoisted(() => ({ on: false }))
-vi.mock("@/lib/use-case/inner-availability.js", () => ({ usecaseMulticamAvailable: async () => multicamViewer.on }))
+const multicamViewer = vi.hoisted(() => ({ on: false, framesWithheld: false }))
+vi.mock("@/lib/use-case/inner-availability.js", () => ({
+  usecaseViewerEstimateFor: async () => ({ ...(multicamViewer.on ? { multicam: true } : {}), ...(multicamViewer.framesWithheld ? { framesWithheld: true } : {}) }),
+}))
 
 // The batch route prices from the price table; the rest of the billing module
 // stays real (chargedCredits is the formula under test with it).
@@ -707,6 +709,18 @@ describe("POST /v1/credits/estimate-workflow", () => {
       expect(mockEstimateWorkflowCredits).toHaveBeenLastCalledWith(nodes, undefined, { multicam: true })
     } finally {
       multicamViewer.on = false
+    }
+  })
+
+  it("a caller Speaker Frames is withheld from: an auto framing source is priced as the even split (decided 2026-10-20)", async () => {
+    mockEstimateWorkflowCredits.mockReturnValue(50)
+    multicamViewer.framesWithheld = true
+    try {
+      const nodes = [{ id: "t", type: "tighten-episode", data: {} }]
+      await app.inject({ method: "POST", url: "/v1/credits/estimate-workflow", payload: { nodes } })
+      expect(mockEstimateWorkflowCredits).toHaveBeenLastCalledWith(nodes, undefined, { framesWithheld: true })
+    } finally {
+      multicamViewer.framesWithheld = false
     }
   })
 

@@ -19,6 +19,7 @@
  * enterprise concern) and only the already-allowlisted callers reach into it.
  */
 import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
+import { usecaseFramesWithheld } from "@/lib/use-case-frames-viewer"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
@@ -257,8 +258,9 @@ interface ExpandedGraph {
  * edge shape (inner ids are `<node>::<id>`). `null` when there is none.
  */
 function expandedForEditor(nodes: WorkflowNode[], edges: WorkflowEdge[]): ExpandedGraph | null {
-  // Several recordings and a master only for a viewer who may use Speaker Map: the run reads what the quote prices.
-  const expansion = expandUseCaseNodes(nodes, edges, { multicam: usecaseMulticamOffered() })
+  // Several recordings and a master only for a viewer who may use Speaker Map, an `auto` framing source as
+  // the even split only for one Speaker Frames is withheld from: the run reads what the quote prices.
+  const expansion = expandUseCaseNodes(nodes, edges, { multicam: usecaseMulticamOffered(), ...(usecaseFramesWithheld() ? { framesWithheld: true } : {}) })
   if (!expansion.expanded) return null
   return {
     expansion,

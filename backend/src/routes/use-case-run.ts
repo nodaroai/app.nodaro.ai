@@ -18,6 +18,7 @@ import {
   usecaseDescriptor,
   usecaseDistinctMaster,
   usecaseFeeCreditId,
+  usecaseFramingForViewer,
   type UseCaseMediaSource,
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
@@ -50,7 +51,7 @@ import {
 } from "../lib/use-case/lanes.js"
 import { prepareUseCase, usecaseReviewerPresent, type PreparedUseCase } from "../lib/use-case/request.js"
 import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
-import { usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
+import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 
 type Ready = { readonly userId: string; readonly body: UseCaseBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
@@ -77,7 +78,11 @@ async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: Fasti
     reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([type]) } })
     return null
   }
-  const body = parsed.data as UseCaseBody
+  // An `auto` framing source follows faces only for a caller who may use Speaker Frames; for anyone
+  // else it is the even split, silently (decided 2026-10-20). An explicit `tracking` is kept: the
+  // inner-step check below refuses it for such a caller.
+  const sent = parsed.data as UseCaseBody
+  const body = sent.framingSource === "auto" ? usecaseFramingForViewer(sent, await usecaseFramesAvailable(userId)) : sent
   // Several recordings or a Master audio asked for by a caller who may not use Speaker Map: refused before anything is probed.
   const multicamDenied = await usecaseMulticamDenial(type, body, userId)
   if (multicamDenied) {

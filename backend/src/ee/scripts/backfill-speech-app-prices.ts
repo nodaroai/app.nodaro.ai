@@ -55,7 +55,7 @@ import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../../
 import { appListingPrice, type AppListingSplit } from "../../lib/app-listing-price.js"
 import { SPEECH_NODE_TYPES, speechEstimate, upstreamSpeechText } from "../../lib/speech-estimate.js"
 import { estimateWorkflowListingCredits, type EstimateEdge, type EstimateNode, type ListingPublishType } from "../billing/credits.js"
-import { usecaseMulticamForEveryone } from "../../lib/use-case/inner-availability.js"
+import { usecaseViewerForEveryone } from "../../lib/use-case/inner-availability.js"
 import { loadAvailabilityOverridesForScript } from "../../lib/availability-override.js"
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ async function recomputeListing(
     replaceableMediaNodeIds: exposedMediaNodeIds(settings, nodes),
     exposedListNodeIds: exposedListNodeIds(settings, nodes),
     // As a republish prices it: a general user's run (decided 2026-10-20).
-    ...(usecaseMulticamForEveryone(nodes) ? { multicam: true } : {}),
+    ...usecaseViewerForEveryone(nodes),
   })
   return { split, caps, nodes }
 }
@@ -233,8 +233,8 @@ export async function runBackfill(opts: BackfillOptions): Promise<{ ok: boolean;
     console.error("Refusing: SPEECH_LENGTH_PRICING_ENABLED is not on in this environment. The backfill prices what the flipped server charges; pass --allow-flag-off only for the rollback path.")
     return { ok: false, lines: [] }
   }
-  // A listing is priced as a general user's run (usecaseMulticamForEveryone): read the
-  // deployment's availability first — a cold cache would read Speaker Map as released.
+  // A listing is priced as a general user's run (usecaseViewerForEveryone: Speaker Map and
+  // Speaker Frames): read the deployment's availability first — a cold cache would read both as released.
   if (!(await loadAvailabilityOverridesForScript())) {
     console.error("Refusing: the deployment's availability (Admin → Availability) could not be read. Without it a node hidden from users reads as released, and a listing would be priced as their run is not.")
     return { ok: false, lines: [] }

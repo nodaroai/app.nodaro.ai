@@ -2997,6 +2997,7 @@ Needs `workflows:execute`.
 | `output` | string |  | video (default) or an audio-only episode. One of `video`, `audio`. |
 | `framing_aspect` | string |  | Frame a video episode for this shape with Speaker View (automatic boxes over the speakers on screen). Omit for no framing. One of `16:9`, `9:16`, `1:1`, `4:5`. |
 | `framing_layout` | string |  | Layout when framing_aspect is set (default auto; one the shape does not draw is snapped). Ignored without framing_aspect. One of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`. |
+| `framing_source` | string |  | How a framed episode follows its speakers: "static" (default) splits the frame evenly by speaker; "tracking" follows faces with Speaker Frames (charged per started block of 1,000 sampled frames; a camera shared by several speakers keeps the even split until faces are named; refused 403 where Speaker Frames is not available to you); "auto" follows faces while Speaker Frames is available to you, else the even split. Ignored without a framing. One of `auto`, `static`, `tracking`. |
 | `captions` | boolean |  | Burn captions into a video episode (default true). |
 | `caption_style` | string |  | Caption style (default word-highlight). One of `subtitle`, `word-highlight`, `karaoke`, `tiktok-words`, `word-pop`, `bouncy`. |
 | `review_before_render` | boolean |  | Stop at a proxy preview for review (default false). |

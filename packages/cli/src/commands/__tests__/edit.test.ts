@@ -383,6 +383,24 @@ describe("edit tighten-episode", () => {
     expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "16:9", layout: "auto" } })
   })
 
+  it("sends --framing-source with --framing (decided 2026-10-17/20)", async () => {
+    for (const source of ["auto", "static", "tracking"]) {
+      mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-f" })
+      await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "9:16", "--framing-source", source, "--json")
+      expect(mocks.tightenEpisode).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "9:16", layout: "auto" }, framingSource: source })
+    }
+  })
+
+  it("refuses --framing-source without --framing, or an unknown one, before any request", async () => {
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing-source", "tracking")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "9:16", "--framing-source", "faces")).rejects.toThrow("process.exit(1)")
+    expect(mocks.tightenEpisode).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/^--framing-source applies with --framing only/),
+      expect.stringMatching(/^--framing-source must be/),
+    ])
+  })
+
   it("names the command it ran on the queued line", async () => {
     mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-1" })
     await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4")

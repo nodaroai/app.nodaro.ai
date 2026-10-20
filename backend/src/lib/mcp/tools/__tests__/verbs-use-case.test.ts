@@ -236,6 +236,34 @@ describe("tighten_episode", () => {
   })
 })
 
+describe("tighten_episode's framing source (decided 2026-10-17/20)", () => {
+  it("sends framing_source as framingSource with a framing", async () => {
+    const { server, seen } = await setup()
+    for (const framing_source of ["auto", "static", "tracking"] as const) {
+      await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", framing_aspect: "9:16", framing_layout: "stacked", framing_source })
+      expect(seen.body).toEqual({
+        mediaUrls: ["https://r2/ep.mp4"],
+        framing: { aspect: "9:16", layout: "stacked" },
+        framingSource: framing_source,
+        mcp_client: "Claude",
+        userId: "u1",
+      })
+    }
+  })
+
+  it("left out, nothing is sent (the even split, as before)", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", framing_aspect: "9:16" })
+    expect(seen.body).not.toHaveProperty("framingSource")
+  })
+
+  it("refuses any other value in the schema", async () => {
+    const { server, seen } = await setup()
+    expect((await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", framing_aspect: "9:16", framing_source: "faces" })).isError).toBe(true)
+    expect(seen.url).toBeUndefined()
+  })
+})
+
 describe("tighten_episode on several recordings (decided 2026-10-19)", () => {
   it("posts the recordings in order, the Master audio and the Cameras settings camelCased", async () => {
     const { server, seen } = await setup()

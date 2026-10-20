@@ -145,6 +145,16 @@ function masterSourceData(
   nodes: readonly EstimateGraphNode[],
   edges: readonly EstimateGraphEdge[],
 ): Record<string, unknown> | undefined {
+  return editPlanMasterOrigin(node, nodes, edges)?.data as Record<string, unknown> | undefined
+}
+
+/** An Edit Plan's master source node (teleports walked): the `master-audio`
+ *  role when one is set, else the first source in its `sourceOrder`, else first-wired. */
+export function editPlanMasterOrigin(
+  node: EstimateGraphNode,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+): EstimateGraphNode | undefined {
   const data = dataOf(node)
   const cfg = (data.sourceConfig as Record<string, { role?: string }> | undefined) ?? {}
   const order = (data.sourceOrder as string[] | undefined) ?? []
@@ -156,8 +166,7 @@ function masterSourceData(
     : srcIds
   const masterId = ordered.find((id) => cfg[id]?.role === "master-audio") ?? ordered[0]
   if (!masterId) return undefined
-  const origin = resolveGraphOrigin(nodes.find((n) => n.id === masterId), nodes, edges)
-  return origin?.data as Record<string, unknown> | undefined
+  return resolveGraphOrigin(nodes.find((n) => n.id === masterId), nodes, edges)
 }
 
 /**

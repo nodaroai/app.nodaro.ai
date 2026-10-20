@@ -45,6 +45,7 @@ import { mediaLengthSecOf } from "./apply-edl-estimate"
 import { renderFinalRunSet } from "./render-final-set"
 import { USE_CASE_MASTER_NODE_ID, usecaseRecordingNodeId, usecaseRecordingsOf, type UseCaseSourcesShape } from "./use-case-cameras"
 import { usecaseDistinctMaster, usecaseRecordingsKind, usecaseRunMaxRecordings, usecaseSoundRecordingIndex } from "./use-case-multicam"
+import { usecaseFramesAvailableFor, usecaseFramingForViewer } from "./use-case-framing-viewer"
 import { usecaseDescriptor, type UseCaseInputHandle, type UseCaseSources } from "./use-case-registry"
 
 type AnyNode = { readonly id?: string; readonly type?: string | null; readonly data?: unknown }
@@ -87,6 +88,13 @@ export interface UseCaseExpandOptions {
    * the first recording only, as before multicam (`usecaseRunMaxRecordings`).
    */
   readonly multicam?: boolean
+  /**
+   * Speaker Frames is withheld from the viewer (decided 2026-10-20): an `auto`
+   * framing source is priced as the run reads it, the even split
+   * (`usecaseFramingForViewer`). Absent: available — `auto` is priced
+   * following faces, never under the run's hold.
+   */
+  readonly framesWithheld?: boolean
 }
 
 const PLACEHOLDER_URL = "estimate://use-case-source"
@@ -201,6 +209,7 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
 
   const whole = options?.chain === "whole"
   const multicam = options?.multicam === true
+  const framesAvailable = usecaseFramesAvailableFor(options)
   const byId = new Map(nodes.flatMap((n) => (typeof n.id === "string" ? [[n.id, n] as const] : [])))
   const ucIds = new Set(useCases.map((u) => u.id))
   const wireInto = (id: string, handle: string) => edges.find((e) => e.target === id && e.targetHandle === handle && !!e.source)
@@ -259,7 +268,10 @@ export function expandUseCaseNodes<N extends AnyNode, E extends AnyEdge>(
     const raw = (u.data ?? {}) as Readonly<Record<string, unknown>>
     // A Render final renders with the settings of the run it finishes (the
     // preview's, carried on the continuation), never the node's later ones.
-    const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? raw), reviewBeforeRender: false } : raw, kind, shape)
+    // The framing source as the viewer's run reads it (`usecaseFramingForViewer`); a Render final's
+    // stored settings are already resolved (never `auto`).
+    const own = usecaseFramingForViewer(raw, framesAvailable)
+    const settings = d.resolveSettings(finals.has(u.id) ? { ...(renderFinalSettingsOf(raw) ?? own), reviewBeforeRender: false } : own, kind, shape)
     // Recordings 2..n are placeholders too, each of its own kind (absent for one recording).
     const moreMedia: UseCaseSources["moreMedia"] = wires.length > 1 ? wires.slice(1).map((w) => ({ url: PLACEHOLDER_URL, kind: kindOf(w) })) : undefined
     const g = d.build(settings, { media: { url: PLACEHOLDER_URL, kind: kinds[0] ?? kind }, ...(moreMedia ? { moreMedia } : {}), ...optional })

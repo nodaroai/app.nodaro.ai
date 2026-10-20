@@ -10,7 +10,7 @@ import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
 import { outputPipSourceType, characterMentionSlug, type EntityKind } from "@nodaro/shared/entities"
-import { bypassTeleports, splitMediaParts } from "@nodaro/render-rules"
+import { bypassTeleports, editPlanProducerKind, splitMediaParts } from "@nodaro/render-rules"
 import {
   DYNAMIC_PRODUCER_TYPES,
   VIDEO_PRODUCER_TYPES,
@@ -2170,8 +2170,8 @@ export function resolveNodeInputs(
       }
       if (srcEdge.targetHandle === "sources") {
         const srcType = src.type ?? "";
-        const kind: "video" | "audio" =
-          VIDEO_PRODUCER_TYPES.has(srcType) ? "video" : AUDIO_PRODUCER_TYPES.has(srcType) ? "audio" : "video";
+        // The one rule the Speaker Frames estimate counts cameras by, too.
+        const kind = editPlanProducerKind(srcType);
         // Carry the source's own duration (incl. the audio-master lane via
         // metadata.durationSeconds) for parity with the backend reserve.
         const duration = editPlanSourceDurationSec(src.data as Record<string, unknown>);

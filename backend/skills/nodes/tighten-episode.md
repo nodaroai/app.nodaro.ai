@@ -1,7 +1,7 @@
 ---
 node_type: tighten-episode
-generated_at: 2026-10-20T01:07:55.000Z
-generated_from: 4aeff0392
+generated_at: 2026-10-20T01:40:23.684Z
+generated_from: 5334e3a6d
 ---
 
 # Tighten Episode
@@ -22,6 +22,7 @@ generated_from: 4aeff0392
 - `cameras?: UseCaseCamerasInput`
 - `output?: "video" | "audio"`
 - `framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null`
+- `framingSource?: "auto" | "static" | "tracking"`
 - `captions?: boolean`
 - `captionStyle?: CaptionStyle`
 - `reviewBeforeRender?: boolean`
@@ -54,6 +55,7 @@ generated_from: 4aeff0392
   "captionStyle": "word-highlight",
   "reviewBeforeRender": false,
   "planTier": "standard",
+  "framingSource": "auto",
   "instructions": "",
   "fieldMappings": {},
   "executionStatus": "idle"
@@ -102,6 +104,7 @@ Reach for the individual nodes instead (Edit Plan → Camera Switch → Apply ED
     "captionStyle": "word-highlight",
     "reviewBeforeRender": false,
     "planTier": "standard",
+    "framingSource": "auto",
     "instructions": "",
     "fieldMappings": {},
     "executionStatus": "idle"

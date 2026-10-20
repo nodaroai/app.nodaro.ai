@@ -15,6 +15,15 @@ vi.mock("@/lib/use-case-multicam-viewer", () => ({
   useUseCaseMulticamViewer: () => viewer.state,
 }))
 
+// The viewer's answer: may they use Speaker Frames (an `auto` framing source follows faces, decided 2026-10-20)? Offered by default.
+const frames = vi.hoisted(() => ({ state: "offered" as "loading" | "offered" | "withheld" }))
+vi.mock("@/lib/use-case-frames-viewer", () => ({
+  usecaseFramesOffered: () => frames.state === "offered",
+  usecaseFramesWithheld: () => frames.state === "withheld",
+  usecaseFramesViewer: () => frames.state,
+  useUseCaseFramesViewer: () => frames.state,
+}))
+
 import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { tightenFramingLayouts } from "@nodaro/render-rules"
 import { ConfigPanel as TightenEpisodeConfig } from "../config"
@@ -253,5 +262,67 @@ describe("the Cameras section (decided 2026-10-17; shown only to a viewer who ma
     const onUpdate = vi.fn()
     renderConfig({ data: { output: "video", cameras: { wide: 9, speakerCameras: { "1": 7 } } }, onUpdate, ...three })
     expect(onUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("TightenEpisodeConfig: the framing source (decided 2026-10-17/20)", () => {
+  const FRAMED = { output: "video" as const, framing: { aspect: "9:16" as const, layout: "stacked" as const } }
+  const sourceBox = () => screen.queryByRole("combobox", { name: t("proccfg.usecaseFramingSource") })
+  afterEach(() => {
+    frames.state = "offered"
+  })
+
+  it("with a framing chosen: Automatic, Even split and Follow faces, with its hint", async () => {
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" } })
+    expect(sourceBox()).toHaveTextContent(t("proccfg.usecaseFramingAuto"))
+    expect(screen.getByText(t("proccfg.usecaseFramingHint"))).toBeInTheDocument()
+    await userEvent.click(sourceBox()!)
+    expect(optionNames()).toEqual([t("proccfg.usecaseFramingAuto"), t("proccfg.usecaseFramingStatic"), t("proccfg.usecaseFramingTracking")])
+  })
+
+  it("a saved node without one shows Even split — what it runs", () => {
+    renderConfig({ data: FRAMED })
+    expect(sourceBox()).toHaveTextContent(t("proccfg.usecaseFramingStatic"))
+  })
+
+  it("picking Even split writes static", async () => {
+    const onUpdate = vi.fn()
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" }, onUpdate })
+    await userEvent.click(sourceBox()!)
+    await userEvent.click(screen.getByRole("option", { name: t("proccfg.usecaseFramingStatic") }))
+    expect(onUpdate).toHaveBeenCalledWith({ framingSource: "static" })
+  })
+
+  it("no framing: no framing source", () => {
+    renderConfig({ data: { output: "video", framingSource: "auto" } })
+    expect(sourceBox()).toBeNull()
+  })
+
+  it("sound-only recordings (the audio lock): hidden with Framing, its value kept", () => {
+    const onUpdate = vi.fn()
+    renderConfig({
+      data: { ...FRAMED, framingSource: "tracking" },
+      onUpdate,
+      nodes: [{ id: "rec", type: "upload-audio", data: {} }, { id: "t1", type: "tighten-episode", data: {} }],
+      edges: [{ id: "e", source: "rec", target: "t1", sourceHandle: "audio", targetHandle: "media" }],
+    })
+    expect(sourceBox()).toBeNull()
+    expect(onUpdate.mock.calls.some(([patch]) => "framingSource" in (patch as object))).toBe(false)
+  })
+
+  it("Speaker Frames withheld from the viewer: no field (auto is the even split for them) — unless the node is set to follow faces, which a run refuses", () => {
+    frames.state = "withheld"
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" } })
+    expect(sourceBox()).toBeNull()
+    cleanup()
+    renderConfig({ data: { ...FRAMED, framingSource: "tracking" } })
+    expect(sourceBox()).toHaveTextContent(t("proccfg.usecaseFramingTracking"))
+    expect(screen.getByText(t("proccfg.usecaseFramingNeedsFrames"))).toBeInTheDocument()
+  })
+
+  it("while the viewer's availability is loading: no field yet (never a flash)", () => {
+    frames.state = "loading"
+    renderConfig({ data: { ...FRAMED, framingSource: "auto" } })
+    expect(sourceBox()).toBeNull()
   })
 })

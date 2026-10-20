@@ -21,6 +21,7 @@ export const definition = {
     "captionStyle": "word-highlight",
     "reviewBeforeRender": false,
     "planTier": "standard",
+    "framingSource": "auto",
     "instructions": "",
     "fieldMappings": {},
     "executionStatus": "idle"

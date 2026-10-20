@@ -9,9 +9,12 @@
  * - The listing (an app's, a component's or a template's stored price) is
  *   shown to everyone, so it is priced as a GENERAL user's run (decided
  *   2026-10-20): several recordings only while Speaker Map is available to
- *   users (`usecaseMulticamForEveryone`, which every listing site passes),
- *   never by who publishes it.
- * - The app-run Retry's run-set price takes its runner's flag.
+ *   users (`usecaseMulticamForEveryone`, the Speaker Map half of the
+ *   `usecaseViewerForEveryone` every listing site passes), never by who publishes it.
+ * - An `auto` framing source (decided 2026-10-20) follows faces only for a
+ *   viewer Speaker Frames is available to (`framesWithheld` otherwise), and a
+ *   listing reads a general user's answer (`usecaseViewerForEveryone`).
+ * - The app-run Retry's run-set price takes its runner's flags.
  * - Every file outside the billing module that prices a run for a viewer
  *   passes that viewer's flag, or is named here with the reason it has no use-case
  *   node to expand; no listing site asks a viewer's answer.
@@ -22,7 +25,7 @@ import { afterEach, beforeAll, describe, it, expect, vi } from "vitest"
 vi.mock("@/lib/config.js", async (orig) => ({ ...(await orig<typeof import("@/lib/config.js")>()), hasCredits: () => false }))
 import { STATIC_CREDIT_COSTS, estimateRunSetCreditsWithoutUgc, estimateWorkflowListingCredits } from "../credits.js"
 import { __availabilityUniverseReadyForTests, __resetAvailabilityOverridesForTests } from "@/lib/availability-override.js"
-import { usecaseMulticamForEveryone } from "@/lib/use-case/inner-availability.js"
+import { usecaseMulticamForEveryone, usecaseViewerForEveryone } from "@/lib/use-case/inner-availability.js"
 
 const cam = (n: number) => ({ id: `cam${n}`, type: "upload-video", data: { url: `https://r2/cam${n}.mp4`, metadata: { durationSeconds: 5400 } } })
 const master = { id: "mic", type: "upload-audio", data: { url: "https://r2/master.wav", metadata: { durationSeconds: 5400 } } }
@@ -84,12 +87,41 @@ describe("the listing prices a use-case node as a general user's run reads it (d
   })
 })
 
+describe("the listing prices an auto framing source as a general user's run reads it (decided 2026-10-20)", () => {
+  beforeAll(() => __availabilityUniverseReadyForTests())
+  afterEach(() => __resetAvailabilityOverridesForTests())
+  const framed = (framingSource?: string) => ({ ...tighten, data: { label: "Tighten Episode", captions: false, framing: { aspect: "9:16", layout: "stacked" }, ...(framingSource ? { framingSource } : {}) } })
+  const graph = (framingSource?: string) => ({ nodes: [cam(1), framed(framingSource)], edges: [media(1)] })
+  const listing = (g: ReturnType<typeof graph>) =>
+    estimateWorkflowListingCredits(g.nodes, g.edges, { publishType: "app", replaceableMediaNodeIds: new Set(), ...usecaseViewerForEveryone(g.nodes) })
+  const BASE = ["tighten-episode", "upload-video"]
+
+  it("while Speaker Frames is withheld from users: the even split's price, exactly a node with no framing source", async () => {
+    __resetAvailabilityOverridesForTests({ nodes: new Set(BASE) })
+    expect(await listing(graph("auto"))).toEqual(await listing(graph()))
+  })
+
+  it("once Speaker Frames is every user's: following faces (more than the even split)", async () => {
+    __resetAvailabilityOverridesForTests({ nodes: new Set([...BASE, "speaker-frames"]) })
+    expect((await listing(graph("auto"))).preview).toBeGreaterThan((await listing(graph())).preview)
+    expect(await listing(graph("auto"))).toEqual(await listing(graph("tracking")))
+  })
+})
+
 describe("an app run's Retry prices its run set as its runner's run reads it", () => {
   it("multicam for a runner who may use Speaker Map; the first recording for anyone else", async () => {
     const runSet = new Set(["t1"])
     const one = await estimateRunSetCreditsWithoutUgc(ONE.nodes, ONE.edges, runSet)
-    expect(await estimateRunSetCreditsWithoutUgc(MULTICAM.nodes, MULTICAM.edges, runSet, true)).toBe(one + MULTICAM_STEPS)
+    expect(await estimateRunSetCreditsWithoutUgc(MULTICAM.nodes, MULTICAM.edges, runSet, { multicam: true })).toBe(one + MULTICAM_STEPS)
     expect(await estimateRunSetCreditsWithoutUgc(MULTICAM.nodes, MULTICAM.edges, runSet)).toBe(one)
+  })
+  it("an auto framing source as the even split for a runner Speaker Frames is withheld from; following faces for anyone else", async () => {
+    const runSet = new Set(["t1"])
+    const framed = (framingSource?: string) => [cam(1), { ...tighten, data: { label: "Tighten Episode", captions: false, framing: { aspect: "9:16", layout: "stacked" }, ...(framingSource ? { framingSource } : {}) } }]
+    const evenSplit = await estimateRunSetCreditsWithoutUgc(framed(), ONE.edges, runSet)
+    expect(await estimateRunSetCreditsWithoutUgc(framed("auto"), ONE.edges, runSet, { framesWithheld: true })).toBe(evenSplit)
+    expect(await estimateRunSetCreditsWithoutUgc(framed("auto"), ONE.edges, runSet)).toBe(await estimateRunSetCreditsWithoutUgc(framed("tracking"), ONE.edges, runSet))
+    expect(await estimateRunSetCreditsWithoutUgc(framed("auto"), ONE.edges, runSet)).toBeGreaterThan(evenSplit)
   })
 })
 
@@ -105,10 +137,10 @@ function sourceFiles(dir: string): string[] {
 }
 /** A call of a run estimator that expands use-case nodes for a viewer (the billing module's own definitions excluded). */
 const ESTIMATE_CALL = /\b(?:estimateWorkflowCredits|estimateRunSetCredits|estimateRunSetCreditsWithoutUgc|appRunResumeCredits)\s*\(/
-/** A listing: priced for everyone (`usecaseMulticamForEveryone`), never per viewer. */
+/** A listing: priced for everyone (`usecaseViewerForEveryone`: Speaker Map and Speaker Frames), never per viewer. */
 const LISTING_CALL = /\bestimateWorkflowListingCredits\s*\(/
-/** A viewer's own answer. */
-const VIEWER_FLAG = /\busecaseMulticam(?:Available|EstimateFor)\(/
+/** A viewer's own answer (Speaker Map's or Speaker Frames'). */
+const VIEWER_FLAG = /\busecase(?:Multicam(?:Available|EstimateFor)|ViewerEstimateFor|FramesAvailable|RunViewer)\(/
 /** Files that price a graph that holds no use-case node to expand (or define the estimators). */
 const NO_VIEWER: Readonly<Record<string, string>> = {
   "ee/billing/credits.ts": "the estimators themselves",
@@ -138,18 +170,23 @@ function callSites(code: string, call: RegExp): Array<{ line: number; args: stri
   return out
 }
 
-/** A call's arguments that carry a multicam answer: the `multicam` option, or the viewer's answer asked in place. */
-const CARRIES_FLAG = /\bmulticam\b|\busecaseMulticam(?:Available|EstimateFor)\(/
 /**
- * The other branch of a choice ON the flag (`multicam ? f(…, multicam) : f(…)`):
- * the call without it is the viewer-who-may-not's, kept byte-identical on purpose.
+ * A call's arguments that carry the viewer's answers — BOTH (decided
+ * 2026-10-20): the `viewer` flags (`usecaseViewerEstimateFor`: Speaker Map's
+ * and Speaker Frames'), or that answer asked in place. A bare `multicam`
+ * carries Speaker Map's alone, so it no longer counts.
  */
-const ELSE_OF_FLAG = /\bmulticam\s*\?[^;?]*:\s*(?:await\s+)?(?:[\w$]+\.)*$/
-/** The branch a choice on the flag takes when it is true (the flag passed positionally, `true`). */
-const THEN_OF_FLAG = /\bmulticam\s*\?\s*(?:await\s+)?(?:[\w$]+\.)*$/
+const CARRIES_FLAG = /\bviewer\b|\busecaseViewerEstimateFor\(/
+/**
+ * The other branch of a choice ON the flags (`viewer.multicam || viewer.framesWithheld ? f(…, viewer) : f(…)`):
+ * the call without them is the as-before viewer's, kept byte-identical on purpose.
+ */
+const ELSE_OF_FLAG = /\b(?:viewer(?:\.framesWithheld)?|flagged)\s*\?[^;?]*:\s*(?:await\s+)?(?:[\w$]+\.)*$/
+/** The branch a choice on the flags takes when it is true. */
+const THEN_OF_FLAG = /\b(?:viewer(?:\.framesWithheld)?|flagged)\s*\?\s*(?:await\s+)?(?:[\w$]+\.)*$/
 const passesFlag = (c: { args: string; before: string }) => CARRIES_FLAG.test(c.args) || ELSE_OF_FLAG.test(c.before) || THEN_OF_FLAG.test(c.before)
 
-describe("every estimate site passes its viewer's multicam flag (site totality)", () => {
+describe("every estimate site passes its viewer's flags — Speaker Map's and Speaker Frames' (site totality)", () => {
   const files = sourceFiles(SRC).map((path) => ({ rel: relative(SRC, path).split("\\").join("/"), text: readFileSync(path, "utf8") }))
   const callers = files.filter((f) => ESTIMATE_CALL.test(f.text))
 
@@ -171,7 +208,7 @@ describe("every estimate site passes its viewer's multicam flag (site totality)"
     expect(callers.map((f) => f.rel)).toContain(rel)
   })
 
-  it("each other call site passes a multicam flag in its own arguments (a comment, or another call in the file, does not count)", () => {
+  it("each other call site passes the viewer's flags in its own arguments (a comment, or another call in the file, does not count)", () => {
     const missing = callers
       .filter((f) => !(f.rel in NO_VIEWER))
       .flatMap((f) => callSites(codeOf(f.text), ESTIMATE_CALL).filter((c) => !passesFlag(c)).map((c) => `${f.rel}:${c.line}`))
@@ -179,18 +216,22 @@ describe("every estimate site passes its viewer's multicam flag (site totality)"
   })
 
   it("the call-site check sees what a file-level word would miss", () => {
-    const code = codeOf("// multicam\nestimateWorkflowCredits(nodes, edges)\nestimateWorkflowCredits(nodes, edges, { multicam: true })\nconst x = multicam ? await estimateWorkflowCredits(n, e, { multicam }) : await estimateWorkflowCredits(n, e)")
-    expect(callSites(code, ESTIMATE_CALL).map(passesFlag)).toEqual([false, true, true, true])
+    const code = codeOf(
+      "// viewer\nestimateWorkflowCredits(nodes, edges)\nestimateWorkflowCredits(nodes, edges, { multicam: true })\nestimateWorkflowCredits(nodes, edges, viewer)\n" +
+        "const x = viewer.multicam || viewer.framesWithheld ? await estimateWorkflowCredits(n, e, viewer) : await estimateWorkflowCredits(n, e)",
+    )
+    // A bare multicam flag no longer counts: it would price an `auto` framing source for the wrong viewer.
+    expect(callSites(code, ESTIMATE_CALL).map(passesFlag)).toEqual([false, false, true, true, true])
   })
 
-  it("every listing site passes the general user's flag, never a viewer's answer", () => {
+  it("every listing site passes the general user's flags (Speaker Map's and Speaker Frames'), never a viewer's answer", () => {
     const listingSites = files.filter((f) => f.rel !== "ee/billing/credits.ts" && LISTING_CALL.test(f.text))
     expect(listingSites.map((f) => f.rel)).toEqual(
       expect.arrayContaining(["routes/published-apps.ts", "routes/workflow-templates.ts", "ee/scripts/backfill-listing-range.ts", "ee/scripts/backfill-speech-app-prices.ts"]),
     )
     expect(listingSites.filter((f) => VIEWER_FLAG.test(f.text)).map((f) => f.rel)).toEqual([])
     const unflagged = listingSites.flatMap((f) =>
-      callSites(codeOf(f.text), LISTING_CALL).filter((c) => !/\busecaseMulticamForEveryone\(/.test(c.args)).map((c) => `${f.rel}:${c.line}`),
+      callSites(codeOf(f.text), LISTING_CALL).filter((c) => !/\busecaseViewerForEveryone\(/.test(c.args)).map((c) => `${f.rel}:${c.line}`),
     )
     expect(unflagged).toEqual([])
   })

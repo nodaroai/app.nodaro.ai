@@ -1077,6 +1077,12 @@ const TRAILER_RECORDINGS_BYTES = 1_747
 // (audio-only is refused) instead of the shared "video or audio". Measured by this suite on the same
 // tree: 465_357 total − 465_341 before = 16 B (make_trailer 5_290 → 5_306); the 103 B of headroom carry across.
 const TRAILER_MEDIA_URL_VIDEO_BYTES = 16
+// RAISED 2026-10-20 by `tighten_episode` taking `framing_source` (auto / static / tracking, from the
+// shared module verbs-use-case-framing.ts that Clip Pack and Speaker Layout will reuse) and its
+// description saying what each does, what tracking is charged and when it is refused. No tool was
+// added, so the fixture does NOT move. Measured by this suite on the same tree, after dev's Trailer
+// raises above: 465_895 total − 465_357 before = 538 B; the 103 B of headroom carry across.
+const TIGHTEN_FRAMING_SOURCE_BYTES = 538
 
 // RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
 // added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
@@ -1220,7 +1226,8 @@ export const TOOL_WIRE_BUDGET = {
     TIGHTEN_RECORDINGS_BYTES +
     TIGHTEN_CAMERA_CAP_BYTES +
     TRAILER_RECORDINGS_BYTES +
-    TRAILER_MEDIA_URL_VIDEO_BYTES,
+    TRAILER_MEDIA_URL_VIDEO_BYTES +
+    TIGHTEN_FRAMING_SOURCE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

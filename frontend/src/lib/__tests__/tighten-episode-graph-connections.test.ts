@@ -102,6 +102,34 @@ describe("Tighten Episode graphs are drawable", () => {
     expect(graphs).toBe(5 * 2 * 2 * 2 * 2 * 2 * 2 * 2)
   })
 
+  it("following faces (decided 2026-10-17): every edge of every framed graph with Speaker Frames passes the canvas validator", () => {
+    let graphs = 0
+    const tracking = (raw: Record<string, unknown>) => ({ ...raw, framingSource: "tracking" })
+    for (const captions of [true, false])
+      for (const reviewBeforeRender of [true, false])
+        for (const music of [false, true])
+          for (const framing of FRAMINGS.filter((f) => f !== null)) {
+            const one = buildTightenEpisodeGraph(
+              resolveTightenEpisodeSettings(tracking({ ...TIGHTEN_EPISODE_DEFAULTS, captions, reviewBeforeRender, framing }), "video"),
+              { media: { url: "https://r2/ep", kind: "video" }, ...(music ? { music: { url: "https://r2/bed.mp3" } } : {}) },
+            )
+            expect(one.nodes.some((n) => n.type === "speaker-frames")).toBe(true)
+            expect(refusedEdge(one), JSON.stringify({ captions, reviewBeforeRender, music, framing })).toBeNull()
+            graphs++
+            for (const sources of MULTICAM_RECORDINGS) {
+              const shape = { recordings: usecaseRecordings(sources).length, masterAudio: !!sources.masterAudio }
+              const g = buildTightenEpisodeGraph(
+                resolveTightenEpisodeSettings(tracking({ ...TIGHTEN_EPISODE_DEFAULTS, captions, reviewBeforeRender, framing }), "video", shape),
+                { ...sources, ...(music ? { music: { url: "https://r2/bed.mp3" } } : {}) },
+              )
+              expect(g.nodes.some((n) => n.type === "speaker-frames")).toBe(true)
+              expect(refusedEdge(g), JSON.stringify({ shape, captions, reviewBeforeRender, music, framing })).toBeNull()
+              graphs++
+            }
+          }
+    expect(graphs).toBe(2 * 2 * 2 * 3 * (1 + MULTICAM_RECORDINGS.length))
+  })
+
   it("while Speaker Map is withheld from the viewer, the switch's Speaker map wire is refused on the canvas (the run still reads it)", () => {
     const g = buildTightenEpisodeGraph(
       resolveTightenEpisodeSettings({ captions: false }, "video", { recordings: 2, masterAudio: false }),

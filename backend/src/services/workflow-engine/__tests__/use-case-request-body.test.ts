@@ -28,7 +28,7 @@ const LANE = `"componentDepth":1,"executingComponentIds":[],"previewStopRule":fa
 
 const bodyOf = (data: Record<string, unknown>, inputs: Record<string, unknown> = REC, multicam = false): string => {
   const node = { id: "t1", type: "tighten-episode", data: { label: "Tighten Episode", fieldMappings: {}, ...data } } as unknown as SimpleNode
-  return JSON.stringify(requestOf(node, inputs as unknown as ResolvedInputs, ctx, null, multicam).body)
+  return JSON.stringify(requestOf(node, inputs as unknown as ResolvedInputs, ctx, null, { multicam, framesAvailable: false }).body)
 }
 
 const DEFAULTS = { output: "video", captions: true, captionStyle: "word-highlight", reviewBeforeRender: false, planTier: "standard", instructions: "" }
@@ -106,13 +106,13 @@ describe("recordings and Master audio (decided 2026-10-19: several only for a vi
 
   it("a type that takes one recording (Chapters) sends the first in mediaOrder, whoever the viewer", () => {
     const chapters = (data: Record<string, unknown>) =>
-      JSON.parse(JSON.stringify(requestOf({ id: "c1", type: "episode-chapters", data: { label: "Chapters", fieldMappings: {}, ...data } } as unknown as SimpleNode, TWO as unknown as ResolvedInputs, ctx, null, true).body))
+      JSON.parse(JSON.stringify(requestOf({ id: "c1", type: "episode-chapters", data: { label: "Chapters", fieldMappings: {}, ...data } } as unknown as SimpleNode, TWO as unknown as ResolvedInputs, ctx, null, { multicam: true, framesAvailable: false }).body))
     expect(chapters({ mediaOrder: ["b"] }).mediaUrls).toEqual(["https://r2/b.mp4"])
     expect(chapters({}).mediaUrls).toEqual(["https://r2/a.mp4"])
   })
 
   it("a wired Master audio is not sent by a type whose descriptor does not take it (Chapters)", () => {
-    const chapters = requestOf({ id: "c1", type: "episode-chapters", data: { label: "Chapters", fieldMappings: {} } } as unknown as SimpleNode, { ...REC, ...MIC } as unknown as ResolvedInputs, ctx, null, true)
+    const chapters = requestOf({ id: "c1", type: "episode-chapters", data: { label: "Chapters", fieldMappings: {} } } as unknown as SimpleNode, { ...REC, ...MIC } as unknown as ResolvedInputs, ctx, null, { multicam: true, framesAvailable: false })
     expect(JSON.stringify(chapters.body)).not.toContain("masterAudioUrl")
   })
 
@@ -134,13 +134,39 @@ describe("recordings and Master audio (decided 2026-10-19: several only for a vi
   })
 })
 
+describe("the framing source (decided 2026-10-17/20)", () => {
+  const FRAMED = { output: "video", framing: { aspect: "9:16", layout: "stacked" } }
+  const HEAD = `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","framing":{"aspect":"9:16","layout":"stacked"}`
+  const node = (data: Record<string, unknown>) => ({ id: "t1", type: "tighten-episode", data: { label: "Tighten Episode", fieldMappings: {}, ...data } }) as unknown as SimpleNode
+  const body = (data: Record<string, unknown>, framesAvailable: boolean) =>
+    JSON.stringify(requestOf(node(data), REC as unknown as ResolvedInputs, ctx, null, { multicam: false, framesAvailable }).body)
+
+  it("a node without one sends none — the body as before, whoever the viewer", () => {
+    expect(body(FRAMED, true)).toBe(`${HEAD},${LANE}}`)
+    expect(body(FRAMED, false)).toBe(`${HEAD},${LANE}}`)
+  })
+  it("tracking is sent as tracking, whoever the viewer (a caller without Speaker Frames is refused for it)", () => {
+    expect(body({ ...FRAMED, framingSource: "tracking" }, true)).toBe(`${HEAD},"framingSource":"tracking",${LANE}}`)
+    expect(body({ ...FRAMED, framingSource: "tracking" }, false)).toBe(`${HEAD},"framingSource":"tracking",${LANE}}`)
+  })
+  it("auto: sent as auto to a viewer who may use Speaker Frames, as the even split to anyone else", () => {
+    expect(body({ ...FRAMED, framingSource: "auto" }, true)).toBe(`${HEAD},"framingSource":"auto",${LANE}}`)
+    expect(body({ ...FRAMED, framingSource: "auto" }, false)).toBe(`${HEAD},"framingSource":"static",${LANE}}`)
+  })
+  it("the route's body schema takes every value the engine sends", () => {
+    for (const framingSource of ["auto", "static", "tracking"]) {
+      expect(tightenEpisodeBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"], framingSource }).success).toBe(true)
+    }
+  })
+})
+
 describe("Trailer's recordings and Master audio (decided 2026-10-20: several only for a viewer who may use Speaker Map)", () => {
   const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
   const FIRST = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }
   const MIC = { useCaseMasterAudio: "https://r2/m.wav", useCaseMasterAudioNodeId: "mic" }
   const CARD = { useCaseIntroCard: "https://r2/card.mp4" }
   const trailer = (data: Record<string, unknown>, inputs: Record<string, unknown>, multicam: boolean) =>
-    JSON.stringify(requestOf({ id: "t1", type: "episode-trailer", data: { label: "Trailer", fieldMappings: {}, ...data } } as unknown as SimpleNode, inputs as unknown as ResolvedInputs, ctx, null, multicam).body)
+    JSON.stringify(requestOf({ id: "t1", type: "episode-trailer", data: { label: "Trailer", fieldMappings: {}, ...data } } as unknown as SimpleNode, inputs as unknown as ResolvedInputs, ctx, null, { multicam, framesAvailable: false }).body)
 
   it("a viewer who may not use Speaker Map: the first recording alone — its master, other cameras and Cameras settings ignored — byte-identical to the run as before", () => {
     expect(trailer({ formats: ["9:16"], cameras: { wide: 2 } }, { ...TWO, ...MIC, ...CARD }, false)).toBe(trailer({ formats: ["9:16"] }, { ...FIRST, ...CARD }, false))

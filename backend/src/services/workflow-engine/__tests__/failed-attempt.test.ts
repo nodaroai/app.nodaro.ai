@@ -6,8 +6,10 @@
  * removed or non-default new setting still runs the node fresh.
  */
 import { describe, expect, it } from "vitest"
-import { USE_CASE_DESCRIPTORS, usecaseDescriptor, type UseCaseNodeType } from "@nodaro/render-rules"
+import { SPEAKER_FRAMES_PRICED, USE_CASE_DESCRIPTORS, usecaseDescriptor, type UseCaseNodeType } from "@nodaro/render-rules"
 import { attemptMediaKind, attemptRanWithInputs, settingsUnchanged } from "../failed-attempt.js"
+import { freshRunInputs } from "../use-case-request.js"
+import type { ResolvedInputs, SimpleNode } from "../types.js"
 
 const MEDIA = "https://r2/ep.mp4"
 
@@ -191,6 +193,17 @@ const PINNED_MULTICAM_SETTING_KEYS: Readonly<Partial<Record<UseCaseNodeType, rea
   "episode-trailer": [...PINNED_SETTING_KEYS["episode-trailer"], "cameras"],
 }
 
+/**
+ * Settings a resolver makes only when they differ from the behaviour before
+ * they existed (omitted otherwise, so a stored attempt's settings read as they
+ * always did): each with the raw settings that make it appear. Tighten's
+ * `framingSource` (decided 2026-10-17) appears only when a framed video
+ * episode follows faces; absent is the even split, as before it existed.
+ */
+const PINNED_OMITTED_AT_DEFAULT: Readonly<Partial<Record<UseCaseNodeType, Readonly<Record<string, Readonly<Record<string, unknown>>>>>>> = {
+  "tighten-episode": { framingSource: { framing: { aspect: "9:16", layout: "stacked" }, framingSource: "tracking" } },
+}
+
 describe("guard: the use-case resolvers' setting keys are pinned", () => {
   const types = Object.keys(USE_CASE_DESCRIPTORS) as UseCaseNodeType[]
   const changed = (type: string) =>
@@ -213,7 +226,14 @@ describe("guard: the use-case resolvers' setting keys are pinned", () => {
         expect(keys, changed(type)).toEqual([...PINNED_SETTING_KEYS[type]].sort())
         // One recording resolves exactly as it did before any shape was passed.
         expect(Object.keys(d.resolveSettings({}, kind, { recordings: 1, masterAudio: false })).sort()).toEqual(keys)
-        expect([...d.settingKeys].sort()).toEqual([...(multicam ?? keys)].sort())
+        const omitted = PINNED_OMITTED_AT_DEFAULT[type] ?? {}
+        expect([...d.settingKeys].sort()).toEqual([...(multicam ?? keys), ...Object.keys(omitted)].sort())
+      })
+    }
+    for (const [key, raw] of Object.entries(PINNED_OMITTED_AT_DEFAULT[type] ?? {})) {
+      it(`${type}: ${key} is made only away from the behaviour before it existed`, () => {
+        expect(key in d.resolveSettings({}, "video"), changed(type)).toBe(false)
+        expect(key in d.resolveSettings(raw, "video"), changed(type)).toBe(true)
       })
     }
     if (multicam) {
@@ -224,4 +244,48 @@ describe("guard: the use-case resolvers' setting keys are pinned", () => {
       }
     }
   }
+})
+
+/**
+ * The framing source (decided 2026-10-17): an attempt stored before it existed
+ * (or one that ran the even split) resumes while the node frames with the even
+ * split; a node that now follows faces runs fresh (its graph has Speaker Frames).
+ */
+describe("attemptRanWithInputs: the framing source", () => {
+  const type: UseCaseNodeType = "tighten-episode"
+  const d = usecaseDescriptor(type)
+  const framing = { aspect: "9:16", layout: "stacked" }
+  const stored = d.resolveSettings({ framing }, "video") as Record<string, unknown>
+  const now = (data: Record<string, unknown> = {}) => ({ mediaUrls: [MEDIA], framing, ...data })
+  it("a framed attempt that stored no framing source resumes against a node that sends none, or static", () => {
+    expect("framingSource" in stored).toBe(false)
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: stored }, "video", now())).toBe(true)
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: stored }, "video", now({ framingSource: "static" }))).toBe(true)
+  })
+  it("…and runs fresh once the node follows faces", () => {
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: stored }, "video", now({ framingSource: "tracking" }))).toBe(false)
+  })
+  it("an attempt that followed faces resumes against tracking, and runs fresh against static", () => {
+    const tracked = d.resolveSettings({ framing, framingSource: "tracking" }, "video") as Record<string, unknown>
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: tracked }, "video", now({ framingSource: "tracking" }))).toBe(true)
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: tracked }, "video", now({ framingSource: "static" }))).toBe(false)
+  })
+
+  // An `auto` node (the new node's default) is held to what its viewer's fresh run would send
+  // (`freshRunInputs` → `usecaseFramingForViewer`, decided 2026-10-20): the resume match never reads
+  // `auto` as tracking against an attempt that ran on the even split, so nobody pays again.
+  describe("an auto node, held through the body its viewer's fresh run sends", () => {
+    const node = { id: "t1", type, data: { label: "Tighten Episode", fieldMappings: {}, output: "video", framing, framingSource: "auto" } } as unknown as SimpleNode
+    const inputs = { useCaseMedia: [{ nodeId: "rec", url: MEDIA }] } as unknown as ResolvedInputs
+    const fresh = (framesAvailable: boolean) => freshRunInputs(node, inputs, { multicam: false, framesAvailable })
+    const evenSplit = d.resolveSettings({ output: "video", framing }, "video") as Record<string, unknown>
+    const tracked = d.resolveSettings({ output: "video", framing, framingSource: "tracking" }, "video") as Record<string, unknown>
+    it("a viewer without Speaker Frames resumes an attempt that ran on the even split", () => {
+      expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: evenSplit }, "video", fresh(false))).toBe(true)
+    })
+    it("a viewer with Speaker Frames resumes an attempt that followed faces, and runs fresh against one that did not (while it is priced)", () => {
+      expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: tracked }, "video", fresh(true))).toBe(SPEAKER_FRAMES_PRICED)
+      expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: evenSplit }, "video", fresh(true))).toBe(!SPEAKER_FRAMES_PRICED)
+    })
+  })
 })

@@ -86,7 +86,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -4225,6 +4225,21 @@ export type WorkflowEstimateOptions = {
    *  as the run reads them. Absent: its first recording only, as before
    *  multicam (decided 2026-10-19). */
   multicam?: boolean
+  /** Speaker Frames is withheld from the run's viewer (`usecaseViewerEstimateFor`):
+   *  a use-case node's `auto` framing source is priced as its run reads it,
+   *  the even split. Absent: available — `auto` priced following faces
+   *  (decided 2026-10-20). */
+  framesWithheld?: boolean
+}
+
+/**
+ * The expansion's viewer flags from an estimate's options: only the `true`
+ * ones, and none at all (`undefined`) when neither is set — a graph priced
+ * for a viewer who reads the node as before is expanded exactly as before.
+ */
+function usecaseExpandFlags(flags: UseCaseViewerFlags | undefined): UseCaseViewerFlags | undefined {
+  if (!flags?.multicam && !flags?.framesWithheld) return undefined
+  return { ...(flags.multicam ? { multicam: true } : {}), ...(flags.framesWithheld ? { framesWithheld: true } : {}) }
 }
 
 /**
@@ -4332,7 +4347,7 @@ function sumWorkflowEstimate(
   // A use-case node is priced as the chain it builds, wired to its real
   // source, plus its fee (decided 2026-10-13): the one expansion every
   // estimator shares. The expanded graph holds no use-case node.
-  const uc = expandUseCaseNodes(nodes, edges ?? [], options?.multicam ? { multicam: true } : undefined)
+  const uc = expandUseCaseNodes(nodes, edges ?? [], usecaseExpandFlags(options))
   if (uc.expanded) {
     const runSet = options?.runNodeIds
     const opts = runSet ? { ...options, runNodeIds: withUseCaseMembers(runSet, uc.members) } : options
@@ -5222,8 +5237,8 @@ function listingEstimate(
   replaceableMediaNodeIds?: ReadonlySet<string>,
   /** An app's or component's List inputs its user fills (`exposedListNodeIds`). */
   exposedListNodeIds?: ReadonlySet<string>,
-  /** A general user may use Speaker Map (`usecaseMulticamForEveryone`). */
-  multicam?: boolean,
+  /** A general user's answers (`usecaseViewerForEveryone`): Speaker Map, Speaker Frames. */
+  viewer?: UseCaseViewerFlags,
 ): AppListingEstimate {
   // A use-case node lists as the chain it builds (decided 2026-10-13): the
   // preview part is what its run executes (a review-on node stops at its
@@ -5231,10 +5246,10 @@ function listingEstimate(
   // render at final and what follows it, with no fee. Its recordings are a
   // general user's run's (decided 2026-10-20): several only with `multicam`.
   // The expanded graphs below hold no use-case node, so they need no flag.
-  const uc = expandUseCaseNodes(nodes, edges, multicam ? { multicam: true } : undefined)
+  const uc = expandUseCaseNodes(nodes, edges, usecaseExpandFlags(viewer))
   if (uc.expanded) {
     const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
-    const whole = expandUseCaseNodes(nodes, edges, { chain: "whole", ...(multicam ? { multicam: true } : {}) })
+    const whole = expandUseCaseNodes(nodes, edges, { chain: "whole", ...usecaseExpandFlags(viewer) })
     const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
     // Each fee counts once per run its node makes (a List's items, Each wires, repeats).
     const reruns = new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
@@ -5838,14 +5853,14 @@ export function estimateRunSetCredits(
   runNodeIds: ReadonlySet<string>,
   /** Use-case nodes of the run the caller prices itself (`WorkflowEstimateOptions.pricedElsewhereNodeIds`). */
   pricedElsewhereNodeIds?: ReadonlySet<string>,
-  /** The run's viewer may use Speaker Map (`WorkflowEstimateOptions.multicam`). */
-  multicam?: boolean,
+  /** What the run's viewer may use (`WorkflowEstimateOptions.multicam` / `.framesWithheld`, `usecaseViewerEstimateFor`). */
+  viewer?: UseCaseViewerFlags,
 ): Promise<number> {
   // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
   return estimateRunGraphCredits(nodes, edges, {
     runNodeIds,
     ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
-    ...(multicam ? { multicam: true } : {}),
+    ...usecaseExpandFlags(viewer),
   })
 }
 
@@ -5860,13 +5875,13 @@ export async function estimateRunSetCreditsWithoutUgc(
   nodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge>,
   runNodeIds: ReadonlySet<string>,
-  /** The run's viewer may use Speaker Map (`WorkflowEstimateOptions.multicam`). */
-  multicam?: boolean,
+  /** What the run's viewer may use (`WorkflowEstimateOptions.multicam` / `.framesWithheld`). */
+  viewer?: UseCaseViewerFlags,
 ): Promise<number> {
   const edges = bypassTeleports(nodes, rawEdges)
   const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
   const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
-  return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds, ...(multicam ? { multicam: true } : {}) }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
+  return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds, ...usecaseExpandFlags(viewer) }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
 }
 
 /**
@@ -5994,12 +6009,17 @@ export type ListingEstimateOptions = {
      *  further item beyond the saved count. Ignored for a template. */
     readonly exposedListNodeIds?: ReadonlySet<string>
     /** A listing is shown to everyone, so it is a GENERAL user's run (decided
-     *  2026-10-20): every listing site passes `usecaseMulticamForEveryone(nodes)`
-     *  — a use-case node lists on several recordings only while Speaker Map is
-     *  available to users, never by who publishes it. Absent: its first
+     *  2026-10-20): every listing site passes `usecaseViewerForEveryone(nodes)`
+     *  (this flag and `framesWithheld`) — a use-case node lists on several
+     *  recordings only while Speaker Map is available to users, never by who
+     *  publishes it. Absent: its first
      *  recording only. (Passed in, not read here: the availability modules
      *  import the node registry, which imports this module.) */
     readonly multicam?: boolean
+    /** A general user's Speaker Frames answer (`usecaseViewerForEveryone`, decided
+     *  2026-10-20): an `auto` framing source lists as the even split while
+     *  Speaker Frames is withheld from users. Absent: following faces. */
+    readonly framesWithheld?: boolean
 }
 
 /**
@@ -6024,7 +6044,7 @@ async function listingPricer(
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)
   return (graph: ReadonlyArray<EstimateNode>): AppListingEstimate => {
-    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, options.multicam)
+    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, usecaseExpandFlags(options))
     return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
   }
 }

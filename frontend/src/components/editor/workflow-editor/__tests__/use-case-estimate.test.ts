@@ -4,8 +4,16 @@
  * with (`expandUseCaseNodes`, @nodaro/render-rules). The server's half, on the
  * same graphs, is the shared run-estimate parity fixture.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { buildTightenEpisodeGraph, TIGHTEN_EPISODE_DEFAULTS } from "@nodaro/render-rules"
+
+// Speaker Frames' availability to the viewer (the estimate's only reader of it). Default: not withheld —
+// what the unmocked module answers before availability lands, so every other case reads as before.
+const frames = vi.hoisted(() => ({ withheld: false }))
+vi.mock("@/lib/use-case-frames-viewer", async (orig) => ({
+  ...(await orig<typeof import("@/lib/use-case-frames-viewer")>()),
+  usecaseFramesWithheld: () => frames.withheld,
+}))
 import { withRunOverrides } from "@nodaro/shared/nodes"
 import { estimateRunCreditLines, estimateRunCredits, estimateWholeRun, runModelIds, usecaseNodeCredits, wholeRunExecutable } from "../estimate-run-credits"
 
@@ -141,3 +149,42 @@ describe("a continuation saved on the graph is priced as the fresh run the serve
   })
 })
 
+
+describe("a framed Tighten's framing source in the editor's quote (decided 2026-10-20; docs: 1121 following faces, 1103 the even split)", () => {
+  afterEach(() => { frames.withheld = false })
+
+  // The charged figures the docs page states for a 60-minute 9:16 stacked episode, captions off.
+  const charged: Record<string, number> = {
+    "elevenlabs-stt": 25,
+    "silence-detect": 11,
+    "edit-plan:tighten:standard:60m": 264,
+    "speaker-frames:8u": 18,
+    "speaker-view:complex:60u": 792,
+    "use-case-fee:tighten-episode": 11,
+  }
+  const framed = (framingSource?: string) =>
+    ({ ...t1, data: { ...t1.data, framing: { aspect: "9:16", layout: "stacked" }, ...(framingSource ? { framingSource } : {}) } })
+  const idsOf = (framingSource?: string) => runModelIds(wholeRunExecutable([rec, framed(framingSource)] as never[]), [rec, framed(framingSource)] as never[], [wire] as never[])
+  const quoteOf = (framingSource?: string) => usecaseNodeCredits("t1", [rec, framed(framingSource)] as never[], [wire] as never[], (id) => charged[id])
+  const speakerFrames = (ids: string[]) => ids.filter((id) => id.startsWith("speaker-frames"))
+
+  it("auto and tracking follow faces for a viewer Speaker Frames is available to: 8 blocks (3,604 s × 2 = 7,208 frames), 1121 in all", () => {
+    for (const source of ["auto", "tracking"]) {
+      expect(speakerFrames(idsOf(source))).toEqual(["speaker-frames", "speaker-frames:8u"])
+      expect(quoteOf(source)).toBe(1121)
+    }
+  })
+  it("static, or no framing source at all (a node saved before it existed), is the even split: no Speaker Frames, 1103", () => {
+    for (const source of ["static", undefined]) {
+      expect(speakerFrames(idsOf(source))).toEqual([])
+      expect(quoteOf(source)).toBe(1103)
+    }
+  })
+  it("a viewer Speaker Frames is withheld from: auto is quoted as the even split; tracking (refused at run) still as asked", () => {
+    frames.withheld = true
+    expect(speakerFrames(idsOf("auto"))).toEqual([])
+    expect(quoteOf("auto")).toBe(1103)
+    expect(quoteOf("static")).toBe(1103)
+    expect(quoteOf("tracking")).toBe(1121)
+  })
+})

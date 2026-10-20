@@ -75,8 +75,8 @@ export const USE_CASE_SPECS = {
     maxRecordings: USE_CASE_MAX_RECORDINGS,
     needsVideo: false,
     inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music, masterAudio: USE_CASE_MASTER_NODE_ID },
-    // `cameras` is resolved (and sent) only for two or more recordings or a Master audio.
-    settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras"],
+    // `cameras` is resolved (and sent) only for two or more recordings or a Master audio; `framingSource` only when a framed episode follows faces.
+    settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras", "framingSource"],
     resultKind: "episode",
     // An audio recording makes an audio episode, with no captions (its framing is only hidden, never cleared).
     audioForced: Object.freeze({ output: "audio", captions: false }),

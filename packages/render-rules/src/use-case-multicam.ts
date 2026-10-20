@@ -27,6 +27,7 @@ import type { UseCaseSources } from "./use-case-registry"
 import { USE_CASE_MASTER_NODE_ID, USE_CASE_MAX_RECORDINGS, usecaseRecordingNodeId, usecaseRecordings, usecaseRecordingsOf, type UseCaseCameras } from "./use-case-cameras"
 import { usecaseEdge, usecaseNode, usecaseSourceNode } from "./use-case-graph-parts"
 import { MULTICAM_SPEAKER_MAP_TYPE } from "./speaker-map-step"
+import { usecaseFramingForViewer } from "./use-case-framing-viewer"
 
 export { MULTICAM_SPEAKER_MAP_TYPE }
 export const MULTICAM_NODE_IDS = Object.freeze({ master: USE_CASE_MASTER_NODE_ID, sync: "uc-sync", map: "uc-map", switch: "uc-switch" } as const)
@@ -94,7 +95,10 @@ export function usecaseDistinctMaster<T extends string>(master: T | undefined | 
  * master on the same file as a recording); and the node's settings without
  * `cameras` unless the run reads two or more recordings or a Master audio —
  * one recording sends no Cameras settings at all, so a stale or malformed
- * value on the node never reaches (or fails) a one-recording run.
+ * value on the node never reaches (or fails) a one-recording run. Its framing
+ * source as the viewer's run reads it (`usecaseFramingForViewer`, decided
+ * 2026-10-20): `auto` is sent as the even split to a viewer Speaker Frames is
+ * withheld from.
  */
 export function usecaseRunRecordings<T extends { readonly nodeId: string; readonly url: string }>(input: {
   readonly wired: readonly T[] | undefined
@@ -104,6 +108,8 @@ export function usecaseRunRecordings<T extends { readonly nodeId: string; readon
   /** The Master audio wired into the node: its upstream node and its file. */
   readonly master?: { readonly nodeId: string; readonly url: string } | undefined
   readonly multicam: boolean
+  /** Whether Speaker Frames is available to the run's viewer: else an `auto` framing source is the even split. */
+  readonly framesAvailable: boolean
   /** The settings the run would send (`usecaseSentSettings`). */
   readonly settings: Readonly<Record<string, unknown>>
 }): { readonly recordings: T[]; readonly masterAudioUrl?: string; readonly settings: Readonly<Record<string, unknown>>; readonly sendsCameras: boolean } {
@@ -111,8 +117,9 @@ export function usecaseRunRecordings<T extends { readonly nodeId: string; readon
   const master = input.multicam && input.takesMaster && input.master?.url ? input.master : undefined
   const masterAudioUrl = master && usecaseDistinctMaster(master.nodeId, recordings.map((r) => r.nodeId)) ? master.url : undefined
   const sendsCameras = recordings.length > 1 || !!masterAudioUrl
-  const { cameras: _cameras, ...oneRecording } = input.settings
-  return { recordings, ...(masterAudioUrl ? { masterAudioUrl } : {}), settings: sendsCameras ? input.settings : oneRecording, sendsCameras }
+  const framed = usecaseFramingForViewer(input.settings, input.framesAvailable)
+  const { cameras: _cameras, ...oneRecording } = framed
+  return { recordings, ...(masterAudioUrl ? { masterAudioUrl } : {}), settings: sendsCameras ? framed : oneRecording, sendsCameras }
 }
 
 /** Two or more recordings, or a Master audio: the run is built with the multicam front. */

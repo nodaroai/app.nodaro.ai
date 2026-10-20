@@ -27,6 +27,7 @@ import {
   MULTICAM_NODE_IDS,
   isUseCaseNodeType,
   usecaseDescriptor,
+  usecaseFramingForViewer,
   usecaseRecordingsKind,
   usecaseRenameInnerIds,
   usecaseRenderNodeId,
@@ -40,6 +41,7 @@ import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-inpu
 import { usecaseListDriven } from "@/components/editor/workflow-editor/use-case-render-final-set"
 import { usecaseRunSettings, usecaseTakeOnShow } from "@/lib/use-case-run-result"
 import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
+import { usecaseFramesOffered } from "@/lib/use-case-frames-viewer"
 import { usecaseCarriedWires } from "@/lib/use-case-wired-recordings"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { planKindOf } from "./plan-kind"
@@ -116,7 +118,8 @@ function takeInputs(node: GraphNode, nodes: readonly GraphNode[], edges: readonl
   const masterId = multicam && d.inputs.includes("masterAudio") ? wires.master?.nodeId : undefined
   const media = recordings[0] ?? { url: "", kind: "video" as const }
   return {
-    raw: kept ?? data,
+    // A take that kept none reads the framing source as this viewer's run would (`usecaseFramingForViewer`).
+    raw: kept ?? usecaseFramingForViewer(data, usecaseFramesOffered()),
     sources: {
       media,
       ...(recordings.length > 1 ? { moreMedia: recordings.slice(1) } : {}),

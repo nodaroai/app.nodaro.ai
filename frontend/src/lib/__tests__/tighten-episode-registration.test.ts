@@ -19,6 +19,8 @@ describe("Tighten Episode is registered everywhere it must be", () => {
     expect(def.inputs).toEqual(["media", "music", "masterAudio"])
     expect(def.outputs).toEqual(["media", "json"])
     expect(def.defaultData).toMatchObject({ label: "Tighten Episode", output: "video", captions: true, reviewBeforeRender: false, planTier: "standard" })
+    // A NEW node follows faces once a framing is chosen, while Speaker Frames is offered (decided 2026-10-17/20); a saved node without one keeps the even split.
+    expect((def.defaultData as Record<string, unknown>).framingSource).toBe("auto")
   })
   it("producer sets, json producer, output types, executable, fee mirror", () => {
     expect(DYNAMIC_PRODUCER_TYPES.has("tighten-episode")).toBe(true)

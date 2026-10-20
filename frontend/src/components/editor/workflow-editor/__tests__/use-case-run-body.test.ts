@@ -16,9 +16,11 @@
  */
 import { describe, expect, it, vi } from "vitest"
 
-const store = vi.hoisted(() => ({ nodes: [] as unknown[], updateNodeData: vi.fn(), multicam: false }))
+const store = vi.hoisted(() => ({ nodes: [] as unknown[], updateNodeData: vi.fn(), multicam: false, frames: false }))
 // The viewer's answer: may they use Speaker Map (several recordings, decided 2026-10-19)?
 vi.mock("@/lib/use-case-multicam-viewer", () => ({ usecaseMulticamOffered: () => store.multicam }))
+// …and Speaker Frames (an `auto` framing source follows faces, decided 2026-10-20)?
+vi.mock("@/lib/use-case-frames-viewer", () => ({ usecaseFramesOffered: () => store.frames }))
 
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }) } }),
@@ -122,5 +124,30 @@ describe("recordings and Master audio (decided 2026-10-19: several only for a vi
   it("a Split Media's audio into Master audio beside its own video into Recordings is that camera's track: no master, the one-recording body", async () => {
     const split = { useCaseMedia: [{ nodeId: "split", url: "https://r2/split-video.mp4" }], useCaseMasterAudio: "https://r2/split-audio.m4a", useCaseMasterAudioNodeId: "split" }
     expect(await bodyOf({ ...DEFAULTS, cameras: { synced: true } }, split, true)).toBe(await bodyOf(DEFAULTS, { useCaseMedia: split.useCaseMedia }, true))
+  })
+})
+
+describe("the framing source (decided 2026-10-17/20)", () => {
+  const FRAMED = { output: "video", framing: { aspect: "9:16", layout: "stacked" } }
+  const HEAD = `{"mediaUrls":["https://r2/ep.mp4"],"output":"video","framing":{"aspect":"9:16","layout":"stacked"}`
+  const framed = async (data: Record<string, unknown>, frames: boolean) => {
+    store.frames = frames
+    try {
+      return await bodyOf({ ...FRAMED, ...data })
+    } finally {
+      store.frames = false
+    }
+  }
+  it("a node without one sends none — the body as before, whoever the viewer", async () => {
+    expect(await framed({}, true)).toBe(`${HEAD},"userId":"${USER}"}`)
+    expect(await framed({}, false)).toBe(`${HEAD},"userId":"${USER}"}`)
+  })
+  it("tracking is sent as tracking, whoever the viewer", async () => {
+    expect(await framed({ framingSource: "tracking" }, true)).toBe(`${HEAD},"framingSource":"tracking","userId":"${USER}"}`)
+    expect(await framed({ framingSource: "tracking" }, false)).toBe(`${HEAD},"framingSource":"tracking","userId":"${USER}"}`)
+  })
+  it("auto: as auto to a viewer who may use Speaker Frames, as the even split to anyone else (the server's engine's rule)", async () => {
+    expect(await framed({ framingSource: "auto" }, true)).toBe(`${HEAD},"framingSource":"auto","userId":"${USER}"}`)
+    expect(await framed({ framingSource: "auto" }, false)).toBe(`${HEAD},"framingSource":"static","userId":"${USER}"}`)
   })
 })

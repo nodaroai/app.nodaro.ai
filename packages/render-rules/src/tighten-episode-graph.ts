@@ -11,6 +11,9 @@
  *   [captions]  render's media + render's transcript → add-captions
  *   [music]     render's media + music → mix (ducked under the render, ends with it)
  *               video: (captions | render) + mix → merge-video-audio (no original audio)
+ *   [frames]    framed and following faces (`framingSource: "tracking"`):
+ *               Speaker Frames on the plan's edit and the transcript, its
+ *               tracks into Speaker View (use-case-framing.ts)
  *   review on   the render is a proxy preview (`quality: "proxy"`).
  */
 import {
@@ -38,6 +41,7 @@ import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, with
 import { buildTightenMulticamGraph } from "./tighten-episode-multicam"
 import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
 import { usecaseIsMulticam } from "./use-case-multicam"
+import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires } from "./use-case-framing"
 import type { UseCaseSources } from "./use-case-registry"
 
 export type { PlanTier, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
@@ -70,6 +74,13 @@ export interface TightenEpisodeSettings {
    * always were); a builder reads absent as the defaults.
    */
   readonly cameras?: UseCaseCameras
+  /**
+   * Framed and following faces (decided 2026-10-17): Speaker Frames' tracks
+   * feed Speaker View. Resolved only when a framed video episode's framing
+   * source is `tracking` (absent otherwise: the even split, so every run's
+   * settings before it existed read as they always did).
+   */
+  readonly framingSource?: "tracking"
 }
 
 export const TIGHTEN_EPISODE_DEFAULTS: TightenEpisodeSettings = Object.freeze({
@@ -152,6 +163,8 @@ export function resolveTightenEpisodeSettings(
     styleGuide: str(r.styleGuide, d.styleGuide),
     musicDuckAmount: duck,
     ...(usecaseShapeIsMulticam(shape) ? { cameras: resolveUseCaseCameras(r.cameras, shape) } : {}),
+    // Absent reads the even split (decided 2026-10-17): a saved node and an API caller keep their run.
+    ...(framing && resolveUseCaseFramingSource(r.framingSource, "static") === "tracking" ? { framingSource: "tracking" as const } : {}),
   }
 }
 
@@ -195,5 +208,10 @@ export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sourc
     usecaseEdge(ID.plan, "edl", ID.render, "edl"),
     usecaseEdge(ID.transcribe, "json", ID.render, "transcript"),
   ]
+  // Following faces: Speaker Frames after the render, so the even split's graph is unchanged.
+  if (framing && settings.framingSource === "tracking") {
+    nodes.push(usecaseFramesNode(3, 2))
+    edges.push(...usecaseFramesWires({ edl: { nodeId: ID.plan, handle: "edl" }, transcript: { nodeId: ID.transcribe, handle: "json" }, renderId: ID.render }))
+  }
   return withTightenTail(settings, sources, { nodes, edges, framed: !!framing })
 }

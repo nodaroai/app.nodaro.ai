@@ -6,6 +6,7 @@
  * follows it building on a preview, or held after its Render final. Only a
  * reviewable type holds; one without a review (Chapters) never does.
  */
+import { USE_CASE_RUN_VIEWER_AS_BEFORE } from "@nodaro/render-rules"
 import { describe, it, expect } from "vitest"
 import { REVIEW_HOLDING_USE_CASE_TYPES, isRenderNodeType, previewStops, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { USE_CASE_NODE_TYPES, runsUseCaseRenderFinal, usecaseDescriptor, usecaseFinalRunSet, usecaseRenderFinalOverrides } from "@nodaro/render-rules"
@@ -116,7 +117,7 @@ describe("a render-final override that names no run", () => {
       }
       const ctx = { userId: "u1", billingContext: { payer: "personal", userId: "u1" } } as unknown as OrchestratorContext
       const inputs = { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] } as unknown as ResolvedInputs
-      const request = requestOf(t1 as unknown as SimpleNode, inputs, ctx, null)
+      const request = requestOf(t1 as unknown as SimpleNode, inputs, ctx, null, USE_CASE_RUN_VIEWER_AS_BEFORE)
       expect(request.path).toBe(usecaseDescriptor(type).route)
       expect(request.body).not.toHaveProperty("jobId")
     })

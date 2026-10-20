@@ -11,7 +11,17 @@ vi.mock("../../availability-viewer.js", () => ({
     return denied.types.includes(type)
   },
 }))
-import { usecaseInnerDenial, usecaseMulticamAvailable, usecaseMulticamDenial, usecaseMulticamEstimateFor, usecaseMulticamForEveryone } from "../inner-availability.js"
+import {
+  usecaseFramesAvailable,
+  usecaseInnerDenial,
+  usecaseMulticamAvailable,
+  usecaseMulticamDenial,
+  usecaseMulticamEstimateFor,
+  usecaseMulticamForEveryone,
+  usecaseRunViewer,
+  usecaseViewerEstimateFor,
+  usecaseViewerForEveryone,
+} from "../inner-availability.js"
 import { __availabilityUniverseReadyForTests, __resetAvailabilityOverridesForTests } from "../../availability-override.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
@@ -104,5 +114,46 @@ describe("usecaseMulticamForEveryone: what a listing prices (decided 2026-10-20)
   })
   it("a graph with no use-case node that takes several recordings: no", () => {
     expect(usecaseMulticamForEveryone([{ type: "episode-chapters" }, { type: "upload-video" }])).toBe(false)
+  })
+})
+
+describe("an auto framing source follows Speaker Frames' availability (decided 2026-10-20)", () => {
+  it("usecaseFramesAvailable: yes while Speaker Frames is the user's; no while it is withheld", async () => {
+    expect(await usecaseFramesAvailable(USER)).toBe(true)
+    denied.types = ["speaker-frames"]
+    expect(await usecaseFramesAvailable(USER)).toBe(false)
+  })
+  it("usecaseRunViewer: both of a run's answers", async () => {
+    expect(await usecaseRunViewer(USER)).toEqual({ multicam: true, framesAvailable: true })
+    denied.types = ["speaker-frames"]
+    expect(await usecaseRunViewer(USER)).toEqual({ multicam: true, framesAvailable: false })
+    denied.types = ["speaker-map"]
+    expect(await usecaseRunViewer(USER)).toEqual({ multicam: false, framesAvailable: true })
+  })
+  it("usecaseViewerEstimateFor: only true flags, so a viewer who may use both is priced as before", async () => {
+    const graph = [{ type: "upload-video" }, { type: "tighten-episode" }]
+    expect(await usecaseViewerEstimateFor(graph, USER)).toEqual({ multicam: true })
+    denied.types = ["speaker-frames", "speaker-map"]
+    expect(await usecaseViewerEstimateFor(graph, USER)).toEqual({ framesWithheld: true })
+  })
+  it("usecaseViewerEstimateFor: a graph whose use-case nodes take no framing source asks nothing of Speaker Frames", async () => {
+    denied.types = ["speaker-frames"]
+    expect(await usecaseViewerEstimateFor([{ type: "upload-video" }, { type: "episode-chapters" }], USER)).toEqual({})
+    expect(denied.asked.filter(([t]) => t === "speaker-frames")).toEqual([])
+  })
+})
+
+describe("usecaseViewerForEveryone: what a listing prices (decided 2026-10-20)", () => {
+  beforeAll(() => __availabilityUniverseReadyForTests())
+  afterEach(() => __resetAvailabilityOverridesForTests())
+  const graph = [{ type: "upload-video" }, { type: "tighten-episode" }]
+  it("a general user's answers, whoever asks", () => {
+    __resetAvailabilityOverridesForTests({ nodes: new Set(["tighten-episode"]) })
+    expect(usecaseViewerForEveryone(graph)).toEqual({ framesWithheld: true })
+    __resetAvailabilityOverridesForTests({ nodes: new Set(["tighten-episode", "speaker-frames"]) })
+    expect(usecaseViewerForEveryone(graph)).toEqual({})
+    __resetAvailabilityOverridesForTests({ nodes: new Set(["tighten-episode", "speaker-frames", "speaker-map"]) })
+    expect(usecaseViewerForEveryone(graph)).toEqual({ multicam: true })
+    expect(denied.asked).toEqual([])
   })
 })

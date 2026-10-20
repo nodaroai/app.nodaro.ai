@@ -92,7 +92,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, isUseCaseNodeType, pickSunoSeparateSource } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, pickSunoSeparateSource } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -7626,7 +7626,7 @@ function executeNodeCore(
       : wired;
     const sources = orderedWired.map((row) => {
       const c = epData.sourceConfig?.[row.nodeId] ?? {};
-      const s: Record<string, unknown> = { id: row.nodeId, url: row.url, kind: c.kind ?? row.kind };
+      const s: Record<string, unknown> = { id: row.nodeId, url: row.url, kind: editPlanSourceKind(c.kind, row.kind) };
       if (c.role) s.role = c.role;
       if (c.speakers && c.speakers.length > 0) s.speakers = c.speakers;
       if (typeof c.offsetMs === "number") s.offsetMs = c.offsetMs;

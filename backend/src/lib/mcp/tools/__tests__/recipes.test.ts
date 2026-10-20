@@ -120,6 +120,8 @@ describe("recipe catalog", () => {
       "media_url", "intro_card_url", "formats", "target_length_sec", "edited_edl",
       // tighten_episode's and make_trailer's recordings (verbs-use-case-recordings.ts).
       "media_urls", "master_audio_url", "cameras", "wide_camera", "already_synced", "speaker_cameras",
+      // …and its framing source (verbs-use-case-framing.ts).
+      "framing_source",
       // The refusal codes that say what held a run, and the list-driven refusal.
       "preview_review_required_review_on", "preview_review_required_mixed", "preview_render_nested_review_on",
       "preview_render_nested_mixed", "use_case_review_list_driven",

@@ -21,6 +21,21 @@ function client(fetchMock: typeof fetch) {
   })
 }
 
+describe("edit.tightenEpisode's framing source (decided 2026-10-17/20)", () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>) => JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+  it("sends framingSource with the framing, for the run and its estimate", async () => {
+    const framing = { aspect: "9:16", layout: "stacked" } as const
+    for (const framingSource of ["auto", "static", "tracking"] as const) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+      await client(fetchMock).edit.tightenEpisode({ mediaUrl: "https://r2/a.mp4", framing, framingSource })
+      expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/a.mp4"], framing, framingSource })
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 1, stepsCredits: 0, feeCredits: 1, durationSec: null } }))
+    await client(fetchMock).edit.estimateTightenEpisode({ mediaUrl: "https://r2/a.mp4", framing, framingSource: "tracking" })
+    expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/a.mp4"], framing, framingSource: "tracking" })
+  })
+})
+
 describe("edit.tightenEpisode on several recordings (decided 2026-10-19)", () => {
   const bodyOf = (fetchMock: ReturnType<typeof vi.fn>) => JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
 

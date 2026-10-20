@@ -29,6 +29,7 @@ import { LLM_MCP_FIELDS } from "../tools/_llm-fields.js"
 import { SCENE3D_MCP_AUTHORING_FIELDS } from "../tools/verbs-scene3d.js"
 import { imageBatchArgs } from "../tools/_image-batch.js"
 import { recordingsInputShape } from "../tools/verbs-use-case-recordings.js"
+import { framingSourceInputShape } from "../tools/verbs-use-case-framing.js"
 
 const TOOLS_DIR = join(__dirname, "..", "tools")
 const TOOL_FILES = readdirSync(TOOLS_DIR).filter(
@@ -123,6 +124,8 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
   imageBatchArgs: Object.keys(imageBatchArgs),
   // A use-case verb's recordings (media_url / media_urls, master_audio_url, cameras).
   recordingsInputShape: Object.keys(recordingsInputShape),
+  // A framing use-case verb's framing source (framing_source).
+  framingSourceInputShape: Object.keys(framingSourceInputShape),
 }
 
 /**
@@ -136,6 +139,7 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
 const FRAGMENT_CONSUMERS: Record<string, string> = {
   LLM_MCP_FIELDS: "llmPayloadFields(args)",
   recordingsInputShape: "recordingsPayload(args)",
+  framingSourceInputShape: "framingSourcePayload(args)",
 }
 
 /** Keys that a spread fragment contributes, mapped to the consumer call that

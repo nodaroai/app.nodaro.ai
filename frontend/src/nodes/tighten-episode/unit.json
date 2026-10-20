@@ -23,7 +23,7 @@
       { "id": "json", "label": "Edit (EDL)", "kind": "look" }
     ]
   },
-  "defaultData": { "label": "Tighten Episode", "output": "video", "captions": true, "captionStyle": "word-highlight", "reviewBeforeRender": false, "planTier": "standard", "instructions": "", "fieldMappings": {}, "executionStatus": "idle" },
+  "defaultData": { "label": "Tighten Episode", "output": "video", "captions": true, "captionStyle": "word-highlight", "reviewBeforeRender": false, "planTier": "standard", "framingSource": "auto", "instructions": "", "fieldMappings": {}, "executionStatus": "idle" },
   "execution": { "kind": "use-case", "builder": "tighten" },
   "capabilities": ["panel:generate-button", "edition:nodaro-exclusive"],
   "registry": {

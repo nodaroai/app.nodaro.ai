@@ -19,6 +19,8 @@ export type TightenEpisodeData = {
    *  automatic boxes — the shipped default boxes over the speakers on screen,
    *  tracked speakers followed. null/absent = no framing. */
   framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null
+  /** With a framing: where its boxes come from — "static" the even split by speaker, "tracking" Speaker Frames following faces, "auto" following faces while Speaker Frames is offered to the run's user (else the even split). Absent = "static" (a saved node keeps its run); a new node starts on "auto". */
+  framingSource?: "auto" | "static" | "tracking"
   captions?: boolean
   captionStyle?: CaptionStyle
   reviewBeforeRender?: boolean

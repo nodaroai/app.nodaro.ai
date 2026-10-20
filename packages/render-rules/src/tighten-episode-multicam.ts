@@ -7,14 +7,17 @@
  * the switched edit. The render resolves each camera from the edit itself (no
  * sources wire), as the template's does. With two or more cameras a framed
  * render shows each camera's own shot: Speaker View deals its automatic boxes
- * only over one camera. An audio episode is the sound's alone (nothing to cut
- * to): P1's audio chain over the sound source. Pure.
+ * only over one camera. Framed and following faces, Speaker Frames reads the
+ * edit and transcript the render reads, and its tracks feed it. An audio
+ * episode is the sound's alone (nothing to cut to): P1's audio chain over the
+ * sound source. Pure.
  */
 import type { UseCaseGraphEdge, UseCaseGraphNode } from "./use-case-graph"
 import type { UseCaseSources } from "./use-case-registry"
 import { USE_CASE_CAMERAS_DEFAULTS } from "./use-case-cameras"
 import { usecaseEdge, usecaseNode, usecaseTranscribeNode } from "./use-case-graph-parts"
 import { usecaseMulticamFront, usecaseMulticamSoundNode, usecaseSwitchNode, usecaseSwitchWires } from "./use-case-multicam"
+import { usecaseFramesNode, usecaseFramesWires } from "./use-case-framing"
 import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, withTightenTail } from "./tighten-episode-parts"
 import type { TightenEpisodeGraph, TightenEpisodeSettings } from "./tighten-episode-graph"
 
@@ -87,6 +90,11 @@ export function buildTightenMulticamGraph(settings: TightenEpisodeSettings, sour
     ? usecaseNode(ID.render, TIGHTEN_FRAMED_RENDER_TYPE, 4, 1, { label: "Speaker Layout", quality, targetAspect: framing.aspect, layout: framing.layout, autoRegions: true })
     : usecaseNode(ID.render, TIGHTEN_RENDER_TYPE, 4, 1, { label: "Apply Cut", output: "video", quality, crossfadeMs: 0 }))
   edges.push(usecaseEdge(edit.nodeId, edit.handle, ID.render, "edl"), usecaseEdge(named.nodeId, named.handle, ID.render, "transcript"))
+  // Following faces: Speaker Frames on the edit and transcript the render reads, after the render.
+  if (framing && settings.framingSource === "tracking") {
+    nodes.push(usecaseFramesNode(3, 2))
+    edges.push(...usecaseFramesWires({ edl: edit, transcript: named, renderId: ID.render }))
+  }
   const multicam = { ...(front.offsets ? { sync: front.offsets } : {}), ...(front.map ? { map: front.map } : {}) }
   return withTightenTail(settings, sources, { nodes, edges, framed: !!framing, ...(Object.keys(multicam).length > 0 ? { multicam } : {}) })
 }

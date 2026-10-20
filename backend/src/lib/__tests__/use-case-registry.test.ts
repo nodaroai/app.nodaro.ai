@@ -51,7 +51,7 @@ describe("the use-case registry", () => {
     expect(d).toMatchObject({ label: "Tighten Episode", reviewable: true, resultKind: "episode", needsVideo: false, inputs: ["media", "music", "masterAudio"] })
     // Its Master audio pip (unit.json) replaces the built Master audio.
     expect(d.inputNodeIds).toEqual({ media: "uc-source", music: "uc-music", masterAudio: "uc-master" })
-    expect(d.settingKeys).toEqual(["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras"])
+    expect(d.settingKeys).toEqual(["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras", "framingSource"])
   })
   it("a builder that builds several recordings names the built Master audio its wire replaces", () => {
     expect(USE_CASE_SPECS.tighten.inputNodeIds.masterAudio).toBe(USE_CASE_MASTER_NODE_ID)
