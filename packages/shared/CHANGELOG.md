@@ -1,5 +1,23 @@
 # @nodaro/shared
 
+## 3.37.0
+
+### Minor Changes
+
+- 82169cf: `LLM_FEATURE_DEFAULTS["describe-to-picker"]` is now `gemini-3.8-flash` (it was `claude-opus-5.5`), so a Describe to Picker or Text to Picker call that omits `llmModel` runs on Gemini 3.8 Flash at Auto. `LLM_FEATURE_DEFAULT_EFFORTS` changes shape: each entry is now `{ model, effort }` — the model the effort belongs to — instead of a bare effort (a consumer reading the table directly must read `.effort`; `defaultReasoningEffort(feature, modelId)`, the sanctioned reader, keeps its signature and now returns `"high"` only for `claude-opus-5.5` on `describe-to-picker` — every other model, the default included, gets `undefined`, Auto). New: `DESCRIBE_TO_PICKER_MODELS`, the models the node offers and its route accepts (the structured vision models minus `DESCRIBE_TO_PICKER_WITHHELD_MODELS` — Claude Fable 5), and `LLM_STRUCTURED_WITHHELD_MODELS`, the same set as every legend-sized structured read (`POST /v1/text-to-picker`, `POST /v1/llm/structured`) withholds it.
+- fbf0b82: `renderLoneRow(renderId, nodes, edges, batchOf)`: the row a render run once reads behind a pass-through node (Camera Switch) whose batch has exactly one delivered row — so a multicam Clip Pack whose every clip's Camera Switch but one failed still stamps that clip's `clipKey` and plan basis. Pass `row ?? renderLoneRow(…)` to `renderPlanClipKey` / `renderPlanBasis`. Additive.
+- f75505f: `ScheduleRetry` — the Schedule Trigger's "Retry on failure" policy (`afterMinutes`, `maxAttempts`, `cheapLanesOnly` — the latter keeps the run's model calls that honour it off the direct-vendor fallback), with `normalizeScheduleRetry`, `SCHEDULE_RETRY_LIMITS` and `SCHEDULE_RETRY_DEFAULTS`, exported from `@nodaro/shared/workflow`. A schedule trigger's `config.retry` (the triggers API) and the node's `data.retry` carry it.
+- b3dbb2a: Speaker Layout (`speaker-layout`) joins the published use-case node list (`USE_CASE_NODE_TYPES`) and the unit contracts: a video producer whose `json` pip is an edit (EDL), whose review holds what follows it, and whose `masterAudio` input is not a prompt input.
+- 866182e: Suno Separate contract (`@nodaro/shared/models`). This is a public API contract: the separation modes, the stem names and the result/handle fields the API accepts and returns. `SUNO_SEPARATE_TYPES` lists the three modes (`separate_vocal`, `split_stem`, and the new `split_stem_advanced`, which isolates one named instrument). `SUNO_STEM_NAMES` lists the 98 instrument names that mode accepts, with `DEFAULT_SUNO_STEM_NAME` (`"Lead Vocal"`). `SUNO_SEPARATE_STEM_FIELDS` / `SUNO_SEPARATE_TAKE_FIELDS` / `SUNO_SEPARATE_RESULT_FIELDS` / `SUNO_SEPARATE_META_FIELDS` name the fields a run's output carries: the per-stem URLs plus a new `otherUrl`, the one-instrument takes `isolatedUrl` / `withoutUrl` / `isolated2Url` / `without2Url`, and `separateType`, `stemName`, `engineUsed`, `sunoRefused`, `fallbackReason`. `sunoSeparateCreditId` gives the credit id each mode is priced from. `sunoSeparateHandleUrl` and `sunoSeparatePrimaryUrl` map a run's output to the URL behind each handle. A stem that did not come back stays empty and is never filled with the main audio.
+
+  `NODE_TYPE_EXECUTION_DATA_KEYS` gains a `suno-separate` entry: every result field and the run facts `separateType`, `engineUsed`, `sunoRefused` and `fallbackReason` (not `stemName`, which is the node's setting). A finished run's stems and takes therefore stay out of undo history, node presets and exported templates.
+
+### Patch Changes
+
+- fbf0b82: Clip Pack's Master audio input is a non-prompt input in the published unit contracts.
+- bc00ecf: Tighten Episode's Master audio input is a non-prompt input in the published unit contracts, and a node preset no longer carries a use-case node's recordings order (`mediaOrder`) or its last run's cameras report (`useCaseCameras`).
+- 4636a3e: Trailer's Master audio input is a non-prompt input in the published unit contracts.
+
 ## 3.36.0
 
 ### Minor Changes
