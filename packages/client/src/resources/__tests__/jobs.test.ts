@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
-import { createClient, StaticTokenAuth, NotFoundError } from "../../index.js"
-import type { JobErrorHint, JobRating, JobStatus, RateJobResult } from "../../index.js"
+import { createClient, StaticTokenAuth, NotFoundError, JobBlockedError } from "../../index.js"
+import type { JobErrorHint, JobFromUploadParams, JobRating, JobStatus, RateJobResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -313,5 +313,26 @@ describe("jobs resource — pending_review and the policy-block hint", () => {
     if (!hint || hint.kind !== "policy-block") throw new Error("expected a policy-block hint")
     expect(hint.policyId).toBe("sai-moderation")
     expect(hint.hookPoint).toBe("result")
+  })
+
+  it("fromUpload() POSTs /v1/jobs/from-upload with the params as its body", async () => {
+    const job = { id: "j1", status: "completed", job_type: "image-edit" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: job }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params: JobFromUploadParams = { assetId: "a1", sourceJobId: "j0", sessionId: "s1" }
+
+    const res = await c.jobs.fromUpload(params)
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs/from-upload")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(params)
+    expect(res.data).toEqual(job)
+  })
+
+  it("fromUpload() throws JobBlockedError when a job policy blocks the image", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(422, { error: { code: "job_blocked", message: "Not allowed" } }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await expect(c.jobs.fromUpload({ assetId: "a1" })).rejects.toBeInstanceOf(JobBlockedError)
   })
 })

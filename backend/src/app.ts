@@ -312,6 +312,7 @@ import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
 import { imageCriticRoutes } from "./routes/image-critic.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
+import { jobsFromUploadRoutes } from "./routes/jobs-from-upload.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./ee/routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
@@ -849,6 +850,7 @@ export async function buildApp() {
   await app.register(qaCheckRoutes)
   await app.register(imageCriticRoutes)
   await app.register(saveToStorageRoutes)
+  await app.register(jobsFromUploadRoutes)
   await app.register(promptHelperRoutes)
   if (hasAdmin()) await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)

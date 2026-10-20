@@ -1305,6 +1305,47 @@ await client.jobs.rate(jobId, "good")
 await client.jobs.rate(jobId, null) // clear it
 ```
 
+#### `fromUpload(params)`
+
+```ts
+fromUpload(params: JobFromUploadParams): Promise<{ data: Job }>
+```
+
+Records an image edited in the browser — already stored with
+`client.uploads.upload` — as a job (`POST /v1/jobs/from-upload`): a completed,
+private, free `image-edit` job whose `output_data.imageUrl` is the upload. It
+then rates, favorites, lists (`list({ type: "image-edit" })`) and files into a
+session like any image job. The source is linked in `input_data`
+(`sourceJobId` or `sourceAssetId`, and the `sourceImageUrl` the server read
+from it); an edit of a character, object, creature or location image keeps
+that link. One upload is one job: the same `assetId` again returns the same
+job, so a retry never makes two. OAuth apps need the `assets:write` scope.
+Throws `NotFoundError` when the asset, the source or the session is not
+yours, `NodaroError` (`validation_error`) when the asset is not an image you
+stored or the source has no finished image, and `JobBlockedError` when a job
+policy of the deployment refuses the image. Full rules:
+[Recording an image edited in the browser](./api-integration.md#recording-an-image-edited-in-the-browser).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `assetId` | `string` | The edited image's `assetId`, as `uploads.upload` returned it. |
+| `sourceJobId` | `string?` | The job whose image was edited. |
+| `sourceImageUrl` | `string?` | Which of `sourceJobId`'s images was edited, when it made several (default: its `imageUrl`). |
+| `sourceAssetId` | `string?` | The upload that was edited, when the source is not a job. Not with `sourceJobId`. |
+| `editStateUrl` | `string?` | The editor's design state, stored with `uploads.uploadJson`. |
+| `sessionId` | `string?` | The generation session to file the job in. |
+
+```ts
+const upload = await client.uploads.upload(editedPng)
+const { url: editStateUrl } = await client.uploads.uploadJson(designState)
+const { data: job } = await client.jobs.fromUpload({
+  assetId: upload.assetId!,
+  sourceJobId,
+  editStateUrl,
+  sessionId,
+})
+```
+
 #### `getStatus(id)`
 
 ```ts
@@ -6342,6 +6383,18 @@ console.log(result.url)        // use as sourceImageUrl / audioUrl / videoUrl
 console.log(result.assetId)    // reference back to the storage row
 ```
 
+#### `uploadJson(json)`
+
+```ts
+uploadJson(json: Record<string, unknown> | readonly unknown[]): Promise<UploadJsonResult>
+```
+
+`POST /v1/upload-json` → stores a JSON document (up to 25 MB) and returns
+`{ url }`, its public URL — for example an image editor's design state, passed
+to `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened. The
+URL is unguessable but public, so never store a secret in it. It creates no
+library item.
+
 ### `client.library`
 
 #### `list(params?)`
@@ -8114,6 +8167,8 @@ not two.
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
 - `JobRating` — `"good" | "bad"`; `JobRatingFilter` — `JobRating | "rated" | "unrated"` (the `jobs.list` filter)
 - `RateJobResult` — `jobs.rate`'s answer: `{ data: { jobId, rating } }`
+- `JobFromUploadParams` — `jobs.fromUpload`'s body: `{ assetId, sourceJobId?, sourceImageUrl?, sourceAssetId?, editStateUrl?, sessionId? }`
+- `UploadJsonResult` — `uploads.uploadJson`'s answer: `{ url }`
 
 ### Gallery
 

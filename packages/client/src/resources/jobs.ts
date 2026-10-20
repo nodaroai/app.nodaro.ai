@@ -189,6 +189,25 @@ export interface RateJobResult {
   data: { jobId: string; rating: JobRating | null }
 }
 
+/**
+ * {@link JobsResource.fromUpload}'s body: an image edited in the browser,
+ * already stored with `client.uploads.upload`, and what it was made from.
+ */
+export interface JobFromUploadParams {
+  /** The edited image's `assetId`, as `client.uploads.upload` returned it. */
+  assetId: string
+  /** The job whose image was edited. */
+  sourceJobId?: string
+  /** Which of `sourceJobId`'s images was edited, when it made several. Default: its `imageUrl`. */
+  sourceImageUrl?: string
+  /** The upload that was edited, when the source is not a job. Not with `sourceJobId`. */
+  sourceAssetId?: string
+  /** The editor's design state, stored with `client.uploads.uploadJson`, so the edit can be reopened. */
+  editStateUrl?: string
+  /** The generation session to file the job in. */
+  sessionId?: string
+}
+
 /** A list filter value as the query string carries it: several are comma-separated. */
 function listParam(value: string | readonly string[] | undefined): string | undefined {
   if (value === undefined) return undefined
@@ -246,6 +265,19 @@ export class JobsResource {
     return this.client.request<ListJobsPage>("GET", "/v1/jobs", {
       query: { ...rest, status: listParam(status), type: listParam(type) },
     })
+  }
+
+  /**
+   * Record an image edited in the browser as a job (`POST /v1/jobs/from-upload`):
+   * a completed, private, free `image-edit` job whose `output_data.imageUrl` is
+   * the upload, linked to its source in `input_data` (`sourceJobId` /
+   * `sourceAssetId`, `sourceImageUrl`). It then lists, rates, favorites and
+   * files into a session like any image job. One upload is one job: the same
+   * `assetId` again returns the same job. OAuth apps need the `assets:write`
+   * scope. A deployment's job policy can refuse the image ({@link JobBlockedError}).
+   */
+  fromUpload(params: JobFromUploadParams): Promise<{ data: Job }> {
+    return this.client.request<{ data: Job }>("POST", "/v1/jobs/from-upload", { body: params })
   }
 
   /**

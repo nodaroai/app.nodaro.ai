@@ -36,7 +36,7 @@ import { eachSourceFile, lineOf, SCAN_TIMEOUT_MS, walk } from "./source-scan.js"
 /** Plain insert helpers: they leave job_type / started_at to a worker pickup. */
 const PLAIN_INSERTS = new Set(["insertJob", "insertJobs", "insertJobIdempotent"])
 /** Every request-path insert helper, for the completed-insert check. */
-const ROW_INSERTS = new Set([...PLAIN_INSERTS, "insertSyncJob", "insertInternalJob"])
+const ROW_INSERTS = new Set([...PLAIN_INSERTS, "insertSyncJob", "insertSyncJobIdempotent", "insertInternalJob"])
 const COMPLETION_FUNNELS = new Set(["markJobCompleted", "markJobCompletedDetailed"])
 
 /**

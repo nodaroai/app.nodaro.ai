@@ -255,6 +255,14 @@ const ALLOWED_PATHS = [
   // jobs; the 518 DB guards refuse any item of another owner.
   /^src\/routes\/generation-sessions\.ts$/,
 
+  // Browser-edit jobs (POST /v1/jobs/from-upload): writes a `jobs` row, which
+  // client roles may not insert since migration 474 — the insert goes through
+  // the job funnel (lib/insert-job.ts), as on every job-creating route. Its
+  // reads are the caller's own: the asset and the source (job or asset) by id
+  // AND `user_id`, the recorded job by id AND `user_id`; the object behind the
+  // asset is judged by judgeUrlForRecording before it is published.
+  /^src\/routes\/jobs-from-upload\.ts$/,
+
   // Outbound webhook endpoints (migration 521): per-account CRUD over
   // `webhooks` and its delivery log `webhook_deliveries`. Every handler
   // derives the caller from req.userId (401 if absent); every read and write

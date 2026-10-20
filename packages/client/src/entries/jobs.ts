@@ -13,6 +13,7 @@ export type {
   JobStatusResult,
   CancelJobResult,
   DeleteJobResult,
+  JobFromUploadParams,
   ListJobsParams,
   ListJobsPage,
   // `error_hint`'s discriminated union and its two arms, plus the credit

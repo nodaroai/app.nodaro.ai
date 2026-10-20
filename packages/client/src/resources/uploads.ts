@@ -47,4 +47,21 @@ export class UploadsResource {
     )
     return res.data
   }
+
+  /**
+   * Store a JSON document (`POST /v1/upload-json`, up to 25 MB) and get its
+   * public URL — e.g. an image editor's design state, passed to
+   * `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened.
+   * The URL is unguessable but public: never store a secret in it. Creates no
+   * library item.
+   */
+  uploadJson(json: Record<string, unknown> | readonly unknown[]): Promise<UploadJsonResult> {
+    return this.client.request<UploadJsonResult>("POST", "/v1/upload-json", { body: json })
+  }
+}
+
+/** Result of {@link UploadsResource.uploadJson}. */
+export interface UploadJsonResult {
+  /** Public URL of the stored JSON document. */
+  readonly url: string
 }

@@ -70,6 +70,9 @@ const IMAGE_JOBS = new Set([
   "generate-creature-asset",
   "generate-location",
   "generate-location-asset",
+  // A browser edit recorded by POST /v1/jobs/from-upload: always private, so
+  // only the owner's own scope ever lists it.
+  "image-edit",
 ])
 
 const VIDEO_JOBS = new Set([

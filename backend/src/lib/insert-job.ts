@@ -429,3 +429,24 @@ export async function insertJobIdempotent<T = { id: string }>(
   if (gate) await recordAllowedInsert(gate, result.row)
   return result
 }
+
+/**
+ * `insertJobIdempotent` for a SYNCHRONOUS route — the `insertSyncJob` rule
+ * (`job_type` derived from `input_data.type`, `started_at` stamped; a caller's
+ * own `started_at` wins) on the race-proof lane. Throws like the function it
+ * wraps. A synchronous route that keys its row on a fact of its own (one row
+ * per uploaded asset, say) uses this instead of a read-then-write dedup.
+ */
+export async function insertSyncJobIdempotent<T = { id: string }>(
+  req: FastifyRequest,
+  row: SyncJobRow & { user_id: string },
+  idempotencyKey: string,
+  selectColumns = "id",
+): Promise<IdempotentInsertResult<T>> {
+  return insertJobIdempotent<T>(
+    req,
+    { started_at: new Date().toISOString(), job_type: row.input_data.type, ...row },
+    idempotencyKey,
+    selectColumns,
+  )
+}

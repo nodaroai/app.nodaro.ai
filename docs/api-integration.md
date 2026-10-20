@@ -3568,6 +3568,55 @@ curl -s "https://app.nodaro.ai/v1/jobs?rating=good&favorited=true&status=complet
   -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {id, favorited, rating}'
 ```
 
+### Recording an image edited in the browser
+
+An image edited in your own app (cropped, annotated, filtered) is an upload,
+not a job, so on its own it cannot be rated, favorited, filed in a session or
+handed to a tool that takes a job id. Record it as one:
+
+1. Store the edited image with `POST /v1/upload` and keep its `assetId`.
+2. Optionally store the editor's design state with `POST /v1/upload-json`
+   (any JSON body, up to 25 MB; returns `{ url }`), so the edit can be reopened.
+3. `POST /v1/jobs/from-upload`.
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `POST` | `/v1/jobs/from-upload` | `{ assetId, sourceJobId?, sourceImageUrl?, sourceAssetId?, editStateUrl?, sessionId? }` | Records the upload as an `image-edit` job, completed at once. Returns `{ data: Job }`: `201` when it records it, `200` when this `assetId` was recorded before (the same job). |
+
+- **Free and private.** Recording the job charges nothing (the file's storage
+  was counted when you uploaded it), and the job is never public: it lists in your own job history,
+  gallery and library views, never in the public gallery.
+- **What it holds.** `output_data.imageUrl` is the upload, with `thumbnailUrl`
+  and its `width` / `height`. `input_data` carries `type: "image-edit"`, the
+  `assetId`, and the source: `sourceJobId` or `sourceAssetId`, plus
+  `sourceImageUrl` — the source's image, read by the server (for a job that
+  made several images, send the one you edited as `sourceImageUrl`; it must
+  be one of them). An edit of a character, object, creature or location image
+  keeps that link, so it lists with the entity and the main-image approvals
+  accept it for that entity only. `GET /v1/jobs?type=image-edit` lists them.
+- **One upload, one job.** Sending the same `assetId` again answers the same
+  job, so a retry or a double click never makes two. To show it in a second
+  session, add it there with `POST /v1/sessions/:id/items`.
+- **Refusals.** `404 not_found` when the asset, the source or the session is
+  not yours. `400 validation_error` when the asset is not an image, is not a
+  file you stored, the source job has no finished image, `sourceImageUrl` is
+  not one of its images, both sources are sent, or `editStateUrl` is not a url
+  `POST /v1/upload-json` returned. `422 job_blocked` when a job policy of this
+  deployment refuses the image.
+- **Deleting.** Deleting the job leaves the uploaded file in your uploads.
+  Deleting the upload from your library keeps the file while this job still
+  shows it.
+
+OAuth app tokens need `assets:write` (no-op for user / API-key auth).
+
+```bash
+# Record an edited image next to the job it was made from, in a session
+curl -s -X POST "https://app.nodaro.ai/v1/jobs/from-upload" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"assetId\": \"$ASSET\", \"sourceJobId\": \"$JOB\", \"sessionId\": \"$SESSION\"}" | jq '.data | {id, status, output_data}'
+```
+
 ## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 
 The segmented long-video engine ([Generate Video Pro](./nodes/ai-video/generate-video-pro.md)) generates one segment at a time and checkpoints between segments, so a run can be stopped gracefully and continued later:

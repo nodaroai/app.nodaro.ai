@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify"
 // Core route modules register their paths at import time; the ee credits
 // routes register theirs inside the route function, called below on a stub.
 import "../../routes/jobs.js"
+import "../../routes/jobs-from-upload.js"
 import "../../routes/workflows.js"
 import "../../routes/workflow-execution.js"
 import "../../routes/nodes.js"
@@ -30,6 +31,7 @@ describe("OpenAPI document", () => {
   it.each([
     "/v1/jobs/{id}",
     "/v1/jobs/{id}/status",
+    "/v1/jobs/from-upload",
     "/v1/nodes",
     "/v1/nodes/{type}",
     "/v1/generate-image",
