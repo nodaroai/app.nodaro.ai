@@ -100,6 +100,27 @@ function* multicamSpace(): Generator<SettingsCase & { readonly name: string }> {
   }
 }
 
+/**
+ * Trailer on several recordings or a Master audio (decided 2026-10-17): every
+ * recordings set the route lets run × in sync × the wide × the override ×
+ * formats × review × an intro card. Video only (every set holds a camera).
+ */
+function* trailerMulticamSpace(): Generator<SettingsCase & { readonly name: string }> {
+  for (const { name, sources } of MULTICAM_RECORDINGS) {
+    const kinds = usecaseRecordings(sources).map((r) => r.kind)
+    for (const synced of [false, true])
+      for (const wide of [null, kinds.length])
+        for (const speakerCameras of [{}, { "1": 2, "2": 0 }])
+          for (const formats of [["9:16"], [...TRAILER_FORMATS]])
+            for (const reviewBeforeRender of [true, false])
+              for (const introCard of [undefined, { url: "https://r2/card.mp4", durationSec: 6 }]) {
+                const cameras = { wide, synced, speakerCameras }
+                if (usecaseRecordingsProblem({ kinds, masterAudio: !!sources.masterAudio, cameras })) continue
+                yield { name, raw: { formats, reviewBeforeRender, cameras }, kind: usecaseRecordingsKind(kinds)!, sources: { ...sources, ...(introCard ? { introCard } : {}) } }
+              }
+  }
+}
+
 /** The shape a run of these sources is resolved against (how many recordings, whether a master is wired). */
 const shapeOf = (sources: UseCaseSources): UseCaseSourcesShape => ({ recordings: usecaseRecordings(sources).length, masterAudio: !!sources.masterAudio })
 
@@ -146,6 +167,7 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
               },
             }
           }
+    yield* trailerMulticamSpace()
   },
   // An audio recording makes audio clips: no framing, no captions (the resolver forces both).
   "clip-pack": function* () {
@@ -256,6 +278,19 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
     }
     // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 framings × 2 captions × 2 review × 2 outputs, none refused.
     expect(count).toBe(1024)
+  })
+
+  it("Trailer on several recordings or a Master audio (every set the route lets run)", () => {
+    let count = 0
+    const d = usecaseDescriptor("episode-trailer")
+    for (const c of trailerMulticamSpace()) {
+      const g = d.build(d.resolveSettings(c.raw, c.kind, shapeOf(c.sources)), c.sources)
+      expect(problems(g), JSON.stringify({ name: c.name, raw: c.raw })).toEqual([])
+      expect(g.nodes.some((n) => n.type === "camera-switch")).toBe(usecaseRecordings(c.sources).filter((r) => r.kind === "video").length >= 2)
+      count++
+    }
+    // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 format sets × 2 review × 2 intro cards, none refused.
+    expect(count).toBe(512)
   })
 
   it("has a settings table for every registered use-case type", () => {

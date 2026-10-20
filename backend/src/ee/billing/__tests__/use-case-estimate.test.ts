@@ -476,6 +476,16 @@ function reviewed(sec: number) {
   return { ...preview, data: { ...preview.data, generatedJson: PLAN_35, editedEdl: reviewOf(sec), useCaseContinue: { mode: "render-final", jobId: "job-0" } } }
 }
 
+/** Three 60-minute cameras and a 60-minute Master audio wired into a Trailer node. */
+function multicamTrailer(node: { id: string; type: string; data: Record<string, unknown> }): [Array<{ id: string; type: string; data: Record<string, unknown> }>, Array<{ source: string; target: string; sourceHandle: string; targetHandle: string }>] {
+  const cams = [1, 2, 3].map((n) => ({ id: `cam${n}`, type: "upload-video", data: { url: `https://r2/cam${n}.mp4`, metadata: { durationSeconds: 3600 } } }))
+  const mic = { id: "mic", type: "upload-audio", data: { url: "https://r2/master.wav", metadata: { durationSeconds: 3600 } } }
+  return [
+    [...cams, mic, node],
+    [...cams.map((c) => ({ source: c.id, target: "tr", sourceHandle: "video", targetHandle: "media" })), { source: "mic", target: "tr", sourceHandle: "audio", targetHandle: "masterAudio" }],
+  ]
+}
+
 describe("the docs' worked examples, at the charged price (episode-trailer.md, What the estimate shows)", () => {
   const head: Step[] = [["elevenlabs-stt"], ["edit-plan:trailer:standard:per-minute", 60], ["edit-plan:trailer:standard:flat"]]
   const formats: Step = ["social-media-format", 3]
@@ -517,7 +527,37 @@ describe("the docs' worked examples, at the charged price (episode-trailer.md, W
       engine: () => estimateRunSetCredits([video(3600), reviewed(90)], [trailerWire], new Set(["tr"])),
       docs: 88,
     },
+    {
+      // A viewer who may use Speaker Map (decided 2026-10-19): every recording and the Master audio are read.
+      name: "three cameras (the third the wide) + Master audio, 60 min each, three formats: Audio Sync over four sources, Speaker Map, Camera Switch",
+      steps: [...head, ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["apply-edl", 1], formats, fee],
+      engine: () => estimateWorkflowCredits(...multicamTrailer(trailer({ cameras: { wide: 3 } })), { multicam: true }),
+      docs: 454,
+    },
+    {
+      name: "the same, review on: the preview, the switch included",
+      steps: [...head, ["audio-sync:4src"], ["speaker-map"], ["camera-switch"], ["apply-edl:proxy", 1], fee],
+      engine: () => estimateWorkflowCredits(...multicamTrailer(trailer({ reviewBeforeRender: true, cameras: { wide: 3 } })), { multicam: true }),
+      docs: 379,
+    },
+    {
+      name: "the same, review on, no edits: its Render final re-runs Camera Switch, then the render on the 35-second cut and every format, no fee",
+      steps: [["camera-switch"], ["apply-edl", 1], formats],
+      engine: () => {
+        const preview = trailer({ reviewBeforeRender: true, cameras: { wide: 3 } })
+        const final = { ...preview, data: { ...preview.data, generatedJson: PLAN_35, useCaseContinue: { mode: "render-final", jobId: "job-0" } } }
+        const [nodes, edges] = multicamTrailer(final)
+        return estimateRunSetCredits(nodes, edges, new Set(["tr"]), undefined, true)
+      },
+      docs: 88,
+    },
   ]
+  it("a viewer who may not use Speaker Map: three cameras and a Master audio are quoted as the first camera alone, exactly as before multicam", async () => {
+    const one = await estimateWorkflowCredits([video(3600), trailer({})], [trailerWire])
+    expect(await estimateWorkflowCredits(...multicamTrailer(trailer({ cameras: { wide: 3 } })))).toBe(one)
+    expect(await estimateWorkflowCredits(...multicamTrailer(trailer({ cameras: { wide: 3 } })), { multicam: false })).toBe(one)
+    expect(chargedOf([...head, ["apply-edl", 1], formats, fee])).toBe(399)
+  })
   for (const c of trailerCases) {
     it(`${c.name}: the engine's steps, charged = ${c.docs}`, async () => {
       expect(listOf(c.steps)).toBe(await c.engine())

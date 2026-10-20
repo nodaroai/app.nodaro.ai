@@ -229,3 +229,27 @@ describe("a multicam take's review view (decided 2026-10-17)", () => {
     expect(view.nodes.map((n) => n.id)).toEqual(["t1::uc-source", "t1::uc-transcribe", "t1::uc-silence", "t1", "t1::uc-render"])
   })
 })
+
+describe("Trailer's review on several recordings (decided 2026-10-17)", () => {
+  const cam2 = { id: "cam2", type: "upload-video", position: at, data: { url: "https://r2/cam2.mp4" } }
+  const mic = { id: "mic", type: "upload-audio", position: at, data: { url: "https://r2/mic.wav" } }
+  const w = (source: string, sourceHandle: string, targetHandle = "media") => ({ id: `w-${source}`, source, target: "t1", sourceHandle, targetHandle })
+  const wires = [w("rec", "video"), w("cam2", "video"), w("mic", "audio", "masterAudio")]
+  const trailer = (data: Record<string, unknown> = {}) => ({ ...t1({ formats: ["9:16"], reviewBeforeRender: true, ...data }), type: "episode-trailer" })
+  const take = (settings: object) => ({ generatedResults: [{ url: "https://r2/p.mp4", quality: "proxy", useCaseSettings: settings }] })
+
+  it("a viewer who may not use Speaker Map reviews exactly the one-recording run: further cameras and the master are not read", () => {
+    const view = reviewViewOf("t1", [rec, cam2, mic, trailer()], wires)
+    expect(JSON.parse(JSON.stringify(view))).toEqual(JSON.parse(JSON.stringify(reviewViewOf("t1", [rec, trailer()], [w("rec", "video")]))))
+  })
+  it("a multicam take: the recordings, the master, the plan, Camera Switch and the render, wired plan → switch → render", () => {
+    const settings = resolveEpisodeTrailerSettings({ formats: ["9:16"], reviewBeforeRender: true, cameras: { speakerCameras: { "1": 2 } } }, "video", { recordings: 2, masterAudio: true })
+    const view = reviewViewOf("t1", [rec, cam2, mic, trailer(take(settings))], wires)
+    const ids = view.nodes.map((n) => n.id)
+    for (const id of ["t1::uc-source", "t1::uc-cam-2", "t1::uc-master", "t1", "t1::uc-switch", "t1::uc-render"]) expect(ids).toContain(id)
+    expect(ids).not.toContain("t1::uc-map")
+    expect(view.edges.map((e) => `${e.source}>${e.target}.${e.targetHandle}`)).toEqual(expect.arrayContaining(["t1>t1::uc-switch.edl", "t1::uc-switch>t1::uc-render.edl"]))
+    expect(renderPlanPath(view.renderId, view.nodes, view.edges as never)?.planId).toBe("t1")
+    expect((view.nodes.find((n) => n.id === "t1::uc-switch")!.data as Record<string, unknown>)).toMatchObject({ speakerMapByOrder: { "1": "t1::uc-cam-2" } })
+  })
+})

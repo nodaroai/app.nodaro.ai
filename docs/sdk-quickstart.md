@@ -563,7 +563,9 @@ A trailer for social media is one call as well: `client.edit.episodeTrailer`
 cuts a 20–40 second trailer from the recording and pads it to each format you
 choose (default 9:16, 1:1 and 4:5; also 16:9), optionally after an intro card.
 Its fee is 11 credits<!-- credits: use-case-fee:episode-trailer --> per run, on top of its steps (quote it with
-`estimateEpisodeTrailer`). Not yet enabled on nodaro.ai.
+`estimateEpisodeTrailer`). Not yet enabled on nodaro.ai. It takes the cameras
+of one conversation as Tighten Episode does (`mediaUrls`, `masterAudioUrl`,
+`cameras`), with the same need for Speaker Map.
 
 ```ts
 const trailer = await client.edit.episodeTrailer({ mediaUrl: masterUrl, formats: ["9:16", "1:1"] })

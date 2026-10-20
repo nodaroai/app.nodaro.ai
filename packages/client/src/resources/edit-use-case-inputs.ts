@@ -105,12 +105,13 @@ export type TrailerFormat = (typeof TRAILER_FORMATS)[number]
 
 /**
  * Input for {@link EditResource.episodeTrailer} and
- * {@link EditResource.estimateEpisodeTrailer}: one video recording in, a
- * 20–40 s trailer out in each chosen format. Only `mediaUrl` is required.
+ * {@link EditResource.estimateEpisodeTrailer}: one video recording (or the
+ * recordings of one conversation, see {@link UseCaseRecordingsInput}) in, a
+ * 20–40 s trailer out in each chosen format. Only the recording is required.
  */
-export interface EpisodeTrailerInput {
-  /** The recording — a video URL, up to 3 hours (an audio-only recording is refused). */
-  mediaUrl: string
+export interface EpisodeTrailerInput extends UseCaseRecordingsInput {
+  /** The recording — a video URL, up to 3 hours (a run with no picture is refused). Or `mediaUrls`. */
+  mediaUrl?: string
   /** An optional intro card: a short video (15 s at most) played before the trailer. */
   introCardUrl?: string
   /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list is refused). */
@@ -230,6 +231,9 @@ export function chaptersBody(input: EpisodeChaptersInput): Record<string, unknow
 export function trailerBody(input: EpisodeTrailerInput): Record<string, unknown> {
   return withRecordings({
     mediaUrl: input.mediaUrl,
+    mediaUrls: input.mediaUrls,
+    masterAudioUrl: input.masterAudioUrl,
+    cameras: input.cameras,
     ...(input.introCardUrl !== undefined ? { introCardUrl: input.introCardUrl } : {}),
     // An empty list is sent as is: the route refuses it (at least one format).
     ...(input.formats !== undefined ? { formats: input.formats } : {}),

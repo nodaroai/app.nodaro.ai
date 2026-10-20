@@ -553,7 +553,7 @@ nodaro edit episode-chapters --media <url> [--plan-tier economy|standard|premium
                                                          # transcribe, then plan the chapters; nothing is rendered. With --watch the show
                                                          # notes are printed when the run completes: one "0:00 Title" line per chapter.
                                                          # Priced as its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
-nodaro edit episode-trailer --media <url> [--intro-card <url>] [--formats 9:16,1:1,4:5,16:9] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit episode-trailer --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--intro-card <url>] [--formats 9:16,1:1,4:5,16:9] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Trailer: one video recording (up to 3 hours) in, a 20–40 second trailer out in each
                                                          # format of --formats (comma-separated; default 9:16,1:1,4:5), padded, never cropped;
                                                          # --intro-card plays a short video (15 s at most) first. With --watch each format's
@@ -561,6 +561,9 @@ nodaro edit episode-trailer --media <url> [--intro-card <url>] [--formats 9:16,1
                                                          # that could not be rendered ("Could not render: 1:1"). --review stops at
                                                          # a preview of the trailer and prints the edit continue-use-case command that renders
                                                          # every format. Priced as its steps plus a per-run fee (listed after this block).
+                                                         # Several cameras: the recordings flags of edit tighten-episode (repeat --media,
+                                                         # --master-audio, --wide-camera, --synced, --speaker-camera); they need Speaker Map
+                                                         # (not yet enabled on nodaro.ai: refused 403 node_not_available until it is).
                                                          # Not yet enabled on nodaro.ai.
 nodaro edit clip-pack --media <url> [--count <n>] [--length <sec>] [--framing 16:9|9:16|1:1|4:5|none [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>]] (--layout, --switch and --emphasis only with --framing <aspect>) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Clip Pack: one recording (video or audio, up to 3 hours) in, a pack of short clips

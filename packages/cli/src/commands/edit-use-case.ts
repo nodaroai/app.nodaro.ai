@@ -173,10 +173,11 @@ export function registerUseCaseCommands(cmd: Command): void {
     )
 
   // ── episode-trailer (podcast use-case node) ─────────────────────────────
-  cmd
-    .command("episode-trailer")
-    .description("cut a 20–40 second trailer of a recording and deliver it in each chosen social format, in one step")
-    .requiredOption("--media <url>", "the recording (a video URL, up to 3 hours)")
+  withRecordingsOptions(
+    cmd
+      .command("episode-trailer")
+      .description("cut a 20–40 second trailer of a recording and deliver it in each chosen social format, in one step"),
+  )
     .option("--intro-card <url>", "an optional short video (15 s at most) played before the trailer")
     .option("--formats <list>", `comma-separated, at least one: ${TRAILER_FORMATS.join(",")} (default 9:16,1:1,4:5)`)
     .option("--review", "stop at a preview to review (render every format with `nodaro edit continue-use-case <jobId> --mode render-final`)")
@@ -191,8 +192,8 @@ export function registerUseCaseCommands(cmd: Command): void {
     .action(
       async (
         opts: GlobalOpts &
-          WatchOpts & {
-            media: string
+          WatchOpts &
+          RecordingsOpts & {
             introCard?: string
             formats?: string
             review?: boolean
@@ -208,11 +209,12 @@ export function registerUseCaseCommands(cmd: Command): void {
           process.exit(1)
         }
         refuseUnknownPlanTier(opts.planTier)
+        const recordings = recordingsInput(opts)
         try {
           const client = buildClient(opts.profile)
           const result = await client.edit.episodeTrailer(
             {
-              mediaUrl: opts.media,
+              ...recordings,
               ...(opts.introCard ? { introCardUrl: opts.introCard } : {}),
               ...(formats ? { formats: formats as TrailerFormat[] } : {}),
               ...(opts.review ? { reviewBeforeRender: true } : {}),

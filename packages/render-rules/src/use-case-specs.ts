@@ -96,19 +96,21 @@ export const USE_CASE_SPECS = {
   }),
   trailer: defineUseCase<EpisodeTrailerSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
-    maxRecordings: 1,
-    // Every format is a video (decided 2026-10-14): an audio-only recording is refused.
+    // Up to six recordings (decided 2026-10-17), read only for a viewer who may use Speaker Map.
+    maxRecordings: USE_CASE_MAX_RECORDINGS,
+    // Every format is a video (decided 2026-10-14): a run whose recordings are all sound only is refused.
     needsVideo: true,
-    inputNodeIds: { media: TRAILER_NODE_IDS.source, introCard: TRAILER_NODE_IDS.intro },
-    settingKeys: ["formats", "reviewBeforeRender", "planTier", "instructions", "styleGuide"],
+    inputNodeIds: { media: TRAILER_NODE_IDS.source, introCard: TRAILER_NODE_IDS.intro, masterAudio: USE_CASE_MASTER_NODE_ID },
+    // `cameras` is resolved (and sent) only for two or more recordings or a Master audio.
+    settingKeys: ["formats", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "cameras"],
     resultKind: "formats",
     // Every chosen format is made, whichever one fails: a failed format refunds itself and is named.
     triesEvery: Object.values(TRAILER_FORMAT_SPECS).map((spec) => spec.nodeId),
     // Each format is the planned teaser at the length its render is estimated at (the longest trailer the plan cuts), after the intro card.
     outputLength: { fixedSec: renderLengthSec(editPlanRenderEstimateLength({ mode: "trailer" }, undefined)), after: "introCard" },
-    resolveSettings: (raw, kind) => resolveEpisodeTrailerSettings(raw, kind),
-    build: (settings, sources) =>
-      buildEpisodeTrailerGraph(settings, { media: sources.media, ...(sources.introCard ? { introCard: sources.introCard } : {}) }),
+    resolveSettings: (raw, kind, shape) => resolveEpisodeTrailerSettings(raw, kind, shape),
+    // Every recording, the master and the intro card: one recording builds exactly as before.
+    build: (settings, sources) => buildEpisodeTrailerGraph(settings, sources),
   }),
   clipPack: defineUseCase<ClipPackSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,

@@ -7621,14 +7621,17 @@ it in each chosen social format: the run transcribes the recording, plans the
 trailer from its strongest moments (the plan picks the length and joins the
 moments with its own short crossfades; neither is a setting), renders it,
 plays an optional intro card first, and pads it to every format — never
-cropped. Only `mediaUrl` is required; a field left out takes the node's
-default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
+cropped. Only the recording is required (`mediaUrl`, or `mediaUrls`); a field
+left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
 
-**`EpisodeTrailerInput`:**
+**`EpisodeTrailerInput`** (with `UseCaseRecordingsInput`, its recordings):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | yes | The recording — a video URL, up to 3 hours (an audio-only recording is refused `media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video URL, up to 3 hours (an audio-only recording is refused `media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls` | `string[]` | `mediaUrl` or `mediaUrls` | Instead of `mediaUrl`: the recordings of one conversation, in order (Camera 1, Camera 2…) — up to six in all with the Master audio; without one, two or more cameras keep a place for the sound, so up to five. See [Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras). **Needs Speaker Map** (as on `tightenEpisode`). |
+| `masterAudioUrl` | `string` | no | The mixer or recorder track: the trailer's sound and the clock the recordings are lined up to. **Needs Speaker Map**. |
+| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio. |
 | `introCardUrl` | `string` | no | A short video, 15 s at most, played before the trailer. Make it the recording's size and shape, or one of the two is letterboxed. |
 | `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one: an empty list is sent as is and refused `400 validation_error`. |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview of the trailer for a person to review; render every format afterwards with `continueUseCase({ mode: "render-final" })`. |
@@ -7636,7 +7639,10 @@ default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processin
 | `instructions` | `string` | no | Instructions for the trailer (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 
-`options.idempotencyKey` works as on `tightenEpisode`.
+`options.idempotencyKey` works as on `tightenEpisode`. Passing both `mediaUrl`
+and `mediaUrls`, or neither, rejects with a `TypeError` before any request;
+several recordings or a Master audio are refused `403 node_not_available`
+where Speaker Map is not available to you (not yet on nodaro.ai).
 
 `episodeTrailer` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data.formats` is `[{ format, url }]`,
@@ -7646,7 +7652,8 @@ is `"proxy"` for a review-on run's preview (`videoUrl` is then the preview, and
 `formats` is `[]` until the Render final), `"final"` otherwise. A format that
 could not be rendered is named in `output_data.failedFormats`: the run
 completes with the others, keeps its fee and is not charged for that format.
-A run with no format rendered fails, and its fee is refunded.
+A run with no format rendered fails, and its fee is refunded. A run on several
+recordings or a Master audio adds `output_data.cameras`, as on `tightenEpisode`.
 
 `estimateEpisodeTrailer` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-trailer --> per run.

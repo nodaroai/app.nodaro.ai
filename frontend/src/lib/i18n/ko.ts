@@ -10829,6 +10829,7 @@ export const ko: ChromeDict = {
   "nodeRun.tightenContinueListDriven": "목록 항목마다 한 번씩 실행되는 노드에서는 이어서 실행할 수 없습니다. 다시 실행하세요.",
   "nodeRun.tightenReviewListDriven": "노드가 목록 항목마다 한 번씩 실행될 때는 '렌더링 전에 검토'를 사용할 수 없습니다. 목록을 실행하려면 끄세요.",
   "nodeRun.usecaseListDriven": "“{label}”에는 녹음을 하나만 연결할 수 있습니다. 녹음마다 워크플로를 따로 실행하세요.",
+  "nodeRun.usecaseListDrivenEpisode": "“{label}”에는 한 대화의 녹음을 연결합니다. 에피소드마다 워크플로를 따로 실행하세요.",
   "nodeRun.clipPackNoneRendered": "클립 {count}개 중 어느 것도 렌더링하지 못했습니다: {reason}.",
   "nodeRun.clipPackOneNotRendered": "계획의 클립 하나를 렌더링하지 못했습니다: {reason}.",
   "nodeRun.usecaseNeedsRecording": "먼저 “{label}”에 녹음을 연결하세요",

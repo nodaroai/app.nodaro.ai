@@ -10829,6 +10829,7 @@ export const ja: ChromeDict = {
   "nodeRun.tightenContinueListDriven": "リストの項目ごとに1回ずつ実行されるノードでは「続ける」は使えません。もう一度実行してください。",
   "nodeRun.tightenReviewListDriven": "ノードがリストの項目ごとに1回ずつ実行される場合、「レンダリング前に確認」は使えません。リストを実行するにはオフにしてください。",
   "nodeRun.usecaseListDriven": "{label}は録画を1つだけ受け付けます。録画ごとにワークフローを個別に実行してください。",
+  "nodeRun.usecaseListDrivenEpisode": "{label}は1つの会話の録画を受け付けます。エピソードごとにワークフローを個別に実行してください。",
   "nodeRun.clipPackNoneRendered": "{count} 本のクリップはいずれもレンダリングできませんでした：{reason}。",
   "nodeRun.clipPackOneNotRendered": "プランの1本のクリップをレンダリングできませんでした：{reason}。",
   "nodeRun.usecaseNeedsRecording": "先に「{label}」に録音を接続してください",

@@ -44,7 +44,7 @@ describe("the listing prices a use-case node as a general user's run reads it (d
   const speakerMapWithheld = () => __resetAvailabilityOverridesForTests({ nodes: new Set(["tighten-episode", "upload-video", "upload-audio"]) })
   const speakerMapForAll = () => __resetAvailabilityOverridesForTests({ nodes: new Set(["tighten-episode", "upload-video", "upload-audio", "speaker-map"]) })
   // As every listing site calls it (published-apps.ts, workflow-templates.ts, the backfills): the general user's flag.
-  const listing = (g: typeof MULTICAM, snapshotSettings?: Record<string, unknown>) =>
+  const listing = (g: { readonly nodes: ReadonlyArray<{ id: string; type: string; data: Record<string, unknown> }>; readonly edges: typeof MULTICAM.edges }, snapshotSettings?: Record<string, unknown>) =>
     estimateWorkflowListingCredits(g.nodes, g.edges, {
       publishType: "app",
       replaceableMediaNodeIds: new Set(),
@@ -62,6 +62,17 @@ describe("the listing prices a use-case node as a general user's run reads it (d
     const one = await listing(ONE)
     expect(MULTICAM_STEPS).toBeGreaterThan(0)
     expect((await listing(MULTICAM)).preview).toBe(one.preview + MULTICAM_STEPS)
+  })
+
+  it("Trailer the same way (decided 2026-10-20): its first recording while Speaker Map is withheld from users, every recording once it is available to all", async () => {
+    const trailer = { id: "t1", type: "episode-trailer", data: { label: "Trailer", cameras: { wide: 3 } } }
+    const multi = { nodes: [cam(1), cam(2), cam(3), master, trailer], edges: [media(1), media(2), media(3), masterWire] }
+    const one = { nodes: [cam(1), trailer], edges: [media(1)] }
+    const nodesWith = (extra: string[]) => new Set(["episode-trailer", "upload-video", "upload-audio", ...extra])
+    __resetAvailabilityOverridesForTests({ nodes: nodesWith([]) })
+    expect(await listing(multi)).toEqual(await listing(one))
+    __resetAvailabilityOverridesForTests({ nodes: nodesWith(["speaker-map"]) })
+    expect((await listing(multi)).preview).toBe((await listing(one)).preview + MULTICAM_STEPS)
   })
 
   it("the range's ceiling follows the same rule", async () => {

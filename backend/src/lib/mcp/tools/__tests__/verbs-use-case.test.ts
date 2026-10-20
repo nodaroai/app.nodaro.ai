@@ -355,6 +355,61 @@ describe("make_chapters", () => {
   })
 })
 
+describe("make_trailer on several recordings (decided 2026-10-20)", () => {
+  it("posts the recordings in order, the Master audio and the Cameras settings camelCased, beside the formats", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "make_trailer", {
+      media_urls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      master_audio_url: "https://r2/m.wav",
+      cameras: { wide_camera: 3, speaker_cameras: { "1": 2 } },
+      formats: ["16:9"],
+    })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/episode-trailer")
+    expect(seen.body).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 3, speakerCameras: { "1": 2 } },
+      formats: ["16:9"],
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+  })
+  it("media_url alone is the one-recording request it always was; both or neither is a tool error before any request", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "make_trailer", { media_url: "https://r2/ep.mp4" })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], mcp_client: "Claude", userId: "u1" })
+    const fresh = await setup()
+    const both = await callTool(fresh.server, "make_trailer", { media_url: "https://r2/a.mp4", media_urls: ["https://r2/b.mp4"] })
+    expect(both.isError).toBe(true)
+    const neither = await callTool(fresh.server, "make_trailer", { formats: ["9:16"] })
+    expect(neither.isError).toBe(true)
+    expect(textOf(neither)).toMatch(/Pass media_url/)
+    expect(fresh.seen.url).toBeUndefined()
+  })
+  it("a refusal for a caller without Speaker Map reaches the agent with its code and message", async () => {
+    const message = "Trailer on several recordings or with a Master audio is not available on this deployment yet. Send one recording."
+    const { server } = await setup(403, { error: { code: "node_not_available", message } })
+    const res = await callTool(server, "make_trailer", { media_urls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("node_not_available")
+    expect(textOf(res)).toContain("Send one recording")
+  })
+  it("the description says several recordings need Speaker Map and names the cameras report", async () => {
+    const { server } = await setup()
+    const tool = (await listTools(server)).find((t) => t.name === "make_trailer")
+    expect(tool?.description).toMatch(/media_urls/)
+    expect(tool?.description).toMatch(/Speaker Map/)
+    expect(tool?.description).toContain("output_data.cameras")
+  })
+  it("its media_url is a video (audio-only is refused), never the shared \"video or audio\"", async () => {
+    const { server } = await setup()
+    const props = (await listTools(server)).find((t) => t.name === "make_trailer")?.inputSchema as { properties: Record<string, { description?: string }> }
+    expect(props.properties.media_url!.description).toMatch(/a video URL/)
+    expect(props.properties.media_url!.description).not.toMatch(/video or audio/)
+  })
+})
+
 describe("make_trailer", () => {
   it("posts the recording, the intro card, the formats and the plan settings to /v1/episode-trailer", async () => {
     const { server, seen } = await setup(202, { jobId: "00000000-0000-4000-8000-0000000000dd" })

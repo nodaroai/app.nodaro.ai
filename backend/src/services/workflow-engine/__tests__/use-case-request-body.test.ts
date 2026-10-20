@@ -1,4 +1,4 @@
-// @test-units-by-name looks up only the tighten-episode body (USE_CASE_BODIES["tighten-episode"])
+// @test-units-by-name looks up only the tighten-episode body (USE_CASE_BODIES["tighten-episode"]) and builds episode-trailer and episode-chapters engine bodies by type
 /**
  * The body the backend engine sends a use-case node's route (`requestOf`).
  * Tighten Episode's bodies are pinned byte for byte (key order included) to
@@ -131,5 +131,29 @@ describe("recordings and Master audio (decided 2026-10-19: several only for a vi
   it("a Split Media's audio into Master audio beside its own video into Recordings is that camera's track: no master, the one-recording body", () => {
     const split = { useCaseMedia: [{ nodeId: "split", url: "https://r2/split-video.mp4" }], useCaseMasterAudio: "https://r2/split-audio.m4a", useCaseMasterAudioNodeId: "split" }
     expect(bodyOf({ ...DEFAULTS, cameras: { synced: true } }, split, true)).toBe(bodyOf(DEFAULTS, { useCaseMedia: split.useCaseMedia }, true))
+  })
+})
+
+describe("Trailer's recordings and Master audio (decided 2026-10-20: several only for a viewer who may use Speaker Map)", () => {
+  const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+  const FIRST = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }
+  const MIC = { useCaseMasterAudio: "https://r2/m.wav", useCaseMasterAudioNodeId: "mic" }
+  const CARD = { useCaseIntroCard: "https://r2/card.mp4" }
+  const trailer = (data: Record<string, unknown>, inputs: Record<string, unknown>, multicam: boolean) =>
+    JSON.stringify(requestOf({ id: "t1", type: "episode-trailer", data: { label: "Trailer", fieldMappings: {}, ...data } } as unknown as SimpleNode, inputs as unknown as ResolvedInputs, ctx, null, multicam).body)
+
+  it("a viewer who may not use Speaker Map: the first recording alone — its master, other cameras and Cameras settings ignored — byte-identical to the run as before", () => {
+    expect(trailer({ formats: ["9:16"], cameras: { wide: 2 } }, { ...TWO, ...MIC, ...CARD }, false)).toBe(trailer({ formats: ["9:16"] }, { ...FIRST, ...CARD }, false))
+  })
+  it("a viewer who may use Speaker Map: every recording, the master and the Cameras settings", () => {
+    expect(JSON.parse(trailer({ formats: ["9:16"], cameras: { wide: 2 } }, { ...TWO, ...MIC, ...CARD }, true))).toMatchObject({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      introCardUrl: "https://r2/card.mp4",
+      formats: ["9:16"],
+      cameras: { wide: 2 },
+    })
+    // One recording sends no Cameras settings, even for such a viewer.
+    expect(trailer({ formats: ["9:16"], cameras: { wide: 2 } }, FIRST, true)).toBe(trailer({ formats: ["9:16"] }, FIRST, false))
   })
 })

@@ -16,7 +16,7 @@ import { UGC_NEWER_TAKE_WINS_TYPE, ugcCanvasRunMark } from "@/lib/ugc-run-patch"
 import { browserRenderRowSentStamps } from "./apply-edl-stamps";
 import { fanOutRowStamps } from "./fan-out-row-stamps";
 import { USE_CASE_LIST_DRIVEN, isUseCaseNodeType, usecaseFanOutRefusalOf } from "@nodaro/render-rules";
-import { usecaseLabelVars } from "@/lib/use-case-request-body";
+import { usecaseLabelVars, usecaseListDrivenKey } from "@/lib/use-case-request-body";
 import { toast } from "sonner";
 import { nodeRunError } from "./node-run-message";
 
@@ -63,7 +63,7 @@ export async function executeNodeForList(
   const refusal = usecaseFanOutRefusalOf(node);
   if (refusal) {
     const message = refusal.code === USE_CASE_LIST_DRIVEN && isUseCaseNodeType(node.type)
-      ? nodeRunError((node.data as { label?: string }).label, "nodeRun.usecaseListDriven", usecaseLabelVars(node.type))
+      ? nodeRunError((node.data as { label?: string }).label, usecaseListDrivenKey(node.type), usecaseLabelVars(node.type))
       : nodeRunError((node.data as { label?: string }).label, "nodeRun.tightenReviewListDriven");
     useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: message });
     toast.error(message);

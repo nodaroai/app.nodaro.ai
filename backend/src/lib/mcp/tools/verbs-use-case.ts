@@ -367,7 +367,10 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
       description:
         "Cut a 20–40 second trailer from a podcast or interview recording in one call and deliver it in each chosen social format: " +
         "transcribes it, plans the trailer from its strongest moments, renders it, and pads it to every format (never cropped). " +
-        "Pass `media_url` (a video recording, up to 3 hours; an audio-only recording is refused). `formats` (default 9:16, 1:1, 4:5; also 16:9). " +
+        "Pass `media_url` (a video recording, up to 3 hours; an audio-only recording is refused), or `media_urls` (several cameras of one " +
+        "conversation) and optionally `master_audio_url`. " +
+        RECORDINGS_SENTENCE +
+        " `formats` (default 9:16, 1:1, 4:5; also 16:9). " +
         "`intro_card_url`: an optional short video (15 s at most) played first. `review_before_render: true` stops at a quick proxy preview " +
         "of the trailer (`output_data.videoUrl`; `formats` is empty until the final): inspect `output_data.json`, then `continue_use_case` " +
         "with `mode: \"render-final\"`. Returns a job id: the trailers are `output_data.formats` (`[{ format, url }]`, in format order), " +
@@ -378,7 +381,9 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
         "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("trailer")),
       inputSchema: {
-        media_url: z.string().url().describe("The recording (a video URL)."),
+        ...recordingsInputShape,
+        // Every format is a video: Trailer's recording is a video (an audio-only one is refused).
+        media_url: recordingsInputShape.media_url.describe("The recording (a video URL; audio-only is refused). Or `media_urls`."),
         intro_card_url: z.string().url().optional().describe("Optional intro card: a short video (15 s at most), the recording's size and shape."),
         formats: z
           .array(z.enum(tuple(TRAILER_FORMATS)))
@@ -397,14 +402,16 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const recordings = recordingsPayload(args)
+      if ("error" in recordings) return recordings.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/episode-trailer",
         label: TRAILER.label,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
+          ...recordings.payload,
           ...(args.intro_card_url ? { introCardUrl: args.intro_card_url } : {}),
           ...(args.formats ? { formats: args.formats } : {}),
           ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
@@ -419,7 +426,8 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
         widgetKind: "video",
         widgetData: { prompt: "(trailer)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }
 

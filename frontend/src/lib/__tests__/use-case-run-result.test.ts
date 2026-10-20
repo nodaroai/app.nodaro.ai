@@ -141,4 +141,11 @@ describe("a multicam run's cameras report lands on the node (useCaseCameras), in
   it("a failed run that got as far as its cameras keeps their report", () => {
     expect(usecaseFailedRunFields("tighten-episode", { cameras: REPORT }, {}, "job-1")).toMatchObject({ useCaseCameras: REPORT })
   })
+  it("Trailer (a list of formats): its run's report lands; a later run that delivered formats with no report clears it", () => {
+    const formats = [{ format: "9:16", url: "https://r2/a.mp4" }]
+    const out = (more: Record<string, unknown>) => ({ videoUrl: "https://r2/a.mp4", formats, json: PLAN, ...more }) as Parameters<typeof applyEdlRunCutFields>[1]
+    expect(applyEdlRunCutFields("episode-trailer", out({ cameras: REPORT }), {})).toMatchObject({ useCaseCameras: REPORT })
+    expect(applyEdlRunCutFields("episode-trailer", out({}), { useCaseCameras: REPORT })).toHaveProperty("useCaseCameras", undefined)
+    expect(applyEdlRunCutFields("episode-trailer", out({}), {})).not.toHaveProperty("useCaseCameras")
+  })
 })

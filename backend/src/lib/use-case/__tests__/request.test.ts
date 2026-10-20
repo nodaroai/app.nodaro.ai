@@ -313,6 +313,46 @@ describe("episodeTrailerBody", () => {
     expect(episodeTrailerBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"], formats: ["16:9"] }).success).toBe(true)
     expect(episodeTrailerBody.safeParse({ mediaUrls: ["https://r2/ep.mp4"] }).success).toBe(true)
   })
+  it("takes one to six recordings, a Master audio and the Cameras settings (decided 2026-10-17)", () => {
+    const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://r2/c${i + 1}.mp4`)
+    expect(episodeTrailerBody.safeParse({ mediaUrls: urls(6), masterAudioUrl: "https://r2/m.wav", cameras: { wide: 2 } }).success).toBe(true)
+    expect(episodeTrailerBody.safeParse({ mediaUrls: urls(7) }).success).toBe(false)
+    expect(episodeTrailerBody.safeParse({ mediaUrls: [] }).success).toBe(false)
+  })
+})
+
+describe("prepareUseCase: Trailer on several recordings (decided 2026-10-17)", () => {
+  const cams = ["https://r2/c1.mp4", "https://r2/c2.mp4", "https://r2/c3.mp4"]
+  const multi = (over: Record<string, unknown> = {}) => episodeTrailerBody.parse({ mediaUrls: cams, ...over }) as UseCaseBody
+
+  it("three cameras + master: the trailer's multicam graph, every recording and the master probed", async () => {
+    const r = await prepareUseCase("episode-trailer", multi({ masterAudioUrl: "https://r2/m.wav", cameras: { wide: 3 } }))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.graph.nodeType).toBe("episode-trailer")
+    expect(r.graph.nodes.map((n) => n.type)).toEqual(expect.arrayContaining(["audio-sync", "speaker-map", "camera-switch", "social-media-format"]))
+    expect(r.settings).toMatchObject({ cameras: { wide: 3, synced: false, speakerCameras: {} } })
+    expect(probe.duration).toHaveBeenCalledTimes(4)
+  })
+  it("every recording sound only: refused as one audio recording is (every format is a video)", async () => {
+    probe.streams.mockResolvedValue({ hasVideo: false, hasAudio: true })
+    expect(await prepareUseCase("episode-trailer", episodeTrailerBody.parse({ mediaUrls: cams.slice(0, 1) }) as UseCaseBody)).toMatchObject({ code: "media_needs_video", message: "Trailer needs a video recording." })
+    // Two sound-only recordings are refused first for what they are.
+    expect(await prepareUseCase("episode-trailer", multi())).toMatchObject({ ok: false, code: "recordings_two_audio_only" })
+  })
+  it("one recording: the sources and settings exactly as before (no `cameras`), whatever Cameras settings it is sent", async () => {
+    const one = episodeTrailerBody.parse({ mediaUrls: cams.slice(0, 1) }) as UseCaseBody
+    const plain = await prepareUseCase("episode-trailer", one)
+    expect(plain.ok && Object.keys(plain.sources)).toEqual(["media"])
+    expect(plain.ok && "cameras" in plain.settings).toBe(false)
+    expect(await prepareUseCase("episode-trailer", { ...one, cameras: { wide: 7 } } as UseCaseBody)).toEqual(plain)
+  })
+  it("an intro card rides beside several recordings", async () => {
+    probe.duration.mockImplementation(async (u: string) => (u.includes("card") ? 4 : 3600))
+    const r = await prepareUseCase("episode-trailer", multi({ introCardUrl: "https://r2/card.mp4" }))
+    expect(r.ok && r.sources.introCard).toEqual({ url: "https://r2/card.mp4", durationSec: 4 })
+    expect(r.ok && r.graph.nodes.some((n) => n.id === "uc-combine")).toBe(true)
+  })
 })
 
 describe("usecaseReviewerPresent (who can review a use-case run's preview)", () => {

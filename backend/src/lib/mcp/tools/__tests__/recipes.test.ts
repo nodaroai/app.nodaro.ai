@@ -118,7 +118,7 @@ describe("recipe catalog", () => {
       "output_data", "plan_tier", "clip_key", "crossfade_ms", "speaker_map", "speaker_names", "transcript_source_id",
       "offset_ms", "layout_hints", "error_message", "job_id", "preview_review_required", "preview_render_nested",
       "media_url", "intro_card_url", "formats", "target_length_sec", "edited_edl",
-      // tighten_episode's recordings (verbs-use-case-recordings.ts).
+      // tighten_episode's and make_trailer's recordings (verbs-use-case-recordings.ts).
       "media_urls", "master_audio_url", "cameras", "wide_camera", "already_synced", "speaker_cameras",
       // The refusal codes that say what held a run, and the list-driven refusal.
       "preview_review_required_review_on", "preview_review_required_mixed", "preview_render_nested_review_on",

@@ -1,7 +1,7 @@
 ---
 node_type: tighten-episode
-generated_at: 2026-10-19T20:50:32.611Z
-generated_from: eddbe739a
+generated_at: 2026-10-20T01:07:55.000Z
+generated_from: 4aeff0392
 ---
 
 # Tighten Episode
@@ -65,7 +65,9 @@ generated_from: eddbe739a
 
 Tighten one podcast or interview recording in a single node: it runs Transcribe (`elevenlabs-stt`, speakers labelled, word timings), Silence Detect, Edit Plan in Tighten mode and a render (Apply EDL, or Speaker View when `framing` is set), plus Add Captions (`captions`, video episodes) and a music bed (Mix Audio ducked under the voice, ending when the voice ends, then Merge Video & Audio on a video episode) when a track is wired into `music`. Wire the recording into `media` — one video or audio file, up to 3 hours, with sound; an audio recording always makes an audio episode (no captions, no framing). The episode comes out on `media` (video, or audio for an audio episode) and the edit plan (an EDL, review edits applied) on `json`.
 
-Reach for the individual nodes instead (Edit Plan → Camera Switch → Apply EDL / Speaker View) for several cameras, a hand-edited EDL, clips, chapters or a trailer.
+Several cameras of one conversation are this node too: wire each camera into `media` (Recordings, 1–6 in order, `mediaOrder`) and the mixer track into `masterAudio` (Master audio), with `cameras` (`wide`, `synced`, `speakerCameras`); the run lines them up, works out who is on which camera (Speaker Map) and cuts to whoever is talking. Several recordings or a Master audio need Speaker Map, not yet enabled on nodaro.ai: until then a run reads the first recording only, and a direct request with several is refused `403 node_not_available`.
+
+Reach for the individual nodes instead (Edit Plan → Camera Switch → Apply EDL / Speaker View) for a hand-edited EDL or switch, clips, chapters or a trailer.
 
 **Priced as its steps at their own rates plus a per-run fee of 11 credits**<!-- credits: use-case-fee:tighten-episode --> (credit id `use-case-fee:tighten-episode`). The estimate prices the render at the recording's full length (unknown length: the 180-minute ceiling) and a framed render at Speaker View's complex rate; the charge follows the rendered minutes. A 60-minute video with the default settings (captions on, no music, no framing) is estimated at 1026<!-- credits: elevenlabs-stt + silence-detect + edit-plan:tighten:standard:per-minute@60 + apply-edl@60 + add-captions:kinetic + use-case-fee:tighten-episode -->: 25<!-- credits: elevenlabs-stt --> (Transcribe) + 11<!-- credits: silence-detect --> (Silence Detect) + 264<!-- credits: edit-plan:tighten:standard:per-minute@60 --> (Edit Plan, standard) + 660<!-- credits: apply-edl@60 --> (Apply EDL, final) + 55<!-- credits: add-captions:kinetic --> (Add Captions) + 11<!-- credits: use-case-fee:tighten-episode --> (fee). `POST /v1/tighten-episode/estimate` quotes a request before it runs.
 

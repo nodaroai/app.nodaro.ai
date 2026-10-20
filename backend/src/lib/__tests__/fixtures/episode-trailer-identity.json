@@ -5,13 +5,18 @@
     "properties": {
       "mediaUrls": {
         "minItems": 1,
-        "maxItems": 1,
+        "maxItems": 6,
         "type": "array",
         "items": {
           "type": "string",
           "format": "uri"
         }
       },
+      "masterAudioUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "cameras": {},
       "introCardUrl": {
         "type": "string",
         "format": "uri"
@@ -108,6 +113,14 @@
             "required": true
           },
           {
+            "key": "masterAudioUrl",
+            "type": "audio-url"
+          },
+          {
+            "key": "cameras",
+            "type": "object"
+          },
+          {
             "key": "introCardUrl",
             "type": "video-url"
           },
@@ -155,18 +168,21 @@
     "needsVideo": true,
     "inputs": [
       "media",
-      "introCard"
+      "introCard",
+      "masterAudio"
     ],
     "inputNodeIds": {
       "media": "uc-source",
-      "introCard": "uc-intro"
+      "introCard": "uc-intro",
+      "masterAudio": "uc-master"
     },
     "settingKeys": [
       "formats",
       "reviewBeforeRender",
       "planTier",
       "instructions",
-      "styleGuide"
+      "styleGuide",
+      "cameras"
     ],
     "reviewable": true,
     "resultKind": "formats",
@@ -1363,6 +1379,7 @@
   "membership": {
     "runResultTypeKeys": [
       "errorCode",
+      "useCaseCameras",
       "failedFormats"
     ],
     "fanOutEachHandles": {
@@ -1378,20 +1395,22 @@
     "introCardIsNonPromptLane": true,
     "textFeedsPrompt": {
       "media": true,
-      "introCard": false
+      "introCard": false,
+      "masterAudio": false
     },
     "outputType": "video",
     "nodaroExclusive": true,
     "fanOutRefusal": {
       "code": "use_case_list_driven",
-      "message": "Trailer takes one recording. Use a separate workflow run for each recording."
+      "message": "Trailer takes the recordings of one conversation. Use a separate workflow run for each episode."
     },
     "useCaseTypesPredecessor": "episode-chapters"
   },
   "mcpHandles": {
     "inputs": [
       "media",
-      "introCard"
+      "introCard",
+      "masterAudio"
     ],
     "outputs": [
       "media",

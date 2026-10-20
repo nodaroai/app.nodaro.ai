@@ -504,6 +504,33 @@ describe("edit episode-chapters", () => {
   })
 })
 
+describe("edit episode-trailer on several recordings (decided 2026-10-20)", () => {
+  it("maps repeated --media, --master-audio and the camera flags to the recordings input, beside the formats", async () => {
+    mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-m" })
+    await runCmd(
+      "edit", "episode-trailer",
+      "--media", "https://r2/a.mp4", "--media", "https://r2/b.mp4",
+      "--master-audio", "https://r2/m.wav",
+      "--wide-camera", "2",
+      "--speaker-camera", "1=2",
+      "--formats", "16:9",
+      "--json",
+    )
+    expect(mocks.episodeTrailer).toHaveBeenCalledWith({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 2, speakerCameras: { "1": 2 } },
+      formats: ["16:9"],
+    }, undefined)
+  })
+
+  it("refuses a camera flag with one recording and no Master audio, before any request", async () => {
+    await expect(runCmd("edit", "episode-trailer", "--media", "https://r2/a.mp4", "--synced")).rejects.toThrow("process.exit(1)")
+    expect(mocks.episodeTrailer).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/^--wide-camera, --synced and --speaker-camera apply with several --media or --master-audio/)])
+  })
+})
+
 describe("edit episode-trailer", () => {
   it("maps flags to client.edit.episodeTrailer, the formats split on commas", async () => {
     mocks.episodeTrailer.mockResolvedValueOnce({ jobId: "job-t" })

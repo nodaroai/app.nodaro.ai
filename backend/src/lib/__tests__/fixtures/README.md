@@ -29,6 +29,23 @@ is now false, because the validator reads the pip and a use-case node's plan
 never feeds a media-only input (`usecaseDataPipRefused`). Any later validator
 change is ruled on record by record — never re-record.
 
+When Trailer came to take up to six recordings and a Master audio (ruled
+2026-10-20), these records were corrected by hand, never re-recorded, each
+recomputed with its test's own function: `requestBody` (`mediaUrls` up to 6,
+`masterAudioUrl`, `cameras`), `nodesEntry.found.inputSchema.fields` (the same
+two fields), `descriptor` (`inputs` and `inputNodeIds` gain `masterAudio`,
+`settingKeys` gains `cameras`), `membership.runResultTypeKeys` (gains
+`useCaseCameras`, as every type that takes several recordings),
+`membership.textFeedsPrompt` (gains `masterAudio: false`),
+`mcpHandles.inputs` (gains `masterAudio`) and `membership.fanOutRefusal` (the
+list-driven refusal no longer says Trailer takes one recording: "Trailer takes
+the recordings of one conversation. Use a separate workflow run for each
+episode."). In the
+editor twin: `definition.inputs` and `targetHandles` (they gain the Master
+audio input; the Recording input is labelled Recordings). Every graph and
+length row is unchanged: `cameras` is resolved only for several recordings or
+a Master audio, and a one-recording run builds exactly as before.
+
 It was recorded once, on `feat/episode-trailer` before the units merge
 (`UNITS_RECORD_TRAILER_IDENTITY=1`; the test refuses to overwrite an existing
 fixture). **Never re-record it**: a re-recording takes whatever the code then

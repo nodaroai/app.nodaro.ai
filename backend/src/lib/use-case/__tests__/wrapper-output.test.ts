@@ -8,6 +8,7 @@ import {
   buildEpisodeChaptersGraph,
   buildEpisodeTrailerGraph,
   resolveClipPackSettings,
+  resolveEpisodeTrailerSettings,
   buildTightenEpisodeGraph,
   clipPackNoneRenderedMessage,
   parseClipPackNoneRendered,
@@ -543,5 +544,60 @@ describe("the cameras report (decided 2026-10-17)", () => {
     expect(usecaseJobOutput({ videoUrl: "https://r2/out.mp4", cameras })).toMatchObject({ useCaseCameras: cameras })
     expect(usecaseJobOutput({ videoUrl: "https://r2/out.mp4", cameras: { speakers: "no" } })).not.toHaveProperty("useCaseCameras")
     expect(usecaseJobOutput({ videoUrl: "https://r2/out.mp4" })).not.toHaveProperty("useCaseCameras")
+  })
+})
+
+describe("a Trailer run on several recordings (decided 2026-10-17)", () => {
+  const cam = (n: number) => ({ url: `https://r2/c${n}.mp4`, kind: "video" as const })
+  const sources = { media: cam(1), moreMedia: [cam(2), cam(3)], masterAudio: { url: "https://r2/m.wav", kind: "audio" as const } }
+  const settings = resolveEpisodeTrailerSettings({ formats: ["9:16", "1:1"] }, "video", { recordings: 3, masterAudio: true })
+  const g = toStoredInlineGraph(buildEpisodeTrailerGraph(settings, sources), settings)
+  const done = (output: Record<string, unknown>) => ({ status: "completed", output })
+  const front = {
+    "uc-sync": done({ json: { version: 1, reference: "uc-master", offsets: [], notes: [] } }),
+    "uc-map": done({ json: { version: 1, speakerMap: { speaker_0: "uc-cam-2" }, confidence: { speaker_0: { camera: "uc-cam-2", marginDb: 6 } }, notes: [] } }),
+    "uc-transcribe": done({ json: { words: [{ text: "a", startMs: 0, endMs: 1, speaker: "speaker_0" }] } }),
+    "uc-plan": done({ json: { segments: [] } }),
+  }
+
+  it("every format delivered, and the cameras report beside them", () => {
+    const out = usecaseWrapperOutput(g, {
+      ...front,
+      "uc-switch": done({ edl: { segments: [] } }),
+      "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final" }),
+      "uc-format-9x16": done({ videoUrl: "https://r2/t-916.mp4" }),
+      "uc-format-1x1": done({ videoUrl: "https://r2/t-11.mp4" }),
+    }, "exec-m")
+    expect(out).toMatchObject({
+      formats: [{ format: "9:16", url: "https://r2/t-916.mp4" }, { format: "1:1", url: "https://r2/t-11.mp4" }],
+      cameras: { speakers: [{ speaker: "speaker_0", ordinal: 1, camera: 2, marginDb: 6 }], syncNotes: [], mapNotes: [] },
+    })
+    expect(out).not.toHaveProperty("failedFormats")
+  })
+  it("a failed format keeps the delivered ones, as on one recording", () => {
+    const out = usecaseWrapperOutput(g, {
+      ...front,
+      "uc-switch": done({ edl: { segments: [] } }),
+      "uc-render": done({ videoUrl: "https://r2/trailer.mp4", quality: "final" }),
+      "uc-format-9x16": { status: "failed", error: "boom" },
+      "uc-format-1x1": done({ videoUrl: "https://r2/t-11.mp4" }),
+    }, "exec-m")
+    expect(out).toMatchObject({ formats: [{ format: "1:1", url: "https://r2/t-11.mp4" }], failedFormats: ["9:16"] })
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(true)
+  })
+  it("Camera Switch failed: it is upstream of every format, so no format renders and the run fails (nothing kept)", () => {
+    const out = usecaseWrapperOutput(g, { ...front, "uc-switch": { status: "failed", error: "no speaker map" } }, "exec-m")
+    expect(out).toMatchObject({ formats: [], failedNodeId: "uc-switch" })
+    expect(out.videoUrl).toBeUndefined()
+    expect(usecaseWrapperHasResult(g, out)).toBe(false)
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(false)
+  })
+  it("Audio Sync or Speaker Map failed: the same (upstream of the plan or the switch)", () => {
+    for (const failed of ["uc-sync", "uc-map"]) {
+      const { [failed as "uc-sync"]: _gone, ...rest } = front
+      const out = usecaseWrapperOutput(g, { ...rest, [failed]: { status: "failed", error: "boom" } }, "exec-m")
+      expect(out, failed).toMatchObject({ formats: [], failedNodeId: failed })
+      expect(usecaseWrapperKeepsPartial(g, out), failed).toBe(false)
+    }
   })
 })

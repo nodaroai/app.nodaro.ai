@@ -356,6 +356,11 @@ function stubServer(shape) {
         return send(shape.clipPack.status, shape.clipPack.body)
       }
       if (path === "/v1/episode-trailer" && req.method === "POST") {
+        // A multicam body (several recordings or a Master audio) may be answered on its own.
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.trailerMulticam) return send(shape.trailerMulticam.status, shape.trailerMulticam.body)
         if (shape.trailer.createsJob) {
           state.jobs = [{ id: "job_trailer", status: "processing", input_data: { type: "episode-trailer" } }, ...state.jobs]
         }
@@ -703,6 +708,17 @@ test("a Trailer run accepted with a job handle fails the Trailer contract", asyn
     shape.trailer = { status: 202, body: { jobId: "job_trailer", executionId: "exec_1" }, createsJob: true }
   })
   assertContract(out, TRAILER, "FAIL")
+})
+
+test("a Trailer multicam body refused 403 by a gate that runs before the connection check fails the Trailer contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.trailerMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Trailer on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, TRAILER, "FAIL")
+  assertContract(out, TIGHTEN, "PASS")
 })
 
 test("a Trailer refusal that left a job row behind fails the Trailer contract", async () => {

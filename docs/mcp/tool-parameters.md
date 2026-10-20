@@ -1957,7 +1957,13 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `media_url` | string (URL) | yes | The recording (a video URL). |
+| `media_url` | string (URL) |  | The recording (a video URL; audio-only is refused). Or `media_urls`. |
+| `media_urls` | string (URL)[] |  | Instead of media_url: 1–6 recordings of one conversation (cameras; one may be sound only), in order; without master_audio_url, 2+ cameras keep one place for the sound, so up to 5. With 2 or more the run lines them up, works out who is on which camera and cuts to whoever is talking. From 1 to 6 items. |
+| `master_audio_url` | string (URL) |  | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. Up to 6 recordings in all, this one included. |
+| `cameras` | object |  | With several recordings or a Master audio: the Cameras settings. |
+| `cameras.wide_camera` | integer |  | Which recording (1-based) is the wide shot: shown when a speaker has no camera of their own. From 1 to 6. |
+| `cameras.already_synced` | boolean |  | The recordings already share one clock: skip lining them up. |
+| `cameras.speaker_cameras` | object (map of integer) |  | Who is on which camera: speaker number (1 = the first voice heard) → recording number, 0 = the wide shot. Overrides the automatic map. |
 | `intro_card_url` | string (URL) |  | Optional intro card: a short video (15 s at most), the recording's size and shape. |
 | `formats` | string[] |  | The formats to deliver (default 9:16, 1:1, 4:5). From 1 to 4 items. |
 | `review_before_render` | boolean |  | Stop at a proxy preview for review (default false). |

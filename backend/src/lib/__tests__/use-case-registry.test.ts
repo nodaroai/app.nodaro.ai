@@ -34,8 +34,8 @@ describe("the use-case registry", () => {
         expect(d.inputs[0]).toBe("media")
         for (const h of d.inputs) expect(typeof d.inputNodeIds[h]).toBe("string")
       })
-      it("takes the recordings it builds (Tighten six, the others one), and its first recording is the built source every builder names", () => {
-        expect(d.maxRecordings).toBe(type === "tighten-episode" ? USE_CASE_MAX_RECORDINGS : 1)
+      it("takes the recordings it builds (Tighten and Trailer six, the others one), and its first recording is the built source every builder names", () => {
+        expect(d.maxRecordings).toBe(type === "tighten-episode" || type === "episode-trailer" ? USE_CASE_MAX_RECORDINGS : 1)
         expect(d.inputNodeIds.media).toBe(usecaseRecordingNodeId(0))
       })
       it("builds a graph of its own type and result kind", () => {
@@ -61,8 +61,8 @@ describe("the use-case registry", () => {
     )
     expect(g.nodes.find((n) => n.id === USE_CASE_MASTER_NODE_ID)).toMatchObject({ type: "upload-audio" })
   })
-  it("every builder spec declares how many recordings it takes: Tighten up to six (decided 2026-10-17), the others one until their multicam work", () => {
-    for (const [key, spec] of Object.entries(USE_CASE_SPECS)) expect(spec.maxRecordings, key).toBe(key === "tighten" ? USE_CASE_MAX_RECORDINGS : 1)
+  it("every builder spec declares how many recordings it takes: Tighten and Trailer up to six (decided 2026-10-17), the others one until their multicam work", () => {
+    for (const [key, spec] of Object.entries(USE_CASE_SPECS)) expect(spec.maxRecordings, key).toBe(key === "tighten" || key === "trailer" ? USE_CASE_MAX_RECORDINGS : 1)
   })
   it("anything else is not a list-result type", () => {
     expect(usecaseListsItsResult("apply-edl")).toBe(false)

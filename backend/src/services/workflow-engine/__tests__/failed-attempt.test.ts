@@ -89,8 +89,7 @@ describe("attemptRanWithInputs: settings across a change of the resolver's key s
  * the attempt resumes only when every one of them, and the Cameras settings
  * read for that shape, are the node's now.
  */
-describe("attemptRanWithInputs: several recordings, a Master audio, the Cameras settings", () => {
-  const type: UseCaseNodeType = "tighten-episode"
+for (const type of ["tighten-episode", "episode-trailer"] as const satisfies readonly UseCaseNodeType[]) describe(`attemptRanWithInputs (${type}): several recordings, a Master audio, the Cameras settings`, () => {
   const d = usecaseDescriptor(type)
   const A = "https://r2/a.mp4", B = "https://r2/b.mp4", C = "https://r2/c.mp4", M = "https://r2/m.wav"
   const ranOn = (mediaUrls: string[], cameras: Record<string, unknown>, master?: string) => {
@@ -189,6 +188,7 @@ const PINNED_SETTING_KEYS: Readonly<Record<UseCaseNodeType, readonly string[]>> 
 /** The settings a type that takes several recordings makes for several (or a Master audio): one recording's, plus the Cameras settings. */
 const PINNED_MULTICAM_SETTING_KEYS: Readonly<Partial<Record<UseCaseNodeType, readonly string[]>>> = {
   "tighten-episode": [...PINNED_SETTING_KEYS["tighten-episode"], "cameras"],
+  "episode-trailer": [...PINNED_SETTING_KEYS["episode-trailer"], "cameras"],
 }
 
 describe("guard: the use-case resolvers' setting keys are pinned", () => {

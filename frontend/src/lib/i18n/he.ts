@@ -11039,6 +11039,7 @@ export const he: ChromeDict = {
   "nodeRun.tightenContinueListDriven": "המשך אינו זמין לרכיב שרץ פעם אחת לכל פריט ברשימה — הריצו אותו שוב.",
   "nodeRun.tightenReviewListDriven": "סקירה לפני רינדור אינה זמינה כשהרכיב רץ פעם אחת לכל פריט ברשימה — כבו אותה כדי להריץ את הרשימה.",
   "nodeRun.usecaseListDriven": "{label}: הקלטה אחת בלבד. הריצו את תהליך העבודה בנפרד לכל הקלטה.",
+  "nodeRun.usecaseListDrivenEpisode": "{label} מקבל את ההקלטות של שיחה אחת. הריצו את תהליך העבודה בנפרד לכל פרק.",
   "nodeRun.clipPackNoneRendered": "אף אחד מ־{count} הקליפים לא רונדר: {reason}.",
   "nodeRun.clipPackOneNotRendered": "הקליפ היחיד בתוכנית לא רונדר: {reason}.",
   "nodeRun.usecaseNeedsRecording": "חברו קודם הקלטה ל{label}",

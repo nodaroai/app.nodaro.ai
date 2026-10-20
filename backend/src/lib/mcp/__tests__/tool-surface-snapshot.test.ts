@@ -1066,6 +1066,17 @@ const TIGHTEN_RECORDINGS_BYTES = 1_661
 // (two or more cameras keep one place for the sound) — one clause, one tool. Measured by this suite:
 // 462_730 total − 462_651 = 79 B (tighten_episode 5_532 → 5_611); the 103 B of headroom carry across.
 const TIGHTEN_CAMERA_CAP_BYTES = 79
+// RAISED 2026-10-20 by `make_trailer` taking several recordings (`media_urls`, `master_audio_url`,
+// `cameras`, the same shared module verbs-use-case-recordings.ts `tighten_episode` reads — `media_url`
+// becomes optional) and its description saying they need Speaker Map (refused 403 where it is withheld)
+// and naming `output_data.cameras`. No tool was added, so the fixture does NOT move. Measured by this
+// suite on the same tree: 464_477 total − 462_730 before = 1_747 B (make_trailer 3_543 → 5_290, under
+// the per-tool budget); the 103 B of headroom carry across.
+const TRAILER_RECORDINGS_BYTES = 1_747
+// RAISED 2026-10-20 by `make_trailer`'s own `media_url` description saying the recording is a video
+// (audio-only is refused) instead of the shared "video or audio". Measured by this suite on the same
+// tree: 465_357 total − 465_341 before = 16 B (make_trailer 5_290 → 5_306); the 103 B of headroom carry across.
+const TRAILER_MEDIA_URL_VIDEO_BYTES = 16
 
 // RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
 // added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
@@ -1207,7 +1218,9 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +
-    TIGHTEN_CAMERA_CAP_BYTES,
+    TIGHTEN_CAMERA_CAP_BYTES +
+    TRAILER_RECORDINGS_BYTES +
+    TRAILER_MEDIA_URL_VIDEO_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

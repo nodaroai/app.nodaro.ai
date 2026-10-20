@@ -62,6 +62,46 @@ describe("edit.tightenEpisode on several recordings (decided 2026-10-19)", () =>
   })
 })
 
+describe("edit.episodeTrailer on several recordings (decided 2026-10-20)", () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>) => JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+
+  it("sends the recordings in order, the Master audio and the Cameras settings, then the formats", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+    await client(fetchMock).edit.episodeTrailer({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 2, speakerCameras: { "1": 1 } },
+      formats: ["16:9"],
+    })
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/episode-trailer")
+    expect(bodyOf(fetchMock)).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { wide: 2, speakerCameras: { "1": 1 } },
+      formats: ["16:9"],
+    })
+  })
+
+  it("the estimate takes the same body; mediaUrl is still one recording, with nothing more sent", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { totalCredits: 1, stepsCredits: 0, feeCredits: 1, durationSec: null } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+    await client(fetchMock).edit.estimateEpisodeTrailer({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/episode-trailer/estimate")
+    expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    await client(fetchMock).edit.episodeTrailer({ mediaUrl: "https://r2/a.mp4" })
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/a.mp4"] })
+  })
+
+  it("mediaUrl and mediaUrls together, or neither, reject with a TypeError before any request", async () => {
+    const fetchMock = vi.fn()
+    const edit = client(fetchMock).edit
+    await expect(edit.episodeTrailer({ mediaUrl: "https://r2/a.mp4", mediaUrls: ["https://r2/b.mp4"] })).rejects.toThrow(new TypeError("pass mediaUrl or mediaUrls, not both"))
+    await expect(edit.estimateEpisodeTrailer({ formats: ["9:16"] })).rejects.toThrow(new TypeError("pass mediaUrl or mediaUrls"))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("edit.episodeChapters / estimateEpisodeChapters", () => {
   it("episodeChapters posts the recording and only the settings given", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c", executionId: "exec-c" }))

@@ -10829,6 +10829,7 @@ export const ptBR: ChromeDict = {
   "nodeRun.tightenContinueListDriven": "Continuar não está disponível para um nó que roda uma vez por item da lista — execute-o novamente.",
   "nodeRun.tightenReviewListDriven": "Revisar antes de renderizar não está disponível quando o nó roda uma vez por item da lista — desative para rodar a lista.",
   "nodeRun.usecaseListDriven": "{label} aceita uma única gravação. Use uma execução separada do fluxo de trabalho para cada gravação.",
+  "nodeRun.usecaseListDrivenEpisode": "{label} aceita as gravações de uma única conversa. Use uma execução separada do fluxo de trabalho para cada episódio.",
   "nodeRun.clipPackNoneRendered": "Não foi possível renderizar nenhum dos clipes ({count}): {reason}.",
   "nodeRun.clipPackOneNotRendered": "O único clipe do plano não pôde ser renderizado: {reason}.",
   "nodeRun.usecaseNeedsRecording": "Conecte primeiro uma gravação ao {label}",

@@ -11,15 +11,16 @@ import { NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { NODE_FAMILIES, TAB_SUPERSET } from "@/lib/node-families"
 import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
+import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 
 const typeOf = (id: string) =>
-  ({ rec: "upload-video", pod: "upload-audio", tr: "episode-trailer", img: "upload-image", cv: "combine-videos", jp: "json-process" } as Record<string, string>)[id]
+  ({ rec: "upload-video", rec2: "upload-video", pod: "upload-audio", tr: "episode-trailer", img: "upload-image", cv: "combine-videos", jp: "json-process" } as Record<string, string>)[id]
 
 describe("Trailer is registered everywhere it must be", () => {
-  it("definition: the recording and an intro card in; the trailers and the plan out; three formats by default", () => {
+  it("definition: the recordings, an intro card and a Master audio in; the trailers and the plan out; three formats by default", () => {
     const def = NODE_DEFINITIONS.find((d) => d.type === "episode-trailer")!
     expect(def.label).toBe("Trailer")
-    expect(def.inputs).toEqual(["media", "introCard"])
+    expect(def.inputs).toEqual(["media", "introCard", "masterAudio"])
     expect(def.outputs).toEqual(["media", "json"])
     expect(def.defaultData).toMatchObject({ label: "Trailer", formats: ["9:16", "1:1", "4:5"], reviewBeforeRender: false, planTier: "standard" })
   })
@@ -47,7 +48,27 @@ describe("Trailer is registered everywhere it must be", () => {
     expect(isValidWorkflowConnection({ source: "img", target: "tr", sourceHandle: "image", targetHandle: "introCard" }, typeOf)).toBe(false)
     expect(isValidWorkflowConnection({ source: "tr", target: "cv", sourceHandle: "media", targetHandle: "in" }, typeOf)).toBe(true)
     expect(isValidWorkflowConnection({ source: "tr", target: "jp", sourceHandle: "json", targetHandle: "in" }, typeOf)).toBe(true)
-    expect(TARGET_HANDLE_ACCEPTS["episode-trailer"]?.map((h) => [h.handleId, h.label])).toEqual([["media", "Recording"], ["introCard", "Intro card"]])
+    expect(TARGET_HANDLE_ACCEPTS["episode-trailer"]?.map((h) => [h.handleId, h.label])).toEqual([["media", "Recordings"], ["introCard", "Intro card"], ["masterAudio", "Master audio"]])
+  })
+  it("connections (decided 2026-10-17): an Upload Audio into Master audio (for a viewer who may use Speaker Map), never a video; two video recordings into media", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [] })
+    try {
+      expect(isValidWorkflowConnection({ source: "pod", target: "tr", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(true)
+      expect(isValidWorkflowConnection({ source: "rec", target: "tr", sourceHandle: "video", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+      expect(isValidWorkflowConnection({ source: "rec", target: "tr", sourceHandle: "video", targetHandle: "media" }, typeOf)).toBe(true)
+      expect(isValidWorkflowConnection({ source: "rec2", target: "tr", sourceHandle: "video", targetHandle: "media" }, typeOf)).toBe(true)
+    } finally {
+      __resetSurfaceAvailabilityForTests(null)
+    }
+  })
+  it("Master audio is withheld with Speaker Map: refused on the canvas until the viewer's availability lands, and while Speaker Map is withheld", () => {
+    expect(isValidWorkflowConnection({ source: "pod", target: "tr", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+    __resetSurfaceAvailabilityForTests({ nodes: ["speaker-map"], models: [] })
+    try {
+      expect(isValidWorkflowConnection({ source: "pod", target: "tr", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+    } finally {
+      __resetSurfaceAvailabilityForTests(null)
+    }
   })
 
   it("picker: the Podcast family on the Video tab, and not on the Audio tab (a trailer is video only)", () => {

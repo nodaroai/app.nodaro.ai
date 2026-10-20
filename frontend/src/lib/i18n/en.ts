@@ -11128,6 +11128,7 @@ export const en = {
   "nodeRun.tightenContinueListDriven": "Continue isn't available for a node that runs once per list item — run it again.",
   "nodeRun.tightenReviewListDriven": "Review before render isn't available when the node runs once per list item — turn it off to run the list.",
   "nodeRun.usecaseListDriven": "{label} takes one recording. Use a separate workflow run for each recording.",
+  "nodeRun.usecaseListDrivenEpisode": "{label} takes the recordings of one conversation. Use a separate workflow run for each episode.",
   "nodeRun.clipPackNoneRendered": "None of the {count} clips could be rendered: {reason}.",
   "nodeRun.clipPackOneNotRendered": "The plan's one clip could not be rendered: {reason}.",
   "nodeRun.usecaseNeedsRecording": "Connect a recording to {label} first",

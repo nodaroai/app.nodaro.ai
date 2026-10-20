@@ -11,7 +11,7 @@
  *    one run to name), so everything after it would wait for a final that
  *    never comes.
  */
-import { isUseCaseNodeType } from "./use-case-graph"
+import { isUseCaseNodeType, type UseCaseNodeType } from "./use-case-graph"
 import { usecaseDescriptor, usecaseListsItsResult } from "./use-case-registry"
 
 /** Stable code of the review-on refusal (the node state's `errorCode`). */
@@ -27,9 +27,20 @@ export const USE_CASE_LIST_DRIVEN = "use_case_list_driven"
 /**
  * Its English text, naming the node type by its English label (decided
  * 2026-10-18; the editor shows its own, localized, with the localized label).
+ * A type that takes the several recordings of one conversation (`several`:
+ * its descriptor's maxRecordings > 1, decided 2026-10-20) is not told it takes
+ * one recording: one run is one episode.
  */
-export function usecaseListDrivenMessage(label: string): string {
-  return `${label} takes one recording. Use a separate workflow run for each recording.`
+export function usecaseListDrivenMessage(label: string, several = false): string {
+  return several
+    ? `${label} takes the recordings of one conversation. Use a separate workflow run for each episode.`
+    : `${label} takes one recording. Use a separate workflow run for each recording.`
+}
+
+/** The list-driven refusal's English text for a use-case type, in the words its recordings call for. */
+export function usecaseListDrivenMessageOf(type: UseCaseNodeType): string {
+  const d = usecaseDescriptor(type)
+  return usecaseListDrivenMessage(d.label, d.maxRecordings > 1)
 }
 
 type FanOutNode = { readonly type?: string | null; readonly data?: unknown }
@@ -47,7 +58,7 @@ export function usecaseFanOutRefused(node: FanOutNode): boolean {
 /** The refusal (stable code + English text) for fanning this node out over a list, or null. */
 export function usecaseFanOutRefusalOf(node: FanOutNode): { readonly code: string; readonly message: string } | null {
   if (!isUseCaseNodeType(node.type)) return null
-  if (usecaseListsItsResult(node.type)) return { code: USE_CASE_LIST_DRIVEN, message: usecaseListDrivenMessage(usecaseDescriptor(node.type).label) }
+  if (usecaseListsItsResult(node.type)) return { code: USE_CASE_LIST_DRIVEN, message: usecaseListDrivenMessageOf(node.type) }
   if (reviewOn(node)) return { code: USE_CASE_REVIEW_LIST_DRIVEN, message: USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE }
   return null
 }

@@ -91,6 +91,22 @@ describe("Trailer builds transcribe → Edit Plan (trailer) → Apply EDL → [i
     for (const type of ["tighten-episode", "episode-chapters"]) expect(usecaseTriesEvery({ nodeType: type }).size).toBe(0)
     expect(usecaseTriesEvery({ nodeType: "not-a-use-case" }).size).toBe(0)
   })
+  it("three cameras + Master audio: the plan reads every recording with its role and the offsets; Camera Switch sits between the plan and the render (decided 2026-10-17)", () => {
+    const cam = (n: number) => ({ url: `https://r2/c${n}.mp4`, kind: "video" as const, durationSec: 3600 })
+    const g = buildEpisodeTrailerGraph(
+      resolveEpisodeTrailerSettings({ cameras: { wide: 3 } }, "video", { recordings: 3, masterAudio: true }),
+      { media: cam(1), moreMedia: [cam(2), cam(3)], masterAudio: { url: "https://r2/m.wav", kind: "audio", durationSec: 3600 } },
+    )
+    expect(wires(g)).toEqual(expect.arrayContaining([
+      "uc-master.audio>uc-transcribe.audio", "uc-sync.json>uc-plan.offsets", "uc-plan.edl>uc-switch.edl", "uc-map.json>uc-switch.speakerMap", "uc-switch.edl>uc-render.edl",
+    ]))
+    expect(g.outputMap).toMatchObject({ kind: "formats", multicam: { map: { nodeId: "uc-map", handle: "json" } } })
+  })
+  it("one recording: no multicam step and no `multicam` key (the identity fixture's Trailer rows pin the hashes)", () => {
+    const g = buildEpisodeTrailerGraph(resolveEpisodeTrailerSettings({}, "video"), { media: { url: "https://r2/c1.mp4", kind: "video", durationSec: 3600 } })
+    expect(g.nodes.some((n) => ["audio-sync", "speaker-map", "camera-switch"].includes(n.type))).toBe(false)
+    expect("multicam" in g.outputMap).toBe(false)
+  })
   it("never shares objects between builds", () => {
     const a = buildEpisodeTrailerGraph(EPISODE_TRAILER_DEFAULTS, { media })
     const b = buildEpisodeTrailerGraph(EPISODE_TRAILER_DEFAULTS, { media })

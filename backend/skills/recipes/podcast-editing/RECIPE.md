@@ -44,7 +44,9 @@ Each podcast use-case has a one-node verb. Reach for it first when it is in your
   optionally, `formats` (default 9:16, 1:1, 4:5; also 16:9) and an `intro_card_url` (a short video, 15 s at most). It
   runs transcribe → plan in `trailer` mode (20–40 s) → render → one padded format per choice. The trailers are
   `output_data.formats` (`[{ format, url }]`), the first also `output_data.videoUrl`. Set `review_before_render: true`
-  to stop at a preview of the trailer; then `continue_use_case` with `mode: "render-final"` makes every format.
+  to stop at a preview of the trailer; then `continue_use_case` with `mode: "render-final"` makes every format. A
+  conversation on several cameras is one call too: `media_urls` + `master_audio_url` (and `cameras`), as on
+  `tighten_episode` — it needs Speaker Map (refused `403 node_not_available` where it is not available).
 - **`make_chapters`** — "chapters for this episode" is one call: pass the recording's `media_url` (transcribe → plan
   in `chapters` mode; nothing renders). The show notes are `output_data.text` (one `0:00 Title` line per chapter),
   the list is `output_data.json` (`[{ startMs, title }]`). A run that finds no chapters fails, and its fee is refunded.

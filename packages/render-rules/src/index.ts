@@ -584,6 +584,7 @@ export {
   usecaseFanOutRefusalOf,
   usecaseFanOutRefused,
   usecaseListDrivenMessage,
+  usecaseListDrivenMessageOf,
 } from "./use-case-fan-out"
 export { clipPackNoneRenderedMessage, parseClipPackNoneRendered, usecaseCancelledMessage } from "./use-case-messages"
 export {
