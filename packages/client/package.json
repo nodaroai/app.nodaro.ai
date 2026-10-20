@@ -35,6 +35,11 @@
       "import": "./dist/entries/billing.js",
       "require": "./dist/entries/billing.cjs"
     },
+    "./cast-swap": {
+      "types": "./dist/entries/cast-swap.d.ts",
+      "import": "./dist/entries/cast-swap.js",
+      "require": "./dist/entries/cast-swap.cjs"
+    },
     "./catalogs": {
       "types": "./dist/entries/catalogs.d.ts",
       "import": "./dist/entries/catalogs.js",

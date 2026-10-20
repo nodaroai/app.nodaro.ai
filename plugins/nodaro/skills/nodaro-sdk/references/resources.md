@@ -41,6 +41,7 @@
 | `models` | Model catalog: capabilities + credit prices, each model's maker + the maker's `logoUrl` (`GET /v1/models`) |
 | `shots` | Saved shots: prompt, references, results; private or public |
 | `recast` | Recast runs: quote, buy, follow, answer picks, import a script |
+| `castSwap` | Cast Swap: replace the people and/or location in a short video — `run`, `estimate` (Cloud) |
 | `studio` | Studio productions: plan, edit, stills and clips, share, copy |
 | `copilot` | Copilot threads and streamed turns (signed-in session only) |
 | `community` | Shared characters/locations/objects: browse, clone, favorites |

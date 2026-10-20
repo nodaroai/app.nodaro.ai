@@ -3810,6 +3810,57 @@ before anything runs or is billed. What a published UGC video carries,
 and the photo an app set to My photo needs, are in
 [UGC videos in a published app or template](#ugc-videos-in-a-published-app-or-template).
 
+## 13f. Cast Swap (Cloud edition)
+
+Cast Swap replaces the people and/or the location in a short video with your
+own reference images, keeping its motion, framing, timing and sound. Both
+routes are served by the Nodaro Cloud plugin and answer 404 on self-hosted
+installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
+[`cast_swap`](./mcp/tools.md) verb).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance }, settlesLower }`. |
+| `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
+
+Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
+`{ kind: "person", name, images, body?, outfit?, hair? }` and at most 1
+`{ kind: "location", name?, images }`, each with 0–3 images; a role with no
+images keeps that person or place as in the video), and optionally
+`postPrompt`, `preview`, `previewStart`, `quality` (`"draft"`), `sessionId`
+and `origin`. The field-by-field shape is in the
+[SDK reference](./sdk-reference.md#clientcastswap).
+
+The quote is `totalCredits` = `breakdown.castSwap` (the run itself) +
+`breakdown.seedance` (the video model it calls). `settlesLower: true` means the
+video's length is left to the model (Auto), so the final charge is expected to
+come out lower than the quote.
+
+**Repeats.** Send the same `Idempotency-Key` (8–200 characters) when you
+retry a run. A repeat within the credit guard's dedup window (about 10 s)
+answers `200 { jobId, deduped: true }` with an `X-Dedup-Hit: 1` header; a
+later one answers `202 { jobId }` with the first run's job. Either way nothing
+new is started or charged. Without a key every request is a new run.
+
+Refusals, all before anything is charged (bodies are
+`{ error: { code, message } }`):
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `validation_error` | The body does not validate: no role with images and no `postPrompt`, more roles than allowed, more than 3 images on a role, or a `postPrompt` over 4,000 characters. Also an invalid `origin`. |
+| `400` | `raw_reference_token` | A role's `name` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
+| `400` | `invalid_role_mention` | `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
+| `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |
+| `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
+| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
+| `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
+| `401` | `unauthorized` | No authenticated user. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/cast-swap` only). |
+| `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
+| `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
+| `503` | `estimate_unavailable` | The video model's price cannot be quoted right now (`/estimate` only); try again shortly. |
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

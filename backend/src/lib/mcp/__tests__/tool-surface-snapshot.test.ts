@@ -1099,6 +1099,14 @@ const CLIP_PACK_RECORDINGS_BYTES = 2_373
 // continue_use_case's label list + 16 B ("Trailer or Clip Pack" → "Trailer, Clip Pack or Speaker
 // Layout"). The 103 B of headroom carry across.
 const SPEAKER_LAYOUT_TOOL_BYTES = 6_217
+// RAISED 2026-10-20 by one NEW tool, `cast_swap` (the MCP face of POST /v1/cast-swap: the quote
+// without `confirm`, the run with `confirm: true`, as retry_app_run), and nothing else. It is
+// gated by workflows:execute and registered inside hasCredits() (the routes are the Cloud
+// plugin's), so only the cloud/all fixture moves, by that one name. Measured by this suite on the
+// same tree with and without it (re-measured after merging dev's tighten_episode raises above):
+// 465_864 total − 462_730 = 3_134 B, far under the per-tool budget; the 103 B of headroom the list
+// had before is carried across. The route's rules live in docs/api-integration.md.
+const CAST_SWAP_TOOL_BYTES = 3_134
 
 // RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
 // added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
@@ -1245,7 +1253,8 @@ export const TOOL_WIRE_BUDGET = {
     TRAILER_MEDIA_URL_VIDEO_BYTES +
     TIGHTEN_FRAMING_SOURCE_BYTES +
     CLIP_PACK_RECORDINGS_BYTES +
-    SPEAKER_LAYOUT_TOOL_BYTES,
+    SPEAKER_LAYOUT_TOOL_BYTES +
+    CAST_SWAP_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
