@@ -181,7 +181,7 @@ const ENGINE = tracked.filter((f) => f.startsWith("tools/test-select/"))
 
 test("every file of tools/test-select/ is either a global trigger or a listed non-input — never both, never neither", () => {
   const unclassified = ENGINE.filter((f) => !isGlobalTrigger(f) && !NOT_GLOBAL_INPUTS[f])
-  assert.deepEqual(unclassified, [], "classify these: a trigger glob in select.mjs GLOBAL_TRIGGERS, or NOT_GLOBAL_INPUTS here with the reason")
+  assert.deepEqual(unclassified, [], "classify these: a trigger glob in global-triggers.mjs GLOBAL_TRIGGERS, or NOT_GLOBAL_INPUTS here with the reason")
   assert.deepEqual(Object.keys(NOT_GLOBAL_INPUTS).filter((f) => isGlobalTrigger(f)), [])
   assert.deepEqual(Object.keys(NOT_GLOBAL_INPUTS).filter((f) => !ENGINE.includes(f)), [], "listed but gone — remove it")
   // the engine's code is all in

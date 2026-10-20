@@ -6,7 +6,10 @@ import { spawnSync } from 'node:child_process'
 const workflow = readFileSync('.github/workflows/ci.yml', 'utf8')
 const jobs = Object.fromEntries([...workflow.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)]
   .map(([, name, body]) => [name, body]))
-const consumers = ['frontend-test-shards', 'backend-test-shards', 'typecheck', 'remotion-tests', 'characterize', 'build-backend', 'backend-boot-smoke']
+const consumers = ['frontend-test-shards', 'backend-test-shards', 'typecheck', 'remotion-tests', 'characterize', 'ffmpeg-ledger-redis', 'build-backend', 'backend-boot-smoke']
+// Skipped on an unrelated diff once preparation succeeded: the suites by the
+// Diff Gate's tree classification, the gated jobs by tools/ci/job-inputs.json.
+const diffGated = ['frontend-test-shards', 'backend-test-shards', 'remotion-tests', 'characterize', 'ffmpeg-ledger-redis']
 
 for (const name of consumers) test(`${name} fails closed when preparation fails or is skipped`, () => {
   const job = jobs[name]
@@ -17,11 +20,11 @@ for (const name of consumers) test(`${name} fails closed when preparation fails 
   assert.ok(job.indexOf('Require successful preparation') < job.indexOf('actions/checkout'))
   for (const result of ['success', 'failure', 'skipped', 'cancelled']) {
     const needs = {
-      changes: { result: 'success', outputs: { frontend: 'false', backend: 'false' } },
+      changes: { result: 'success', outputs: { frontend: 'false', backend: 'false', remotion: 'false', characterize: 'false', ffmpeg_ledger: 'false' } },
       'prepare-packages': { result }, typecheck: { result }, 'build-backend': { result },
     }
     const shouldRun = Function('needs', 'cancelled', `return (${condition.replace(/needs\.([a-z-]+)/g, "needs['$1']")})`)(needs, () => false)
-    if (['frontend-test-shards', 'backend-test-shards'].includes(name) && result === 'success') {
+    if (diffGated.includes(name) && result === 'success') {
       assert.equal(shouldRun, false, 'unrelated diff still skips')
     } else assert.equal(shouldRun, true, 'failed preparation cannot skip a required check')
     const r = spawnSync('bash', ['-c', command], { env: { ...process.env,

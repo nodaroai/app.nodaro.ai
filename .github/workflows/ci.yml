@@ -50,9 +50,16 @@ jobs:
   # PRs into dev are `shadow` (the full suite runs; the selector's choice is
   # reported and checked for misses) until the repository variable
   # TEST_SELECT_ENFORCE is exactly `true`, which makes them `affected`.
+  # The job outputs `remotion`, `characterize`, `migrations` and
+  # `ffmpeg_ledger` (decided 2026-10-20) gate four jobs that test one corner of
+  # the tree: each declares its inputs once, in tools/ci/job-inputs.json, and
+  # runs on a PR only when one changed (or a global trigger, or tools/ci/) —
+  # always on a push and on a PR into main. Each such job's `if:` reads
+  # `!= 'false'`, so a gate that failed or wrote nothing runs it.
   changes:
     name: Diff Gate
     runs-on: ubuntu-slim
+    timeout-minutes: 10
     permissions:
       pull-requests: read
       actions: read
@@ -61,6 +68,10 @@ jobs:
       frontend: ${{ steps.gate.outputs.frontend }}
       backend: ${{ steps.gate.outputs.backend }}
       testdedup: ${{ steps.gate.outputs.testdedup }}
+      remotion: ${{ steps.jobs.outputs.remotion }}
+      characterize: ${{ steps.jobs.outputs.characterize }}
+      migrations: ${{ steps.jobs.outputs.migrations }}
+      ffmpeg_ledger: ${{ steps.jobs.outputs.ffmpeg_ledger }}
       mode: ${{ steps.mode.outputs.mode }}
       reason: ${{ steps.mode.outputs.reason }}
     steps:
@@ -115,11 +126,24 @@ jobs:
         continue-on-error: true
         with:
           persist-credentials: false
-          sparse-checkout: tools/test-select
+          sparse-checkout: |
+            tools/test-select
+            tools/ci
       - uses: actions/setup-node@v5
         continue-on-error: true
         with:
           node-version: 22
+      - name: Decide the gated jobs
+        id: jobs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        timeout-minutes: 3
+        run: node tools/ci/job-gate.mjs
       - name: Decide the test mode
         id: mode
         continue-on-error: true
@@ -387,14 +411,14 @@ jobs:
 
   remotion-tests:
     name: Remotion Tests
-    needs: [prepare-packages]
-    if: ${{ !cancelled() }}
+    needs: [changes, prepare-packages]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.remotion != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - name: Require successful preparation
         env:
-          DEPENDENCIES: ${{ toJSON(needs) }}
-        run: echo "$DEPENDENCIES" | jq -e 'all(.[]; .result == "success")'
+          PREPARE_RESULT: ${{ needs.prepare-packages.result }}
+        run: test "$PREPARE_RESULT" = success
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -412,7 +436,11 @@ jobs:
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
+      - name: Declared inputs cover what the tests reach
+        run: node tools/ci/job-inputs-check.mjs remotion
       - name: Run remotion tests
+        # The declaration check fails the job, but never hides the result.
+        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         run: npm run test
         working-directory: packages/remotion
 
@@ -861,8 +889,11 @@ jobs:
 
   attribute-dev-failure:
     name: Attribute Dev Failure
-    needs: [frontend-tests, backend-tests]
-    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && (needs.frontend-tests.result == 'failure' || needs.backend-tests.result == 'failure') }}
+    # The suites, and the jobs gated by tools/ci/job-inputs.json — which always
+    # run on a push, so their failure here is this merge's to answer for. A
+    # skipped job is never a failure.
+    needs: [frontend-tests, backend-tests, remotion-tests, characterize, migration-behavior, ffmpeg-ledger-redis]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && (needs.frontend-tests.result == 'failure' || needs.backend-tests.result == 'failure' || needs.remotion-tests.result == 'failure' || needs.characterize.result == 'failure' || needs.migration-behavior.result == 'failure' || needs.ffmpeg-ledger-redis.result == 'failure') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -886,6 +917,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BEFORE: ${{ github.event.before }}
           FAILED_DIR: ${{ runner.temp }}/failed
+          NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # The three lists each failed shard uploads (failed-<p>.txt,
@@ -898,12 +930,13 @@ jobs:
           # only the PR whose merge commit IS this commit produced it.
           PR="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq "[.[] | select(.merge_commit_sha == \"$GITHUB_SHA\")][0].number // empty" || true)"
           node --input-type=module -e '
-            import { buildAttributionComment } from "./tools/test-select/attribution.mjs"
+            import { buildAttributionComment, failedJobsFrom } from "./tools/test-select/attribution.mjs"
             import { readFailedLists } from "./tools/test-select/failed-lists.mjs"
             process.stdout.write(buildAttributionComment({
               sha: process.env.GITHUB_SHA, before: process.env.BEFORE, runUrl: process.env.RUN_URL,
               ...readFailedLists(process.env.FAILED_DIR),
               previousConclusion: process.env.PREVIOUS,
+              failedJobs: failedJobsFrom(JSON.parse(process.env.NEEDS || "{}")),
             }))' > "$RUNNER_TEMP/comment.md"
           cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$PR" ]; then gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"; fi
@@ -919,7 +952,7 @@ jobs:
   ffmpeg-ledger-redis:
     name: FFmpeg Ledger (real Redis)
     needs: [changes, prepare-packages]
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.backend == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.ffmpeg_ledger != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -943,8 +976,8 @@ jobs:
     steps:
       - name: Require successful preparation
         env:
-          DEPENDENCIES: ${{ toJSON(needs) }}
-        run: echo "$DEPENDENCIES" | jq -e 'all(.[]; .result == "success")'
+          PREPARE_RESULT: ${{ needs.prepare-packages.result }}
+        run: test "$PREPARE_RESULT" = success
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -958,10 +991,15 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
       - name: Restore shared packages
+        id: build-packages
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
+      - name: Declared inputs cover what the tests reach
+        run: node tools/ci/job-inputs-check.mjs ffmpeg_ledger
       - name: Run the ledger suites against the real Redis
+        # The declaration check fails the job, but never hides the result.
+        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         working-directory: backend
         run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts src/lib/__tests__/download-slot-ledger.redis.test.ts src/ee/lib/__tests__/presence-redis.redis.test.ts
 
@@ -1156,12 +1194,15 @@ jobs:
 
   migration-behavior:
     name: Migration Behavior (real Postgres)
+    needs: [changes]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.migrations != 'false') }}
     runs-on: ubuntu-latest
     # The organizations migrations put the tenancy rules INTO the database —
     # RLS policies, SECURITY DEFINER helpers, the invitation and join RPCs.
     # None of that is provable from the SQL text, and none of it is exercised
-    # by a unit test, so every PR applies the whole chain to a real Supabase
-    # Postgres and runs the behavioral assertions against it.
+    # by a unit test, so every PR that touches the migrations, the proofs or
+    # the scripts below (tools/ci/job-inputs.json) applies the whole chain to a
+    # real Supabase Postgres and runs the behavioral assertions against it.
     services:
       postgres:
         image: supabase/postgres:15.8.1.085
@@ -1779,8 +1820,8 @@ jobs:
   # and ship all of it in one PR.
   characterize:
     name: FFmpeg Output Characterization
-    needs: [prepare-packages]
-    if: ${{ !cancelled() }}
+    needs: [changes, prepare-packages]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.characterize != 'false') }}
     runs-on: ubuntu-latest
     container: node:22-slim
     env:
@@ -1816,6 +1857,10 @@ jobs:
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
+      - name: Declared inputs cover what the tests reach
+        run: node tools/ci/job-inputs-check.mjs characterize
       - name: Characterization check (decoded-output goldens)
+        # The declaration check fails the job, but never hides the result.
+        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         working-directory: backend
         run: npm run characterize:check
