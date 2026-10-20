@@ -34,6 +34,10 @@ export const MASK_COMPOSITE_BOUNDS = {
   /** Grow (+) or shrink (−) the white region, pixels. */
   GROW_MIN: -10,
   GROW_MAX: 10,
+  /** How strongly the foreground covers the background inside the mask
+   *  (1 = fully, today's output; 0 = not at all). */
+  OPACITY_MIN: 0,
+  OPACITY_MAX: 1,
   /** The longest foreground a run accepts, seconds. */
   MAX_DURATION_SEC: 300,
 } as const
@@ -60,6 +64,7 @@ export const MASK_COMPOSITE_DEFAULTS = {
   invertMask: false,
   feather: 2,
   grow: 0,
+  opacity: 1,
   backgroundFit: "cover" as MaskCompositeBackgroundFit,
   audioSource: "foreground" as MaskCompositeAudioSource,
 } as const
@@ -68,12 +73,17 @@ export interface MaskCompositeSettings {
   readonly invertMask: boolean
   readonly feather: number
   readonly grow: number
+  /** Inside the mask: opacity × foreground + (1 − opacity) × background. */
+  readonly opacity: number
   readonly backgroundFit: MaskCompositeBackgroundFit
   readonly audioSource: MaskCompositeAudioSource
 }
 
 const clampInt = (v: unknown, min: number, max: number, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : fallback
+
+const clampNumber = (v: unknown, min: number, max: number, fallback: number): number =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback
 
 /**
  * Node data (or any loose object) → settings every engine renders with.
@@ -88,6 +98,7 @@ export function resolveMaskCompositeSettings(data: Readonly<Record<string, unkno
     invertMask: typeof data.invertMask === "boolean" ? data.invertMask : d.invertMask,
     feather: clampInt(data.feather, b.FEATHER_MIN, b.FEATHER_MAX, d.feather),
     grow: clampInt(data.grow, b.GROW_MIN, b.GROW_MAX, d.grow),
+    opacity: clampNumber(data.opacity, b.OPACITY_MIN, b.OPACITY_MAX, d.opacity),
     backgroundFit: (MASK_COMPOSITE_BACKGROUND_FITS as readonly string[]).includes(data.backgroundFit as string)
       ? (data.backgroundFit as MaskCompositeBackgroundFit)
       : d.backgroundFit,

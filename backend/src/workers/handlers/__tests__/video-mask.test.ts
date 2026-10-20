@@ -191,11 +191,16 @@ describe("video-mask handler — a long clip in chunks", () => {
 })
 
 describe("mask-composite handler", () => {
+  it("renders with the job's opacity", async () => {
+    await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", opacity: 0.85 }), ctx)
+    expect(mocks.maskComposite).toHaveBeenLastCalledWith(expect.objectContaining({ settings: expect.objectContaining({ opacity: 0.85 }) }))
+  })
+
   it("normalises the settings and finishes through the shared ffmpeg completion", async () => {
     await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", feather: 99, backgroundFit: "contain" }), ctx)
     expect(mocks.maskComposite).toHaveBeenCalledWith({
       foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
-      settings: { invertMask: false, feather: 20, grow: 0, backgroundFit: "contain", audioSource: "foreground" },
+      settings: { invertMask: false, feather: 20, grow: 0, opacity: 1, backgroundFit: "contain", audioSource: "foreground" },
     })
     expect(mocks.completeFfmpegVideoJob).toHaveBeenCalledWith("/tmp/mc/output.mp4", ctx, { width: 640, height: 360, durationSec: 3 })
   })

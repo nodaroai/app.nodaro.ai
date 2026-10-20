@@ -465,8 +465,9 @@ export class MediaResource {
    * The result follows the foreground's size, frame rate and length; the
    * background is fitted (`backgroundFit`, default cover) and loops when
    * shorter; the mask holds its last frame when shorter. Optional
-   * `invertMask`, `feather` (0–20 px), `grow` (−10–10 px) and `audioSource`
-   * (foreground / background / mix / none). Priced per started 5 seconds of
+   * `invertMask`, `feather` (0–20 px), `grow` (−10–10 px), `opacity` (0–1,
+   * default 1: how strongly the foreground covers the background inside the
+   * mask) and `audioSource` (foreground / background / mix / none). Priced per started 5 seconds of
    * the result (foreground up to 300 s). Poll `jobs.get(jobId)` for `videoUrl`.
    */
   maskComposite(input: MaskCompositeRequest): Promise<{ jobId: string }> {

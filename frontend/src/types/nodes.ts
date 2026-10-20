@@ -5018,6 +5018,9 @@ export type MaskCompositeData = {
   feather: number
   /** Grow (+) / shrink (−) the white region, px. */
   grow: number
+  /** How strongly the foreground covers the background inside the mask,
+   *  0–1 (1 = fully). The panel shows it as a percent. */
+  opacity?: number
   backgroundFit: MaskCompositeBackgroundFit
   audioSource: MaskCompositeAudioSource
   fieldMappings: FieldMappings

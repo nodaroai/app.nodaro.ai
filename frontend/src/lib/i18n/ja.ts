@@ -12483,6 +12483,8 @@ export const ja: ChromeDict = {
   "proccfg.maskCompositeFeatherHint": "マスクの境界をやわらげます。0 ではくっきりした境界のままです。",
   "proccfg.maskCompositeGrow": "拡大／縮小：{n} px",
   "proccfg.maskCompositeGrowHint": "正の値で白い領域を広げ、負の値で狭めます。",
+  "proccfg.maskCompositeOpacity": "不透明度：{n}%",
+  "proccfg.maskCompositeOpacityHint": "マスク内で前景が背景をどれだけ覆うかを決めます。100% では前景が背景を置き換え、それより低い値では両者が混ざります。",
   "proccfg.maskCompositeBackgroundFit": "背景のフィット",
   "proccfg.maskCompositeFitCover": "カバー（切り抜いて埋める）",
   "proccfg.maskCompositeFitContain": "全体を表示（レターボックス）",

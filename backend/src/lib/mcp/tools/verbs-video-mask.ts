@@ -105,7 +105,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         "Place a foreground video over a background video through a mask video (white = foreground shows, black = background shows) — local ffmpeg, no AI. " +
         "Typical use: the mask from video_mask cuts the subject out of its own footage and drops it into a new scene. " +
         "The result follows the FOREGROUND's size, frame rate and length; the background is fitted to that frame (`background_fit`: cover / contain / stretch, default cover) and loops when shorter; the mask is stretched to the frame and holds its last frame when shorter. " +
-        `Optional: \`invert_mask\`, \`feather\` (0–${B.FEATHER_MAX} px edge softening, default 2), \`grow\` (${B.GROW_MIN}–${B.GROW_MAX} px — positive widens the foreground, negative trims halos), ` +
+        `Optional: \`invert_mask\`, \`feather\` (0–${B.FEATHER_MAX} px edge softening, default 2), \`grow\` (${B.GROW_MIN}–${B.GROW_MAX} px — positive widens the foreground, negative trims halos), \`opacity\` (0–1, default 1), ` +
         `priced per started 5 s of the result (foreground up to ${B.MAX_DURATION_SEC} s), ` +
         "`audio_source` (foreground / background / mix / none, default foreground). Returns a job_id; widget renders the video.",
       inputSchema: {
@@ -118,6 +118,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         invert_mask: z.boolean().optional().describe("Swap which side of the mask shows the foreground."),
         feather: z.number().int().min(B.FEATHER_MIN).max(B.FEATHER_MAX).optional().describe("Edge softening, px (default 2)."),
         grow: z.number().int().min(B.GROW_MIN).max(B.GROW_MAX).optional().describe("Grow (+) or shrink (−) the foreground region, px (default 0)."),
+        opacity: z.number().min(B.OPACITY_MIN).max(B.OPACITY_MAX).optional().describe("How strongly the foreground covers the background inside the mask, 0–1 (default 1 = fully)."),
         background_fit: z.enum(MASK_COMPOSITE_BACKGROUND_FITS).optional().describe("How the background fills the foreground's frame (default cover)."),
         audio_source: z.enum(MASK_COMPOSITE_AUDIO_SOURCES).optional().describe("Which sound the result carries (default foreground)."),
       },
@@ -139,6 +140,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         ...(args.invert_mask !== undefined ? { invertMask: args.invert_mask } : {}),
         ...(args.feather !== undefined ? { feather: args.feather } : {}),
         ...(args.grow !== undefined ? { grow: args.grow } : {}),
+        ...(args.opacity !== undefined ? { opacity: args.opacity } : {}),
         ...(args.background_fit ? { backgroundFit: args.background_fit } : {}),
         ...(args.audio_source ? { audioSource: args.audio_source } : {}),
         mcp_client: session.clientName,

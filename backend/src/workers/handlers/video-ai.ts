@@ -591,7 +591,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, refVideoDurationsSec, draft } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft } = job.data as {
     jobId: string
     /** Seedance Draft — see the image-to-video payload above. */
     draft?: boolean
@@ -621,6 +621,9 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     webSearch?: boolean
     nsfwChecker?: boolean
     enableTranslation?: boolean
+    /** `false` = a copyright refusal fails the job instead of being retried
+     *  once with a reworded prompt. Absent / true = the retry below. */
+    contentPolicyRewrite?: boolean
   }
 
   // LTX 2.3 short-circuits the t2v router — same prediction-shape rationale
@@ -655,7 +658,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // Extracted to a const so the content-policy retry below resubmits with
   // byte-identical options — only the prompt text differs between the two
   // textToVideo calls.
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, draft }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, draft, contentPolicyRewrite: allowContentPolicyRewrite }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -680,6 +683,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
       // common. A new class added later is excluded by default, which is the
       // safe direction for a paid retry.
       if (!(err instanceof KieError) || err.contentPolicyClass !== "copyright") throw err
+      // The caller opted out: the refusal stands, unreworded.
+      if (allowContentPolicyRewrite === false) throw err
       const rewritten = await rewriteForContentPolicy(prompt)
       if (!rewritten) throw err
       result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })

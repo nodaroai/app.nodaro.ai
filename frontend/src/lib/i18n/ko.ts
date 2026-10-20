@@ -12483,6 +12483,8 @@ export const ko: ChromeDict = {
   "proccfg.maskCompositeFeatherHint": "마스크 가장자리를 부드럽게 합니다. 0이면 가장자리가 선명하게 유지됩니다.",
   "proccfg.maskCompositeGrow": "확장/축소: {n}px",
   "proccfg.maskCompositeGrowHint": "양수는 흰색 영역을 넓히고, 음수는 좁힙니다.",
+  "proccfg.maskCompositeOpacity": "불투명도: {n}%",
+  "proccfg.maskCompositeOpacityHint": "마스크 안에서 전경이 배경을 얼마나 덮을지 정합니다. 100%이면 전경이 배경을 대신하고, 그보다 낮으면 둘이 섞입니다.",
   "proccfg.maskCompositeBackgroundFit": "배경 맞춤",
   "proccfg.maskCompositeFitCover": "채우기(잘라서 채움)",
   "proccfg.maskCompositeFitContain": "맞추기(레터박스)",

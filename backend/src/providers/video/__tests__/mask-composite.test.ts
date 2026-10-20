@@ -59,7 +59,24 @@ describe("buildMaskCompositeArgs", () => {
   })
   it("clamps and defaults node data the panel never wrote", () => {
     const s = resolveMaskCompositeSettings({ feather: 99, grow: -40, backgroundFit: "tile", audioSource: 3 })
-    expect(s).toEqual({ invertMask: false, feather: 20, grow: -10, backgroundFit: "cover", audioSource: "foreground" })
+    expect(s).toEqual({ invertMask: false, feather: 20, grow: -10, opacity: 1, backgroundFit: "cover", audioSource: "foreground" })
+    expect(resolveMaskCompositeSettings({ opacity: 1.5 }).opacity).toBe(1)
+    expect(resolveMaskCompositeSettings({ opacity: -0.2 }).opacity).toBe(0)
+    expect(resolveMaskCompositeSettings({ opacity: 0.85 }).opacity).toBe(0.85)
+    expect(resolveMaskCompositeSettings({ opacity: "0.5" }).opacity).toBe(1)
+  })
+  it("opacity 1 (the default) leaves the graph exactly as it was", () => {
+    const argv = build({ invertMask: true, grow: 2, feather: 4 })
+    expect(build({ invertMask: true, grow: 2, feather: 4, opacity: 1 })).toEqual(argv)
+    expect(graphOf(argv)).toContain(
+      "[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m]",
+    )
+  })
+  it("opacity < 1 scales the finished mask (after invert / grow / feather), so inside it the result is opacity × foreground + (1 − opacity) × background", () => {
+    expect(graphOf(build({ invertMask: true, grow: 2, feather: 4, opacity: 0.85 }))).toContain(
+      "[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,lut=c0='val*0.8500',fps=30/1,tpad=stop_mode=clone:stop=-1[m]",
+    )
+    expect(graphOf(build({ opacity: 0 }))).toContain("lut=c0='val*0.0000'")
   })
   it("gives longer composites a longer kill budget", () => {
     expect(maskCompositeTimeoutMs(300)).toBeGreaterThan(maskCompositeTimeoutMs(10))
@@ -130,6 +147,35 @@ describe("mask composite (real ffmpeg)", () => {
       const [rr, , rb] = at(140, 45)
       expect(lr).toBeGreaterThan(200); expect(lb).toBeLessThan(60) // red foreground on the left
       expect(rb).toBeGreaterThan(200); expect(rr).toBeLessThan(60) // blue background on the right
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("blends opacity × foreground + (1 − opacity) × background inside the mask, and leaves outside it alone", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mask-composite-opacity-"))
+    try {
+      const fg = join(dir, "fg.mp4"), bg = join(dir, "bg.mp4"), mask = join(dir, "mask.mp4"), out = join(dir, "out.mp4")
+      const lavfi = (src: string, file: string, extra: string[] = []) =>
+        execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", src, ...extra, "-c:v", "libx264", "-pix_fmt", "yuv420p", file])
+      lavfi("color=c=red:s=160x90:r=10:d=1", fg)
+      lavfi("color=c=blue:s=160x90:r=10:d=1", bg)
+      lavfi("color=c=black:s=160x90:r=10:d=1", mask, ["-vf", "drawbox=x=0:y=0:w=80:h=90:color=white:t=fill"])
+      const argv = buildMaskCompositeArgs({
+        foregroundPath: fg, backgroundPath: bg, maskPath: mask, outputPath: out,
+        settings: resolveMaskCompositeSettings({ feather: 0, opacity: 0.5 }),
+        probe: { width: 160, height: 90, frameRate: "10/1", durationSec: 1, foregroundHasAudio: false, backgroundHasAudio: false },
+      })
+      await runFfmpeg(argv, 60_000)
+      const rgb = execFileSync("ffmpeg", ["-v", "error", "-i", out, "-vf", "select=eq(n\\,5)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+      const at = (x: number, y: number) => [...rgb.subarray((y * 160 + x) * 3, (y * 160 + x) * 3 + 3)]
+      const [lr, , lb] = at(20, 45)
+      const [rr, , rb] = at(140, 45)
+      // Inside the mask: half red, half blue.
+      expect(lr).toBeGreaterThan(90); expect(lr).toBeLessThan(170)
+      expect(lb).toBeGreaterThan(90); expect(lb).toBeLessThan(170)
+      // Outside it: the background, untouched.
+      expect(rb).toBeGreaterThan(200); expect(rr).toBeLessThan(60)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

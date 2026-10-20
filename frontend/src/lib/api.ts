@@ -4298,6 +4298,7 @@ export async function maskCompositeApi(params: {
   invertMask?: boolean
   feather?: number
   grow?: number
+  opacity?: number
   backgroundFit?: MaskCompositeBackgroundFit
   audioSource?: MaskCompositeAudioSource
   userId?: string

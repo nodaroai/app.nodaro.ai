@@ -12483,6 +12483,8 @@ export const ptBR: ChromeDict = {
   "proccfg.maskCompositeFeatherHint": "Suaviza a borda da máscara. Com 0, a borda fica nítida.",
   "proccfg.maskCompositeGrow": "Expandir / reduzir: {n} px",
   "proccfg.maskCompositeGrowHint": "Um valor positivo expande a área branca e um valor negativo a reduz.",
+  "proccfg.maskCompositeOpacity": "Opacidade: {n}%",
+  "proccfg.maskCompositeOpacityHint": "Quanto o primeiro plano cobre o fundo dentro da máscara. Em 100% ele substitui o fundo ali; valores menores misturam os dois.",
   "proccfg.maskCompositeBackgroundFit": "Ajuste do fundo",
   "proccfg.maskCompositeFitCover": "Preencher (cortar para preencher)",
   "proccfg.maskCompositeFitContain": "Conter (com faixas)",

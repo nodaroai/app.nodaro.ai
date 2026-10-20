@@ -18,6 +18,7 @@ It is a local, deterministic FFmpeg step — no model, no provider key — so it
 | Invert mask | toggle | off | Swap the sides: black shows the foreground, white the background (e.g. keep everything *except* the subject). |
 | Feather | slider | `2` | Edge softening, `0`–`20` px. `0` is a hard edge; a few pixels hide the stair-steps of a tracked mask. |
 | Grow / shrink | slider | `0` | Widen (+) or narrow (−) the white region, `-10`–`10` px, before feathering. A negative value trims a halo of the old background around the subject. |
+| Opacity | slider | `100%` | How strongly the foreground covers the background inside the mask, `0`–`100` %: at `100%` the foreground replaces the background there; below it the two blend (`opacity × foreground + (1 − opacity) × background`). Outside the mask is always the background. The API takes it as `opacity`, `0`–`1`. |
 | Background fit | select | `cover` | How the background fills the foreground's frame: `cover` (fill, cropping the overflow), `contain` (fit inside, black bars) or `stretch`. |
 | Audio | select | `foreground` | Which sound the result carries: `foreground`, `background`, `mix` (both at equal level) or `none`. A chosen track that does not exist leaves the result silent; `mix` with only one track uses that one. |
 

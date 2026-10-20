@@ -98,7 +98,7 @@ import {
 import { requestPluginDaemon } from "../plugin-daemons/client.js"
 import { checkIsAdmin } from "../admin-check.js"
 import { videoQueue } from "../queue.js"
-import { creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../../middleware/credit-guard.js"
+import { checkPayerCanAfford, creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
 import { safeFetch } from "../safe-fetch.js"
 import { safeFetchBytes } from "../safe-fetch-bytes.js"
@@ -1661,6 +1661,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       creditGuard,
       reserveCreditsForJob,
       reserveCreditsForJobOnce,
+      // Cloud only: absent (not a throwing stub) where there is no credit
+      // system, so a plugin feature-detects it with `?.`.
+      ...(hasCredits() ? { checkPayerCanAfford } : {}),
       applyCreditMarkup: async (modelIdentifier, baseCredits) => {
         if (!Number.isFinite(baseCredits) || baseCredits < 0) {
           throw new Error("Dynamic credit quote must be a finite non-negative number")

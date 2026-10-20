@@ -58,6 +58,9 @@ const MASK_WHITE = 230
 
 const even = (n: number): number => Math.max(2, Math.floor(n / 2) * 2)
 
+/** The mask multiplier, 4 decimals (finer than one 8-bit mask level). */
+const opacityFactor = (opacity: number): string => Math.min(1, Math.max(0, opacity)).toFixed(4)
+
 function backgroundFitFilter(fit: MaskCompositeBackgroundFit, w: number, h: number): string {
   switch (fit) {
     case "contain":
@@ -91,6 +94,10 @@ function maskChain(s: MaskCompositeSettings, w: number, h: number, rate: string 
   const morph = s.grow > 0 ? "dilation" : "erosion"
   for (let i = 0; i < Math.abs(s.grow); i++) parts.push(morph)
   if (s.feather > 0) parts.push(`gblur=sigma=${(s.feather / 2).toFixed(2)}`)
+  // Opacity scales the finished mask (after invert / grow / feather), so the
+  // overlay blends opacity × foreground + (1 − opacity) × background inside it.
+  // At 1 nothing is added: the default graph is unchanged.
+  if (s.opacity < 1) parts.push(`lut=c0='val*${opacityFactor(s.opacity)}'`)
   if (rate) parts.push(`fps=${rate}`)
   // Hold the last mask frame past its end so a short mask never ends the render.
   parts.push("tpad=stop_mode=clone:stop=-1")

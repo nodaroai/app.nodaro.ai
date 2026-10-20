@@ -2064,6 +2064,7 @@ Needs `workflows:execute`.
 | `invert_mask` | boolean |  | Swap which side of the mask shows the foreground. |
 | `feather` | integer |  | Edge softening, px (default 2). From 0 to 20. |
 | `grow` | integer |  | Grow (+) or shrink (−) the foreground region, px (default 0). From -10 to 10. |
+| `opacity` | number |  | How strongly the foreground covers the background inside the mask, 0–1 (default 1 = fully). From 0 to 1. |
 | `background_fit` | string |  | How the background fills the foreground's frame (default cover). One of `cover`, `contain`, `stretch`. |
 | `audio_source` | string |  | Which sound the result carries (default foreground). One of `foreground`, `background`, `mix`, `none`. |
 

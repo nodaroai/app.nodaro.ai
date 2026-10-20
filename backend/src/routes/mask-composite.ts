@@ -37,6 +37,8 @@ export const maskCompositeBody = z.object({
   invertMask: z.boolean().optional().default(d.invertMask),
   feather: z.number().int().min(b.FEATHER_MIN).max(b.FEATHER_MAX).optional().default(d.feather),
   grow: z.number().int().min(b.GROW_MIN).max(b.GROW_MAX).optional().default(d.grow),
+  // Inside the mask: opacity × foreground + (1 − opacity) × background.
+  opacity: z.number().min(b.OPACITY_MIN).max(b.OPACITY_MAX).optional().default(d.opacity),
   backgroundFit: z.enum(MASK_COMPOSITE_BACKGROUND_FITS).optional().default(d.backgroundFit),
   audioSource: z.enum(MASK_COMPOSITE_AUDIO_SOURCES).optional().default(d.audioSource),
 })

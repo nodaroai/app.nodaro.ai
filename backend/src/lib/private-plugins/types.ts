@@ -1978,6 +1978,18 @@ export interface PluginHttpToolkit {
     modelIdentifier: string,
   ): Promise<PluginCreditReservation | undefined>
 
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * Can the payer of this request afford `credits` (final, already marked-up
+   * credits) right now? Payer-aware exactly as creditGuard's balance check
+   * (personal, workspace, deployment payer). Holds nothing and leaves nothing on
+   * the request (no reservation, no creditOverride). Resolves { ok: true }, or
+   * { ok: false, statusCode, body } where statusCode/body are exactly what
+   * creditGuard sends when the balance is short (same code, same message shape).
+   * Rejects on an internal failure. Cloud only (hasCredits()); absent elsewhere.
+   */
+  checkPayerCanAfford?(req: FastifyRequest, credits: number): Promise<{ ok: true } | { ok: false; statusCode: number; body: unknown }>
+
   /** Optional atomic job reservation with exact replay and transactional ledger. */
   reserveCreditsForJobOnce?(
     req: FastifyRequest, reply: FastifyReply, jobId: string, modelIdentifier: string,

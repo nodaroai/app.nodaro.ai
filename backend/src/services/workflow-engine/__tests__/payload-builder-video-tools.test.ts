@@ -628,13 +628,13 @@ describe("payload-builder-video-mask.test.ts", () => {
 
   describe("mask-composite payload", () => {
     it("sends the three resolved videos and the normalised settings at the flat row", () => {
-      const r = build(node("mask-composite", { feather: 50, audioSource: "mix" }), {
+      const r = build(node("mask-composite", { feather: 50, audioSource: "mix", opacity: 0.6 }), {
         videoUrl: "https://x/fg.mp4", backgroundVideoUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
       })
       expect(r.modelIdentifier).toBe("mask-composite")
       expect(r.payload).toMatchObject({
         foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
-        invertMask: false, feather: 20, grow: 0, backgroundFit: "cover", audioSource: "mix",
+        invertMask: false, feather: 20, grow: 0, opacity: 0.6, backgroundFit: "cover", audioSource: "mix",
       })
     })
 

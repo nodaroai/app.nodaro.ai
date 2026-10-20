@@ -2634,6 +2634,11 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > source is refused with a 4xx before anything is charged. See
 > [Seedance 2.5 HD (from draft)](./nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft).
 
+> **Copyright refusals.** `TextToVideoParams` takes `contentPolicyRewrite?: boolean`.
+> Absent or `true`, a copyright refusal is retried once with a reworded prompt;
+> `false` = a copyright refusal fails the job instead of retrying once with a
+> reworded prompt.
+
 > **A name you have no picture for.** The same three params take
 > `describedReferences: DescribedReference[]` (also re-exported from the SDK) —
 > up to 10 `{ name, description }` entries for a subject you can name and
@@ -5844,6 +5849,7 @@ maskComposite(input: {
   invertMask?: boolean
   feather?: number                // 0..20 px, default 2
   grow?: number                   // -10..10 px, default 0
+  opacity?: number                // 0..1, default 1 (how strongly the foreground covers the background inside the mask)
   backgroundFit?: "cover" | "contain" | "stretch"           // default cover
   audioSource?: "foreground" | "background" | "mix" | "none" // default foreground
 }): Promise<{ jobId: string }>

@@ -1153,6 +1153,13 @@ const MODIFY_VIDEO_SEEDANCE_REFS_BYTES = 396
 // change: 479_566 total − 478_015 = 1_551 B; the 103 B of headroom carry across.
 const CAST_SWAP_V1_BYTES = 1_551
 
+// RAISED 2026-10-21 by `mask_composite` taking `opacity` (0–1, default 1: how strongly the
+// foreground covers the background inside the mask) — one arg and five words in its description,
+// and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite on the
+// same tree with and without the change: 479_754 total − 479_566 = 188 B; the 103 B of headroom
+// carry across.
+const MASK_COMPOSITE_OPACITY_BYTES = 188
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1279,6 +1286,7 @@ export const TOOL_WIRE_BUDGET = {
     SUNO_SEPARATE_ANY_AUDIO_BYTES +
     MODIFY_VIDEO_SEEDANCE_REFS_BYTES +
     CAST_SWAP_V1_BYTES +
+    MASK_COMPOSITE_OPACITY_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +

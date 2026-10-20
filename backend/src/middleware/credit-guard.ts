@@ -77,6 +77,24 @@ export interface CreditReservation {
   creditOverride?: number
 }
 
+/** The verdict of {@link checkPayerCanAfford}: a refusal carries the status
+ *  and body the credit guard sends for the same shortfall. */
+export type PayerAffordability = { ok: true } | { ok: false; statusCode: number; body: unknown }
+
+/**
+ * Can the payer of this request afford `credits` (final, already marked-up
+ * credits) right now? Payer-aware like the guard's balance check (personal,
+ * workspace, deployment payer); holds nothing and leaves nothing on the
+ * request. Cloud: delegates to ee/lib/credit-guard-impl.ts
+ * (`checkPayerCanAffordImpl`, which documents the rules). Without a credit
+ * system every amount is affordable. Rejects on an internal failure.
+ */
+export async function checkPayerCanAfford(req: FastifyRequest, credits: number): Promise<PayerAffordability> {
+  if (!hasCredits()) return { ok: true }
+  const impl = await loadCreditGuardImpl()
+  return impl.checkPayerCanAffordImpl(req, credits)
+}
+
 /** Re-exported so the video routes keep one import for the guard + the stash
  *  type. Authoritative declaration lives in `lib/video-request-norm.ts`. */
 export type { VideoRequestNorm } from "../lib/video-request-norm.js"

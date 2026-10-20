@@ -5913,6 +5913,12 @@ export interface RunSetCreditsCheck {
   available: number | null
   /** Why it is refused; only when `sufficient` is false. */
   message?: string
+  /**
+   * Refused on a consumer surface where a payg account spends its free pool
+   * only (web-free mode) — the credit guard answers that with the
+   * subscription ask, not a plain 402. Only present (true) on such a refusal.
+   */
+  subscriptionRequired?: true
 }
 
 /** The credit guard's own words for it (credit-guard-impl.ts): the operator is the fixer. */
@@ -5956,6 +5962,7 @@ export async function checkRunSetCredits(
     sufficient: false,
     required,
     available,
+    ...(gates.webFree ? { subscriptionRequired: true as const } : {}),
     message: deployment
       ? DEPLOYMENT_OUT_OF_CREDITS
       : gates.webFree

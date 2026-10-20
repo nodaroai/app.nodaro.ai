@@ -12693,6 +12693,8 @@ export const he: ChromeDict = {
   "proccfg.maskCompositeFeatherHint": "מרכך את קצה המסכה. 0 משאיר קצה חד.",
   "proccfg.maskCompositeGrow": "הרחבה / כיווץ: {n} פיקסלים",
   "proccfg.maskCompositeGrowHint": "ערך חיובי מרחיב את האזור הלבן, ערך שלילי מכווץ אותו.",
+  "proccfg.maskCompositeOpacity": "אטימות: {n}%",
+  "proccfg.maskCompositeOpacityHint": "עד כמה החזית מכסה את הרקע בתוך המסכה. ב-100% היא מחליפה שם את הרקע; ערכים נמוכים יותר ממזגים את השניים.",
   "proccfg.maskCompositeBackgroundFit": "התאמת הרקע",
   "proccfg.maskCompositeFitCover": "מילוי (חיתוך למילוי המסגרת)",
   "proccfg.maskCompositeFitContain": "התאמה (פסים שחורים)",

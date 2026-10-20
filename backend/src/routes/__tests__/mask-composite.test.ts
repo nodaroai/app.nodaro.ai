@@ -87,13 +87,28 @@ describe("POST /v1/mask-composite", () => {
     expect(guardedCredits).toBe(30)
     expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-mc-1", "mask-composite")
     expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", {
-      jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, backgroundFit: "cover", audioSource: "foreground", usageLogId: "u-1",
+      jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, opacity: 1, backgroundFit: "cover", audioSource: "foreground", usageLogId: "u-1",
     })
   })
 
   it("passes explicit settings through", async () => {
     await post({ ...URLS, invertMask: true, feather: 8, grow: -3, backgroundFit: "contain", audioSource: "mix", userId: USER })
     expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", expect.objectContaining({ invertMask: true, feather: 8, grow: -3, backgroundFit: "contain", audioSource: "mix" }))
+  })
+
+  it("accepts an opacity from 0 to 1 and passes it through", async () => {
+    for (const opacity of [0, 1, 0.85]) {
+      vi.mocked(videoQueue.add).mockClear()
+      expect((await post({ ...URLS, opacity, userId: USER })).statusCode).toBe(200)
+      expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", expect.objectContaining({ opacity }))
+    }
+  })
+
+  it("refuses an opacity outside 0–1 or not a number", async () => {
+    expect((await post({ ...URLS, opacity: 1.5, userId: USER })).statusCode).toBe(400)
+    expect((await post({ ...URLS, opacity: -0.1, userId: USER })).statusCode).toBe(400)
+    expect((await post({ ...URLS, opacity: "0.5", userId: USER })).statusCode).toBe(400)
+    expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
   it("refuses a missing input and out-of-range settings", async () => {

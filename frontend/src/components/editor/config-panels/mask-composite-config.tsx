@@ -83,6 +83,21 @@ export function MaskCompositeConfig({ data, onUpdate }: { data: MaskCompositeDat
       </div>
 
       <div>
+        <Label htmlFor="mask-composite-opacity">{t("proccfg.maskCompositeOpacity", { n: Math.round(s.opacity * 100) })}</Label>
+        <input
+          id="mask-composite-opacity"
+          type="range"
+          min={Math.round(b.OPACITY_MIN * 100)}
+          max={Math.round(b.OPACITY_MAX * 100)}
+          step={1}
+          value={Math.round(s.opacity * 100)}
+          onChange={(e) => onUpdate({ opacity: parseInt(e.target.value, 10) / 100 })}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.maskCompositeOpacityHint")}</p>
+      </div>
+
+      <div>
         <Label>{t("proccfg.maskCompositeBackgroundFit")}</Label>
         <Select value={s.backgroundFit} onValueChange={(v) => onUpdate({ backgroundFit: v as MaskCompositeBackgroundFit })}>
           <SelectTrigger aria-label={t("proccfg.maskCompositeBackgroundFit")}><SelectValue /></SelectTrigger>

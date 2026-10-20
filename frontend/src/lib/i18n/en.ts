@@ -12788,6 +12788,8 @@ export const en = {
   "proccfg.maskCompositeFeatherHint": "Softens the mask edge. 0 keeps a hard edge.",
   "proccfg.maskCompositeGrow": "Grow / shrink: {n} px",
   "proccfg.maskCompositeGrowHint": "A positive value grows the white area, a negative value shrinks it.",
+  "proccfg.maskCompositeOpacity": "Opacity: {n}%",
+  "proccfg.maskCompositeOpacityHint": "How strongly the foreground covers the background inside the mask. At 100% it replaces the background there; lower values blend the two.",
   "proccfg.maskCompositeBackgroundFit": "Background fit",
   "proccfg.maskCompositeFitCover": "Cover (crop to fill)",
   "proccfg.maskCompositeFitContain": "Contain (letterbox)",

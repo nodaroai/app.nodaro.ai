@@ -300,6 +300,39 @@ describe("text-to-video handler — content-policy rewrite-once", () => {
     expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
   })
 
+  it("contentPolicyRewrite: false — a copyright refusal fails the job: no rewrite, no retry, the original error", async () => {
+    const policyError = makePolicyError()
+    mocks.mockTextToVideo.mockRejectedValueOnce(policyError)
+
+    const job = makeJob({ prompt: ORIGINAL_PROMPT, contentPolicyRewrite: false })
+    await expect(handler(job as never, makeCtx())).rejects.toBe(policyError)
+
+    expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(1)
+    // The opt-out rides the provider options too, so the cloud relay can forward it.
+    expect(mocks.mockTextToVideo.mock.calls[0][4]).toMatchObject({ contentPolicyRewrite: false })
+    // rewriteForContentPolicy is REAL here; its LLM never being asked IS "never rewritten".
+    expect(mocks.mockLlmCompleteStructured).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("contentPolicyRewrite: true behaves as absent — rewrites once and retries", async () => {
+    mocks.mockTextToVideo
+      .mockRejectedValueOnce(makePolicyError())
+      .mockResolvedValueOnce(VIDEO_RESULT)
+    mocks.mockLlmCompleteStructured.mockResolvedValue({
+      output: { rewrittenPrompt: REWRITTEN_PROMPT },
+      inputTokens: 20,
+      outputTokens: 20,
+    })
+
+    const job = makeJob({ prompt: ORIGINAL_PROMPT, contentPolicyRewrite: true })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(2)
+    expect(mocks.mockTextToVideo.mock.calls[1][0]).toBe(REWRITTEN_PROMPT)
+    expect(mocks.mockLlmCompleteStructured).toHaveBeenCalledTimes(1)
+  })
+
   it("non-policy KieError: rethrows immediately, no rewrite attempted", async () => {
     const nonPolicyError = makeNonPolicyError()
     mocks.mockTextToVideo.mockRejectedValueOnce(nonPolicyError)
