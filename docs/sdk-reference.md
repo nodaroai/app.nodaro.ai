@@ -1875,8 +1875,9 @@ returns `409 legacy_mix_mismatch`.
 
 ### `client.castSwap`
 
-Cast Swap: replace the people and/or the location in a short video with your
-own reference images, keeping its motion, framing, timing and sound. **Cloud
+Cast Swap: replace the people, pets, products and/or the location in a short
+video with your own reference images, keeping its motion, framing, timing and
+sound (the clip's audio is kept, and the result is the clip's length). **Cloud
 edition only**: these routes 404 on self-hosted installs. Also importable as
 `@nodaro/sdk/cast-swap`. Routes: [Cast Swap](./api-integration.md#13f-cast-swap-cloud-edition);
 MCP: `cast_swap`.
@@ -1893,27 +1894,53 @@ interface CastSwapParams {
     | { kind: "person"; name: string; images: string[] | null
         body?: "new" | "original"; outfit?: "new" | "original"; hair?: "new" | "original" } // each default "new"
     | { kind: "location"; name?: string; images: string[] | null }                          // name default "the setting"
-  >                                // ≤ 6 person roles, ≤ 1 location role; 0–3 images of ONE person / place each
+    | { kind: "pet"; name: string; images: string[] | null
+        body?: "new" | "original"; coat?: "new" | "original" }                              // each default "new"
+    | { kind: "product"; name: string; images: string[] | null
+        shape?: "new" | "original"; finish?: "new" | "original" }                           // each default "new"
+  >                                // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
+                                   // 0–3 images of ONE subject / place each, ≤ 30 images in all
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
-  quality?: "draft"                // the only value today
+  resolution?: "480p" | "720p" | "1080p" // default "480p"
+  draft?: boolean                  // default true at 480p, false above; true above 480p is a 400
+  prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
+  quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
   sessionId?: string
   origin?: string
 }
 
 interface CastSwapEstimate {
-  totalCredits: number                              // castSwap + seedance
-  breakdown: { castSwap: number; seedance: number } // the run itself; the video model it calls
-  settlesLower: boolean                             // Auto length: the final charge is expected to be lower
+  totalCredits: number // castSwap + seedance + references
+  breakdown: {
+    castSwap: number     // the run itself
+    seedance: number     // the video model it calls
+    references: number   // preparing the reference pictures; 0 when off or nothing to prepare
+  }
+  settlesLower: boolean // Auto length: the final charge is expected to be lower
 }
 ```
 
-A role with no images (empty or `null`) is skipped: that person or place stays
-as in the video. At least one role with images, or a `postPrompt`, is
-required. Both routes answer `400` before charging for a `postPrompt` over
-4,000 characters, a `{role:N}` with N outside 1..`roles.length` (empty roles
-count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name` or the
+A role with no images (empty or `null`) is skipped: that subject or place
+stays as in the video. At least one role with images, or a `postPrompt`, is
+required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
+kept from the video.
+
+**Reference preparation** (`prepareReferences`, on by default): before the
+video, each person, pet and product role's images are turned into one clean
+reference picture by an image model. It costs extra credits
+(`breakdown.references` in the estimate), charged when it runs, even if the
+video then fails; it adds about a minute, and falls back to your own images
+for a role whose picture could not be made. Locations are not prepared.
+Pass `prepareReferences: false` to use your images as they are.
+
+Both routes answer `400` before charging for more roles of a kind than allowed
+or more than 30 images in all (`validation_error`), `draft: true` with
+`resolution` `"720p"` or `"1080p"` (`validation_error`, "Draft is 480p only."),
+a `postPrompt` over 4,000 characters, a `{role:N}` with N outside
+1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name` or the
 `postPrompt`, a clip outside 4–30 s, or a preview past the clip's end
 (`previewStart + 4` > its length); also for an invalid body
 (`validation_error`), an address that is not public http(s) (`unsafe_url`) or a

@@ -10,6 +10,8 @@ export {
   type CastSwapTraitSource,
   type CastSwapPersonRole,
   type CastSwapLocationRole,
+  type CastSwapPetRole,
+  type CastSwapProductRole,
   type CastSwapRole,
   type CastSwapParams,
   type CastSwapEstimate,

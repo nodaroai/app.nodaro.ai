@@ -3861,27 +3861,44 @@ and the photo an app set to My photo needs, are in
 
 ## 13f. Cast Swap (Cloud edition)
 
-Cast Swap replaces the people and/or the location in a short video with your
-own reference images, keeping its motion, framing, timing and sound. Both
+Cast Swap replaces the people, pets, products and/or the location in a short
+video with your own reference images, keeping its motion, framing, timing and
+sound: the clip's audio is kept, and the result is the clip's length. Both
 routes are served by the Nodaro Cloud plugin and answer 404 on self-hosted
 installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
 [`cast_swap`](./mcp/tools.md) verb).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance }, settlesLower }`. |
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance, references }, settlesLower }`. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
-`{ kind: "person", name, images, body?, outfit?, hair? }` and at most 1
-`{ kind: "location", name?, images }`, each with 0–3 images; a role with no
-images keeps that person or place as in the video), and optionally
-`postPrompt`, `preview`, `previewStart`, `quality` (`"draft"`), `sessionId`
-and `origin`. The field-by-field shape is in the
+`{ kind: "person", name, images, body?, outfit?, hair? }`, at most 1
+`{ kind: "location", name?, images }`, at most 3
+`{ kind: "pet", name, images, body?, coat? }` and at most 3
+`{ kind: "product", name, images, shape?, finish? }`, each with 0–3 images and
+at most 30 images in all; a role with no images keeps that subject or place as
+in the video; each trait is `"new"` — the default, from your images — or
+`"original"`, kept from the video), and optionally `postPrompt`, `preview`,
+`previewStart`, `resolution` (`"480p"` — the default — `"720p"` or `"1080p"`),
+`draft` (on by default at 480p, off above it; `true` above 480p is refused),
+`prepareReferences` (default `true`, see below), `sessionId` and `origin`.
+`quality: "draft"` is still accepted and means 480p draft; it is deprecated:
+use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
 
+**Reference preparation.** Unless `prepareReferences` is `false`, each person,
+pet and product role's images are first turned into one clean reference
+picture by an image model, and the video is made from those. It costs extra
+credits (`breakdown.references`), charged when it runs, even if the video then
+fails; it adds about a minute, and falls back to your own images for a role
+whose picture could not be made. Locations are not prepared.
+
 The quote is `totalCredits` = `breakdown.castSwap` (the run itself) +
-`breakdown.seedance` (the video model it calls). `settlesLower: true` means the
+`breakdown.seedance` (the video model it calls) + `breakdown.references` (the
+reference preparation; 0 when it is off or there is nothing to prepare).
+`settlesLower: true` means the
 video's length is left to the model (Auto), so the final charge is expected to
 come out lower than the quote.
 
@@ -3896,7 +3913,7 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images and no `postPrompt`, more roles than allowed, more than 3 images on a role, or a `postPrompt` over 4,000 characters. Also an invalid `origin`. |
+| `400` | `validation_error` | The body does not validate: no role with images and no `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), or a `postPrompt` over 4,000 characters. Also an invalid `origin`. |
 | `400` | `raw_reference_token` | A role's `name` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
 | `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |

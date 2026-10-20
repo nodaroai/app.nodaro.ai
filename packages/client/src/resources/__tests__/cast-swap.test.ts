@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClient, StaticTokenAuth, type CastSwapParams } from "../../index.js"
+import { createClient, StaticTokenAuth, type CastSwapEstimate, type CastSwapParams } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
   return Promise.resolve({ ok: true, status, json: async () => body } as unknown as Response)
@@ -79,12 +79,36 @@ describe("castSwap resource", () => {
     expect(out).toEqual({ jobId: "job-1", deduped: true })
   })
 
+  it("run posts pet and product roles, the resolution and the preparation switch unchanged", async () => {
+    const v1: CastSwapParams = {
+      videoUrl: "https://cdn.example.com/clip.mp4",
+      roles: [
+        { kind: "person", name: "the runner", images: ["https://cdn.example.com/me.png"], hair: "original" },
+        { kind: "pet", name: "the dog", images: ["https://cdn.example.com/dog.png"], coat: "original" },
+        { kind: "product", name: "the can", images: ["https://cdn.example.com/can.png"], shape: "new", finish: "original" },
+        { kind: "pet", name: "the cat", images: null },
+      ],
+      resolution: "1080p",
+      draft: false,
+      prepareReferences: false,
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-2" }, 202))
+    const client = make(fetchMock)
+
+    await expect(client.castSwap.run(v1)).resolves.toEqual({ jobId: "job-2" })
+
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual(v1)
+  })
+
   it("estimate posts to /v1/cast-swap/estimate", async () => {
-    const estimate = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7 }, settlesLower: true }
+    const estimate = { totalCredits: 15, breakdown: { castSwap: 5, seedance: 7, references: 3 }, settlesLower: true }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
     const client = make(fetchMock)
 
-    await expect(client.castSwap.estimate(params)).resolves.toEqual(estimate)
+    const out: CastSwapEstimate = await client.castSwap.estimate(params)
+    expect(out).toEqual(estimate)
+    expect(out.breakdown.references).toBe(3)
 
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/estimate")
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }

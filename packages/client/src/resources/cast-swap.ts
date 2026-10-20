@@ -1,8 +1,16 @@
 import type { NodaroClientCore } from "../core.js"
 
 /**
- * Cast Swap — replace the people and/or the location in a short video with
- * your own references, keeping its motion, framing, timing and sound.
+ * Cast Swap — replace the people, pets, products and/or the location in a
+ * short video with your own references, keeping its motion, framing, timing
+ * and sound (the clip's audio is kept, and the result is the clip's length).
+ *
+ * Before the video, each person, pet and product role's photos are turned
+ * into one clean reference picture by an image model. This costs extra
+ * credits (`breakdown.references` in the estimate), charged when it runs, even
+ * if the video then fails; it adds about a minute, falls back to your own
+ * photos if it fails, and is turned off with `prepareReferences: false`.
+ * Locations are not prepared.
  *
  * Cloud edition only: `/v1/cast-swap` is served by the cloud plugin and 404s
  * on self-hosted installs. `run()` answers 202 with a job id; follow it with
@@ -15,8 +23,9 @@ import type { NodaroClientCore } from "../core.js"
  * `jobId`. Nothing new is started or charged.
  *
  * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`), before
- * anything is charged: 400 `validation_error` (the body; also a `postPrompt`
- * over 4,000 characters), `raw_reference_token`, `invalid_role_mention`,
+ * anything is charged: 400 `validation_error` (the body: more roles of a kind
+ * than allowed, more than 30 images in all, `draft: true` above 480p, a
+ * `postPrompt` over 4,000 characters), `raw_reference_token`, `invalid_role_mention`,
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
  * `preview_out_of_range`; 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
@@ -24,7 +33,7 @@ import type { NodaroClientCore } from "../core.js"
  * only).
  */
 
-/** Whether a swapped person takes this trait from the references (`"new"`) or keeps the video's (`"original"`). */
+/** Whether a swapped subject takes this trait from the references (`"new"`) or keeps the video's (`"original"`). */
 export type CastSwapTraitSource = "new" | "original"
 
 /** A person in the video to recast. */
@@ -51,16 +60,43 @@ export interface CastSwapLocationRole {
   images: string[] | null
 }
 
-export type CastSwapRole = CastSwapPersonRole | CastSwapLocationRole
+/** An animal in the video to recast. */
+export interface CastSwapPetRole {
+  kind: "pet"
+  /** How the animal is told apart in the video, e.g. `"the dog"`. */
+  name: string
+  /** 0–3 images of ONE animal. Empty or `null` keeps the original animal. */
+  images: string[] | null
+  /** Body (shape, size and build) from the references or the video. Default `"new"`. */
+  body?: CastSwapTraitSource
+  /** Coat (fur, colors and markings) from the references or the video. Default `"new"`. */
+  coat?: CastSwapTraitSource
+}
+
+/** An object in the video to recast. */
+export interface CastSwapProductRole {
+  kind: "product"
+  /** How the object is told apart in the video, e.g. `"the can"`. */
+  name: string
+  /** 0–3 images of ONE product. Empty or `null` keeps the original object. */
+  images: string[] | null
+  /** Shape and proportions from the references or the video. Default `"new"`. */
+  shape?: CastSwapTraitSource
+  /** Finish (colors, materials, label and markings) from the references or the video. Default `"new"`. */
+  finish?: CastSwapTraitSource
+}
+
+export type CastSwapRole = CastSwapPersonRole | CastSwapLocationRole | CastSwapPetRole | CastSwapProductRole
 
 /** The body of `POST /v1/cast-swap` and `POST /v1/cast-swap/estimate`. */
 export interface CastSwapParams {
   /** The source clip, 4–30 seconds. */
   videoUrl: string
   /**
-   * Who and what to swap: at most 6 person roles and at most 1 location role.
-   * A role with no images is skipped (that person or place stays as in the
-   * video). At least one role with images, or a `postPrompt`, is required.
+   * Who and what to swap: at most 6 person roles, 1 location role, 3 pet roles
+   * and 3 product roles, with at most 30 images in all. A role with no images
+   * is skipped (that subject or place stays as in the video). At least one role
+   * with images, or a `postPrompt`, is required.
    */
   roles: CastSwapRole[]
   /**
@@ -78,7 +114,24 @@ export interface CastSwapParams {
   preview?: boolean
   /** Where the preview starts, in seconds. Default 0. */
   previewStart?: number
-  /** Default `"draft"`, the only value accepted today. */
+  /** The output resolution. Default `"480p"`. */
+  resolution?: "480p" | "720p" | "1080p"
+  /**
+   * Render as a draft. Defaults to `true` at 480p and `false` above it; `true`
+   * with `"720p"` or `"1080p"` answers 400 (draft is 480p only).
+   */
+  draft?: boolean
+  /**
+   * Turn each person, pet and product role's photos into one clean reference
+   * picture before the video (extra credits, shown in `breakdown.references`;
+   * about a minute longer; falls back to your own photos if it fails).
+   * Default `true`.
+   */
+  prepareReferences?: boolean
+  /**
+   * `"draft"` means 480p draft.
+   * @deprecated use `resolution` + `draft`.
+   */
   quality?: "draft"
   /** A generation session to file the result in. */
   sessionId?: string
@@ -88,10 +141,14 @@ export interface CastSwapParams {
 
 /** What a run would cost, in credits. */
 export interface CastSwapEstimate {
-  /** The quote in credits: `breakdown.castSwap + breakdown.seedance`. */
+  /** The quote in credits: `breakdown.castSwap + breakdown.seedance + breakdown.references`. */
   totalCredits: number
-  /** `castSwap`: the run itself; `seedance`: the video model it calls. */
-  breakdown: { castSwap: number; seedance: number }
+  /**
+   * `castSwap`: the run itself; `seedance`: the video model it calls;
+   * `references`: preparing the reference pictures (0 when `prepareReferences`
+   * is off or there is nothing to prepare).
+   */
+  breakdown: { castSwap: number; seedance: number; references: number }
   /** `true` when the video is made at Auto length: the final charge is expected to come out lower than this quote. */
   settlesLower: boolean
 }

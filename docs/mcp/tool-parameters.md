@@ -390,17 +390,23 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person roles and 1 location role. At least one role with images, or a post_prompt. |
-| `roles[].kind` | string | yes | One of `person`, `location`. |
-| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person`. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a post_prompt. |
+| `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
+| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person` or `pet` or `product`. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
-| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
 | `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
+| `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
+| `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
-| `quality` | string |  | "draft" (the default and only value today). Always `draft`. |
+| `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Render as a draft, 480p only. Default true at 480p, false above. |
+| `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
+| `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |

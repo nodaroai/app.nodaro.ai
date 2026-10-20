@@ -1130,6 +1130,13 @@ const SUNO_SEPARATE_ANY_AUDIO_BYTES = 864
 // before is carried across.
 const MODIFY_VIDEO_SEEDANCE_REFS_BYTES = 396
 
+// RAISED 2026-10-20 by `cast_swap` taking pet and product roles (`coat`, `shape`, `finish` chips),
+// `resolution`, `draft` and `prepare_references` (the deprecated `quality` kept, its description
+// saying so), and its description naming the reference preparation, and nothing else. No tool was
+// added, so the fixture does NOT move. Measured by this suite on the same tree with and without the
+// change: 479_566 total − 478_015 = 1_551 B; the 103 B of headroom carry across.
+const CAST_SWAP_V1_BYTES = 1_551
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1255,6 +1262,7 @@ export const TOOL_WIRE_BUDGET = {
     RETRY_APP_RUN_BYTES +
     SUNO_SEPARATE_ANY_AUDIO_BYTES +
     MODIFY_VIDEO_SEEDANCE_REFS_BYTES +
+    CAST_SWAP_V1_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +
