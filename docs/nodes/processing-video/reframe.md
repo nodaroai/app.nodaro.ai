@@ -53,7 +53,7 @@ Wherever the editor quotes a price it shows **one summed estimate for the group*
 - in every run confirm — Run, Run selected, Run from here, Run up to here, a single node's run, Render final and Update preview — a **Reframe** row with the group's sum above the run's total (Render final and Update preview also list each node's own row beneath it);
 - in the run totals — the Execute button, the run confirm, the credit check before a run, a published app's quote and listing — the total simply counts all three nodes once. A group is a frame and changes no figure.
 
-The group's figure is the sum of its nodes' own lines from the run's estimate, never a second calculation, so it cannot differ from what the run is gated on. Each line leans high as its node's page describes: before the run, Speaker Frames quotes the clip at its recorded length, as Speaker View does (a 14-second upload: one block, 3<!-- credits: speaker-frames -->), and at its ceiling (130 blocks, 286<!-- credits: speaker-frames@130 -->) only when the clip's length is not known before the run; the run then reserves the clip's own measured frames and charges the frames it sampled.
+The group's figure is the sum of its nodes' own lines from the run's estimate, never a second calculation, so it cannot differ from what the run is gated on. Each line leans high as its node's page describes: before the run, Speaker Frames quotes the clip at its recorded length, as Speaker View does (a 14-second upload: one block, 3<!-- credits: speaker-frames -->), and at 180 minutes on its one camera (22 blocks, 49<!-- credits: speaker-frames@22 -->) only when the clip's length is not known before the run; the run then reserves the clip's own measured frames and charges the frames it sampled.
 
 ## Notes
 

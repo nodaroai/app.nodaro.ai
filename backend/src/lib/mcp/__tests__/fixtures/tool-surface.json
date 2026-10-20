@@ -23,6 +23,7 @@
   "build_ugc_clips",
   "build_ugc_creator",
   "capture_site",
+  "cast_swap",
   "check_balance",
   "clone_studio_production",
   "combine_videos",

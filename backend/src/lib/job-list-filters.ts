@@ -114,9 +114,13 @@ type JobListFilterable<Q> = {
  * Apply every filter to a jobs query whose select carries
  * `jobListFilterSelect(filters)`. `ownerId` is whose favorites and ratings
  * count — the jobs' owner.
+ *
+ * Always, whatever the filters: a child job (`parent_job_id` set — a step a
+ * worker-side handler ran for its parent) is left out. It is shown only
+ * through its parent, as the Library leaves it out (`createAssetFromJob`).
  */
 export function applyJobListFilters<Q extends JobListFilterable<Q>>(query: Q, filters: JobListFilters, ownerId: string): Q {
-  let out = query
+  let out = query.is("parent_job_id", null)
   const { statuses, types, origin, favorited, rating } = filters
   if (statuses && statuses.length > 0) out = statuses.length === 1 ? out.eq("status", statuses[0]!) : out.in("status", statuses)
   if (types && types.length > 0) {

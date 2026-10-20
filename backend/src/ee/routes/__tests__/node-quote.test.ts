@@ -24,7 +24,7 @@ vi.mock("../../../lib/surface-deny.js", async () => {
   return { ...actual, isModelDenied: (m: string) => m === "runway-aleph" }
 })
 
-const probe = vi.hoisted(() => ({ probeMediaDuration: vi.fn(async () => 10) }))
+const probe = vi.hoisted(() => ({ probeMediaDuration: vi.fn(async (_url?: unknown): Promise<number> => 10) }))
 vi.mock("../../../providers/video/ffmpeg-utils.js", async () => {
   const actual = await vi.importActual<typeof import("../../../providers/video/ffmpeg-utils.js")>("../../../providers/video/ffmpeg-utils.js")
   return { ...actual, probeMediaDuration: probe.probeMediaDuration }
@@ -218,6 +218,107 @@ describe("/v1/video-to-video with a Seedance edit model", () => {
     await app.close()
   })
 
+  const CLIP2 = "https://cdn.example.com/sky.mp4"
+  const HAT = "https://cdn.example.com/hat.png"
+  const COAT = "https://cdn.example.com/coat.png"
+  const SONG = "https://cdn.example.com/song.mp3"
+
+  it("takes every reference: extra clips after the source, images after referenceImageUrl, audio as sent", async () => {
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST", url: "/v1/video-to-video",
+      payload: {
+        ...EDIT,
+        prompt: "put the sky of {video:2} behind her, the hat of {image:1} and the coat of {image:2} on her, to the beat of {audio:1}, like {video:5}",
+        referenceImageUrl: HAT, referenceImageUrls: [COAT], referenceVideoUrls: [CLIP2], referenceAudioUrls: [SONG],
+      },
+    })
+    expect(res.statusCode, res.body).toBe(200)
+    const [name, payload] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+    expect(name).toBe("text-to-video")
+    expect(payload).toMatchObject({
+      referenceVideoUrls: [CLIP, CLIP2],
+      referenceImageUrls: [HAT, COAT],
+      referenceAudioUrls: [SONG],
+    })
+    // The source stays @video_1; the extras number on from it; an
+    // out-of-range token degrades to its label (nothing, unlabelled).
+    expect(payload.prompt).toBe(
+      "edit @video_1 as follows:\nput the sky of @video_2 behind her, the hat of @image_1 and the coat of @image_2 on her, to the beat of @audio_1, like",
+    )
+    await app.close()
+  })
+
+  it("quotes an edit with extra clips and images at exactly what the run reserves, expecting the SOURCE clip's length", async () => {
+    // The extra clip is longer than the source: an edit still renders the source.
+    probe.probeMediaDuration.mockImplementation(async (url: unknown) => (url === CLIP2 ? 12 : 10))
+    try {
+      const { quote, reserved } = await quoteThenRun("video-to-video", {
+        ...EDIT, referenceImageUrl: HAT, referenceImageUrls: [COAT], referenceVideoUrls: [CLIP2],
+      })
+      expect(quote.reserve).toBe(reserved)
+      // input 10 + 12, output the source's 10 s
+      expect(quote.expected).toBe(mk(Math.ceil(42.5 * 32)))
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
+  it("refuses the reference lists on a model that is not a Seedance edit", async () => {
+    const app = await buildApp()
+    for (const extra of [{ referenceImageUrls: [HAT] }, { referenceVideoUrls: [CLIP2] }, { referenceAudioUrls: [SONG] }]) {
+      const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { videoUrl: CLIP, provider: "wan", prompt: "x", ...extra } })
+      expect(res.statusCode, JSON.stringify(extra)).toBe(400)
+    }
+    expect(reserveSpy).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it("leaves the lane's own caps in charge — on the run AND the quote: the source counts as one of the videos", async () => {
+    const { SEEDANCE_2_5_REF_LIMITS: CAP } = await import("@nodaro/shared/models")
+    const many = (n: number, ext: string) => Array.from({ length: n }, (_, i) => `https://cdn.example.com/r${i}.${ext}`)
+    const app = await buildApp()
+    const overCap = [
+      { referenceVideoUrls: many(CAP.videos, "mp4") },
+      { referenceImageUrl: HAT, referenceImageUrls: many(CAP.images, "png") },
+      { referenceAudioUrls: many(CAP.audio + 1, "mp3") },
+    ]
+    for (const extra of overCap) {
+      const run = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...EDIT, ...extra } })
+      expect(run.statusCode, `run ${Object.keys(extra).join()}`).toBe(400)
+      const quote = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-to-video", params: { ...EDIT, ...extra } } })
+      expect(quote.statusCode, `quote ${Object.keys(extra).join()}`).toBe(400)
+    }
+    // At each cap is fine (ten 3 s clips, inside the model's 30 s total).
+    probe.probeMediaDuration.mockImplementation(async () => 3)
+    const atCap = await app.inject({
+      method: "POST", url: "/v1/quote",
+      payload: { type: "video-to-video", params: { ...EDIT, referenceVideoUrls: many(CAP.videos - 1, "mp4"), referenceImageUrl: HAT, referenceImageUrls: many(CAP.images - 1, "png"), referenceAudioUrls: many(CAP.audio, "mp3") } },
+    })
+    probe.probeMediaDuration.mockImplementation(async () => 10)
+    expect(atCap.statusCode, atCap.body).toBe(200)
+    expect(reserveSpy).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it("refuses an over-long reference audio before anything is reserved — run and quote", async () => {
+    probe.probeMediaDuration.mockImplementation(async (url: unknown) => (url === SONG ? 60 : 10))
+    try {
+      const app = await buildApp()
+      const body = { ...EDIT, referenceAudioUrls: [SONG] }
+      const run = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: body })
+      expect(run.statusCode, run.body).toBe(400)
+      const quote = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-to-video", params: body } })
+      expect(quote.statusCode, quote.body).toBe(400)
+      expect(quote.json().error.code).toBe(run.json().error.code)
+      expect(reserveSpy).not.toHaveBeenCalled()
+      await app.close()
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
   it("refuses an edit with no instruction before anything is reserved", async () => {
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { videoUrl: CLIP, provider: "seedance-2-5", prompt: "  " } })
@@ -257,7 +358,7 @@ describe("POST /v1/quote refusals", () => {
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "generate-music", params: {} } })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error).toMatchObject({ code: "quote_unsupported", supported: ["text-to-video", "generate-video", "video-to-video"] })
+    expect(res.json().error).toMatchObject({ code: "quote_unsupported", supported: ["text-to-video", "generate-video", "video-to-video", "video-upscale"] })
     await app.close()
   })
 

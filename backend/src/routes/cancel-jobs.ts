@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
-import { cancelOwnedJob, refundReservedHolds } from "../lib/cancel-job.js"
+import { cancelOwnedJob, cancelRunningChildJobs, refundReservedHolds } from "../lib/cancel-job.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 
@@ -50,18 +50,15 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
             break
         }
 
-        // A parent that spawned an analysis child (POST /v1/llm/structured/jobs
-        // with videoUrl) takes a STILL-RUNNING child with it: the child's row
-        // and reservation are the user's too, and nobody will draft from an
-        // analysis whose draft was cancelled. A finished child is left alone
-        // (anything but "cancelled" here is fine — Draft again reuses it), and
-        // a child already out at the provider is left to finish, like any
-        // in-flight job.
-        if (result.analysisJobId) {
-          await cancelOwnedJob(result.analysisJobId, userId).catch((err) =>
-            console.error(`[cancel-job] child ${result.analysisJobId} of ${jobId}:`, err),
-          )
-        }
+        // The parent takes its STILL-RUNNING children with it: the analysis
+        // child a POST /v1/llm/structured/jobs parent spawned with videoUrl
+        // (`input_data.analysisJobId` — nobody will draft from an analysis
+        // whose draft was cancelled) and every job whose `parent_job_id` names
+        // it. Each goes through the same single-job cancel; a finished child
+        // is left alone (Draft again reuses a finished analysis), and one
+        // already out at the provider is left to finish, like any in-flight
+        // job. Best effort: a child's failure never fails this cancel.
+        await cancelRunningChildJobs(jobId, userId, { analysisJobId: result.analysisJobId })
 
         invalidateBalanceCache(userId)
         return { success: true, cancelled: 1, inFlight: false }

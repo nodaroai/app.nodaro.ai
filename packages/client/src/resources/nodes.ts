@@ -855,6 +855,9 @@ export class NodesResource {
   quote(type: "text-to-video", params: TextToVideoParams): Promise<NodeQuote>
   quote(type: "generate-video", params: GenerateVideoParams): Promise<NodeQuote>
   quote(type: "video-to-video", params: VideoToVideoParams): Promise<NodeQuote>
+  /** A Seedance 2.5 draft's 1080p finalize (`seedance-2-5-hd`) is priced from
+   *  the draft itself, including the clips it was made with. */
+  quote(type: "video-upscale", params: VideoUpscaleParams): Promise<NodeQuote>
   quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
   async quote(type: string, params: Record<string, unknown> = {}): Promise<NodeQuote> {
     const res = await this.client.request<{ data: NodeQuote }>("POST", "/v1/quote", { body: { type, params } })

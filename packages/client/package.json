@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/sdk",
-  "version": "2.33.0",
+  "version": "2.34.0",
   "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
@@ -34,6 +34,11 @@
       "types": "./dist/entries/billing.d.ts",
       "import": "./dist/entries/billing.js",
       "require": "./dist/entries/billing.cjs"
+    },
+    "./cast-swap": {
+      "types": "./dist/entries/cast-swap.d.ts",
+      "import": "./dist/entries/cast-swap.js",
+      "require": "./dist/entries/cast-swap.cjs"
     },
     "./catalogs": {
       "types": "./dist/entries/catalogs.d.ts",

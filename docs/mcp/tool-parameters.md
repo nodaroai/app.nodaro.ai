@@ -383,6 +383,28 @@ Needs `workflows:execute`.
 | `max_stills` | integer |  | How many section stills at most (3–8, default 8). From 3 to 8. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `cast_swap`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) | yes | The source clip, 4–30 s. |
+| `roles` | object[] | yes | At most 6 person roles and 1 location role. At least one role with images, or a post_prompt. |
+| `roles[].kind` | string | yes | One of `person`, `location`. |
+| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person`. |
+| `roles[].images` | string (URL)[] or null |  | At most 3 items. |
+| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
+| `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
+| `preview` | boolean |  | true = render 4 s from preview_start. |
+| `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
+| `quality` | string |  | "draft" (the default and only value today). Always `draft`. |
+| `session_id` | string |  | A generation session to file the result in. At least 1 character. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `chat_pipeline_stage`
 
 Needs `pipelines:approve` · Nodaro Cloud only.
@@ -2101,6 +2123,8 @@ Needs `workflows:execute`.
 | `multi_shots` | boolean |  | Wan Flash only — allow multi-shot scene changes. |
 | `reference_image_url` | string (URL) |  | Runway Aleph only — style reference image. |
 | `reference_image_urls` | string (URL)[] |  | seedance-2-5 only — cite as {image:N} in the prompt. At most 30 items. |
+| `reference_video_urls` | string (URL)[] |  | seedance-2-5 only — extra clips: the source is {video:1}, these are {video:2}, {video:3}, … (all clips billed by length). At most 9 items. |
+| `reference_audio_urls` | string (URL)[] |  | seedance-2-5 only — cite as {audio:N} in the prompt. At most 10 items. |
 | `seed` | integer |  | At least 0. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
 

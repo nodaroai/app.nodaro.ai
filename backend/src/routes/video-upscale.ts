@@ -23,7 +23,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -100,26 +100,30 @@ const resolveCreditModel = (req: FastifyRequest): string =>
   req.seedanceDraftFinalize?.creditId ??
   upscaleCreditModel(((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? "topaz")
 
-// The seeded row prices every upscale — including a finalize of a draft made
-// without a reference video (`seedance-2-5-hd:{N}s`, DB-first).
-const seededGuard = creditGuard(resolveCreditModel)
-// A finalize of a reference-video draft bills input + output seconds, which the
-// per-second `-ref` row cannot express alone (same as the generation lane).
-const refDraftGuard = creditGuard(resolveCreditModel, {
-  computeCredits: async (_body, req) => {
-    const base = req.seedanceDraftFinalize ? await seedanceDraftFinalizeBaseCredits(req.seedanceDraftFinalize) : undefined
-    if (base === undefined) throw new Error("seedance draft finalize priced without a resolved reference-video draft")
-    return base
+/**
+ * Everything /v1/video-upscale prices a request with — registered as the
+ * route's preHandlers and run as-is by `POST /v1/quote` (one copy). The seeded
+ * row prices every upscale, including a finalize of a draft made without a
+ * reference video (`seedance-2-5-hd:{N}s`, DB-first). A finalize of a
+ * reference-video draft bills input + output seconds, which the per-second
+ * `-ref` row cannot express alone (same as the generation lane).
+ */
+export const videoUpscalePricing: RoutePricing = {
+  prechecks: [seedanceDraftFinalizePreHandler],
+  modelResolver: resolveCreditModel,
+  opts: {
+    computeCredits: async (_body, req) => {
+      if (!req.seedanceDraftFinalize?.hasRefVideo) return undefined
+      const base = await seedanceDraftFinalizeBaseCredits(req.seedanceDraftFinalize)
+      if (base === undefined) throw new Error("seedance draft finalize priced without a resolved reference-video draft")
+      return base
+    },
   },
-})
-
-async function videoUpscaleCreditGuard(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  return req.seedanceDraftFinalize?.hasRefVideo ? refDraftGuard(req, reply) : seededGuard(req, reply)
 }
 
 export async function videoUpscaleRoutes(app: FastifyInstance) {
   app.post("/v1/video-upscale", {
-    preHandler: [seedanceDraftFinalizePreHandler, videoUpscaleCreditGuard],
+    preHandler: [...videoUpscalePricing.prechecks, creditGuard(videoUpscalePricing.modelResolver, videoUpscalePricing.opts)],
   }, async (req, reply) => {
     const parsed = videoUpscaleBody.safeParse(req.body)
     if (!parsed.success) {

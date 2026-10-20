@@ -1,0 +1,133 @@
+import type { NodaroClientCore } from "../core.js"
+
+/**
+ * Cast Swap — replace the people and/or the location in a short video with
+ * your own references, keeping its motion, framing, timing and sound.
+ *
+ * Cloud edition only: `/v1/cast-swap` is served by the cloud plugin and 404s
+ * on self-hosted installs. `run()` answers 202 with a job id; follow it with
+ * `client.jobs.get(jobId)` / `client.jobs.getStatus(jobId)` like any other job.
+ *
+ * Repeats: pass `{ idempotencyKey }` to `run()` and it is sent as the
+ * `Idempotency-Key` header. A repeat with the same key within the credit
+ * guard's dedup window (about 10 s) answers 200 `{ jobId, deduped: true }` with
+ * an `X-Dedup-Hit` header; a later one answers 202 with the first run's
+ * `jobId`. Nothing new is started or charged.
+ *
+ * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`), before
+ * anything is charged: 400 `validation_error` (the body; also a `postPrompt`
+ * over 4,000 characters), `raw_reference_token`, `invalid_role_mention`,
+ * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
+ * `preview_out_of_range`; 401; 402 `insufficient_credits` (`run()` only); 404
+ * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
+ * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
+ * only).
+ */
+
+/** Whether a swapped person takes this trait from the references (`"new"`) or keeps the video's (`"original"`). */
+export type CastSwapTraitSource = "new" | "original"
+
+/** A person in the video to recast. */
+export interface CastSwapPersonRole {
+  kind: "person"
+  /** How the person is told apart in the video, e.g. `"the woman that attacks"`. */
+  name: string
+  /** 0–3 images of ONE person. Empty or `null` keeps the original person. */
+  images: string[] | null
+  /** Body from the references or the video. Default `"new"`. */
+  body?: CastSwapTraitSource
+  /** Outfit from the references or the video. Default `"new"`. */
+  outfit?: CastSwapTraitSource
+  /** Hairstyle and haircut from the references or the video. Default `"new"`. */
+  hair?: CastSwapTraitSource
+}
+
+/** The place the video happens in. */
+export interface CastSwapLocationRole {
+  kind: "location"
+  /** How the place is named. Default `"the setting"`. */
+  name?: string
+  /** 0–3 images of ONE place. Empty or `null` keeps the original place. */
+  images: string[] | null
+}
+
+export type CastSwapRole = CastSwapPersonRole | CastSwapLocationRole
+
+/** The body of `POST /v1/cast-swap` and `POST /v1/cast-swap/estimate`. */
+export interface CastSwapParams {
+  /** The source clip, 4–30 seconds. */
+  videoUrl: string
+  /**
+   * Who and what to swap: at most 6 person roles and at most 1 location role.
+   * A role with no images is skipped (that person or place stays as in the
+   * video). At least one role with images, or a `postPrompt`, is required.
+   */
+  roles: CastSwapRole[]
+  /**
+   * Extra instructions in your own words, at most 4,000 characters. Mention a
+   * role as `{role:N}`, where N is its 1-based position in `roles`
+   * (`{role:1}` is `roles[0]`; empty roles count).
+   *
+   * The route answers 400, before charging, for an N outside 1..`roles.length`,
+   * for a raw `{image:` / `{video:` / `{audio:` token in the post prompt or a
+   * role's `name`, for a clip outside 4–30 s, and for a preview past the clip's
+   * end (`previewStart + 4` > its length).
+   */
+  postPrompt?: string
+  /** `true` runs on 4 seconds of the clip, starting at `previewStart`: a cheap check of the roles and choices. */
+  preview?: boolean
+  /** Where the preview starts, in seconds. Default 0. */
+  previewStart?: number
+  /** Default `"draft"`, the only value accepted today. */
+  quality?: "draft"
+  /** A generation session to file the result in. */
+  sessionId?: string
+  /** The client app that sent the run (stored on the job as `input_data.origin`). */
+  origin?: string
+}
+
+/** What a run would cost, in credits. */
+export interface CastSwapEstimate {
+  /** The quote in credits: `breakdown.castSwap + breakdown.seedance`. */
+  totalCredits: number
+  /** `castSwap`: the run itself; `seedance`: the video model it calls. */
+  breakdown: { castSwap: number; seedance: number }
+  /** `true` when the video is made at Auto length: the final charge is expected to come out lower than this quote. */
+  settlesLower: boolean
+}
+
+/** Per-call options for {@link CastSwapResource.run}. */
+export interface CastSwapRunOptions {
+  /**
+   * Sent as the `Idempotency-Key` header, unchanged (the SDK checks nothing;
+   * an empty string sends no header, like no key).
+   * The server takes 8–200 characters and answers 400 for any other length.
+   * Reuse the same value when retrying the same run: within about 10 s the
+   * repeat answers 200 `{ jobId, deduped: true }`, later 202 with the first
+   * run's `jobId`. Nothing new is started or charged.
+   */
+  idempotencyKey?: string
+}
+
+export class CastSwapResource {
+  constructor(private client: NodaroClientCore) {}
+
+  /**
+   * Start a Cast Swap run (`POST /v1/cast-swap`, 202 `{ jobId }`). Returns the
+   * job to follow. With `options.idempotencyKey` (sent as the
+   * `Idempotency-Key` header; 8–200 characters, else 400) a repeat with the
+   * same key within about 10 s answers 200 `{ jobId, deduped: true }`, a later
+   * one 202 with the first run's `jobId`; nothing new starts.
+   */
+  run(params: CastSwapParams, options?: CastSwapRunOptions): Promise<{ jobId: string; deduped?: boolean }> {
+    return this.client.request("POST", "/v1/cast-swap", {
+      body: params,
+      ...(options?.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+    })
+  }
+
+  /** Quote a run before starting it (`POST /v1/cast-swap/estimate`); spends nothing. */
+  estimate(params: CastSwapParams): Promise<CastSwapEstimate> {
+    return this.client.request("POST", "/v1/cast-swap/estimate", { body: params })
+  }
+}

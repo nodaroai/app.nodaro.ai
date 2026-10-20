@@ -72,12 +72,30 @@ on the node is dispatched as a **text-to-video** job in edit shape:
 
 **From the API or SDK**, send it to `POST /v1/video-to-video` like any other
 model of this node — `{ videoUrl, prompt, provider: "seedance-2-5",
-resolution?, draft?, audio?, seed?, referenceImageUrl? }`. The server builds the
-edit body above itself (`referenceImageUrl` becomes `@image_1`, `audio` the
-native sound) and runs it on the same Seedance reference-video lane, so the
-price, the clip-length check and the settlement are the ones described here.
-`480p` and `draft` are accepted for this model only. Price it first with
-`POST /v1/quote` (`type: "video-to-video"`).
+resolution?, draft?, audio?, seed?, referenceImageUrl?, referenceImageUrls?,
+referenceVideoUrls?, referenceAudioUrls? }`. The server builds the edit body
+above itself (`audio` becomes the native sound) and runs it on the same Seedance
+reference-video lane, so the price, the clip-length check and the settlement
+are the ones described here. `480p`, `draft` and the three reference lists are
+accepted for this model only (any other model answers `400`). Price it first
+with `POST /v1/quote` (`type: "video-to-video"`).
+
+How the references are numbered, for `{video:N}` / `{image:N}` / `{audio:N}` in
+the prompt:
+
+| Field | Tokens |
+|---|---|
+| `videoUrl` (the clip being edited) | `{video:1}` |
+| `referenceVideoUrls` (extra clips — do not repeat `videoUrl`) | `{video:2}`, `{video:3}`, … |
+| `referenceImageUrl`, then `referenceImageUrls` | `{image:1}`, `{image:2}`, … (the list starts at `{image:1}` when `referenceImageUrl` is not sent) |
+| `referenceAudioUrls` | `{audio:1}`, `{audio:2}`, … |
+
+The caps are the model's own: 10 clips in all, the source included, 30 images
+and 10 audio clips on Seedance 2.5; a body over a cap, or a reference audio
+clip the model would refuse (too long), is answered `400` before anything is
+reserved, and `POST /v1/quote` answers it the same way. A token past the end of its list is dropped
+(its label is kept when it has one). Every clip — the source and the extras — is
+measured and billed as input seconds (see the credits below).
 
 **The source clip must be 4–30 seconds.** Shorter or longer clips are rejected
 by the provider.
@@ -118,7 +136,10 @@ on the `-ref` ladder for the chosen resolution, as one charge rounded up.
 
 Duration is `Auto`, so the run is **reserved at the model's longest clip (30 s)**
 and **refunded down to the length actually delivered** — which, for an edit, is
-the source clip's own length. Your balance must cover the reservation for the
+the source clip's own length. Extra reference clips add their seconds to the
+input side; the output is still the source clip's length, even when an extra
+clip is longer (a quote's `expected` says so; the reservation still covers the
+longest clip). Your balance must cover the reservation for the
 run to start.
 
 The node's price and its Run button show **exactly that reservation**: the

@@ -5123,10 +5123,11 @@ export function graphPricingUnits(
   edges: ReadonlyArray<EstimateEdge> | undefined,
   rerunIds: ReadonlySet<string>,
 ): number {
-  // Speaker Frames: the blocks of the edit wired in when it is known now,
-  // else the 180 min × 6 cameras ceiling (`speakerFramesEstimateBlocks`, the
-  // one rule the editor reads too). No wiring sent: the ceiling, unless the
-  // node's own edit gives the frames.
+  // Speaker Frames: the blocks of the edit wired in when it is known now; a
+  // length not known before the run, 180 min on each camera the run will
+  // frame (at most 6); else the 180 min × 6 cameras ceiling
+  // (`speakerFramesEstimateBlocks`, the one rule the editor reads too). No
+  // wiring sent: the ceiling, unless the node's own edit gives the frames.
   if (node.type === "speaker-frames") {
     const self = { id: node.id ?? "", type: node.type, data: node.data }
     if (edges === undefined || !node.id) {

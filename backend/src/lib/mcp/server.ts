@@ -20,6 +20,7 @@ import { registerCreatureTools } from "./tools/creatures.js"
 import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerRecastTools } from "./tools/recast.js"
+import { registerCastSwapTools } from "./tools/cast-swap.js"
 import { registerStudioProductionTools } from "./tools/studio-production.js"
 import { registerUgcTools } from "./tools/ugc.js"
 import { registerResearchTools } from "./tools/research.js"
@@ -209,6 +210,9 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     // Recast authored-script lane (spec 2026-08-06 §5): Cloud-only — the
     // routes these verbs call live in the cloud plugin and 404 off-cloud.
     registerRecastTools({ server, session, fastify: opts.fastify })
+    // Cast Swap (quote, then confirm): Cloud-only for the same reason — the
+    // `/v1/cast-swap` routes are the cloud plugin's.
+    registerCastSwapTools({ server, session, fastify: opts.fastify })
     // Studio productions: Cloud-only for the same reason — the
     // `/v1/studio/productions/*` routes these tools dispatch to are served by
     // the cloud plugin, so off-cloud the whole family answers `not_available`.

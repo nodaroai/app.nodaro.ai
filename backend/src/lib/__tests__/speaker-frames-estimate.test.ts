@@ -4,8 +4,10 @@
  * 2026-10-16): `speakerFramesEstimateBlocks`, the one rule the editor's pill,
  * Run button, confirm and precheck and the server's run quote and listing all
  * read. It leans high: the edit wired in when it is known now, a video's
- * recorded length, else the ceiling of 180 minutes on each of 6 cameras
- * (130 blocks). The reserve counts
+ * recorded length; a length not known before the run is 180 minutes on each
+ * camera the run will frame (decided 2026-10-20: one for a video, the cameras
+ * a plan or map reads, at most 6); else the ceiling of 180 minutes on each of
+ * 6 cameras (130 blocks). The reserve counts
  * the run's own frames on the server, and the charge the frames it sampled.
  */
 import { describe, it, expect, vi } from "vitest"
@@ -16,8 +18,9 @@ vi.mock("@/lib/config.js", async (importOriginal) => ({
 }))
 
 import type { Edl } from "@nodaro/shared/edl"
-import { SPEAKER_FRAMES_CEILING_BLOCKS, editPlanProducerKind, editPlanSourceKind, speakerFramesBlocks, speakerFramesEstimateBlocks } from "@nodaro/render-rules"
+import { MULTICAM_SPEAKER_MAP_TYPE, SPEAKER_FRAMES_CEILING_BLOCKS, editPlanProducerKind, editPlanSourceKind, speakerFramesBlocks, speakerFramesCeilingBlocks, speakerFramesEstimateBlocks } from "@nodaro/render-rules"
 import { CreditsService } from "../../ee/billing/credits.js"
+import { speakerFramesReserveFrames } from "../speaker-frames-plan.js"
 
 const MIC = { id: "mic", url: "https://media.test/mic.wav", kind: "audio" as const, role: "master-audio" }
 const cam = (id: string) => ({ id, url: `https://media.test/${id}.mp4`, kind: "video" as const })
@@ -75,9 +78,9 @@ describe("speakerFramesEstimateBlocks", () => {
     expect(speakerFramesEstimateBlocks(sf(), [huge, sf()], videoIn("up"), NONE)).toBe(22)
   })
 
-  it("a video whose length is not known before the run: the ceiling", () => {
+  it("a video whose length is not known before the run: 180 minutes on its one camera, 22 blocks (decided 2026-10-20)", () => {
     const link = { id: "up", type: "upload-video", data: { url: "https://media.test/clip.mp4" } }
-    expect(speakerFramesEstimateBlocks(sf(), [link, sf()], [{ source: "up", target: "sf", targetHandle: "video" }], NONE)).toBe(130)
+    expect(speakerFramesEstimateBlocks(sf(), [link, sf()], [{ source: "up", target: "sf", targetHandle: "video" }], NONE)).toBe(22)
   })
 
   it("nothing wired: an edit set on the node itself, else one block (the run is refused before it reserves)", () => {
@@ -146,9 +149,9 @@ describe("an edit a plan is about to make (decided 2026-10-17)", () => {
     expect(speakerFramesEstimateBlocks(fr, nodes, edges, PLAN)).toBe(speakerFramesBlocks((180 * 60 + 4) * 2)) // 22
   })
 
-  it("a recording of unknown length, or a plan with no video source, still prices the ceiling", () => {
+  it("a recording of unknown length: 180 minutes on its one camera (decided 2026-10-20); a plan with no video source still prices the ceiling", () => {
     const edges = [wire("v", "video", "plan", "sources"), ...heard("v"), toFrames]
-    expect(speakerFramesEstimateBlocks(fr, [up("v"), tx, plan(), fr], edges, PLAN)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+    expect(speakerFramesEstimateBlocks(fr, [up("v"), tx, plan(), fr], edges, PLAN)).toBe(22)
     const audioEdges = [wire("v", "audio", "plan", "sources"), ...heard("v", "audio"), toFrames]
     expect(speakerFramesEstimateBlocks(fr, [up("v", 3600, "upload-audio"), tx, plan(), fr], audioEdges, PLAN)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
     expect(speakerFramesEstimateBlocks(fr, [plan(), fr], [toFrames], PLAN)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
@@ -199,7 +202,8 @@ describe("an edit a plan is about to make (decided 2026-10-17)", () => {
       const trim = { id: "t", type: "trim-video", data: { generatedResults: [{ duration: 1800 }] } }
       const nodes = [trim, tx, plan(), fr]
       const edges = [wire("t", "video", "plan", "sources"), ...heard("t"), toFrames]
-      expect(speakerFramesEstimateBlocks(fr, nodes, edges, new Set(["t", "tx", "plan"]))).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+      // Its length this run is not known: 180 minutes on the plan's one camera.
+      expect(speakerFramesEstimateBlocks(fr, nodes, edges, new Set(["t", "tx", "plan"]))).toBe(22)
       // Held (not running again), it hands on what it holds: 1,800 s → 3,608 frames, 4 blocks.
       expect(speakerFramesEstimateBlocks(fr, nodes, edges, PLAN)).toBe(4)
     })
@@ -210,7 +214,7 @@ describe("an edit a plan is about to make (decided 2026-10-17)", () => {
       expect(speakerFramesEstimateBlocks(fr, nodes, edges, new Set(["v", "tx", "plan", "sf"]))).toBe(8)
     })
 
-    it("a transcript not made by a Transcribe here: the ceiling (the plugin plans over the transcript's end)", () => {
+    it("a transcript not made by a Transcribe here: the ceiling (the plugin plans over the transcript's end, which no recording bounds)", () => {
       const doc = { id: "doc", type: "text-prompt", data: { text: "{}" } }
       const nodes = [up("v", 3600), doc, plan(), fr]
       const edges = [wire("v", "video", "plan", "sources"), wire("doc", "text", "plan", "transcript"), toFrames]
@@ -218,10 +222,19 @@ describe("an edit a plan is about to make (decided 2026-10-17)", () => {
       expect(speakerFramesEstimateBlocks(fr, [up("v", 3600), plan(), fr], [wire("v", "video", "plan", "sources"), toFrames], PLAN)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
     })
 
-    it("a Transcribe over media of unknown length: the ceiling", () => {
+    it("a Transcribe over media of unknown length that is not a source: the ceiling (its transcript may outrun every camera)", () => {
       const nodes = [up("v", 3600), up("other"), tx, plan(), fr]
       const edges = [wire("v", "video", "plan", "sources"), ...heard("other"), toFrames]
       expect(speakerFramesEstimateBlocks(fr, nodes, edges, PLAN)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+    })
+
+    it("length unknown: 180 minutes a camera only when the Transcribe hears the plan's master; a non-master recording keeps the ceiling", () => {
+      const nodes = [up("a"), up("m", undefined, "upload-audio"), tx, plan({ sourceConfig: { m: { role: "master-audio" } } }), fr]
+      const sources = [wire("a", "video", "plan", "sources"), wire("m", "audio", "plan", "sources")]
+      // Heard from the master (the run refuses a master over 180 minutes): the one camera, 22 blocks.
+      expect(speakerFramesEstimateBlocks(fr, nodes, [...sources, ...heard("m", "audio"), toFrames], PLAN)).toBe(22)
+      // Heard from a camera that is not the master: it may run longer than the master, so the ceiling.
+      expect(speakerFramesEstimateBlocks(fr, nodes, [...sources, ...heard("a"), toFrames], PLAN)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
     })
 
     it("a Transcribe that does not run again: the end of the transcript it holds, not its recording's length now", () => {
@@ -239,7 +252,7 @@ describe("an edit a plan is about to make (decided 2026-10-17)", () => {
       expect(speakerFramesEstimateBlocks(fr, nodes, edges, new Set(["tx", "plan", "sf"]))).toBe(8)
     })
 
-    it("a Transcribe that does not run again and holds no readable transcript: the ceiling", () => {
+    it("a Transcribe that does not run again and holds no readable transcript: the ceiling (what it heard is not known)", () => {
       const nodes = [up("v", 3600), tx, plan(), fr]
       const edges = [wire("v", "video", "plan", "sources"), ...heard("v"), toFrames]
       expect(speakerFramesEstimateBlocks(fr, nodes, edges, new Set(["plan"]))).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
@@ -281,8 +294,8 @@ describe("an edit a plan is about to make (decided 2026-10-17)", () => {
 describe("the server's run quote reads the same rule", () => {
   const up = { id: "up", type: "upload-video", data: { url: "https://media.test/clip.mp4" } }
 
-  it("a video of unknown length quotes the 130-block ceiling at 2 a block; a recorded one its own blocks", () => {
-    expect(CreditsService.estimateWorkflowBaseCredits([up, sf()], [{ source: "up", target: "sf", targetHandle: "video" }])).toBe(260)
+  it("a video of unknown length quotes its one camera's 22 blocks at 2 a block (decided 2026-10-20); a recorded one its own blocks", () => {
+    expect(CreditsService.estimateWorkflowBaseCredits([up, sf()], [{ source: "up", target: "sf", targetHandle: "video" }])).toBe(44)
     const recorded = { ...up, data: { ...up.data, duration: 14 } }
     expect(CreditsService.estimateWorkflowBaseCredits([recorded, sf()], [{ source: "up", target: "sf", targetHandle: "video" }])).toBe(2)
   })
@@ -294,5 +307,173 @@ describe("the server's run quote reads the same rule", () => {
     expect(rerunsNothing).toBeGreaterThanOrEqual(260)
     expect(CreditsService.estimateWorkflowBaseCredits([sf()], undefined)).toBe(260)
     expect(CreditsService.estimateWorkflowBaseCredits([sf({ edl: TWO_CAMS })], undefined)).toBe(6)
+  })
+})
+
+describe("a length not known before the run counts the cameras the run will frame (decided 2026-10-20)", () => {
+  const up = (id: string, type = "upload-video") => ({ id, type, data: {} })
+  const fr = sf()
+  const wire = (source: string, sourceHandle: string, target: string, targetHandle: string) => ({ source, sourceHandle, target, targetHandle })
+  const tx = { id: "tx", type: "transcribe", data: {} }
+  const camIds = (n: number) => Array.from({ length: n }, (_, i) => `c${i + 1}`)
+  /** An Edit Plan over `n` cameras (and a mic) of unknown length, about to run. */
+  const planGraph = (n: number) => {
+    const nodes = [...camIds(n).map((id) => up(id)), up("mic", "upload-audio"), tx, { id: "plan", type: "edit-plan", data: { sourceConfig: { mic: { role: "master-audio" } } } }, fr]
+    const edges = [
+      ...camIds(n).map((id) => wire(id, "video", "plan", "sources")),
+      wire("mic", "audio", "plan", "sources"),
+      wire("mic", "audio", "tx", "audio"),
+      wire("tx", "json", "plan", "transcript"),
+      wire("plan", "edl", "sf", "edl"),
+    ]
+    return { nodes, edges, rerun: new Set(["tx", "plan", "sf"]) }
+  }
+  /** A Speaker Map over `n` cameras (and a mic) of unknown length, about to run. */
+  const mapGraph = (n: number) => {
+    const nodes = [...camIds(n).map((id) => up(id)), up("mic", "upload-audio"), { id: "map", type: MULTICAM_SPEAKER_MAP_TYPE, data: {} }, fr]
+    const edges = [
+      ...camIds(n).map((id) => wire(id, "video", "map", "sources")),
+      wire("mic", "audio", "map", "sources"),
+      wire("map", "edl", "sf", "edl"),
+    ]
+    return { nodes, edges, rerun: new Set(["map", "sf"]) }
+  }
+  /** The longest edit the run can hold for: 180 minutes kept on `n` cameras, its 2 s margins unclamped. */
+  const longestEdit = (n: number): Edl =>
+    ({
+      version: 1,
+      clock: "master",
+      sources: [MIC, ...camIds(n).map((id) => cam(id))],
+      segments: [{ id: "s0", inMs: 5_000, outMs: 5_000 + 180 * 60_000, video: "c1" }],
+    }) as Edl
+  const noProbe = async (): Promise<number> => {
+    throw new Error("unreadable")
+  }
+  /** The blocks the run reserves for a payload, counted on the server. */
+  const holdBlocks = async (payload: Record<string, unknown>) => speakerFramesBlocks((await speakerFramesReserveFrames(payload, noProbe))!)
+
+  it("the ceiling per camera count: 1 → 22, 2 → 44, 3 → 65, 4 → 87, 5 → 109, 6 → 130, never past 6", () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 12].map(speakerFramesCeilingBlocks)).toEqual([22, 44, 65, 87, 109, 130, 130, 130])
+    // A count that cannot be read is the ceiling (never low).
+    expect([0, -1, 1.5, Number.NaN].map(speakerFramesCeilingBlocks)).toEqual([130, 130, 130, 130])
+  })
+
+  it("an Edit Plan over 1 camera: 22 blocks; over 3 cameras: 65; over 6: 130", () => {
+    for (const [n, blocks] of [[1, 22], [3, 65], [6, 130]] as const) {
+      const g = planGraph(n)
+      expect(speakerFramesEstimateBlocks(fr, g.nodes, g.edges, g.rerun)).toBe(blocks)
+    }
+  })
+
+  it("a Speaker Map over 3 cameras: 65 blocks; through a re-running Camera Switch the same", () => {
+    const g = mapGraph(3)
+    expect(speakerFramesEstimateBlocks(fr, g.nodes, g.edges, g.rerun)).toBe(65)
+    const sw = { id: "sw", type: "camera-switch", data: {} }
+    const edges = [...g.edges.filter((e) => e.target !== "sf"), wire("map", "edl", "sw", "edl"), wire("sw", "edl", "sf", "edl")]
+    expect(speakerFramesEstimateBlocks(fr, [...g.nodes, sw], edges, new Set([...g.rerun, "sw"]))).toBe(65)
+  })
+
+  it("more than 6 cameras: the 130-block ceiling", () => {
+    const g = planGraph(8)
+    expect(speakerFramesEstimateBlocks(fr, g.nodes, g.edges, g.rerun)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+  })
+
+  it("cameras that cannot be counted keep the 130-block ceiling", () => {
+    // Another producer about to run, a plan that holds nothing and is not about to run, an edit that cannot be read.
+    const other = { id: "o", type: "apply-edl", data: {} }
+    expect(speakerFramesEstimateBlocks(fr, [other, fr], [wire("o", "edl", "sf", "edl")], new Set(["o"]))).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+    const g = planGraph(1)
+    expect(speakerFramesEstimateBlocks(fr, g.nodes, g.edges, NONE)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+    expect(speakerFramesEstimateBlocks(sf({ edl: "not an edit" }), [], [], NONE)).toBe(SPEAKER_FRAMES_CEILING_BLOCKS)
+    // No wiring sent to the server's quote at all.
+    expect(CreditsService.estimateWorkflowBaseCredits([sf()], undefined)).toBe(2 * SPEAKER_FRAMES_CEILING_BLOCKS)
+  })
+
+  it("a known length is unchanged: one camera over an hour is 8 blocks, not 22", () => {
+    const g = planGraph(1)
+    const nodes = g.nodes.map((n) => (n.id === "c1" || n.id === "mic" ? { ...n, data: { metadata: { durationSeconds: 3600 } } } : n))
+    expect(speakerFramesEstimateBlocks(fr, nodes, g.edges, g.rerun)).toBe(8)
+  })
+
+  it("is never below what the run holds: the longest edit on N cameras, and a bare video that cannot be probed", async () => {
+    for (let n = 1; n <= 6; n++) {
+      const hold = await holdBlocks({ edl: longestEdit(n) })
+      expect(hold).toBe(speakerFramesCeilingBlocks(n))
+      const p = planGraph(n)
+      expect(speakerFramesEstimateBlocks(fr, p.nodes, p.edges, p.rerun)).toBeGreaterThanOrEqual(hold)
+      const m = mapGraph(n)
+      expect(speakerFramesEstimateBlocks(fr, m.nodes, m.edges, m.rerun)).toBeGreaterThanOrEqual(hold)
+    }
+    // A bare video the server cannot probe is held at 180 minutes: 21,600 frames, 22 blocks.
+    const bare = await holdBlocks({ videoUrl: "https://media.test/clip.mp4" })
+    expect(bare).toBe(22)
+    // So is a longer one (the job refuses it before sampling, and the reserve is refunded): 4 hours → 22, not 29.
+    const fourHours = speakerFramesBlocks((await speakerFramesReserveFrames({ videoUrl: "https://media.test/long.mp4" }, async () => 4 * 3600))!)
+    expect(fourHours).toBe(22)
+    const link = { id: "up", type: "upload-video", data: { url: "https://media.test/clip.mp4" } }
+    const quote = speakerFramesEstimateBlocks(fr, [link, fr], [wire("up", "video", "sf", "video")], NONE)
+    expect(quote).toBeGreaterThanOrEqual(bare)
+    expect(quote).toBeGreaterThanOrEqual(fourHours)
+  })
+
+  it("the master at the run's 3 s tolerance, cut with a 3 s gap and its start pad unclamped, still holds no more than the quote", async () => {
+    // Kept 180 min over a 10,803 s span: the margins merge across the gap, 10,807 s → 21,614 frames a camera.
+    const tolerance = (n: number): Edl =>
+      ({
+        version: 1,
+        clock: "master",
+        sources: [MIC, ...camIds(n).map((id) => cam(id))],
+        segments: [
+          { id: "s0", inMs: 5_000, outMs: 5_000 + 5_400_000, video: "c1" },
+          { id: "s1", inMs: 5_000 + 5_403_000, outMs: 5_000 + 10_803_000, video: "c1" },
+        ],
+      }) as Edl
+    for (let n = 1; n <= 6; n++) {
+      expect((await speakerFramesReserveFrames({ edl: tolerance(n) }, noProbe))! / n).toBe(21_614)
+      const p = planGraph(n)
+      expect(speakerFramesEstimateBlocks(fr, p.nodes, p.edges, p.rerun)).toBeGreaterThanOrEqual(await holdBlocks({ edl: tolerance(n) }))
+    }
+  })
+
+  it("Speaker Map counts cameras by the run's rule: a node that hands on either kind is a camera on its video pip (known and unknown length)", async () => {
+    // cam1 an upload; cam2 a video through Adjust Volume (its `video-out` pip); cam3 a Voice Changer's video; a mic.
+    const graph = (micSec?: number) => {
+      const nodes = [
+        up("cam1"), up("raw"), { id: "cam2", type: "adjust-volume", data: {} }, { id: "cam3", type: "voice-changer", data: {} },
+        { id: "mic", type: "upload-audio", data: micSec ? { metadata: { durationSeconds: micSec } } : {} },
+        { id: "map", type: MULTICAM_SPEAKER_MAP_TYPE, data: { masterSourceId: "mic" } }, fr,
+      ]
+      const edges = [
+        wire("raw", "video", "cam2", "in"),
+        wire("cam1", "video", "map", "sources"),
+        wire("cam2", "video-out", "map", "sources"),
+        wire("cam3", "video", "map", "sources"),
+        wire("mic", "audio", "map", "sources"),
+        wire("map", "edl", "sf", "edl"),
+      ]
+      return { nodes, edges, rerun: new Set(["cam2", "cam3", "map", "sf"]) }
+    }
+    // Unknown length: three cameras at 180 minutes — 65 blocks, never below the longest edit on three.
+    const unknown = graph()
+    const unknownQuote = speakerFramesEstimateBlocks(fr, unknown.nodes, unknown.edges, unknown.rerun)
+    expect(unknownQuote).toBe(65)
+    expect(unknownQuote).toBeGreaterThanOrEqual(await holdBlocks({ edl: longestEdit(3) }))
+    // A one-hour master: three cameras over 3,604 s — 21,624 frames, 22 blocks (was 8: one camera).
+    const known = graph(3600)
+    const knownQuote = speakerFramesEstimateBlocks(fr, known.nodes, known.edges, known.rerun)
+    expect(knownQuote).toBe(22)
+    const hour: Edl = { version: 1, clock: "master", sources: [MIC, ...camIds(3).map((id) => cam(id))], segments: [{ id: "s0", inMs: 0, outMs: 3_600_000, video: "c1" }] } as Edl
+    expect(knownQuote).toBeGreaterThanOrEqual(await holdBlocks({ edl: hour }))
+    // On its audio pip the same node is sound only, as the run reads it.
+    const soundOnly = { ...known, edges: known.edges.map((e) => (e.source === "cam2" && e.target === "map" ? { ...e, sourceHandle: "audio-out" } : e)) }
+    expect(speakerFramesEstimateBlocks(fr, soundOnly.nodes, soundOnly.edges, soundOnly.rerun)).toBe(speakerFramesBlocks(2 * (3604 * 2)))
+  })
+
+  it("the server's run quote reads the same figures: 3 cameras of unknown length quote 65 blocks at 2 a block", () => {
+    const g = planGraph(3)
+    const nodes = g.nodes.filter((n) => n.id !== "sf")
+    const total = CreditsService.estimateWorkflowBaseCredits([...nodes, fr], g.edges)
+    const without = CreditsService.estimateWorkflowBaseCredits(nodes, g.edges.filter((e) => e.target !== "sf"))
+    expect(total - without).toBe(2 * 65)
   })
 })

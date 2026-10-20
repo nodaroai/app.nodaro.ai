@@ -1584,6 +1584,46 @@ describe("modify_video verb", () => {
     expect(received.body).not.toHaveProperty("videoUrl")
   })
 
+  it("seedance-2-5 sends extra clips after the source and the audio references", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-edit" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "modify_video", {
+      prompt: "put the sky of {video:2} behind her, to {audio:1}",
+      video_url: "https://a/v.mp4",
+      model: "seedance-2-5",
+      reference_video_urls: ["https://a/sky.mp4"],
+      reference_audio_urls: ["https://a/song.mp3"],
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({
+      referenceVideoUrls: ["https://a/v.mp4", "https://a/sky.mp4"],
+      referenceAudioUrls: ["https://a/song.mp3"],
+    })
+  })
+
+  it("refuses the Seedance reference lists on another model instead of dropping them", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-to-video", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "modify_video", {
+      prompt: "x", video_url: "https://a/v.mp4", model: "wan", reference_video_urls: ["https://a/sky.mp4"],
+    })
+    expect(result.isError).toBe(true)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("seedance-2-5 numbers reference_image_url first, as the REST route does", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-edit" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "modify_video", {
+      prompt: "x", video_url: "https://a/v.mp4", model: "seedance-2-5",
+      reference_image_url: "https://a/hat.jpg", reference_image_urls: ["https://a/coat.jpg"],
+    })
+    expect(received.body?.referenceImageUrls).toEqual(["https://a/hat.jpg", "https://a/coat.jpg"])
+  })
+
   it("returns isError without video", async () => {
     const { fastify } = stubRoute("POST", "/v1/video-to-video", { jobId: "j" })
     const server = buildServer()

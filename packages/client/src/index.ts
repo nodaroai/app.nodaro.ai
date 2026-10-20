@@ -6,6 +6,7 @@
 export * from "./entries/apps.js"
 export * from "./entries/audio.js"
 export * from "./entries/billing.js"
+export * from "./entries/cast-swap.js"
 export * from "./entries/catalogs.js"
 export * from "./entries/characters.js"
 export * from "./entries/client.js"

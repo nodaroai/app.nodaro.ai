@@ -17,6 +17,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.llm`](#clientllm)
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
+  - [`client.castSwap`](#clientcastswap)
   - [`client.studio`](#clientstudio)
   - [`client.copilot`](#clientcopilot)
   - [`client.executions`](#clientexecutions)
@@ -65,7 +66,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -141,12 +142,12 @@ const client = createClient({
 | `workspaceId` | `string` | no | The workspace every request acts in, sent as `X-Nodaro-Workspace`. See [`client.withWorkspace`](#clientwithworkspaceworkspaceid). Omit for the caller's personal space. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
-The instance exposes 35 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 36 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
 `oauth`, `voices`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
-`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `studio`,
-`community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
+`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `castSwap`,
+`studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
 
@@ -1831,6 +1832,78 @@ returns `409 legacy_mix_mismatch`.
 
 ---
 
+### `client.castSwap`
+
+Cast Swap: replace the people and/or the location in a short video with your
+own reference images, keeping its motion, framing, timing and sound. **Cloud
+edition only**: these routes 404 on self-hosted installs. Also importable as
+`@nodaro/sdk/cast-swap`. Routes: [Cast Swap](./api-integration.md#13f-cast-swap-cloud-edition);
+MCP: `cast_swap`.
+
+```ts
+run(params: CastSwapParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/cast-swap → 202 (200 + deduped on a keyed repeat)
+estimate(params: CastSwapParams): Promise<CastSwapEstimate> // POST /v1/cast-swap/estimate, free
+```
+
+```ts
+interface CastSwapParams {
+  videoUrl: string                 // the source clip, 4–30 s
+  roles: Array<
+    | { kind: "person"; name: string; images: string[] | null
+        body?: "new" | "original"; outfit?: "new" | "original"; hair?: "new" | "original" } // each default "new"
+    | { kind: "location"; name?: string; images: string[] | null }                          // name default "the setting"
+  >                                // ≤ 6 person roles, ≤ 1 location role; 0–3 images of ONE person / place each
+  postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
+  preview?: boolean                // true = run on 4 s of the clip
+  previewStart?: number            // seconds, default 0
+  quality?: "draft"                // the only value today
+  sessionId?: string
+  origin?: string
+}
+
+interface CastSwapEstimate {
+  totalCredits: number                              // castSwap + seedance
+  breakdown: { castSwap: number; seedance: number } // the run itself; the video model it calls
+  settlesLower: boolean                             // Auto length: the final charge is expected to be lower
+}
+```
+
+A role with no images (empty or `null`) is skipped: that person or place stays
+as in the video. At least one role with images, or a `postPrompt`, is
+required. Both routes answer `400` before charging for a `postPrompt` over
+4,000 characters, a `{role:N}` with N outside 1..`roles.length` (empty roles
+count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name` or the
+`postPrompt`, a clip outside 4–30 s, or a preview past the clip's end
+(`previewStart + 4` > its length); also for an invalid body
+(`validation_error`), an address that is not public http(s) (`unsafe_url`) or a
+clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,
+`402 insufficient_credits` (`run()` only), `404` (a `sessionId` you may not use),
+`422 job_blocked`, `503 host_too_old` (both), `503 estimate_unavailable`
+(`estimate()` only). The full table is in the
+[route reference](./api-integration.md#13f-cast-swap-cloud-edition).
+
+`run()` returns a job id; follow it with `client.jobs.get(jobId)`. Pass
+`{ idempotencyKey }` (`CastSwapRunOptions`) to make a retry safe: `run()` sends
+it unchanged as the `Idempotency-Key` header (the server takes 8–200
+characters and answers `400` otherwise). A repeat with the same key within the
+credit guard's dedup window (about 10 s) answers `200 { jobId, deduped: true }`
+with an `X-Dedup-Hit` header, a later one `202` with the first run's `jobId`,
+and nothing new is started or charged. Without a key no header is sent.
+A preview's job keeps every input in its `input_data`, so rerunning it with
+`preview: false` renders the full clip with the same choices.
+
+```ts
+const params: CastSwapParams = {
+  videoUrl,
+  roles: [{ kind: "person", name: "the woman dancing", images: [myPhotoUrl], outfit: "original" }],
+  preview: true,
+}
+const quote = await client.castSwap.estimate(params)
+const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
+```
+
+---
+
 ### `client.copilot`
 
 The assistant's conversation surface (`/v1/copilot/*`). A **thread** is the
@@ -2590,8 +2663,11 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 `happyhorse-edit` or the Seedance edit model `seedance-2-5`), `duration`
 (`"5"` | `"10"`), `resolution`, `audio`, `multiShots`, `aspectRatio`, `seed`,
 `referenceImageUrl`, `negativePrompt`, `videoEditDuration`, `audioSetting`,
-`promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit is
-built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
+`promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit also takes
+`referenceImageUrls`, `referenceVideoUrls` (extra clips; the source `videoUrl` is
+`{video:1}`, these are `{video:2}`, …) and `referenceAudioUrls` — refused on any
+other model; numbering and caps in [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit).
+The edit is built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
 so you send the same body as for any other edit model.
 
 #### `quote(type, params?)`
@@ -2603,8 +2679,9 @@ quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
 The price of a run before you start it (`POST /v1/quote`). Pass exactly the
 body you would pass to `run`: the platform prices it with the run route's own
 code — validation, measuring reference clips, the credit id and the amount — and
-starts nothing. Typed for `text-to-video`, `generate-video` and
-`video-to-video`; those are the types the platform can quote today (any other
+starts nothing. Typed for `text-to-video`, `generate-video`,
+`video-to-video` and `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
+priced from the draft); those are the types the platform can quote today (any other
 rejects with `400 quote_unsupported`). Cloud only.
 
 ```ts

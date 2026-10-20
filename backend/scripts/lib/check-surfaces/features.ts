@@ -71,6 +71,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "models", cli: ["models"], routePrefixes: ["/v1/models", "/v1/model-makers"], mcpFiles: ["models.ts"] },
   { id: "shots", cli: ["shots"], routePrefixes: ["/v1/shots"], mcpFiles: ["shot-shapes.ts"] },
   { id: "recast", cli: ["recast"], routePrefixes: ["/v1/recast"], mcpFiles: ["recast.ts"] },
+  // Cast Swap: both routes are the Cloud plugin's (no CLI group).
+  { id: "castSwap", cli: [], routePrefixes: ["/v1/cast-swap"], mcpFiles: ["cast-swap.ts"] },
   { id: "studio", cli: [], routePrefixes: ["/v1/studio"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },
   { id: "studio.productions", cli: [], routePrefixes: ["/v1/studio/productions"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },
   { id: "copilot", cli: [], routePrefixes: ["/v1/copilot"], mcpFiles: [] },
@@ -94,6 +96,7 @@ export const PLUGIN_ROUTE_PREFIXES: readonly string[] = [
   "/v1/studio/productions",
   "/v1/ugc",
   "/v1/recast",
+  "/v1/cast-swap",
   "/v1/video-analysis/import",
   "/v1/video-analysis/authoring-skill",
   "/v1/competitors",

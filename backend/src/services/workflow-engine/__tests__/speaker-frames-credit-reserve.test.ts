@@ -117,6 +117,12 @@ describe("speaker-frames in a workflow run — the reserve reads the row, per st
     expect(await speakerFramesCreditOverride(jobName, payload, async () => { throw new Error("unreadable") })).toBe(7 * 22)
   })
 
+  it("a bare video longer than 180 minutes is reserved at those 180 minutes, never its whole length (decided 2026-10-20: the job refuses it before sampling, so no charge exceeds them)", async () => {
+    const { jobName, payload } = build({ videoUrl: "https://media.test/long.mp4" })
+    // 4 hours would be 28,800 frames, 29 blocks; the reserve is 21,600 frames, 22 blocks — what a video of unknown length is quoted.
+    expect(await speakerFramesCreditOverride(jobName, payload, async () => 4 * 3600)).toBe(7 * 22)
+  })
+
   it("is undefined for any other job, so the override chain falls through", async () => {
     expect(await speakerFramesCreditOverride("speaker-view", { edl: TIGHTEN_90 })).toBeUndefined()
     expect(m.rateIds).toEqual([])

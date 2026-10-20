@@ -32,7 +32,7 @@ import {
   GetTaskRequestSchema,
   ListTasksRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
-import { redactPrivateJobData } from "../public-job-data.js"
+import { redactPrivateJobOutput } from "../public-job-data.js"
 
 export interface Task {
   taskId: string
@@ -144,8 +144,17 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
     .eq("id", jobId)
     .in("status", ["pending", "processing"])
     .or("provider.is.null,provider.neq.use-case")
-    .select("id")
-  if (flipped && flipped.length > 0) return
+    .select("id, input_data")
+  if (flipped && flipped.length > 0) {
+    // A cancelled parent takes its still-running children with it, as on
+    // POST /v1/jobs/:id/cancel — through the one shared sweep (lazy for the
+    // same reason as below).
+    const input = (flipped[0] as { input_data?: unknown }).input_data as Record<string, unknown> | null | undefined
+    const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
+    const { cancelRunningChildJobs } = await import("../cancel-job.js")
+    await cancelRunningChildJobs(jobId, userId, { analysisJobId })
+    return
+  }
 
   // Nothing flipped: the row is either already terminal (nothing to do), a
   // use-case wrapper (above), or parked in `pending_review`. A HELD job must be cancellable (spec
@@ -161,8 +170,11 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   // pulled into every importer of this module, and only reached on the slow
   // path. On an already-terminal row this costs one SELECT and answers
   // `invalid_status` — a no-op, exactly as before.
-  const { cancelOwnedJob } = await import("../cancel-job.js")
-  await cancelOwnedJob(jobId, userId)
+  const { cancelOwnedJob, cancelRunningChildJobs } = await import("../cancel-job.js")
+  const result = await cancelOwnedJob(jobId, userId)
+  if (result.kind === "cancelled") {
+    await cancelRunningChildJobs(jobId, userId, { analysisJobId: result.analysisJobId })
+  }
 }
 
 /**
@@ -378,7 +390,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
       return {
         taskId: jobId,
         status: data.status,
-        output: redactPrivateJobData(data.output_data ?? null),
+        output: redactPrivateJobOutput(data.output_data ?? null),
         error: data.error_message ?? null,
       }
     }

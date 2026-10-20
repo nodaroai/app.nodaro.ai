@@ -75,6 +75,7 @@ import { textToVideoRoutes } from "../text-to-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
+import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 import { assembleVideoConnectedReferences } from "../generate-video.js"
 import {
   getStylePromptHint,
@@ -424,6 +425,43 @@ describe("POST /v1/text-to-video", () => {
         prompt: "a sunset timelapse",
       })
     )
+  })
+})
+
+/**
+ * A child job: a worker-side handler (`tk.http.workerRequest`) asking for a
+ * job on behalf of the job it is running. The parent rides in the server-only
+ * submission scope, never in the body, and lands on the row's `parent_job_id`
+ * (the DB trigger of migration 480 holds it to the same owner).
+ */
+describe("POST /v1/text-to-video — child jobs", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const PARENT = "00000000-0000-4000-8000-0000000000b2"
+
+  it("internal request with parentJobId stamps parent_job_id", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await withJobSubmissionContext(
+      { userId: USER, method: "POST", url: "/v1/text-to-video", parentJobId: PARENT },
+      () => app.inject({ method: "POST", url: "/v1/text-to-video", payload: { prompt: "a lighthouse at dawn", userId: USER } }),
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER, parent_job_id: PARENT }))
+  })
+
+  it("public request never stamps parent_job_id (a body field is ignored)", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a lighthouse at dawn", userId: USER, parentJobId: PARENT, parent_job_id: PARENT },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledTimes(1)
+    expect(mockInsert.mock.calls[0]![0]).not.toHaveProperty("parent_job_id")
   })
 })
 

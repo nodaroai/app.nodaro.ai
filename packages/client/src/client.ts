@@ -37,6 +37,7 @@ import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
 import { ShotsResource } from "./resources/shots.js"
 import { RecastResource } from "./resources/recast.js"
+import { CastSwapResource } from "./resources/cast-swap.js"
 import { StudioResource } from "./resources/studio.js"
 import { CopilotResource } from "./resources/copilot.js"
 import { CommunityResource } from "./resources/community.js"
@@ -100,6 +101,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly models: ModelsResource
   readonly shots: ShotsResource
   readonly recast: RecastResource
+  /** Cast Swap: replace the people and/or location in a short video (Cloud). */
+  readonly castSwap: CastSwapResource
   readonly studio: StudioResource
   readonly copilot: CopilotResource
   readonly community: CommunityResource
@@ -151,6 +154,7 @@ export class NodaroClient extends NodaroClientCore {
     this.models = new ModelsResource(this)
     this.shots = new ShotsResource(this)
     this.recast = new RecastResource(this)
+    this.castSwap = new CastSwapResource(this)
     this.studio = new StudioResource(this)
     this.copilot = new CopilotResource(this)
     this.community = new CommunityResource(this)

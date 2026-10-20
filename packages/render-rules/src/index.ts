@@ -407,6 +407,8 @@ export {
   speakerFramesBareVideoFrames,
   speakerFramesBaseCredits,
   speakerFramesBlocks,
+  speakerFramesCameraFrames,
+  speakerFramesCeilingBlocks,
   speakerFramesEstimateBlocks,
   speakerFramesScopeFrames,
 } from "./speaker-frames-pricing"

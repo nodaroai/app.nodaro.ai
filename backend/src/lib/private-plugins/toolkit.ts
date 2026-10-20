@@ -142,7 +142,7 @@ import { changesStudioPublishFlag } from "../studio-audience.js"
 import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
-import { redactPrivateJobData } from "../public-job-data.js"
+import { redactPrivateJobOutput } from "../public-job-data.js"
 import { assertParentJobId, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
@@ -1284,9 +1284,10 @@ async function readJobsOwnedBy(
   return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((raw) => ({
     id: raw.id as string,
     status: (raw.status as string) ?? "pending",
-    // `output_data` can carry server-only fields, and a landed result is
-    // persisted on a document that can later be shared by link.
-    output_data: redactPrivateJobData(
+    // `output_data` can carry server-only fields (a remux base, `__` resume
+    // checkpoints), and a landed result is persisted on a document that can
+    // later be shared by link.
+    output_data: redactPrivateJobOutput(
       (raw.output_data as Record<string, unknown> | null) ?? null,
     ),
     error_message: (raw.error_message as string | null) ?? null,

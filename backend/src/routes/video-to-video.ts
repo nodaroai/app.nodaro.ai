@@ -11,9 +11,11 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
 import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
-import { handleTextToVideoRequest, textToVideoPricing } from "./text-to-video.js"
+import { handleTextToVideoRequest, textToVideoBody, textToVideoPricing } from "./text-to-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+
+const SEEDANCE_EDIT_ONLY_LISTS = ["referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls"] as const
 
 export const videoToVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -40,9 +42,22 @@ export const videoToVideoBody = z.object({
   promptExtend: z.boolean().optional(),
   // Seedance 2.5 Draft (480p, finalized later with video-upscale).
   draft: z.boolean().optional(),
+  // Seedance edit models only (checked below): more references for the edit,
+  // passed to the reference lane, whose own caps apply (the source clip counts
+  // as one of the videos). Numbering: {video:1} is the source, these clips are
+  // {video:2}, {video:3}, …; images follow `referenceImageUrl` when it is sent.
+  referenceImageUrls: z.array(safeUrlSchema).optional(),
+  referenceVideoUrls: z.array(safeUrlSchema).optional(),
+  referenceAudioUrls: z.array(safeUrlSchema).optional(),
 }).superRefine((b, ctx) => {
-  if (b.resolution === "480p" && !isSeedanceVideoEditProvider(b.provider)) {
+  if (isSeedanceVideoEditProvider(b.provider)) return
+  if (b.resolution === "480p") {
     ctx.addIssue({ code: "custom", path: ["resolution"], message: "480p is available on the Seedance edit models only" })
+  }
+  for (const field of SEEDANCE_EDIT_ONLY_LISTS) {
+    if (b[field] !== undefined) {
+      ctx.addIssue({ code: "custom", path: [field], message: `${field} is available on the Seedance edit models only` })
+    }
   }
 })
 
@@ -51,27 +66,32 @@ function isSeedanceEdit(req: FastifyRequest): boolean {
   return isSeedanceVideoEditProvider((req.body as Record<string, unknown> | undefined)?.provider as string | undefined)
 }
 
+const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+
 /**
  * A /v1/video-to-video body for a Seedance edit model, as the ONE Seedance
  * reference-video lane takes it (/v1/text-to-video): the clip as `@video_1`,
  * the edit instruction framed as an edit, the edit shape (adaptive, Auto
- * duration). The same body the canvas node and MCP `modify_video` send, built
- * server-side so no client has to. Request-level fields (sessionId, origin,
+ * duration), and every other reference after it. The same body the canvas
+ * node and MCP `modify_video` send, built server-side so no client has to. Request-level fields (sessionId, origin,
  * workflow/node ids, mcp_client) ride along untouched.
  */
 export function seedanceEditRunBody(body: Record<string, unknown>): Record<string, unknown> {
   const {
-    videoUrl, referenceImageUrl, audio, prompt, userPrompt,
+    videoUrl, referenceImageUrl, referenceImageUrls, referenceVideoUrls, audio, prompt, userPrompt,
     duration: _v2vDuration, multiShots: _m, videoEditDuration: _e, audioSetting: _a, promptExtend: _p,
     ...rest
   } = body
+  const imageUrls = [...(typeof referenceImageUrl === "string" ? [referenceImageUrl] : []), ...listOf(referenceImageUrls)]
+  // referenceAudioUrls rides along in `rest`.
   return {
     ...rest,
     prompt: buildSeedanceVideoEditPrompt(typeof prompt === "string" ? prompt : ""),
     ...(typeof (userPrompt ?? prompt) === "string" ? { userPrompt: userPrompt ?? prompt } : {}),
     ...SEEDANCE_VIDEO_EDIT_SHAPE,
-    referenceVideoUrls: [videoUrl],
-    ...(typeof referenceImageUrl === "string" ? { referenceImageUrls: [referenceImageUrl] } : {}),
+    // The source is {video:1}; extra clips number on from it.
+    referenceVideoUrls: [videoUrl, ...listOf(referenceVideoUrls)],
+    ...(imageUrls.length > 0 ? { referenceImageUrls: imageUrls } : {}),
     ...(typeof audio === "boolean" ? { generateAudio: audio } : {}),
   }
 }
@@ -90,7 +110,15 @@ async function rewriteSeedanceEdit(req: FastifyRequest, reply: FastifyReply): Pr
   if (!parsed.data.prompt?.trim()) {
     return reply.status(400).send({ error: { code: "validation_error", message: "prompt is required for a Seedance edit: say what to change in the clip" } })
   }
-  req.body = seedanceEditRunBody(req.body as Record<string, unknown>)
+  const runBody = seedanceEditRunBody(req.body as Record<string, unknown>)
+  // The rewritten body is the reference lane's: its own rules (the reference
+  // caps — the source counts as one of the videos) decide it here, so a quote
+  // refuses exactly what the run refuses, and nothing is probed past a cap.
+  const lane = textToVideoBody.safeParse(runBody)
+  if (!lane.success) {
+    return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(lane.error) } })
+  }
+  req.body = runBody
   return undefined
 }
 

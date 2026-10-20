@@ -1530,6 +1530,13 @@ job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 `GET /v1/jobs/:id/status` carries `completed_at` — when the job finished, on
 the server's clock (`null` until it has) — as `GET /v1/jobs/:id` does.
 
+A child job (one a job started internally as a step of its own work) is not
+listed by `GET /v1/jobs`; output keys whose name starts with `__` are
+server-only and no job read ever returns them; and cancelling a job
+(`POST /v1/jobs/:id/cancel`) also cancels its still-running child jobs — a
+finished child is left as it is, and one already at the provider finishes, as
+any in-flight job does.
+
 `GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and
 `GET /v1/jobs/status` also carry `credit_status: "reserved" | "committed" |
 "refunded" | null` — the job's credit reservation lifecycle, derived
@@ -3496,7 +3503,7 @@ The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. Wit
 
 `POST /v1/quote` returns what a node run will reserve, before you start it. Send the node type and **exactly the body you would send to its run route**: the server prices it with the run route's own code — the same body validation, the same reference-clip measurement, the same credit id and the same arithmetic — so the quote is what the run reserves. Nothing is started and nothing is charged. Cloud only; requires authentication; rate-limited to 30 requests a minute. SDK: `client.nodes.quote(type, params)`.
 
-Quotable today: `text-to-video`, `generate-video`, `video-to-video`. Any other type is a `400 quote_unsupported` that lists them.
+Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with). Any other type is a `400 quote_unsupported` that lists them. A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
 
 ```json
 {"type":"text-to-video","params":{"prompt":"edit {video:1} as follows:
@@ -3509,7 +3516,7 @@ The response is `{ "data": { identifier, reserve, expected?, adjustments, warnin
 |---|---|
 | `identifier` | The credit id the run is charged under. |
 | `reserve` | Credits the run holds when it starts. |
-| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit); `expected` is input plus the length it will most likely render — the source clip's length for an Auto-duration edit, the requested seconds otherwise. Never above `reserve`. |
+| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
 | `adjustments` | `{ code, message, credits? }` — why the price is what it is: `ref_video_length` (priced by the clips' lengths), `extra_reference_images` (MiniMax Hailuo 3 images past the first 5), `auto_duration`, `loop_trim_addon` / `voiced_audio_addon` (with their credits), `params_adjusted` (a resolution or ratio snapped to one the model offers). |
 | `warnings` | `{ code, message }` — `settles_to_actual` (the run is charged for what was generated and the rest of `reserve` is refunded), `ref_video_unmeasured` (a clip could not be measured and is priced as the longest the model accepts). |
 
@@ -3802,6 +3809,57 @@ can hold while its clips render: a run whose payer cannot cover that is refused 
 before anything runs or is billed. What a published UGC video carries,
 and the photo an app set to My photo needs, are in
 [UGC videos in a published app or template](#ugc-videos-in-a-published-app-or-template).
+
+## 13f. Cast Swap (Cloud edition)
+
+Cast Swap replaces the people and/or the location in a short video with your
+own reference images, keeping its motion, framing, timing and sound. Both
+routes are served by the Nodaro Cloud plugin and answer 404 on self-hosted
+installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
+[`cast_swap`](./mcp/tools.md) verb).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance }, settlesLower }`. |
+| `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
+
+Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
+`{ kind: "person", name, images, body?, outfit?, hair? }` and at most 1
+`{ kind: "location", name?, images }`, each with 0–3 images; a role with no
+images keeps that person or place as in the video), and optionally
+`postPrompt`, `preview`, `previewStart`, `quality` (`"draft"`), `sessionId`
+and `origin`. The field-by-field shape is in the
+[SDK reference](./sdk-reference.md#clientcastswap).
+
+The quote is `totalCredits` = `breakdown.castSwap` (the run itself) +
+`breakdown.seedance` (the video model it calls). `settlesLower: true` means the
+video's length is left to the model (Auto), so the final charge is expected to
+come out lower than the quote.
+
+**Repeats.** Send the same `Idempotency-Key` (8–200 characters) when you
+retry a run. A repeat within the credit guard's dedup window (about 10 s)
+answers `200 { jobId, deduped: true }` with an `X-Dedup-Hit: 1` header; a
+later one answers `202 { jobId }` with the first run's job. Either way nothing
+new is started or charged. Without a key every request is a new run.
+
+Refusals, all before anything is charged (bodies are
+`{ error: { code, message } }`):
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `validation_error` | The body does not validate: no role with images and no `postPrompt`, more roles than allowed, more than 3 images on a role, or a `postPrompt` over 4,000 characters. Also an invalid `origin`. |
+| `400` | `raw_reference_token` | A role's `name` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
+| `400` | `invalid_role_mention` | `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
+| `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |
+| `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
+| `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
+| `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
+| `401` | `unauthorized` | No authenticated user. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/cast-swap` only). |
+| `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
+| `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
+| `503` | `estimate_unavailable` | The video model's price cannot be quoted right now (`/estimate` only); try again shortly. |
 
 ## 14. Pipelines
 

@@ -9,6 +9,7 @@ import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor } from ".
 import { textToVideoBody, textToVideoPricing } from "../../routes/text-to-video.js"
 import { generateVideoBody, generateVideoPricing } from "../../routes/generate-video.js"
 import { videoToVideoBody, videoToVideoPricing } from "../../routes/video-to-video.js"
+import { videoUpscaleBody, videoUpscalePricing } from "../../routes/video-upscale.js"
 
 const ROUTE = "/v1/quote"
 
@@ -22,6 +23,7 @@ export const QUOTABLE_NODE_TYPES: Readonly<Record<string, { readonly schema: z.Z
   "text-to-video": { schema: textToVideoBody, pricing: textToVideoPricing },
   "generate-video": { schema: generateVideoBody, pricing: generateVideoPricing },
   "video-to-video": { schema: videoToVideoBody, pricing: videoToVideoPricing },
+  "video-upscale": { schema: videoUpscaleBody, pricing: videoUpscalePricing },
 }
 
 const quoteBody = z.object({
