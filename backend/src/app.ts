@@ -224,6 +224,7 @@ import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
+import { recordThisEngineEnvironment } from "./ee/lib/engine-environments.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
 import { adminReviewRoutes } from "./ee/routes/admin-review.js"
@@ -845,7 +846,11 @@ export async function buildApp() {
   // (hasCredits() false); on cloud, a load failure is fatal (process.exit(1)
   // inside the loader) unless PRIVATE_MODULES=optional. See
   // backend/src/lib/private-plugins/load.ts.
-  await loadPrivatePlugins({ app })
+  const privatePlugins = await loadPrivatePlugins({ app })
+  // Trends (spec D17): record what this environment's engine supports, so
+  // publishing a trend can check every environment. Fire and forget: it
+  // never rejects, and boot never waits on it (cloud + Railway only).
+  void recordThisEngineEnvironment(privatePlugins.pluginBuildId ?? null)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
   await app.register(imageCriticRoutes)

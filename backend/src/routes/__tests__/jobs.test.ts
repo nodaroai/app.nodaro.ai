@@ -1073,11 +1073,13 @@ describe("server-only `__` output keys are never returned", () => {
     expect(batch.json().data[0].output_data).toEqual(expectedOutput)
   })
 
-  it("sanitizeJobForPublic strips them for an admin too, and leaves input_data's own keys alone", () => {
+  it("sanitizeJobForPublic strips them for an admin too, from output_data and input_data alike", () => {
     const row = { ...sampleJob, input_data: { prompt: "p", __internal: 1 }, output_data: withCheckpoint }
     expect(sanitizeJobForPublic(row, true).output_data).toEqual(expectedOutput)
-    expect(sanitizeJobForPublic(row, true).input_data).toEqual({ prompt: "p", __internal: 1 })
+    expect(sanitizeJobForPublic(row, true).input_data).toEqual({ prompt: "p" })
     expect(sanitizeJobForPublic(row, false).output_data).toEqual(expectedOutput)
+    expect(sanitizeJobForPublic(row, false).input_data).toEqual({ prompt: "p" })
+    expect(row.input_data).toHaveProperty("__internal")
   })
 })
 

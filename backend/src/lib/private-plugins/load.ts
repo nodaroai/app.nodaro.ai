@@ -111,6 +111,13 @@ export interface LoadPrivatePluginsResult {
    * names). Absent after a failed load — the host reads that as none.
    */
   daemons?: PluginDaemon[]
+  /**
+   * The loaded module's `pluginBuildId` (`@nodaroai/cloud-plugins@<version>`,
+   * v0.7.3+), or null when it exports none. Present only after a successful
+   * load; absent on community/business and after a failed load. The API
+   * server records it per environment (`ee/lib/engine-environments.ts`).
+   */
+  pluginBuildId?: string | null
 }
 
 export { getPluginServices } from "./services-registry.js"
@@ -347,6 +354,7 @@ export async function loadPrivatePlugins(
     recipes,
     supports,
     ...(opts.daemons ? { daemons: [...daemons] } : {}),
+    pluginBuildId: typeof buildId === "string" ? buildId : null,
   }
 }
 

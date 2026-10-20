@@ -1051,6 +1051,61 @@ describe("GET /v1/workflow-executions/:id", () => {
     expect(data.totalNodes).toBe(1)
     expect(data.nodeStates[TEST_JOB_ID].jobId).toBe(TEST_JOB_ID)
   })
+
+  it("the standalone-job fallback's triggerData drops input_data's server-only __ keys (a trend run's hidden inputs)", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockImplementation((table) => {
+      if (table === "workflow_executions") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116", message: "not found" } }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: TEST_JOB_ID,
+                    workflow_id: null,
+                    user_id: TEST_USER_ID,
+                    workflow_execution_id: null,
+                    status: "completed",
+                    provider: null,
+                    input_data: {
+                      type: "cast-swap",
+                      trend: { id: "t" },
+                      __videoUrl: "https://private.example/source.mp4",
+                      __roles: [{ roleName: "hidden" }],
+                    },
+                    credits: 40,
+                    error_message: null,
+                    started_at: "2026-01-01T00:01:00Z",
+                    completed_at: "2026-01-01T00:02:00Z",
+                    created_at: "2026-01-01T00:00:00Z",
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      } as never
+    })
+
+    const res = await authedGet(`/v1/workflow-executions/${TEST_JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.triggerData).toEqual({ type: "cast-swap", trend: { id: "t" } })
+    expect(res.body).not.toContain("private.example")
+    expect(res.body).not.toContain("__roles")
+  })
 })
 
 // ==========================================================================
@@ -2084,6 +2139,69 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
     expect(sendEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "done" }))
 
     // Restore the module-level mock impl so other tests aren't affected.
+    if (originalImpl) vi.mocked(createSSEStream).mockImplementation(originalImpl)
+  })
+
+  it("the standalone-job SSE snapshot's triggerData drops input_data's server-only __ keys", async () => {
+    const sendEventSpy = vi.fn()
+    const { createSSEStream } = await import("@/lib/sse.js")
+    const originalImpl = vi.mocked(createSSEStream).getMockImplementation()
+    vi.mocked(createSSEStream).mockImplementationOnce((_req, reply) => {
+      return {
+        sendEvent: sendEventSpy,
+        sendComment: vi.fn(),
+        close: () => { (reply as { send: () => void }).send() },
+        isClosed: false,
+      } as never
+    })
+
+    const wfChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116", message: "not found" } }),
+          }),
+        }),
+      }),
+    }
+    const jobRow = {
+      id: TEST_EXEC_ID,
+      workflow_id: null,
+      user_id: "test-user-id",
+      workflow_execution_id: null,
+      status: "completed",
+      provider: null,
+      mcp_client: null,
+      input_data: { type: "cast-swap", trend: { id: "t" }, __videoUrl: "https://private.example/source.mp4", __postPrompt: "hidden" },
+      credits: 40,
+      error_message: null,
+      started_at: "2026-05-20T20:00:00Z",
+      completed_at: "2026-05-20T20:05:00Z",
+      created_at: "2026-05-20T20:00:00Z",
+    }
+    const jobsChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: jobRow, error: null }),
+            }),
+          }),
+        }),
+      }),
+    }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobsChain as never
+      return wfChain as never
+    })
+
+    const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}/stream`)
+    expect(res.statusCode).not.toBe(404)
+    expect(sendEventSpy).toHaveBeenCalledTimes(2)
+    for (const [event] of sendEventSpy.mock.calls) {
+      expect((event as { data: { triggerData: unknown } }).data.triggerData).toEqual({ type: "cast-swap", trend: { id: "t" } })
+    }
+
     if (originalImpl) vi.mocked(createSSEStream).mockImplementation(originalImpl)
   })
 

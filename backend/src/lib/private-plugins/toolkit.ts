@@ -151,7 +151,7 @@ import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
-import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
+import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -1294,6 +1294,42 @@ async function readJobsOwnedBy(
   }))
 }
 
+const OWNED_RAW_JOB_COLUMNS = "id,status,input_data,output_data,created_at,completed_at"
+
+/**
+ * `tk.jobs.readOwnedJob` — one job, for its owner, with `input_data` and
+ * `output_data` RAW (server-only `__` keys included). Server-side only: unlike
+ * `readJobsOwnedBy`, nothing is redacted, because the caller acts on the job's
+ * hidden inputs and never returns them.
+ *
+ * The owner predicate is part of the query, so "not yours" and "does not
+ * exist" stay the same null. A malformed id (22P02) is absent too; any other
+ * database error throws `JobReadError`, like `readJobStrict`.
+ */
+async function readOwnedJob(jobId: string, userId: string): Promise<PluginOwnedRawJob | null> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(OWNED_RAW_JOB_COLUMNS)
+    .eq("id", jobId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (error?.code === "22P02") return null
+  if (error) {
+    console.error(`[private-plugins/jobs] readOwnedJob(${jobId}) database error:`, error.message)
+    throw new JobReadError()
+  }
+  if (!data) return null
+  const row = data as unknown as Record<string, unknown>
+  return {
+    id: row.id as string,
+    status: row.status as string,
+    input_data: (row.input_data as Record<string, unknown> | null) ?? {},
+    output_data: (row.output_data as Record<string, unknown> | null) ?? null,
+    created_at: row.created_at as string,
+    completed_at: (row.completed_at as string | null) ?? null,
+  }
+}
+
 /** Trusted submission records are available only through an owner-scoped read. */
 async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<string>) {
   const ids = [...new Set(jobIds)].filter((id) => id.length > 0)
@@ -1562,6 +1598,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     jobs: {
       readJobExecution,
       readJobsOwnedBy,
+      readOwnedJob,
       readJobSubmissionsOwnedBy,
       waitForJob,
       storeRecastAudioBase,

@@ -292,7 +292,7 @@ describe("loadPrivatePlugins", () => {
     const result = await loadPrivatePlugins({ app: fakeApp, importer, exit })
 
     expect(exit).not.toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {}, pluginBuildId: null })
   })
 })
 
@@ -541,5 +541,31 @@ describe("supports — what a plugin's own handlers can do (plugin → host)", (
     expect(getPluginSupports()).toEqual({})
 
     errorSpy.mockRestore()
+  })
+})
+
+describe("pluginBuildId — which plugin build this process runs", () => {
+  beforeEach(() => {
+    mockHasCreditsRef.value = true
+  })
+
+  it("surfaces the module's pluginBuildId on a successful load", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const result = await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, pluginBuildId: "@nodaroai/cloud-plugins@1.2.3", plugins: [] }),
+      toolkit: fakeToolkit,
+    })
+    expect(result.pluginBuildId).toBe("@nodaroai/cloud-plugins@1.2.3")
+    logSpy.mockRestore()
+  })
+
+  it("is null when the module does not export one (a pre-0.7.3 build)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const result = await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, pluginBuildId: 7, plugins: [] }),
+      toolkit: fakeToolkit,
+    })
+    expect(result.pluginBuildId).toBeNull()
+    logSpy.mockRestore()
   })
 })

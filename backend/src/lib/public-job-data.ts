@@ -6,11 +6,14 @@ import { withoutServerOnlyKeys } from "./job-output-visibility.js"
  * replacement; it must never reach browsers, SDK consumers, MCP clients, or
  * even the admin UI.
  *
- * It also drops a job's server-only `output_data` keys — the top-level `__`
- * keys plugins keep resume checkpoints in (lib/job-output-visibility.ts) —
- * from every `output_data` it meets in the value, so a whole row, a list of
- * rows or an envelope around them is covered. A bare `output_data` (not
- * under that key) goes through `redactPrivateJobOutput` instead.
+ * It also drops a job's server-only keys — the top-level `__` keys of its
+ * `output_data` (plugins' resume checkpoints) and of its `input_data` (hidden
+ * inputs such as a trend run's source clip and prompt parts); see
+ * lib/job-output-visibility.ts — from every `output_data` and `input_data` it
+ * meets in the value, so a whole row, a list of rows or an envelope around
+ * them is covered. Only those objects' own top-level keys go; a `__` key
+ * nested deeper stays. A bare `output_data` (not under that key) goes through
+ * `redactPrivateJobOutput` instead.
  *
  * Supabase JSONB values are acyclic plain JSON, but this helper deliberately
  * handles shared/cyclic objects as well so a malformed mock or future adapter
@@ -46,7 +49,7 @@ function redact(value: unknown, seen: WeakMap<object, unknown>): unknown {
   for (const [key, item] of Object.entries(value)) {
     if (key === "unscoredUrl") continue
     Object.defineProperty(copy, key, {
-      value: redact(key === "output_data" ? withoutServerOnlyKeys(item) : item, seen),
+      value: redact(key === "output_data" || key === "input_data" ? withoutServerOnlyKeys(item) : item, seen),
       enumerable: true,
       configurable: true,
       writable: true,

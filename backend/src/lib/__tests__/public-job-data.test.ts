@@ -72,3 +72,22 @@ describe("a held job's quarantined payload passes through untouched (D6)", () =>
     )
   })
 })
+
+/**
+ * The `__` convention covers `input_data` too: trend runs keep hidden data
+ * (the source clip URL, prompt parts) under top-level `__` keys of a job's
+ * input, and no job read may return them.
+ */
+describe("redactPrivateJobData — server-only input_data keys", () => {
+  it("drops top-level __ keys from input_data in a row", () => {
+    const row = { input_data: { type: "cast-swap", trend: { id: "t" }, __videoUrl: "https://x/s.mp4", __roles: [] }, output_data: { videoUrl: "v", __castSwapChildJobId: "c" } }
+    expect(redactPrivateJobData(row)).toEqual({ input_data: { type: "cast-swap", trend: { id: "t" } }, output_data: { videoUrl: "v" } })
+  })
+  it("drops input_data __ keys inside lists and envelopes", () => {
+    const env = { data: [{ job: { input_data: { __postPrompt: "p", slots: [] } } }] }
+    expect(redactPrivateJobData(env)).toEqual({ data: [{ job: { input_data: { slots: [] } } }] })
+  })
+  it("keeps nested (non-top-level) __ keys inside input_data values", () => {
+    expect(redactPrivateJobData({ input_data: { a: { __b: 1 } } })).toEqual({ input_data: { a: { __b: 1 } } })
+  })
+})

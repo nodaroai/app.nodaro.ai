@@ -1286,6 +1286,19 @@ export interface PluginOwnedJobRow {
   error_message: string | null
 }
 
+/**
+ * One job as `readOwnedJob` returns it: `input_data` and `output_data` RAW,
+ * server-only `__` keys included — never sent to a client as is.
+ */
+export interface PluginOwnedRawJob {
+  id: string
+  status: string
+  input_data: Record<string, unknown>
+  output_data: Record<string, unknown> | null
+  created_at: string
+  completed_at: string | null
+}
+
 /** Structural mirror of `_wait-for-job.ts`'s own (unexported) options. */
 export interface PluginWaitForJobOptions {
   jobId: string
@@ -1393,6 +1406,23 @@ export interface PluginJobsToolkit {
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
   readJobsOwnedBy?(userId: string, jobIds: readonly string[]): Promise<PluginOwnedJobRow[]>
+  /**
+   * ONE job THIS user owns, with `input_data` and `output_data` RAW —
+   * server-only `__` keys included. For a plugin route that acts on the
+   * user's own job and needs its hidden inputs (Trends' Full Quality re-runs a
+   * draft from them). The answer is SERVER-SIDE ONLY: never return it, or any
+   * `__` key in it, to a client. A client-facing read is `readJobsOwnedBy`
+   * (redacted).
+   *
+   * The owner filter is part of the QUERY: someone else's job and a missing
+   * job are the same `null`, as is a malformed id. Any other database error
+   * THROWS (`.name === "JobReadError"`, `.retryable === true`,
+   * `.code === "job_read_failed"`), never a null that would tell the user
+   * "not your job" during an outage. `input_data` absent reads as `{}`.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  readOwnedJob?(jobId: string, userId: string): Promise<PluginOwnedRawJob | null>
   /**
    * Mirrors `waitForJob` (`lib/mcp/tools/_wait-for-job.ts`) — block until a
    * job reaches a terminal state, then hand back its output.
@@ -2855,6 +2885,30 @@ export interface PluginSupports {
    * available on a connected install yet". Absent ⇒ false.
    */
   readonly speakerFramesRelayedProxies?: boolean
+  /**
+   * What the plugin's Cast Swap engine can run, for Trends (spec D17). Each
+   * environment records its plugin's declaration at boot
+   * (`ee/lib/engine-environments.ts`, table `engine_environments`), and
+   * publishing a trend checks every environment's engine against what the
+   * trend uses, because staging and production share one database but pin
+   * their own plugin builds.
+   *
+   * - `roleKinds`: the role kinds a run may cast.
+   * - `fixedReferences`: a run accepts fixed reference images (a trend's own).
+   * - `fullQuality`: a completed draft run can be re-rendered at full quality.
+   * - `resolutions`: the output resolutions a run accepts.
+   * - `trendRun`: a run accepts a trend's hidden inputs (`trendRun`).
+   *
+   * Absent ⇒ an engine that predates Trends: publishing treats that
+   * environment as supporting no trend at all.
+   */
+  readonly castSwap?: {
+    readonly roleKinds: readonly ("person" | "location" | "product" | "pet")[]
+    readonly fixedReferences: boolean
+    readonly fullQuality: boolean
+    readonly resolutions: readonly ("480p" | "720p" | "1080p")[]
+    readonly trendRun: boolean
+  }
 }
 
 export interface PluginDeploymentToolkit {
