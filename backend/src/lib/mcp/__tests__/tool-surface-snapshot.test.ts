@@ -1083,6 +1083,14 @@ const TRAILER_MEDIA_URL_VIDEO_BYTES = 16
 // added, so the fixture does NOT move. Measured by this suite on the same tree, after dev's Trailer
 // raises above: 465_895 total − 465_357 before = 538 B; the 103 B of headroom carry across.
 const TIGHTEN_FRAMING_SOURCE_BYTES = 538
+// RAISED 2026-10-20 by `make_clip_pack` taking several recordings (`media_urls`, `master_audio_url`,
+// `cameras` — the shared verbs-use-case-recordings.ts module; `media_url` becomes optional) and
+// `framing_source` (the shared verbs-use-case-framing.ts module), and its description saying several
+// recordings need Speaker Map (refused 403 where it is withheld), naming `output_data.cameras`, and that
+// a clip not cut between cameras is skipped like one not rendered. No tool was added, so the fixture
+// does NOT move. Measured by this suite on the same tree: 468_268 total − 465_895 before = 2_373 B
+// (make_clip_pack to 8_229, under the per-tool budget); the 103 B of headroom carry across.
+const CLIP_PACK_RECORDINGS_BYTES = 2_373
 
 // RAISED 2026-10-19 by Suno Separate on any audio, and nothing else. No tool was
 // added, so the fixture does NOT move. suno_separate_stems takes `audio_url`
@@ -1227,7 +1235,8 @@ export const TOOL_WIRE_BUDGET = {
     TIGHTEN_CAMERA_CAP_BYTES +
     TRAILER_RECORDINGS_BYTES +
     TRAILER_MEDIA_URL_VIDEO_BYTES +
-    TIGHTEN_FRAMING_SOURCE_BYTES,
+    TIGHTEN_FRAMING_SOURCE_BYTES +
+    CLIP_PACK_RECORDINGS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

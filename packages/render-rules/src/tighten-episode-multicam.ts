@@ -16,7 +16,8 @@ import type { UseCaseGraphEdge, UseCaseGraphNode } from "./use-case-graph"
 import type { UseCaseSources } from "./use-case-registry"
 import { USE_CASE_CAMERAS_DEFAULTS } from "./use-case-cameras"
 import { usecaseEdge, usecaseNode, usecaseTranscribeNode } from "./use-case-graph-parts"
-import { usecaseMulticamFront, usecaseMulticamSoundNode, usecaseSwitchNode, usecaseSwitchWires } from "./use-case-multicam"
+import { usecaseMulticamSoundNode } from "./use-case-multicam"
+import { usecaseMulticamPlanChain } from "./use-case-multicam-chain"
 import { usecaseFramesNode, usecaseFramesWires } from "./use-case-framing"
 import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, withTightenTail } from "./tighten-episode-parts"
 import type { TightenEpisodeGraph, TightenEpisodeSettings } from "./tighten-episode-graph"
@@ -59,32 +60,14 @@ export function buildTightenMulticamGraph(settings: TightenEpisodeSettings, sour
     return withTightenTail(settings, sources, { nodes, edges, framed: false })
   }
 
-  const transcript = { nodeId: ID.transcribe, handle: "json" } as const
-  const front = usecaseMulticamFront(sources, cameras, { transcript })
-  const pipOf = (id: string) => (front.nodes.find((n) => n.id === id)!.type === "upload-audio" ? "audio" : "video")
-  const nodes: UseCaseGraphNode[] = [
-    ...front.nodes,
-    usecaseTranscribeNode(ID.transcribe, 1, 0),
-    silenceNode(),
-    planNode(settings, front.planSourceIds, front.planSourceConfig),
-  ]
-  const edges: UseCaseGraphEdge[] = [
-    ...front.edges,
-    usecaseEdge(front.sound.nodeId, front.sound.pip, ID.transcribe, "audio"),
-    usecaseEdge(front.sound.nodeId, front.sound.pip, ID.silence, "in"),
-    ...front.planSourceIds.map((id) => usecaseEdge(id, pipOf(id), ID.plan, "sources")),
-    ...(front.offsets ? [usecaseEdge(front.offsets.nodeId, front.offsets.handle, ID.plan, "offsets")] : []),
-    usecaseEdge(ID.transcribe, "json", ID.plan, "transcript"),
-    usecaseEdge(ID.silence, "json", ID.plan, "silence"),
-  ]
-  const sw = usecaseSwitchNode(front, cameras, 3, 1)
-  if (sw) {
-    nodes.push(sw)
-    edges.push(...usecaseSwitchWires(front, { nodeId: ID.plan, handle: "edl" }, transcript))
-  }
-  // With a switch the render reads the switched edit and its renamed transcript; without one, the plan's edit and the transcript.
-  const edit = sw ? { nodeId: sw.id, handle: "edl" } : { nodeId: ID.plan, handle: "edl" }
-  const named = sw ? { nodeId: sw.id, handle: "transcript" } : { nodeId: ID.transcribe, handle: "json" }
+  const chain = usecaseMulticamPlanChain(sources, cameras, {
+    transcribeId: ID.transcribe,
+    planId: ID.plan,
+    plan: (order, config) => planNode(settings, order, config),
+    listeners: [{ node: silenceNode(), input: "in", output: "json", planInput: "silence" }],
+    switchAt: { column: 3, row: 1 },
+  })
+  const { nodes, edges, edit, named } = chain
   const framing = settings.framing
   nodes.push(framing
     ? usecaseNode(ID.render, TIGHTEN_FRAMED_RENDER_TYPE, 4, 1, { label: "Speaker Layout", quality, targetAspect: framing.aspect, layout: framing.layout, autoRegions: true })
@@ -95,6 +78,5 @@ export function buildTightenMulticamGraph(settings: TightenEpisodeSettings, sour
     nodes.push(usecaseFramesNode(3, 2))
     edges.push(...usecaseFramesWires({ edl: edit, transcript: named, renderId: ID.render }))
   }
-  const multicam = { ...(front.offsets ? { sync: front.offsets } : {}), ...(front.map ? { map: front.map } : {}) }
-  return withTightenTail(settings, sources, { nodes, edges, framed: !!framing, ...(Object.keys(multicam).length > 0 ? { multicam } : {}) })
+  return withTightenTail(settings, sources, { nodes, edges, framed: !!framing, ...(chain.multicam ? { multicam: chain.multicam } : {}) })
 }

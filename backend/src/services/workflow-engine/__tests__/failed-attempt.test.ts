@@ -91,7 +91,7 @@ describe("attemptRanWithInputs: settings across a change of the resolver's key s
  * the attempt resumes only when every one of them, and the Cameras settings
  * read for that shape, are the node's now.
  */
-for (const type of ["tighten-episode", "episode-trailer"] as const satisfies readonly UseCaseNodeType[]) describe(`attemptRanWithInputs (${type}): several recordings, a Master audio, the Cameras settings`, () => {
+for (const type of ["tighten-episode", "episode-trailer", "clip-pack"] as const satisfies readonly UseCaseNodeType[]) describe(`attemptRanWithInputs (${type}): several recordings, a Master audio, the Cameras settings`, () => {
   const d = usecaseDescriptor(type)
   const A = "https://r2/a.mp4", B = "https://r2/b.mp4", C = "https://r2/c.mp4", M = "https://r2/m.wav"
   const ranOn = (mediaUrls: string[], cameras: Record<string, unknown>, master?: string) => {
@@ -191,6 +191,7 @@ const PINNED_SETTING_KEYS: Readonly<Record<UseCaseNodeType, readonly string[]>> 
 const PINNED_MULTICAM_SETTING_KEYS: Readonly<Partial<Record<UseCaseNodeType, readonly string[]>>> = {
   "tighten-episode": [...PINNED_SETTING_KEYS["tighten-episode"], "cameras"],
   "episode-trailer": [...PINNED_SETTING_KEYS["episode-trailer"], "cameras"],
+  "clip-pack": [...PINNED_SETTING_KEYS["clip-pack"], "cameras"],
 }
 
 /**
@@ -202,6 +203,8 @@ const PINNED_MULTICAM_SETTING_KEYS: Readonly<Partial<Record<UseCaseNodeType, rea
  */
 const PINNED_OMITTED_AT_DEFAULT: Readonly<Partial<Record<UseCaseNodeType, Readonly<Record<string, Readonly<Record<string, unknown>>>>>>> = {
   "tighten-episode": { framingSource: { framing: { aspect: "9:16", layout: "stacked" }, framingSource: "tracking" } },
+  // Clip Pack frames by default: following faces is the framing source alone.
+  "clip-pack": { framingSource: { framingSource: "tracking" } },
 }
 
 describe("guard: the use-case resolvers' setting keys are pinned", () => {
@@ -251,12 +254,15 @@ describe("guard: the use-case resolvers' setting keys are pinned", () => {
  * (or one that ran the even split) resumes while the node frames with the even
  * split; a node that now follows faces runs fresh (its graph has Speaker Frames).
  */
-describe("attemptRanWithInputs: the framing source", () => {
-  const type: UseCaseNodeType = "tighten-episode"
+/** Each framed type's framed node data (Tighten frames when asked; Clip Pack frames by default). */
+const FRAMED_DATA: ReadonlyArray<readonly [UseCaseNodeType, Readonly<Record<string, unknown>>]> = [
+  ["tighten-episode", { output: "video", framing: { aspect: "9:16", layout: "stacked" } }],
+  ["clip-pack", {}],
+]
+for (const [type, framedData] of FRAMED_DATA) describe(`attemptRanWithInputs (${type}): the framing source`, () => {
   const d = usecaseDescriptor(type)
-  const framing = { aspect: "9:16", layout: "stacked" }
-  const stored = d.resolveSettings({ framing }, "video") as Record<string, unknown>
-  const now = (data: Record<string, unknown> = {}) => ({ mediaUrls: [MEDIA], framing, ...data })
+  const stored = d.resolveSettings({ ...framedData }, "video") as Record<string, unknown>
+  const now = (data: Record<string, unknown> = {}) => ({ mediaUrls: [MEDIA], ...framedData, ...data })
   it("a framed attempt that stored no framing source resumes against a node that sends none, or static", () => {
     expect("framingSource" in stored).toBe(false)
     expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: stored }, "video", now())).toBe(true)
@@ -266,7 +272,7 @@ describe("attemptRanWithInputs: the framing source", () => {
     expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: stored }, "video", now({ framingSource: "tracking" }))).toBe(false)
   })
   it("an attempt that followed faces resumes against tracking, and runs fresh against static", () => {
-    const tracked = d.resolveSettings({ framing, framingSource: "tracking" }, "video") as Record<string, unknown>
+    const tracked = d.resolveSettings({ ...framedData, framingSource: "tracking" }, "video") as Record<string, unknown>
     expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: tracked }, "video", now({ framingSource: "tracking" }))).toBe(true)
     expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: tracked }, "video", now({ framingSource: "static" }))).toBe(false)
   })
@@ -275,11 +281,11 @@ describe("attemptRanWithInputs: the framing source", () => {
   // (`freshRunInputs` → `usecaseFramingForViewer`, decided 2026-10-20): the resume match never reads
   // `auto` as tracking against an attempt that ran on the even split, so nobody pays again.
   describe("an auto node, held through the body its viewer's fresh run sends", () => {
-    const node = { id: "t1", type, data: { label: "Tighten Episode", fieldMappings: {}, output: "video", framing, framingSource: "auto" } } as unknown as SimpleNode
+    const node = { id: "t1", type, data: { label: d.label, fieldMappings: {}, ...framedData, framingSource: "auto" } } as unknown as SimpleNode
     const inputs = { useCaseMedia: [{ nodeId: "rec", url: MEDIA }] } as unknown as ResolvedInputs
     const fresh = (framesAvailable: boolean) => freshRunInputs(node, inputs, { multicam: false, framesAvailable })
-    const evenSplit = d.resolveSettings({ output: "video", framing }, "video") as Record<string, unknown>
-    const tracked = d.resolveSettings({ output: "video", framing, framingSource: "tracking" }, "video") as Record<string, unknown>
+    const evenSplit = d.resolveSettings({ ...framedData }, "video") as Record<string, unknown>
+    const tracked = d.resolveSettings({ ...framedData, framingSource: "tracking" }, "video") as Record<string, unknown>
     it("a viewer without Speaker Frames resumes an attempt that ran on the even split", () => {
       expect(attemptRanWithInputs(type, { mediaUrls: [MEDIA], settings: evenSplit }, "video", fresh(false))).toBe(true)
     })

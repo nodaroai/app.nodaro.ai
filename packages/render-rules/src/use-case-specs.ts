@@ -14,6 +14,7 @@
 import type { UseCaseGraph, UseCaseMediaKind } from "./use-case-graph"
 import { USE_CASE_MASTER_NODE_ID, USE_CASE_MAX_RECORDINGS, type UseCaseSourcesShape } from "./use-case-cameras"
 import { editPlanRenderEstimateLength, renderLengthSec } from "./apply-edl-estimate"
+import { MULTICAM_NODE_IDS } from "./use-case-multicam"
 import type { UseCaseDescriptor, UseCaseSettings, UseCaseSources } from "./use-case-registry"
 import {
   TIGHTEN_MAX_EPISODE_SEC,
@@ -114,18 +115,22 @@ export const USE_CASE_SPECS = {
   }),
   clipPack: defineUseCase<ClipPackSettings>({
     maxSourceSec: TIGHTEN_MAX_EPISODE_SEC,
-    maxRecordings: 1,
+    // Up to six recordings (decided 2026-10-17), read only for a viewer who may use Speaker Map.
+    maxRecordings: USE_CASE_MAX_RECORDINGS,
     // An audio recording makes audio clips (decided 2026-10-14).
     needsVideo: false,
-    inputNodeIds: { media: CLIP_PACK_NODE_IDS.source },
-    settingKeys: ["count", "targetDurationSec", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide"],
+    inputNodeIds: { media: CLIP_PACK_NODE_IDS.source, masterAudio: USE_CASE_MASTER_NODE_ID },
+    // `cameras` is resolved (and sent) only for two or more recordings or a Master audio; `framingSource` only when a framed pack follows faces.
+    settingKeys: ["count", "targetDurationSec", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "cameras", "framingSource"],
     resultKind: "clips",
-    // Every clip is rendered and captioned, whichever one fails: each failed clip refunds itself and is named.
-    triesEvery: [CLIP_PACK_NODE_IDS.render, CLIP_PACK_NODE_IDS.captions],
+    // Every clip is switched, rendered and captioned, whichever one fails: each failed clip refunds itself and is named.
+    // The switch comes last: the render and the captions keep their places.
+    triesEvery: [CLIP_PACK_NODE_IDS.render, CLIP_PACK_NODE_IDS.captions, MULTICAM_NODE_IDS.switch],
     // An audio recording makes audio clips: no framing (null, the recording's shape) and no captions.
     audioForced: Object.freeze({ framing: null, captions: false }),
-    resolveSettings: (raw, kind) => resolveClipPackSettings(raw, kind),
-    build: (settings, sources) => buildClipPackGraph(settings, { media: sources.media }),
+    resolveSettings: (raw, kind, shape) => resolveClipPackSettings(raw, kind, shape),
+    // Every recording and the master: one recording builds exactly as before.
+    build: (settings, sources) => buildClipPackGraph(settings, sources),
   }),
 } as const
 

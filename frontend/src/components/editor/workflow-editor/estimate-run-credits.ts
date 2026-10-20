@@ -257,10 +257,19 @@ interface ExpandedGraph {
  * final: its final chain from the render on, no fee). In the editor's node and
  * edge shape (inner ids are `<node>::<id>`). `null` when there is none.
  */
+/**
+ * The editor viewer's expansion flags: several recordings and a master only
+ * for a viewer who may use Speaker Map, an `auto` framing source as the even
+ * split only for one Speaker Frames is withheld from — so the run reads what
+ * the quote prices, and every editor surface that names a run's steps (the
+ * Render final footer) names the ones the quote prices.
+ */
+export function usecaseEditorExpandOptions(): { readonly multicam: boolean; readonly framesWithheld?: true } {
+  return { multicam: usecaseMulticamOffered(), ...(usecaseFramesWithheld() ? { framesWithheld: true as const } : {}) }
+}
+
 function expandedForEditor(nodes: WorkflowNode[], edges: WorkflowEdge[]): ExpandedGraph | null {
-  // Several recordings and a master only for a viewer who may use Speaker Map, an `auto` framing source as
-  // the even split only for one Speaker Frames is withheld from: the run reads what the quote prices.
-  const expansion = expandUseCaseNodes(nodes, edges, { multicam: usecaseMulticamOffered(), ...(usecaseFramesWithheld() ? { framesWithheld: true } : {}) })
+  const expansion = expandUseCaseNodes(nodes, edges, usecaseEditorExpandOptions())
   if (!expansion.expanded) return null
   return {
     expansion,

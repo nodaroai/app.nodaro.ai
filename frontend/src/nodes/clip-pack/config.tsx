@@ -26,7 +26,10 @@ import { CAPTION_STYLE_LABEL_KEYS } from "@/components/editor/config-panels/capt
 import { SPEAKER_EMPHASIS_LABEL_KEYS } from "@/components/editor/config-panels/speaker-view-reasons"
 import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
 import { useSpeakerSwitchLabel } from "@/components/editor/config-panels/speaker-switch-label"
-import { USE_CASE_AUDIO_LOCKS, usecaseAudioLockFailSafe, usecaseWiredMediaKind } from "@/lib/use-case-audio-lock"
+import { UseCaseFramingSourceField } from "@/components/editor/config-panels/use-case-framing-source-field"
+import { UseCaseMulticamSection, usecaseViewerSoundOnly } from "@/components/editor/config-panels/use-case-multicam-section"
+import { USE_CASE_AUDIO_LOCKS, usecaseAudioLockFailSafe } from "@/lib/use-case-audio-lock"
+import { useUseCaseMulticamViewer } from "@/lib/use-case-multicam-viewer"
 import type { UnitConfigKit } from "../exec-kit"
 import type { ClipPackData } from "./types"
 
@@ -39,25 +42,32 @@ type Framing = NonNullable<ClipPackData["framing"]>
  * Clip Pack's settings. What the run would read differently from the stored
  * value is snapped here, by the run's own rules (@nodaro/render-rules), so
  * the panel never shows a setting the run quietly overrides:
- *  - the recording wired into `media` is read by the estimate's rule
- *    (`usecaseMediaKindOf`, from the wire) — an audio one makes audio clips,
+ *  - the recordings the run reads (the first alone, or — for a viewer who may
+ *    use Speaker Map — every one) are read by the estimate's rule (the store's
+ *    audio lock, `usecaseViewerSoundOnly`) — sound only makes audio clips,
  *    with no framing and no captions (the person's own are remembered, and
  *    come back when a video is wired again — lib/use-case-audio-lock.ts). The
  *    run itself decides by probing the file;
  *  - framing offers only the layouts Speaker View draws at the chosen shape,
  *    and a stored layout it does not draw is snapped as the run snaps it
  *    (CLAUDE.md Provider Enum Sync 12b), keeping the switch and emphasis;
+ *  - with a framing, its source (`UseCaseFramingSourceField`): a saved node
+ *    without one shows — and runs — the even split; a new node starts on
+ *    automatic (unit.json). Hidden with Framing under the audio lock, kept;
  *  - the clip count and length are clamped to what the run reads (1–50
  *    clips, 5–180 seconds) when the person leaves the field, never while
  *    they type.
+ * Two or more recordings or a Master audio show the Cameras section
+ * (`UseCaseMulticamSection`) — only to a viewer who may use Speaker Map; any
+ * other viewer is told their run reads the first recording only.
  */
-export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }) {
+export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources = [] }: ConfigProps<never> & { readonly kit: UnitConfigKit; readonly nodeId: string }) {
   const data = raw as unknown as ClipPackData
   const t = useT()
   const switchLabel = useSpeakerSwitchLabel()
-  // The recording the run reads, in the node's order — the store's lock reads it so too.
-  const wiredKind = usecaseWiredMediaKind(nodeId, nodes, edges ?? [])
-  const audioSource = wiredKind === "audio"
+  const viewer = useUseCaseMulticamViewer()
+  // The recordings this viewer's run reads, in the node's order — the store's lock reads them so too.
+  const audioSource = usecaseViewerSoundOnly(nodeId, nodes, edges ?? [], viewer)
   // No framing stored = the run's default framing; null = none.
   const framing: Framing | null = audioSource ? null : data.framing === undefined ? { ...CLIP_PACK_DEFAULT_FRAMING } : data.framing
   const captions = !audioSource && (data.captions ?? D.captions)
@@ -70,9 +80,9 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: Confi
   useEffect(() => {
     // The store keeps the lock on every wire change (and gives the person's settings
     // back); this only snaps a graph that arrived already wired.
-    const patch = usecaseAudioLockFailSafe(wiredKind, data, USE_CASE_AUDIO_LOCKS["clip-pack"]!)
+    const patch = usecaseAudioLockFailSafe(audioSource ? "audio" : undefined, data, USE_CASE_AUDIO_LOCKS["clip-pack"]!)
     if (patch) onUpdate(patch)
-  }, [wiredKind])
+  }, [audioSource])
 
   useEffect(() => {
     if (!framing || audioSource) return
@@ -97,6 +107,8 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: Confi
 
   return (
     <div className="space-y-4">
+      <UseCaseMulticamSection type="clip-pack" data={data} onUpdate={onUpdate} nodeId={nodeId} nodes={nodes} edges={edges ?? []} sources={sources} viewer={viewer} />
+
       <p className="text-xs text-muted-foreground">{t("proccfg.clipPackHint")}</p>
 
       <div className="grid grid-cols-2 gap-3">
@@ -172,6 +184,11 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges }: Confi
         )}
         {audioSource && <p className="text-xs text-muted-foreground">{t("proccfg.clipPackAudioForced")}</p>}
       </div>
+
+      {/* Only with a framing chosen; hidden with Framing under the audio lock — never cleared. */}
+      {framing && (
+        <UseCaseFramingSourceField value={data.framingSource} onChange={(framingSource) => onUpdate({ framingSource })} absent="static" />
+      )}
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">

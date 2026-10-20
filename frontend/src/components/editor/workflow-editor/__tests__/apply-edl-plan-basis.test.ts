@@ -108,8 +108,10 @@ describe("the plan basis a render would stamp now (A3-2: the review's freshness 
 describe("execute-node stamps through the helper, on the list row only", () => {
   it("passes the list row and sends the basis beside the clip key", () => {
     const src = readFileSync(join(__dirname, "../execute-node.ts"), "utf8")
-    const block = src.slice(src.indexOf("const clipKey = renderPlanClipKey("), src.indexOf("if (node.type === \"edit-plan\") {"))
-    expect(block).toMatch(/browserRenderPlanBasis\(\s*node\.id,\s*graphNodes,\s*graphEdges,\s*listRowIndex,?\s*\)/)
+    const block = src.slice(src.indexOf("const planRow = "), src.indexOf("if (node.type === \"edit-plan\") {"))
+    // The list row, else the lone delivered row behind a Camera Switch (renderLoneRow, decided 2026-10-20).
+    expect(block).toContain("const planRow = listRowIndex ?? browserRenderLoneRow(")
+    expect(block).toMatch(/browserRenderPlanBasis\(\s*node\.id,\s*graphNodes,\s*graphEdges,\s*planRow,?\s*\)/)
     expect(block).toContain("...(planBasis ? { planBasis } : {})")
   })
 })

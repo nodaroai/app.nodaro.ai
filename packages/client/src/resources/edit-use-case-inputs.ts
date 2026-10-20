@@ -148,13 +148,13 @@ export type ClipPackEmphasis = SpeakerEmphasisStyle | `${Exclude<SpeakerEmphasis
 
 /**
  * Input for {@link EditResource.clipPack} and
- * {@link EditResource.estimateClipPack}: one recording in, a pack of short
- * clips out. Only `mediaUrl` is required; every other field left out takes
- * the node's default.
+ * {@link EditResource.estimateClipPack}: the recording (or the recordings of
+ * one conversation, see {@link UseCaseRecordingsInput} — each clip then cuts
+ * to whoever is talking) in, a pack of short clips out. An audio recording
+ * makes audio clips (no framing, no captions). Only the recording is
+ * required; every other field left out takes the node's default.
  */
-export interface ClipPackInput {
-  /** The recording — a video or audio URL, up to 3 hours. An audio recording makes audio clips (no framing, no captions). */
-  mediaUrl: string
+export interface ClipPackInput extends UseCaseRecordingsInput {
   /** How many clips to find, 1–50 (default 8). The plan may find fewer. */
   count?: number
   /** Each clip's target length in seconds, {@link CLIP_PACK_MIN_TARGET_SEC}–{@link CLIP_PACK_MAX_TARGET_SEC} (default 60). */
@@ -173,6 +173,15 @@ export interface ClipPackInput {
     switchType?: SpeakerSwitchId
     emphasisStyle?: ClipPackEmphasis
   } | null
+  /**
+   * With a framing, how it follows the speakers: `"static"` splits the frame
+   * evenly by speaker (what a request that leaves this out gets); `"tracking"`
+   * runs Speaker Frames once over the whole pack to follow faces (charged per
+   * started block of 1,000 sampled frames; refused 403 where Speaker Frames is
+   * not available to the caller); `"auto"` follows faces while Speaker Frames
+   * is available to the caller, else the even split. Ignored without a framing.
+   */
+  framingSource?: "auto" | "static" | "tracking"
   /** Caption each video clip (on by default). */
   captions?: boolean
   /** The captions' look (default `"karaoke"`). */

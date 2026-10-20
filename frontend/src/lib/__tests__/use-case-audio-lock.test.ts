@@ -266,4 +266,21 @@ describe("the audio lock over several recordings (decided 2026-10-18): the recor
     connect("vid", "t1")
     expect(dataOf("t1")).toMatchObject({ output: "audio", captions: false, settingsBeforeAudio: { output: "video", captions: true } })
   })
+
+  it("the store, Clip Pack (decided 2026-10-17): a video wire beside a sound-only first recording gives back Framing and Captions, for a viewer whose run reads them all", () => {
+    viewer.multicam = true
+    const framing = { aspect: "9:16", layout: "stacked", switchType: "pan", emphasisStyle: "scale" }
+    act(() => useWorkflowStore.setState({ nodes: [VIDEO, AUDIO, node("cp1", "clip-pack", { framing, captions: true })], edges: [] }))
+    connect("aud", "cp1")
+    expect(dataOf("cp1")).toMatchObject({ framing: null, captions: false, settingsBeforeAudio: { framing, captions: true } })
+    useWorkflowStore.getState().onConnect({ source: "vid", sourceHandle: "video", target: "cp1", targetHandle: "media" })
+    expect(dataOf("cp1")).toMatchObject({ framing, captions: true })
+    expect(dataOf("cp1").settingsBeforeAudio).toBeUndefined()
+  })
+  it("the store, Clip Pack, a viewer whose run reads one recording: the second (video) wire changes nothing", () => {
+    act(() => useWorkflowStore.setState({ nodes: [VIDEO, AUDIO, node("cp1", "clip-pack", { captions: true })], edges: [] }))
+    connect("aud", "cp1")
+    connect("vid", "cp1")
+    expect(dataOf("cp1")).toMatchObject({ framing: null, captions: false })
+  })
 })

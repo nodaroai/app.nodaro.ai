@@ -28,6 +28,7 @@ import { NO_EDL } from "@/lib/edl-validity"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
 import { edlPathIds, type ListedRun } from "./newer-run-review"
 import { extractNodeOutputAsList } from "./node-input-resolver"
+import { browserRenderLoneRow } from "./apply-edl-stamps"
 
 // ── TA1 (a): the render's own rule ──────────────────────────────────────────
 
@@ -124,7 +125,7 @@ export async function finalIsUnchanged(
         nodes,
         edges as readonly RenderGraphEdge[],
         (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"),
-        render.row,
+        render.row ?? browserRenderLoneRow(renderId, nodes, edges as readonly RenderGraphEdge[]),
       )
       const last = takes.find(
         (t) => t.quality === "final" && !!t.jobId && (clipKey === undefined || t.clipKey === clipKey),

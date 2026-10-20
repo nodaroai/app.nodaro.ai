@@ -76,7 +76,7 @@ import {
   clampSmartCutWindow,
   type Transcript
 } from "@nodaro/shared/edl";
-import { browserRenderPlanBasis } from "./apply-edl-stamps";
+import { browserRenderLoneRow, browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
 import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
 import { executeSiteCapture } from "./site-capture-execute";
@@ -7567,12 +7567,14 @@ function executeNodeCore(
     // the iteration number. The server calls the same rule (applyEdlClipKey);
     // the worker stamps it on the result.
     const { nodes: graphNodes, edges: graphEdges } = runGraph();
+    // Run once behind a Camera Switch with one delivered row: that row (`renderLoneRow`).
+    const planRow = listRowIndex ?? browserRenderLoneRow(node.id, graphNodes, graphEdges);
     const clipKey = renderPlanClipKey(
       node.id,
       graphNodes,
       graphEdges,
       (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"),
-      listRowIndex,
+      planRow,
     );
     // The plan value it cuts (A3-1), only when that is the plan's own value:
     // a render behind Camera Switch is never stamped here (apply-edl-stamps.ts).
@@ -7580,7 +7582,7 @@ function executeNodeCore(
       node.id,
       graphNodes,
       graphEdges,
-      listRowIndex,
+      planRow,
     );
     setUserPromptTemplate(undefined);
     return runApplyEdl(

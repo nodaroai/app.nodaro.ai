@@ -1935,7 +1935,13 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `media_url` | string (URL) | yes | The recording (video or audio URL). |
+| `media_url` | string (URL) |  | The recording (video or audio URL). Or `media_urls`. |
+| `media_urls` | string (URL)[] |  | Instead of media_url: 1–6 recordings of one conversation (cameras; one may be sound only), in order; without master_audio_url, 2+ cameras keep one place for the sound, so up to 5. With 2 or more the run lines them up, works out who is on which camera and cuts to whoever is talking. From 1 to 6 items. |
+| `master_audio_url` | string (URL) |  | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. Up to 6 recordings in all, this one included. |
+| `cameras` | object |  | With several recordings or a Master audio: the Cameras settings. |
+| `cameras.wide_camera` | integer |  | Which recording (1-based) is the wide shot: shown when a speaker has no camera of their own. From 1 to 6. |
+| `cameras.already_synced` | boolean |  | The recordings already share one clock: skip lining them up. |
+| `cameras.speaker_cameras` | object (map of integer) |  | Who is on which camera: speaker number (1 = the first voice heard) → recording number, 0 = the wide shot. Overrides the automatic map. |
 | `count` | integer |  | How many clips to find, 1–50 (default 8); the plan may find fewer. From 1 to 50. |
 | `target_length_sec` | integer |  | Each clip's target length in seconds, 5–180 (default 60). From 5 to 180. |
 | `framing` | object or null |  | Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default 9:16, stacked). null: the recording's shape. |
@@ -1943,6 +1949,7 @@ Needs `workflows:execute`.
 | `framing.layout` | string |  | How the speakers are laid out (default stacked; one the shape does not draw is snapped). One of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`. |
 | `framing.switch_type` | string |  | The switch at each speaker change (default pan). One of `cut`, `pan`, `zoom`, `xfade:fade`, `xfade:dissolve`, `xfade:dip-to-black`, `xfade:dip-to-white`, `xfade:fadegrays`, `xfade:wipe-left`, `xfade:wipe-right`, `xfade:wipe-up`, `xfade:wipe-down`, `xfade:wipe-tl`, `xfade:wipe-tr`, `xfade:wipe-bl`, `xfade:wipe-br`, `xfade:slide-left`, `xfade:slide-right`, `xfade:slide-up`, `xfade:slide-down`, `xfade:smooth-left`, `xfade:smooth-right`, `xfade:smooth-up`, `xfade:smooth-down`, `xfade:circle-open`, `xfade:circle-close`, `xfade:circle-crop`, `xfade:rect-crop`, `xfade:horz-open`, `xfade:horz-close`, `xfade:vert-open`, `xfade:vert-close`, `xfade:diag-tl`, `xfade:diag-tr`, `xfade:diag-bl`, `xfade:diag-br`, `xfade:hl-slice`, `xfade:hr-slice`, `xfade:vu-slice`, `xfade:vd-slice`, `xfade:reveal-left`, `xfade:reveal-right`, `xfade:reveal-up`, `xfade:reveal-down`, `xfade:cover-left`, `xfade:cover-right`, `xfade:cover-up`, `xfade:cover-down`, `xfade:pixelize`, `xfade:radial`, `xfade:hblur`, `xfade:distance`, `xfade:zoom-in`, `xfade:squeeze-h`, `xfade:squeeze-v`. |
 | `framing.emphasis` | string |  | How the speaker talking is emphasised (default scale): "none", or scale, border, dim joined with "+" (each once). At most 40 characters. |
+| `framing_source` | string |  | How a framed episode follows its speakers: "static" (default) splits the frame evenly by speaker; "tracking" follows faces with Speaker Frames (charged per started block of 1,000 sampled frames; a camera shared by several speakers keeps the even split until faces are named; refused 403 where Speaker Frames is not available to you); "auto" follows faces while Speaker Frames is available to you, else the even split. Ignored without a framing. One of `auto`, `static`, `tracking`. |
 | `captions` | boolean |  | Caption each video clip (default true). |
 | `caption_style` | string |  | Caption style (default karaoke). One of `subtitle`, `word-highlight`, `karaoke`, `tiktok-words`, `word-pop`, `bouncy`. |
 | `review_before_render` | boolean |  | Stop at proxy previews for review (default false). |

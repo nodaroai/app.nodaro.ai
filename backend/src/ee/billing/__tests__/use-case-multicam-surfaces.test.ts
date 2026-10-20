@@ -78,6 +78,19 @@ describe("the listing prices a use-case node as a general user's run reads it (d
     expect((await listing(multi)).preview).toBe((await listing(one)).preview + MULTICAM_STEPS)
   })
 
+  it("Clip Pack the same way (decided 2026-10-20): its first recording while Speaker Map is withheld from users; every recording once it is available to all, Camera Switch once per clip", async () => {
+    const pack = { id: "t1", type: "clip-pack", data: { label: "Clip Pack", cameras: { wide: 3 } } }
+    const multi = { nodes: [cam(1), cam(2), cam(3), master, pack], edges: [media(1), media(2), media(3), masterWire] }
+    const one = { nodes: [cam(1), pack], edges: [media(1)] }
+    const nodesWith = (extra: string[]) => new Set(["clip-pack", "upload-video", "upload-audio", ...extra])
+    __resetAvailabilityOverridesForTests({ nodes: nodesWith([]) })
+    expect(await listing(multi)).toEqual(await listing(one))
+    __resetAvailabilityOverridesForTests({ nodes: nodesWith(["speaker-map"]) })
+    // The default pack: 8 clips, each switched on its own.
+    const steps = STATIC_CREDIT_COSTS["audio-sync:4src"]! + STATIC_CREDIT_COSTS["speaker-map"]! + 8 * STATIC_CREDIT_COSTS["camera-switch"]!
+    expect((await listing(multi)).preview).toBe((await listing(one)).preview + steps)
+  })
+
   it("the range's ceiling follows the same rule", async () => {
     speakerMapWithheld()
     expect((await listing(MULTICAM, {})).ceiling).toEqual((await listing(ONE, {})).ceiling)

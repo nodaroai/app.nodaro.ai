@@ -40,12 +40,12 @@ import { executeUseCase } from "../use-case-executor"
 const USER = "00000000-0000-4000-8000-000000000001"
 const REC = { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] }
 
-async function bodyOf(data: Record<string, unknown>, inputs: Record<string, unknown> = REC, multicam = false): Promise<string> {
+async function bodyOf(data: Record<string, unknown>, inputs: Record<string, unknown> = REC, multicam = false, type = "tighten-episode"): Promise<string> {
   store.multicam = multicam
   const f = vi.fn().mockResolvedValue({ ok: true, status: 202, json: async () => ({ jobId: "job-1" }) })
   vi.stubGlobal("fetch", f)
   try {
-    const node = { id: "t1", type: "tighten-episode", position: { x: 0, y: 0 }, data: { label: "Tighten Episode", fieldMappings: {}, ...data } }
+    const node = { id: "t1", type, position: { x: 0, y: 0 }, data: { label: type, fieldMappings: {}, ...data } }
     store.nodes = [node]
     await executeUseCase(node as never, inputs as never, { userId: USER, isWorkflowStale: () => false } as never)
     return (f.mock.calls[0]![1] as RequestInit).body as string
@@ -151,3 +151,32 @@ describe("the framing source (decided 2026-10-17/20)", () => {
     expect(await framed({ framingSource: "auto" }, false)).toBe(`${HEAD},"framingSource":"static","userId":"${USER}"}`)
   })
 })
+
+/**
+ * Trailer and Clip Pack take several recordings too (decided 2026-10-17): the
+ * same rule, read off each type's descriptor — the server's engine body for
+ * each viewer (use-case-request-body.test.ts on the server).
+ */
+for (const [type, settings, optional] of [
+  ["episode-trailer", { formats: ["9:16"], planTier: "standard", instructions: "" }, { useCaseIntroCard: "https://r2/card.mp4" }],
+  ["clip-pack", { count: 8, captions: true, planTier: "standard", instructions: "", framingSource: "static" }, {}],
+] as const) {
+  describe(`${type}: recordings and Master audio for each viewer`, () => {
+    const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+    const FIRST = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }
+    const MIC = { useCaseMasterAudio: "https://r2/m.wav", useCaseMasterAudioNodeId: "mic" }
+    it("a viewer who may not use Speaker Map: two cameras, a master and Cameras settings (an object, null or \"\") send the one-recording body, byte for byte", async () => {
+      const one = await bodyOf(settings, { ...FIRST, ...optional }, false, type)
+      for (const cameras of [{ wide: 2, synced: true }, null, ""]) {
+        expect(await bodyOf({ ...settings, cameras }, { ...TWO, ...MIC, ...optional }, false, type), JSON.stringify(cameras)).toBe(one)
+      }
+    })
+    it("a viewer who may use Speaker Map: every recording, the master and the Cameras settings", async () => {
+      expect(JSON.parse(await bodyOf({ ...settings, cameras: { wide: 2 } }, { ...TWO, ...MIC, ...optional }, true, type))).toMatchObject({
+        mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+        masterAudioUrl: "https://r2/m.wav",
+        cameras: { wide: 2 },
+      })
+    })
+  })
+}

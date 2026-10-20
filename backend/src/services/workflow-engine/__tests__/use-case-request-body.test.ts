@@ -1,4 +1,4 @@
-// @test-units-by-name looks up only the tighten-episode body (USE_CASE_BODIES["tighten-episode"]) and builds episode-trailer and episode-chapters engine bodies by type
+// @test-units-by-name looks up only the tighten-episode and clip-pack bodies (USE_CASE_BODIES) and builds episode-trailer, clip-pack and episode-chapters engine bodies by type
 /**
  * The body the backend engine sends a use-case node's route (`requestOf`).
  * Tighten Episode's bodies are pinned byte for byte (key order included) to
@@ -181,5 +181,38 @@ describe("Trailer's recordings and Master audio (decided 2026-10-20: several onl
     })
     // One recording sends no Cameras settings, even for such a viewer.
     expect(trailer({ formats: ["9:16"], cameras: { wide: 2 } }, FIRST, true)).toBe(trailer({ formats: ["9:16"] }, FIRST, false))
+  })
+})
+
+describe("Clip Pack's recordings, Master audio and framing source (decided 2026-10-17/20)", () => {
+  const TWO = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }, { nodeId: "b", url: "https://r2/b.mp4" }] }
+  const FIRST = { useCaseMedia: [{ nodeId: "a", url: "https://r2/a.mp4" }] }
+  const MIC = { useCaseMasterAudio: "https://r2/m.wav", useCaseMasterAudioNodeId: "mic" }
+  const pack = (data: Record<string, unknown>, inputs: Record<string, unknown>, multicam: boolean, framesAvailable = false) =>
+    JSON.stringify(requestOf({ id: "c1", type: "clip-pack", data: { label: "Clip Pack", fieldMappings: {}, ...data } } as unknown as SimpleNode, inputs as unknown as ResolvedInputs, ctx, null, { multicam, framesAvailable }).body)
+
+  it("a viewer who may not use Speaker Map: the first recording alone — its master, other cameras and Cameras settings ignored — byte-identical to the run as before", () => {
+    for (const cameras of [{ wide: 2 }, null, ""]) {
+      expect(pack({ count: 4, cameras }, { ...TWO, ...MIC }, false), JSON.stringify(cameras)).toBe(pack({ count: 4 }, FIRST, false))
+    }
+  })
+  it("a viewer who may use Speaker Map: every recording, the master and the Cameras settings", () => {
+    expect(JSON.parse(pack({ count: 4, cameras: { wide: 2 } }, { ...TWO, ...MIC }, true))).toMatchObject({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      count: 4,
+      cameras: { wide: 2 },
+    })
+    expect(pack({ count: 4, cameras: { wide: 2 } }, FIRST, true)).toBe(pack({ count: 4 }, FIRST, false))
+  })
+  it("auto: sent as auto to a viewer who may use Speaker Frames, as the even split to anyone else; a node without one sends none", () => {
+    expect(JSON.parse(pack({ framingSource: "auto" }, FIRST, false, true)).framingSource).toBe("auto")
+    expect(JSON.parse(pack({ framingSource: "auto" }, FIRST, false, false)).framingSource).toBe("static")
+    expect("framingSource" in JSON.parse(pack({}, FIRST, false, true))).toBe(false)
+  })
+  it("the route's body schema takes every value the engine sends", () => {
+    for (const framingSource of ["auto", "static", "tracking"]) {
+      expect(USE_CASE_BODIES["clip-pack"].safeParse({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"], masterAudioUrl: "https://r2/m.wav", framingSource }).success).toBe(true)
+    }
   })
 })

@@ -449,12 +449,15 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         "Cut a podcast or interview recording into a pack of short clips in one call: finds the best moments " +
         `(\`count\`, default ${CLIP_PACK_DEFAULTS.count}; \`target_length_sec\`, default ${CLIP_PACK_DEFAULTS.targetDurationSec}), renders each — ` +
         `framed for ${F.aspect} with the speakers ${F.layout} by default (\`framing\`, or \`null\` for the recording's shape) — ` +
-        "and captions each clip (`captions`, default on). Pass `media_url` (a video or audio recording, up to 3 hours); " +
-        "an audio recording makes audio clips, with no framing or captions. `review_before_render: true` stops at quick proxy " +
+        "and captions each clip (`captions`, default on); `framing_source` follows faces. Pass `media_url` (a video or audio recording, up to 3 hours; " +
+        "an audio recording makes audio clips, with no framing or captions), or `media_urls` (several cameras of one conversation: each clip " +
+        "cuts to whoever is talking) and optionally `master_audio_url`. " +
+        RECORDINGS_SENTENCE +
+        " `review_before_render: true` stops at quick proxy " +
         "previews: inspect `output_data.json` (one EDL per clip), then `continue_use_case` with `mode: \"render-final\"` and an " +
         "`edited_edl` that keeps or drops clips (keep at least one); Render final renders only the kept clips, with no fee. " +
         "Returns a job id: the clips are `output_data.clips` (`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]`), " +
-        "the first also `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried: one that cannot be rendered is " +
+        "the first also `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried: one that cannot be rendered (or cut between cameras) is " +
         "skipped and not charged, counted in `output_data.failedClips`, and the pack completes with the others, its fee kept, so it " +
         "has no `from-failed`: render the missing clip yourself from its EDL in `output_data.json` (Apply EDL or Speaker View, then " +
         "Add Captions; no fee), or start a new run. A clip whose captions could " +
@@ -463,7 +466,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("clipPack")),
       inputSchema: {
-        media_url: z.string().url().describe("The recording (video or audio URL)."),
+        ...recordingsInputShape,
         count: z
           .number()
           .int()
@@ -496,6 +499,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
           .nullable()
           .optional()
           .describe(`Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default ${F.aspect}, ${F.layout}). null: the recording's shape.`),
+        ...framingSourceInputShape,
         captions: z.boolean().optional().describe(`Caption each video clip (default ${CLIP_PACK_DEFAULTS.captions}).`),
         caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${CLIP_PACK_DEFAULTS.captionStyle}).`),
         review_before_render: z.boolean().optional().describe(`Stop at proxy previews for review (default ${CLIP_PACK_DEFAULTS.reviewBeforeRender}).`),
@@ -508,14 +512,16 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const recordings = recordingsPayload(args)
+      if ("error" in recordings) return recordings.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/clip-pack",
         label: CLIP_PACK_LABEL,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
+          ...recordings.payload,
           ...(args.count !== undefined ? { count: args.count } : {}),
           ...(args.target_length_sec !== undefined ? { targetDurationSec: args.target_length_sec } : {}),
           // null = no framing; a field left out takes the route's default (layout: stacked).
@@ -531,6 +537,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
                   },
                 }
               : {}),
+          ...framingSourcePayload(args),
           ...(args.captions !== undefined ? { captions: args.captions } : {}),
           ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
           ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
@@ -545,6 +552,7 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         widgetKind: "video",
         widgetData: { prompt: "(clip pack)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }

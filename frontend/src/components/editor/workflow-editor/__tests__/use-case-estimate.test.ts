@@ -188,3 +188,31 @@ describe("a framed Tighten's framing source in the editor's quote (decided 2026-
     expect(quoteOf("tracking")).toBe(1121)
   })
 })
+
+describe("a Clip Pack following faces in the editor's quote (docs: 996 — ONE Speaker Frames run over the whole pack)", () => {
+  afterEach(() => { frames.withheld = false })
+  const charged: Record<string, number> = {
+    "elevenlabs-stt": 25,
+    "edit-plan:clips:standard:60m": 286,
+    "speaker-frames:8u": 18,
+    "speaker-view:complex:2u": 27,
+    "add-captions:kinetic": 55,
+    "use-case-fee:clip-pack": 11,
+  }
+  const pack = (framingSource?: string) => ({ id: "cp", type: "clip-pack", position: { x: 0, y: 0 }, data: { label: "Clip Pack", fieldMappings: {}, ...(framingSource ? { framingSource } : {}) } })
+  const packWire = { id: "e", source: "rec", target: "cp", sourceHandle: "video", targetHandle: "media" }
+  const idsOf = (framingSource?: string) => runModelIds(wholeRunExecutable([rec, pack(framingSource)] as never[]), [rec, pack(framingSource)] as never[], [packWire] as never[])
+  const quoteOf = (framingSource?: string) => usecaseNodeCredits("cp", [rec, pack(framingSource)] as never[], [packWire] as never[], (id) => charged[id])
+
+  it("tracking and auto (for a viewer Speaker Frames is available to): Speaker Frames once, 8 blocks, never once per clip — 996, the server's", () => {
+    for (const source of ["tracking", "auto"]) {
+      expect(idsOf(source).filter((id) => id.startsWith("speaker-frames"))).toEqual(["speaker-frames", "speaker-frames:8u"])
+      expect(quoteOf(source)).toBe(996)
+    }
+  })
+  it("a viewer Speaker Frames is withheld from: auto is the even split's quote", () => {
+    frames.withheld = true
+    expect(quoteOf("auto")).toBe(quoteOf())
+    expect(quoteOf()).toBe(996 - 18)
+  })
+})

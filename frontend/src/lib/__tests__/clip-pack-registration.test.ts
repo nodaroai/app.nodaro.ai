@@ -12,17 +12,18 @@ import { NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { NODE_FAMILIES, TAB_SUPERSET } from "@/lib/node-families"
 import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
+import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 
 const typeOf = (id: string) =>
   ({ rec: "upload-video", pod: "upload-audio", cp: "clip-pack", img: "upload-image", smf: "social-media-format", jp: "json-process", ta: "trim-audio" } as Record<string, string>)[id]
 
 describe("Clip Pack is registered everywhere it must be", () => {
-  it("definition: the recording in; the clips and the plan out; the run's own defaults", () => {
+  it("definition: the recordings and a Master audio in; the clips and the plan out; the run's own defaults", () => {
     const def = NODE_DEFINITIONS.find((d) => d.type === "clip-pack")!
     expect(def.label).toBe("Clip Pack")
     expect(def.category).toBe("processing")
-    expect(def.inputs).toEqual(["media"])
+    expect(def.inputs).toEqual(["media", "masterAudio"])
     expect(def.outputs).toEqual(["clips", "json"])
     expect(def.defaultData).toMatchObject({
       label: "Clip Pack",
@@ -33,6 +34,8 @@ describe("Clip Pack is registered everywhere it must be", () => {
       captionStyle: "karaoke",
       reviewBeforeRender: false,
       planTier: "standard",
+      // A new node follows faces where Speaker Frames is available (a saved node without one keeps the even split).
+      framingSource: "auto",
     })
   })
 
@@ -62,7 +65,7 @@ describe("Clip Pack is registered everywhere it must be", () => {
   })
 
   it("Clear takes its last run's failure code and the clips it could not render", () => {
-    expect(RUN_RESULT_TYPE_KEYS["clip-pack"]).toEqual(["errorCode", "failedClips"])
+    expect(RUN_RESULT_TYPE_KEYS["clip-pack"]).toEqual(["errorCode", "useCaseCameras", "failedClips"])
   })
 
   it("connections: a video or audio recording in, never an image; its clips into Social Media Format, its plan into JSON Process", () => {
@@ -73,7 +76,25 @@ describe("Clip Pack is registered everywhere it must be", () => {
     expect(isValidWorkflowConnection({ source: "cp", target: "jp", sourceHandle: "json", targetHandle: "in" }, typeOf)).toBe(true)
     // Its clips are audio for an audio recording, so an audio-only step takes them too (Trim Audio's `in`).
     expect(isValidWorkflowConnection({ source: "cp", target: "ta", sourceHandle: "clips", targetHandle: "in" }, typeOf)).toBe(true)
-    expect(TARGET_HANDLE_ACCEPTS["clip-pack"]?.map((h) => [h.handleId, h.label])).toEqual([["media", "Recording"]])
+    expect(TARGET_HANDLE_ACCEPTS["clip-pack"]?.map((h) => [h.handleId, h.label])).toEqual([["media", "Recordings"], ["masterAudio", "Master audio"]])
+  })
+  it("connections (decided 2026-10-17): an Upload Audio into Master audio (for a viewer who may use Speaker Map), never a video", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [] })
+    try {
+      expect(isValidWorkflowConnection({ source: "pod", target: "cp", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(true)
+      expect(isValidWorkflowConnection({ source: "rec", target: "cp", sourceHandle: "video", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+    } finally {
+      __resetSurfaceAvailabilityForTests(null)
+    }
+  })
+  it("Master audio is withheld with Speaker Map: refused on the canvas until the viewer's availability lands, and while Speaker Map is withheld", () => {
+    expect(isValidWorkflowConnection({ source: "pod", target: "cp", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+    __resetSurfaceAvailabilityForTests({ nodes: ["speaker-map"], models: [] })
+    try {
+      expect(isValidWorkflowConnection({ source: "pod", target: "cp", sourceHandle: "audio", targetHandle: "masterAudio" }, typeOf)).toBe(false)
+    } finally {
+      __resetSurfaceAvailabilityForTests(null)
+    }
   })
 
   it("picker: the Podcast family on the Video tab, and on the Audio tab too (an audio recording makes audio clips)", () => {

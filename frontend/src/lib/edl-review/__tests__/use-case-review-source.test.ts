@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { isRenderNodeType, renderPlanPath } from "@nodaro/shared/nodes"
-import { buildEpisodeTrailerGraph, buildTightenEpisodeGraph, resolveEpisodeTrailerSettings, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
+import { buildEpisodeTrailerGraph, buildTightenEpisodeGraph, resolveClipPackSettings, resolveEpisodeTrailerSettings, resolveTightenEpisodeSettings } from "@nodaro/render-rules"
 import { reviewViewOf, usecaseReviewSource } from "../use-case-review-source"
 import { reviewEntryOf, reviewKindOf, reviewRendersOf, reviewTargetOf } from "../review-entry"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
@@ -251,5 +251,29 @@ describe("Trailer's review on several recordings (decided 2026-10-17)", () => {
     expect(view.edges.map((e) => `${e.source}>${e.target}.${e.targetHandle}`)).toEqual(expect.arrayContaining(["t1>t1::uc-switch.edl", "t1::uc-switch>t1::uc-render.edl"]))
     expect(renderPlanPath(view.renderId, view.nodes, view.edges as never)?.planId).toBe("t1")
     expect((view.nodes.find((n) => n.id === "t1::uc-switch")!.data as Record<string, unknown>)).toMatchObject({ speakerMapByOrder: { "1": "t1::uc-cam-2" } })
+  })
+})
+
+describe("Clip Pack's review on several recordings (decided 2026-10-17)", () => {
+  const cam2 = { id: "cam2", type: "upload-video", position: at, data: { url: "https://r2/cam2.mp4" } }
+  const mic = { id: "mic", type: "upload-audio", position: at, data: { url: "https://r2/mic.wav" } }
+  const w = (source: string, sourceHandle: string, targetHandle = "media") => ({ id: `w-${source}`, source, target: "t1", sourceHandle, targetHandle })
+  const wires = [w("rec", "video"), w("cam2", "video"), w("mic", "audio", "masterAudio")]
+  const clipPlan = [{ ...plan, meta: { title: "Clip" } }]
+  const pack = (data: Record<string, unknown> = {}) => ({ ...t1({ generatedJson: clipPlan, reviewBeforeRender: true, ...data }), type: "clip-pack" })
+  const take = (settings: object) => ({ generatedResults: [{ url: "https://r2/p.mp4", quality: "proxy", useCaseSettings: settings }] })
+
+  it("a viewer who may not use Speaker Map reviews exactly the one-recording run: further cameras and the master are not read", () => {
+    const view = reviewViewOf("t1", [rec, cam2, mic, pack()], wires)
+    expect(JSON.parse(JSON.stringify(view))).toEqual(JSON.parse(JSON.stringify(reviewViewOf("t1", [rec, pack()], [w("rec", "video")]))))
+  })
+  it("a multicam take: the recordings, the master, the plan, the per-clip Camera Switch and the render, wired plan → switch → render", () => {
+    viewer.multicam = true
+    const settings = resolveClipPackSettings({ reviewBeforeRender: true, cameras: { speakerCameras: { "1": 2 } } }, "video", { recordings: 2, masterAudio: true })
+    const view = reviewViewOf("t1", [rec, cam2, mic, pack(take(settings))], wires)
+    const ids = view.nodes.map((n) => n.id)
+    for (const id of ["t1::uc-source", "t1::uc-cam-2", "t1::uc-master", "t1", "t1::uc-switch", "t1::uc-render"]) expect(ids).toContain(id)
+    expect(view.edges.map((e) => `${e.source}>${e.target}.${e.targetHandle}`)).toEqual(expect.arrayContaining(["t1>t1::uc-switch.edl", "t1::uc-switch>t1::uc-render.edl"]))
+    expect(renderPlanPath(view.renderId, view.nodes, view.edges as never)?.planId).toBe("t1")
   })
 })

@@ -577,7 +577,10 @@ best moments of the recording (8 by default, about 60 seconds each) and
 renders each as its own clip, framed for 9:16 with the speakers stacked and
 captioned by default (`framing: null` keeps the recording's shape).
 Its fee is 11 credits<!-- credits: use-case-fee:clip-pack --> per run, on top of its steps (quote it with
-`estimateClipPack`). Not yet enabled on nodaro.ai.
+`estimateClipPack`). Not yet enabled on nodaro.ai. It takes the cameras of
+one conversation as Tighten Episode does (`mediaUrls`, `masterAudioUrl`,
+`cameras`; each clip then cuts to whoever is talking), with the same need for
+Speaker Map, and `framingSource: "tracking"` follows faces.
 
 ```ts
 const pack = await client.edit.clipPack({ mediaUrl: masterUrl, count: 5 })

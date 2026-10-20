@@ -601,3 +601,110 @@ describe("a Trailer run on several recordings (decided 2026-10-17)", () => {
     }
   })
 })
+
+describe("a Clip Pack run on several cameras: a clip whose Camera Switch failed is a failed clip, counted once (decided 2026-10-18)", () => {
+  const cam = (n: number) => ({ url: `https://r2/c${n}.mp4`, kind: "video" as const })
+  const settings = resolveClipPackSettings({}, "video", { recordings: 2, masterAudio: true })
+  const g = toStoredInlineGraph(buildClipPackGraph(settings, { media: cam(1), moreMedia: [cam(2)], masterAudio: { url: "https://r2/m.wav", kind: "audio" } }), settings)
+  const done = (output: object) => ({ status: "completed", output })
+  const CAMS = [{ id: "uc-source", url: "https://r2/c1.mp4", kind: "video" }, { id: "uc-cam-2", url: "https://r2/c2.mp4", kind: "video" }]
+  const clip = (i: number) => ({ version: 1, sources: CAMS, segments: [{ id: `s${i}`, video: "uc-source", inMs: i * 60_000, outMs: i * 60_000 + 30_000 }], meta: { title: `Clip ${i + 1}` } })
+  const plan = [0, 1, 2].map(clip)
+  const keyOf = (i: number) => edlSpanKey(plan[i]) as string
+  const ok = (index: number, value: string, output: Record<string, unknown> = {}): PromiseSettledResult<FanOutIterationValue> => ({
+    status: "fulfilled",
+    value: { index, resultValue: value, result: { output: { videoUrl: value, ...output }, creditsUsed: 2, jobId: `job-${index}` } } as FanOutIterationValue,
+  })
+  const fail = (msg: string): PromiseSettledResult<FanOutIterationValue> => ({ status: "rejected", reason: new Error(msg) })
+  /** The switch's fan-out over the plan's clips: it tries every clip, so its rows are stamped up front (empty) like the orchestrator stamps them. */
+  const switchOf = (settled: PromiseSettledResult<FanOutIterationValue>[]) => assembleFanOutResult(settled, settled.length, "camera-switch", settled.map(() => ({}))).output
+  const switched = (i: number) => ok(i, JSON.stringify({ ...plan[i], switched: true }))
+  /** The render's fan-out over the clips whose switch delivered (a hole is skipped), each row stamped with the clip it was sent for. */
+  const renderOf = (clips: number[], settled: PromiseSettledResult<FanOutIterationValue>[]) =>
+    assembleFanOutResult(settled, settled.length, "speaker-view", clips.map((i) => ({ quality: "final" as const, clipKey: keyOf(i) }))).output
+  /** Render row `row` of clip `i`: its file, and the clip it was sent for. */
+  const rendered = (row: number, i: number) => ok(row, `https://r2/r${i}.mp4`, { quality: "final", clipKey: keyOf(i) })
+  const captionsOf = (settled: PromiseSettledResult<FanOutIterationValue>[]) => assembleFanOutResult(settled, settled.length, "add-captions", settled.map(() => ({}))).output
+
+  it("three clips, the middle switch failed: clips 1 and 3 delivered, one failed clip, the run keeps its fee", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: plan }),
+      "uc-switch": done(switchOf([switched(0), fail("camera switch failed"), switched(2)])),
+      "uc-render": done(renderOf([0, 2], [rendered(0, 0), rendered(1, 2)])),
+      "uc-captions": done(captionsOf([ok(0, "https://r2/c0.mp4"), ok(1, "https://r2/c2.mp4")])),
+    }, "exec-m")
+    expect(out.clips!.map((c) => [c.clipKey, c.title, c.url])).toEqual([[keyOf(0), "Clip 1", "https://r2/c0.mp4"], [keyOf(2), "Clip 3", "https://r2/c2.mp4"]])
+    expect(out.failedClips).toBe(1)
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(true)
+  })
+
+  it("a Stop that left switch row 3 never started (cancelled) is not a failure", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: plan }),
+      "uc-switch": done(switchOf([switched(0), switched(1), fail("Cancelled")])),
+      "uc-render": done(renderOf([0, 1], [rendered(0, 0), rendered(1, 1)])),
+    }, "exec-m")
+    expect(out).not.toHaveProperty("failedClips")
+  })
+
+  it("a switch that failed outright (no row list) failed every planned clip, and says why", () => {
+    const out = usecaseWrapperOutput(g, { "uc-plan": done({ json: plan }), "uc-switch": { status: "failed", error: "Speaker map unavailable" } }, "exec-m")
+    expect(out).toMatchObject({ clips: [], failedClips: 3, renderError: "Speaker map unavailable", failedNodeId: "uc-switch" })
+    expect(usecaseWrapperKeepsPartial(g, out)).toBe(false)
+    expect(usecaseNoClipsRenderedMessage(g, out)).toBe(clipPackNoneRenderedMessage(3, "Speaker map unavailable"))
+  })
+
+  it("a clip whose switch delivered but whose render failed is counted once; with a failed switch row beside it, two", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: plan }),
+      "uc-switch": done(switchOf([switched(0), fail("camera switch failed"), switched(2)])),
+      "uc-render": done(renderOf([0, 2], [rendered(0, 0), fail("render failed")])),
+      "uc-captions": done(captionsOf([ok(0, "https://r2/c0.mp4")])),
+    }, "exec-m")
+    expect(out.clips!.map((c) => c.title)).toEqual(["Clip 1"])
+    expect(out.failedClips).toBe(2)
+  })
+
+  it("every switch delivered, the render failed outright: every planned clip failed (never counted twice)", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: plan }),
+      "uc-switch": done(switchOf([switched(0), switched(1), switched(2)])),
+      "uc-render": { status: "failed", error: "Speaker View could not read the recording." },
+    }, "exec-m")
+    expect(out).toMatchObject({ clips: [], failedClips: 3, renderError: "Speaker View could not read the recording." })
+  })
+
+  it("a one-clip plan whose one switch ran once (no row list): delivered, nothing failed", () => {
+    const one = [plan[0]]
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: one }),
+      "uc-switch": done({ json: { edl: { ...plan[0], switched: true }, transcript: { words: [] } } }),
+      "uc-render": done({ videoUrl: "https://r2/r0.mp4", quality: "final", clipKey: keyOf(0) }),
+      "uc-captions": done({ videoUrl: "https://r2/c0.mp4" }),
+    }, "exec-m")
+    expect(out.clips!.map((c) => c.url)).toEqual(["https://r2/c0.mp4"])
+    expect(out).not.toHaveProperty("failedClips")
+  })
+
+  it("Audio Sync or Speaker Map failed: they come before every clip, so no clip is made and the run fails (nothing kept)", () => {
+    for (const failed of ["uc-sync", "uc-map"]) {
+      const out = usecaseWrapperOutput(g, { "uc-transcribe": done({ json: { words: [] } }), [failed]: { status: "failed", error: "boom" } }, "exec-m")
+      expect(out, failed).toMatchObject({ clips: [], failedNodeId: failed })
+      // No plan was read, so no clip is counted failed: the step that failed is named instead.
+      expect(out, failed).not.toHaveProperty("failedClips")
+      expect(usecaseWrapperKeepsPartial(g, out), failed).toBe(false)
+      expect(usecaseWrapperHasResult(g, out), failed).toBe(false)
+    }
+  })
+
+  it("the cameras report rides beside the clips", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-sync": done({ json: { version: 1, reference: "uc-master", offsets: [], notes: ["n"] } }),
+      "uc-map": done({ json: { version: 1, speakerMap: {}, confidence: {}, notes: [] } }),
+      "uc-plan": done({ json: plan }),
+      "uc-switch": done(switchOf([switched(0), switched(1), switched(2)])),
+      "uc-render": done(renderOf([0, 1, 2], [rendered(0, 0), rendered(1, 1), rendered(2, 2)])),
+    }, "exec-m")
+    expect(out.cameras).toMatchObject({ syncNotes: ["n"] })
+  })
+})

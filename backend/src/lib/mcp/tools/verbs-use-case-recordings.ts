@@ -3,7 +3,7 @@
  * `media_urls` (the cameras of one conversation, in order), an optional
  * `master_audio_url` and the `cameras` settings — one wording and one body
  * mapper for every use-case verb that takes several recordings (Tighten
- * Episode, Trailer). Its own module so verbs-use-case.ts stays under its size
+ * Episode, Trailer, Clip Pack). Its own module so verbs-use-case.ts stays under its size
  * budget and every verb says it the same way.
  *
  * The route is the gate: several recordings or a Master audio run only for a

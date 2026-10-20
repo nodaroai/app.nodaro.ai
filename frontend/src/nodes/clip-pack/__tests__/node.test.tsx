@@ -9,6 +9,8 @@ import userEvent from "@testing-library/user-event"
 
 const store = vi.hoisted(() => ({ updateNodeData: vi.fn(), runSingleNode: vi.fn(), nodes: [{ id: "c1", type: "clip-pack", data: {} }], edges: [] }))
 const fanOut = vi.hoisted(() => ({ listDriven: false }))
+const pips = vi.hoisted(() => ({ masterShown: true }))
+vi.mock("@/hooks/use-target-handle-shown", () => ({ useTargetHandleShown: (_id: string, _type: string, handle: string) => handle !== "masterAudio" || pips.masterShown }))
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
@@ -23,7 +25,7 @@ vi.mock("@/components/nodes/base-node", () => ({
   BaseNode: ({ children }: any) => <div data-testid="base-node">{children}</div>,
 }))
 vi.mock("@/components/nodes/handle-with-popover", () => ({
-  HandleWithPopover: ({ handleId, type, label }: any) => <div data-testid={`pip-${type}-${handleId}`}>{label}</div>,
+  HandleWithPopover: ({ handleId, type, label, top }: any) => <div data-testid={`pip-${type}-${handleId}`} data-top={top}>{label}</div>,
   HANDLE_COLORS: { video: "#000", audio: "#111" },
 }))
 vi.mock("@/components/nodes/run-node-button", () => ({ RunNodeButton: () => null }))
@@ -61,6 +63,7 @@ afterEach(() => {
   store.updateNodeData.mockReset()
   store.runSingleNode.mockReset()
   fanOut.listDriven = false
+  pips.masterShown = true
 })
 
 const RUN = "00000000-0000-4000-8000-000000000007"
@@ -85,9 +88,11 @@ describe("ClipPackNode", () => {
     expect(screen.getByText(t("node.tightenConnectRecording"))).toBeInTheDocument()
   })
 
-  it("its pips: Recording in (the label tables' key), the clips and the clip set out", () => {
+  it("its pips: Recordings (top) and Master audio (bottom) in — the label tables' keys — the clips and the clip set out", () => {
     renderNode({ label: "C", fieldMappings: {} })
-    expect(screen.getByTestId("pip-target-media").textContent).toBe("Recording")
+    expect(screen.getByTestId("pip-target-media").textContent).toBe("Recordings")
+    expect(screen.getByTestId("pip-target-masterAudio").textContent).toBe("Master audio")
+    expect(["media", "masterAudio"].map((h) => screen.getByTestId(`pip-target-${h}`).getAttribute("data-top"))).toEqual(["24px", "calc(100% - 24px)"])
     expect(screen.getByTestId("pip-source-clips").textContent).toBe(t("node.clipPackClips"))
     expect(screen.getByTestId("pip-source-json").textContent).toBe(t("node.clipPackPlan"))
   })
@@ -198,8 +203,33 @@ describe("ClipPackNode", () => {
     expect(screen.getByText(t("nodeRun.clipPackNoneRendered", { count: 3, reason: "out of memory" }))).toBeInTheDocument()
   })
 
-  it("fed a list, its refusal names Clip Pack in the reader's language", () => {
+  it("fed a list, its refusal names Clip Pack in the reader's language (it takes the recordings of one conversation)", () => {
+    renderNode({ label: "C", fieldMappings: {}, executionStatus: "failed", errorMessage: "Clip Pack takes the recordings of one conversation. Use a separate workflow run for each episode.", errorCode: "use_case_list_driven" })
+    expect(screen.getByText(t("nodeRun.usecaseListDrivenEpisode", { label: "Clip Pack" }))).toBeInTheDocument()
+  })
+
+  it("a refusal stored in Clip Pack's words before it took several recordings still reads in today's", () => {
     renderNode({ label: "C", fieldMappings: {}, executionStatus: "failed", errorMessage: "Clip Pack takes one recording. Use a separate workflow run for each recording.", errorCode: "use_case_list_driven" })
-    expect(screen.getByText(t("nodeRun.usecaseListDriven", { label: "Clip Pack" }))).toBeInTheDocument()
+    expect(screen.getByText(t("nodeRun.usecaseListDrivenEpisode", { label: "Clip Pack" }))).toBeInTheDocument()
+  })
+
+  it("no Master audio pip for a viewer it is withheld from (Speaker Map not available, and nothing wired to it): the Recordings pip where it always was", () => {
+    pips.masterShown = false
+    renderNode({ label: "C", fieldMappings: {} })
+    expect(screen.queryByTestId("pip-target-masterAudio")).toBeNull()
+    expect(screen.getByTestId("pip-target-media").getAttribute("data-top")).toBe("24px")
+  })
+
+  it("under a multicam take, the camera note: a speaker with no clear camera, and recordings that could not be lined up", () => {
+    renderNode({
+      ...done,
+      useCaseCameras: { speakers: [{ speaker: "speaker_1", ordinal: 1, camera: null, marginDb: 0.4 }, { speaker: "speaker_0", ordinal: 2, camera: 2, marginDb: 7 }], syncNotes: ["weak"], mapNotes: [] },
+    })
+    expect(screen.getByText(t("node.usecaseCameraUnclear", { n: 1 }))).toBeInTheDocument()
+    expect(screen.getByText(t("node.usecaseCameraSyncWeak"))).toBeInTheDocument()
+  })
+  it("a one-recording take: no camera note", () => {
+    renderNode(done)
+    expect(screen.queryByTestId("use-case-camera-note")).toBeNull()
   })
 })

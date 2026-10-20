@@ -23,7 +23,7 @@
 import { normalizeEdl } from "./edl.js"
 import { editPlanBasis } from "./edit-plan-review.js"
 import { defaultEdgeOutputMode } from "./producer-types.js"
-import { resolveIndex, selectListItems, type SelectorFields } from "./selector.js"
+import { isDefaultSelectorConfig, resolveIndex, selectListItems, type SelectorFields } from "./selector.js"
 
 /** The quality an Apply EDL render was made at. "proxy" is a Preview. */
 export type RenderQuality = "proxy" | "final"
@@ -421,6 +421,41 @@ export function renderPlanClipKey(
   const planNode = path ? nodes.find((n) => n.id === path.planId) : undefined
   if (!path || !planNode) return undefined
   return renderClipKey(planClips(planNode), row, path.hops)
+}
+
+/**
+ * The row a render run ONCE reads behind a pass-through node whose batch has
+ * exactly one delivered row (decided 2026-10-20): Camera Switch ran per clip,
+ * every row but row k failed (`""`), and both engines run the render once on
+ * the one live value, with no list row — a list with one live value drives
+ * nothing (their `> 1` fan-out rule, which stays). That value IS row k of the
+ * switch's batch, which is the row space `renderPlanValue` indexes after a
+ * pass-through hop, so the render is stamped as if row k drove it.
+ *
+ * Only when the render's last wire is an Each wire out of a pass-through node
+ * (two hops or more, `renderPlanPath`) with no selector of its own — a
+ * selector would re-index the batch. `batchOf` reads the pass-through node's
+ * batch as the engine holds it (a hole is `""` or `null`). `undefined`
+ * otherwise; callers pass `row ?? renderLoneRow(…)`, so a list-driven render
+ * and a render wired straight to its plan are untouched.
+ */
+export function renderLoneRow(
+  renderId: string,
+  nodes: readonly RenderGraphNode[],
+  edges: readonly RenderGraphEdge[],
+  batchOf: (passNode: RenderGraphNode) => readonly unknown[] | undefined,
+): number | undefined {
+  const path = renderPlanPath(renderId, nodes, edges)
+  if (!path || path.hops.length < 2) return undefined
+  const last = path.hops[path.hops.length - 1]!
+  if (!last.each || !isDefaultSelectorConfig(last.edge.data as SelectorFields | undefined)) return undefined
+  // The node the last wire hands on from: the target of the hop before it.
+  const passId = path.hops[path.hops.length - 2]!.edge.target
+  const passNode = nodes.find((n) => n.id === passId)
+  const batch = passNode ? batchOf(passNode) : undefined
+  if (!batch) return undefined
+  const live = batch.flatMap((v, k) => (isHole(v) ? [] : [k]))
+  return live.length === 1 ? live[0] : undefined
 }
 
 /**

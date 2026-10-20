@@ -350,6 +350,11 @@ function stubServer(shape) {
         return send(shape.chapters.status, shape.chapters.body)
       }
       if (path === "/v1/clip-pack" && req.method === "POST") {
+        // A multicam body (several recordings or a Master audio) may be answered on its own.
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* the one-recording answer below */ }
+        const multicam = (Array.isArray(body.mediaUrls) && body.mediaUrls.length > 1) || typeof body.masterAudioUrl === "string"
+        if (multicam && shape.clipPackMulticam) return send(shape.clipPackMulticam.status, shape.clipPackMulticam.body)
         if (shape.clipPack.createsJob) {
           state.jobs = [{ id: "job_clip_pack", status: "processing", input_data: { type: "clip-pack" } }, ...state.jobs]
         }
@@ -719,6 +724,17 @@ test("a Trailer multicam body refused 403 by a gate that runs before the connect
   })
   assertContract(out, TRAILER, "FAIL")
   assertContract(out, TIGHTEN, "PASS")
+})
+
+test("a Clip Pack multicam body refused 403 by a gate that runs before the connection check fails the Clip Pack contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.clipPackMulticam = {
+      status: 403,
+      body: { error: { code: "node_not_available", message: "Clip Pack on several recordings or with a Master audio is not available on this deployment yet. Send one recording." } },
+    }
+  })
+  assertContract(out, CLIP_PACK, "FAIL")
+  assertContract(out, TRAILER, "PASS")
 })
 
 test("a Trailer refusal that left a job row behind fails the Trailer contract", async () => {

@@ -160,6 +160,28 @@ vocabularies — caption styles, layouts, xfade switch ids; if dev grows one
 before the merge, rule on it — never re-record. The editor twin also freezes the node
 fields a run's shortfall lands on (`usecaseFailedDeliveriesField`).
 
+When Clip Pack came to take up to six recordings and a Master audio, with a
+framing source (ruled 2026-10-20), these records were corrected by hand,
+never re-recorded, each recomputed with its test's own function: `requestBody`
+(`mediaUrls` up to 6, `masterAudioUrl`, `cameras`, `framingSource`),
+`nodesEntry.found.inputSchema.fields` (the same four fields — not named in the
+ruling, moved by the same body), `descriptor` (`inputs` and `inputNodeIds`
+gain `masterAudio`, `settingKeys` gains `cameras` and `framingSource`,
+`triesEvery` gains `uc-switch`, last), `membership.runResultTypeKeys` (gains
+`useCaseCameras`, as every type that takes several recordings),
+`membership.nonPromptLanes` (gains `masterAudio`),
+`membership.textFeedsPrompt` (gains `masterAudio: false`),
+`membership.fanOutRefusal` and `membership.fanOutRefusalReviewOn` (the
+list-driven refusal no longer says Clip Pack takes one recording: "Clip Pack
+takes the recordings of one conversation. Use a separate workflow run for
+each episode.") and `mcpHandles.inputs` (gains `masterAudio`). In the editor
+twin: `definition` (`inputs` gains `masterAudio`; `defaultData` gains
+`framingSource: "auto"`, a new node's default) and `targetHandles` (the Master
+audio input; the Recording input is labelled Recordings). Every graph and
+length row is unchanged: `cameras` is resolved only for several recordings or
+a Master audio, `framingSource` only when a framed pack follows faces, and a
+one-recording run builds exactly as before.
+
 It was recorded once, on `feat/clip-pack` before the units merge
 (`UNITS_RECORD_CLIP_PACK_IDENTITY=1`; the test refuses to overwrite an existing
 fixture). **Never re-record it**: a re-recording takes whatever the code then

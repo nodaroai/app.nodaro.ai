@@ -21,7 +21,7 @@ import {
 } from "@nodaro/render-rules"
 
 /** The types that take several recordings (written out): their cameras report is their last run's too. */
-const MULTICAM_TYPES: ReadonlySet<string> = new Set(["tighten-episode", "episode-trailer"])
+const MULTICAM_TYPES: ReadonlySet<string> = new Set(["tighten-episode", "episode-trailer", "clip-pack"])
 
 const EXPECTED: { readonly [K in UseCaseResultKind]: readonly string[] } = {
   episode: ["errorCode"],

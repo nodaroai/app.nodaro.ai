@@ -5,13 +5,18 @@
     "properties": {
       "mediaUrls": {
         "minItems": 1,
-        "maxItems": 1,
+        "maxItems": 6,
         "type": "array",
         "items": {
           "type": "string",
           "format": "uri"
         }
       },
+      "masterAudioUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "cameras": {},
       "count": {
         "type": "integer",
         "minimum": 1,
@@ -122,6 +127,14 @@
           }
         ]
       },
+      "framingSource": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "static",
+          "tracking"
+        ]
+      },
       "captions": {
         "type": "boolean"
       },
@@ -214,6 +227,14 @@
             "required": true
           },
           {
+            "key": "masterAudioUrl",
+            "type": "audio-url"
+          },
+          {
+            "key": "cameras",
+            "type": "object"
+          },
+          {
             "key": "count",
             "type": "number"
           },
@@ -224,6 +245,15 @@
           {
             "key": "framing",
             "type": "object"
+          },
+          {
+            "key": "framingSource",
+            "type": "select",
+            "options": [
+              "auto",
+              "static",
+              "tracking"
+            ]
           },
           {
             "key": "captions",
@@ -274,10 +304,12 @@
     "maxSourceSec": 10800,
     "needsVideo": false,
     "inputs": [
-      "media"
+      "media",
+      "masterAudio"
     ],
     "inputNodeIds": {
-      "media": "uc-source"
+      "media": "uc-source",
+      "masterAudio": "uc-master"
     },
     "settingKeys": [
       "count",
@@ -288,13 +320,16 @@
       "reviewBeforeRender",
       "planTier",
       "instructions",
-      "styleGuide"
+      "styleGuide",
+      "cameras",
+      "framingSource"
     ],
     "reviewable": true,
     "resultKind": "clips",
     "triesEvery": [
       "uc-render",
-      "uc-captions"
+      "uc-captions",
+      "uc-switch"
     ],
     "continuePath": "/v1/clip-pack/continue",
     "listsItsResult": true,
@@ -4580,6 +4615,7 @@
   "membership": {
     "runResultTypeKeys": [
       "errorCode",
+      "useCaseCameras",
       "failedClips"
     ],
     "runResultHasFailedClips": true,
@@ -4596,25 +4632,29 @@
     "dynamicProducer": true,
     "declaredJsonOutput": "edl",
     "declaredJsonOutputOnClips": "(undefined)",
-    "nonPromptLanes": [],
+    "nonPromptLanes": [
+      "masterAudio"
+    ],
     "textFeedsPrompt": {
-      "media": true
+      "media": true,
+      "masterAudio": false
     },
     "outputType": "video",
     "nodaroExclusive": true,
     "fanOutRefusal": {
       "code": "use_case_list_driven",
-      "message": "Clip Pack takes one recording. Use a separate workflow run for each recording."
+      "message": "Clip Pack takes the recordings of one conversation. Use a separate workflow run for each episode."
     },
     "fanOutRefusalReviewOn": {
       "code": "use_case_list_driven",
-      "message": "Clip Pack takes one recording. Use a separate workflow run for each recording."
+      "message": "Clip Pack takes the recordings of one conversation. Use a separate workflow run for each episode."
     },
     "useCaseTypesPredecessor": "episode-trailer"
   },
   "mcpHandles": {
     "inputs": [
-      "media"
+      "media",
+      "masterAudio"
     ],
     "outputs": [
       "clips",

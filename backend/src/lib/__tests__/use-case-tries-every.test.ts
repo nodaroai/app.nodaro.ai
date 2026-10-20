@@ -35,10 +35,16 @@ const WIDEST: { readonly [K in UseCaseBuilderKey]: UseCaseSettings } = {
   clipPack: { captions: true, framing: { aspect: "9:16", layout: "stacked" } },
 }
 
-/** Every input the builder takes, wired: the recording, and a music bed and an intro card where it has one. */
+/**
+ * Every input the builder takes, wired: the recording (two cameras where it
+ * reads several), and a Master audio, a music bed and an intro card where it
+ * has one.
+ */
 function everySource(spec: UseCaseBuilderSpec): UseCaseSources {
   return {
     media: { url: "https://r2/ep.mp4", kind: "video", durationSec: 3600 },
+    ...(spec.maxRecordings > 1 ? { moreMedia: [{ url: "https://r2/cam2.mp4", kind: "video" as const, durationSec: 3600 }] } : {}),
+    ...(spec.inputNodeIds.masterAudio ? { masterAudio: { url: "https://r2/master.wav", kind: "audio" as const, durationSec: 3600 } } : {}),
     ...(spec.inputNodeIds.music ? { music: { url: "https://r2/bed.mp3" } } : {}),
     ...(spec.inputNodeIds.introCard ? { introCard: { url: "https://r2/card.mp4", durationSec: 5 } } : {}),
   }
@@ -64,8 +70,12 @@ function deliveryNodeIds(kind: UseCaseResultKind, graph: UseCaseGraph): readonly
 }
 
 const SPECS = Object.entries(USE_CASE_SPECS) as Array<[UseCaseBuilderKey, UseCaseBuilderSpec]>
-const built = (key: UseCaseBuilderKey, spec: UseCaseBuilderSpec): UseCaseGraph =>
-  spec.build(spec.resolveSettings(WIDEST[key], "video"), everySource(spec))
+/** The shape of `sources` (how many recordings, whether a Master audio is wired): what the settings are resolved against. */
+const shapeOf = (sources: UseCaseSources) => ({ recordings: 1 + (sources.moreMedia?.length ?? 0), masterAudio: !!sources.masterAudio })
+const built = (key: UseCaseBuilderKey, spec: UseCaseBuilderSpec): UseCaseGraph => {
+  const sources = everySource(spec)
+  return spec.build(spec.resolveSettings(WIDEST[key], "video", shapeOf(sources)), sources)
+}
 
 describe("a builder's triesEvery names its built nodes and covers every delivery of a list", () => {
   it("at least one builder tries every one of its kind (this guard checks something)", () => {
@@ -78,11 +88,13 @@ describe("a builder's triesEvery names its built nodes and covers every delivery
     expect(graph.nodes.some((n) => n.type === "combine-videos")).toBe(true)
   })
 
-  it("Clip Pack's widest settings build its per-clip render and its captions, and it tries every one of both", () => {
+  it("Clip Pack's widest settings build its per-clip switch, render and captions, and it tries every one of all three", () => {
     const graph = built("clipPack", USE_CASE_SPECS.clipPack)
     const ids = new Set(graph.nodes.map((n) => n.id))
     const tries = USE_CASE_SPECS.clipPack.triesEvery ?? []
-    expect(tries).toHaveLength(2)
+    // The render, the captions, then the switch (last, decided 2026-10-18).
+    expect(tries).toHaveLength(3)
+    expect(graph.nodes.find((n) => n.id === tries[2])?.type).toBe("camera-switch")
     for (const id of tries) expect(ids.has(id), id).toBe(true)
     expect(graph.nodes.find((n) => n.id === tries[1])?.type).toBe("add-captions")
     // Captions on: the captioned clip is the delivery, and the render feeding it is tried for every clip too.
@@ -107,7 +119,8 @@ describe("a builder's triesEvery names its built nodes and covers every delivery
   for (const type of USE_CASE_NODE_TYPES) {
     it(`${type}: its result is a list exactly where this guard reads deliveries`, () => {
       const d = usecaseDescriptor(type)
-      const deliveries = deliveryNodeIds(d.resultKind, d.build(d.resolveSettings({}, "video"), everySource(d)))
+      const sources = everySource(d)
+      const deliveries = deliveryNodeIds(d.resultKind, d.build(d.resolveSettings({}, "video", shapeOf(sources)), sources))
       expect(deliveries !== null, type).toBe(usecaseListsItsResult(type))
     })
   }

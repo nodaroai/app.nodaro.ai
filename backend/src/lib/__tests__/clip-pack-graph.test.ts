@@ -95,16 +95,16 @@ describe("Clip Pack builds transcribe → Edit Plan (clips) → one render per c
     expect(initialRunNodeIds(g)).toEqual([ID.source, ID.transcribe, ID.plan, ID.render])
   })
 
-  it("its registry entry: one recording in, audio allowed, reviewable, a clip set", () => {
+  it("its registry entry: up to six recordings and a Master audio in, audio allowed, reviewable, a clip set", () => {
     const d = usecaseDescriptor("clip-pack")
-    expect(d).toMatchObject({ label: "Clip Pack", route: "/v1/clip-pack", needsVideo: false, inputs: ["media"], inputNodeIds: { media: ID.source }, reviewable: true, resultKind: "clips" })
-    expect(d.settingKeys).toEqual(["count", "targetDurationSec", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide"])
+    expect(d).toMatchObject({ label: "Clip Pack", route: "/v1/clip-pack", needsVideo: false, maxRecordings: 6, inputs: ["media", "masterAudio"], inputNodeIds: { media: ID.source, masterAudio: "uc-master" }, reviewable: true, resultKind: "clips" })
+    expect(d.settingKeys).toEqual(["count", "targetDurationSec", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "cameras", "framingSource"])
     expect(d.build(d.resolveSettings({}, "video"), { media: video })).toEqual(buildClipPackGraph(CLIP_PACK_DEFAULTS, { media: video }))
   })
 
-  it("its render and its captions try every clip; Tighten's and Chapters' steps do not", () => {
-    expect(usecaseDescriptor("clip-pack").triesEvery).toEqual([ID.render, ID.captions])
-    expect([...usecaseTriesEvery({ nodeType: "clip-pack" })]).toEqual([ID.render, ID.captions])
+  it("its render, its captions and (on several cameras) its per-clip switch try every clip — the switch last; Tighten's and Chapters' steps do not", () => {
+    expect(usecaseDescriptor("clip-pack").triesEvery).toEqual([ID.render, ID.captions, "uc-switch"])
+    expect([...usecaseTriesEvery({ nodeType: "clip-pack" })]).toEqual([ID.render, ID.captions, "uc-switch"])
     // A Trailer's are its formats (episode-trailer-graph.test.ts); Tighten's and Chapters' steps keep the default.
     for (const type of ["tighten-episode", "episode-chapters"]) expect(usecaseTriesEvery({ nodeType: type }).size).toBe(0)
     expect(usecaseTriesEvery({ nodeType: "not-a-use-case" }).size).toBe(0)

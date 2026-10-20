@@ -164,6 +164,7 @@ import {
   isRenderNodeType,
   renderPlanBasis,
   renderPlanClipKey,
+  renderLoneRow,
   renderPlanRowClipKeys,
   renderRunQuality,
   renderSentRowStamps,
@@ -2611,8 +2612,20 @@ function applyEdlClipKey(node: SimpleNode, buildCtx: PayloadBuildContext | undef
     nodes,
     edges,
     (planNode) => listFor(planNode as SimpleNode, buildCtx?.nodeStates?.[planNode.id]),
-    buildCtx?.listRow,
+    buildCtx?.listRow ?? applyEdlLoneRow(node, nodes, edges, buildCtx?.nodeStates ?? {}),
   )
+}
+
+/** The row a render run once reads behind a Camera Switch with one delivered
+ *  row (`renderLoneRow`, the rule the editor calls too): its batch as the run
+ *  holds it (`listFor`). */
+function applyEdlLoneRow(
+  node: SimpleNode,
+  nodes: readonly SimpleNode[],
+  edges: readonly SimpleEdge[],
+  states: Readonly<Record<string, NodeExecutionState>>,
+): number | undefined {
+  return renderLoneRow(node.id, nodes, edges, (passNode) => listFor(passNode as SimpleNode, states[passNode.id]))
 }
 
 /** What EVERY row of a render's fan-out is stamped with before it runs,
@@ -2672,7 +2685,7 @@ function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | und
     nodes,
     edges,
     (planNode) => listFor(planNode as SimpleNode, states[planNode.id]) ?? states[planNode.id]?.output?.json,
-    buildCtx?.listRow,
+    buildCtx?.listRow ?? applyEdlLoneRow(node, nodes, edges, states),
     ranIds,
   )
 }

@@ -35,6 +35,7 @@ export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonl
 export const UNIT_NON_PROMPT_INPUTS: ReadonlyArray<readonly [type: string, handles: ReadonlyArray<string>]> = [
   ["tighten-episode", ["music", "masterAudio"]], // unit:tighten-episode
   ["episode-trailer", ["introCard", "masterAudio"]], // unit:episode-trailer
+  ["clip-pack", ["masterAudio"]], // unit:clip-pack
 ]
 
 // Use-case units whose review-on run ends at a Preview that holds what follows (contract.reviewHold) — preview-gate.ts.

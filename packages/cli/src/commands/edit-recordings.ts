@@ -2,7 +2,7 @@
 // 2026-10-19): `--media` (repeat it for the cameras of one conversation),
 // `--master-audio` and the Cameras flags (`--wide-camera`, `--synced`,
 // `--speaker-camera`), parsed into the SDK's recordings input. One helper so
-// every use-case command that takes several recordings (Tighten Episode, Trailer)
+// every use-case command that takes several recordings (Tighten Episode, Trailer, Clip Pack)
 // words and checks them the same way. The server is the gate on how many
 // recordings a run takes and on who may run several (Speaker Map).
 import type { Command } from "commander"

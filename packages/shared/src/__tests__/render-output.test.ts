@@ -5,6 +5,8 @@ import {
   edlSpanKey,
   planClipKeyAt,
   renderClipKey,
+  renderLoneRow,
+  renderPlanBasis,
   renderPlanClipKey,
   renderPlanNodeId,
   renderPlanPath,
@@ -388,5 +390,67 @@ describe("renderPlanClipKey — the clip a row reads is picked by every selector
     it("an item wire on a dropped clip names nothing (it hands on nothing)", () => {
       expect(renderPlanClipKey("render", nodes, wire({ outputMode: "item", itemIndex: "1" }), () => ["", B, C], undefined)).toBeUndefined()
     })
+  })
+})
+
+describe("renderLoneRow — a render run once behind a Camera Switch with one delivered row (decided 2026-10-20)", () => {
+  const span = (inMs: number, outMs: number, title: string) =>
+    JSON.stringify({ version: 1, clock: "master", sources: [], segments: [{ id: `s${inMs}`, inMs, outMs }], meta: { title } })
+  const PLAN = [span(0, 1000, "one"), span(2000, 3000, "two"), span(4000, 5000, "three")]
+  const nodes = [
+    { id: "plan", type: "edit-plan" },
+    { id: "tp-send", type: "teleport-send" },
+    { id: "tp-recv", type: "teleport-receive" },
+    { id: "switch", type: "camera-switch" },
+    { id: "render", type: "speaker-view" },
+  ]
+  const viaSwitch = [
+    { source: "plan", sourceHandle: "edl", target: "switch", targetHandle: "edl" },
+    { source: "switch", sourceHandle: "edl", target: "render", targetHandle: "edl" },
+  ]
+  const batchOf = (batch: readonly unknown[] | undefined) => (n: { id: string }) => (n.id === "switch" ? batch : PLAN)
+  const planList = () => PLAN
+  const ran: ReadonlySet<string> = new Set(["switch", "render"])
+
+  it("the switch's one delivered row is the row: the clip key and the plan basis are that clip's", () => {
+    const row = renderLoneRow("render", nodes, viaSwitch, batchOf(["", "", "switched-3"]))
+    expect(row).toBe(2)
+    expect(renderPlanClipKey("render", nodes, viaSwitch, planList, row)).toBe("4000-5000")
+    expect(renderPlanBasis("render", nodes, viaSwitch, planList, row, ran)).toBe(renderPlanBasis("render", nodes, viaSwitch, planList, 2, ran))
+    // Without it the render reads the plan's three clips and names none.
+    expect(renderPlanClipKey("render", nodes, viaSwitch, planList, undefined)).toBeUndefined()
+    expect(renderPlanBasis("render", nodes, viaSwitch, planList, undefined, ran)).toBeUndefined()
+    // `null` is a hole too, and a teleport between the switch and the render changes nothing.
+    expect(renderLoneRow("render", nodes, viaSwitch, batchOf([null, "switched-2", null]))).toBe(1)
+    const teleported = [
+      viaSwitch[0]!,
+      { source: "switch", sourceHandle: "edl", target: "tp-send", targetHandle: "in" },
+      { source: "tp-send", target: "tp-recv" },
+      { source: "tp-recv", target: "render", targetHandle: "edl" },
+    ]
+    expect(renderLoneRow("render", nodes, teleported, batchOf(["", "switched-2", ""]))).toBe(1)
+  })
+
+  it("the row is in the switch's KEPT-clip row space: a clip dropped from the plan has no switch row", () => {
+    const holed = () => [PLAN[0], "", PLAN[2]]
+    // Two kept clips, so the switch ran twice; its second row (plan clip 3) delivered.
+    const row = renderLoneRow("render", nodes, viaSwitch, () => ["", "switched-3"])
+    expect(row).toBe(1)
+    expect(renderPlanClipKey("render", nodes, viaSwitch, holed, row)).toBe("4000-5000")
+  })
+
+  it("names no row when the batch has several delivered rows, none, or no batch at all", () => {
+    expect(renderLoneRow("render", nodes, viaSwitch, batchOf(["a", "", "c"]))).toBeUndefined()
+    expect(renderLoneRow("render", nodes, viaSwitch, batchOf(["", "", ""]))).toBeUndefined()
+    expect(renderLoneRow("render", nodes, viaSwitch, batchOf(undefined))).toBeUndefined()
+  })
+
+  it("names no row for a render wired straight to its plan (a one-recording pack), a Selected wire, or a selector on the render's wire", () => {
+    const direct = [{ source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" }]
+    expect(renderLoneRow("render", nodes, direct, () => ["", "", PLAN[2]])).toBeUndefined()
+    const selected = [viaSwitch[0]!, { ...viaSwitch[1]!, data: { outputMode: "last" } }]
+    expect(renderLoneRow("render", nodes, selected, batchOf(["", "", "switched-3"]))).toBeUndefined()
+    const picked = [viaSwitch[0]!, { ...viaSwitch[1]!, data: { selectorMode: "list", listExpression: "3" } }]
+    expect(renderLoneRow("render", nodes, picked, batchOf(["", "", "switched-3"]))).toBeUndefined()
   })
 })

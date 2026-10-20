@@ -267,16 +267,21 @@ export function registerUseCaseCommands(cmd: Command): void {
   // ── clip-pack (podcast use-case node) ──────────────────────────────────
   const isWhole = (v: string | undefined, min: number, max: number): boolean =>
     v !== undefined && /^\d+$/.test(v.trim()) && Number(v) >= min && Number(v) <= max
-  cmd
-    .command("clip-pack")
-    .description("cut a recording into a pack of short clips in one step (find the best moments, render each — framed and captioned by default)")
-    .requiredOption("--media <url>", "the recording (video or audio URL, up to 3 hours; an audio recording makes audio clips)")
+  withRecordingsOptions(
+    cmd
+      .command("clip-pack")
+      .description("cut a recording into a pack of short clips in one step (find the best moments, render each — framed and captioned by default; several cameras cut to the speaker in every clip)"),
+  )
     .option("--count <n>", `how many clips, 1–${EDIT_PLAN_MAX_CLIP_COUNT} (default 8; the plan may find fewer)`)
     .option("--length <sec>", `each clip's target length in seconds, ${CLIP_PACK_MIN_TARGET_SEC}–${CLIP_PACK_MAX_TARGET_SEC} (default 60)`)
     .option("--framing <aspect>", `frame each clip on its speakers: ${EDL_TARGET_ASPECTS.join(" | ")}, or none for the recording's shape (default 9:16)`)
     .option("--layout <layout>", `layout with --framing <aspect> (default stacked): ${framingLayouts.join(" | ")}`)
     .option("--switch <id>", `the switch at each speaker change, with --framing <aspect> (default pan): cut | pan | zoom | xfade:<transition>, e.g. xfade:fade`)
     .option("--emphasis <style>", `how the speaker talking is emphasised, with --framing <aspect> (default scale): ${EMPHASIS_HELP}`)
+    .option(
+      "--framing-source <source>",
+      `how the framing follows the speakers (not with --framing none): ${FRAMING_SOURCES.join(" | ")} (default static: the even split; tracking follows faces with one Speaker Frames run over the whole pack, charged per started block of 1,000 sampled frames; auto follows faces while Speaker Frames is available to you)`,
+    )
     .option("--no-captions", "no captions on the clips")
     .option("--caption-style <style>", `the captions' look (default karaoke): ${ALL_CAPTION_STYLES.join(" | ")}`)
     .option("--review", "stop at previews to review (render the kept clips with `nodaro edit continue-use-case <jobId> --mode render-final`)")
@@ -290,7 +295,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     .option("--json")
     .action(
       async (
-        opts: GlobalOpts & WatchOpts & { media: string; count?: string; length?: string; framing?: string; layout?: string; switch?: string; emphasis?: string } & {
+        opts: GlobalOpts & WatchOpts & RecordingsOpts & { count?: string; length?: string; framing?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string } & {
           captions: boolean; captionStyle?: string; review?: boolean; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string
         },
       ) => {
@@ -328,6 +333,15 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--emphasis must be ${EMPHASIS_HELP} (got "${opts.emphasis}")`)
           process.exit(1)
         }
+        // Clip Pack frames by default: the framing source applies unless the framing is none.
+        if (opts.framingSource !== undefined && opts.framing === "none") {
+          warn("--framing-source applies with a framing only (not with --framing none)")
+          process.exit(1)
+        }
+        if (opts.framingSource !== undefined && !(FRAMING_SOURCES as readonly string[]).includes(opts.framingSource)) {
+          warn(`--framing-source must be ${FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
+          process.exit(1)
+        }
         if (opts.captionStyle !== undefined && opts.captions === false) {
           warn("--caption-style applies with captions on (drop --no-captions)")
           process.exit(1)
@@ -337,12 +351,13 @@ export function registerUseCaseCommands(cmd: Command): void {
           process.exit(1)
         }
         refuseUnknownPlanTier(opts.planTier)
+        const recordings = recordingsInput(opts)
         type Framing = NonNullable<ClipPackInput["framing"]>
         try {
           const client = buildClient(opts.profile)
           const result = await client.edit.clipPack(
             {
-              mediaUrl: opts.media,
+              ...recordings,
               ...(opts.count !== undefined ? { count: Number(opts.count) } : {}),
               ...(opts.length !== undefined ? { targetDurationSec: Number(opts.length) } : {}),
               // none = the recording's shape; an aspect alone leaves the layout to the route (stacked).
@@ -358,6 +373,7 @@ export function registerUseCaseCommands(cmd: Command): void {
                       },
                     }
                   : {}),
+              ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<ClipPackInput["framingSource"]> } : {}),
               // commander's --no-captions defaults `captions` to true: send it only when turned off.
               ...(opts.captions === false ? { captions: false } : {}),
               ...(opts.captionStyle ? { captionStyle: opts.captionStyle as NonNullable<ClipPackInput["captionStyle"]> } : {}),

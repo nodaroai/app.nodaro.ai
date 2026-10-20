@@ -37,7 +37,10 @@ Each podcast use-case has a one-node verb. Reach for it first when it is in your
   `count` (default 8) and `target_length_sec` (default 60). It runs transcribe → plan in `clips` mode → one render per
   clip (framed 9:16 with the speakers stacked by default; `framing: null` keeps the recording's shape) → captions per
   clip. An audio recording makes audio clips. The clips are `output_data.clips` (`[{ url, title?, hook?, clipKey,
-  thumbnailUrl?, captionsFailed? }]`); a clip that could not be rendered is skipped and counted in `output_data.failedClips`. Set
+  thumbnailUrl?, captionsFailed? }]`); a clip that could not be rendered is skipped and counted in `output_data.failedClips`.
+  A conversation on several cameras is one call too: `media_urls` + `master_audio_url` (and `cameras`), as on
+  `tighten_episode` — each clip then cuts to whoever is talking; it needs Speaker Map (refused `403 node_not_available`
+  where it is not available). `framing_source: "tracking"` follows faces (one Speaker Frames run for the whole pack). Set
   `review_before_render: true` to stop at previews; then `continue_use_case` with `mode: "render-final"` and an
   `edited_edl` that keeps the clips the user wants (at least one) renders only those.
 - **`make_trailer`** — "a trailer for this episode" is one call: pass the recording's `media_url` (a video) and,

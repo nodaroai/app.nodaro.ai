@@ -22,9 +22,11 @@ vi.mock("../poll-job", () => ({
     return Promise.resolve("done")
   },
 }))
-vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: { getState: () => ({ nodes: [], edges: [] }) } }))
+const graph = vi.hoisted(() => ({ nodes: [] as unknown[], edges: [] as unknown[] }))
+vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: { getState: () => ({ nodes: graph.nodes, edges: graph.edges }) } }))
 
 import { executeSpeakerView, runSpeakerView } from "../speaker-view-executor"
+import { edlSpanKey } from "@nodaro/shared/nodes"
 import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE, speakerViewVideoEdit } from "@nodaro/render-rules"
 import { translate } from "@/lib/i18n"
@@ -41,6 +43,8 @@ const ctx = ctxBase as never
 
 beforeEach(() => {
   vi.clearAllMocks()
+  graph.nodes = []
+  graph.edges = []
   polls.length = 0
   flag.priced = false
   flag.frames = true
@@ -128,6 +132,41 @@ describe("executeSpeakerView", () => {
     await polls[0]!.call()
     const settings = (speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }).settings
     expect(settings).not.toHaveProperty("speakerRegions")
+  })
+
+  // The editor half of the lone-row rule (decided 2026-10-20): run once behind a
+  // Camera Switch whose batch has one delivered row, the render is stamped as
+  // that row's clip — the server's payload builder calls the same rule.
+  it("run once behind a Camera Switch with one delivered row: stamped with THAT clip's key", async () => {
+    flag.priced = true
+    const planClip = (inS: number) => ({ version: 1, clock: "master", sources: [src("a")], segments: [{ id: `p${inS}`, inMs: inS * 1000, outMs: (inS + 5) * 1000, video: "a" }] })
+    const clips = [planClip(0), planClip(20), planClip(40)]
+    const withBatch = (batch: string[]) => {
+      graph.nodes = [
+        { id: "plan", type: "edit-plan", position: { x: 0, y: 0 }, data: { mode: "clips", generatedJson: clips } },
+        { id: "switch", type: "camera-switch", position: { x: 0, y: 0 }, data: { __listResults: batch } },
+        node(),
+      ]
+      graph.edges = [
+        { id: "e1", source: "plan", sourceHandle: "edl", target: "switch", targetHandle: "edl" },
+        { id: "e2", source: "switch", sourceHandle: "edl", target: "sv", targetHandle: "edl" },
+      ]
+    }
+    withBatch(["", "", JSON.stringify(EDL)])
+    await executeSpeakerView(node(), { edl: JSON.stringify(EDL) }, ctx, undefined)
+    await polls[0]!.call()
+    const body = speakerViewApi.mock.calls[0]![0] as Record<string, unknown>
+    expect(body.clipKey).toBe(edlSpanKey(clips[2]))
+    // Behind Camera Switch the browser never stamps a plan basis (the same-run rule): unchanged.
+    expect(body).not.toHaveProperty("planBasis")
+
+    // Two delivered rows: the render would be list-driven; run once here it names no clip.
+    polls.length = 0
+    speakerViewApi.mockClear()
+    withBatch([JSON.stringify(EDL), "", JSON.stringify(EDL)])
+    await executeSpeakerView(node(), { edl: JSON.stringify(EDL) }, ctx, undefined)
+    await polls[0]!.call()
+    expect(speakerViewApi.mock.calls[0]![0]).not.toHaveProperty("clipKey")
   })
 
   it("keeps the take's identity on the result only", async () => {

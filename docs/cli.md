@@ -569,8 +569,13 @@ nodaro edit episode-trailer --media <url> [--media <url> ...] [--master-audio <u
                                                          # --master-audio, --wide-camera, --synced, --speaker-camera); they need Speaker Map
                                                          # (not yet enabled on nodaro.ai: refused 403 node_not_available until it is).
                                                          # Not yet enabled on nodaro.ai.
-nodaro edit clip-pack --media <url> [--count <n>] [--length <sec>] [--framing 16:9|9:16|1:1|4:5|none [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>]] (--layout, --switch and --emphasis only with --framing <aspect>) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit clip-pack --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--count <n>] [--length <sec>] [--framing 16:9|9:16|1:1|4:5|none [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>]] (--layout, --switch and --emphasis only with --framing <aspect>) [--framing-source auto|static|tracking] (not with --framing none) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Clip Pack: one recording (video or audio, up to 3 hours) in, a pack of short clips
+                                                         # (several cameras: the recordings flags of edit tighten-episode — repeat --media,
+                                                         # --master-audio, --wide-camera, --synced, --speaker-camera; each clip cuts to the
+                                                         # speaker; they need Speaker Map, not yet enabled on nodaro.ai: refused 403
+                                                         # node_not_available until it is; --framing-source tracking follows faces with
+                                                         # one Speaker Frames run over the whole pack)
                                                          # out — --count clips (1–50, default 8; the plan may find fewer) of about --length
                                                          # seconds each (5–180, default 60), framed for 9:16 with the speakers stacked and
                                                          # captioned by default (--framing none: the recording's shape; an audio recording makes

@@ -230,6 +230,40 @@ describe("edit.episodeTrailer / estimateEpisodeTrailer", () => {
   })
 })
 
+describe("edit.clipPack on several recordings and with a framing source (decided 2026-10-17/20)", () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>, i = 0) => JSON.parse((fetchMock.mock.calls[i]![1] as { body: string }).body)
+
+  it("sends the recordings in order, the Master audio and the Cameras settings, then the pack's settings and its framing source", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+    await client(fetchMock).edit.clipPack({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { synced: true },
+      count: 4,
+      framingSource: "tracking",
+    })
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/clip-pack")
+    expect(bodyOf(fetchMock)).toEqual({
+      mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
+      masterAudioUrl: "https://r2/m.wav",
+      cameras: { synced: true },
+      count: 4,
+      framingSource: "tracking",
+    })
+  })
+
+  it("the estimate takes the same body; mediaUrl and mediaUrls together, or neither, reject with a TypeError before any request", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 1, stepsCredits: 0, feeCredits: 1, durationSec: null } }))
+    await client(fetchMock).edit.estimateClipPack({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/clip-pack/estimate")
+    expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"] })
+    const edit = client(fetchMock).edit
+    await expect(edit.clipPack({ mediaUrl: "https://r2/a.mp4", mediaUrls: ["https://r2/b.mp4"] })).rejects.toThrow(new TypeError("pass mediaUrl or mediaUrls, not both"))
+    await expect(edit.estimateClipPack({ count: 3 })).rejects.toThrow(new TypeError("pass mediaUrl or mediaUrls"))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("edit.clipPack / estimateClipPack", () => {
   it("clipPack posts the recording, the count and framing: null (no framing)", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-c", executionId: "exec-c" }))

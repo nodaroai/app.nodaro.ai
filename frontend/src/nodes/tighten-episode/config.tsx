@@ -7,7 +7,6 @@ import {
   resolveTightenEpisodeSettings,
   tightenFramingLayouts,
   usecaseDescriptor,
-  usecaseRecordingsProblem,
   type TightenFramingAspect,
   type TightenFramingLayout,
 } from "@nodaro/render-rules"
@@ -21,12 +20,9 @@ import type { ConfigProps } from "@/components/editor/config-panels/types"
 import { RunUpToHereNotice } from "@/components/editor/config-panels/run-up-to-here-notice"
 import { CAPTION_STYLE_LABEL_KEYS } from "@/components/editor/config-panels/caption-style-labels"
 import { UseCasePlanFields } from "@/components/editor/config-panels/use-case-plan-fields"
-import { UseCaseCamerasFields } from "@/components/editor/config-panels/use-case-cameras-fields"
 import { UseCaseFramingSourceField } from "@/components/editor/config-panels/use-case-framing-source-field"
-import { usecaseWiredMediaKind } from "@/lib/use-case-audio-lock"
+import { UseCaseMulticamSection, usecaseViewerSoundOnly } from "@/components/editor/config-panels/use-case-multicam-section"
 import { useUseCaseMulticamViewer } from "@/lib/use-case-multicam-viewer"
-import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
-import { usecaseWiredRecordings } from "@/lib/use-case-wired-recordings"
 import type { UnitConfigKit } from "../exec-kit"
 import type { TightenEpisodeData } from "./types"
 
@@ -60,21 +56,9 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources
   const t = useT()
   const viewer = useUseCaseMulticamViewer()
   const wireInto = (handle: string) => (edges ?? []).find((e) => e.target === nodeId && e.targetHandle === handle && !!e.source)
-  // Sound only by the recordings this viewer's run reads. While their availability is loading the
-  // run could read one recording or all: forced to audio only when both readings say so.
-  const soundOnly = (multicam: boolean) => usecaseWiredMediaKind(nodeId, nodes, edges ?? [], multicam) === "audio"
-  const audioSource = viewer === "loading" ? soundOnly(false) && soundOnly(true) : soundOnly(viewer === "offered")
+  // Sound only by the recordings this viewer's run reads (the store's lock reads them so too).
+  const audioSource = usecaseViewerSoundOnly(nodeId, nodes, edges ?? [], viewer)
   const hasMusic = Boolean(wireInto("music"))
-  // The recordings the type reads (in the node's order), and a Master audio that is not one of them.
-  const wired = usecaseWiredRecordings({ id: nodeId, type: "tighten-episode", data }, nodes, edges ?? [])
-  const masterId = wired.masterId
-  const recordings = wired.recordings.map((r) => {
-    const source = sources.find((s) => s.id === r.nodeId && s.targetHandle === "media")
-    return { ...r, label: source?.label ?? r.nodeId, source }
-  })
-  const multicam = recordings.length >= 2 || !!masterId
-  const problem = viewer === "offered" && multicam ? usecaseRecordingsProblem({ kinds: recordings.map((r) => r.kind), masterAudio: !!masterId, cameras: data.cameras }) : null
-  const problemKey = problem ? USE_CASE_RECORDINGS_REASON_KEYS[problem.code] : undefined
   const output = audioSource ? "audio" : data.output ?? D.output
   const captions = output === "video" && (data.captions ?? D.captions)
   const framing = data.framing ?? null
@@ -105,20 +89,7 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources
 
   return (
     <div className="space-y-4">
-      {multicam && viewer === "withheld" && <p className="text-xs text-muted-foreground">{t("proccfg.usecaseNeedsSpeakerMap")}</p>}
-      {multicam && viewer === "offered" && (
-        <>
-          <UseCaseCamerasFields
-            data={data}
-            onUpdate={onUpdate}
-            recordings={recordings}
-            hasMaster={!!masterId}
-            masterLabel={sources.find((s) => s.id === masterId && s.targetHandle === "masterAudio")?.label}
-            report={data.useCaseCameras}
-          />
-          {problem && <p className="text-xs text-red-500">{problemKey ? t(problemKey) : problem.message}</p>}
-        </>
-      )}
+      <UseCaseMulticamSection type="tighten-episode" data={data} onUpdate={onUpdate} nodeId={nodeId} nodes={nodes} edges={edges ?? []} sources={sources} viewer={viewer} />
 
       <div className="space-y-1.5">
         <Label>{t("proccfg.tightenOutput")}</Label>

@@ -125,6 +125,33 @@ function* trailerMulticamSpace(): Generator<SettingsCase & { readonly name: stri
   }
 }
 
+/**
+ * Clip Pack on several recordings or a Master audio (decided 2026-10-17):
+ * every recordings set the route lets run × in sync × the wide × the override
+ * × framing × framing source × captions × review.
+ */
+function* clipPackMulticamSpace(): Generator<SettingsCase & { readonly name: string }> {
+  for (const { name, sources } of MULTICAM_RECORDINGS) {
+    const kinds = usecaseRecordings(sources).map((r) => r.kind)
+    for (const synced of [false, true])
+      for (const wide of [null, kinds.length])
+        for (const speakerCameras of [{}, { "1": 2, "2": 0 }])
+          for (const framing of [null, undefined, { aspect: "1:1", layout: "side-by-side" }])
+            for (const framingSource of FRAMING_SOURCES)
+              for (const captions of [true, false])
+                for (const reviewBeforeRender of [true, false]) {
+                  const cameras = { wide, synced, speakerCameras }
+                  if (usecaseRecordingsProblem({ kinds, masterAudio: !!sources.masterAudio, cameras })) continue
+                  yield {
+                    name,
+                    raw: { captions, reviewBeforeRender, cameras, ...(framing !== undefined ? { framing } : {}), ...(framingSource ? { framingSource } : {}) },
+                    kind: usecaseRecordingsKind(kinds)!,
+                    sources,
+                  }
+                }
+  }
+}
+
 /** The shape a run of these sources is resolved against (how many recordings, whether a master is wired). */
 const shapeOf = (sources: UseCaseSources): UseCaseSourcesShape => ({ recordings: usecaseRecordings(sources).length, masterAudio: !!sources.masterAudio })
 
@@ -187,6 +214,7 @@ const SETTINGS_TABLES: Record<UseCaseNodeType, () => Iterable<SettingsCase>> = {
                   sources: { media: { url: "https://r2/ep", kind, ...(durationSec ? { durationSec } : {}) } },
                 }
               }
+    yield* clipPackMulticamSpace()
   },
 }
 
@@ -299,6 +327,24 @@ describe("use-case graphs are runnable graphs (every setting combination)", () =
     }
     // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 2 format sets × 2 review × 2 intro cards, none refused.
     expect(count).toBe(512)
+  })
+
+  it("Clip Pack on several recordings or a Master audio (every set the route lets run)", () => {
+    let count = 0
+    let tracked = 0
+    const d = usecaseDescriptor("clip-pack")
+    for (const c of clipPackMulticamSpace()) {
+      const g = d.build(d.resolveSettings(c.raw, c.kind, shapeOf(c.sources)), c.sources)
+      expect(problems(g), JSON.stringify({ name: c.name, raw: c.raw })).toEqual([])
+      // Camera Switch, once per clip, exactly when two or more recordings have picture.
+      expect(g.nodes.some((n) => n.type === "camera-switch")).toBe(usecaseRecordings(c.sources).filter((r) => r.kind === "video").length >= 2)
+      if (g.nodes.some((n) => n.type === "speaker-frames")) tracked++
+      count++
+    }
+    // 8 recordings sets × 2 synced × 2 wide × 2 overrides × 3 framings × 3 framing sources × 2 captions × 2 review, none refused.
+    expect(count).toBe(2304)
+    // Framed (default or chosen) × tracking: 8 × 2 × 2 × 2 × 2 × 2 × 2.
+    expect(tracked).toBe(512)
   })
 
   it("has a settings table for every registered use-case type", () => {
