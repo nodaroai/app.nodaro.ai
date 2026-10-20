@@ -1121,6 +1121,15 @@ const CAST_SWAP_TOOL_BYTES = 3_134
 // 27 B of headroom the list had before is carried across.
 const SUNO_SEPARATE_ANY_AUDIO_BYTES = 864
 
+// RAISED 2026-10-20 by modify_video's Seedance edit references, and nothing
+// else. No tool was added, so the fixture does NOT move. modify_video takes
+// `reference_video_urls` (extra clips after the source, {video:2} on) and
+// `reference_audio_urls`, so it sends every reference /v1/video-to-video and the
+// canvas send. Measured by this suite on the same tree with and without the
+// change: 474_881 total − 474_485 = 396 B; the 103 B of headroom the list had
+// before is carried across.
+const MODIFY_VIDEO_SEEDANCE_REFS_BYTES = 396
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1245,6 +1254,7 @@ export const TOOL_WIRE_BUDGET = {
     RUN_WORKFLOW_NAMED_NEVER_RUN_BYTES +
     RETRY_APP_RUN_BYTES +
     SUNO_SEPARATE_ANY_AUDIO_BYTES +
+    MODIFY_VIDEO_SEEDANCE_REFS_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +

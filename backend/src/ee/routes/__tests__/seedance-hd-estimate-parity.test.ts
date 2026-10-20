@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vites
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * Parity: the Seedance 2.5 HD estimate quotes EXACTLY what a run of the same
- * draft reserves.
+ * Parity: the Seedance 2.5 HD estimate and `POST /v1/quote` both quote
+ * EXACTLY what a run of the same draft reserves.
  *
  * The run side is the real thing, end to end: `POST /v1/video-upscale` through
  * the real credit-guard shim, `creditGuardImpl` (computeCredits + markup) and
@@ -103,6 +103,7 @@ vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn().mockResolvedValue(
 
 const { videoUpscaleRoutes } = await import("@/routes/video-upscale.js")
 const { registerSeedanceHdEstimate } = await import("../seedance-hd-estimate.js")
+const { registerNodeQuote } = await import("../node-quote.js")
 const { STATIC_CREDIT_COSTS } = await import("../../billing/credits.js")
 
 const PLAN = {
@@ -121,6 +122,7 @@ beforeAll(async () => {
   app.addHook("preHandler", async (req) => { req.userId = "user-a" })
   await app.register(async (i) => { await videoUpscaleRoutes(i) })
   registerSeedanceHdEstimate(app)
+  registerNodeQuote(app)
   await app.ready()
 })
 afterAll(async () => { await app.close() })
@@ -129,11 +131,19 @@ beforeEach(() => {
   db.modelPricing = new Map()
 })
 
-/** [credits the estimate quotes, credits the run reserves] for one draft. */
+/** [credits the estimate quotes, credits the run reserves] for one draft;
+ *  `POST /v1/quote` on the run's own body must say the same. */
 async function quoteAndReserve(plan: Record<string, unknown>): Promise<[number, number]> {
   resolver.result = plan
   const estimate = await app.inject({ method: "POST", url: "/v1/credits/seedance-hd-estimate", payload: { taskId: "task-draft" } })
   expect(estimate.statusCode, estimate.body).toBe(200)
+  const quote = await app.inject({
+    method: "POST", url: "/v1/quote",
+    payload: { type: "video-upscale", params: { provider: "seedance-2-5-hd", taskId: "task-draft" } },
+  })
+  expect(quote.statusCode, quote.body).toBe(200)
+  expect(quote.json().data).toMatchObject({ identifier: plan.creditId, reserve: estimate.json().data.credits })
+  expect(db.reserved).toHaveLength(0)
   const run = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "seedance-2-5-hd", taskId: "task-draft" } })
   expect(run.statusCode, run.body).toBe(200)
   expect(db.reserved).toHaveLength(1)
@@ -165,6 +175,15 @@ describe("estimate == reservation", () => {
     expect(reserved).toBe(quoted)
     // 1900 base (4 s in + 4 s out), marked up once at the finalize's margin.
     expect(quoted).toBe(Math.ceil(1900 * 1.25))
+  })
+
+  it("a Topaz upscale: POST /v1/quote equals the reservation", async () => {
+    const body = { provider: "topaz", videoUrl: "https://cdn.example.com/clip.mp4", upscaleFactor: "2" }
+    const quote = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-upscale", params: body } })
+    expect(quote.statusCode, quote.body).toBe(200)
+    const run = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: body })
+    expect(run.statusCode, run.body).toBe(200)
+    expect(db.reserved).toEqual([{ model: "topaz-video", credits: quote.json().data.reserve }])
   })
 
   it("a reference-video draft whose clip could not be measured (worst case)", async () => {

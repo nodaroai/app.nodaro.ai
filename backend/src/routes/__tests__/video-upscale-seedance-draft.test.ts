@@ -25,8 +25,13 @@ vi.mock("@/lib/insert-job.js", () => ({
 vi.mock("@/lib/kie-task-ownership.js", () => ({ kieTaskOwnedByAnother: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn().mockResolvedValue({ id: "q" }) }, redis: {} }))
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: (resolve: (req: unknown) => string, opts?: unknown) => async (req: { body: unknown; guardSeen?: unknown[] }) => {
-    ;(globalThis as { __guardSeen?: unknown[] }).__guardSeen?.push({ id: resolve(req), computes: Boolean(opts) })
+  // `computes`: the guard overrides the seeded row's price (computeCredits answered a number).
+  creditGuard: (
+    resolve: (req: unknown) => string,
+    opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number | undefined> },
+  ) => async (req: { body: unknown }) => {
+    const computed = await opts?.computeCredits?.(req.body, req)
+    ;(globalThis as { __guardSeen?: unknown[] }).__guardSeen?.push({ id: resolve(req), computes: computed !== undefined })
   },
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 1, watermark: false }),
 }))

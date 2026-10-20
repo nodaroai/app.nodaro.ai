@@ -1554,6 +1554,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         multi_shots: z.boolean().optional().describe("Wan Flash only — allow multi-shot scene changes."),
         reference_image_url: z.string().url().optional().describe("Runway Aleph only — style reference image."),
         reference_image_urls: z.array(z.string().url()).max(30).optional().describe("seedance-2-5 only — cite as {image:N} in the prompt."),
+        reference_video_urls: z.array(z.string().url()).max(9).optional().describe("seedance-2-5 only — extra clips: the source is {video:1}, these are {video:2}, {video:3}, … (all clips billed by length)."),
+        reference_audio_urls: z.array(z.string().url()).max(10).optional().describe("seedance-2-5 only — cite as {audio:N} in the prompt."),
         seed: z.number().int().min(0).optional(),
         draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
       },
@@ -1600,8 +1602,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const provider = args.model ?? "wan"
       // Seedance edits a REFERENCE video (no v2v endpoint): dispatch through the
       // one Seedance reference-video lane, in edit shape, the clip as {video:1}.
+      if (!isSeedanceVideoEditProvider(provider) && (args.reference_image_urls || args.reference_video_urls || args.reference_audio_urls)) {
+        return {
+          content: [{ type: "text", text: "reference_image_urls, reference_video_urls and reference_audio_urls work with model seedance-2-5 only." }],
+          isError: true,
+        }
+      }
       if (isSeedanceVideoEditProvider(provider)) {
-        const refs = [...(args.reference_image_urls ?? []), ...(args.reference_image_url ? [args.reference_image_url] : [])]
+        // Same numbering as POST /v1/video-to-video: reference_image_url first.
+        const refs = [...(args.reference_image_url ? [args.reference_image_url] : []), ...(args.reference_image_urls ?? [])]
         return dispatchJob(fastify, session, {
           url: "/v1/text-to-video",
           payload: {
@@ -1610,8 +1619,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             ...SEEDANCE_VIDEO_EDIT_SHAPE,
             ...(args.resolution ? { resolution: args.resolution } : {}),
             ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
-            referenceVideoUrls: [videoUrl],
+            referenceVideoUrls: [videoUrl, ...(args.reference_video_urls ?? [])],
             ...(refs.length ? { referenceImageUrls: refs } : {}),
+            ...(args.reference_audio_urls?.length ? { referenceAudioUrls: args.reference_audio_urls } : {}),
             ...(args.seed !== undefined ? { seed: args.seed } : {}),
             mcp_client: session.clientName,
             userId: session.userId,

@@ -186,6 +186,11 @@ describe("seedance2RefVideoExpectedBaseCredits", () => {
       .toBe(Math.ceil(42.5 * (10 + 10)))
   })
 
+  it("an Auto run with extra clips renders the SOURCE clip (the first), even when an extra one is longer", () => {
+    expect(seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 15, autoDuration: true, durationsSec: [5, 12] }))
+      .toBe(Math.ceil(42.5 * (5 + 12 + 5)))
+  })
+
   it("a fixed-duration run renders what was asked: input + the requested seconds", () => {
     expect(seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 5, autoDuration: false, durationsSec: [10] }))
       .toBe(Math.ceil(42.5 * (10 + 5)))

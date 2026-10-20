@@ -2123,6 +2123,8 @@ Needs `workflows:execute`.
 | `multi_shots` | boolean |  | Wan Flash only — allow multi-shot scene changes. |
 | `reference_image_url` | string (URL) |  | Runway Aleph only — style reference image. |
 | `reference_image_urls` | string (URL)[] |  | seedance-2-5 only — cite as {image:N} in the prompt. At most 30 items. |
+| `reference_video_urls` | string (URL)[] |  | seedance-2-5 only — extra clips: the source is {video:1}, these are {video:2}, {video:3}, … (all clips billed by length). At most 9 items. |
+| `reference_audio_urls` | string (URL)[] |  | seedance-2-5 only — cite as {audio:N} in the prompt. At most 10 items. |
 | `seed` | integer |  | At least 0. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
 

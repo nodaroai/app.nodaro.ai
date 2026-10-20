@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-10-14T00:02:31.878Z
-generated_from: b83a9467d
+generated_at: 2026-10-20T06:48:04.069Z
+generated_from: 3812bdec7
 ---
 
 # Video to Video
@@ -81,6 +81,8 @@ generated_from: b83a9467d
 - `multi_shots`
 - `reference_image_url`
 - `reference_image_urls`
+- `reference_video_urls`
+- `reference_audio_urls`
 - `seed`
 - `draft`
 <!-- AUTO-GEN:END mcp-call -->

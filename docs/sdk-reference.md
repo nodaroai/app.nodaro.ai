@@ -2663,8 +2663,11 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 `happyhorse-edit` or the Seedance edit model `seedance-2-5`), `duration`
 (`"5"` | `"10"`), `resolution`, `audio`, `multiShots`, `aspectRatio`, `seed`,
 `referenceImageUrl`, `negativePrompt`, `videoEditDuration`, `audioSetting`,
-`promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit is
-built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
+`promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit also takes
+`referenceImageUrls`, `referenceVideoUrls` (extra clips; the source `videoUrl` is
+`{video:1}`, these are `{video:2}`, …) and `referenceAudioUrls` — refused on any
+other model; numbering and caps in [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit).
+The edit is built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
 so you send the same body as for any other edit model.
 
 #### `quote(type, params?)`
@@ -2676,8 +2679,9 @@ quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
 The price of a run before you start it (`POST /v1/quote`). Pass exactly the
 body you would pass to `run`: the platform prices it with the run route's own
 code — validation, measuring reference clips, the credit id and the amount — and
-starts nothing. Typed for `text-to-video`, `generate-video` and
-`video-to-video`; those are the types the platform can quote today (any other
+starts nothing. Typed for `text-to-video`, `generate-video`,
+`video-to-video` and `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
+priced from the draft); those are the types the platform can quote today (any other
 rejects with `400 quote_unsupported`). Cloud only.
 
 ```ts

@@ -138,8 +138,9 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
  * rule as the reservation ({@link billedInputSeconds}); the output is the
  * length the run will most likely render:
  *  - Auto duration (the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE`): an edit
- *    renders its source clip's length — the longest clip, the one the
- *    reservation's edit rule already covers;
+ *    renders its SOURCE clip's length — the first clip (`@video_1`); any
+ *    extra clips are references, even a longer one (the reservation's
+ *    longest-clip rule still covers it);
  *  - a fixed duration: the requested seconds (a style run).
  * The settlement still measures what was delivered, so this is an estimate a
  * client can show, not a price. Undefined when a clip could not be measured:
@@ -155,7 +156,7 @@ export function seedance2RefVideoExpectedBaseCredits(args: {
   const { provider, resolution, outputDurationSec, autoDuration, durationsSec } = args
   if (durationsSec.length === 0 || !durationsSec.every(isUsableDuration)) return undefined
   const { perClip, totalSec } = billedInputSeconds(provider, durationsSec)
-  const renderedSec = autoDuration ? Math.max(...perClip) : outputDurationSec
+  const renderedSec = autoDuration ? perClip[0]! : outputDurationSec
   return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec: renderedSec, inputVideoDurationSec: totalSec })
 }
 

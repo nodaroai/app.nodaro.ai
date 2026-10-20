@@ -53,6 +53,12 @@ describe("nodes.run — the typed video lanes take an Idempotency-Key", () => {
     >()
     expectTypeOf<VideoToVideoParams["videoUrl"]>().toEqualTypeOf<string>()
   })
+
+  it("types the Seedance edit's reference lists", () => {
+    expectTypeOf<VideoToVideoParams["referenceImageUrls"]>().toEqualTypeOf<string[] | undefined>()
+    expectTypeOf<VideoToVideoParams["referenceVideoUrls"]>().toEqualTypeOf<string[] | undefined>()
+    expectTypeOf<VideoToVideoParams["referenceAudioUrls"]>().toEqualTypeOf<string[] | undefined>()
+  })
 })
 
 describe("nodes.quote", () => {
@@ -78,6 +84,7 @@ describe("nodes.quote", () => {
   it("is typed for the video lanes and generic for the rest", () => {
     const nodes = client(fetchAnswering(QUOTE)).nodes
     expectTypeOf(nodes.quote("video-to-video", V2V)).toEqualTypeOf<Promise<NodeQuote>>()
+    expectTypeOf(nodes.quote("video-upscale", { provider: "seedance-2-5-hd", sourceJobId: "j" })).toEqualTypeOf<Promise<NodeQuote>>()
     expectTypeOf(nodes.quote("generate-image", { prompt: "x" })).toEqualTypeOf<Promise<NodeQuote>>()
   })
 })

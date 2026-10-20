@@ -28,7 +28,7 @@ import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
@@ -105,7 +105,9 @@ export const textToVideoBody = z.object({
  * probe is what computeCredits reuses. Shared with /v1/generate-video.
  */
 export const textToVideoPricing: RoutePricing = {
-  prechecks: [validateRefVideoDurationPreHandler],
+  // Reference audio the provider would refuse (format, length) is refused here,
+  // before the reservation — the same check /v1/generate-video runs.
+  prechecks: [validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
