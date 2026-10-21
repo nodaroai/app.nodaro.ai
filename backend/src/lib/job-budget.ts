@@ -106,6 +106,9 @@ const LEGACY_JOB_BUDGETS: Record<string, JobBudgetFn> = {
   "apply-edl": applyEdlJobBudgetMs,
   "audio-sync": audioSyncJobBudgetMs,
   "cast-swap": castSwapJobBudgetMs,
+  // Cast Swap's Full Quality redo of a draft: the same handler family and the
+  // same full-clip provider edit, so the same bound.
+  "cast-swap-full-quality": castSwapJobBudgetMs,
   "silence-detect": silenceDetectJobBudgetMs,
   "speaker-frames": speakerFramesJobBudgetMs,
   "speaker-view": speakerViewJobBudgetMs,

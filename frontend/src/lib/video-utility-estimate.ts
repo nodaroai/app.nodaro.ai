@@ -18,8 +18,8 @@ import {
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
-import { maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
+import { maskCompositeLeadHandle, maskCompositeUnits } from "@nodaro/shared/media"
+import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireLengthSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -200,10 +200,32 @@ export function videoUtilityPricingUnits(
 }
 
 /**
- * Mask Composite's pricing units: one per started 5 s of its result (the
- * foreground's length on its `video` wire — the reading Video SFX and Video
- * Mask quote with), or the 300 s cap when that length is not known yet (an
- * upper bound, as the server's run estimate quotes it).
+ * The length, in seconds, a Mask Composite is QUOTED at, or `null` when it is
+ * not known (the 300 s cap): its leading video's — the foreground on its
+ * `video` wire (the reading Video SFX and Video Mask quote with), or, with a
+ * pixelate / blur fill, the background on its `background-video` wire — as
+ * the graph gives it, else as the upstream node itself reports it. The server's
+ * run estimate reads the same wire (`maskCompositeLeadSec`).
+ */
+export function maskCompositeQuotedSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const data = (node.data ?? {}) as Record<string, unknown>
+  const inputs = edges.filter((e) => e.target === node.id)
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  return (
+    maskCompositeLeadSec(data, inputs, inputs.map((e) => lengthOf(e.source))) ??
+    upstreamVideoDurationSec(node.id, maskCompositeLeadHandle(data), nodes, edges)
+  )
+}
+
+/**
+ * Mask Composite's pricing units: one per started 5 s of its result
+ * ({@link maskCompositeQuotedSec}), or the 300 s cap when that length is not
+ * known yet (an upper bound, as the server's run estimate quotes it).
  */
 export function maskCompositePricingUnits(
   node: WorkflowNode,
@@ -211,5 +233,5 @@ export function maskCompositePricingUnits(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number {
-  return maskCompositeUnits(videoSfxQuotedSec(node, nodes, edges, rerunIds))
+  return maskCompositeUnits(maskCompositeQuotedSec(node, nodes, edges, rerunIds))
 }

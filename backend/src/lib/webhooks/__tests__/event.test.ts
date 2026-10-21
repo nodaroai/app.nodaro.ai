@@ -198,11 +198,30 @@ describe("eventBodyFor — a job event", () => {
 })
 
 describe("eventBodyFor — a retry and a ping", () => {
-  it("sends the first attempt's exact text again, without reading the job", async () => {
+  it("sends the first attempt's exact text again, reading only whether the job is a child", async () => {
     const first = '{"id":"d1","type":"job.failed","createdAt":"2026-10-15T10:00:00.123Z","data":{"job":{"id":"j"}}}'
+    db.job = { parent_job_id: null }
     const built = await eventBodyFor(delivery({ payload: first, attempts: 3 }))
     expect(built).toEqual({ kind: "body", body: first, fresh: false })
-    expect(db.calls).toEqual([])
+    expect(db.calls).toEqual([
+      { table: "jobs", op: "select", args: ["parent_job_id"] },
+      { table: "jobs", op: "eq", args: ["id", JOB] },
+      { table: "jobs", op: "maybeSingle", args: [] },
+    ])
+  })
+
+  it("never sends again a kept body recorded for a child job: the job reads as gone", async () => {
+    // A body kept before the capture stopped recording child jobs (migration 550).
+    const first = '{"id":"d1","type":"job.completed","createdAt":"2026-10-15T10:00:00.123Z","data":{"job":{"input_data":{"prompt":"hidden wording"}}}}'
+    db.job = { parent_job_id: "00000000-0000-4000-8000-0000000000f1" }
+    expect(await eventBodyFor(delivery({ payload: first, attempts: 3 }))).toEqual({ kind: "missing" })
+  })
+
+  it("never builds a body for a child job either", async () => {
+    // The fresh read asks for `is(parent_job_id, null)`; this fake applies it.
+    db.job = { ...JOB_ROW, parent_job_id: "00000000-0000-4000-8000-0000000000f1" }
+    await eventBodyFor(delivery())
+    expect(db.calls).toContainEqual({ table: "jobs", op: "is", args: ["parent_job_id", null] })
   })
 
   it("a test ping names its endpoint and reads nothing", async () => {

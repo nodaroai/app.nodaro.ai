@@ -18,6 +18,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
   - [`client.castSwap`](#clientcastswap)
+  - [`client.trends`](#clienttrends)
   - [`client.studio`](#clientstudio)
   - [`client.copilot`](#clientcopilot)
   - [`client.executions`](#clientexecutions)
@@ -66,7 +67,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -142,12 +143,12 @@ const client = createClient({
 | `workspaceId` | `string` | no | The workspace every request acts in, sent as `X-Nodaro-Workspace`. See [`client.withWorkspace`](#clientwithworkspaceworkspaceid). Omit for the caller's personal space. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
-The instance exposes 36 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 37 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
 `oauth`, `voices`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
 `presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `castSwap`,
-`studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
+`trends`, `studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
 
@@ -1231,7 +1232,11 @@ Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-block
 for what it means and when a fallback model is offered) or that a job policy
 registered by the deployment rejected (`kind: "policy-block"`, carrying
 `policyId`, `hookPoint: "request" | "result"` and `reason` — user-safe text
-written by the deployment's policy, or by the platform when the policy supplies none; show it as-is). Admin callers
+written by the deployment's policy, or by the platform when the policy supplies none; show it as-is),
+or that ran out of credits partway (`kind: "credits"`, carrying the refusal's
+`code` — `insufficient_credits`, or a plan or workspace cap such as
+`free_video_limit` or `budget_exceeded`; the job was refunded, so ask the
+person to top up and run it again). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
@@ -1303,6 +1308,47 @@ that does not have ratings yet it throws a `NodaroError` with code
 ```ts
 await client.jobs.rate(jobId, "good")
 await client.jobs.rate(jobId, null) // clear it
+```
+
+#### `fromUpload(params)`
+
+```ts
+fromUpload(params: JobFromUploadParams): Promise<{ data: Job }>
+```
+
+Records an image edited in the browser — already stored with
+`client.uploads.upload` — as a job (`POST /v1/jobs/from-upload`): a completed,
+private, free `image-edit` job whose `output_data.imageUrl` is the upload. It
+then rates, favorites, lists (`list({ type: "image-edit" })`) and files into a
+session like any image job. The source is linked in `input_data`
+(`sourceJobId` or `sourceAssetId`, and the `sourceImageUrl` the server read
+from it); an edit of a character, object, creature or location image keeps
+that link. One upload is one job: the same `assetId` again returns the same
+job, so a retry never makes two. OAuth apps need the `assets:write` scope.
+Throws `NotFoundError` when the asset, the source or the session is not
+yours, `NodaroError` (`validation_error`) when the asset is not an image you
+stored or the source has no finished image, and `JobBlockedError` when a job
+policy of the deployment refuses the image. Full rules:
+[Recording an image edited in the browser](./api-integration.md#recording-an-image-edited-in-the-browser).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `assetId` | `string` | The edited image's `assetId`, as `uploads.upload` returned it. |
+| `sourceJobId` | `string?` | The job whose image was edited. |
+| `sourceImageUrl` | `string?` | Which of `sourceJobId`'s images was edited, when it made several (default: its `imageUrl`). |
+| `sourceAssetId` | `string?` | The upload that was edited, when the source is not a job. Not with `sourceJobId`. |
+| `editStateUrl` | `string?` | The editor's design state, stored with `uploads.uploadJson`. |
+| `sessionId` | `string?` | The generation session to file the job in. |
+
+```ts
+const upload = await client.uploads.upload(editedPng)
+const { url: editStateUrl } = await client.uploads.uploadJson(designState)
+const { data: job } = await client.jobs.fromUpload({
+  assetId: upload.assetId!,
+  sourceJobId,
+  editStateUrl,
+  sessionId,
+})
 ```
 
 #### `getStatus(id)`
@@ -1834,8 +1880,9 @@ returns `409 legacy_mix_mismatch`.
 
 ### `client.castSwap`
 
-Cast Swap: replace the people and/or the location in a short video with your
-own reference images, keeping its motion, framing, timing and sound. **Cloud
+Cast Swap: replace the people, pets, products and/or the location in a short
+video with your own reference images, keeping its motion, framing, timing and
+sound (the clip's audio is kept, and the result is the clip's length). **Cloud
 edition only**: these routes 404 on self-hosted installs. Also importable as
 `@nodaro/sdk/cast-swap`. Routes: [Cast Swap](./api-integration.md#13f-cast-swap-cloud-edition);
 MCP: `cast_swap`.
@@ -1852,28 +1899,66 @@ interface CastSwapParams {
     | { kind: "person"; name: string; images: string[] | null
         body?: "new" | "original"; outfit?: "new" | "original"; hair?: "new" | "original" } // each default "new"
     | { kind: "location"; name?: string; images: string[] | null }                          // name default "the setting"
-  >                                // ≤ 6 person roles, ≤ 1 location role; 0–3 images of ONE person / place each
+    | { kind: "pet"; name: string; images: string[] | null
+        body?: "new" | "original"; coat?: "new" | "original" }                              // each default "new"
+    | { kind: "product"; name: string; images: string[] | null
+        shape?: "new" | "original"; finish?: "new" | "original" }                           // each default "new"
+  >                                // every role also takes previewName? / inPreview? (preview only, see below);
+                                   // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
+                                   // 0–3 images of ONE subject / place each, ≤ 30 images in all
+  prePrompt?: string               // your own words at the start, before the role instructions; {role:N} as in postPrompt
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
-  quality?: "draft"                // the only value today
+  resolution?: "480p" | "720p" | "1080p" // default "480p"
+  draft?: boolean                  // default true at 480p, false above; true above 480p is a 400
+  prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
+  quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
   sessionId?: string
   origin?: string
 }
 
 interface CastSwapEstimate {
-  totalCredits: number                              // castSwap + seedance
-  breakdown: { castSwap: number; seedance: number } // the run itself; the video model it calls
-  settlesLower: boolean                             // Auto length: the final charge is expected to be lower
+  totalCredits: number // castSwap + seedance + references
+  breakdown: {
+    castSwap: number     // the run itself
+    seedance: number     // the video model it calls
+    references: number   // preparing the reference pictures; 0 when off or nothing to prepare
+  }
+  settlesLower: boolean // Auto length: the final charge is expected to be lower
 }
 ```
 
-A role with no images (empty or `null`) is skipped: that person or place stays
-as in the video. At least one role with images, or a `postPrompt`, is
-required. Both routes answer `400` before charging for a `postPrompt` over
-4,000 characters, a `{role:N}` with N outside 1..`roles.length` (empty roles
-count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name` or the
-`postPrompt`, a clip outside 4–30 s, or a preview past the clip's end
+A role with no images (empty or `null`) is skipped: that subject or place
+stays as in the video. At least one role with images, or a `prePrompt` or
+`postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
+kept from the video.
+
+**Preview-only role settings** (any kind; a full run ignores both):
+`previewName` is the name used instead of `name` in a preview, and
+`inPreview: false` leaves the role out of the preview (its images are not sent,
+prepared or charged; `{role:N}` keeps its numbering and reads as its
+`previewName`, else its `name`). A preview with every role left out (always,
+even with a `prePrompt` or `postPrompt`), or with no role kept in it that has
+images and no `prePrompt` or `postPrompt`, answers `400 no_roles_in_preview`.
+
+**Reference preparation** (`prepareReferences`, on by default): before the
+video, each person, pet and product role's images are turned into one clean
+reference picture by an image model. It costs extra credits
+(`breakdown.references` in the estimate), charged when it runs, even if the
+video then fails; it adds about a minute, and falls back to your own images
+for a role whose picture could not be made. Locations are not prepared.
+Pass `prepareReferences: false` to use your images as they are.
+
+Both routes answer `400` before charging for more roles of a kind than allowed
+or more than 30 images in all (`validation_error`), `draft: true` with
+`resolution` `"720p"` or `"1080p"` (`validation_error`, "Draft is 480p only."),
+a `prePrompt` or `postPrompt` over 4,000 characters, a `{role:N}` with N outside
+1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name`, the
+`prePrompt` or the `postPrompt`, a prompt that would build too long
+(`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
+images), a clip outside 4–30 s, or a preview past the clip's end
 (`previewStart + 4` > its length); also for an invalid body
 (`validation_error`), an address that is not public http(s) (`unsafe_url`) or a
 clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,
@@ -1900,6 +1985,133 @@ const params: CastSwapParams = {
 }
 const quote = await client.castSwap.estimate(params)
 const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
+```
+
+---
+
+### `client.trends`
+
+Trends: ready-made Cast Swap recipes. A trend is a short clip with slots (the
+people, pets, products and place you can replace); fill its slots with your own
+pictures and run it. **Cloud edition only**: these routes 404 on self-hosted
+installs. Only published trends exist: a draft, unpublished or unknown slug is a
+`404` on every method. Also importable as `@nodaro/sdk/trends`. Routes:
+[Trends](./api-integration.md#13g-trends-cloud-edition).
+
+```ts
+list(params?: ListTrendsParams): Promise<TrendPage<TrendCard>>                  // GET /v1/trends
+get(slug: string, params?: { locale?: string }): Promise<TrendDetail>           // GET /v1/trends/:slug
+estimate(slug: string, request: TrendRunRequest): Promise<TrendEstimate>        // POST /v1/trends/:slug/estimate, free
+run(slug: string, request: TrendRunRequest, options?: { idempotencyKey?: string }): Promise<{ jobId: string }> // POST /v1/trends/:slug/runs → 202
+runs(params?: ListTrendRunsParams): Promise<TrendPage<TrendRun>>               // GET /v1/trends/runs
+favorite(slug: string): Promise<void>                                           // PUT /v1/trends/:slug/favorite → 204
+unfavorite(slug: string): Promise<void>                                         // DELETE /v1/trends/:slug/favorite → 204
+```
+
+`list()` and `runs()` resolve to the page as it arrives (`{ data, next }`; pass
+`next` back as `cursor`, `null` on the last page). `get()`, `estimate()` and
+`run()` resolve to the payload, out of the route's `{ data }` envelope.
+
+```ts
+type TrendSlotKind = "person" | "location" | "product" | "pet"
+type TrendChoice = "new" | "original"       // make the trait anew from your pictures, or keep the clip's
+// The chips of a slot's kind: person body/outfit/hair, pet body/coat, product shape/finish, location none
+interface TrendChips { body?: TrendChoice; outfit?: TrendChoice; hair?: TrendChoice; coat?: TrendChoice; shape?: TrendChoice; finish?: TrendChoice }
+
+interface ListTrendsParams {
+  q?: string; tag?: string
+  favorites?: boolean   // true → only yours (sent as favorites=1)
+  locale?: string       // default: your profile's language, then English
+  cursor?: string; limit?: number  // 1–60, default 30
+}
+
+interface TrendCard {
+  id: string; slug: string; name: string; description?: string
+  tags: string[]; badges: string[]
+  cover: { videoUrl: string; posterUrl?: string; width: number; height: number } // the first example
+  needs: Record<TrendSlotKind, number>   // slots of each kind
+  durationSec: number
+  isFavorite: boolean
+}
+
+interface TrendDetail extends TrendCard {
+  version: number
+  previewSec: 4 | null                   // 4 when a 4 s preview run is offered
+  resolutions: ("480p" | "720p" | "1080p")[]
+  slots: Array<{ key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string; defaults?: TrendChips }>
+  examples: Array<{ videoUrl: string; posterUrl?: string; width: number; height: number; slots: Record<string, string[]> }>
+}
+
+interface TrendRunRequest {
+  slots: Record<string, { images?: string[] } & TrendChips> // slot key → 1–3 images + its kind's chips
+  example?: number      // 1-based; its pictures fill the optional slots you leave out. Default 1
+  details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
+  preview?: boolean     // 4 s run, when previewSec is 4
+  resolution?: "480p" | "720p" | "1080p" // default "480p"
+  draft?: boolean       // only at 480p; default true there
+  sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
+  projectId?: string    // accepted, but not used by the run today
+}
+
+interface TrendEstimate {
+  expectedCredits: number            // what the run is expected to be charged
+  holdCredits: number                // what is reserved when it starts
+  breakdown: Record<string, number>  // the parts of the quote
+}
+
+interface TrendRun {
+  jobId: string; status: string; progress: number | null
+  error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | cancelled | failed
+  createdAt: string; completedAt: string | null
+  trend: { id: string; slug: string; version: number; name: string } // the version it ran
+  example: number
+  slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean } & TrendChips>
+  details?: string
+  preview: boolean; resolution: string; draft: boolean
+  videoUrl: string | null; posterUrl: string | null  // once completed
+  creditsCharged: number | null
+  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  fullQualityUntil: string | null    // until when a completed draft can be redone in Full Quality
+}
+```
+
+A required slot left empty is refused with `400 missing_slot`; an optional one
+left out takes the chosen example's pictures (`fromExample: true` on the run),
+or is refused with `missing_slot` when that example has none for it
+(`example_out_of_range` when the trend has no such example).
+`estimate()` and `run()` answer `400` before charging for `missing_slot`,
+`unknown_slot`, `invalid_choice` (a chip the slot's kind does not take),
+`example_out_of_range`, `preview_unavailable`, `invalid_slot_mention` (a
+`{slot:<key>}` naming no slot), `prompt_too_long` and `validation_error`; the
+slot errors carry the key as `slot`. Other refusals: `401`, `404 not_found`
+(the trend is not published; for `run()` also a `sessionId` you may not use),
+`502 engine_error`, `503 engine_unsupported` / `trend_unavailable` /
+`not_available`. When the video engine refuses, `estimate()` / `run()` get the
+trend routes' OWN codes with fixed messages, never the engine's text or
+`issues`: `400 trend_run_rejected` (or `clip_out_of_range`,
+`preview_out_of_range`, `video_unreadable`, `unsafe_url`,
+`raw_reference_token`), `402 insufficient_credits` (or a workspace cap) as
+given, `413 storage_limit_exceeded`, `422 job_blocked`, `429 rate_limited`,
+`503 engine_unsupported` / `estimate_unavailable`, else `502 engine_error`.
+`"runs"` is never a slug: `get()`, `estimate()`, `run()`, `favorite()` and
+`unfavorite()` throw a `TypeError` for it before any request. The full table
+is in the [route reference](./api-integration.md#13g-trends-cloud-edition).
+
+`run()` returns a job id; follow it with `client.jobs.get(jobId)`, or read it
+back with `runs()`. Pass `{ idempotencyKey }` (`TrendRunOptions`) to make a
+retry safe: it is sent unchanged as the `Idempotency-Key` header (8–200
+characters, else `400`), and a repeat with the same key answers with the first
+run's `jobId`; nothing new is started or charged.
+
+```ts
+const { data: cards } = await client.trends.list({ tag: "dance" })
+const trend = await client.trends.get(cards[0].slug)
+const request: TrendRunRequest = {
+  slots: { [trend.slots[0].key]: { images: [myPhotoUrl] } },
+  preview: trend.previewSec === 4,
+}
+const quote = await client.trends.estimate(trend.slug, request)
+const { jobId } = await client.trends.run(trend.slug, request, { idempotencyKey: crypto.randomUUID() })
 ```
 
 ---
@@ -2437,6 +2649,11 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > 1080p, priced from the draft's length. A foreign, unfinished or non-draft
 > source is refused with a 4xx before anything is charged. See
 > [Seedance 2.5 HD (from draft)](./nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft).
+
+> **Copyright refusals.** `TextToVideoParams` takes `contentPolicyRewrite?: boolean`.
+> Absent or `true`, a copyright refusal is retried once with a reworded prompt;
+> `false` = a copyright refusal fails the job instead of retrying once with a
+> reworded prompt.
 
 > **A name you have no picture for.** The same three params take
 > `describedReferences: DescribedReference[]` (also re-exported from the SDK) —
@@ -5626,6 +5843,9 @@ videoMask(input: {
   prompt: string                  // ≤500 chars; commas track several subjects
   threshold?: number              // 0.05..0.95, default 0.5 (lower finds more)
   provider?: "sam-3.1" | "sam-3"  // default sam-3.1; sam-3 is half the price
+  holdLastMask?: boolean          // default false; keep the last mask where the subject is lost
+  minSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions shorter than this % of the frame height
+  maxSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions taller than this % (min > max is a 400)
 }): Promise<{ jobId: string }>
 ```
 
@@ -5642,12 +5862,16 @@ priced by length (`sam-3.1-video:5s` … `:300s`, 55<!-- credits: sam-3.1-video:
 
 ```ts
 maskComposite(input: {
-  foregroundUrl: string
+  foregroundUrl?: string          // required when fill is "video" (the default)
   backgroundUrl: string
   maskUrl: string                 // white = foreground
   invertMask?: boolean
   feather?: number                // 0..20 px, default 2
   grow?: number                   // -10..10 px, default 0
+  opacity?: number                // 0..1, default 1 (how strongly the fill covers the background inside the mask)
+  fill?: "video" | "pixelate" | "blur"                       // default video (the foreground)
+  pixelSizePct?: number           // pixelate: block size, 0.2..10 % of the width, default 1.25
+  blurStrengthPct?: number        // blur: sigma, 0.1..5 % of the width, default 2
   backgroundFit?: "cover" | "contain" | "stretch"           // default cover
   audioSource?: "foreground" | "background" | "mix" | "none" // default foreground
 }): Promise<{ jobId: string }>
@@ -5655,9 +5879,13 @@ maskComposite(input: {
 
 Place a foreground video over a background video through a mask video
 (`POST /v1/mask-composite`) — local FFmpeg, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s** of
-the result (foreground up to 300 s). The result follows
+the result (the video it follows up to 300 s). The result follows
 the foreground's size, frame rate and length; the background is fitted and
-loops when shorter, the mask holds its last frame. Full reference:
+loops when shorter, the mask holds its last frame. With `fill: "pixelate"`
+or `"blur"` the masked area is the background itself, pixelated or blurred:
+no `foregroundUrl` is needed (one sent is ignored), the result follows the
+background and is priced on its length, and it always carries the
+background's sound (`audioSource` is ignored). Full reference:
 [Mask Composite](./nodes/processing-video/mask-composite.md).
 
 #### `saveToStorage(input)`
@@ -6341,6 +6569,18 @@ const result = await client.uploads.upload(file)
 console.log(result.url)        // use as sourceImageUrl / audioUrl / videoUrl
 console.log(result.assetId)    // reference back to the storage row
 ```
+
+#### `uploadJson(json)`
+
+```ts
+uploadJson(json: Record<string, unknown> | readonly unknown[]): Promise<UploadJsonResult>
+```
+
+`POST /v1/upload-json` → stores a JSON document (up to 25 MB) and returns
+`{ url }`, its public URL — for example an image editor's design state, passed
+to `client.jobs.fromUpload` as `editStateUrl` so the edit can be reopened. The
+URL is unguessable but public, so never store a secret in it. It creates no
+library item.
 
 ### `client.library`
 
@@ -8114,6 +8354,8 @@ not two.
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
 - `JobRating` — `"good" | "bad"`; `JobRatingFilter` — `JobRating | "rated" | "unrated"` (the `jobs.list` filter)
 - `RateJobResult` — `jobs.rate`'s answer: `{ data: { jobId, rating } }`
+- `JobFromUploadParams` — `jobs.fromUpload`'s body: `{ assetId, sourceJobId?, sourceImageUrl?, sourceAssetId?, editStateUrl?, sessionId? }`
+- `UploadJsonResult` — `uploads.uploadJson`'s answer: `{ url }`
 
 ### Gallery
 

@@ -59,9 +59,26 @@ export type PolicyBlockHint = {
 }
 
 /**
+ * The job ran out of credits partway: a step that reserves its own credits
+ * (for example, the video a Cast Swap or trend run dispatches) was refused —
+ * the balance could not cover it, or a plan or workspace cap was reached. The
+ * job failed and its credits were refunded; ask the person to top up (or raise
+ * the cap), then run it again.
+ *
+ * `code` is the refusal's own code, a lowercase snake_case token — for
+ * example `insufficient_credits`, `free_video_limit`, `instance_cap_reached`,
+ * `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. Treat
+ * an unknown code like `insufficient_credits`.
+ */
+export type CreditsHint = {
+  kind: "credits"
+  code: string
+}
+
+/**
  * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
  * failure verdict, so a caller can act on it without parsing `error_message`
- * prose. One column, two verdict sources; `kind` is the discriminant.
+ * prose. One column, several verdict sources; `kind` is the discriminant.
  *
  * HAND-COPIED MIRROR of `ErrorHint` in the platform's
  * `backend/src/lib/safety-block.ts` (which names this file in its own
@@ -69,7 +86,7 @@ export type PolicyBlockHint = {
  * pasted here verbatim in the same change, with a changeset.
  * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`
@@ -189,6 +206,25 @@ export interface RateJobResult {
   data: { jobId: string; rating: JobRating | null }
 }
 
+/**
+ * {@link JobsResource.fromUpload}'s body: an image edited in the browser,
+ * already stored with `client.uploads.upload`, and what it was made from.
+ */
+export interface JobFromUploadParams {
+  /** The edited image's `assetId`, as `client.uploads.upload` returned it. */
+  assetId: string
+  /** The job whose image was edited. */
+  sourceJobId?: string
+  /** Which of `sourceJobId`'s images was edited, when it made several. Default: its `imageUrl`. */
+  sourceImageUrl?: string
+  /** The upload that was edited, when the source is not a job. Not with `sourceJobId`. */
+  sourceAssetId?: string
+  /** The editor's design state, stored with `client.uploads.uploadJson`, so the edit can be reopened. */
+  editStateUrl?: string
+  /** The generation session to file the job in. */
+  sessionId?: string
+}
+
 /** A list filter value as the query string carries it: several are comma-separated. */
 function listParam(value: string | readonly string[] | undefined): string | undefined {
   if (value === undefined) return undefined
@@ -246,6 +282,19 @@ export class JobsResource {
     return this.client.request<ListJobsPage>("GET", "/v1/jobs", {
       query: { ...rest, status: listParam(status), type: listParam(type) },
     })
+  }
+
+  /**
+   * Record an image edited in the browser as a job (`POST /v1/jobs/from-upload`):
+   * a completed, private, free `image-edit` job whose `output_data.imageUrl` is
+   * the upload, linked to its source in `input_data` (`sourceJobId` /
+   * `sourceAssetId`, `sourceImageUrl`). It then lists, rates, favorites and
+   * files into a session like any image job. One upload is one job: the same
+   * `assetId` again returns the same job. OAuth apps need the `assets:write`
+   * scope. A deployment's job policy can refuse the image ({@link JobBlockedError}).
+   */
+  fromUpload(params: JobFromUploadParams): Promise<{ data: Job }> {
+    return this.client.request<{ data: Job }>("POST", "/v1/jobs/from-upload", { body: params })
   }
 
   /**

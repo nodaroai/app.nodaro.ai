@@ -47,15 +47,18 @@ function mockListJobs(rows: unknown[]) {
 }
 
 function mockGetJob(row: unknown | null) {
+  // `.is("parent_job_id", null)`: a child job reads as one that does not exist.
+  const is = vi.fn().mockReturnValue({
+    maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
+  })
   ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
-        }),
+        eq: vi.fn().mockReturnValue({ is }),
       }),
     }),
   })
+  return { is }
 }
 
 describe("list_jobs tool", () => {
@@ -143,6 +146,16 @@ describe("list_jobs tool", () => {
 })
 
 describe("get_job tool", () => {
+  it("never reads a child job: it answers as one that does not exist", async () => {
+    const { is } = mockGetJob(null)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: "11111111-1111-4111-8111-111111111111" })
+    expect(is).toHaveBeenCalledWith("parent_job_id", null)
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("not found")
+  })
+
   it("returns single job row when owned", async () => {
     mockGetJob({
       id: "11111111-1111-4111-8111-111111111111",
@@ -379,9 +392,10 @@ function mockJobReads(rows: Array<unknown | null>) {
   const chain: Record<string, unknown> = {}
   chain.select = vi.fn().mockReturnValue(chain)
   chain.eq = vi.fn().mockReturnValue(chain)
+  chain.is = vi.fn().mockReturnValue(chain)
   chain.maybeSingle = maybeSingle
   ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(chain)
-  return { maybeSingle }
+  return { maybeSingle, is: chain.is as ReturnType<typeof vi.fn> }
 }
 const JOB = "11111111-1111-4111-8111-111111111111"
 const jobsSession = () => newSession({ userId: "u1", scopes: ["jobs:read"] as Scope[], clientName: "Claude" })
@@ -493,6 +507,16 @@ describe("wait_for_job tool", () => {
     const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
     expect(result.isError).toBe(true)
     expect(result.content[0]?.text).toContain("not found")
+    expect(maybeSingle).toHaveBeenCalledTimes(1)
+  })
+
+  it("never waits on a child job: the ownership read leaves children out", async () => {
+    const { maybeSingle, is } = mockJobReads([null])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    expect(is).toHaveBeenCalledWith("parent_job_id", null)
+    expect(result.isError).toBe(true)
     expect(maybeSingle).toHaveBeenCalledTimes(1)
   })
 

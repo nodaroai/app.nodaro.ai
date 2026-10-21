@@ -265,6 +265,7 @@ export {
   forwardedVideoLengthSec,
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
+  maskCompositeLeadSec,
   runForwardedVideoLengthSec,
   runWireLengthSec,
   utilityOutputLength,

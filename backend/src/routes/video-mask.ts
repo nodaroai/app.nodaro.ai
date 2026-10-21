@@ -30,6 +30,12 @@ export const videoMaskBody = z.object({
   prompt: z.string().trim().min(1).max(VIDEO_MASK_LIMITS.PROMPT_MAX_LENGTH),
   threshold: z.number().min(VIDEO_MASK_LIMITS.THRESHOLD_MIN).max(VIDEO_MASK_LIMITS.THRESHOLD_MAX).optional().default(VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT),
   provider: z.enum(VIDEO_MASK_PROVIDERS).optional().default(DEFAULT_VIDEO_MASK_PROVIDER),
+  // Hold the last mask where the subject is lost (VIDEO_MASK_LIMITS.HOLD_EMPTY_BELOW_FRACTION); off = the model's mask.
+  holdLastMask: z.boolean().optional().default(false),
+  // Drop regions shorter than this % of the frame height (0 = off); applied before holdLastMask.
+  minSubjectHeightPct: z.number().min(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN).max(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX).optional().default(0),
+  // Drop regions taller than this % of the frame height (0 = off); with both set, keep min ≤ h ≤ max.
+  maxSubjectHeightPct: z.number().min(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN).max(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX).optional().default(0),
 })
 
 /**
@@ -67,6 +73,14 @@ export async function videoMaskRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
+      })
+    }
+    // Both size cuts set: the band must not be empty (checked after the parse, so the schema stays an object).
+    const { minSubjectHeightPct: lo, maxSubjectHeightPct: hi } = parsed.data
+    if (lo > 0 && hi > 0 && lo > hi) {
+      const message = `minSubjectHeightPct (${lo}) is above maxSubjectHeightPct (${hi}) — no subject could be kept`
+      return reply.status(400).send({
+        error: { code: "validation_error", message, issues: [{ path: "minSubjectHeightPct", message }] },
       })
     }
     const userId = req.userId

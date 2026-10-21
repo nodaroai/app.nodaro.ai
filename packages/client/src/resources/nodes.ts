@@ -477,6 +477,10 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
    *  { provider: "seedance-2-5-hd", sourceJobId })`: the same take, frame for
    *  frame, at 1080p. Drafts are kept about 7 days. */
   draft?: boolean
+  /** Absent / `true`: a copyright refusal is retried once with a reworded
+   *  prompt. `false` = a copyright refusal fails the job instead of retrying
+   *  once with a reworded prompt. */
+  contentPolicyRewrite?: boolean
   [k: string]: unknown
 }
 

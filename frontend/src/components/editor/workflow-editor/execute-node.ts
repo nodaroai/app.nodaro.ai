@@ -33,7 +33,8 @@ import {
   overlayVariantIdFromHandle,
   VIDEO_MASK_LIMITS,
   resolveVideoMaskProvider,
-  resolveMaskCompositeSettings
+  resolveMaskCompositeSettings,
+  maskCompositeUsesForeground
 } from "@nodaro/shared/media";
 import {
   resolveMusicProvider,
@@ -7089,6 +7090,14 @@ function executeNodeCore(
           prompt,
           threshold: vmData.threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT,
           provider: resolveVideoMaskProvider(vmData.provider),
+          holdLastMask: vmData.holdLastMask === true,
+          // The orchestrator's reading (payload-builder): a finite number, clamped; anything else is 0 (off).
+          minSubjectHeightPct: typeof vmData.minSubjectHeightPct === "number" && Number.isFinite(vmData.minSubjectHeightPct)
+            ? Math.min(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX, Math.max(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN, vmData.minSubjectHeightPct))
+            : 0,
+          maxSubjectHeightPct: typeof vmData.maxSubjectHeightPct === "number" && Number.isFinite(vmData.maxSubjectHeightPct)
+            ? Math.min(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX, Math.max(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN, vmData.maxSubjectHeightPct))
+            : 0,
           userId: ctx.userId,
         }),
       "generatedVideoUrl",
@@ -8559,10 +8568,15 @@ function executeNodeCore(
     // The foreground rides the ordinary `video` handle; `background` and
     // `mask-video` are routed by handle in node-input-resolver (mirrors the
     // backend input-resolver + payload-builder `case "mask-composite"`).
-    const foregroundUrl = overrideMediaUrl ?? inputs.videoUrl;
+    // Pixelate / blur fill from the background: no foreground is required or
+    // sent (a wired one, or a media override, is ignored — the override names
+    // the foreground, which those fills do not use).
+    const settings = resolveMaskCompositeSettings(d);
+    const usesForeground = maskCompositeUsesForeground(settings.fill);
+    const foregroundUrl = usesForeground ? overrideMediaUrl ?? inputs.videoUrl : undefined;
     const backgroundUrl = inputs.backgroundVideoUrl;
     const maskUrl = inputs.maskUrl;
-    if (!foregroundUrl) {
+    if (usesForeground && !foregroundUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.maskCompositeNoForeground"));
       return Promise.reject(new Error("No foreground video"));
     }
@@ -8578,10 +8592,10 @@ function executeNodeCore(
       node.id,
       () =>
         maskCompositeApi({
-          foregroundUrl,
+          ...(foregroundUrl ? { foregroundUrl } : {}),
           backgroundUrl,
           maskUrl,
-          ...resolveMaskCompositeSettings(d),
+          ...settings,
           userId: ctx.userId,
         }),
       "generatedVideoUrl",

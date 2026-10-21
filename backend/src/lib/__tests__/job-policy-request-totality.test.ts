@@ -52,7 +52,7 @@ const SRC = join(__dirname, "..", "..")
  */
 const TODO_ALLOWLIST: ReadonlyMap<string, string> = new Map([])
 
-const CALL = /\b(insertJob|insertJobs|insertSyncJob|insertInternalJob|insertJobIdempotent)\s*(?:<[^>]*>)?\s*\(/g
+const CALL = /\b(insertJob|insertJobs|insertSyncJob|insertInternalJob|insertJobIdempotent|insertSyncJobIdempotent)\s*(?:<[^>]*>)?\s*\(/g
 /** The `const { … } = await` immediately before the call. */
 const DESTRUCTURE = /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?$/
 const HANDLED = /sendInternalError|\bblocked\b|JobBlockedError/

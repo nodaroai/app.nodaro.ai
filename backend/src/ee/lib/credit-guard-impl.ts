@@ -4,19 +4,20 @@
 // at runtime.
 
 import type { FastifyRequest, FastifyReply } from "fastify"
-import { CreditsService, PriceNotConfiguredError, getModelCreditCostFromDB, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
+import { CreditsService, PriceNotConfiguredError, getModelCreditCostFromDB, checkRunSetCredits, DEPLOYMENT_OUT_OF_CREDITS, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { warmAdminCache } from "../../lib/admin-check.js"
 import { getAppSettings } from "../../lib/app-settings.js"
-import type { CreditReservation, StorageSnapshot, CreditGuardOpts } from "../../middleware/credit-guard.js"
+import type { CreditReservation, StorageSnapshot, CreditGuardOpts, PayerAffordability } from "../../middleware/credit-guard.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
-import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface-guard.js"
+import { isWebFreeModeCandidate, sendSubscriptionRequired, SUBSCRIPTION_REQUIRED_BODY } from "./payg-surface-guard.js"
 import { freeVideoRequestOf, readsVideoBody } from "../billing/free-video-limits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
-import { ReserveRpcError, mapReserveError } from "../../lib/reserve-errors.js"
-import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
+import { ReserveRpcError, mapReserveError, reserveRefusalFor } from "../../lib/reserve-errors.js"
+import { billingService, type BillingContext } from "../../lib/billing-context.js"
+import { allowanceEnforcementActive, deploymentBillingContext, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { getWelcomeOfferConfig } from "./welcome-offer-config.js"
 import { consentBlockExempt, sendConsentRequired } from "./welcome-consent-gate.js"
@@ -147,6 +148,93 @@ export async function reservedCreditsFor(
 /** BASE credits marked up at `modelIdentifier`, the way a reservation is. */
 export async function markedUpCredits(baseCredits: number, modelIdentifier: string): Promise<number> {
   return applyServiceMarkup(baseCredits, await getAppSettings(), modelIdentifier)
+}
+
+/** A refusal as the guard sends it: the status and the body, verbatim. */
+export interface CreditRefusal {
+  statusCode: number
+  body: unknown
+}
+
+/**
+ * What the guard answers when the payer's pools cannot cover a run — ONE
+ * builder for the guard (Step 2) and `checkPayerCanAffordImpl`, so the two
+ * can never answer the same shortfall in two dialects.
+ *
+ * - A payg account on a consumer surface (web-free mode): the subscription
+ *   ask (403) — the topup pool is developer-surface money.
+ * - A deployment payer: the wallet that came up short is the OPERATOR's, not
+ *   this requester's. Echoing `balance` would hand every user the operator's
+ *   pool size — the same figure the consumption-only /usage page exists to
+ *   keep private, and this response reaches anyone who can press Generate.
+ *   And the requester cannot resolve this at all: they hold no wallet, and a
+ *   prepaid instance withholds self-serve purchase, so the stock
+ *   "insufficient credits" copy sends them to a dead end. Name the real
+ *   condition and the real fixer instead.
+ * - Otherwise the plain 402 with what the run needs and what the payer has.
+ */
+export function insufficientCreditsRefusal(
+  check: { error?: string; required?: number; balance?: number; subscriptionRequired?: boolean },
+  deploymentPayer: boolean,
+): CreditRefusal {
+  if (check.subscriptionRequired) return { statusCode: 403, body: SUBSCRIPTION_REQUIRED_BODY }
+  if (deploymentPayer) {
+    return {
+      statusCode: 402,
+      body: {
+        error: { code: "insufficient_credits", message: DEPLOYMENT_OUT_OF_CREDITS },
+        required: check.required,
+      },
+    }
+  }
+  return {
+    statusCode: 402,
+    body: {
+      error: { code: "insufficient_credits", message: check.error ?? "Insufficient credits" },
+      required: check.required,
+      balance: check.balance,
+    },
+  }
+}
+
+/**
+ * Track A — the per-user allowance pre-flight under a deployment payer, or
+ * null when the allowance covers `required` (or the user has none).
+ *
+ * NON-AUTHORITATIVE, on purpose (D8). This is a read-then-reserve: two
+ * parallel Generates can both read "enough" and both reserve. The authority
+ * is the block inside `reserve_credits`, holding `FOR UPDATE` on the
+ * allowance row in the same transaction that debits the payer; the overshoot
+ * a race here can produce is bounded by that, never by this. What this buys
+ * is a truthful 402 for the ordinary case, before a job row is created and
+ * refunded.
+ *
+ * The figures are RAW credits and are the requester's OWN (D10): the payer's
+ * pool never appears here, in any key, for the same reason
+ * `insufficientCreditsRefusal` withholds `balance` from a deployment payer.
+ *
+ * The D7 no-row rule (a user who has never generated has no row and must
+ * answer the DEFAULT, never 0) lives in `allowanceFor`. Reading the table
+ * here instead would put a second copy of that rule in the one place where
+ * getting it wrong refuses every user's first ever Generate.
+ */
+async function allowanceRefusal(userId: string, required: number): Promise<CreditRefusal | null> {
+  const allowance = await allowanceFor(userId)
+  if (!allowance || required <= allowance.remaining) return null
+  return {
+    statusCode: 402,
+    body: {
+      error: {
+        // Same code and same fixed message the reserve RPC's own refusal maps
+        // to (reserve-errors.ts, USER_ALLOWANCE_EXCEEDED): one refusal seen
+        // from two places must not read as two.
+        code: "user_allowance_exceeded",
+        message: "Your allowance cannot cover this run",
+      },
+      required,
+      remaining: allowance.remaining,
+    },
+  }
 }
 
 export function creditGuardImpl(
@@ -359,51 +447,16 @@ export function creditGuardImpl(
           reply.status(402).send({ error: { code: "free_video_limit", message: creditCheck.error ?? "Not available on free credits" } })
           return
         }
-        if (creditCheck.subscriptionRequired) {
-          sendSubscriptionRequired(reply)
-          return
-        }
-        // Deployment payer: the wallet that came up short is the OPERATOR's,
-        // not this requester's. Two things must not happen here. Echoing
-        // `balance` would hand every user the operator's pool size — the same
-        // figure the consumption-only /usage page exists to keep private, and
-        // this response reaches anyone who can press Generate. And the
-        // requester cannot resolve this at all: they hold no wallet, and a
-        // prepaid instance withholds self-serve purchase, so the stock
-        // "insufficient credits" copy sends them to a dead end. Name the real
-        // condition and the real fixer instead.
-        if (dep) {
-          reply.status(402).send({
-            error: {
-              code: "insufficient_credits",
-              message: "This deployment is out of credits. Contact your administrator.",
-            },
-            required: creditCheck.required,
-          })
-          return
-        }
-        reply.status(402).send({
-          error: {
-            code: "insufficient_credits",
-            message: creditCheck.error ?? "Insufficient credits",
-          },
-          required: creditCheck.required,
-          balance: creditCheck.balance,
-        })
+        // The subscription ask, the deployment payer's private-pool refusal,
+        // or the plain 402 — see insufficientCreditsRefusal.
+        const refusal = insufficientCreditsRefusal(creditCheck, Boolean(dep))
+        reply.status(refusal.statusCode).send(refusal.body)
         return
       }
 
-      // Track A — the per-user allowance pre-flight, AFTER the payer wealth
-      // check has passed (the pool must be able to pay before the quota is
-      // even a question) and BEFORE a job row exists.
-      //
-      // NON-AUTHORITATIVE, on purpose (D8). This is a read-then-reserve: two
-      // parallel Generates can both read "enough" and both reserve. The
-      // authority is the block inside `reserve_credits`, holding `FOR UPDATE`
-      // on the allowance row in the same transaction that debits the payer;
-      // the overshoot a race here can produce is bounded by that, never by
-      // this. What this buys is a truthful 402 for the ordinary case, before
-      // a job row is created and refunded.
+      // Track A — the per-user allowance pre-flight (allowanceRefusal), AFTER
+      // the payer wealth check has passed (the pool must be able to pay before
+      // the quota is even a question) and BEFORE a job row exists.
       //
       // TWO gates, both load-bearing. `dep` keeps mainline out entirely.
       // `allowanceEnforcementActive()` keeps the whole rollout window before
@@ -411,31 +464,10 @@ export function creditGuardImpl(
       // until then this guard must refuse NOTHING even though balances are
       // already on screen. `required` can be absent (credits disabled) — with
       // no cost to compare there is nothing to refuse.
-      //
-      // The figures are RAW credits and are the requester's OWN (D10): the
-      // payer's pool never appears here, in any key, for the same reason the
-      // `insufficient_credits` branch above withholds `balance`. Both are
-      // reachable by anyone who can press Generate.
-      //
-      // The D7 no-row rule (a user who has never generated has no row and
-      // must answer the DEFAULT, never 0) lives in `allowanceFor`. Reading
-      // the table here instead would put a second copy of that rule in the
-      // one place where getting it wrong refuses every user's first ever
-      // Generate.
       if (dep && allowanceEnforcementActive() && creditCheck.required != null) {
-        const allowance = await allowanceFor(userId)
-        if (allowance && creditCheck.required > allowance.remaining) {
-          reply.status(402).send({
-            error: {
-              // Same code and same fixed message the reserve RPC's own
-              // refusal maps to (reserve-errors.ts, USER_ALLOWANCE_EXCEEDED):
-              // one refusal seen from two places must not read as two.
-              code: "user_allowance_exceeded",
-              message: "Your allowance cannot cover this run",
-            },
-            required: creditCheck.required,
-            remaining: allowance.remaining,
-          })
+        const refusal = await allowanceRefusal(userId, creditCheck.required)
+        if (refusal) {
+          reply.status(refusal.statusCode).send(refusal.body)
           return
         }
       }
@@ -458,6 +490,90 @@ export function creditGuardImpl(
       })
     }
   }
+}
+
+/**
+ * Can the payer of this request afford `credits` (final, already marked-up
+ * credits) right now? The toolkit's `http.checkPayerCanAfford` — for a route
+ * that starts work whose jobs reserve their own credits later and must refuse
+ * up front when the payer cannot cover the whole run.
+ *
+ * Balance only, on the payer the guard reads (`checkRunSetCredits`: the
+ * payer's profile through `payerProfileId`, the reservation's `spendGates`).
+ * Model availability, free-tier limits and daily caps stay with each job's
+ * own guard. A refusal is exactly what the guard sends for the same shortfall
+ * (`insufficientCreditsRefusal`, `allowanceRefusal`); a deployment payer's
+ * pool is never echoed.
+ *
+ * A WORKSPACE payer is checked against the workspace's headroom for this
+ * member (the org-billing service's ONE formula, the payer-aware estimate's
+ * preview: the lower of the budget's and the member cap's headroom) and
+ * refused in the reserve RPC's words (`budget_exceeded`). Stricter than the
+ * guard, which leaves the budget to the reservation — this is asked for a
+ * whole run before any of its jobs exist. Without a headroom answer (an older
+ * plugin, a failed read) it passes: the reservation stays the authority.
+ *
+ * Holds nothing and writes nothing — no reservation, no `creditOverride`, and
+ * `req.webFreeMode` is read, never stamped. Rejects on an internal failure
+ * (an unreadable payer profile, a bad amount, no user).
+ */
+export async function checkPayerCanAffordImpl(
+  req: FastifyRequest,
+  credits: number,
+): Promise<PayerAffordability> {
+  if (typeof credits !== "number" || !Number.isFinite(credits) || credits < 0) {
+    throw new Error("checkPayerCanAfford: credits must be a finite non-negative number")
+  }
+  const userId = req.userId
+  if (!userId) throw new Error("checkPayerCanAfford: the request has no authenticated user")
+  // A run that costs nothing is never refused for credits, whatever the
+  // balance reads (an overdrawn pool, a deployment's empty one).
+  if (credits === 0) return { ok: true }
+
+  // The request's resolved payer — or, where the billing hook did not run
+  // (GET / HEAD, a route it skips), the decision `requestBillingContext`
+  // makes first: under a configured deployment payer EVERY request is the
+  // payer's, so its pool is checked and never echoed (the payer's own app
+  // token included — refusePayerBalanceToProgrammaticCaller's rule).
+  const ctx = req.billingContext ?? (deploymentPayerActive() ? deploymentBillingContext(userId) : undefined)
+  if (ctx?.payer === "workspace") return workspaceAffords(ctx, credits)
+
+  const dep = ctx?.payer === "deployment"
+  // The guard's own surface predicate (OR-preserving the flag auth stamped on
+  // an internal hop) — computed here, never written back onto the request.
+  const webFreeMode = req.webFreeMode === true || isWebFreeModeCandidate(req)
+  const check = await checkRunSetCredits(userId, credits, { billingContext: ctx, webFreeMode })
+  if (!check.sufficient) {
+    return {
+      ok: false,
+      ...insufficientCreditsRefusal(
+        {
+          error: check.message,
+          required: check.required,
+          balance: check.available ?? undefined,
+          subscriptionRequired: check.subscriptionRequired,
+        },
+        dep,
+      ),
+    }
+  }
+  if (dep && allowanceEnforcementActive()) {
+    const refusal = await allowanceRefusal(userId, credits)
+    if (refusal) return { ok: false, ...refusal }
+  }
+  return { ok: true }
+}
+
+async function workspaceAffords(
+  ctx: Extract<BillingContext, { payer: "workspace" }>,
+  credits: number,
+): Promise<PayerAffordability> {
+  const billing = billingService()
+  const preview = billing?.headroom ? await billing.headroom(ctx.workspaceId, ctx.userId) : null
+  if (!preview || credits <= preview.headroomCredits) return { ok: true }
+  const refusal = reserveRefusalFor("BUDGET_EXCEEDED")
+  if (!refusal) throw new Error("checkPayerCanAfford: the BUDGET_EXCEEDED refusal is not mapped")
+  return { ok: false, statusCode: refusal.status, body: { error: { code: refusal.code, message: refusal.message } } }
 }
 
 export async function reserveCreditsForJobImpl(

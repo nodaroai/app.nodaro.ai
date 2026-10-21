@@ -8,6 +8,7 @@
  * same table (job-owner-state.ts).
  */
 import { supabase } from "./supabase.js"
+import { CHILD_JOB_COLUMN } from "./public-job-data.js"
 
 /**
  * Which jobs a person may favorite, as a PostgREST `or()` filter: their own
@@ -26,8 +27,15 @@ export type ToggleFavoriteOutcome = { kind: "toggled"; favorited: boolean } | { 
  * found, as if it did not exist); removing does not — a person can always
  * take back their own favorite, even of a job that has since gone private.
  * `jobId` must already be a well-formed uuid. Throws on a database failure.
+ *
+ * A child job (CHILD_JOB_COLUMN) is never favorited by a non-admin: it reads
+ * as not found, as on every job read by id. `opts.isAdmin` lifts that.
  */
-export async function toggleGalleryFavorite(userId: string, jobId: string): Promise<ToggleFavoriteOutcome> {
+export async function toggleGalleryFavorite(
+  userId: string,
+  jobId: string,
+  opts: { isAdmin?: boolean } = {},
+): Promise<ToggleFavoriteOutcome> {
   const { data: existing, error: readError } = await supabase
     .from("gallery_favorites")
     .select("id")
@@ -42,12 +50,13 @@ export async function toggleGalleryFavorite(userId: string, jobId: string): Prom
     return { kind: "toggled", favorited: false }
   }
 
-  const { data: job, error: jobError } = await supabase
+  let jobQuery = supabase
     .from("jobs")
     .select("id")
     .eq("id", jobId)
     .or(favoritableJobFilter(userId))
-    .maybeSingle()
+  if (!opts.isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
+  const { data: job, error: jobError } = await jobQuery.maybeSingle()
   if (jobError) throw jobError
   if (!job) return { kind: "not_found" }
 

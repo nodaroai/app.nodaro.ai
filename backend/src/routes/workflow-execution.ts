@@ -39,6 +39,7 @@ import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { CHILD_JOB_COLUMN, redactPrivateJobData, trendRunErrorText } from "../lib/public-job-data.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
@@ -1186,13 +1187,17 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // Execution-history lists intentionally merge workflow_executions with
     // standalone single-node jobs (`workflow_execution_id IS NULL`). Detail
     // lookup needs the same fallback so a list row's `id` works uniformly.
-    const { data: job, error: jobError } = await supabase
+    // A child job (CHILD_JOB_COLUMN) is never one: it reads as not found to a
+    // non-admin, as on every job read by id.
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+    let jobQuery = supabase
       .from("jobs")
       .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
-      .single()
+    if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
+    const { data: job, error: jobError } = await jobQuery.single()
 
     if (jobError || !job) {
       return reply.status(404).send({
@@ -1201,7 +1206,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     return {
-      data: jobToExecutionResponse(job),
+      data: jobToExecutionResponse(job, isAdmin),
     }
   })
 
@@ -1243,13 +1248,16 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // worker runs for them), so there's nothing to stream beyond the
       // initial snapshot — the frontend's 3-s job-detail polling carries the
       // live updates from here.
-      const { data: job, error: jobError } = await supabase
+      // As the detail read: never a child job for a non-admin (CHILD_JOB_COLUMN).
+      const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+      let jobQuery = supabase
         .from("jobs")
         .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
         .eq("id", execId)
         .eq("user_id", req.userId)
         .is("workflow_execution_id", null)
-        .single()
+      if (!isAdmin) jobQuery = jobQuery.is(CHILD_JOB_COLUMN, null)
+      const { data: job, error: jobError } = await jobQuery.single()
 
       if (jobError || !job) {
         return reply.status(404).send({
@@ -1258,7 +1266,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       }
 
       const sse = await createSSEStream(req, reply)
-      const jobAsExec = jobToExecutionResponse(job) as unknown as Record<string, unknown>
+      const jobAsExec = jobToExecutionResponse(job, isAdmin) as unknown as Record<string, unknown>
       sse.sendEvent({ type: "metadata", data: jobAsExec })
       const jobTerminalStatuses = new Set(["completed", "failed", "cancelled"])
       if (jobTerminalStatuses.has(job.status as string)) {
@@ -1645,7 +1653,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Merge both sources, sort by created_at desc, take limit + 1
     const execRows = (execResult.data ?? []).map(toExecutionSummary)
-    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row))
+    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, req.userRole === "admin" || req.userRole === "super_admin"))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
 
@@ -1774,7 +1782,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Merge both sources, sort by created_at desc, take limit + 1
     const execRows = (execResult.data ?? []).map((row) => ({ ...toExecutionSummary(row), workflowId: row.workflow_id, userId: row.user_id, _source: "exec" as const }))
-    const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
+    const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row, isAdminViewAll), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
 
@@ -1971,8 +1979,10 @@ const JOB_STATUS_MAP: Record<string, string> = {
  *  decision with credits still reserved, not a terminal state. */
 const HELD_JOB_STATUS = "pending_review"
 
-export function jobToExecutionSummary(row: Record<string, unknown>) {
+export function jobToExecutionSummary(row: Record<string, unknown>, isAdmin = false) {
   const inputData = (row.input_data ?? {}) as Record<string, unknown>
+  // A trend run's failure text is replaced for a non-admin, as on every job read.
+  const error = trendRunErrorText(row.error_message as string | null | undefined, row.input_data, isAdmin)
   const provider = row.provider as string | undefined
   // Component jobs: show the component name as the node type label
   const jobType = provider === "component"
@@ -2006,7 +2016,7 @@ export function jobToExecutionSummary(row: Record<string, unknown>) {
         jobId: row.id,
         progress: (row.progress as number | null | undefined) ?? 0,
         creditsUsed: row.credits ?? 0,
-        error: row.error_message,
+        error,
         startedAt: row.started_at,
         completedAt: row.completed_at,
         // Sidecar, exactly as the orchestrator writes it on `node_states`
@@ -2021,20 +2031,23 @@ export function jobToExecutionSummary(row: Record<string, unknown>) {
     completedNodes: mappedStatus === "completed" ? 1 : 0,
     failedNodes: mappedStatus === "failed" ? 1 : 0,
     totalCreditsUsed: mappedStatus === "completed" ? ((row.credits ?? 0) as number) : 0,
-    errorMessage: row.error_message,
+    errorMessage: error,
     startedAt: row.started_at,
     completedAt: row.completed_at,
     createdAt: row.created_at,
   }
 }
 
-function jobToExecutionResponse(row: Record<string, unknown>) {
-  const summary = jobToExecutionSummary(row)
+function jobToExecutionResponse(row: Record<string, unknown>, isAdmin: boolean) {
+  const summary = jobToExecutionSummary(row, isAdmin)
   return {
     ...summary,
     workflowId: row.workflow_id,
     userId: row.user_id,
-    triggerData: row.input_data,
+    // A standalone job's input, through the redaction every job read applies:
+    // its server-only top-level `__` keys (a trend run's hidden inputs) and
+    // `unscoredUrl` never reach the caller. Shared by the JSON and SSE paths.
+    triggerData: redactPrivateJobData({ input_data: row.input_data }).input_data,
     // `jobs` has no updated_at: its last transition is the closest stamp.
     updatedAt: row.completed_at ?? row.started_at ?? row.created_at,
   }

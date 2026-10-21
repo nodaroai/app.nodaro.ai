@@ -28,14 +28,20 @@ function buildNoAuth() {
   return app
 }
 
-// Non-admin query chain: supabase.from("jobs").select(...).in(...).eq("user_id", uid).
-// Returns the eq spy so owner-scoping can be asserted.
+/** A non-admin read's last step: `.eq("user_id", uid)` then `.is("parent_job_id", null)` — a child job is never priced. */
+function resolvedWithIs<T>(value: T) {
+  return Object.assign(Promise.resolve(value), { is: () => Promise.resolve(value) })
+}
+
+// Non-admin query chain: supabase.from("jobs").select(...).in(...).eq("user_id", uid).is("parent_job_id", null).
+// Returns the eq and is spies so owner-scoping can be asserted.
 function mockJobsQuery(rows: unknown[] | null, error: unknown = null) {
-  const eq = vi.fn().mockResolvedValue({ data: rows, error })
+  const is = vi.fn().mockResolvedValue({ data: rows, error })
+  const eq = vi.fn().mockReturnValue({ is })
   const inFn = vi.fn().mockReturnValue({ eq })
   const select = vi.fn().mockReturnValue({ in: inFn })
   from.mockReturnValue({ select })
-  return { select, in: inFn, eq }
+  return { select, in: inFn, eq, is }
 }
 
 describe("POST /v1/jobs/cost-summary", () => {
@@ -90,7 +96,7 @@ describe("POST /v1/jobs/cost-summary", () => {
   })
 
   it("scopes the query to the caller (.eq(user_id)) for a non-admin owner (IDOR ownership scope)", async () => {
-    const { eq } = mockJobsQuery([
+    const { eq, is } = mockJobsQuery([
       { id: "j1", status: "completed", input_data: { type: "generate-image", provider: "nano-banana" } },
     ])
     const app = build() // userRole = "user" → non-admin
@@ -101,12 +107,13 @@ describe("POST /v1/jobs/cost-summary", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(eq).toHaveBeenCalledWith("user_id", "u1")
+    expect(is).toHaveBeenCalledWith("parent_job_id", null)
   })
 
   // ---- Money-nullability tests (BillingProvider.report → null-not-zero) ----
 
   it("keeps unavailable jobs out of the total instead of counting them as 0", async () => {
-    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => Promise.resolve({
+    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => resolvedWithIs({
       data: [
         { id: "j1", status: "completed", input_data: { type: "generate-image", provider: "nano-banana" } },
         { id: "j2", status: "completed", input_data: { type: "generate-image", provider: "nano-banana" } },
@@ -131,7 +138,7 @@ describe("POST /v1/jobs/cost-summary", () => {
   })
 
   it("totals are null (not 0) when the whole batch is unavailable", async () => {
-    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => Promise.resolve({
+    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => resolvedWithIs({
       data: [{ id: "j1", status: "completed", input_data: { type: "generate-image", provider: "x" } }], error: null }) }) }) })
     const p: BillingProvider = {
       id: "none-ish", displayUnit: "usd",
@@ -151,7 +158,7 @@ describe("POST /v1/jobs/cost-summary", () => {
   it("attacker: the billing provider is asked only about the caller's own jobs", async () => {
     // Another user's job id in the request: the owner-scoped read drops it,
     // and the metering authority must not be asked to price it either.
-    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => Promise.resolve({
+    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => resolvedWithIs({
       data: [{ id: "mine", status: "completed", input_data: { type: "generate-image", provider: "x" } }], error: null }) }) }) })
     const asked: string[][] = []
     const p: BillingProvider = {

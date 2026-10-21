@@ -120,6 +120,7 @@ const CAMEL_CHARACTER_WITH_PENDING = {
 function mockJobsPendingChain(result: { data: unknown; error: unknown } = { data: [], error: null }) {
   const chain: Record<string, unknown> = {
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     filter: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(),
@@ -941,6 +942,9 @@ describe("GET /v1/characters/:id", () => {
 
     expect(jobs.pendingChain.chain.in).toHaveBeenCalledWith("status", [...IN_FLIGHT_JOB_STATUSES])
     expect(jobs.portraitChain.chain.in).toHaveBeenCalledWith("status", [...IN_FLIGHT_JOB_STATUSES])
+    // Never a child job's input.
+    expect(jobs.pendingChain.chain.is).toHaveBeenCalledWith("parent_job_id", null)
+    expect(jobs.portraitChain.chain.is).toHaveBeenCalledWith("parent_job_id", null)
   })
 
   // -------------------------------------------------------------------------

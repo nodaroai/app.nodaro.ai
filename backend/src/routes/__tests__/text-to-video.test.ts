@@ -279,6 +279,35 @@ describe("POST /v1/text-to-video", () => {
     expect(queued.prompt).toContain("a chase scene")
   })
 
+  it("threads contentPolicyRewrite to the queued job (false = opt out; absent stays absent)", async () => {
+    mockJobInsert({ data: { id: "job-cpr" }, error: null })
+    const off = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a sunset over mountains", userId: "00000000-0000-4000-8000-000000000001", contentPolicyRewrite: false },
+    })
+    expect(off.statusCode).toBe(200)
+    expect((vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>).contentPolicyRewrite).toBe(false)
+
+    mockJobInsert({ data: { id: "job-cpr-2" }, error: null })
+    const absent = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a sunset over mountains", userId: "00000000-0000-4000-8000-000000000001" },
+    })
+    expect(absent.statusCode).toBe(200)
+    expect((vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>).contentPolicyRewrite).toBeUndefined()
+  })
+
+  it("rejects a non-boolean contentPolicyRewrite", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a sunset over mountains", userId: "00000000-0000-4000-8000-000000000001", contentPolicyRewrite: "no" },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
   it("assembles a described-references-only request (the gate trips without connectedReferences)", async () => {
     mockJobInsert({ data: { id: "job-desc" }, error: null })
     const res = await app.inject({

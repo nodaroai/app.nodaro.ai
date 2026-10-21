@@ -15,7 +15,9 @@ import {
   MASK_COMPOSITE_BACKGROUND_FITS,
   MASK_COMPOSITE_BOUNDS,
   MASK_COMPOSITE_DEFAULTS,
+  MASK_COMPOSITE_FILLS,
   type MaskCompositeAudioSource,
+  type MaskCompositeFill,
   type MaskCompositeBackgroundFit,
   type OverlayAnchor,
   type OverlayPlatformId,
@@ -1066,6 +1068,9 @@ image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for 
     .description("track a subject described in text through a video (SAM 3.1, or --model sam-3 at half the price) and get a black-and-white mask video back (white = the subject)")
     .option("--model <model>", `${VIDEO_MASK_PROVIDERS.join(" | ")} (default ${DEFAULT_VIDEO_MASK_PROVIDER})`)
     .option("--threshold <n>", `detection confidence ${VIDEO_MASK_LIMITS.THRESHOLD_MIN}–${VIDEO_MASK_LIMITS.THRESHOLD_MAX} (default ${VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT}; lower finds more)`, parseFloat)
+    .option("--hold-last-mask", "keep the last mask on frames where the subject is lost (e.g. hidden behind a hand)")
+    .option("--min-subject-height <pct>", `ignore subjects smaller than this % of the frame height, ${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
+    .option("--max-subject-height <pct>", `ignore subjects larger than this % of the frame height, ${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
@@ -1078,7 +1083,7 @@ Examples:
 
 Clips up to ${VIDEO_MASK_LIMITS.MAX_BILLED_SEC} s at ${VIDEO_MASK_LIMITS.FPS_BASIS} fps (a faster clip counts proportionally longer); priced by the
 clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
-    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string } & WatchOpts) => {
+    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string; holdLastMask?: boolean; minSubjectHeight?: number; maxSubjectHeight?: number } & WatchOpts) => {
       try {
         if (opts.model && !(VIDEO_MASK_PROVIDERS as readonly string[]).includes(opts.model)) {
           warn(`--model must be one of ${VIDEO_MASK_PROVIDERS.join(", ")} (got "${opts.model}")`)
@@ -1088,12 +1093,27 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
           warn(`--threshold must be between ${VIDEO_MASK_LIMITS.THRESHOLD_MIN} and ${VIDEO_MASK_LIMITS.THRESHOLD_MAX}`)
           process.exit(1)
         }
+        if (opts.minSubjectHeight !== undefined && !(Number.isFinite(opts.minSubjectHeight) && opts.minSubjectHeight >= VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN && opts.minSubjectHeight <= VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX)) {
+          warn(`--min-subject-height must be a number from ${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN} to ${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX}`)
+          process.exit(1)
+        }
+        if (opts.maxSubjectHeight !== undefined && !(Number.isFinite(opts.maxSubjectHeight) && opts.maxSubjectHeight >= VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN && opts.maxSubjectHeight <= VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX)) {
+          warn(`--max-subject-height must be a number from ${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN} to ${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX}`)
+          process.exit(1)
+        }
+        if ((opts.minSubjectHeight ?? 0) > 0 && (opts.maxSubjectHeight ?? 0) > 0 && opts.minSubjectHeight! > opts.maxSubjectHeight!) {
+          warn("--min-subject-height is above --max-subject-height: no subject could be kept")
+          process.exit(1)
+        }
         const client = buildClient(opts.profile)
         const result = await client.media.videoMask({
           videoUrl,
           prompt,
           ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
           ...(opts.model ? { provider: opts.model as VideoMaskProvider } : {}),
+          ...(opts.holdLastMask ? { holdLastMask: true } : {}),
+          ...(opts.minSubjectHeight !== undefined ? { minSubjectHeightPct: opts.minSubjectHeight } : {}),
+          ...(opts.maxSubjectHeight !== undefined ? { maxSubjectHeightPct: opts.maxSubjectHeight } : {}),
         })
         await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video mask" })
       } catch (err) {
@@ -1102,13 +1122,16 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
     })
 
   cmd
-    .command("mask-composite <foregroundUrl> <backgroundUrl> <maskUrl>")
-    .description("put a foreground video over a background video through a mask video (white = foreground) — local compositor, no AI")
+    .command("mask-composite <urls...>")
+    .description("put a foreground video over a background video through a mask video (white = foreground) — local compositor, no AI. Takes <foregroundUrl> <backgroundUrl> <maskUrl>; with --fill pixelate|blur, <backgroundUrl> <maskUrl>")
     .option("--invert", "swap which side of the mask shows the foreground")
     .option("--feather <px>", `edge softening ${MASK_COMPOSITE_BOUNDS.FEATHER_MIN}–${MASK_COMPOSITE_BOUNDS.FEATHER_MAX} px (default ${MASK_COMPOSITE_DEFAULTS.feather})`, (v) => parseInt(v, 10))
     .option("--grow <px>", `grow (+) or shrink (−) the foreground region, ${MASK_COMPOSITE_BOUNDS.GROW_MIN}–${MASK_COMPOSITE_BOUNDS.GROW_MAX} px (default 0)`, (v) => parseInt(v, 10))
     .option("--background-fit <fit>", `${MASK_COMPOSITE_BACKGROUND_FITS.join(" | ")} (default ${MASK_COMPOSITE_DEFAULTS.backgroundFit})`)
     .option("--audio <source>", `${MASK_COMPOSITE_AUDIO_SOURCES.join(" | ")} (default ${MASK_COMPOSITE_DEFAULTS.audioSource})`)
+    .option("--fill <fill>", `what fills the mask: ${MASK_COMPOSITE_FILLS.join(" | ")} (default ${MASK_COMPOSITE_DEFAULTS.fill}; pixelate / blur use the background itself and take no foreground)`)
+    .option("--pixel-size-pct <pct>", `pixelate block size, % of the frame width, ${MASK_COMPOSITE_BOUNDS.PIXEL_SIZE_PCT_MIN}–${MASK_COMPOSITE_BOUNDS.PIXEL_SIZE_PCT_MAX} (default ${MASK_COMPOSITE_DEFAULTS.pixelSizePct})`, (v) => Number(v))
+    .option("--blur-strength-pct <pct>", `blur strength (sigma), % of the frame width, ${MASK_COMPOSITE_BOUNDS.BLUR_STRENGTH_PCT_MIN}–${MASK_COMPOSITE_BOUNDS.BLUR_STRENGTH_PCT_MAX} (default ${MASK_COMPOSITE_DEFAULTS.blurStrengthPct})`, (v) => Number(v))
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
@@ -1116,18 +1139,40 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
     .addHelpText("after", `
 Example:
   $ nodaro media mask-composite https://x/dance.mp4 https://x/beach.mp4 https://x/dance-mask.mp4 --feather 4 --grow -1 --watch
+  $ nodaro media mask-composite https://x/street.mp4 https://x/faces-mask.mp4 --fill pixelate --pixel-size-pct 2 --watch
 
 The result follows the FOREGROUND's size, frame rate and length; the background
-is fitted to that frame and loops when shorter; the mask holds its last frame.`)
+is fitted to that frame and loops when shorter; the mask holds its last frame.
+With --fill pixelate or blur the masked area is the background itself,
+pixelated or blurred, and the result follows the background.`)
     .action(
       async (
-        foregroundUrl: string,
-        backgroundUrl: string,
-        maskUrl: string,
-        opts: { invert?: boolean; feather?: number; grow?: number; backgroundFit?: string; audio?: string } & WatchOpts,
+        urls: string[],
+        opts: { invert?: boolean; feather?: number; grow?: number; backgroundFit?: string; audio?: string; fill?: string; pixelSizePct?: number; blurStrengthPct?: number } & WatchOpts,
       ) => {
         try {
           const b = MASK_COMPOSITE_BOUNDS
+          if (opts.fill && !(MASK_COMPOSITE_FILLS as readonly string[]).includes(opts.fill)) {
+            warn(`--fill must be one of ${MASK_COMPOSITE_FILLS.join(", ")} (got "${opts.fill}")`)
+            process.exit(1)
+          }
+          const fill = (opts.fill ?? MASK_COMPOSITE_DEFAULTS.fill) as MaskCompositeFill
+          const withForeground = fill === "video"
+          if (urls.length !== (withForeground ? 3 : 2)) {
+            warn(withForeground
+              ? "give <foregroundUrl> <backgroundUrl> <maskUrl>"
+              : `with --fill ${fill}, give <backgroundUrl> <maskUrl> (no foreground)`)
+            process.exit(1)
+          }
+          const [foregroundUrl, backgroundUrl, maskUrl] = withForeground ? urls : [undefined, ...urls]
+          if (opts.pixelSizePct !== undefined && !(Number.isFinite(opts.pixelSizePct) && opts.pixelSizePct >= b.PIXEL_SIZE_PCT_MIN && opts.pixelSizePct <= b.PIXEL_SIZE_PCT_MAX)) {
+            warn(`--pixel-size-pct must be a number from ${b.PIXEL_SIZE_PCT_MIN} to ${b.PIXEL_SIZE_PCT_MAX}`)
+            process.exit(1)
+          }
+          if (opts.blurStrengthPct !== undefined && !(Number.isFinite(opts.blurStrengthPct) && opts.blurStrengthPct >= b.BLUR_STRENGTH_PCT_MIN && opts.blurStrengthPct <= b.BLUR_STRENGTH_PCT_MAX)) {
+            warn(`--blur-strength-pct must be a number from ${b.BLUR_STRENGTH_PCT_MIN} to ${b.BLUR_STRENGTH_PCT_MAX}`)
+            process.exit(1)
+          }
           if (opts.feather !== undefined && !(Number.isInteger(opts.feather) && opts.feather >= b.FEATHER_MIN && opts.feather <= b.FEATHER_MAX)) {
             warn(`--feather must be a whole number from ${b.FEATHER_MIN} to ${b.FEATHER_MAX}`)
             process.exit(1)
@@ -1146,14 +1191,17 @@ is fitted to that frame and loops when shorter; the mask holds its last frame.`)
           }
           const client = buildClient(opts.profile)
           const result = await client.media.maskComposite({
-            foregroundUrl,
-            backgroundUrl,
-            maskUrl,
+            ...(foregroundUrl ? { foregroundUrl } : {}),
+            backgroundUrl: backgroundUrl!,
+            maskUrl: maskUrl!,
             ...(opts.invert ? { invertMask: true } : {}),
             ...(opts.feather !== undefined ? { feather: opts.feather } : {}),
             ...(opts.grow !== undefined ? { grow: opts.grow } : {}),
             ...(opts.backgroundFit ? { backgroundFit: opts.backgroundFit as MaskCompositeBackgroundFit } : {}),
             ...(opts.audio ? { audioSource: opts.audio as MaskCompositeAudioSource } : {}),
+            ...(opts.fill ? { fill } : {}),
+            ...(opts.pixelSizePct !== undefined ? { pixelSizePct: opts.pixelSizePct } : {}),
+            ...(opts.blurStrengthPct !== undefined ? { blurStrengthPct: opts.blurStrengthPct } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "mask composite" })
         } catch (err) {

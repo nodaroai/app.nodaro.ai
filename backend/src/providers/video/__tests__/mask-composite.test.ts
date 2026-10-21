@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execFileSync } from "node:child_process"
 import { resolveMaskCompositeSettings } from "@nodaro/shared/media"
-import { buildMaskCompositeArgs, maskCompositeTimeoutMs, type MaskCompositeProbe } from "../mask-composite.js"
+import { buildMaskCompositeArgs, buildMaskCompositeFillArgs, maskCompositePixelBlockPx, maskCompositeTimeoutMs, type MaskCompositeProbe } from "../mask-composite.js"
 import { runFfmpeg } from "../ffmpeg-utils.js"
 
 const PROBE: MaskCompositeProbe = { width: 641, height: 361, frameRate: "30/1", durationSec: 2, foregroundHasAudio: true, backgroundHasAudio: true }
@@ -59,10 +59,116 @@ describe("buildMaskCompositeArgs", () => {
   })
   it("clamps and defaults node data the panel never wrote", () => {
     const s = resolveMaskCompositeSettings({ feather: 99, grow: -40, backgroundFit: "tile", audioSource: 3 })
-    expect(s).toEqual({ invertMask: false, feather: 20, grow: -10, backgroundFit: "cover", audioSource: "foreground" })
+    expect(s).toEqual({ invertMask: false, feather: 20, grow: -10, opacity: 1, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "cover", audioSource: "foreground" })
+    expect(resolveMaskCompositeSettings({ fill: "mosaic" }).fill).toBe("video")
+    expect(resolveMaskCompositeSettings({ fill: "blur" }).fill).toBe("blur")
+    expect(resolveMaskCompositeSettings({ pixelSizePct: 0.05 }).pixelSizePct).toBe(0.2)
+    expect(resolveMaskCompositeSettings({ pixelSizePct: 50 }).pixelSizePct).toBe(10)
+    expect(resolveMaskCompositeSettings({ pixelSizePct: 3.3 }).pixelSizePct).toBe(3.3)
+    expect(resolveMaskCompositeSettings({ blurStrengthPct: 0 }).blurStrengthPct).toBe(0.1)
+    expect(resolveMaskCompositeSettings({ blurStrengthPct: 9 }).blurStrengthPct).toBe(5)
+    expect(resolveMaskCompositeSettings({ blurStrengthPct: "1" }).blurStrengthPct).toBe(2)
+    expect(resolveMaskCompositeSettings({ opacity: 1.5 }).opacity).toBe(1)
+    expect(resolveMaskCompositeSettings({ opacity: -0.2 }).opacity).toBe(0)
+    expect(resolveMaskCompositeSettings({ opacity: 0.85 }).opacity).toBe(0.85)
+    expect(resolveMaskCompositeSettings({ opacity: "0.5" }).opacity).toBe(1)
+  })
+  it("opacity 1 (the default) leaves the graph exactly as it was", () => {
+    const argv = build({ invertMask: true, grow: 2, feather: 4 })
+    expect(build({ invertMask: true, grow: 2, feather: 4, opacity: 1 })).toEqual(argv)
+    expect(graphOf(argv)).toContain(
+      "[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m]",
+    )
+  })
+  it("opacity < 1 scales the finished mask (after invert / grow / feather), so inside it the result is opacity × foreground + (1 − opacity) × background", () => {
+    expect(graphOf(build({ invertMask: true, grow: 2, feather: 4, opacity: 0.85 }))).toContain(
+      "[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,lut=c0='val*0.8500',fps=30/1,tpad=stop_mode=clone:stop=-1[m]",
+    )
+    expect(graphOf(build({ opacity: 0 }))).toContain("lut=c0='val*0.0000'")
+  })
+  it("the video fill's argv is byte-identical to the graph before fills existed (defaults, and every setting at once)", () => {
+    // Captured from the builder before `fill` was added; the video fill must never move.
+    expect(build({})).toEqual([
+      "-y", "-i", "fg.mp4", "-stream_loop", "-1", "-i", "bg.mp4", "-i", "m.mp4",
+      "-filter_complex",
+      "[0:v]scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=increase,crop=640:360,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+      "-map", "[vout]", "-map", "0:a:0", "-t", "2.000",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "o.mp4",
+    ])
+    const every = { invertMask: true, grow: 2, feather: 4, backgroundFit: "contain", audioSource: "mix" }
+    const before = [
+      "-y", "-i", "fg.mp4", "-stream_loop", "-1", "-i", "bg.mp4", "-i", "m.mp4",
+      "-filter_complex",
+      "[0:v]scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout];[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+      "-map", "[vout]", "-map", "[aout]", "-t", "2.000",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "o.mp4",
+    ]
+    expect(build(every)).toEqual(before)
+    // pixelSizePct / blurStrengthPct are inert on the video fill.
+    expect(build({ ...every, fill: "video", opacity: 1, pixelSizePct: 3, blurStrengthPct: 4 })).toEqual(before)
   })
   it("gives longer composites a longer kill budget", () => {
     expect(maskCompositeTimeoutMs(300)).toBeGreaterThan(maskCompositeTimeoutMs(10))
+  })
+})
+
+describe("buildMaskCompositeFillArgs (pixelate / blur)", () => {
+  const BG_PROBE: MaskCompositeProbe = { ...PROBE, foregroundHasAudio: false }
+  const fillBuild = (data: Record<string, unknown>, probe: MaskCompositeProbe = BG_PROBE) =>
+    buildMaskCompositeFillArgs({ backgroundPath: "bg.mp4", maskPath: "m.mp4", outputPath: "o.mp4", settings: resolveMaskCompositeSettings(data), probe })
+
+  it("pixelate: the background, split; one copy area-averaged into blocks of pixelSizePct % of the width and scaled back with nearest-neighbour, laid over the other through the mask", () => {
+    // 5 % of 640 = 32 px blocks.
+    const argv = fillBuild({ fill: "pixelate", pixelSizePct: 5 })
+    expect(argv.slice(0, 5)).toEqual(["-y", "-i", "bg.mp4", "-i", "m.mp4"])
+    expect(argv).not.toContain("-stream_loop")
+    expect(argv).not.toContain("fg.mp4")
+    expect(graphOf(argv)).toBe(
+      "[0:v]scale=640:360,setsar=1,format=yuv420p,split=2[bg][src];" +
+        // 640/32 = 20, 360/32 = 11.25 → 11 blocks.
+        "[src]scale=20:11:flags=area,scale=640:360:flags=neighbor,format=yuva420p[fx];" +
+        "[1:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];" +
+        "[fx][m]alphamerge[fxa];[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+    )
+    expect(argv[argv.indexOf("-t") + 1]).toBe("2.000")
+  })
+  it("pixelate blocks are relative to the width: the default 1.25 % is 16 px on a 1280-wide frame, 8 px on 640, and never under 2 px", () => {
+    expect(maskCompositePixelBlockPx({ pixelSizePct: 1.25 }, 1280)).toBe(16)
+    expect(maskCompositePixelBlockPx({ pixelSizePct: 1.25 }, 640)).toBe(8)
+    expect(maskCompositePixelBlockPx({ pixelSizePct: 0.2 }, 640)).toBe(2)
+    expect(graphOf(fillBuild({ fill: "pixelate" }))).toContain("[src]scale=80:45:flags=area,scale=640:360:flags=neighbor")
+    expect(graphOf(fillBuild({ fill: "pixelate" }, { ...BG_PROBE, width: 1280, height: 720 }))).toContain("[src]scale=80:45:flags=area,scale=1280:720:flags=neighbor")
+  })
+  it("pixelate never asks for fewer than one block either way", () => {
+    expect(graphOf(fillBuild({ fill: "pixelate", pixelSizePct: 10 }, { ...BG_PROBE, width: 60, height: 2 }))).toContain("[src]scale=10:1:flags=area,scale=60:2:flags=neighbor")
+  })
+  it("blur: a gaussian at sigma = blurStrengthPct % of the width (the default 2 % ≈ 25.6 px on 1280)", () => {
+    expect(graphOf(fillBuild({ fill: "blur" }))).toContain("[src]gblur=sigma=12.80,format=yuva420p[fx]")
+    expect(graphOf(fillBuild({ fill: "blur" }, { ...BG_PROBE, width: 1280, height: 720 }))).toContain("[src]gblur=sigma=25.60,")
+    expect(graphOf(fillBuild({ fill: "blur", blurStrengthPct: 0.1 }))).toContain("[src]gblur=sigma=0.64,")
+    expect(graphOf(fillBuild({ fill: "blur", blurStrengthPct: 5 }))).toContain("[src]gblur=sigma=32.00,")
+  })
+  it("the mask chain is the video fill's: invert / grow / feather, and opacity scales it", () => {
+    const g = graphOf(fillBuild({ fill: "pixelate", invertMask: true, grow: 2, feather: 4, opacity: 0.85 }))
+    expect(g).toContain(
+      "[1:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,lut=c0='val*0.8500',fps=30/1,tpad=stop_mode=clone:stop=-1[m]",
+    )
+    expect(graphOf(fillBuild({ fill: "blur", opacity: 0.5 }))).toContain("lut=c0='val*0.5000'")
+    expect(graphOf(fillBuild({ fill: "blur" }))).not.toContain("val*")
+  })
+  it("follows the background's clock and frame: a late picture start offsets the mask, non-square pixels are squared", () => {
+    const argv = fillBuild({ fill: "blur" }, { ...BG_PROBE, startSec: 0.1, width: 720, height: 480, sar: 32 / 27 })
+    expect(graphOf(argv)).toContain("[0:v]scale=852:480,")
+    expect(graphOf(argv)).toContain("[1:v]setpts=PTS-STARTPTS+0.100000/TB,scale=852:480,")
+    expect(argv[argv.indexOf("-t") + 1]).toBe("2.100")
+  })
+  it("always carries the background's sound, whatever audioSource says (none included); silent only when the background is", () => {
+    for (const audioSource of ["foreground", "background", "mix", "none"]) {
+      const argv = fillBuild({ fill: "pixelate", audioSource })
+      expect(argv).toEqual(expect.arrayContaining(["-map", "0:a:0", "-c:a", "aac"]))
+      expect(graphOf(argv)).not.toContain("amix")
+    }
+    expect(fillBuild({ fill: "blur", audioSource: "background" }, { ...BG_PROBE, backgroundHasAudio: false })).toContain("-an")
   })
 })
 
@@ -130,6 +236,93 @@ describe("mask composite (real ffmpeg)", () => {
       const [rr, , rb] = at(140, 45)
       expect(lr).toBeGreaterThan(200); expect(lb).toBeLessThan(60) // red foreground on the left
       expect(rb).toBeGreaterThan(200); expect(rr).toBeLessThan(60) // blue background on the right
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  // A background with detail (left half: 1-px black/white columns; right half: plain blue), a mask covering the left half.
+  const fillScene = async (dir: string, size: string, data: Record<string, unknown>) => {
+    const bg = join(dir, "bg.mp4"), mask = join(dir, "mask.mp4"), out = join(dir, "out.mp4")
+    const [w, h] = size.split("x").map(Number) as [number, number]
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `color=c=blue:s=${size}:r=10:d=1`, "-vf",
+      `geq=lum='if(lt(X,${w / 2}),if(mod(X,2),235,16),41)':cb='if(lt(X,${w / 2}),128,240)':cr='if(lt(X,${w / 2}),128,110)'`,
+      "-c:v", "libx264", "-pix_fmt", "yuv444p", "-crf", "0", bg])
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `color=c=black:s=${size}:r=10:d=1`, "-vf", `drawbox=x=0:y=0:w=${w / 2}:h=${h}:color=white:t=fill`,
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", mask])
+    const argv = buildMaskCompositeFillArgs({
+      backgroundPath: bg, maskPath: mask, outputPath: out,
+      settings: resolveMaskCompositeSettings({ feather: 0, ...data }),
+      probe: { width: w, height: h, frameRate: "10/1", durationSec: 1, foregroundHasAudio: false, backgroundHasAudio: false },
+    })
+    await runFfmpeg(argv, 60_000)
+    const rgb = execFileSync("ffmpeg", ["-v", "error", "-i", out, "-vf", "select=eq(n\\,5)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"])
+    return { at: (x: number, y: number) => rgb[y * w + x]!, w, h }
+  }
+
+  it.each([["pixelate", { fill: "pixelate", pixelSizePct: 10 }], ["blur", { fill: "blur", blurStrengthPct: 5 }]] as const)(
+    "%s: smooths the masked half of the background (the columns average to grey) and leaves the rest untouched — on an odd block count",
+    async (_name, data) => {
+      const dir = await mkdtemp(join(tmpdir(), "mask-composite-fill-"))
+      try {
+        // 168x90 at 10 %: 17 px blocks → 168/17 ≈ 9.9 → 10 columns, 90/17 ≈ 5.3 → 5 rows (an odd count).
+        const { at } = await fillScene(dir, "168x90", data)
+        // Inside the mask: no column-to-column flicker any more, mid grey.
+        const row = [20, 21, 22, 23, 24, 25].map((x) => at(x, 45))
+        expect(Math.max(...row) - Math.min(...row)).toBeLessThan(40)
+        expect(row[0]!).toBeGreaterThan(80); expect(row[0]!).toBeLessThan(180)
+        // Outside the mask: the plain background, as it was.
+        expect(Math.abs(at(150, 45) - at(160, 45))).toBeLessThan(6)
+      } finally {
+        await rm(dir, { recursive: true, force: true })
+      }
+    },
+  )
+
+  it("opacity applies to a pixelate fill: half the effect, half the original background", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mask-composite-fill-opacity-"))
+    try {
+      const full = await fillScene(dir, "160x90", { fill: "pixelate", pixelSizePct: 10 })
+      const dirB = await mkdtemp(join(tmpdir(), "mask-composite-fill-opacity-b-"))
+      try {
+        const half = await fillScene(dirB, "160x90", { fill: "pixelate", pixelSizePct: 10, opacity: 0.5 })
+        // The original columns alternate dark / light; the full effect flattens them; half keeps half the swing.
+        const swing = (s: typeof full) => Math.abs(s.at(20, 45) - s.at(21, 45))
+        expect(swing(full)).toBeLessThan(30)
+        expect(swing(half)).toBeGreaterThan(50)
+        expect(swing(half)).toBeLessThan(170)
+      } finally {
+        await rm(dirB, { recursive: true, force: true })
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("blends opacity × foreground + (1 − opacity) × background inside the mask, and leaves outside it alone", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mask-composite-opacity-"))
+    try {
+      const fg = join(dir, "fg.mp4"), bg = join(dir, "bg.mp4"), mask = join(dir, "mask.mp4"), out = join(dir, "out.mp4")
+      const lavfi = (src: string, file: string, extra: string[] = []) =>
+        execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", src, ...extra, "-c:v", "libx264", "-pix_fmt", "yuv420p", file])
+      lavfi("color=c=red:s=160x90:r=10:d=1", fg)
+      lavfi("color=c=blue:s=160x90:r=10:d=1", bg)
+      lavfi("color=c=black:s=160x90:r=10:d=1", mask, ["-vf", "drawbox=x=0:y=0:w=80:h=90:color=white:t=fill"])
+      const argv = buildMaskCompositeArgs({
+        foregroundPath: fg, backgroundPath: bg, maskPath: mask, outputPath: out,
+        settings: resolveMaskCompositeSettings({ feather: 0, opacity: 0.5 }),
+        probe: { width: 160, height: 90, frameRate: "10/1", durationSec: 1, foregroundHasAudio: false, backgroundHasAudio: false },
+      })
+      await runFfmpeg(argv, 60_000)
+      const rgb = execFileSync("ffmpeg", ["-v", "error", "-i", out, "-vf", "select=eq(n\\,5)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+      const at = (x: number, y: number) => [...rgb.subarray((y * 160 + x) * 3, (y * 160 + x) * 3 + 3)]
+      const [lr, , lb] = at(20, 45)
+      const [rr, , rb] = at(140, 45)
+      // Inside the mask: half red, half blue.
+      expect(lr).toBeGreaterThan(90); expect(lr).toBeLessThan(170)
+      expect(lb).toBeGreaterThan(90); expect(lb).toBeLessThan(170)
+      // Outside it: the background, untouched.
+      expect(rb).toBeGreaterThan(200); expect(rr).toBeLessThan(60)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

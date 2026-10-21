@@ -296,6 +296,16 @@ describe("NodaroCloudVideoProvider", () => {
     expect(body).not.toHaveProperty("motionPrompt")
   })
 
+  it("textToVideo forwards the contentPolicyRewrite opt-out to the cloud, and sends nothing when it is absent", async () => {
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-vid-cpr" }),
+      completedJob({ videoUrl: "https://r2.example/t2v.mp4" }),
+    )
+    await new NodaroCloudVideoProvider().textToVideo("a city", "kling", 5, undefined, { contentPolicyRewrite: false })
+    const body = JSON.parse(String(mockFetch.mock.calls[0]![1]?.body)) as Record<string, unknown>
+    expect(body.contentPolicyRewrite).toBe(false)
+  })
+
   it("forwards characterReferences to the cloud on both video routes (never silently dropped on the relay)", async () => {
     const characterReferences = [{ imageUrl: "https://cdn.example/a.png", description: "A woman with silver hair", name: "Ava" }]
     queueResponses(

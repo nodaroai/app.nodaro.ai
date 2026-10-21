@@ -11,6 +11,7 @@
 import type { FastifyRequest } from "fastify"
 import { supabase } from "../supabase.js"
 import { getRuntimeEnv } from "../runtime-env.js"
+import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import type {
   WebhookDeliveryStatus,
   WebhookDisabledReason,
@@ -92,7 +93,21 @@ export function toEndpointResponse(row: EndpointRow) {
   }
 }
 
-export function toDeliveryResponse(row: DeliveryRow) {
+/**
+ * The ids, among `jobIds`, of CHILD jobs (CHILD_JOB_COLUMN). A delivery
+ * recorded for one (before migration 550) may still keep the child's body;
+ * the log never shows it (`toDeliveryResponse`'s `hideBody`). Throws on a
+ * database error.
+ */
+export async function childJobIdsOf(jobIds: ReadonlyArray<string | null>): Promise<Set<string>> {
+  const ids = [...new Set(jobIds.filter((id): id is string => typeof id === "string" && id.length > 0))]
+  if (ids.length === 0) return new Set()
+  const { data, error } = await supabase.from("jobs").select("id").in("id", ids).not(CHILD_JOB_COLUMN, "is", null)
+  if (error) throw error
+  return new Set(((data ?? []) as Array<{ id: string }>).map((r) => r.id))
+}
+
+export function toDeliveryResponse(row: DeliveryRow, hideBody = false) {
   return {
     id: row.id,
     webhookId: row.webhook_id,
@@ -104,7 +119,7 @@ export function toDeliveryResponse(row: DeliveryRow) {
     responseBody: row.response_body,
     durationMs: row.duration_ms,
     error: row.last_error,
-    requestBody: typeof row.payload === "string" ? row.payload : null,
+    requestBody: !hideBody && typeof row.payload === "string" ? row.payload : null,
     createdAt: row.created_at,
     lastAttemptAt: row.last_attempt_at,
     nextAttemptAt: row.status === "pending" ? row.next_retry_at : null,

@@ -390,17 +390,26 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person roles and 1 location role. At least one role with images, or a post_prompt. |
-| `roles[].kind` | string | yes | One of `person`, `location`. |
-| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person`. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt. |
+| `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
+| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person` or `pet` or `product`. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
-| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
 | `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
+| `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
+| `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
+| `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
+| `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
+| `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
-| `quality` | string |  | "draft" (the default and only value today). Always `draft`. |
+| `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Render as a draft, 480p only. Default true at 480p, false above. |
+| `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
+| `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
@@ -780,6 +789,20 @@ Needs `workflows:execute`.
 | `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
+
+## `estimate_trend`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The trend's slug (from list_trends). |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish. |
+| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
+| `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
+| `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
+| `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Default true; only at 480p. |
 
 ## `export_workflow`
 
@@ -1519,6 +1542,14 @@ Always visible · Nodaro Cloud only.
 |---|---|---|---|
 | `part` | string |  | operating = the tool map, loop and edit vocabulary (default); authoring = the plan format; catalog = every picker/model/enum; schema = the JSON Schema. One of `operating`, `authoring`, `catalog`, `schema`. |
 
+## `get_trend`
+
+Needs `jobs:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The trend's slug (from list_trends). |
+
 ## `get_workflow`
 
 Needs `workflows:read`.
@@ -1903,6 +1934,17 @@ Needs `workflows:read` · Nodaro Cloud only.
 | `limit` | integer |  | Default 25. From 1 to 100. |
 | `cursor` | string |  | `nextCursor` from a prior result — an opaque page token. |
 
+## `list_trends`
+
+Needs `jobs:read` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `query` | string |  | Search words. At most 200 characters. |
+| `tag` | string |  | From 1 to 100 characters. |
+| `favorites` | boolean |  | true = only the user's favorites. |
+| `cursor` | string |  | next from the previous call. At most 500 characters. |
+
 ## `list_voices`
 
 Needs `workflows:execute`.
@@ -2025,6 +2067,10 @@ Needs `workflows:execute`.
 | `invert_mask` | boolean |  | Swap which side of the mask shows the foreground. |
 | `feather` | integer |  | Edge softening, px (default 2). From 0 to 20. |
 | `grow` | integer |  | Grow (+) or shrink (−) the foreground region, px (default 0). From -10 to 10. |
+| `opacity` | number |  | How strongly the fill covers the background inside the mask, 0–1 (default 1 = fully). From 0 to 1. |
+| `fill` | string |  | What fills the mask (default video). One of `video`, `pixelate`, `blur`. |
+| `pixel_size_pct` | number |  | Pixelate block size, % of frame width (default 1.25). From 0.2 to 10. |
+| `blur_strength_pct` | number |  | Blur sigma, % of frame width (default 2). From 0.1 to 5. |
 | `background_fit` | string |  | How the background fills the foreground's frame (default cover). One of `cover`, `contain`, `stretch`. |
 | `audio_source` | string |  | Which sound the result carries (default foreground). One of `foreground`, `background`, `mix`, `none`. |
 
@@ -2516,6 +2562,23 @@ Needs `workflows:execute`.
 | `component_id` | string | yes | Component slug (matches the published_apps.slug). At least 1 character. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 | `inputs` | object (map of any) |  | Flat input map keyed by schema key (from get_component_inputs). Omit to use defaults. |
+
+## `run_trend`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `slug` | string | yes | The trend's slug (from list_trends). |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish. |
+| `example` | integer |  | The example (1-based, default 1) whose pictures fill optional slots left out. At least 1. |
+| `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
+| `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
+| `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | Default true; only at 480p. |
+| `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `run_workflow`
 
@@ -3298,6 +3361,9 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | What to track (e.g. 'the woman in the red coat'). From 1 to 500 characters. |
 | `threshold` | number |  | Detection confidence (default 0.5). Lower finds more — try 0.3 when nothing matches. From 0.05 to 0.95. |
 | `provider` | string |  | Segmentation model: sam-3.1 (default) or sam-3 (half the price). One of `sam-3.1`, `sam-3`. |
+| `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost (default false). |
+| `min_subject_height_pct` | number |  | Drop regions shorter than this % of the frame height (default 0 = off). From 0 to 100. |
+| `max_subject_height_pct` | number |  | Drop regions taller than this % of the frame height (default 0 = off). From 0 to 100. |
 
 ## `video_upscale`
 

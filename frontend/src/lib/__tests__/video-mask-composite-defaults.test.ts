@@ -59,4 +59,17 @@ describe("video-mask credit id (editor quote)", () => {
     const up = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
     expect(maskCompositePricingUnits(mc, [up, mc], [wire("u", "c", "video")])).toBe(3)
   })
+
+  it("mask-composite with a pixelate / blur fill prices on the background (its `background-video` wire), never the ignored foreground", () => {
+    const fg = node("f", "upload-video", { videoUrl: "https://x/f.mp4", duration: 12 })
+    const bg = node("b", "upload-video", { videoUrl: "https://x/b.mp4", duration: 41 })
+    const edges = [wire("f", "c", "video"), wire("b", "c", "background-video")]
+    expect(maskCompositePricingUnits(node("c", "mask-composite"), [fg, bg], edges)).toBe(3)
+    for (const fill of ["pixelate", "blur"]) {
+      const mc = node("c", "mask-composite", { fill })
+      expect(maskCompositePricingUnits(mc, [fg, bg, mc], edges)).toBe(9)
+      // No background wired yet: the 300 s cap, even with a foreground of known length.
+      expect(maskCompositePricingUnits(mc, [fg, mc], [wire("f", "c", "video")])).toBe(60)
+    }
+  })
 })

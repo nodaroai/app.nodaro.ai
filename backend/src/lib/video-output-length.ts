@@ -48,6 +48,7 @@ import {
 import {
   extractVideoDurationFromNode,
 } from "@nodaro/shared/video"
+import { maskCompositeLeadHandle } from "@nodaro/shared/media"
 import { LENGTH_KEEPING_VIDEO_TYPES, USE_CASE_NODE_TYPES, usecaseDescriptor, utilityOutputLength, type UseCaseOutputLength } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
@@ -138,8 +139,19 @@ const audioIn = (inputs: readonly WireInput[], handle = "audio"): WireLength => 
 /** The first wire whose length the listing knows anything about (a recording the user replaces counts). */
 const firstDefined = (inputs: readonly WireInput[]): WireLength => inputs.map((i) => i.length).find((l) => l !== undefined)
 
-/** A step that delivers its input's video, whole. */
-const passVideo: OutputLengthRule = { via: "rule", run: (_n, inputs) => videoIn(inputs) }
+/**
+ * A step that delivers its input's video, whole: its `video` wire's — except a
+ * Mask Composite with a pixelate / blur fill, which has no foreground and
+ * follows its `background-video` wire (`maskCompositeLeadHandle`, the rule
+ * `keptLengthWire` follows too).
+ */
+const passVideo: OutputLengthRule = {
+  via: "rule",
+  run: (n, inputs) =>
+    n.type === "mask-composite" && maskCompositeLeadHandle(dataOf(n)) === "background-video"
+      ? (inputs.find((i) => i.handle === "background-video")?.length ?? "unknown")
+      : videoIn(inputs),
+}
 /** A dual-mode step (video in, video out; or audio in, audio out) that keeps whichever it is given. */
 const passMedia: OutputLengthRule = { via: "rule", run: (_n, inputs) => (inputs.find((i) => i.kind === "video") ?? inputs.find((i) => i.kind === "audio"))?.length ?? "unknown" }
 

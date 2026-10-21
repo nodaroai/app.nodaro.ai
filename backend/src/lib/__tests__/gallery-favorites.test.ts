@@ -33,6 +33,7 @@ function seed(answers: Record<string, Answer[]>) {
       delete: () => ((op.verb = "delete"), chain),
       eq: (c: string, v: unknown) => (op.calls.push(["eq", c, v]), chain),
       or: (f: string) => (op.calls.push(["or", f]), chain),
+      is: (c: string, v: unknown) => (op.calls.push(["is", c, v]), chain),
       order: (c: string, o: unknown) => (op.calls.push(["order", c, o]), chain),
       limit: (n: number) => (op.calls.push(["limit", n]), chain),
       maybeSingle: () => Promise.resolve(answer()),
@@ -65,7 +66,18 @@ describe("toggleGalleryFavorite", () => {
     expect(ops.map((o) => `${o.table}:${o.verb}`)).toEqual(["gallery_favorites:select", "jobs:select", "gallery_favorites:insert"])
     expect(ops[1]!.calls).toContainEqual(["eq", "id", JOB])
     expect(ops[1]!.calls).toContainEqual(["or", favoritableJobFilter(USER)])
+    // A child job reads as not found (it is shown only through its parent).
+    expect(ops[1]!.calls).toContainEqual(["is", "parent_job_id", null])
     expect(ops[2]!.payload).toEqual({ user_id: USER, job_id: JOB })
+  })
+
+  it("an admin may favorite a child job (no child filter)", async () => {
+    const ops = seed({
+      gallery_favorites: [{ data: [], error: null }, { data: null, error: null }],
+      jobs: [{ data: { id: JOB }, error: null }],
+    })
+    expect(await toggleGalleryFavorite(USER, JOB, { isAdmin: true })).toEqual({ kind: "toggled", favorited: true })
+    expect(ops[1]!.calls.some((c) => c[0] === "is")).toBe(false)
   })
 
   it("removes an existing favorite without checking the job — you can always take back your own favorite", async () => {

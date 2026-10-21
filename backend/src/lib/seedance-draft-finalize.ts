@@ -69,6 +69,7 @@ interface DraftJobRow {
   provider_task_id: string | null
   provider_kind: string | null
   relay_job_id?: string | null
+  parent_job_id?: string | null
   input_data: Record<string, unknown> | null
   output_data: Record<string, unknown> | null
 }
@@ -93,8 +94,14 @@ export async function resolveSeedanceDraftFinalize(args: {
   userId: string
   taskId?: string
   sourceJobId?: string
+  /**
+   * Whether the draft may be a CHILD job (`parent_job_id` set). Only a
+   * worker-side handler's own request may (`mayUseChildJobAsSource`); for
+   * every other caller a child reads exactly as a draft that does not exist.
+   */
+  allowChildSource?: boolean
 }): Promise<SeedanceDraftFinalizeResolution> {
-  const { userId, taskId, sourceJobId } = args
+  const { userId, taskId, sourceJobId, allowChildSource = false } = args
   if (!taskId && !sourceJobId) {
     return refuse(400, "draft_source_required", "Seedance 2.5 HD finalizes a Seedance 2.5 draft — pass the draft's taskId or sourceJobId.")
   }
@@ -104,14 +111,15 @@ export async function resolveSeedanceDraftFinalize(args: {
 
   const query = supabase
     .from("jobs")
-    .select("id, user_id, status, provider_task_id, provider_kind, relay_job_id, input_data, output_data")
+    .select("id, user_id, status, provider_task_id, provider_kind, relay_job_id, parent_job_id, input_data, output_data")
   // A task id can be carried by more than one row (a VEO upscale child stores
   // its parent's id), so read a handful and pick, never `.limit(1)` blindly.
   const { data, error } = sourceJobId
     ? await query.eq("id", sourceJobId).limit(1)
     : await query.eq("provider_task_id", taskId as string).limit(10)
   if (error) throw new Error(`draft lookup failed: ${error.message}`)
-  const rows = (data ?? []) as DraftJobRow[]
+  // A child job is no draft of the caller's unless the caller may name one.
+  const rows = ((data ?? []) as DraftJobRow[]).filter((r) => allowChildSource || r.parent_job_id == null)
 
   const own = rows.filter((r) => r.user_id === userId)
   if (own.length === 0) {

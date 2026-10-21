@@ -130,6 +130,43 @@ describe("POST /v1/video-mask", () => {
     expect(probe).not.toHaveBeenCalled()
   })
 
+  it("holdLastMask defaults to false, passes true through, and refuses a non-boolean", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    expect((await post({ videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ holdLastMask: false }))
+    expect((await post({ videoUrl: "https://example.com/c.mp4", prompt: "the face", holdLastMask: true, userId: USER })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ holdLastMask: true }))
+    expect((await post({ videoUrl: "https://example.com/c.mp4", prompt: "the face", holdLastMask: "yes", userId: USER })).statusCode).toBe(400)
+  })
+
+  it("minSubjectHeightPct defaults to 0, passes 0–100 through, and refuses out of range", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
+    expect((await post(body)).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ minSubjectHeightPct: 0 }))
+    expect((await post({ ...body, minSubjectHeightPct: 15 })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ minSubjectHeightPct: 15 }))
+    for (const v of [-1, 101, "15"]) expect((await post({ ...body, minSubjectHeightPct: v })).statusCode).toBe(400)
+  })
+
+  it("maxSubjectHeightPct defaults to 0, passes through, and min above max is a 400", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
+    expect((await post(body)).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ maxSubjectHeightPct: 0 }))
+    expect((await post({ ...body, maxSubjectHeightPct: 20 })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ maxSubjectHeightPct: 20 }))
+    expect((await post({ ...body, minSubjectHeightPct: 5, maxSubjectHeightPct: 20 })).statusCode).toBe(200)
+    expect((await post({ ...body, minSubjectHeightPct: 20, maxSubjectHeightPct: 20 })).statusCode).toBe(200)
+    vi.mocked(videoQueue.add).mockClear()
+    const bad = await post({ ...body, minSubjectHeightPct: 30, maxSubjectHeightPct: 20 })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error.code).toBe("validation_error")
+    expect(bad.json().error.message).toMatch(/minSubjectHeightPct \(30\) is above maxSubjectHeightPct \(20\)/)
+    for (const v of [-1, 101, "20"]) expect((await post({ ...body, maxSubjectHeightPct: v })).statusCode).toBe(400)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("returns 401 without a user", async () => {
     probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
     expect((await post({ videoUrl: "https://example.com/c.mp4", prompt: "the dog" })).statusCode).toBe(401)

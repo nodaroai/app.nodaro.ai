@@ -46,7 +46,7 @@ const NON_LITERAL_WRITES: Record<string, { count: number; why: string }> = {
 const WRITE_METHODS = new Set(["update", "insert", "upsert"])
 const FILTER_METHODS = new Set(["eq", "neq", "in", "is", "gt", "gte", "lt", "lte", "like", "ilike", "contains", "containedBy", "not", "filter", "order"])
 /** The insert funnels, each with the index of the row (or rows) it writes. */
-const INSERT_FUNNELS: Record<string, number> = { insertJob: 1, insertJobs: 1, insertJobIdempotent: 1, insertSyncJob: 1, insertInternalJob: 1 }
+const INSERT_FUNNELS: Record<string, number> = { insertJob: 1, insertJobs: 1, insertJobIdempotent: 1, insertSyncJob: 1, insertSyncJobIdempotent: 1, insertInternalJob: 1 }
 
 /**
  * Column helpers a write spreads (`...completedJobColumns()`): every function

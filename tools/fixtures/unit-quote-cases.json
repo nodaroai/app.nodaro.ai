@@ -589,6 +589,72 @@
    }
   },
   {
+   "name": "Mask Composite, Pixelate: the same graph \u2014 12 units (the 60 s background decides; the wired foreground is ignored)",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "mask-composite",
+     "data": {
+      "fill": "pixelate"
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/v.mp4",
+      "videoDurationSec": 23,
+      "duration": 23
+     }
+    },
+    {
+     "id": "b",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/b.mp4",
+      "duration": 60
+     }
+    },
+    {
+     "id": "m",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/m.mp4",
+      "duration": 23
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "b-x-background-video",
+     "source": "b",
+     "target": "x",
+     "targetHandle": "background-video"
+    },
+    {
+     "id": "m-x-mask-video",
+     "source": "m",
+     "target": "x",
+     "targetHandle": "mask-video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "mask-composite",
+    "units": 12,
+    "quoteId": "mask-composite:12u",
+    "servedUnit": 12,
+    "credits": 138,
+    "perUnitQuote": 144
+   }
+  },
+  {
    "name": "Mask Composite: an unknown length \u2014 the 300 s cap, 60 units",
    "nodes": [
     {

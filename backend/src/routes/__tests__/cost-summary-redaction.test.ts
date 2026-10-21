@@ -38,11 +38,11 @@ const ROWS = [
   { id: "j3", status: "failed", input_data: { type: "generate-video", provider: "veo3" } },
 ]
 
-// Non-admins are owner-scoped (.eq), admins are not — the chain ends one call
-// earlier for them, so both shapes have to resolve.
+// Non-admins are owner-scoped (.eq) and never price a child job (.is), admins
+// are not — the chain ends earlier for them, so both shapes have to resolve.
 function mockJobs(rows: unknown[]) {
   const resolved = Promise.resolve({ data: rows, error: null })
-  const eq = vi.fn().mockReturnValue(resolved)
+  const eq = vi.fn().mockReturnValue(Object.assign(Promise.resolve({ data: rows, error: null }), { is: () => resolved }))
   const inFn = vi.fn().mockReturnValue(Object.assign(resolved, { eq }))
   from.mockReturnValue({ select: vi.fn().mockReturnValue({ in: inFn }) })
 }

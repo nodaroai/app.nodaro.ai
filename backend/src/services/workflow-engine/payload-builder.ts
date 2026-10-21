@@ -32,6 +32,8 @@ import {
   VIDEO_MASK_LIMITS,
   resolveVideoMaskProvider,
   resolveMaskCompositeSettings,
+  maskCompositeFillOf,
+  maskCompositeUsesForeground,
   resolveVideoDepthColormap,
   resolveVideoDepthModelSize,
   resolveVideoDepthProvider,
@@ -369,6 +371,10 @@ export interface RequiredMediaInput {
   readonly kind: "video" | "audio" | "image"
   /** What to tell the user to connect ("a video", "an audio track", …). */
   readonly noun: string
+  /** Only when the requirement depends on a setting: it applies when this
+   *  returns true for the node's data (absent = always). Mask Composite's
+   *  foreground is required by the video fill only. */
+  readonly when?: (data: Readonly<Record<string, unknown>>) => boolean
 }
 
 /**
@@ -453,7 +459,8 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "fade-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-mask": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "mask-composite": [
-    { anyOf: ["videoUrl"], kind: "video", noun: "a foreground video" },
+    // Pixelate / blur fill from the background: no foreground then (execute-node skips the same refusal).
+    { anyOf: ["videoUrl"], kind: "video", noun: "a foreground video", when: (d) => maskCompositeUsesForeground(maskCompositeFillOf(d)) },
     { anyOf: ["backgroundVideoUrl"], kind: "video", noun: "a background video" },
     { anyOf: ["maskUrl"], kind: "video", noun: "a mask video" },
   ],
@@ -589,6 +596,7 @@ export function assertRequiredMediaInputs(
   const nd = (data ?? {}) as unknown as Record<string, unknown>
   const label = typeof nd.label === "string" && nd.label.trim() ? nd.label : type
   for (const entry of reqs) {
+    if (entry.when && !entry.when(nd)) continue
     // `||`, NOT `??` (M-12a): every case this mirrors writes
     // `resolvedInputs.x || data.x`, so an EMPTY-STRING resolved input must fall
     // through to the node's own value. With `??` an upstream that resolved to ""
@@ -4979,6 +4987,13 @@ export function buildPayload(
       const maskPrompt = (resolvedInputs.prompt?.trim() || (typeof data.prompt === "string" ? data.prompt.trim() : "")) || undefined
       if (!maskPrompt) throw new Error("Video Mask: no prompt — describe what to track (e.g. \"the dancer\")")
       const rawThreshold = typeof data.threshold === "number" && Number.isFinite(data.threshold) ? data.threshold : VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
+      // The route's empty-band 400: both size cuts set with min above max keeps nothing.
+      const sizeCut = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(0, v)) : 0)
+      const minCut = sizeCut(data.minSubjectHeightPct, VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX)
+      const maxCut = sizeCut(data.maxSubjectHeightPct, VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX)
+      if (minCut > 0 && maxCut > 0 && minCut > maxCut) {
+        throw new Error(`Video Mask: "Ignore subjects smaller than" (${minCut}%) is above "Ignore subjects larger than" (${maxCut}%) — no subject could be kept`)
+      }
       return {
         jobName: "video-mask",
         queueName: "video-generation",
@@ -4989,6 +5004,9 @@ export function buildPayload(
           prompt: applyPromptAffixes(maskPrompt, readPromptAffixes(data), refMap),
           threshold: Math.min(VIDEO_MASK_LIMITS.THRESHOLD_MAX, Math.max(VIDEO_MASK_LIMITS.THRESHOLD_MIN, rawThreshold)),
           provider: resolveVideoMaskProvider(data.provider),
+          holdLastMask: data.holdLastMask === true,
+          minSubjectHeightPct: minCut,
+          maxSubjectHeightPct: maxCut,
           usageLogId,
         },
       }
@@ -4998,8 +5016,11 @@ export function buildPayload(
       return ffmpegResult("mask-composite", {
         jobId,
         // The same keys, and the same `||`, as its REQUIRED_MEDIA_INPUTS row: a
-        // value that passes the guard is the value sent.
-        foregroundUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
+        // value that passes the guard is the value sent. Pixelate / blur take
+        // no foreground (a wired one is ignored), so none is sent.
+        ...(maskCompositeUsesForeground(maskCompositeFillOf(data))
+          ? { foregroundUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined) }
+          : {}),
         backgroundUrl: resolvedInputs.backgroundVideoUrl || (data.backgroundVideoUrl as string | undefined),
         maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
         ...resolveMaskCompositeSettings(data),

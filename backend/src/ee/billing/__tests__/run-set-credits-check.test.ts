@@ -85,13 +85,19 @@ describe("checkRunSetCredits", () => {
     expect(h.profileId).toBe("u1")
   })
 
+  it("a personal refusal off the consumer surface is a plain one (no subscription ask)", async () => {
+    const check = await checkRunSetCredits("u1", 530, {})
+    expect(check.sufficient).toBe(false)
+    expect(check).not.toHaveProperty("subscriptionRequired")
+  })
+
   it("a personal payer who can cover it passes", async () => {
     expect(await checkRunSetCredits("u1", 50, {})).toMatchObject({ sufficient: true, required: 50, available: 50 })
   })
 
   it("the consumer surface spends a pay-as-you-go account's free pool only", async () => {
     h.profile = { ...PERSONAL, tier: "free", subscription_tier: null, lifetime_topup_credits: 500, subscription_credits: 20, topup_credits: 500 }
-    expect(await checkRunSetCredits("u1", 100, { webFreeMode: true })).toMatchObject({ sufficient: false, available: 20 })
+    expect(await checkRunSetCredits("u1", 100, { webFreeMode: true })).toMatchObject({ sufficient: false, available: 20, subscriptionRequired: true })
     expect(await checkRunSetCredits("u1", 100, { webFreeMode: false })).toMatchObject({ sufficient: true, available: 520 })
   })
 

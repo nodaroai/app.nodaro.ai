@@ -137,6 +137,15 @@ export const RESERVE_STATUS_BY_CODE: Readonly<Record<MappedReserveError["code"],
     Record<MappedReserveError["code"], MappedReserveError["status"]>
   >
 
+/**
+ * The refusal a reserve-RPC prefix maps to, for a lane that reaches the same
+ * verdict BEFORE the RPC (a pre-flight) and must answer it in the same words.
+ * Null for an unknown prefix.
+ */
+export function reserveRefusalFor(prefix: string): MappedReserveError | null {
+  return RESERVE_PREFIX_MAP[prefix] ?? null
+}
+
 const RAISE_PREFIX = /^([A-Z][A-Z_]*):/
 
 /** The known reserve-refusal prefix at the START of a message, or null. */

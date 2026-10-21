@@ -69,15 +69,18 @@ export function isWebFreeModeCandidate(req: FastifyRequest): boolean {
   return blockEnabled() && isConsumerSurfaceRequest(req)
 }
 
+/** The founder-approved consumer-surface block (403 body). */
+export const SUBSCRIPTION_REQUIRED_BODY = {
+  error: {
+    code: "subscription_required",
+    message:
+      "Your credits are available through the API, SDK and MCP. Working in the studio requires a subscription.",
+  },
+} as const
+
 /** The founder-approved consumer-surface block message. */
 export function sendSubscriptionRequired(reply: FastifyReply): void {
-  reply.status(403).send({
-    error: {
-      code: "subscription_required",
-      message:
-        "Your credits are available through the API, SDK and MCP. Working in the studio requires a subscription.",
-    },
-  })
+  reply.status(403).send(SUBSCRIPTION_REQUIRED_BODY)
 }
 
 interface TierProfileFields {

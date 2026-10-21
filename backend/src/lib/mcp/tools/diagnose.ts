@@ -6,6 +6,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
+import { CHILD_JOB_COLUMN, trendRunErrorText } from "../../public-job-data.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -196,12 +197,14 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         const jobMap = new Map<string, JobRow>()
         if (jobIds.length > 0) {
           // The ids come from node_states, so they are pointers: read only
-          // the caller's own jobs (the execution is theirs, checked above).
+          // the caller's own jobs (the execution is theirs, checked above),
+          // and never a child job (CHILD_JOB_COLUMN).
           const { data: jobs } = await supabase
             .from("jobs")
             .select("id, error_message, input_data, credits_actual, output_data")
             .in("id", jobIds)
             .eq("user_id", session.userId)
+            .is(CHILD_JOB_COLUMN, null)
           for (const j of (jobs ?? []) as JobRow[]) {
             if (j.id) jobMap.set(j.id, j)
           }
@@ -209,7 +212,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
 
         const failures: Failure[] = failedEntries.map(([nodeId, s]) => {
           const job = s.jobId ? jobMap.get(s.jobId) : undefined
-          const error = job?.error_message ?? s.error ?? null
+          // A trend run's failure text is replaced (an MCP session is never an admin one).
+          const error = trendRunErrorText(job?.error_message ?? s.error ?? null, job?.input_data, false)
           return buildFailure(
             nodeId,
             s.nodeType ?? null,
@@ -276,6 +280,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
+        // A child job reads as one that does not exist (CHILD_JOB_COLUMN).
+        .is(CHILD_JOB_COLUMN, null)
         .maybeSingle()
       if (jobErr) {
         return {
@@ -303,7 +309,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                 j.id ?? args.id,
                 (j.job_type as string) ?? null,
                 j.id ?? args.id,
-                j.error_message ?? null,
+                trendRunErrorText(j.error_message, j.input_data, false),
                 providerOf(j.input_data),
                 j.credits_actual ?? null,
                 jobErrorCode(j),

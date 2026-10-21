@@ -28,6 +28,7 @@ import type {
   VideoMaskProvider,
   MaskCompositeBackgroundFit,
   MaskCompositeAudioSource,
+  MaskCompositeFill,
 } from "@nodaro/shared/media"
 import type { Pro3DRenderQuote, Pro3DRenderSource } from "@nodaro/shared/scene3d"
 import type { ReduceMeta, WorkflowExport, WorkflowImportReport } from "@nodaro/shared/workflow"
@@ -354,6 +355,12 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
     throw new CredentialUnboundError(
       message,
       Array.isArray(errObj.details) ? (errObj.details as UnboundCredentialUse[]) : [],
+    )
+  }
+  if (errObj?.code === "publish_blocked") {
+    throw new TrendPublishBlockedError(
+      message,
+      Array.isArray(errObj.reasons) ? (errObj.reasons as TrendPublishBlocker[]) : [],
     )
   }
   // Generic error: attach the machine-readable `code` so callers can branch on
@@ -4286,12 +4293,17 @@ export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDura
  *  background video through a mask video (white = foreground). Settings are the
  *  normalised `resolveMaskCompositeSettings` output (bounds in @nodaro/shared). */
 export async function maskCompositeApi(params: {
-  foregroundUrl: string
+  /** Required by the video fill; pixelate / blur take none. */
+  foregroundUrl?: string
   backgroundUrl: string
   maskUrl: string
   invertMask?: boolean
   feather?: number
   grow?: number
+  opacity?: number
+  fill?: MaskCompositeFill
+  pixelSizePct?: number
+  blurStrengthPct?: number
   backgroundFit?: MaskCompositeBackgroundFit
   audioSource?: MaskCompositeAudioSource
   userId?: string
@@ -6553,6 +6565,12 @@ export async function videoMaskApi(params: {
   prompt: string
   threshold?: number
   provider?: VideoMaskProvider
+  /** Hold the last mask where the subject is lost (default false). */
+  holdLastMask?: boolean
+  /** Ignore subjects smaller than this % of the frame height (default 0 = off). */
+  minSubjectHeightPct?: number
+  /** Ignore subjects larger than this % of the frame height (default 0 = off). */
+  maxSubjectHeightPct?: number
   userId?: string
 }): Promise<{ jobId: string }> {
   const { userId, ...rest } = params
@@ -10932,4 +10950,313 @@ export function pauseTelegramAccount(id: string): Promise<{ id: string; status: 
 
 export function resumeTelegramAccount(id: string): Promise<{ id: string; status: "active" }> {
   return apiRequest(`/v1/telegram-accounts/${encodeURIComponent(id)}/resume`, "apiErr.resumeTheAccount", { method: "POST" })
+}
+
+// ---- Admin: trends (EE; /v1/admin/trends, backend/src/ee/routes/admin-trends.ts) ----
+//
+// A trend is a ready-made Cast Swap recipe. Admins see its hidden parts (the
+// source clip, each slot's roleName, the fixed references, the trend prompt);
+// these types mirror the admin routes' replies and never reach a user screen.
+
+/** Text shown to users: English always, any other platform language optionally. */
+export type TrendLocalizedText = { en: string } & Partial<Record<string, string>>
+
+export type TrendSlotKind = "person" | "location" | "product" | "pet"
+export type TrendChoice = "new" | "original"
+export type TrendChipKey = "body" | "outfit" | "hair" | "coat" | "shape" | "finish"
+export type TrendResolution = "480p" | "720p" | "1080p"
+
+export interface AdminTrendSlot {
+  /** `^[a-z0-9_]{1,32}$`, unique, stable across versions. */
+  key: string
+  label: TrendLocalizedText
+  kind: TrendSlotKind
+  required: boolean
+  hint?: TrendLocalizedText
+  /** Who this is in the source clip (hidden from users). */
+  roleName: string
+  /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
+  defaults?: Partial<Record<TrendChipKey, TrendChoice>>
+}
+
+export interface AdminTrendReference {
+  images: string[]
+  line: string
+}
+
+export interface AdminTrendExample {
+  videoUrl: string
+  posterUrl?: string
+  width: number
+  height: number
+  durationSec: number
+  slots: Record<string, string[]>
+  sourceJobId: string
+}
+
+export interface AdminTrendSource {
+  videoUrl: string
+  durationSec: number
+  width?: number
+  height?: number
+}
+
+export interface AdminTrendData {
+  name: TrendLocalizedText
+  description?: TrendLocalizedText
+  source: AdminTrendSource | null
+  /** Where the 4 s preview starts; null = no preview offered. */
+  previewStart: number | null
+  slots: AdminTrendSlot[]
+  references: AdminTrendReference[]
+  trendPrompt?: string
+  examples: AdminTrendExample[]
+}
+
+export type TrendStatus = "draft" | "published" | "unpublished"
+export type TrendBadge = "trending" | "new"
+
+export interface AdminTrendRow {
+  id: string
+  slug: string
+  status: TrendStatus
+  tags: string[]
+  badges: TrendBadge[]
+  sortOrder: number
+  draftVersion: number
+  publishedVersion: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminTrendListItem {
+  id: string
+  slug: string
+  status: TrendStatus
+  name: string
+  coverUrl?: string
+  slotCount: number
+  draftVersion: number
+  publishedVersion: number | null
+  tags: string[]
+  badges: TrendBadge[]
+  sortOrder: number
+  updatedAt: string
+}
+
+export interface AdminTrendDetail {
+  trend: AdminTrendRow
+  draft: AdminTrendData
+  published: AdminTrendData | null
+  /** The draft's revision: sent back on every draft write; a stale one is a 409 `draft_conflict`. */
+  revision: string
+}
+
+/** What a draft write returns. */
+export interface TrendDraftWrite {
+  version: number
+  revision: string
+}
+
+export interface AdminTrendRunSlot {
+  key: string
+  label: string
+  kind: TrendSlotKind
+  images: string[]
+  fromExample: boolean
+  body?: TrendChoice
+  outfit?: TrendChoice
+  hair?: TrendChoice
+  coat?: TrendChoice
+  shape?: TrendChoice
+  finish?: TrendChoice
+}
+
+export interface AdminTrendRun {
+  jobId: string
+  status: string
+  progress: number | null
+  error: { code?: string; message: string } | null
+  createdAt: string
+  completedAt: string | null
+  trend: { id: string; slug: string; version: number; name: string }
+  example: number
+  slots: AdminTrendRunSlot[]
+  details?: string
+  preview: boolean
+  resolution: string
+  draft: boolean
+  videoUrl: string | null
+  posterUrl: string | null
+  creditsCharged: number | null
+  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  fullQualityUntil: string | null
+  ownerIsAdmin: boolean
+}
+
+export interface TrendTestRunRequest {
+  slots: Record<string, { images?: string[] } & Partial<Record<TrendChipKey, TrendChoice>>>
+  example?: number
+  details?: string
+  preview?: boolean
+  resolution?: TrendResolution
+  draft?: boolean
+}
+
+export interface TrendEngineEnvironment {
+  env: string
+  pluginBuildId: string | null
+  supports: {
+    castSwap?: {
+      roleKinds?: TrendSlotKind[]
+      fixedReferences?: boolean
+      fullQuality?: boolean
+      resolutions?: TrendResolution[]
+      trendRun?: boolean
+    }
+  } & Record<string, unknown>
+  updatedAt: string
+}
+
+/** One reason a trend cannot be published (`409 publish_blocked`). */
+export interface TrendPublishBlocker {
+  code: string
+  env?: string
+  need?: string
+  example?: number
+  slots?: string[]
+  message?: string
+}
+
+/** `POST /v1/admin/trends/:id/publish` refused: every reason, to list on the screen. */
+export class TrendPublishBlockedError extends Error {
+  readonly code = "publish_blocked"
+  constructor(
+    message: string,
+    readonly reasons: TrendPublishBlocker[],
+  ) {
+    super(message)
+    this.name = "TrendPublishBlockedError"
+  }
+}
+
+const ADMIN_TRENDS = "/v1/admin/trends"
+const trendPath = (id: string) => `${ADMIN_TRENDS}/${encodeURIComponent(id)}`
+
+export async function fetchAdminTrends(): Promise<AdminTrendListItem[]> {
+  return (await apiRequest<{ data: AdminTrendListItem[] }>(ADMIN_TRENDS, "apiErr.loadTrends")).data
+}
+
+export async function createAdminTrend(input: { slug: string; name: TrendLocalizedText }): Promise<{ id: string }> {
+  return (await apiRequest<{ data: { id: string } }>(ADMIN_TRENDS, "apiErr.saveTrend", { method: "POST", body: input })).data
+}
+
+export async function fetchAdminTrend(id: string): Promise<AdminTrendDetail> {
+  return (await apiRequest<{ data: AdminTrendDetail }>(trendPath(id), "apiErr.loadTrends")).data
+}
+
+export async function patchAdminTrend(
+  id: string,
+  patch: { slug?: string; tags?: string[]; badges?: TrendBadge[]; sortOrder?: number },
+): Promise<AdminTrendRow> {
+  return (await apiRequest<{ data: AdminTrendRow }>(trendPath(id), "apiErr.saveTrend", { method: "PATCH", body: patch })).data
+}
+
+/** Save the draft (its examples are kept server-side; only the example routes write them). */
+export async function saveAdminTrendDraft(
+  id: string,
+  data: Omit<AdminTrendData, "examples">,
+  revision: string,
+): Promise<TrendDraftWrite> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite }>(`${trendPath(id)}/draft`, "apiErr.saveTrend", {
+      method: "PUT",
+      body: { data, revision },
+    })
+  ).data
+}
+
+/** Copy a URL (an upload, a library asset) into the trend's own storage. */
+export async function storeAdminTrendMedia(
+  id: string,
+  input: { url: string; kind: "source" | "reference" },
+): Promise<{ url: string; durationSec?: number; width?: number; height?: number }> {
+  return (
+    await apiRequest<{ data: { url: string; durationSec?: number; width?: number; height?: number } }>(
+      `${trendPath(id)}/media`,
+      "apiErr.saveTrend",
+      { method: "POST", body: input },
+    )
+  ).data
+}
+
+export async function fetchAdminTrendTestRuns(id: string): Promise<AdminTrendRun[]> {
+  return (await apiRequest<{ data: AdminTrendRun[] }>(`${trendPath(id)}/test-runs`, "apiErr.loadTrends")).data
+}
+
+/** Run the saved DRAFT as the admin (billed to the admin's own account). */
+export async function startAdminTrendTestRun(id: string, body: TrendTestRunRequest): Promise<{ jobId: string }> {
+  return (
+    await apiRequest<{ data: { jobId: string } }>(`${trendPath(id)}/test-runs`, "apiErr.saveTrend", { method: "POST", body })
+  ).data
+}
+
+export async function fetchAdminTrendRunPrompt(jobId: string): Promise<{ prompt: string }> {
+  return (
+    await apiRequest<{ data: { prompt: string } }>(
+      `${ADMIN_TRENDS}/test-runs/${encodeURIComponent(jobId)}/prompt`,
+      "apiErr.loadTrends",
+    )
+  ).data
+}
+
+export async function promoteAdminTrendExample(
+  id: string,
+  jobId: string,
+): Promise<TrendDraftWrite & { index: number; example: AdminTrendExample }> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite & { index: number; example: AdminTrendExample } }>(
+      `${trendPath(id)}/examples`,
+      "apiErr.saveTrend",
+      { method: "POST", body: { jobId } },
+    )
+  ).data
+}
+
+/** `order` lists the current 0-based example indexes in their new order. */
+export async function reorderAdminTrendExamples(id: string, order: number[], revision: string): Promise<TrendDraftWrite> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite }>(`${trendPath(id)}/examples/order`, "apiErr.saveTrend", {
+      method: "PUT",
+      body: { order, revision },
+    })
+  ).data
+}
+
+export async function removeAdminTrendExample(id: string, index: number, revision: string): Promise<TrendDraftWrite> {
+  return (
+    await apiRequest<{ data: TrendDraftWrite }>(
+      `${trendPath(id)}/examples/${index}?revision=${encodeURIComponent(revision)}`,
+      "apiErr.saveTrend",
+      { method: "DELETE" },
+    )
+  ).data
+}
+
+/** Publish the draft at `revision`; refused with `TrendPublishBlockedError` (every reason) when it can't be. */
+export async function publishAdminTrend(id: string, revision?: string): Promise<AdminTrendRow> {
+  return (
+    await apiRequest<{ data: AdminTrendRow }>(`${trendPath(id)}/publish`, "apiErr.saveTrend", {
+      method: "POST",
+      body: revision ? { revision } : {},
+    })
+  ).data
+}
+
+export async function unpublishAdminTrend(id: string): Promise<AdminTrendRow> {
+  return (await apiRequest<{ data: AdminTrendRow }>(`${trendPath(id)}/unpublish`, "apiErr.saveTrend", { method: "POST" })).data
+}
+
+export async function fetchTrendEngineEnvironments(): Promise<TrendEngineEnvironment[]> {
+  return (await apiRequest<{ data: TrendEngineEnvironment[] }>(`${ADMIN_TRENDS}/engine-environments`, "apiErr.loadTrends")).data
 }

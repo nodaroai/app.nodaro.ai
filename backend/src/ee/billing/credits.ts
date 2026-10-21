@@ -86,7 +86,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -4549,12 +4549,13 @@ function estimateNodeCredits(
     return prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
   }
   // Mask Composite: its one-unit row × one unit per started 5 s of the result
-  // (the foreground's length — its `video` wire — when a run estimate knows
-  // it, else the 300-second cap: an upper bound on what the run measures).
+  // (its leading video's length — the foreground's `video` wire, or the
+  // `background-video` wire with a pixelate / blur fill — when a run estimate
+  // knows it, else the 300-second cap: an upper bound on what the run measures).
   // Marked up once as a whole, the way the route's creditGuard and the
   // workflow run reserve it (`unitRateBaseCredits`).
   if (node.type === "mask-composite") {
-    const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(videoSfxClipSecOf(node, edges, wireSec)))
+    const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(maskCompositeLeadSecOf(node, edges, wireSec)))
     if (credits !== undefined) return credits
   }
   // Dubbing: its language's per-minute row × the started minutes of the span
@@ -4650,6 +4651,20 @@ function dubbingSourceSecOf(
   const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
   if (wire === undefined) return undefined
   return wireSec(wire.source) ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
+}
+
+/**
+ * The length a Mask Composite is priced at when a run is estimated: its
+ * leading video's wire (`maskCompositeLeadSec`, @nodaro/render-rules).
+ */
+function maskCompositeLeadSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const inputs = edges.filter((e) => e.target === node.id)
+  return maskCompositeLeadSec(node.data, inputs, inputs.map((e) => wireSec(e.source)))
 }
 
 /**
@@ -5913,6 +5928,12 @@ export interface RunSetCreditsCheck {
   available: number | null
   /** Why it is refused; only when `sufficient` is false. */
   message?: string
+  /**
+   * Refused on a consumer surface where a payg account spends its free pool
+   * only (web-free mode) — the credit guard answers that with the
+   * subscription ask, not a plain 402. Only present (true) on such a refusal.
+   */
+  subscriptionRequired?: true
 }
 
 /** The credit guard's own words for it (credit-guard-impl.ts): the operator is the fixer. */
@@ -5956,6 +5977,7 @@ export async function checkRunSetCredits(
     sufficient: false,
     required,
     available,
+    ...(gates.webFree ? { subscriptionRequired: true as const } : {}),
     message: deployment
       ? DEPLOYMENT_OUT_OF_CREDITS
       : gates.webFree

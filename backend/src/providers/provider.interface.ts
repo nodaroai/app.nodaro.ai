@@ -148,6 +148,11 @@ export interface ProviderOptions {
   // is true; set false to keep prompts (e.g. the perfect-loop seal phrase)
   // verbatim. Has no effect on non-VEO providers.
   enableTranslation?: boolean
+  // Text-to-video: `false` = a copyright refusal fails the job instead of
+  // being retried once with a reworded prompt. The worker handler acts on it;
+  // providers ignore it, except the cloud relay, which forwards it so the
+  // connected cloud honours the same opt-out.
+  contentPolicyRewrite?: boolean
   // V2V-specific
   referenceImageUrl?: string // Runway Aleph style reference image
   audio?: boolean            // Wan Flash: generate with audio (affects pricing)

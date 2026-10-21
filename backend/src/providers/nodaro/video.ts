@@ -182,6 +182,9 @@ export class NodaroCloudVideoProvider
       ...(duration !== undefined ? { duration } : {}),
       ...(aspectRatio !== undefined ? { aspectRatio } : {}),
       ...sharedVideoBody(cloudOptions),
+      // The caller's copyright-reword opt-out: the cloud's own handler would
+      // otherwise reword and retry on its side.
+      ...(options?.contentPolicyRewrite !== undefined ? { contentPolicyRewrite: options.contentPolicyRewrite } : {}),
     }
 
     const jobId = await createCloudJob("/v1/text-to-video", body)

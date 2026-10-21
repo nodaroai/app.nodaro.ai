@@ -624,17 +624,41 @@ describe("payload-builder-video-mask.test.ts", () => {
     it("refuses a run with no video", () => {
       expect(() => build(node("video-mask", { prompt: "x" }), {})).toThrow()
     })
+
+    it("carries holdLastMask (true only when the node says so)", () => {
+      expect(build(node("video-mask", { prompt: "x" }), { videoUrl: "https://x/c.mp4" }).payload.holdLastMask).toBe(false)
+      expect(build(node("video-mask", { prompt: "x", holdLastMask: true }), { videoUrl: "https://x/c.mp4" }).payload.holdLastMask).toBe(true)
+      expect(build(node("video-mask", { prompt: "x", holdLastMask: "yes" }), { videoUrl: "https://x/c.mp4" }).payload.holdLastMask).toBe(false)
+    })
+
+    it("carries maxSubjectHeightPct (clamped, 0 when absent) and refuses min above max like the route", () => {
+      const b = (d: Record<string, unknown>) => build(node("video-mask", { prompt: "x", ...d }), { videoUrl: "https://x/c.mp4" })
+      expect(b({}).payload.maxSubjectHeightPct).toBe(0)
+      expect(b({ maxSubjectHeightPct: 20 }).payload.maxSubjectHeightPct).toBe(20)
+      expect(b({ maxSubjectHeightPct: 250 }).payload.maxSubjectHeightPct).toBe(100)
+      expect(b({ minSubjectHeightPct: 5, maxSubjectHeightPct: 20 }).payload).toMatchObject({ minSubjectHeightPct: 5, maxSubjectHeightPct: 20 })
+      expect(() => b({ minSubjectHeightPct: 30, maxSubjectHeightPct: 20 })).toThrow(/above "Ignore subjects larger than"/)
+    })
+
+    it("carries minSubjectHeightPct, clamped to 0–100 (0 when absent or not a number)", () => {
+      const pct = (v: unknown) => build(node("video-mask", { prompt: "x", minSubjectHeightPct: v }), { videoUrl: "https://x/c.mp4" }).payload.minSubjectHeightPct
+      expect(pct(undefined)).toBe(0)
+      expect(pct(15)).toBe(15)
+      expect(pct(250)).toBe(100)
+      expect(pct(-5)).toBe(0)
+      expect(pct("15")).toBe(0)
+    })
   })
 
   describe("mask-composite payload", () => {
     it("sends the three resolved videos and the normalised settings at the flat row", () => {
-      const r = build(node("mask-composite", { feather: 50, audioSource: "mix" }), {
+      const r = build(node("mask-composite", { feather: 50, audioSource: "mix", opacity: 0.6 }), {
         videoUrl: "https://x/fg.mp4", backgroundVideoUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
       })
       expect(r.modelIdentifier).toBe("mask-composite")
       expect(r.payload).toMatchObject({
         foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
-        invertMask: false, feather: 20, grow: 0, backgroundFit: "cover", audioSource: "mix",
+        invertMask: false, feather: 20, grow: 0, opacity: 0.6, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "cover", audioSource: "mix",
       })
     })
 
@@ -643,6 +667,21 @@ describe("payload-builder-video-mask.test.ts", () => {
       // A node carrying data.maskUrl passes the guard AND reaches the worker with it.
       const r = build(node("mask-composite", { maskUrl: "https://x/m.mp4" }), { videoUrl: "https://x/fg.mp4", backgroundVideoUrl: "https://x/bg.mp4" })
       expect(r.payload.maskUrl).toBe("https://x/m.mp4")
+    })
+
+    it("the video fill (default) still refuses a missing foreground", () => {
+      expect(() => build(node("mask-composite"), { backgroundVideoUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4" })).toThrow(/video_required.*foreground/)
+      expect(() => build(node("mask-composite", { fill: "video" }), { backgroundVideoUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4" })).toThrow(/video_required/)
+    })
+
+    it.each(["pixelate", "blur"])("%s runs with no foreground, sends none (a wired one is ignored), and carries the fill settings", (fill) => {
+      const r = build(node("mask-composite", { fill, pixelSizePct: 2.5, blurStrengthPct: 3 }), { backgroundVideoUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4" })
+      expect(r.payload).toMatchObject({ backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill, pixelSizePct: 2.5, blurStrengthPct: 3 })
+      expect(r.payload).not.toHaveProperty("foregroundUrl")
+      const wired = build(node("mask-composite", { fill }), { videoUrl: "https://x/fg.mp4", backgroundVideoUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4" })
+      expect(wired.payload).not.toHaveProperty("foregroundUrl")
+      // Background and mask stay required.
+      expect(() => build(node("mask-composite", { fill }), { maskUrl: "https://x/m.mp4" })).toThrow(/video_required.*background/)
     })
   })
 })

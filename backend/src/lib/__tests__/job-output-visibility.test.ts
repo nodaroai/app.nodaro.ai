@@ -40,7 +40,7 @@ describe("withoutServerOnlyKeys", () => {
 })
 
 describe("redactPrivateJobData — server-only output keys", () => {
-  it("strips __ keys from a row's output_data, wherever the row sits in the answer", () => {
+  it("strips __ keys from a row's output_data and input_data, wherever the row sits in the answer", () => {
     const answer = {
       data: [
         {
@@ -54,13 +54,14 @@ describe("redactPrivateJobData — server-only output keys", () => {
       data: [
         {
           id: "j1",
-          // input_data is not output_data: the ruling covers output keys only.
-          input_data: { __nodaroContinue: { from: "x" }, prompt: "p" },
+          // input_data's own top-level __ keys are server-only too.
+          input_data: { prompt: "p" },
           output_data: { videoUrl: "https://public.example/v.mp4" },
         },
       ],
     })
     expect(answer.data[0]!.output_data).toHaveProperty("__checkpoint")
+    expect(answer.data[0]!.input_data).toHaveProperty("__nodaroContinue")
   })
 
   it("redactPrivateJobOutput strips both __ keys and unscoredUrl from a bare output_data", () => {

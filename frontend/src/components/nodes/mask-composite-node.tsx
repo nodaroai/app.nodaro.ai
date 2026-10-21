@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Blend, Loader2, AlertCircle, Film, Clapperboard } from "lucide-react"
-import { maskCompositeUnits, resolveMaskCompositeSettings } from "@nodaro/shared/media"
+import { maskCompositeUnits, maskCompositeUsesForeground, resolveMaskCompositeSettings } from "@nodaro/shared/media"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -21,7 +21,7 @@ import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { isValidMaskCompositeConnection } from "@/lib/video-producer-handles"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { MaskCompositeData } from "@/types/nodes"
-import { videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { maskCompositeQuotedSec } from "@/lib/video-utility-estimate"
 import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
 // @registry-lookup reads its own row only (NODE_CREDIT_COSTS / estimateNodeCredits)
 
@@ -40,10 +40,11 @@ const HANDLE_TOP = {
 function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as MaskCompositeData
-  // One `mask-composite` row per started 5 s of the result (the foreground's
-  // length); an unknown length shows the range "one unit – the 300 s cap".
+  // One `mask-composite` row per started 5 s of the result (its leading video's
+  // length: the foreground, or the background with a pixelate / blur fill); an
+  // unknown length shows the range "one unit – the 300 s cap".
   const unitRow = useModelCredits("mask-composite", NODE_CREDIT_COSTS["mask-composite"])
-  const fgSec = useWorkflowStore((s) => videoSfxQuotedSec({ id }, s.nodes, s.edges))
+  const fgSec = useWorkflowStore((s) => maskCompositeQuotedSec({ id, data: nodeData }, s.nodes, s.edges))
   // The whole run's price for its units (an unknown length: the 300 s cap) —
   // what the run is charged, marked up once (lib/unit-quote.ts).
   const atLength = useUnitQuoteCredits("mask-composite", maskCompositeUnits(fgSec ?? undefined), NODE_CREDIT_COSTS["mask-composite"])
@@ -72,6 +73,9 @@ function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   const settings = resolveMaskCompositeSettings(nodeData)
+  // Pixelate / blur fill from the background: the Foreground input is unused
+  // (shown muted, as an input the current settings ignore; a wired edge stays).
+  const usesForeground = maskCompositeUsesForeground(settings.fill)
   const hasResult = status !== "running" && !!activeUrl && !videoError
 
   return (
@@ -120,7 +124,7 @@ function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
             {status !== "running" && !activeUrl && status !== "failed" && (
               <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
                 <Blend className="w-10 h-10" />
-                <span className="text-[10px] text-muted-foreground/60 px-2 text-center">{t("node.maskCompositeIdleHint")}</span>
+                <span className="text-[10px] text-muted-foreground/60 px-2 text-center">{t(usesForeground ? "node.maskCompositeIdleHint" : "node.maskCompositeIdleHintNoForeground")}</span>
                 {settings.invertMask && (
                   <span className="text-[10px] text-muted-foreground/60">{t("node.maskCompositeInverted")}</span>
                 )}
@@ -143,7 +147,7 @@ function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
           onVideoLoad={() => setVideoError(false)}
         />
       )}
-      <HandleWithPopover nodeId={id} nodeType="mask-composite" handleId="video"      type="target" position={Position.Left}  label="Foreground" color={HANDLE_COLORS.video} icon={<Film />}         side="left"  top={HANDLE_TOP.foreground} accepts={ACCEPTS_FOREGROUND} />
+      <HandleWithPopover nodeId={id} nodeType="mask-composite" handleId="video"      type="target" position={Position.Left}  label="Foreground" color={HANDLE_COLORS.video} icon={<Film />}         side="left"  top={HANDLE_TOP.foreground} accepts={ACCEPTS_FOREGROUND} disabled={!usesForeground} />
       <HandleWithPopover nodeId={id} nodeType="mask-composite" handleId="background-video" type="target" position={Position.Left}  label="Background" color={HANDLE_COLORS.video} icon={<Film />}         side="left"  top={HANDLE_TOP["background-video"]} accepts={ACCEPTS_BACKGROUND} />
       <HandleWithPopover nodeId={id} nodeType="mask-composite" handleId="mask-video" type="target" position={Position.Left}  label="Mask"       color={HANDLE_COLORS.mask}  icon={<Clapperboard />} side="left"  top={HANDLE_TOP.mask}       accepts={ACCEPTS_MASK} />
       <HandleWithPopover nodeId={id} nodeType="mask-composite" handleId="video"      type="source" position={Position.Right} label="Video"      color={HANDLE_COLORS.video} icon={<Film />}         side="right" top="24px" />

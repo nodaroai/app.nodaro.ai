@@ -13,14 +13,16 @@ export type {
   JobStatusResult,
   CancelJobResult,
   DeleteJobResult,
+  JobFromUploadParams,
   ListJobsParams,
   ListJobsPage,
-  // `error_hint`'s discriminated union and its two arms, plus the credit
+  // `error_hint`'s discriminated union and its arms, plus the credit
   // lifecycle — all reachable from `Job`/`JobStatusResult` but, until now, not
   // nameable, so a consumer could not narrow or annotate against them.
   JobErrorHint,
   SafetyBlockHint,
   PolicyBlockHint,
+  CreditsHint,
   CreditStatus,
   JobRating,
   JobRatingFilter,

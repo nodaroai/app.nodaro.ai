@@ -20,6 +20,8 @@ interface SubmissionScope {
   readonly submission?: ServerJobSubmission
   /** The job a worker-side handler is running when it asks for this one (child job). */
   readonly parentJobId?: string
+  /** Set only by the plugin toolkit's own `tk.http.internalRequest` (trusted plugin code). */
+  readonly trustedPluginCaller?: true
   active: boolean
 }
 
@@ -38,10 +40,23 @@ export async function withJobSubmissionContext<T>(request: {
   readonly jobSubmission?: ServerJobSubmission
   /** Server-only: the parent job of the job this request creates (`tk.http.workerRequest`). */
   readonly parentJobId?: string
+  /**
+   * Server-only: the request is the plugin toolkit's own internal request
+   * (`tk.http.internalRequest` / `workerRequest` in private-plugins/toolkit.ts
+   * — plugin code is trusted). Set by that one function and nothing else;
+   * never derived from a header or the body. Read by `mayUseChildJobAsSource`.
+   */
+  readonly trustedPluginCaller?: boolean
 }, run: () => T | PromiseLike<T>): Promise<T> {
   // Nested internal calls without an explicit context must not inherit one.
-  if (!request.jobSubmission && request.parentJobId === undefined) return scopes.run(undefined, async () => await run())
-  if (!request.userId.trim()) throw new Error("Invalid server job submission context")
+  if (!request.jobSubmission && request.parentJobId === undefined && request.trustedPluginCaller !== true) {
+    return scopes.run(undefined, async () => await run())
+  }
+  // A scope that carries a submission or a parent needs a caller; the trusted
+  // plugin flag alone does not (it is matched against the caller when read).
+  if ((request.jobSubmission || request.parentJobId !== undefined) && !request.userId.trim()) {
+    throw new Error("Invalid server job submission context")
+  }
   if (request.parentJobId !== undefined) assertParentJobId(request.parentJobId)
   let submission: ServerJobSubmission | undefined
   if (request.jobSubmission) {
@@ -57,6 +72,7 @@ export async function withJobSubmissionContext<T>(request: {
     userId: request.userId, method: request.method, url: request.url,
     ...(submission ? { submission } : {}),
     ...(request.parentJobId !== undefined ? { parentJobId: request.parentJobId } : {}),
+    ...(request.trustedPluginCaller === true ? { trustedPluginCaller: true as const } : {}),
     active: true,
   }
   // Fastify's inject result is a lazy thenable. Start/await it INSIDE the
@@ -96,4 +112,35 @@ export function jobSubmissionParentJobId(req: FastifyRequest): string | undefine
   if (scope.parentJobId === undefined) return undefined
   if (req.userId !== scope.userId) throw new JobSubmissionIdentityError()
   return scope.parentJobId
+}
+
+/**
+ * Whether THIS request is the plugin toolkit's own internal request (the same
+ * active + method + url + caller match as `jobSubmissionParentJobId`).
+ */
+function isTrustedPluginRequest(req: FastifyRequest): boolean {
+  const scope = scopes.getStore()
+  if (!scope?.active || req.method !== scope.method || req.url !== scope.url) return false
+  return scope.trustedPluginCaller === true && req.userId === scope.userId
+}
+
+/**
+ * Whether this request may name a CHILD job (`parent_job_id` set) as the
+ * source of the job it creates or prices: only trusted plugin code reaching a
+ * route as the caller — internal auth AND, on this very request, a server-only
+ * scope from the plugin toolkit (`tk.http.internalRequest`, or a
+ * `workerRequest` with a parent job), as Cast Swap's Full Quality quote and
+ * upscale of its Seedance edit child are. Every other caller — a browser, an
+ * API key, an app token, and an internal hop that relays a caller's body (MCP's
+ * `mcpInject`, the trend routes' `engineRequest`) — names a child exactly as a
+ * job that does not exist, so a child's input never feeds a job its owner can
+ * read.
+ */
+export function mayUseChildJobAsSource(req: FastifyRequest): boolean {
+  if (req.authKind !== "internal") return false
+  try {
+    return jobSubmissionParentJobId(req) !== undefined || isTrustedPluginRequest(req)
+  } catch {
+    return false
+  }
 }

@@ -150,4 +150,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "review",
   // Gallery Moderation — admin-only, like Content Review.
   "gallery-moderation",
+  // Trends — admin-only (and only where credits exist), its editor a child path.
+  "trends",
+  "trends/:id",
 ]

@@ -6,7 +6,7 @@ import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { JOB_STATUSES } from "../lib/job-status.js"
-import { redactPrivateJobData } from "../lib/public-job-data.js"
+import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData } from "../lib/public-job-data.js"
 import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
 import { ORDER_QUALITY_COLUMNS, fillJobRenderQuality, fillJobsRenderQuality } from "../lib/render-label-fill.js"
 import type { ErrorHint } from "../lib/safety-block.js"
@@ -262,10 +262,12 @@ function pickKeys(row: Record<string, unknown>, keys: readonly string[]): Record
  * Non-admin callers get exactly PUBLIC_JOB_KEYS (credits, never USD; never the
  * provider id, never the raw provider error). Admins get PUBLIC + ADMIN_ONLY.
  * Nobody gets a key outside those two lists, and the private Recast remux
- * base is redacted for every caller (redactPrivateJobData).
+ * base is redacted for every caller (redactPrivateJobData). A non-admin reads
+ * a trend run's failure as `TREND_RUN_FAILURE_MESSAGE` (maskTrendRunError).
  */
 export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
-  const redacted = redactPrivateJobData(job) as unknown as Record<string, unknown>
+  // A trend run's failure text is replaced for a non-admin (maskTrendRunError).
+  const redacted = maskTrendRunError(redactPrivateJobData(job), isAdmin) as unknown as Record<string, unknown>
   const picked = pickKeys(redacted, isAdmin ? [...PUBLIC_JOB_KEYS, ...ADMIN_ONLY_JOB_KEYS] : PUBLIC_JOB_KEYS)
 
   // Recovery visibility (audit UX): a processing row the reconcile system has
@@ -361,11 +363,17 @@ export async function jobRoutes(app: FastifyInstance) {
     // status route already exposes, so this widens no boundary. error_hint
     // (migration 376) and usage_log_id (credit_status, PR9) piggyback for the
     // same reason.
-    const { data, error } = await supabase
+    // A child job is left out for a non-admin, as an id that does not exist
+    // (CHILD_JOB_COLUMN); the marker tells a trend run, whose failure text a
+    // non-admin never reads (maskTrendRunError removes the marker).
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+    let query = supabase
       .from("jobs")
-      .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}`)
+      .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
       .in("id", ids)
       .eq("user_id", req.userId)
+    if (!isAdmin) query = query.is(CHILD_JOB_COLUMN, null)
+    const { data, error } = await query
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
@@ -374,7 +382,7 @@ export async function jobRoutes(app: FastifyInstance) {
     // An old render carries no stored Preview label: fill it from the order
     // (read-time only, never written; the lean answer stays lean).
     const rows = fillJobsRenderQuality(
-      (data ?? []) as unknown as (Record<string, unknown> & { usage_log_id?: string | null })[],
+      maskTrendRunErrors((data ?? []) as unknown as (Record<string, unknown> & { usage_log_id?: string | null })[], isAdmin),
       { dropJobType: true },
     )
     const creditMap = await creditStatusMapFor(rows.map((r) => r.usage_log_id))
@@ -406,8 +414,10 @@ export async function jobRoutes(app: FastifyInstance) {
       .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id")
       .eq("id", id)
 
+    // A non-admin reads only their own jobs, and never a child job: it answers
+    // exactly as a job that does not exist (CHILD_JOB_COLUMN).
     if (!isAdmin) {
-      query = query.eq("user_id", req.userId)
+      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
     }
 
     const { data: job, error } = await query.single()
@@ -464,11 +474,12 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}`)
+      .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
       .eq("id", id)
 
+    // As GET /v1/jobs/:id: a non-admin never reads a child job (CHILD_JOB_COLUMN).
     if (!isAdmin) {
-      query = query.eq("user_id", req.userId)
+      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
     }
 
     const { data: job, error } = await query.single()
@@ -488,7 +499,7 @@ export async function jobRoutes(app: FastifyInstance) {
       reconcile_attempts: attempts,
       usage_log_id: usageLogId,
       ...rest
-    } = fillJobRenderQuality(job as unknown as Record<string, unknown>, { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
+    } = fillJobRenderQuality(maskTrendRunError(job as unknown as Record<string, unknown>, isAdmin), { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
     const creditMap = await creditStatusMapFor([usageLogId])
     return redactPrivateJobData({
       data: {
@@ -731,11 +742,13 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}`)
+      .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}`)
       .in("id", jobIds)
 
+    // A child job is left out for a non-admin, as an id that does not exist
+    // (CHILD_JOB_COLUMN).
     if (!isAdmin) {
-      query = query.eq("user_id", req.userId)
+      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
     }
 
     const { data: jobs, error } = await query
@@ -748,7 +761,7 @@ export async function jobRoutes(app: FastifyInstance) {
     // the order (read-time only; the answer stays lean).
     return {
       data: redactPrivateJobData(
-        fillJobsRenderQuality((jobs ?? []) as unknown as Record<string, unknown>[], { dropJobType: true }),
+        fillJobsRenderQuality(maskTrendRunErrors((jobs ?? []) as unknown as Record<string, unknown>[], isAdmin), { dropJobType: true }),
       ),
     }
   })

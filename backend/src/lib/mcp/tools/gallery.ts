@@ -10,7 +10,7 @@ import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { failureGuidance } from "./_job-error.js"
-import { redactPrivateJobData } from "../../public-job-data.js"
+import { CHILD_JOB_COLUMN, maskTrendRunError, redactPrivateJobData } from "../../public-job-data.js"
 import { ASSET_SEARCH_COLUMNS, textSearchFilters } from "../../text-search.js"
 import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
 import { isPreviewRender } from "../../preview-render.js"
@@ -70,6 +70,9 @@ const IMAGE_JOBS = new Set([
   "generate-creature-asset",
   "generate-location",
   "generate-location-asset",
+  // A browser edit recorded by POST /v1/jobs/from-upload: always private, so
+  // only the owner's own scope ever lists it.
+  "image-edit",
 ])
 
 const VIDEO_JOBS = new Set([
@@ -375,6 +378,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
                 .eq("status", "completed")
                 .neq("user_id", session.userId)
         query = query.not("output_data", "is", null)
+        // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
+        query = query.is(CHILD_JOB_COLUMN, null)
         // The public scope is the gallery: same moderation as the web one
         // (lib/gallery-moderation.ts) — blocked creators out in the query,
         // banned words dropped below. "mine" is the caller's own library.
@@ -452,7 +457,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
                   .eq("is_public", true)
                   .eq("status", "completed")
                   .neq("user_id", session.userId)
-          countQuery = countQuery.not("output_data", "is", null)
+          countQuery = countQuery.not("output_data", "is", null).is(CHILD_JOB_COLUMN, null)
           if (excludedUsers) countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
           for (const filter of promptFilters) countQuery = countQuery.or(filter)
           countQuery = countQuery.in("job_type", allowedJobTypes)
@@ -701,6 +706,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // Without this, favoriting another user's job UUID would leak its
             // output_data URLs + input_data prompt.
             .or(`user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`)
+            // Never a child job (CHILD_JOB_COLUMN), favorited by its id or not.
+            .is(CHILD_JOB_COLUMN, null)
           items = ((jobsData ?? []) as GalleryRow[])
             .map((row) => rowToGalleryItem(row, session.userId))
             .filter((item): item is GalleryItem => item !== null)
@@ -783,6 +790,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .or(
             `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
           )
+          // A child job reads as one that does not exist (CHILD_JOB_COLUMN).
+          .is(CHILD_JOB_COLUMN, null)
           .maybeSingle()
         if (error) {
           return {
@@ -800,7 +809,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // An old render carries no stored Preview label: fill it from the order by
         // the rule get_job uses, so both readers say the same of one job (response
         // only; decided 2026-10-06).
-        const data = redactPrivateJobData(fillJobRenderQuality(rawData))
+        // A trend run's failure text is replaced (an MCP session is never an admin one).
+        const data = maskTrendRunError(redactPrivateJobData(fillJobRenderQuality(rawData)), false)
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
@@ -1000,6 +1010,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .or(
             `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
           )
+          // A child job reads as one that does not exist (CHILD_JOB_COLUMN).
+          .is(CHILD_JOB_COLUMN, null)
           .maybeSingle()
         if (error) {
           return {
@@ -1214,6 +1226,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .select("id, input_data, provider, completed_at, created_at")
             .in("id", jobIds)
             .eq("user_id", session.userId)
+            // Never a child job's input (CHILD_JOB_COLUMN), whatever node_states names.
+            .is(CHILD_JOB_COLUMN, null)
           for (const j of jobs ?? []) {
             const input = (j.input_data ?? {}) as Record<string, unknown>
             jobMeta.set(j.id as string, {
@@ -1309,6 +1323,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .select("id")
             .eq("id", args.job_id)
             .or(favoritableJobFilter(session.userId))
+            // Never a child job (CHILD_JOB_COLUMN): it reads as not found.
+            .is(CHILD_JOB_COLUMN, null)
             .maybeSingle()
           if (!visible) {
             return {

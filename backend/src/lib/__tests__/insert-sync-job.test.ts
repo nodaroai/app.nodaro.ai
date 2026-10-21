@@ -21,7 +21,10 @@ const { fromMock, insertMock } = vi.hoisted(() => {
 })
 
 vi.mock("../supabase.js", () => ({ supabase: { from: fromMock } }))
-vi.mock("../idempotent-insert.js", () => ({ insertWithIdempotencyKey: vi.fn() }))
+const { idempotentMock } = vi.hoisted(() => ({
+  idempotentMock: vi.fn<(...a: unknown[]) => unknown>(async () => ({ row: { id: "job-2" }, created: true })),
+}))
+vi.mock("../idempotent-insert.js", () => ({ insertWithIdempotencyKey: idempotentMock }))
 vi.mock("../job-policy-audit.js", () => ({
   recordJobPolicyDecision: vi.fn(async () => "decision-1"),
   hashGateSubject: vi.fn(() => "hash-1"),
@@ -32,7 +35,7 @@ vi.mock("../access-blocks.js", async (importOriginal) => ({
   isUserBlocked: vi.fn(async () => false),
 }))
 
-import { insertSyncJob } from "../insert-job.js"
+import { insertSyncJob, insertSyncJobIdempotent } from "../insert-job.js"
 import { clearJobPolicies, registerJobPolicy, type JobRequestContext } from "../job-policy.js"
 
 const req = {
@@ -86,5 +89,19 @@ describe("insertSyncJob", () => {
     })
     await insertSyncJob(req, row)
     expect(seen).toEqual(["image-to-text"])
+  })
+})
+
+describe("insertSyncJobIdempotent", () => {
+  it("stamps job_type and started_at on the race-proof lane, under the caller's key", async () => {
+    const before = Date.now()
+    const result = await insertSyncJobIdempotent(req, row, "image-to-text:abc")
+
+    expect(result).toEqual({ row: { id: "job-2" }, created: true })
+    const [table, stamped, key] = idempotentMock.mock.calls[0]! as [string, Record<string, unknown>, string]
+    expect(table).toBe("jobs")
+    expect(key).toBe("image-to-text:abc")
+    expect(stamped).toMatchObject({ job_type: "image-to-text", status: "pending", input_data: row.input_data })
+    expect(Date.parse(stamped.started_at as string)).toBeGreaterThanOrEqual(before - 1)
   })
 })

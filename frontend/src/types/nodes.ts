@@ -69,6 +69,7 @@ import {
   type VideoMaskProvider,
   type MaskCompositeBackgroundFit,
   type MaskCompositeAudioSource,
+  type MaskCompositeFill,
   MASK_COMPOSITE_DEFAULTS,
   VIDEO_MASK_DEFAULTS
 } from "@nodaro/shared/media"
@@ -249,7 +250,18 @@ export interface PolicyBlockHint {
 }
 
 /**
- * Structured hint attached to a job's failure. One jsonb column, two verdict
+ * The job ran out of credits partway: a step that reserves its own credits (a
+ * child job it dispatches) was refused — the balance, or a plan or workspace
+ * cap. The job was refunded. `code` is the refusal's own snake_case code
+ * (`insufficient_credits`, `free_video_limit`, …).
+ */
+export interface CreditsHint {
+  readonly kind: "credits"
+  readonly code: string
+}
+
+/**
+ * Structured hint attached to a job's failure. One jsonb column, several verdict
  * sources — a DISCRIMINATED UNION on `kind`, which was already the
  * discriminant every reader tested, so widening it breaks none of them.
  *
@@ -259,7 +271,7 @@ export interface PolicyBlockHint {
  * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
  * change (that file's comment says the same thing).
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {
@@ -2538,6 +2550,15 @@ export interface VideoMaskNodeData extends PromptAffixFields {
   threshold: number
   /** Segmentation model — `"sam-3"` is the only one (VIDEO_MASK_PROVIDERS). */
   provider: VideoMaskProvider
+  /** Hold the last mask where the subject is lost (default false). Optional:
+   *  older saved nodes lack it. */
+  holdLastMask?: boolean
+  /** Ignore subjects smaller than this % of the frame height (0 = off). Optional:
+   *  older saved nodes lack it. */
+  minSubjectHeightPct?: number
+  /** Ignore subjects larger than this % of the frame height (0 = off). Optional:
+   *  older saved nodes lack it. */
+  maxSubjectHeightPct?: number
   /** Resolved at execution time from the connected video edge. */
   videoUrl?: string
   activeResultIndex?: number
@@ -5018,6 +5039,17 @@ export type MaskCompositeData = {
   feather: number
   /** Grow (+) / shrink (−) the white region, px. */
   grow: number
+  /** How strongly the foreground covers the background inside the mask,
+   *  0–1 (1 = fully). The panel shows it as a percent. */
+  opacity?: number
+  /** What fills the masked area: `video` (the foreground; the default) or the
+   *  background itself, `pixelate`d or `blur`red — no foreground then. Optional:
+   *  older saved nodes lack it, the normaliser defaults it. */
+  fill?: MaskCompositeFill
+  /** Pixelate block size, % of the frame width. */
+  pixelSizePct?: number
+  /** Blur strength: the gaussian sigma, % of the frame width. */
+  blurStrengthPct?: number
   backgroundFit: MaskCompositeBackgroundFit
   audioSource: MaskCompositeAudioSource
   fieldMappings: FieldMappings

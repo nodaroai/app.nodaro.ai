@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
-import { createClient, StaticTokenAuth, NotFoundError } from "../../index.js"
-import type { JobErrorHint, JobRating, JobStatus, RateJobResult } from "../../index.js"
+import { createClient, StaticTokenAuth, NotFoundError, JobBlockedError } from "../../index.js"
+import type { CreditsHint, JobErrorHint, JobFromUploadParams, JobRating, JobStatus, RateJobResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -242,15 +242,48 @@ describe("jobs resource — pending_review and the policy-block hint", () => {
       reason: "This image can't be published here.",
       hookPoint: "result",
     }
-    const hints: JobErrorHint[] = [safety, policy]
+    const credits: JobErrorHint = { kind: "credits", code: "insufficient_credits" }
+    const hints: JobErrorHint[] = [safety, policy, credits]
     const seen: string[] = []
     for (const hint of hints) {
       // `kind` is the discriminant in every reader; narrowing must reach the
       // arm-specific fields without a cast.
       if (hint.kind === "safety-block") seen.push(hint.class)
-      else seen.push(`${hint.policyId}:${hint.hookPoint}`)
+      else if (hint.kind === "policy-block") seen.push(`${hint.policyId}:${hint.hookPoint}`)
+      else seen.push(`credits:${hint.code}`)
     }
-    expect(seen).toEqual(["copyright", "sai-moderation:result"])
+    expect(seen).toEqual(["copyright", "sai-moderation:result", "credits:insufficient_credits"])
+  })
+
+  it("CreditsHint is exported and get() carries a credits error_hint verbatim", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        data: {
+          id: "job-3",
+          status: "failed",
+          progress: 0,
+          user_id: "u1",
+          input_data: {},
+          output_data: null,
+          error_message: "You don't have enough credits to finish this run. Top up and try again.",
+          error_hint: { kind: "credits", code: "free_video_limit" },
+          credit_status: "refunded",
+          credits: 40,
+          job_type: "cast-swap",
+          created_at: "2026-10-21T00:00:00Z",
+          started_at: null,
+          completed_at: null,
+        },
+      }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.jobs.get("job-3")
+    const hint = data.error_hint
+    if (hint?.kind !== "credits") throw new Error("expected the credits arm")
+    // Type-level: `CreditsHint` is nameable from the package root.
+    const named: CreditsHint = hint
+    expect(named).toEqual({ kind: "credits", code: "free_video_limit" })
+    expect(data.credit_status).toBe("refunded")
   })
 
   it("getStatus() carries a held job's status and a policy-block error_hint untouched", async () => {
@@ -313,5 +346,26 @@ describe("jobs resource — pending_review and the policy-block hint", () => {
     if (!hint || hint.kind !== "policy-block") throw new Error("expected a policy-block hint")
     expect(hint.policyId).toBe("sai-moderation")
     expect(hint.hookPoint).toBe("result")
+  })
+
+  it("fromUpload() POSTs /v1/jobs/from-upload with the params as its body", async () => {
+    const job = { id: "j1", status: "completed", job_type: "image-edit" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: job }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params: JobFromUploadParams = { assetId: "a1", sourceJobId: "j0", sessionId: "s1" }
+
+    const res = await c.jobs.fromUpload(params)
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs/from-upload")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(params)
+    expect(res.data).toEqual(job)
+  })
+
+  it("fromUpload() throws JobBlockedError when a job policy blocks the image", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(422, { error: { code: "job_blocked", message: "Not allowed" } }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await expect(c.jobs.fromUpload({ assetId: "a1" })).rejects.toBeInstanceOf(JobBlockedError)
   })
 })

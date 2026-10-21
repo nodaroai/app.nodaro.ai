@@ -34,6 +34,7 @@ import { entityHandlers } from "../../workers/handlers/entity.js"
 import { referenceSheetHandlers } from "../../workers/handlers/reference-sheet.js"
 import { createSurroundHandlers } from "../../workers/handlers/surround.js"
 import { assetKindOf } from "../mcp/tools/_job-view.js"
+import { JOBS_FROM_UPLOAD_LANES } from "../../routes/jobs-from-upload.js"
 
 const SRC = join(__dirname, "..", "..")
 
@@ -63,6 +64,8 @@ const LEDGER: ReadonlyMap<string, Entry> = new Map<string, Entry>([
   // reads a video or audio file, by key family or extension.
   ["workers/handlers/reference-sheet.ts", { publishes: ["reference-sheet"], via: referenceSheetHandlers }],
   ["workers/handlers/surround.ts", { publishes: ["generate-surround-continuation"], via: createSurroundHandlers(undefined) }],
+  // A browser edit, completed in its route: the uploaded image is the job's image.
+  ["routes/jobs-from-upload.ts", { publishes: ["image-edit"], via: JOBS_FROM_UPLOAD_LANES }],
 
   ["workers/handlers/suno.ts", { notAnOutput: "each Suno track's cover art, nested in sunoTracks[] of an audio job" }],
   ["lib/reconcile/kie.ts", { notAnOutput: "the same Suno track cover art, on the reconcile path" }],

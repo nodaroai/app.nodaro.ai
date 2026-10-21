@@ -19,6 +19,7 @@ import { isDrainAbortError } from "../lib/worker-drain.js"
 import {
   safetyBlockOf,
   errorHintFor,
+  creditsHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
 } from "../lib/safety-block.js"
@@ -599,15 +600,19 @@ export function createVideoWorker() {
           // "completed"/"cancelled" → "failed" — which would orphan its committed
           // credits + delivered asset and fail the workflow despite delivery — and
           // what keeps this worker off a `pending_review` row (spec D11).
+          const errorHint = block ? errorHintFor(block, safetyRetried) : creditsHintOf(err)
           const flipped = await markJobFailed(jobId, {
             error_message: errorMessage,
             // W0: the provider's own error, redacted — the sanitized message
             // above is what the user sees; this is what the operator needs.
             error_detail: providerDetailOf(err),
             // Migration 376: a user-safe, machine-readable hint the editor/MCP
-            // can act on (offer the fallback model) without parsing prose.
-            // NULL for anything that isn't a classified content-policy block.
-            ...(block ? { error_hint: errorHintFor(block, safetyRetried) } : {}),
+            // can act on (offer the fallback model, say "top up") without
+            // parsing prose. A classified content-policy block, else a
+            // handler's credits refusal (`failureHint` on the error or its
+            // cause chain — a plugin's child job refused for credits); NULL
+            // for anything else. The refund below is unchanged either way.
+            ...(errorHint ? { error_hint: errorHint } : {}),
           })
 
           // Only refund if WE flipped the row. If a concurrent writer already

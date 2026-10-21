@@ -11,9 +11,10 @@ export const SESSION_COLS =
   "id, user_id, project_id, workspace_id, title, tool, created_at, updated_at, archived_at, cover_job_id"
 
 /** The job columns a session feed returns, before `sanitizeJobForPublic`
- *  narrows them to the public allowlist. */
+ *  narrows them to the public allowlist. `parent_job_id` is read only to leave
+ *  a child job out of a non-admin's feed (the allowlist drops it). */
 export const SESSION_FEED_JOB_COLS =
-  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, credits, job_type, source, source_detail, session_id"
+  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, credits, job_type, source, source_detail, session_id, parent_job_id"
 
 export const TOOL_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
 

@@ -102,4 +102,17 @@ describe("uploads resource", () => {
     expect(err).toBeInstanceOf(NodaroError)
     expect((err as StorageExceededError).limitBytes).toBe(10_000_000)
   })
+
+  it("uploadJson() POSTs the document to /v1/upload-json and returns its url", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ url: "https://cdn.example.com/projects/x.json" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+
+    const res = await c.uploads.uploadJson({ annotations: [] })
+
+    expect((fetchMock.mock.calls[0][0] as string).endsWith("/v1/upload-json")).toBe(true)
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ annotations: [] })
+    expect(res).toEqual({ url: "https://cdn.example.com/projects/x.json" })
+  })
 })

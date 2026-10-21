@@ -43,6 +43,7 @@ import {
   updateSessionBody,
 } from "../lib/generation-sessions-schemas.js"
 import { sanitizeJobForPublic, type JobRecord } from "./jobs.js"
+import { CHILD_JOB_COLUMN } from "../lib/public-job-data.js"
 // OpenAPI entries (module side effect, like every route file's registerPath).
 import "./generation-sessions-docs.js"
 
@@ -268,6 +269,9 @@ export async function generationSessionRoutes(app: FastifyInstance) {
       data: rows.flatMap((r) => {
         const job = Array.isArray(r.job) ? r.job[0] : r.job
         if (!job) return []
+        // A child job is shown only through its parent: never in a non-admin's
+        // feed, however it got there (CHILD_JOB_COLUMN).
+        if (!isAdmin && (job as { parent_job_id?: string | null }).parent_job_id != null) return []
         const fromId = r.imported_from_session_id
         return [{
           jobId: r.job_id,
@@ -305,6 +309,9 @@ export async function generationSessionRoutes(app: FastifyInstance) {
       .select("id, session_id")
       .in("id", ids)
       .eq("user_id", req.userId)
+      // A child job is not the caller's to import: it reads as a job that does
+      // not exist, and so refuses the whole call (CHILD_JOB_COLUMN).
+      .is(CHILD_JOB_COLUMN, null)
     if (req.workspaceId) {
       jobsQuery = jobsQuery.eq("workspace_id", req.workspaceId)
     } else {

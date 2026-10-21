@@ -55,15 +55,16 @@ function serverWith(fastify: FastifyInstance, scopes: Scope[] = ["workflows:exec
   return server
 }
 
-const QUOTE = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7 }, settlesLower: false }
+const QUOTE = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0 }, settlesLower: false }
 
 const ARGS = {
   video_url: "https://cdn.example/clip.mp4",
   roles: [
     { kind: "person", name: "the singer", images: ["https://cdn.example/me.png"], outfit: "original" },
-    { kind: "person", name: "the drummer" },
+    { kind: "person", name: "the drummer", preview_name: "the tall drummer", in_preview: false },
     { kind: "location", images: ["https://cdn.example/beach.png"] },
   ],
+  pre_prompt: "{role:2} in slow motion",
   post_prompt: "{role:1} smiles at the end",
   preview: true,
   preview_start: 2,
@@ -75,9 +76,10 @@ const BODY = {
   videoUrl: "https://cdn.example/clip.mp4",
   roles: [
     { kind: "person", name: "the singer", images: ["https://cdn.example/me.png"], outfit: "original" },
-    { kind: "person", name: "the drummer", images: null },
+    { kind: "person", name: "the drummer", images: null, previewName: "the tall drummer", inPreview: false },
     { kind: "location", images: ["https://cdn.example/beach.png"] },
   ],
+  prePrompt: "{role:2} in slow motion",
   postPrompt: "{role:1} smiles at the end",
   preview: true,
   previewStart: 2,
@@ -101,6 +103,54 @@ describe("cast_swap", () => {
     const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: { ...QUOTE, settlesLower: true } } })
     const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
     expect(res.content[0]!.text).toMatch(/lower/)
+  })
+
+  it("names the reference preparation in the quote when it costs something", async () => {
+    const withPrep = { totalCredits: 15, breakdown: { castSwap: 5, seedance: 7, references: 3 }, settlesLower: false }
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: withPrep } })
+    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect(res.content[0]!.text).toContain("15 credits")
+    expect(res.content[0]!.text).toMatch(/3 credits?[^.]*prepar/i)
+    expect(res.content[0]!.text).toContain("prepare_references: false")
+    expect(res.structuredContent).toEqual({ ...withPrep, confirmed: false })
+  })
+
+  it("says nothing of the preparation when it costs nothing", async () => {
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect(res.content[0]!.text).not.toMatch(/prepar/i)
+  })
+
+  it("sends pet and product roles, their preview settings, resolution, draft and prepare_references to the route in camelCase", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", {
+      video_url: "https://cdn.example/clip.mp4",
+      roles: [
+        { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original", preview_name: "  the puppy  " },
+        { kind: "product", name: "the can", images: ["https://cdn.example/can.png"], finish: "original", in_preview: true },
+      ],
+      resolution: "720p",
+      draft: false,
+      prepare_references: false,
+    })
+
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({
+      videoUrl: "https://cdn.example/clip.mp4",
+      roles: [
+        { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original", previewName: "the puppy" },
+        { kind: "product", name: "the can", images: ["https://cdn.example/can.png"], finish: "original", inPreview: true },
+      ],
+      resolution: "720p",
+      draft: false,
+      prepareReferences: false,
+    })
+  })
+
+  it("still passes the deprecated quality through", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, quality: "draft" })
+    expect(calls[0]!.payload).toEqual({ ...BODY, quality: "draft" })
   })
 
   it("runs with confirm and returns jobId", async () => {

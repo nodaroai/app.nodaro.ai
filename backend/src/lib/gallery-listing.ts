@@ -1,3 +1,4 @@
+import { CHILD_JOB_COLUMN } from "./public-job-data.js"
 import { supabase } from "./supabase.js"
 import { bannedGalleryUsersFilter, galleryHides, type GalleryModeration } from "./gallery-moderation.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "./render-listing.js"
@@ -25,6 +26,9 @@ const IMAGE_JOBS = new Set([
   "generate-character", "generate-character-asset",
   "generate-object", "generate-object-asset",
   "generate-location", "generate-location-asset",
+  // A browser edit recorded by POST /v1/jobs/from-upload: always private, so
+  // only the owner's own view ever lists it.
+  "image-edit",
 ])
 
 const VIDEO_JOBS = new Set([
@@ -180,6 +184,8 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
       .select("id", { count: "exact", head: true })
       .eq("status", "completed")
       .not("output_data", "is", null)
+      // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
+      .is(CHILD_JOB_COLUMN, null)
     if (!q.includePrivate) countQuery = countQuery.eq("is_public", true)
     if (q.userId) countQuery = countQuery.eq("user_id", q.userId)
     if (excludedUsers) countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
@@ -205,6 +211,8 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
       .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
       .eq("status", "completed")
       .not("output_data", "is", null)
+      // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
+      .is(CHILD_JOB_COLUMN, null)
       .order("completed_at", { ascending: false })
       .limit(fetchCount)
     if (!q.includePrivate) dbQuery = dbQuery.eq("is_public", true)

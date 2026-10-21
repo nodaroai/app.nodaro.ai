@@ -27,6 +27,7 @@ const IMAGE_TYPES = new Set<string>([
   "extract-frame",
   "image-overlay",
   "image-collage",
+  "image-edit",
 ])
 
 /**

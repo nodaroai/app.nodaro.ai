@@ -341,6 +341,7 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     ]
     const jobsChain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       filter: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
@@ -379,6 +380,8 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     ])
     // Verify the filter targets attachToLocationId
     expect(jobsChain.filter).toHaveBeenCalledWith("input_data->>attachToLocationId", "eq", TEST_LOCATION_ID)
+    // Never a child job's input.
+    expect(jobsChain.is).toHaveBeenCalledWith("parent_job_id", null)
     // Verify pendingJobs LIMIT 100
     expect(jobsChain.limit).toHaveBeenCalledWith(100)
   })
@@ -395,6 +398,7 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     const locationSelect = vi.fn().mockReturnValue(locationChain)
     const jobsChain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       filter: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),

@@ -47,6 +47,8 @@ const mockTranscodeVideoApi = vi.fn()
 const mockSpeedRampApi = vi.fn()
 const mockLoopVideoApi = vi.fn()
 const mockFadeVideoApi = vi.fn()
+const mockMaskCompositeApi = vi.fn()
+const mockVideoMaskApi = vi.fn()
 const mockVideoOverlayApi = vi.fn()
 const mockResizeVideoApi = vi.fn()
 const mockAdjustVolumeApi = vi.fn()
@@ -135,6 +137,8 @@ vi.mock("@/lib/api", () => ({
   speedRampApi: (...args: unknown[]) => mockSpeedRampApi(...args),
   loopVideoApi: (...args: unknown[]) => mockLoopVideoApi(...args),
   fadeVideoApi: (...args: unknown[]) => mockFadeVideoApi(...args),
+  maskCompositeApi: (...args: unknown[]) => mockMaskCompositeApi(...args),
+  videoMaskApi: (...args: unknown[]) => mockVideoMaskApi(...args),
   videoOverlayApi: (...args: unknown[]) => mockVideoOverlayApi(...args),
   resizeVideoApi: (...args: unknown[]) => mockResizeVideoApi(...args),
   adjustVolumeApi: (...args: unknown[]) => mockAdjustVolumeApi(...args),
@@ -965,6 +969,82 @@ describe("loop-video", () => {
 // ---------------------------------------------------------------------------
 // fade-video
 // ---------------------------------------------------------------------------
+
+describe("video-mask", () => {
+  it.each([[{}, false], [{ holdLastMask: true }, true]] as const)("sends holdLastMask (%j → %s)", async (data, expected) => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoMaskApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-mask", { prompt: "the face", ...data }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: "http://clip.mp4", prompt: "the face", holdLastMask: expected }))
+  })
+
+  it.each([[undefined, 0], [15, 15], [250, 100], ["15", 0], [Infinity, 0]] as const)("sends minSubjectHeightPct (%s → %s), read as the orchestrator reads it", async (pct, expected) => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoMaskApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-mask", { prompt: "the face", minSubjectHeightPct: pct }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ minSubjectHeightPct: expected }))
+  })
+
+  it.each([[undefined, 0], [20, 20], [250, 100], ["20", 0]] as const)("sends maxSubjectHeightPct (%s → %s)", async (pct, expected) => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoMaskApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-mask", { prompt: "the face", maxSubjectHeightPct: pct }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ maxSubjectHeightPct: expected }))
+  })
+})
+
+describe("mask-composite", () => {
+  const BG_MASK = { backgroundVideoUrl: "http://bg.mp4", maskUrl: "http://mask.mp4" }
+  const sentBody = async () => {
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    return mockMaskCompositeApi.mock.calls[0][0] as Record<string, unknown>
+  }
+
+  it("the video fill (default) still refuses a missing foreground", async () => {
+    mockResolveNodeInputs.mockReturnValue(BG_MASK)
+    const promise = executeNode(makeNode("mask-composite", {}), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No foreground video")
+    expect(mockMaskCompositeApi).not.toHaveBeenCalled()
+  })
+
+  it("the video fill sends the foreground and the settings", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://fg.mp4", ...BG_MASK })
+    mockMaskCompositeApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("mask-composite", {}), makeCtx())
+    expect(await sentBody()).toMatchObject({ foregroundUrl: "http://fg.mp4", backgroundUrl: "http://bg.mp4", maskUrl: "http://mask.mp4", fill: "video" })
+  })
+
+  it.each(["pixelate", "blur"])("%s runs without a foreground input and sends none (a wired one is ignored)", async (fill) => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://fg.mp4", ...BG_MASK })
+    mockMaskCompositeApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("mask-composite", { fill, pixelSizePct: 2, blurStrengthPct: 3 }), makeCtx())
+    const body = await sentBody()
+    expect(body).toMatchObject({ backgroundUrl: "http://bg.mp4", maskUrl: "http://mask.mp4", fill, pixelSizePct: 2, blurStrengthPct: 3 })
+    expect(body).not.toHaveProperty("foregroundUrl")
+  })
+
+  it("pixelate with no foreground wired at all runs, and still refuses a missing background", async () => {
+    mockResolveNodeInputs.mockReturnValue(BG_MASK)
+    mockMaskCompositeApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("mask-composite", { fill: "pixelate" }), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalled()
+    mockResolveNodeInputs.mockReturnValue({ maskUrl: "http://mask.mp4" })
+    const promise = executeNode(makeNode("mask-composite", { fill: "pixelate" }), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No background video")
+  })
+})
 
 describe("fade-video", () => {
   it("rejects when no video input", async () => {

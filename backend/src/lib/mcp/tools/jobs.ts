@@ -6,7 +6,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
-import { redactPrivateJobData } from "../../public-job-data.js"
+import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
@@ -266,7 +266,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       if (kinds) rows = rows.filter((r) => listedUnder(r).some((k) => kinds.includes(k as "image" | "video" | "audio")))
       // An old render carries no stored Preview label: fill it from the order,
       // by the rule the job-status routes use (decided 2026-10-06; response only).
-      rows = redactPrivateJobData(fillJobsRenderQuality(rows)).map((r) =>
+      // A trend run's failure text is replaced (maskTrendRunError): an MCP
+      // session is never an admin one.
+      rows = maskTrendRunErrors(redactPrivateJobData(fillJobsRenderQuality(rows)), false).map((r) =>
         isPreviewListing(r) ? { ...r, preview: true } : r,
       )
       // Your own jobs carry what each one was charged once settled
@@ -339,6 +341,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         )
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
+        // A child job reads as one that does not exist (CHILD_JOB_COLUMN); an
+        // MCP session has no admin reading.
+        .is(CHILD_JOB_COLUMN, null)
         .maybeSingle()
       if (error) {
         return {
@@ -357,7 +362,8 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // `suggestedProvider`, a real model id the SAME request can retry on.
       // An old render carries no stored Preview label: fill it from the order
       // (response only, never written back), as the job-status routes do.
-      const [charged] = await withCreditsCharged([data])
+      // A trend run's failure text is replaced before either envelope is built.
+      const [charged] = await withCreditsCharged([maskTrendRunError(data, false)])
       const filled = fillJobRenderQuality(charged!)
       const publicData = redactPrivateJobData(filled)
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
@@ -440,11 +446,14 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       if (!isUuid(args.job_id)) {
         return { content: [{ type: "text", text: `Job ${args.job_id} not found (expected a job UUID)` }], isError: true }
       }
+      // Ownership, and never a child job (CHILD_JOB_COLUMN) — checked here, not
+      // in the shared wait loop, which server-side callers use on children.
       const { data: own, error } = await supabase
         .from("jobs")
-        .select("id")
+        .select(`id, ${TREND_RUN_MARKER_SELECT}`)
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
+        .is(CHILD_JOB_COLUMN, null)
         .maybeSingle()
       if (error) return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true }
       if (!own) return { content: [{ type: "text", text: `Job ${args.job_id} not found` }], isError: true }
@@ -476,11 +485,15 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id")
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
+        .is(CHILD_JOB_COLUMN, null)
         .maybeSingle()
-      const charged = row ? (await withCreditsCharged([row]))[0] : null
+      const charged = row ? (await withCreditsCharged([maskTrendRunError(row, false)]))[0] : null
+      // Without the row (gone between the two reads), the wait's own error
+      // text, a trend run's replaced as everywhere else.
+      const waitedError = trendRunErrorText(waited.error, { trend: (own as { trend_run_marker?: unknown }).trend_run_marker }, false)
       const view = charged
         ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0])
-        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
+        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waitedError, jobType: waited.jobType }
       const summary =
         view.status === "completed"
           ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`

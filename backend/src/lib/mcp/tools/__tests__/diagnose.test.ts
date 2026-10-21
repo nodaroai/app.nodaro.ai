@@ -12,10 +12,12 @@ const { registerDiagnose, classifyFailure } = await import("../diagnose.js")
 const { supabase } = await import("../../../supabase.js")
 
 let batchFilters: Array<Record<string, unknown>> = []
+let singleFilters: Array<Record<string, unknown>> = []
 
 beforeEach(() => {
   vi.clearAllMocks()
   batchFilters = []
+  singleFilters = []
 })
 
 /**
@@ -52,8 +54,14 @@ function mockSupabase(opts: {
           select: () => ({
             eq: () => ({
               eq: () => ({
-                maybeSingle: () =>
-                  Promise.resolve({ data: opts.jobSingle ?? null, error: null }),
+                // A child job reads as one that does not exist (`.is("parent_job_id", null)`).
+                is: (col: string, v: unknown) => {
+                  singleFilters.push({ [col]: v })
+                  return {
+                    maybeSingle: () =>
+                      Promise.resolve({ data: opts.jobSingle ?? null, error: null }),
+                  }
+                },
               }),
             }),
             // The batch chain may narrow by owner: rows carrying a `user_id`
@@ -62,6 +70,7 @@ function mockSupabase(opts: {
               const filters: Record<string, unknown> = {}
               const q = {
                 eq: (col: string, v: unknown) => { filters[col] = v; return q },
+                is: (col: string, v: unknown) => { filters[col] = v; return q },
                 then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => {
                   batchFilters.push({ ...filters })
                   const rows = (opts.jobsBatch ?? []).filter((r) =>
@@ -279,7 +288,8 @@ describe("diagnose_run tool", () => {
     registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
     const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
 
-    expect(batchFilters).toEqual([{ user_id: "u1" }])
+    // The caller's own jobs, and never a child job.
+    expect(batchFilters).toEqual([{ user_id: "u1", parent_job_id: null }])
     expect(out.failures).toHaveLength(1)
     expect(out.failures[0].error).toBeNull()
     expect(out.failures[0].provider).toBeNull()
@@ -308,6 +318,30 @@ describe("diagnose_run tool", () => {
     expect(out.failures).toHaveLength(1)
     expect(out.failures[0].class).toBe("validation")
     expect(out.failures[0].provider).toBe("nano-banana")
+  })
+
+  it("reads a job by id leaving child jobs out: a child reads as not found", async () => {
+    mockSupabase({ execution: null, jobSingle: null })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const res = await callTool(server, "diagnose_run", { id: "22222222-2222-4222-8222-222222222222" })
+    expect(singleFilters).toEqual([{ parent_job_id: null }])
+    expect(res.isError).toBe(true)
+  })
+
+  it("replaces a trend run's failure text", async () => {
+    mockSupabase({
+      execution: null,
+      jobSingle: {
+        id: "job-trend", status: "failed", job_type: "cast-swap", user_id: "u1",
+        error_message: "failed for the hidden role", input_data: { type: "cast-swap", trend: { slug: "t" } },
+      },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "job-trend" }))
+    expect(out.failures[0].error).toBe("This run didn't finish.")
+    expect(JSON.stringify(out)).not.toContain("hidden role")
   })
 
   const VOICE_TOO_LONG =

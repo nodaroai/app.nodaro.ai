@@ -61,7 +61,8 @@ describe("POST /v1/gallery/favorite", () => {
     const on = await toggle({ jobId: JOB })
     expect(on.statusCode).toBe(200)
     expect(on.json()).toEqual({ favorited: true })
-    expect(toggleGalleryFavorite).toHaveBeenCalledWith(USER, JOB)
+    // A non-admin: a child job reads as not found (lib/gallery-favorites.ts).
+    expect(toggleGalleryFavorite).toHaveBeenCalledWith(USER, JOB, { isAdmin: false })
 
     vi.mocked(toggleGalleryFavorite).mockResolvedValueOnce({ kind: "toggled", favorited: false })
     expect((await toggle({ jobId: JOB })).json()).toEqual({ favorited: false })

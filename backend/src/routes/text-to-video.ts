@@ -94,6 +94,9 @@ export const textToVideoBody = z.object({
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
   // upstream). Set false to keep prompts verbatim. No effect on non-VEO.
   enableTranslation: z.boolean().optional(),
+  // A copyright refusal from the provider is retried ONCE with a reworded
+  // prompt (absent / true). `false` = the refusal fails the job instead.
+  contentPolicyRewrite: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -285,7 +288,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
   if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
 
-  const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, draft: rawDraft } = parsed.data
+  const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite, draft: rawDraft } = parsed.data
   // Platform default when the request omits provider/duration (shared with
   // generate-video and the DAG payload builder).
   const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
@@ -543,6 +546,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     webSearch,
     nsfwChecker,
     enableTranslation,
+    contentPolicyRewrite,
     usageLogId,
   })
 

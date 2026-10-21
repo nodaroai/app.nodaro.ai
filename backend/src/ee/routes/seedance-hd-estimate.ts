@@ -4,6 +4,7 @@ import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { resolveSeedanceDraftFinalize } from "../../lib/seedance-draft-finalize.js"
+import { mayUseChildJobAsSource } from "../../lib/job-submission-context.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import {
   seedanceDraftFinalizeChargedCredits,
@@ -63,7 +64,7 @@ export function registerSeedanceHdEstimate(app: FastifyInstance): void {
       if (!sourceJobId && !taskId) {
         return { data: { credits: await seedanceDraftFinalizeMinimumCredits(), minimum: true } }
       }
-      const resolved = await resolveSeedanceDraftFinalize({ userId: req.userId, taskId, sourceJobId })
+      const resolved = await resolveSeedanceDraftFinalize({ userId: req.userId, taskId, sourceJobId, allowChildSource: mayUseChildJobAsSource(req) })
       if (!resolved.ok) {
         return reply.status(resolved.status).send({ error: { code: resolved.code, message: resolved.message } })
       }

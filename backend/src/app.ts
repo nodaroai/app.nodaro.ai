@@ -165,6 +165,8 @@ import { generateLocationMotionRoutes } from "./routes/generate-location-motion.
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
+import { trendRoutes } from "./ee/routes/trends.js"
+import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -224,6 +226,7 @@ import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
+import { recordThisEngineEnvironment } from "./ee/lib/engine-environments.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
 import { adminReviewRoutes } from "./ee/routes/admin-review.js"
@@ -312,6 +315,7 @@ import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
 import { imageCriticRoutes } from "./routes/image-critic.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
+import { jobsFromUploadRoutes } from "./routes/jobs-from-upload.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./ee/routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
@@ -691,6 +695,10 @@ export async function buildApp() {
   if (hasCredits()) for (const route of Object.values(UNIT_EE_ROUTES)) await app.register(route)
   // Marketing-email consent prompt + Loops sync (Cloud-only).
   if (hasCredits()) await app.register(consentRoutes)
+  // Trends: the public catalog and trend runs (Cast Swap recipes; ee/lib/trends).
+  if (hasCredits()) await app.register(trendRoutes)
+  // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
+  if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
   // The Users page's linked-account marking rides on the same clusters RPC.
@@ -844,11 +852,16 @@ export async function buildApp() {
   // (hasCredits() false); on cloud, a load failure is fatal (process.exit(1)
   // inside the loader) unless PRIVATE_MODULES=optional. See
   // backend/src/lib/private-plugins/load.ts.
-  await loadPrivatePlugins({ app })
+  const privatePlugins = await loadPrivatePlugins({ app })
+  // Trends (spec D17): record what this environment's engine supports, so
+  // publishing a trend can check every environment. Fire and forget: it
+  // never rejects, and boot never waits on it (cloud + Railway only).
+  void recordThisEngineEnvironment(privatePlugins.pluginBuildId ?? null)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
   await app.register(imageCriticRoutes)
   await app.register(saveToStorageRoutes)
+  await app.register(jobsFromUploadRoutes)
   await app.register(promptHelperRoutes)
   if (hasAdmin()) await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)

@@ -164,6 +164,15 @@ describe("steps that keep their input's length", () => {
     }
   })
 
+  it("Mask Composite follows its foreground, or its background with a pixelate / blur fill (a wired foreground is then ignored)", () => {
+    const wires = [video(fixed(20)), video(fixed(70), "background-video"), video(fixed(20), "mask-video")]
+    expect(run("mask-composite", wires)).toEqual(fixed(20))
+    expect(run("mask-composite", wires, { fill: "video" })).toEqual(fixed(20))
+    expect(run("mask-composite", wires, { fill: "pixelate" })).toEqual(fixed(70))
+    expect(run("mask-composite", wires, { fill: "blur" })).toEqual(fixed(70))
+    expect(run("mask-composite", [video(fixed(20))], { fill: "blur" })).toBe("unknown")
+  })
+
   it("Edit Video Pro adds a stitch seam to its source", () => {
     expect(run("edit-video-pro", [video(fixed(60))])).toEqual(fixed(61))
     expect(run("edit-video-pro", [video(episode)])).toEqual({ fixedSec: 1, perEpisodeSec: 60 })

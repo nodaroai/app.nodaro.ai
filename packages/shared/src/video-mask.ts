@@ -27,6 +27,12 @@ export const DEFAULT_VIDEO_MASK_PROVIDER: VideoMaskProvider = "sam-3.1"
 export const VIDEO_MASK_DEFAULTS = {
   threshold: 0.5,
   provider: "sam-3.1" as VideoMaskProvider,
+  /** Off: the mask is the model's, frame for frame (see `HOLD_EMPTY_BELOW_FRACTION`). */
+  holdLastMask: false,
+  /** 0 = off: every region the model finds is kept (see `MIN_SUBJECT_HEIGHT_PCT_*`). */
+  minSubjectHeightPct: 0,
+  /** 0 = off: no ceiling on a region's height (see `MAX_SUBJECT_HEIGHT_PCT_*`). */
+  maxSubjectHeightPct: 0,
 } as const
 
 export const VIDEO_MASK_LIMITS = {
@@ -42,6 +48,31 @@ export const VIDEO_MASK_LIMITS = {
   THRESHOLD_STEP: 0.05,
   /** Default detection confidence. Lower finds more (and less precise) regions. */
   THRESHOLD_DEFAULT: VIDEO_MASK_DEFAULTS.threshold,
+  /**
+   * `holdLastMask`: a frame whose mask covers less than this fraction of the
+   * picture (0.002 % — about 41 px at 1080p: a stray speck, never a subject) counts as empty — the subject lost (hidden behind a
+   * hand, turned away) — and shows the most recent non-empty frame's mask
+   * instead. Frames before the first detection stay as they are.
+   */
+  HOLD_EMPTY_BELOW_FRACTION: 0.00002,
+  /**
+   * `minSubjectHeightPct`: drop every connected white region (8-connected)
+   * whose bounding box is shorter than this % of the frame height — extras'
+   * small faces behind the main subject. 0 = off. Applied before
+   * `holdLastMask`, so a frame left with only small regions counts as empty
+   * and is held from the last frame with a big subject.
+   */
+  MIN_SUBJECT_HEIGHT_PCT_MIN: 0,
+  MIN_SUBJECT_HEIGHT_PCT_MAX: 100,
+  /**
+   * `maxSubjectHeightPct`, the mirror: drop every region whose bounding box is
+   * TALLER than this % of the frame height (keep only the small subjects — a
+   * paste-back mask of the background faces). 0 = off. With both set, a
+   * region is kept when min ≤ height ≤ max (min > max is refused). Same pass,
+   * same order (before `holdLastMask`).
+   */
+  MAX_SUBJECT_HEIGHT_PCT_MIN: 0,
+  MAX_SUBJECT_HEIGHT_PCT_MAX: 100,
 } as const
 
 const VIDEO_MASK_BUCKETS_SEC = [5, 10, 15, 30, 60, 90, 120, 180, 240, 300] as const
@@ -93,4 +124,13 @@ export interface VideoMaskRequest {
   /** Detection confidence, `VIDEO_MASK_LIMITS.THRESHOLD_MIN`–`THRESHOLD_MAX` (default 0.5). */
   readonly threshold?: number
   readonly provider?: VideoMaskProvider
+  /** Hold the last mask where the subject is lost (default false): an empty frame
+   *  after the first detection repeats the most recent non-empty one. */
+  readonly holdLastMask?: boolean
+  /** Ignore subjects smaller than this % of the frame height, 0–100 (default 0 = off):
+   *  connected regions whose bounding box is shorter are dropped from every frame. */
+  readonly minSubjectHeightPct?: number
+  /** Ignore subjects larger than this % of the frame height, 0–100 (default 0 = off):
+   *  connected regions whose bounding box is taller are dropped from every frame. */
+  readonly maxSubjectHeightPct?: number
 }
