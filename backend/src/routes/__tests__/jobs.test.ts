@@ -1366,6 +1366,7 @@ describe("GET /v1/jobs/:id — a credits failure hint", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: row, error: null }),
       }
       return chain as never
