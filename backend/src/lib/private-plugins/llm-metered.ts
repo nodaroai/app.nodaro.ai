@@ -32,7 +32,8 @@ export async function completeStructuredMetered<T>(
     return { ok: true, output: result.output, usage: {
       inputTokens: result.inputTokens, outputTokens: result.outputTokens,
       providerCost: result.providerCost, complete: result.usageComplete === true,
-    } }
+      ...(result.attempts ? { attempts: result.attempts } : {}),
+    }, lane: result.lane, ...(result.attempts ? { attempts: result.attempts } : {}) }
   } catch (error) {
     if (error instanceof StructuredLlmError) return { ok: false, message: error.message, usage: error.usage }
     throw error

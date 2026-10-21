@@ -22,15 +22,27 @@ describe("a render run button's price", () => {
     expect(runPriceTitle(t)).toBeUndefined()
   })
   it("a UGC part's figure not yet the server's, or not checked: marked as an estimate, the reason on the title", () => {
-    expect(runPriceSuffix(t, 530, "checking")).toBe(` · ${t("renderFinal.priceEstimate", { n: "530" })}`)
+    // `~` before an estimate, as every run price shows one.
+    expect(runPriceSuffix(t, 530, "checking")).toBe(" · ~530")
     expect(runPriceTitle(t, "checking")).toBe(t("ugc.price.checking"))
     expect(runPriceTitle(t, "editor")).toBe(t("ugc.price.unchecked"))
     expect(runPriceTitle(t, "held")).toBe(t("ugc.price.uncheckedHeld"))
     expect(runPriceTitle(t, "length")).toBe(t("ugc.price.uncheckedLength"))
   })
-  it("the Clip Pack's footer quotes an approximate figure, marked the same way", () => {
-    expect(runPriceSuffix(t, 420, undefined, { approx: true })).toBe(" · ≈420")
-    expect(runPriceSuffix(t, 420, "editor", { approx: true })).toBe(` · ${t("renderFinal.priceEstimate", { n: "≈420" })}`)
+  it("an approximate figure (a metered LLM estimate, the Clip Pack's footer) is marked the same way", () => {
+    expect(runPriceSuffix(t, 420, undefined, { approx: true })).toBe(" · ~420")
+    expect(runPriceSuffix(t, 420, "editor", { approx: true })).toBe(" · ~420")
+  })
+  it("a run holding a node the server refuses to price: no figure — not priced yet, the server's sentence on the title", () => {
+    const message = 'The model "x" has no price yet, so it cannot be run. Choose another model.'
+    expect(runPriceSuffix(t, 420, undefined, { approx: true, unpriced: { message } })).toBe(` · ${t("renderFinal.priceNotPricedYet")}`)
+    expect(t("renderFinal.priceNotPricedYet")).toBe("not priced yet")
+    expect(runPriceSuffix(t, 0, undefined, { unpriced: {} })).toBe(" · not priced yet")
+    expect(runPriceTitle(t, "checking", { message })).toBe(message)
+    h.credits = false
+    expect(runPriceSuffix(t, 420, undefined, { unpriced: { message } })).toBe("")
+    expect(runPriceTitle(t, undefined, { message })).toBeUndefined()
+    h.credits = true
   })
   it("no price to show: nothing, marked or not", () => {
     expect(runPriceSuffix(t, 0, "checking")).toBe("")

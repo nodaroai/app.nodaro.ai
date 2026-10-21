@@ -2,20 +2,19 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType, type PickerGaps } from "@nodaro/prompts/picker-catalogs"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_STRUCTURED_WITHHELD_MODELS } from "@nodaro/shared/llm-models"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
 import { PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { supabase } from "../lib/supabase.js"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { llmCompleteStructured, type LlmServedLane } from "../lib/llm-client.js"
+import { llmCompleteStructured, type LlmRequest, type LlmServedLane, type StructuredLlmOutput } from "../lib/llm-client.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { effortTimeoutMs } from "../lib/llm-effort-timeout.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { withDescribeToPickerDefaults } from "./describe-to-picker.js"
 import { completedJobColumns } from "../lib/job-status.js"
@@ -24,6 +23,9 @@ import { billedContentRefusal, billedProviderCost } from "../lib/llm-errors.js"
 // From its own module, not the client facade a route test replaces.
 import { StructuredLlmError } from "../lib/llm/structured.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
+import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, type LlmPlannedCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { chargedFailureMessage, llmPrecheckBody, llmTextChars, plannedStructuredCall } from "../lib/llm-metered-route.js"
+import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 
 /**
  * POST /v1/text-to-picker — free text in, pickerJson out.
@@ -119,6 +121,15 @@ interface BatchResult {
   outputTokens: number
   providerCost?: number
   lane: LlmServedLane
+  /** The structured call's own answer — every attempt it billed, for the metered spend. */
+  answered: StructuredLlmOutput<unknown>
+}
+
+/** One family batch's call, built before anything is reserved: the metered hold is sized from it. */
+interface PlannedBatch {
+  request: LlmRequest
+  schema: Parameters<typeof llmCompleteStructured>[1]
+  toolName: string
 }
 
 /** One lane when every batch landed on it, else each batch's lane in batch order. */
@@ -151,7 +162,18 @@ export async function textToPickerRoutes(app: FastifyInstance) {
     "/v1/text-to-picker",
     // Same LLM call shape as describe-to-picker, so its defaults are applied
     // before the pre-check prices it — on this route's OWN credit rows.
-    { preHandler: creditGuard((req) => resolveLlmCreditId(TEXT_TO_PICKER_CREDIT_FEATURE, withDescribeToPickerDefaults(req.body))) },
+    {
+      preHandler: creditGuard((req) => resolveLlmCreditId(TEXT_TO_PICKER_CREDIT_FEATURE, withDescribeToPickerDefaults(req.body)), {
+        // Metered (D1): pre-checked at one attempt over the body's text (the
+        // legends are added at the reserve, which holds every batch). Undefined
+        // under the rollback: the tier row prices it as before.
+        computeCredits: (body) => {
+          const precheck = llmPrecheckBody(body)
+          const raw = (body ?? {}) as Record<string, unknown>
+          return precheck && llmPrecheckBaseCredits("text-to-picker", precheck, llmTextChars(raw.text, raw.instructions))
+        },
+      }),
+    },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
@@ -178,11 +200,6 @@ export async function textToPickerRoutes(app: FastifyInstance) {
       if (!model) {
         return reply.status(400).send({ error: { code: "validation_error", message: "Unknown llmModel" } })
       }
-      // The models withheld from every legend-sized read (Claude Fable 5): the
-      // same 400 as an unknown model, before any row or reservation exists.
-      if (LLM_STRUCTURED_WITHHELD_MODELS.has(model.id)) {
-        return reply.status(400).send({ error: { code: "validation_error", message: `llmModel ${model.id} is not offered on text-to-picker` } })
-      }
       const advancedError = advancedModeError(parsed.data, model.id)
       if (advancedError) return reply.status(400).send({ error: advancedError })
       // As in describe-to-picker: no effort sent → a model with a recipe effort
@@ -208,36 +225,57 @@ export async function textToPickerRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
-      void reservation
+      // Every batch's call, built ONCE: the metered hold is one attempt of
+      // each (they run for certain, in parallel), and the calls below send
+      // exactly these requests.
+      const planned: PlannedBatch[] = batchTargetPickers(targetPickers).map((batch) => {
+        const { schema, toolName, legend } = buildMultiPickerAnalyzerSpec(batch)
+        return {
+          schema,
+          toolName,
+          request: {
+            modelId: model.id,
+            system: buildSystemPrompt(legend, instructions),
+            messages: [{ role: "user", content: [{ type: "text", text: `Scene description:\n${text}\n\nAnalyze it and emit the picker JSON.` }] }],
+            reasoningEffort,
+            ...resolveLlmParams(parsed.data),
+            ...(timeoutMs === undefined ? {} : { timeoutMs }),
+          },
+        }
+      })
+      const plannedCalls = planned.map((b) => plannedStructuredCall(b.request, b.schema, b.toolName)) as [LlmPlannedCall, ...LlmPlannedCall[]]
+      // Metered (D1): held under `text-to-picker:<model>`; under the rollback
+      // `{ metered: false }` and the tier id is reserved as before.
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "text-to-picker", calls: plannedCalls })
+      if (reply.sent || !reserve) return
+      if (!reserve.metered) {
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        void reservation
+      }
 
-      await markProviderCallStart(job.id, "anthropic-sync")
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+      const spend = new LlmSpend()
 
       // What the run spent when a batch failed: the batches that answered
       // before it were paid for too, and `Promise.all` would have dropped them.
       let spentOnFailure: number | null = null
       try {
-        const batches = batchTargetPickers(targetPickers)
+        const batches = planned
         const settled: PromiseSettledResult<BatchResult>[] = await Promise.allSettled(
-          batches.map(async (batch): Promise<BatchResult> => {
-            const { schema, toolName, legend } = buildMultiPickerAnalyzerSpec(batch)
-            const { output, inputTokens, outputTokens, providerCost, lane } = await llmCompleteStructured(
-              {
-                modelId: model.id,
-                system: buildSystemPrompt(legend, instructions),
-                messages: [{ role: "user", content: [{ type: "text", text: `Scene description:\n${text}\n\nAnalyze it and emit the picker JSON.` }] }],
-                reasoningEffort,
-                ...resolveLlmParams(parsed.data),
-                ...(timeoutMs === undefined ? {} : { timeoutMs }),
-              },
-              schema,
-              { schemaName: toolName },
-            )
+          batches.map(async ({ request, schema, toolName }): Promise<BatchResult> => {
+            const answered = await llmCompleteStructured(request, schema, { schemaName: toolName })
+            const { output, inputTokens, outputTokens, providerCost, lane } = answered
             const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
-            return { pickerJson, gaps, inputTokens, outputTokens, providerCost, lane }
+            return { pickerJson, gaps, inputTokens, outputTokens, providerCost, lane, answered }
           }),
         )
+        // Every batch's spend (A6): an answer's attempts, a failure's billed
+        // usage — metered only: under the rollback nothing reads it, and its
+        // validation must not be able to fail a tier run (byte-identical).
+        if (reserve.metered) {
+          settled.forEach((r, i) => spend.add(model.id, plannedCalls[i].request, r.status === "fulfilled" ? { output: r.value.answered } : { error: r.reason }))
+        }
         const failed = settled.find((r): r is PromiseRejectedResult => r.status === "rejected")
         if (failed) {
           spentOnFailure = settledProviderCost(settled)
@@ -256,6 +294,19 @@ export async function textToPickerRoutes(app: FastifyInstance) {
         const providerCost = results.some((r) => r.providerCost !== undefined)
           ? results.reduce((s, r) => s + (r.providerCost ?? 0), 0)
           : null
+
+        if (reserve.metered) {
+          // The output first, non-terminal: the settle writes provider_cost and
+          // credits_actual (its ledger to the server-only ledger column), so
+          // nothing overwrites them after.
+          await supabase.from("jobs")
+            .update({ output_data: { json: pickerJson, targetPickers, usage }, provider: servedLanes(results.map((r) => r.lane)) })
+            .eq("id", job.id).eq("user_id", userId)
+          const settledBill = await settleLlmJob(job.id, reserve, spend)
+          // Unsettled: the row stays non-terminal; the sweep fails it and settles the hold.
+          if (settledBill.outcome !== "unsettled") await completeSettledSyncJob(job.id, { userId })
+          return reply.send({ jobId: job.id, pickerJson, gaps })
+        }
 
         await supabase
           .from("jobs")
@@ -284,6 +335,16 @@ export async function textToPickerRoutes(app: FastifyInstance) {
         // batches that answered before it — stays on the row, with the lane
         // the failing batch names when it names one.
         const lane = err instanceof StructuredLlmError ? err.lane : undefined
+        if (reserve.metered) {
+          // The spend already holds every batch (a throw before the calls
+          // settled — none — leaves it empty: refunded). Output first, then
+          // the settle, then the terminal status.
+          await supabase.from("jobs").update({ output_data: { error: message }, ...(lane ? { provider: lane } : {}) }).eq("id", job.id).eq("user_id", userId)
+          const settledBill = await settleLlmJob(job.id, reserve, spend)
+          const shown = chargedFailureMessage(message, settledBill)
+          if (settledBill.outcome !== "unsettled") await markJobFailed(job.id, { error_message: shown })
+          return reply.status(502).send({ error: { code: llmErrorCode(err), message: shown } })
+        }
         await markJobFailed(job.id, {
           error_message: message,
           extra: {

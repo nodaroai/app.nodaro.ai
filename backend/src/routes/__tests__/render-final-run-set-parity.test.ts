@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   queueAdd: vi.fn().mockResolvedValue({ id: "orch-job-1" }),
   loadSource: vi.fn(),
   estimate: vi.fn(async () => 120),
+  meteredEstimate: vi.fn((..._a: unknown[]) => false),
   afford: vi.fn(async (_userId: string, required: number, _surface?: unknown) => ({ sufficient: true, required, available: 1000 }) as {
     sufficient: boolean
     required: number
@@ -55,7 +56,7 @@ vi.mock("@/lib/queue.js", () => ({
 }))
 vi.mock("@/lib/sse.js", () => ({ createSSEStream: vi.fn() }))
 vi.mock("@/lib/execution-events.js", () => ({ executionEvents: { on: vi.fn(), off: vi.fn(), emit: vi.fn() } }))
-vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { refundCredits: vi.fn() }, estimateRunSetCredits: mocks.estimate, checkRunSetCredits: mocks.afford }))
+vi.mock("@/ee/billing/credits.js", () => ({ unpricedMeteredLlmOfRun: () => null, CreditsService: { refundCredits: vi.fn() }, estimateRunSetCredits: mocks.estimate, checkRunSetCredits: mocks.afford, runHoldsMeteredLlmEstimate: mocks.meteredEstimate }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
 // The leaf the consumers read from forwards to the mock above.
 vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
@@ -362,6 +363,18 @@ describe("POST /v1/workflows/:id/render-final/estimate", () => {
     // Nothing is created by a quote.
     expect(mocks.inserts).toEqual([])
     expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("flags the figure an estimate exactly when an LLM node the run executes is metered (`~N`), asked on the run's own set", async () => {
+    useGraph(FIXTURE.cases["multicam"]!)
+    mocks.loadSource.mockResolvedValue(source())
+    const fixed = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
+    expect(fixed.json().data).not.toHaveProperty("estimatedCreditsIsEstimate")
+    mocks.meteredEstimate.mockReturnValueOnce(true)
+    const metered = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
+    expect(metered.json().data.estimatedCreditsIsEstimate).toBe(true)
+    const [, , runNodeIds] = mocks.meteredEstimate.mock.calls[1]! as unknown as [unknown, unknown, ReadonlySet<string>]
+    expect([...runNodeIds].sort()).toEqual(["c", "cam", "render"])
   })
 
   it("without a credit system it answers the set with no figure", async () => {

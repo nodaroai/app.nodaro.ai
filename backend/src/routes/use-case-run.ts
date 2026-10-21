@@ -56,6 +56,7 @@ import { clipMeasureStartLimiter } from "../lib/clip-measure-limit.js"
 import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
 import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 
 /**
  * The per-user limit on starting a measurement of a recording (decided
@@ -174,7 +175,13 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
     const durationSec = usecaseClockSec(p.prep.sources) ?? null
     if (!hasCredits()) return { data: { totalCredits: 0, stepsCredits: 0, feeCredits: 0, durationSec } }
     const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
-    return { data: { ...(await estimateUseCaseCredits(p.prep.graph)), durationSec } }
+    try {
+      return { data: { ...(await estimateUseCaseCredits(p.prep.graph)), durationSec } }
+    } catch (err) {
+      // A metered LLM step whose model has no price (R49): refused, as its run would be.
+      if (await replyIfLlmUnpriced(reply, err)) return reply
+      throw err
+    }
   })
 
   app.post(d.route, { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID)] }, async (req, reply) => {
@@ -193,7 +200,13 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
     if (hasCredits()) {
       const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
       const { CreditsService, DEPLOYMENT_OUT_OF_CREDITS } = await import("../ee/billing/credits.js")
-      const estimate = await estimateUseCaseCredits(prep.graph)
+      let estimate: Awaited<ReturnType<typeof estimateUseCaseCredits>>
+      try {
+        estimate = await estimateUseCaseCredits(prep.graph)
+      } catch (err) {
+        if (await replyIfLlmUnpriced(reply, err)) return reply
+        throw err
+      }
       feeCredits = estimate.feeCredits
       const cover = await CreditsService.checkBalanceCovers(userId, estimate.totalCredits, billingContext, webFreeMode)
       if (!cover.ok) {

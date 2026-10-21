@@ -11,13 +11,14 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_ADVANCED_SHAPE, advancedModeError } from "../lib/llm-advanced-mode.js"
 import { LLM_CHEAP_LANES_SHAPE } from "../lib/llm-cheap-lanes.js"
-import { describeImageWithLlm } from "../lib/image-describe.js"
+import { describeImageWithLlm, imageDescribeRequest, type ImageDescribeArgs } from "../lib/image-describe.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { finishMeteredSyncLlmJob, llmGuardPrecheck, spendLlmCall } from "../lib/meter-sync-llm.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
@@ -40,7 +41,10 @@ export async function imageToTextRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-to-text/describe",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("image-to-text", req.body)),
+      preHandler: creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
+        // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
+        computeCredits: (body) => llmGuardPrecheck("image-to-text", body),
+      }),
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -93,36 +97,61 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Reserve credits
-      const reservation = await reserveCreditsForJob(
-        req,
-        reply,
-        job.id,
-        modelIdentifier,
-      )
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
+      const describeArgs: ImageDescribeArgs = {
+        imageUrl,
+        llmModel,
+        detailLevel,
+        customPrompt,
+        reasoningEffort: parsed.data.reasoningEffort,
+        advanced: parsed.data,
+        lanes: parsed.data,
+      }
+      // The request as it is sent (its URL form: an image is sized as an image
+      // either way), so the metered hold and the spend are sized from it.
+      const request = imageDescribeRequest(describeArgs)
+
+      // Reserve credits: metered (the call's 1-attempt hold), else the tier id as before.
+      const reserve = await reserveLlmCall(req, reply, job.id, {
+        feature: "image-to-text",
+        calls: [{ modelId: llmModel, request, cheapLanesOnly: parsed.data.cheapLanesOnly === true }],
+      })
+      if (!reserve) return
+      const spend = new LlmSpend()
+      let usageLogId: string | undefined
+      if (!reserve.metered) {
+        const reservation = await reserveCreditsForJob(
+          req,
+          reply,
+          job.id,
+          modelIdentifier,
+        )
+        if (reply.sent) return
+        usageLogId = reservation?.usageLogId
+      }
 
       // Reconciliation: mark this job inflight before invoking the LLM. The
       // sync-sweep cron uses this to detect stuck rows that the route
       // handler never completed. Best-effort — never throws.
-      await markProviderCallStart(job.id, "anthropic-sync")
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
 
       try {
         // Shared describe core (lib/image-describe.ts) — same prompts, image
         // pre-fetch, and LLM params as always; extracted so in-process
         // composers reuse it without an HTTP self-call.
-        const response = await describeImageWithLlm({
-          imageUrl,
-          llmModel,
-          detailLevel,
-          customPrompt,
-          reasoningEffort: parsed.data.reasoningEffort,
-          advanced: parsed.data,
-          lanes: parsed.data,
-        })
+        const response = await spendLlmCall(reserve.metered ? spend : undefined, llmModel, request, () => describeImageWithLlm(describeArgs))
 
         const generatedText = response.text
+
+        if (reserve.metered) {
+          // Result first, then the settle (what the call cost), then the terminal write.
+          // Which LLM lane served the answer rides `provider` (admin-only), never output_data.
+          await finishMeteredSyncLlmJob(job.id, reserve, spend, {
+            status: "completed",
+            outputData: { generatedText, detailLevel, usage: response.usage },
+            provider: response.lane,
+          })
+          return reply.send({ jobId: job.id, generatedText })
+        }
 
         // Finalize job and credits
         try {
@@ -160,6 +189,14 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         // the log only.
         const message = userFacingMessage(err, "Image description failed")
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-to-text] failed")
+
+        if (reserve.metered) {
+          // A billed failure is charged its usage (and says so); an unbilled one is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "failed", errorMessage: message, outputData: { error: message } })
+          return reply.status(502).send({
+            error: { code: llmErrorCode(err), message: finished.errorMessage ?? message },
+          })
+        }
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 

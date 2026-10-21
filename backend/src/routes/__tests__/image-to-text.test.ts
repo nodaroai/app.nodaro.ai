@@ -21,6 +21,9 @@ vi.mock("@/lib/supabase.js", () => {
 })
 
 vi.mock("@/lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: {
     EDITION: "cloud",
     SUPABASE_URL: "https://test.supabase.co",

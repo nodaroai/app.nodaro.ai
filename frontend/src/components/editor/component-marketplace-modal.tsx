@@ -52,6 +52,8 @@ export interface ComponentSelection {
   creatorName: string
   creatorId: string
   estimatedCredits: number
+  /** `estimatedCredits` holds a metered LLM call's estimate (the listing's flag): the node shows `~N`. */
+  estimatedCreditsIsEstimate: boolean
 }
 
 interface ComponentMarketplaceModalProps {
@@ -83,6 +85,7 @@ function browseCardToSelection(card: AppBrowseCard): ComponentSelection {
     creatorId: card.creatorId,
     // A component inside a run estimate is priced at its most (decided 2026-10-07).
     estimatedCredits: listingCeilingCredits(card.estimatedCredits, card.perMinuteCredits),
+    estimatedCreditsIsEstimate: card.estimatedCreditsIsEstimate === true,
   }
 }
 
@@ -98,6 +101,7 @@ function myAppToSelection(app: PublishedApp): ComponentSelection {
     creatorName: app.creatorDisplayName ?? "",
     creatorId: app.creatorId ?? "",
     estimatedCredits: listingCeilingCredits(app.estimatedCredits, app.perMinuteCredits),
+    estimatedCreditsIsEstimate: app.estimatedCreditsIsEstimate === true,
   }
 }
 
@@ -109,6 +113,7 @@ function publishedAppToBrowseCard(app: PublishedApp): AppBrowseCard {
     description: app.description ?? "",
     iconUrl: app.iconUrl ?? null,
     estimatedCredits: app.estimatedCredits ?? 0,
+    ...(app.estimatedCreditsIsEstimate === true ? { estimatedCreditsIsEstimate: true } : {}),
     perMinuteCredits: app.perMinuteCredits,
     perItemCredits: app.perItemCredits,
     category: app.category ?? "",
@@ -210,7 +215,7 @@ function ComponentListItem({
       </div>
       {card.estimatedCredits > 0 && (
         <span className="text-[10px] text-purple-400 font-medium flex items-center gap-0.5 flex-shrink-0">
-          <Coins className="w-2.5 h-2.5" />{card.estimatedCredits}
+          <Coins className="w-2.5 h-2.5" />{card.estimatedCreditsIsEstimate === true ? "~" : ""}{card.estimatedCredits}
           {(card.perMinuteCredits ?? 0) > 0 && ` ${t("credits.plusPerMinute", { n: card.perMinuteCredits ?? 0 })}`}
           {(card.perItemCredits ?? 0) > 0 && ` ${t("credits.plusPerItem", { n: card.perItemCredits ?? 0 })}`}
         </span>

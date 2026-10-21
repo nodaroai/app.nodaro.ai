@@ -19,8 +19,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test", LLM_TIER_PRICING_ROLLBACK: true },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  // D6: metered pricing is the default; this suite pins the TIER behaviour under
+  // the rollback (`LLM_TIER_PRICING_ROLLBACK`). The metered path is covered by
+  // llm-metered-structured-routes.test.ts.
+  llmMeteredPricing: () => false,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
 // insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
@@ -291,19 +295,26 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     expect(mocks.llmCompleteStructured.mock.calls.at(-1)?.[0]).toMatchObject({ reasoningEffort: "max", timeoutMs: 285_000 })
   })
 
-  // Decided 2026-10-20 (production cost audit): Claude Fable 5 is withheld from
-  // the node. A saved node or API call naming it is refused like any model the
-  // analyzer does not accept — before any row or reservation exists.
-  it("refuses Claude Fable 5 with the same validation_error as any unsupported model, before reserving", async () => {
-    for (const llmModel of ["claude-fable-5", "gpt-5.2"]) {
-      vi.clearAllMocks()
-      const res = await post({ ...VALID, llmModel })
-      expect(res.statusCode, llmModel).toBe(400)
-      expect(res.json().error.code, llmModel).toBe("validation_error")
-      expect(mocks.insertJob, llmModel).not.toHaveBeenCalled()
-      expect(mocks.reserveCreditsForJob, llmModel).not.toHaveBeenCalled()
-      expect(mocks.llmCompleteStructured, llmModel).not.toHaveBeenCalled()
-    }
+  // A model the analyzer does not accept is refused before any row or reservation exists.
+  it("refuses a model with no vision + structured output with a validation_error, before reserving", async () => {
+    const res = await post({ ...VALID, llmModel: "gpt-5.2" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.llmCompleteStructured).not.toHaveBeenCalled()
+  })
+
+  // Claude Fable 5 is offered again (metered pricing charges what a read
+  // costs). Under the rollback it bills the post-#2403 premium rung (C8).
+  it("accepts Claude Fable 5; under the rollback it reserves the premium rung, byte-identically", async () => {
+    const res = await post({ ...VALID, llmModel: "claude-fable-5" })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    // Exactly today's call: four arguments, no metered hold option.
+    expect(mocks.reserveCreditsForJob.mock.calls[0]).toHaveLength(4)
+    expect(mocks.reserveCreditsForJob.mock.calls[0][3]).toBe("describe-to-picker:premium")
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
   })
 })
 

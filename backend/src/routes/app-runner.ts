@@ -16,6 +16,8 @@ import { ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
 import { storedListingRange, storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
 import { selectWithMax } from "../lib/listing-max-columns.js"
+import { LISTING_ESTIMATE_FLAG_COLUMN, selectWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
+import { refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
@@ -28,7 +30,7 @@ import { isUserBlocked } from "../lib/access-blocks.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
-import { hasCredits } from "../lib/config.js"
+import { hasCredits, llmMeteredPricing } from "../lib/config.js"
 import { editPlanPerMinuteActive } from "../lib/private-plugins/edit-plan-per-minute.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { findRestrictedPickerValue, flattenItems, type PickerCardRestrictions } from "@nodaro/shared/apps"
@@ -233,7 +235,18 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   // capabilities route, and an embed viewer may have no user to ask it with.
   // Read per request, never frozen into the cached body.
   async function withEditPlanPerMinute(data: unknown): Promise<Record<string, unknown>> {
-    return { ...(data as Record<string, unknown>), editPlanPerMinute: await editPlanPerMinuteActive() }
+    return withListingEstimateGate({ ...(data as Record<string, unknown>), editPlanPerMinute: await editPlanPerMinuteActive() })
+  }
+
+  /**
+   * The listing's estimate flag is served only while metered pricing is on
+   * (Task 12 / R47) — read at send time, so a cached answer follows the
+   * rollback switch: under it no figure is an estimate.
+   */
+  function withListingEstimateGate(data: Record<string, unknown>): Record<string, unknown> {
+    if (data.estimatedCreditsIsEstimate !== true || llmMeteredPricing()) return data
+    const { estimatedCreditsIsEstimate: _hidden, ...rest } = data
+    return rest
   }
 
   // --- Load published app (public, auth optional for personalization) ---
@@ -267,9 +280,13 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // Step 2: load all versions by workflow_id (slug is unique per row, workflow_id spans versions)
     // With the per-minute price, unless its column has not reached this database yet.
     // And the listed "up to" (decided 2026-10-14), unless migration 517 has not reached it yet.
-    const { data: allVersionRows } = await selectWithMax<Record<string, unknown>[]>(
+    // And the estimate flag (migration 553), unless it has not reached it yet.
+    const { data: allVersionRows } = await selectWithEstimateFlag<Record<string, unknown>[]>(
       "published_apps",
       "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, base_estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, supports_remix, created_at, workflow_id, monetization_enabled, monetization_flat_fee, monetization_percent",
+      (flagCols) => selectWithMax<Record<string, unknown>[]>(
+      "published_apps",
+      flagCols,
       (maxCols) => selectWithPerMinute<Record<string, unknown>[]>(
         "published_apps",
         maxCols,
@@ -284,7 +301,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         "all",
       ),
       "listed",
-    )
+    ))
 
     if (!allVersionRows || allVersionRows.length === 0) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
@@ -330,6 +347,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       runPerItemCredits: runPrice.perItem,
       // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
       ...storedListingRange(appRow),
+      // Stored as the row says; served only while metered pricing is on (`withListingEstimateGate`).
+      ...(appRow[LISTING_ESTIMATE_FLAG_COLUMN] === true ? { estimatedCreditsIsEstimate: true } : {}),
       creatorId: appRow.creator_id,
       maxRunsPerUserPerDay: appRow.max_runs_per_user_per_day,
       thumbnailNodeId: appRow.thumbnail_node_id ?? null,
@@ -599,6 +618,10 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       )
       if (refusal) return reply.status(400).send({ error: refusal })
     }
+
+    // A metered LLM call on a model with no price (R51): refused before any row exists, so no fixed
+    // node runs and is charged ahead of the call the run would refuse mid-graph.
+    if (await refuseIfRunUnpriced(reply, (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: unknown }>, (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source: string; target: string }>, { runNodeIds: nodeIds, overrides: inputOverrides })) return reply
 
     if (runId) {
       // Existing draft run path — create execution inline then link the draft.

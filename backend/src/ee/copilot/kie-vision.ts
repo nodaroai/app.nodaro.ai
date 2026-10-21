@@ -16,6 +16,7 @@ import { billedProviderCost, type LlmFailureUsage } from "../../lib/llm-errors.j
 import { callKie } from "../../lib/llm/kie-lane.js"
 import { kieCostUsd, kieFailureCostUsd, requestChars } from "../../lib/llm/kie-cost.js"
 import type { LlmRequest } from "../../lib/llm/types.js"
+import { LlmRateMissingError } from "../../lib/pricing/llm-cost.js"
 import { TURN_CAPS } from "./constants.js"
 
 export const DESCRIBE_IMAGE_SYSTEM =
@@ -81,6 +82,9 @@ async function describeOne(
     const costUsd = kieCostUsd(model.id, { creditsUsd: resp.creditsUsd, promptChars: requestChars(req), answerChars: resp.text.length })
     return description ? { description, costUsd } : { costUsd }
   } catch (err) {
+    // A missing KIE rate is a billing misconfiguration, never a $0 description:
+    // it propagates (kieCostUsd above throws inside this try).
+    if (err instanceof LlmRateMissingError) throw err
     console.warn(`[copilot] image description failed on ${model.id}: ${String(err).slice(0, 200)}`)
     // Billed (a refusal, a cut-off answer): KIE's stated charge, else the size estimate.
     if (billedProviderCost(err) === null || !req) return { costUsd: 0 }

@@ -15,7 +15,8 @@
     "phone-photo"
   ],
   "complexity": "beginner",
-  "estimatedCredits": 107,
+  "estimatedCredits": 114,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "lighting",

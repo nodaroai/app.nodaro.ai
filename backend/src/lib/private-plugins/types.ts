@@ -1582,6 +1582,16 @@ export interface PluginJobsToolkit {
    */
   markProviderCallStart(jobId: string, kind: string): Promise<void>
   /**
+   * R38: {@link markProviderCallStart} as a CAS on the live statuses
+   * (`markProviderCallStartIfLive`, `lib/reconcile/persistence.ts`) — what a
+   * plugin route that reserved a METERED LLM hold (`reserveLlmCall`) stamps
+   * immediately before its call. `not-live`: the job was cancelled since the
+   * reserve — the call must NOT be sent (the cancel found no stamp and refunded
+   * the hold); `error`: not stamped — do not send it either. Release the hold
+   * with `settleLlmJob` on an empty spend in both cases.
+   */
+  markProviderCallStartIfLive(jobId: string, kind: string): Promise<"started" | "not-live" | "error">
+  /**
    * Reads a job row by id. Returns the job's id, status, user_id,
    * output_data (jsonb object or null), and error_message, or null if not found.
    * Mirrors a narrow jobs-row read for the pipeline seed lane.
@@ -2478,15 +2488,42 @@ export interface PluginLlmMultimodalRequest {
   retryStreamOnError?: boolean
 }
 
+/**
+ * What one attempt of an LLM call spent — structural mirror of the host's
+ * `LlmAttemptSpend` (`lib/llm/types.ts`). Each attempt is costed on the lane
+ * that served it, from the size of the request it sent.
+ */
+export interface PluginLlmAttemptSpend {
+  lane: "kie" | "direct-gemini" | "direct-anthropic"
+  modelId: string
+  requestChars: number
+  inputTokens: number
+  outputTokens: number
+  providerCost?: number
+  creditsUsd?: number
+  estimated?: true
+}
+
 export interface PluginLlmMeteredUsage {
   inputTokens: number
   outputTokens: number
   providerCost?: number
   /** False means some provider usage is unknown; never treat it as zero cost. */
   complete: boolean
+  /**
+   * Every attempt the call made (additive-optional: absent on an older host).
+   * A failed result passed whole to `tk.llmBilling` spend `add(…, { error: result })`
+   * is costed from these.
+   */
+  attempts?: PluginLlmAttemptSpend[]
 }
+/**
+ * On success `lane` and `attempts` (additive-optional) let the result itself
+ * be recorded: `spend.add(model, request, { output: result })`; on failure
+ * `spend.add(model, request, { error: result })`.
+ */
 export type PluginLlmMeteredResult<T> =
-  | { ok: true; output: T; usage: PluginLlmMeteredUsage }
+  | { ok: true; output: T; usage: PluginLlmMeteredUsage; lane?: PluginLlmAttemptSpend["lane"]; attempts?: PluginLlmAttemptSpend[] }
   | { ok: false; message: string; usage: PluginLlmMeteredUsage }
 
 export interface PluginLlmToolkit {
@@ -2523,7 +2560,216 @@ export interface PluginLlmToolkit {
     req: PluginLlmMultimodalRequest,
     schema: unknown,
     opts?: { schemaName?: string; maxRetries?: number },
-  ): Promise<{ output: T; providerCost?: number }>
+  ): Promise<{ output: T; providerCost?: number; lane?: PluginLlmAttemptSpend["lane"]; attempts?: PluginLlmAttemptSpend[] }>
+}
+
+// ============================================================================
+// tk.llmBilling — metered LLM billing (lib/llm-billing.ts)
+// ============================================================================
+
+/**
+ * One call a metered feature makes for certain, as it will be sent: its hold
+ * is one attempt of it on its primary lane. Structural mirror of
+ * `LlmPlannedCall` (`lib/llm-billing.ts`); `request` is the host's
+ * `LlmRequest` shape (modelId, system, messages, maxTokens, reasoningEffort,
+ * requireLane, jsonSchema …).
+ */
+export interface PluginLlmPlannedCall {
+  modelId: string
+  request: {
+    modelId: string
+    system: string
+    messages: Array<{ role: "user" | "assistant"; content: string | PluginLlmContentBlock[] }>
+    maxTokens?: number
+    reasoningEffort?: string
+    requireLane?: "kie" | "direct"
+    jsonSchema?: { name: string; schema: Record<string, unknown> }
+  }
+  /** Length of EACH video / audio block, when known. */
+  mediaSeconds?: number
+  cheapLanesOnly?: boolean
+}
+
+/**
+ * `{ metered: true, … }` — the hold is reserved; `{ metered: false }` —
+ * metering is off on this host, bill as before; `undefined` — a reply was
+ * already sent (a refusal), return at once.
+ */
+export type PluginLlmReserveResult =
+  | {
+      metered: true
+      reservation: { usageLogId: string; creditsReserved: number; watermark: boolean }
+      chargeId: string
+      holdCredits: number
+    }
+  | { metered: false }
+  | undefined
+
+/**
+ * The spend of one metered job (`LlmSpend`). Every call the job makes is
+ * added — fallbacks and repairs included — with the request it sent and its
+ * outcome: `{ response }` (an `llmComplete` answer), `{ output }` (a
+ * structured call's full output, with its per-attempt `attempts`), or
+ * `{ error }` (whatever the call threw). Only a spend from `newSpend()` may
+ * be settled.
+ */
+export interface PluginLlmSpend {
+  /**
+   * `{ output }` takes a `completeStructuredMetered` success or a
+   * `completeStructuredMultimodal` result (their `attempts`, else `lane` +
+   * totals); `{ error }` a failed `completeStructuredMetered` result or a
+   * thrown error. A malformed outcome (no lane, a count that is not a finite
+   * number) throws `TypeError` rather than recording a figure that cannot be
+   * charged.
+   */
+  add(
+    modelId: string,
+    request: PluginLlmPlannedCall["request"],
+    outcome:
+      | { response: unknown }
+      | { output: { lane?: PluginLlmAttemptSpend["lane"]; attempts?: PluginLlmAttemptSpend[]; inputTokens?: number; outputTokens?: number; providerCost?: number } }
+      | { error: unknown },
+  ): void
+  readonly costUsd: number
+  readonly billedAnything: boolean
+}
+
+export interface PluginLlmBillingToolkit {
+  /**
+   * Whether this host bills LLM calls metered RIGHT NOW: false under the
+   * rollback, without credits, and until the host has confirmed its metered
+   * schema (R33). It can flip from false to true while the process runs (once
+   * the schema is confirmed; never back), so read it on EVERY call — never
+   * cache it at registration or plugin load.
+   */
+  meteredPricing(): boolean
+  /** `reserveLlmCall`: hold one attempt of each planned call, marked up at `<feature>:<calls[0].modelId>`. */
+  reserve(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    jobId: string,
+    args: { feature: string; calls: readonly [PluginLlmPlannedCall, ...PluginLlmPlannedCall[]] },
+  ): Promise<PluginLlmReserveResult>
+  newSpend(): PluginLlmSpend
+  /** `settleLlmJob`: charge the real cost (refund when nothing was billed). `unsettled` = left for the reconcile sweep. */
+  settle(
+    jobId: string,
+    reserve: PluginLlmReserveResult,
+    spend: PluginLlmSpend,
+  ): Promise<PluginLlmSettleOutcome>
+  /**
+   * Metered SIDE holds (`lib/llm-side-hold.ts`, migration 554) — a metered
+   * hold for an LLM call a job makes BESIDE its own reservation (a UGC
+   * clip's per-take frame check), reserved, started and settled from a WORKER.
+   * It never touches the job's row or its reservation (`usage_log_id`,
+   * `credits`, `credits_actual`, checkpoints, the job's cancel decision).
+   * Optional: feature-detect it (`tk.llmBilling?.side`), then ask
+   * `available()` on every call.
+   */
+  side?: PluginLlmSideHoldToolkit
+}
+
+/** What a metered settle did (`LlmSettleOutcome`). `unsettled` = left reserved for the reconcile sweep, never refunded on a guess. */
+export type PluginLlmSettleOutcome =
+  | { outcome: "charged"; charged: number; shortfall: number }
+  | { outcome: "refunded" }
+  | { outcome: "not-metered" }
+  | { outcome: "unsettled" }
+
+/**
+ * Who pays for a side hold: the job's payer as its admitting request
+ * resolved it (`payerOf(req)` in the route), stamped on the job's payload and
+ * handed back by the worker — never re-resolved. Opaque to the plugin; the
+ * host checks it (another user's or a malformed context is refused). Absent =
+ * the personal payer.
+ */
+export interface PluginLlmSideHoldPayer {
+  billingContext?: unknown
+  isAppRun?: boolean
+  webFreeMode?: boolean
+  skipAutoRecharge?: boolean
+  communityInstance?: boolean
+}
+
+/** A side-hold refusal: nothing was reserved and the job was not touched. */
+export interface PluginLlmSideHoldRefusal {
+  ok: false
+  /**
+   * `unavailable` (metered pricing is off: bill as before), `job_not_live`,
+   * `conflict`, `llm_model_unpriced`, `insufficient_credits`,
+   * `subscription_required`, `free_video_limit`, `consent_required`,
+   * `invalid_request`, a reserve refusal (`budget_exceeded`,
+   * `member_cap_exceeded`, `user_allowance_exceeded`, `access_blocked`, …)
+   * or `reservation_failed`.
+   */
+  code: string
+  /** A user-presentable sentence. */
+  message: string
+  /** `insufficient_credits`: the hold. */
+  required?: number
+  balance?: number
+}
+
+/** A reserved side hold. */
+export interface PluginLlmSideHold {
+  readonly jobId: string
+  readonly usageLogId: string
+  /** `<feature>:<model>` — the charge id it is reserved and settled under. */
+  readonly chargeId: string
+  readonly holdCredits: number
+  /** The key named an open hold already: this is that hold, its recorded spend carried into the settle. */
+  readonly replayed: boolean
+  /**
+   * Immediately before the call. Resolves: send it. Throws — never send it —
+   * a `JobCancelledError` (name `"JobCancelledError"`) when the job is no
+   * longer live (the hold is released), or an Error when the hold is closed
+   * or the start could not be recorded.
+   */
+  callStarting(): Promise<void>
+  /** After every answered call: record the spend so far (the sweep's evidence). Never throws. */
+  noteSpend(spend: PluginLlmSpend): Promise<void>
+  /**
+   * Exactly once, on success, failure and cancel alike: charge the actual (D1), refund what nothing
+   * billed. AWAIT the settle of EVERY side hold BEFORE the job's terminal write and BEFORE the clip's
+   * final ready checkpoint: a run reads a step's charge (its own + its SETTLED side holds, R53) when
+   * the job turns terminal, and a cancel/sweep only waits a short grace for a closed hold.
+   */
+  settle(spend: PluginLlmSpend): Promise<PluginLlmSettleOutcome>
+}
+
+/**
+ * Usage, in order, per reading: `reserve({ …, key })` (one key per reading, e.g. `take:${n}`) →
+ * `hold.callStarting()` immediately before the call → the call → `spend.add(…)` + `hold.noteSpend(spend)`
+ * → `await hold.settle(spend)` — in a `finally`, BEFORE the job's terminal write and before the clip's
+ * final ready checkpoint. A refusal `key_settled` on a retried attempt: that reading already ran and
+ * was settled — keep its checkpointed verdict, else reserve under a new key. `key_in_use`: retry.
+ * The clip's ceiling, when the plugin declares metered readings (`ugc.clipReadingMode() === "metered"`),
+ * holds the clip's video + speech only: the reading is held by its own side hold, never in the clip's
+ * managed reservation (else held twice).
+ */
+export interface PluginLlmSideHoldToolkit {
+  /** Whether a side hold can be reserved RIGHT NOW (metered pricing on). Read it per call; never cache it. */
+  available(): boolean
+  /** The request's payer, to stamp on the job's payload for its worker. */
+  payerOf(req: FastifyRequest): PluginLlmSideHoldPayer
+  /** The hold `reserve` would take for `calls` (one attempt of each on its primary lane), or undefined when metered pricing is off. */
+  holdFor(args: { feature: string; calls: readonly [PluginLlmPlannedCall, ...PluginLlmPlannedCall[]] }): Promise<{ chargeId: string; holdCredits: number } | undefined>
+  /** What the settle would charge for `spend` under `chargeId` (credits; 0 when nothing billed). */
+  creditsFor(chargeId: string, spend: PluginLlmSpend): Promise<number>
+  /**
+   * Reserve a side hold for job `jobId` (live, owned by `userId`), paid by the
+   * job's payer. `key` (unique per job, e.g. `take:3`) makes it idempotent.
+   * A refusal is an answer, never a throw.
+   */
+  reserve(args: {
+    jobId: string
+    userId: string
+    feature: string
+    calls: readonly [PluginLlmPlannedCall, ...PluginLlmPlannedCall[]]
+    payer?: PluginLlmSideHoldPayer
+    /** REQUIRED, unique per job, 1–200 chars — one per reading, e.g. `take:${n}`. */
+    key: string
+  }): Promise<{ ok: true; hold: PluginLlmSideHold } | PluginLlmSideHoldRefusal>
 }
 
 // ============================================================================
@@ -2652,6 +2898,13 @@ export interface PluginToolkit {
   jobs: PluginJobsToolkit
   http: PluginHttpToolkit
   llm: PluginLlmToolkit
+  /**
+   * Metered LLM billing (per-model usage pricing): reserve a call's hold,
+   * record what each call spent, settle at the real cost. ADDITIVE-OPTIONAL
+   * (no CONTRACT_VERSION bump) — `?.`-guard it; an older host has no such
+   * member and the plugin keeps its tier billing.
+   */
+  llmBilling?: PluginLlmBillingToolkit
   pipelines: PluginPipelinesToolkit
   redis: PluginRedisToolkit
   auth: PluginAuthToolkit
@@ -3590,6 +3843,22 @@ export interface PluginUgcService {
    * of at least 1: the host holds twice the price.
    */
   clipHoldFactor?(): number
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it. How UGC Clip charges its per-take
+   * reading (the frame check): `"metered"` — through a metered SIDE hold (`tk.llmBilling.side`),
+   * charged its actual, and NOT in the clip's managed reservation; `"fixed"` — today's fixed reading
+   * price inside the clip's reservation. The ONE switch both sides read: the host's quote and estimate
+   * price the reading as the plugin will charge it, and the plugin's admission decides with the same
+   * answer (metered only while `tk.llmBilling.side.available()` too). Absent (an older plugin), or any
+   * other answer: `"fixed"`, exactly as today.
+   */
+  clipReadingMode?(): "metered" | "fixed"
+  /**
+   * ADDITIVE-OPTIONAL — `?.`-guard it. The model a metered reading runs (the plugin pins it, e.g.
+   * `claude-sonnet-5.5`); the quote prices `image-to-text:<model>` on the lane the reading runs
+   * (`requireLane: "direct"`, R56). Absent: the host's default image-to-text model.
+   */
+  clipReadingModel?(): string
   /**
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it. The content key the plugin's
    * `/v1/ugc/clip` admits this ticket under, at this Re-render count (`nonce`) and run key (none for an

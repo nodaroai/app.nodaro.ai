@@ -346,6 +346,8 @@
   "MediaProcessResult",
   "MediaResource",
   "MemberStatus",
+  "ModelCostError",
+  "ModelCostResult",
   "ModelCostsResult",
   "ModelFamilyGroup",
   "ModelMaker",

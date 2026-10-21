@@ -5,6 +5,7 @@
 // then merged in code under the shared `tutorial_categories` taxonomy.
 
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
+import { listingEstimateFlag, selectWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -78,6 +79,8 @@ export function toFlowResponse(row: FlowRow) {
     previewMediaType: row.preview_media_type,
     complexity: row.complexity ?? "simple",
     estimatedCredits: row.estimated_credits ?? 0,
+    // The listed price holds a metered LLM estimate (`~N`, only while metered pricing is on).
+    ...listingEstimateFlag(row as unknown as Record<string, unknown>),
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
     estimatedPerMinuteCredits: perMinuteOf(row as unknown as Record<string, unknown>, "estimated_per_minute_credits"),
     nodeTypesUsed: row.node_types_used ?? [],
@@ -108,16 +111,21 @@ export async function tutorialsRoutes(app: FastifyInstance) {
         )
         .eq("is_enabled", true)
         .order("sort_order"),
-      selectWithPerMinute<FlowRow[]>(
+      // With the estimate flag (migration 553), unless it has not reached this database yet.
+      selectWithEstimateFlag<FlowRow[]>(
         "workflow_templates",
         "id, slug, name, description, markdown_description, preview_media_url, preview_media_type, complexity, estimated_credits, node_types_used, providers_used, creator_display_name, node_count, tutorial_category_id, tutorial_sort_order, workflow_id, created_at",
-        (columns) =>
-          supabase
-            .from("workflow_templates")
-            .select(columns)
-            .contains("listed_in", ["tutorial"])
-            .eq("is_active", true)
-            .order("tutorial_sort_order"),
+        (flagCols) => selectWithPerMinute<FlowRow[]>(
+          "workflow_templates",
+          flagCols,
+          (columns) =>
+            supabase
+              .from("workflow_templates")
+              .select(columns)
+              .contains("listed_in", ["tutorial"])
+              .eq("is_active", true)
+              .order("tutorial_sort_order"),
+        ),
       ),
     ])
 

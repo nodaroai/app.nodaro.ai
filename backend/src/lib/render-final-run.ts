@@ -97,6 +97,8 @@ export function isRenderFinalRefusal(value: unknown): value is RenderFinalRefusa
 /** What a Render final will be charged, and whether its payer can cover it. */
 export interface RenderFinalCredits {
   readonly estimatedCredits: number
+  /** `estimatedCredits` includes a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent for a fixed price. */
+  readonly estimate?: true
   readonly sufficient: boolean
   /** What the payer can spend; `null` when it is not the caller's to see (a deployment payer) or not what pays (a workspace budget). */
   readonly available: number | null
@@ -136,9 +138,11 @@ export async function renderFinalCredits(input: {
   readonly continuation?: ContinuationPricing
 }): Promise<RenderFinalCredits | null> {
   if (!hasCredits()) return null
-  const { estimateRunSetCredits, checkRunSetCredits } = await import("../ee/billing/credits.js")
+  const { estimateRunSetCredits, checkRunSetCredits, runHoldsMeteredLlmEstimate } = await import("../ee/billing/credits.js")
   const priced = withRunOverrides(input.nodes as Array<GraphNode & { type?: string }>, input.overrides)
   const resumed = await resumedCredits(input)
+  // The figure's own lines: a part priced elsewhere (a UGC video's, from its quote) says itself whether it is an estimate.
+  const lines: Array<{ readonly credits: number; readonly estimate: boolean }> = []
   const estimatedCredits =
     (await estimateRunSetCredits(
       priced as unknown as Parameters<typeof estimateRunSetCredits>[0],
@@ -147,7 +151,16 @@ export async function renderFinalCredits(input: {
       new Set(resumed.keys()),
       // A use-case node reads the recordings and framing source its user's run reads: priced as it runs.
       await usecaseViewerEstimateFor(priced as unknown as Parameters<typeof estimateRunSetCredits>[0], input.userId),
+      (_nodeId, credits, estimate) => lines.push({ credits, estimate }),
     )) + [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
+  // An LLM node the run executes is charged its actual usage after it — as is a UGC part its
+  // quote flags (the creator check): the figure is an estimate (`~N`).
+  const estimate = runHoldsMeteredLlmEstimate(
+    priced as unknown as Parameters<typeof runHoldsMeteredLlmEstimate>[0],
+    input.edges as unknown as Parameters<typeof runHoldsMeteredLlmEstimate>[1],
+    new Set(input.runNodeIds),
+    lines,
+  )
   const check = await checkRunSetCredits(input.userId, estimatedCredits, {
     billingContext: input.surface.billingContext,
     webFreeMode: input.surface.webFreeMode ?? false,
@@ -157,6 +170,8 @@ export async function renderFinalCredits(input: {
   const sufficient = check.sufficient || estimatedCredits <= 0
   return {
     estimatedCredits,
+    // An LLM node in the run is charged its actual usage: the figure is an estimate (`~N`).
+    ...(estimate ? { estimate: true as const } : {}),
     sufficient,
     available: check.available,
     ...(!sufficient && check.message !== undefined ? { message: check.message } : {}),

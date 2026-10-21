@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { sideHoldChargesFor, withSideCharge } from "../../job-step-charge.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { CHILD_JOB_COLUMN, trendRunErrorText } from "../../public-job-data.js"
 
@@ -209,6 +210,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             if (j.id) jobMap.set(j.id, j)
           }
         }
+        // R53: a step's charge includes its settled metered side holds (554).
+        const sideCharges = await sideHoldChargesFor([...jobMap.keys()])
 
         const failures: Failure[] = failedEntries.map(([nodeId, s]) => {
           const job = s.jobId ? jobMap.get(s.jobId) : undefined
@@ -220,7 +223,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             s.jobId ?? null,
             error,
             providerOf(job?.input_data),
-            job?.credits_actual ?? null,
+            withSideCharge(job?.credits_actual ?? null, job?.id, sideCharges),
             s.errorCode ?? jobErrorCode(job),
           )
         })
@@ -302,6 +305,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
       }
 
       const j = job as JobRow & { status?: string; job_type?: string }
+      const sideCharges = await sideHoldChargesFor([j.id])
       const failures: Failure[] =
         j.status === "failed"
           ? [
@@ -311,7 +315,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                 j.id ?? args.id,
                 trendRunErrorText(j.error_message, j.input_data, false),
                 providerOf(j.input_data),
-                j.credits_actual ?? null,
+                withSideCharge(j.credits_actual ?? null, j.id, sideCharges),
                 jobErrorCode(j),
               ),
             ]

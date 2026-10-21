@@ -15,6 +15,7 @@ import {
   platformExhaustionMessage,
   type PlatformExhaustion,
 } from "./llm-platform-exhaustion.js"
+import type { LlmServedLane } from "./llm/types.js"
 
 /**
  * How the provider said a reply ENDED. A required argument of every response
@@ -66,17 +67,53 @@ export class LlmStreamResponseError extends Error {
   /** The full diagnostic (lane, model, provider text) — for the operator's
    *  `error_detail`, never the person's screen. */
   readonly internalDetails: string
+  /**
+   * The lane that served the failed attempt, when the adapter that threw knew
+   * it — every lane adapter sets it, so the metered settle costs a billed
+   * failure on the lane that really billed it (a fallback that is then refused
+   * is billed at the fallback's rate, not the primary's).
+   */
+  readonly lane?: LlmServedLane
 
-  constructor(message: string, readonly usage: LlmFailureUsage) {
+  constructor(message: string, readonly usage: LlmFailureUsage, lane?: LlmServedLane) {
     super(message)
     this.name = "LlmStreamResponseError"
     this.internalDetails = message
+    if (lane !== undefined) this.lane = lane
   }
 
   /** What the person running it reads (`userFacingMessage`): no lane, vendor
    *  or internal model id. */
   get userMessage(): string {
     return "The AI model stopped partway through its answer. Please try again, or choose another model."
+  }
+}
+
+/**
+ * The caller stopped a streaming call after it was dispatched (D2): the
+ * provider kept billing for what it had already read and written, but never
+ * reported the usage. The throw carries an ESTIMATE — `ceil(requestChars ÷ 4)`
+ * in, `ceil(streamedChars ÷ 4)` out, priced at the serving lane's rate into
+ * `usage.providerCost` — so `billedProviderCost`, `failureWithSpend` and the
+ * metered settle pick it up like any other usage-carrying failure. An abort
+ * before dispatch spent nothing and is a plain error, refunded. Thrown by the
+ * stream adapters (Task 7); the type is frozen here.
+ */
+export class LlmStreamAbortedError extends LlmStreamResponseError {
+  readonly code = "stream_aborted"
+  // `declare`: narrows the type only, so the parent's constructor-assigned
+  // `usage` is not reset by a re-declared class field.
+  declare readonly usage: LlmFailureUsage & { estimated: true }
+  // Always known for a stopped stream (`declare`: narrows the parent's field only).
+  declare readonly lane: LlmServedLane
+
+  constructor(message: string, usage: LlmFailureUsage & { estimated: true }, lane: LlmServedLane) {
+    super(message, usage, lane)
+    this.name = "LlmStreamAbortedError"
+  }
+
+  override get userMessage(): string {
+    return "The answer was stopped before it finished."
   }
 }
 
@@ -228,8 +265,8 @@ export class LlmAdvancedModeUnavailableError extends LlmLaneError {
  */
 export class LlmOutputTruncatedError extends LlmStreamResponseError {
   readonly code = "output_truncated"
-  constructor(message: string, usage: LlmFailureUsage) {
-    super(message, usage)
+  constructor(message: string, usage: LlmFailureUsage, lane?: LlmServedLane) {
+    super(message, usage, lane)
     this.name = "LlmOutputTruncatedError"
   }
 
@@ -278,8 +315,8 @@ export const LLM_CONTENT_REFUSAL_MESSAGE =
 export class LlmContentRefusalError extends LlmStreamResponseError {
   readonly code = "content_refusal"
   readonly contentPolicyClass = "safety" as const
-  constructor(message: string, usage: LlmFailureUsage) {
-    super(message, usage)
+  constructor(message: string, usage: LlmFailureUsage, lane?: LlmServedLane) {
+    super(message, usage, lane)
     this.name = "LlmContentRefusalError"
   }
 
@@ -358,8 +395,10 @@ export function assertNotContentRefusal(opts: {
   providerCost: number | undefined
   /** KIE's own stated charge, when the reply carried one (`LlmFailureUsage.creditsUsd`). */
   creditsUsd?: number
+  /** The lane that served the reply, carried on the throw (`LlmStreamResponseError.lane`). */
+  servedLane?: LlmServedLane
 }): void {
-  const { modelId, lane, stopReason, usage, providerCost, creditsUsd } = opts
+  const { modelId, lane, stopReason, usage, providerCost, creditsUsd, servedLane } = opts
   if (!isContentRefusalStop(stopReason)) return
   const detail = `${lane} ${modelId} stopped with ${String(stopReason)} (in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
   console.warn(`[llm-content-refusal] ${detail}`)
@@ -369,7 +408,7 @@ export function assertNotContentRefusal(opts: {
     providerCost,
     ...(creditsUsd !== undefined ? { creditsUsd } : {}),
     complete: usage !== undefined && providerCost !== undefined,
-  })
+  }, servedLane)
 }
 
 /**
@@ -434,8 +473,10 @@ export function assertNotOutputCapped(opts: {
   providerCost: number | undefined
   /** KIE's own stated charge, when the reply carried one (`LlmFailureUsage.creditsUsd`). */
   creditsUsd?: number
+  /** The lane that served the reply, carried on the throw (`LlmStreamResponseError.lane`). */
+  servedLane?: LlmServedLane
 }): void {
-  const { modelId, lane, stopReason, cap, usage, providerCost, creditsUsd } = opts
+  const { modelId, lane, stopReason, cap, usage, providerCost, creditsUsd, servedLane } = opts
   if (!isOutputCapStop(stopReason)) return
   const detail = `${lane} ${modelId} stopped with ${String(stopReason)} at cap ${cap ?? "provider default"} ` +
     `(in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
@@ -448,7 +489,7 @@ export function assertNotOutputCapped(opts: {
     providerCost,
     ...(creditsUsd !== undefined ? { creditsUsd } : {}),
     complete: usage !== undefined && providerCost !== undefined,
-  })
+  }, servedLane)
 }
 
 /** How many links of a `cause` chain a log line carries, and how much of each. */

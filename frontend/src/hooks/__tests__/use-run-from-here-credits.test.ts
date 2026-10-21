@@ -10,6 +10,8 @@ import { renderHook, waitFor } from "@testing-library/react"
 const cache = new Map<string, number>()
 const fetched: string[][] = []
 vi.mock("@/hooks/use-model-credit-cost", () => ({
+  // No metered key is refused here (the run estimate asks for a refused key).
+  isModelRefused: () => false,
   getCachedModelCredits: (id: string) => cache.get(id),
   prefetchModelCreditCosts: async (ids: string[]) => {
     fetched.push([...ids])

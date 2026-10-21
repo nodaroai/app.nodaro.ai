@@ -15,7 +15,8 @@ import {
   JOB_OUTPUT_SCHEMA,
   uiMeta,
 } from "./_verb-helpers.js"
-import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
+import { llmMcpFields, llmPayloadFields } from "./_llm-fields.js"
+import { meteredLlmPriceSentence } from "./_credit-hint.js"
 import {
   dispatchImageGeneration,
   fanOutLevers,
@@ -1079,7 +1080,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       description:
         "Ask a vision model where ONE overlay layer should sit on a base image — it avoids faces, the subject and busy texture. " +
         "Answers anchor + x/y + width in the same PERCENT units image_overlay takes, plus a one-line reason; apply it by passing those values as a layer to image_overlay. " +
-        "Nothing is composited here. Costs one image-to-text call.",
+        `Nothing is composited here. Costs one image-to-text call. ${meteredLlmPriceSentence("image-to-text")}`,
       inputSchema: {
         image_url: z.string().url().optional().describe("Base image URL."),
         image_asset_id: z.string().optional().describe("Base image as a Nodaro image job id."),
@@ -1141,13 +1142,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       description:
         "Describe or analyse an image using a vision LLM. Returns a job_id; " +
         "the description is in the job output text. Use for captions, alt-text, " +
-        "scene analysis, or custom questions about the image.",
+        "scene analysis, or custom questions about the image. " +
+        meteredLlmPriceSentence("image-to-text"),
       inputSchema: {
         image_url: z.string().url().optional().describe("Image URL to describe."),
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
         detail_level: z.enum(["brief", "detailed", "comprehensive"]).optional().describe("How much detail to include. Default detailed."),
         custom_prompt: z.string().max(2000).optional().describe("Override the default system prompt with a specific question (e.g. 'List all text visible in the image')."),
-        ...LLM_MCP_FIELDS,
+        ...llmMcpFields("image-to-text"),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -1181,7 +1183,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "Generate a structured video script from a text prompt using an LLM. " +
         "Returns a job_id; the script text is in the job output. Use the scenes " +
         "to drive a sequence of generate_image or generate_video calls.\n\n" +
-        "Models: gemini (default), claude, gpt.",
+        `Models: gemini (default), claude, gpt. ${meteredLlmPriceSentence("generate-script")}`,
       inputSchema: {
         prompt: z.string().min(1).max(10000).describe("High-level description of the video (topic, style, audience, etc.)."),
         scene_count: z.number().int().min(SCRIPT_SCENE_COUNT_RANGE.min).max(SCRIPT_SCENE_COUNT_RANGE.max).optional().describe(`Number of scenes. Default ${SCRIPT_SCENE_COUNT_DEFAULT}.`),

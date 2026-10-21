@@ -3,7 +3,9 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
-import { statedPrices } from "../../ee/billing/stated-prices.js"
+import { hostedStatedPrices, statedPrices } from "../../ee/billing/stated-prices.js"
+import { LLM_FEATURE_DEFAULTS, llmPriceKey } from "@nodaro/shared/llm-models"
+import { setLlmMeteredSchemaReadyForTesting } from "../../lib/llm-metered-schema-gate.js"
 import { NODE_REGISTRY, chargedDescriptor } from "../../lib/node-registry.js"
 import { renderCreditCostLine } from "../../../scripts/lib/gen-skills/credit-line.js"
 import { renderNodeDataShapeBlock } from "../../../scripts/lib/gen-skills/render-skill.js"
@@ -40,6 +42,45 @@ describe("renderCreditCostLine", () => {
     const charged = statedPrices().credits(filled!.type)
     expect(charged).toBeGreaterThan(STATIC_CREDIT_COSTS[filled!.type] as number)
     expect(renderCreditCostLine(filled!.type)).toContain(`\`${charged}\``)
+  })
+
+  it("a metered LLM node states its default model's estimate as one (`~N typical`), never its tier band", () => {
+    const key = llmPriceKey("llm-chat", LLM_FEATURE_DEFAULTS["llm-chat"])
+    const estimate = hostedStatedPrices().credits(key)
+    expect(estimate).toBeGreaterThan(0)
+    const line = renderCreditCostLine("llm-chat")
+    expect(line).toContain(`\`~${estimate}\` typical on Nodaro Cloud`)
+    expect(line).not.toContain("charged on Nodaro Cloud")
+  })
+
+  it("an LLM node's line points at its own `<feature>:<model>` price key, the lookup that quotes any model", () => {
+    const line = renderCreditCostLine("llm-chat")
+    expect(line).toContain("`GET /v1/credits/model-cost?model=llm-chat:<model id>`")
+    expect(line).toContain('`list_models` with `priceIds: ["llm-chat:<model id>"]`')
+    // A node whose call borrows another feature id names that id (Video Composer bills scene-graph-ai).
+    expect(renderCreditCostLine("video-composer")).toContain("model=scene-graph-ai:<model id>")
+  })
+
+  it("Choose Best states its free strategies up to its AI judge's default-model estimate (`~0-N`), never the judge's tier band", () => {
+    const judge = hostedStatedPrices().credits(llmPriceKey("reduce:pick-best-llm", LLM_FEATURE_DEFAULTS["pick-best-llm"]))
+    expect(judge).toBeGreaterThan(0)
+    const line = renderCreditCostLine("reduce")
+    expect(line).toContain(`\`~0-${judge}\` typical on Nodaro Cloud`)
+    expect(line).toContain("model=reduce:pick-best-llm:<model id>")
+  })
+
+  it("the generated line does not depend on this process's switch: the hosted deployment is metered (D6)", () => {
+    // Vitest's R33 gate is not ready, so `statedPrices` prices no metered key here — the hosted
+    // pricer still does, and so does the line.
+    const key = llmPriceKey("image-to-text", LLM_FEATURE_DEFAULTS["image-to-text"])
+    setLlmMeteredSchemaReadyForTesting(false)
+    try {
+      expect(statedPrices().credits(key)).toBeUndefined()
+      expect(hostedStatedPrices().credits(key)).toBeGreaterThan(0)
+      expect(renderCreditCostLine("image-to-text")).toContain(`\`~${hostedStatedPrices().credits(key)}\``)
+    } finally {
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
   })
 
   it("says so plainly for a node nothing prices at all", () => {

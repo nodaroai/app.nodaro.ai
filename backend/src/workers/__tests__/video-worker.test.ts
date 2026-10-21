@@ -8,6 +8,10 @@ import { randomUUID } from "node:crypto"
 const mocks = vi.hoisted(() => {
   const mockHasCreditsRef = { value: true }
   const mockRefundJobCredits = vi.fn().mockResolvedValue(undefined)
+  // R38: the cancelled metered settle. Default: not a metered job on a cancelled row.
+  const mockSettleCancelledMeteredJob = vi.fn().mockResolvedValue(false)
+  // R38 (m5): the metered hold of a job discarded at pickup (cancelled while queued for a retry).
+  const mockSettleDiscarded = vi.fn().mockResolvedValue(undefined)
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   // Default: treat every attempt as the final one so existing failure tests
   // exercise the finalize+refund path. Per-test override for the retry case.
@@ -49,6 +53,8 @@ const mocks = vi.hoisted(() => {
   return {
     mockHasCreditsRef,
     mockRefundJobCredits,
+    mockSettleCancelledMeteredJob,
+    mockSettleDiscarded,
     mockCreateAssetFromJob,
     mockIsFinalJobAttempt,
     mockIsPromptBlocked,
@@ -122,6 +128,8 @@ vi.mock("../../services/scene3d-artifacts/delivery-provider-access.js", () => ({
 
 vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
+  settleCancelledMeteredJob: mocks.mockSettleCancelledMeteredJob,
+  settleDiscardedCancelledMeteredHold: mocks.mockSettleDiscarded,
   LLM_PRODUCT_JOB_TYPES: new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"]),
   createAssetFromJob: mocks.mockCreateAssetFromJob,
   isFinalJobAttempt: mocks.mockIsFinalJobAttempt,
@@ -278,6 +286,39 @@ describe("video worker processor", () => {
     createVideoWorker()
     processor = mocks.getCapturedProcessor()!
     expect(processor).toBeDefined()
+  })
+
+  // R38: a metered LLM job whose row was cancelled while it ran still settles
+  // its hold — on the cancel unwind and on a failure that lands after the
+  // cancel (markJobFailed's CAS loses to `cancelled`; a non-final attempt's
+  // retry would be discarded at pickup). The settle helper decides (it is a
+  // no-op without a metered spend); the worker must call it and stop there.
+  it("R38: a JobCancelledError hands the job to the cancelled metered settle, then discards quietly (no fail, no refund)", async () => {
+    const { JobCancelledError } = await import("../../lib/job-cancellation.js")
+    const err = new JobCancelledError("job-1")
+    mocks.mockHandler.mockRejectedValueOnce(err)
+    await expect(processor(makeBullJob("generate-image"))).resolves.toBeUndefined()
+    expect(mocks.mockSettleCancelledMeteredJob).toHaveBeenCalledWith("usage-1", "job-1", err)
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: "failed" })) // no markJobFailed
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("R38: a failure on a row cancelled meanwhile (metered) is settled there — not failed, not refunded, not retried", async () => {
+    // A non-final attempt too: settled, never rethrown for a retry the pickup would discard.
+    const err = new Error("parse failed")
+    mocks.mockHandler.mockRejectedValueOnce(err)
+    mocks.mockSettleCancelledMeteredJob.mockResolvedValueOnce(true)
+    await expect(processor(makeBullJob("generate-image"))).resolves.toBeUndefined()
+    expect(mocks.mockSettleCancelledMeteredJob).toHaveBeenCalledWith("usage-1", "job-1", err)
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }))
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("R38: any other failure (the settle helper declines) takes today's path", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(new Error("boom"))
+    await expect(processor(makeBullJob("generate-image"))).rejects.toThrow("boom")
+    expect(mocks.mockSettleCancelledMeteredJob).toHaveBeenCalledTimes(1)
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
   it("routes to correct handler for known job type", async () => {
@@ -686,6 +727,8 @@ describe("video worker processor", () => {
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" }),
     )
+    // R38 (m5): a metered hold still reserved on the cancelled row is settled at the discard.
+    expect(mocks.mockSettleDiscarded).toHaveBeenCalledWith("usage-1", "job-1")
   })
 
   // -------------------------------------------------------------------------

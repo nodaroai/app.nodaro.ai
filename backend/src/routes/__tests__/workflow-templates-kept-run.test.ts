@@ -245,6 +245,19 @@ describe("POST /v1/templates/publish with includeRunResults", () => {
     expect(w.written.filter((x) => x.table === "workflow_templates")).toEqual([])
   })
 
+  it("a publish refused for an unpriced metered LLM model (R49) is priced BEFORE the kept run is copied: no storage written or billed", async () => {
+    vi.mocked(estimateWorkflowListingCredits).mockRejectedValueOnce(
+      Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" }),
+    )
+    const w = await world()
+    const { res } = await publish(w, { includeRunResults: true })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ reason: "llm_model_unpriced", modelId: "claude-opus-5.5" })
+    expect(copyToTemplateKept).not.toHaveBeenCalled()
+    expect(copyToTemplatePreview).not.toHaveBeenCalled()
+    expect(w.written.filter((x) => x.table === "workflow_templates")).toEqual([])
+  })
+
   it("a ledger read that fails refuses the publish and writes nothing", async () => {
     const w = await world({}, { jobsFail: true })
     const { res } = await publish(w, { includeRunResults: true })

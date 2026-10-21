@@ -121,7 +121,7 @@ function adoptedRender(row: InFlightRow, budgetMs: number | undefined): Adoptabl
  * execution. Called by the orchestrator at the start of a (re-)pick, AFTER
  * reconcileNodeStatesFromJobs + carry-forward have decided which nodes are done.
  *
- * Three classes:
+ * Three classes (plus the metered rule's own, below):
  *
  * 1. Everything not adopted below (pre-provider rows, fan-out iterations,
  *    orphans, a render whose worker is gone) — cancel + refund, exactly the
@@ -162,6 +162,11 @@ function adoptedRender(row: InFlightRow, budgetMs: number | undefined): Adoptabl
  *    `provider_call_started_at`). A beat, or a video-worker pickup, rewrites
  *    the stamp, the CAS misses, and the re-read adopts the now-live row — so
  *    there is never a live render AND a re-dispatch for the same node.
+ *
+ * A metered LLM job the sweep's rule leaves live (`retry`: its call may be in
+ * flight, or a billed hold is not settled yet) is never cancelled; on the
+ * RESUME it is ADOPTED like a live render (single-shot, owning node known), so
+ * the node is not re-run and the model is not paid twice.
  *
  * CRITICAL — we still STRIP `input_data.node_id` from each CANCELLED job:
  *   reconcileNodeStatesFromJobs' Path-2 maps a `cancelled` job back to its node
@@ -205,7 +210,7 @@ export async function cancelInFlightChildJobs(
 ): Promise<NeutralizeResult> {
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
   const { data: inFlight, error: selErr } = await readJobsWithSlotWait<Array<Record<string, unknown>>>(
-    "id, status, input_data, provider, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key",
+    "id, status, input_data, provider, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key, reconcile_attempts, reconcile_last_error",
     (columns) => supabase
       .from("jobs")
       .select(columns)
@@ -277,6 +282,40 @@ export async function cancelInFlightChildJobs(
 
     // Class 1 — cancel + refund (pre-provider, fan-out iteration, orphan, or a
     // render whose worker is gone).
+    //
+    // D10 first, BEFORE the flip: a metered LLM hold whose job recorded a
+    // billed cost is committed, never refunded — the reconcile sweep's own
+    // rule (`settleMeteredHoldsBeforeCancel`). One that cannot be committed
+    // yet is left exactly as it is, still sweepable, for the sweep to settle.
+    const { settleMeteredHoldsBeforeCancel } = await import("../cancel-job.js")
+    const metered = await settleMeteredHoldsBeforeCancel(id, {
+      reconcile_attempts: typeof row.reconcile_attempts === "number" ? row.reconcile_attempts : 0,
+      reconcile_last_error: typeof row.reconcile_last_error === "string" ? row.reconcile_last_error : null,
+    })
+    if (metered === "retry") {
+      // A metered call may be in flight (it started, or its evidence could
+      // not be read), or its billed hold is not settled yet: the job is left
+      // live — never cancelled, never refunded on a guess (D10). On the
+      // RESUME it is ADOPTED, as a live render is (class 3): re-running the
+      // node would pay the model a second time while this job's own settle
+      // charges the first call at its actual. Its worker finishes it, or the
+      // reconcile sweep settles + fails it and the adopting poll reports that
+      // failure (the node fails rather than re-running — the same residual
+      // as an adopted render). Fresh clocks, as a provider-task adoption: an
+      // LLM job declares no render budget its original dispatch would bound.
+      if (opts.adoptLiveBudgetedRenders === true && nodeId !== null && singleShot && !result.adoptable.has(nodeId)) {
+        result.adoptable.set(nodeId, {
+          jobId: id,
+          usageLogId: typeof row.usage_log_id === "string" ? row.usage_log_id : undefined,
+          creditsReserved: typeof row.credits === "number" ? row.credits : undefined,
+          budgetMs,
+        })
+        console.warn(`[orchestrator/resume] job ${id}: its metered call may be in flight — adopted for node ${nodeId}, not re-run`)
+        continue
+      }
+      console.warn(`[orchestrator/resume] job ${id}: a billed metered hold is not settled yet — left for the reconcile sweep, not cancelled`)
+      continue
+    }
     const { node_id: prevNodeId, ...restInput } = prevInput
     let cas = supabase
       .from("jobs")
@@ -314,6 +353,18 @@ export async function cancelInFlightChildJobs(
       continue
     }
     result.cancelled++
+    // 554: the job's metered SIDE holds settle on their own call-start markers, after the flip.
+    const { settleSideHoldsAfterFlip } = await import("../llm-side-hold.js")
+    await settleSideHoldsAfterFlip([id])
+    // R38 / N1: a not-started verdict committed nothing before the flip; now
+    // that the row is cancelled, a worker that sent its first call in between
+    // keeps its hold (kept and reported; it settles the hold when the call
+    // ends), and a hold an earlier attempt billed is settled at its actual —
+    // the refund below then touches only what is still reserved.
+    if (metered === "not-started") {
+      const { settleMeteredHoldAfterFlip } = await import("../cancel-job.js")
+      if ((await settleMeteredHoldAfterFlip(id)) === "kept") continue
+    }
     await refundReservedCreditsForJob(id).catch(() => {})
   }
 

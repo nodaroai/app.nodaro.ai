@@ -13,6 +13,7 @@ import { ALL_SCOPES } from "../../../src/lib/scopes.js"
 import { publishStandInPluginServices } from "../../../src/lib/private-plugins/load.js"
 import { setPluginEngines } from "../../../src/lib/private-plugins/engine-registry.js"
 import { captureMcpToolSchemas } from "./capture-mcp-schemas.js"
+import { assumeLlmMeteredSchemaReadyForDocs } from "../../../src/lib/llm-metered-schema-gate.js"
 import type { PluginEngines, PluginServices } from "../../../src/lib/private-plugins/types.js"
 import type { Edition, ToolGate, ToolSurface } from "./tool-surface.js"
 
@@ -49,6 +50,9 @@ if (edition === "cloud") {
   const engines: Required<{ [K in keyof PluginEngines]: never }> = { scene3d: engine, surround: engine, smartCut: engine }
   publishStandInPluginServices(services)
   setPluginEngines(engines)
+  // Nodaro Cloud runs with the metered LLM schema (551 + 552 + 554) applied; this
+  // process has no database to ask (R33 gate — see the helper).
+  assumeLlmMeteredSchemaReadyForDocs()
 }
 
 /** The tool's input as JSON Schema: what a client is told it may send. */

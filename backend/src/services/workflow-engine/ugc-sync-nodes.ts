@@ -187,7 +187,7 @@ export interface UgcDeps {
   poll(jobId: string, nodeType: string): Promise<ExecuteNodeResult>
   /** Register a child job with the run: its job link and its progress. */
   onJobCreated(jobId: string): void
-  /** What a finished child job charged: jobs.credits_actual, else jobs.credits (its committed reservation), else 0. */
+  /** What a finished child job charged: jobs.credits_actual, else jobs.credits (its committed reservation), else 0 — plus its settled metered side holds (`lib/job-step-charge.ts`). */
   jobCharge(jobId: string): Promise<number>
 }
 

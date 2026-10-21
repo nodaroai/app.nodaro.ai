@@ -3,6 +3,8 @@
 import { SPEAKER_VIEW_PRICED, isUseCaseNodeType } from "@nodaro/render-rules"
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { useLlmPrices } from "@/hooks/use-llm-price"
+import { llmNodePriceIds } from "@/lib/llm-price-ids"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -876,6 +878,15 @@ export function ConfigPanel() {
     && (_earlyData.providers as unknown[]).length >= 2
   const _providersForSum = _isMultiProviderNode ? (_earlyData.providers as readonly string[]) : []
   const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
+  // A metered LLM node: its two price ids in one batch (the metered key and the
+  // tier id). Subscribing re-renders the panel when the answer lands, so the
+  // Run button below re-reads `getModelIdentifier` — the key, shown `~N`, once
+  // the server marked it an estimate; the tier id under the rollback.
+  const _llmPriceIdsList = useMemo(() => {
+    const ids = displayNode ? llmNodePriceIds(displayNode) : undefined
+    return ids ? [ids] : []
+  }, [displayNode])
+  useLlmPrices(_llmPriceIdsList)
   // A use-case node (any type): its chain on its real source plus its fee —
   // the node's own pill figure — never the bare fee its credit id names.
   const _usecaseCredits = useUseCaseCredits(isUseCaseNodeType(_earlyType) && displayNode ? displayNode.id : "")

@@ -35,7 +35,13 @@ vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () =
 vi.mock("@/lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: mocks.queueAdd } }))
 vi.mock("@/lib/access-blocks.js", () => ({ isUserBlocked: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/middleware/credit-guard.js", () => ({ resolveWebSurfaceFlag: vi.fn().mockResolvedValue(false) }))
+// The run pre-check (R51; the estimator is unit-tested in workflow-estimate-metered.test.ts):
+// a node naming "unpriced-model" is the call a run would be refused at.
 vi.mock("@/ee/billing/credits.js", () => ({
+  unpricedMeteredLlmOfRun: (nodes: Array<{ data?: { llmModel?: unknown } }>) =>
+    nodes.some((n) => n.data?.llmModel === "unpriced-model")
+      ? Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+      : null,
   CreditsService: { checkAppRunEligibility: vi.fn().mockResolvedValue({ allowed: true }) },
 }))
 vi.mock("@/services/app-execution.js", () => ({ executeAppRun: mocks.executeAppRun }))
@@ -189,6 +195,33 @@ describe("everyone else is still nobody to review (TA9 a)", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("preview_render_nested")
     expect(res.json().error.message).toBe("A component cannot stop for a review: its render must be set to Final.")
+  })
+})
+
+describe("R51: an app run meeting an unpriced metered LLM model is refused before anything runs", () => {
+  const unpricedSnapshot = {
+    nodes: [
+      { id: "gen", type: "generate-image", data: { prompt: "a cat" } },
+      { id: "chat", type: "llm-chat", data: { llmModel: "unpriced-model" } },
+    ],
+    edges: [{ source: "gen", target: "chat" }],
+  }
+
+  it("refused 400 llm_model_unpriced: no app run, no execution, nothing enqueued — a draft run too", async () => {
+    snapshot.current = unpricedSnapshot
+    for (const body of [{ reviewer: "app" }, { reviewer: "app", runId: DRAFT }]) {
+      const res = await run(body)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "unpriced-model" })
+    }
+    expect(mocks.executeAppRun).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a model the runner's inputs set is the one asked about: overriding it onto a priced model runs", async () => {
+    snapshot.current = unpricedSnapshot
+    const res = await run({ reviewer: "app", inputOverrides: { chat: { llmModel: "claude-opus-5.5" } } })
+    expect(res.json().error?.reason).not.toBe("llm_model_unpriced")
   })
 })
 

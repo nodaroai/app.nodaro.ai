@@ -47,7 +47,7 @@ import {
   getNodeResult,
 } from "@/lib/presentation-utils"
 import { EXECUTABLE_TYPES, isExecutableNode } from "@/components/editor/workflow-editor/types"
-import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
+import { useLiveRunFigure } from "@/hooks/use-live-run-estimate"
 import { useChosenRecordingLengths } from "@/hooks/use-chosen-recording-lengths"
 import { recordingLengthPending, runCostLabel } from "@/lib/run-price"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
@@ -375,10 +375,16 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // ONE live estimate for every runner surface (the mobile shell prices the same
   // hook), so desktop and phone cannot quote different numbers for one run. Base
   // figure; the app's monetization markup is applied below.
-  const dynamicEstimatedCost = useLiveRunEstimate(
+  const liveFigure = useLiveRunFigure(
     { nodes, edges, inputValues, enabled: hasCredits(), mediaLengths: chosenRecordingLengths },
     { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
+  const dynamicEstimatedCost = liveFigure.total
+  // The live figure holds a metered LLM call's estimate: the Run label reads
+  // `~N` (spec §8.5). Until the live figure is in, the seeded server figure
+  // says itself whether it is one (`estimatedCostIsEstimate`, Task 12).
+  const seededIsEstimate = usePresentationStore((s) => s.estimatedCostIsEstimate)
+  const estimateIsApprox = dynamicEstimatedCost > 0 ? liveFigure.estimate : isFullscreen && seededIsEstimate
   // Mirror the live base figure into the presentation store so other consumers
   // see it (it was seeded with the server's static figure at load).
   useEffect(() => {
@@ -1567,6 +1573,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const costLabel = hasCredits()
     ? runCostLabel({
         exact: estimatedCost,
+        estimate: estimateIsApprox,
         listing: isFullscreen ? listedPrice : null,
         pending: recordingLengthPending(inputNodes, inputValues, chosenRecordingLengths),
         plusPerMinute: (n) => t("credits.plusPerMinute", { n }),

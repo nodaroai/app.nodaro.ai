@@ -16,6 +16,9 @@ import { searchMetaAdvertisers } from "../providers/apify/meta-ads-advertisers.j
 import { MissingProviderKeyError } from "../providers/provider-keys.js"
 import { classifyAndStoreMetaAdsMedia, metaAdsWithoutMedia } from "../lib/meta-ads-media.js"
 import { analyzeMetaAds } from "../lib/meta-ads-analysis.js"
+import { adCreativeAnalysisPlannedCall } from "../lib/ad-creative-analysis.js"
+import { LlmSpend } from "../lib/llm-billing.js"
+import { fixedPlusLlmSpendTracker, reserveFixedPlusLlmCalls, settleFixedPlusLlmCalls, settleFixedPlusLlmCallsAfterCancel, type FixedPlusLlmHold } from "../lib/llm-fixed-plus-calls.js"
 import {
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
@@ -48,7 +51,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { normalizeWebUrlInput } from "../lib/web-url-input.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { config } from "../lib/config.js"
+import { config, llmMeteredPricing } from "../lib/config.js"
 import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
 import { callCloudRoute, createCloudJob, waitForCloudJob } from "../providers/nodaro/client.js"
 
@@ -327,9 +330,42 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, jobError, "Failed to create job")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-    if (reply.sent) return
-    const usageLogId = reservation?.usageLogId
+    // Per-ad analysis bills METERED (B5): the scrape keeps its fixed price and
+    // each requested ad's analysis is held at one call's 1-attempt hold under
+    // meta-ads-analysis:<model>, all in ONE reservation; the settle charges the
+    // scrape plus what the analyses cost. Under the rollback — and for a cloud
+    // relay, whose connected account runs and bills the analysis — the run
+    // reserves its tier id exactly as before.
+    const analysisModel = body.analysisModel ?? LLM_FEATURE_DEFAULTS["meta-ads-analysis"]
+    const meteredAnalysis = analysisTier !== null && !viaCloud && llmMeteredPricing()
+    const analysisSpend = new LlmSpend()
+    let analysisHold: FixedPlusLlmHold | undefined
+    let usageLogId: string | undefined
+    if (meteredAnalysis) {
+      const requestedAds = Math.min(Math.max(Math.trunc(body.count) || 1, 1), META_ADS_SCRAPE_MAX_COUNT)
+        * Math.min(Math.max(sources, 1), META_ADS_SCRAPE_MAX_SOURCES)
+      // Held at the typical per-ad cost × the ads requested (D12); the
+      // actual is collected at the settle. The planned call (one ad's request)
+      // makes the model fail closed when a lane it may use has no rate.
+      const planned = adCreativeAnalysisPlannedCall({ modelId: analysisModel, focus: body.analysisFocus })
+      analysisHold = await reserveFixedPlusLlmCalls(req, reply, job.id, {
+        fixedId: buildMetaAdsScrapeCreditId({ count: body.count, sources }),
+        feature: "meta-ads-analysis",
+        modelId: analysisModel,
+        items: requestedAds,
+        plannedRequest: planned.request,
+      })
+      if (!analysisHold) return
+      usageLogId = analysisHold.usageLogId
+    } else {
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      if (reply.sent) return
+      usageLogId = reservation?.usageLogId
+    }
+    // Each analysis call is recorded as it returns (or fails) — every item is
+    // a billed call — and the running ledger lands in the job's server-only
+    // billing ledger (R32, never output_data) after each item, so a cancel mid-run commits what was already billed.
+    const tracker = analysisHold ? fixedPlusLlmSpendTracker(job.id, analysisHold.chargeId, analysisSpend) : undefined
 
     /**
      * Run the scrape and settle the job — the ONE body both reply modes share,
@@ -377,9 +413,13 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
         // Per-ad AI analysis, under what is left of the same deadline. A cloud
         // relay already analysed on the connected account (its `analysis`
         // stats ride along); locally each ad is one structured vision call.
-        const analysisModel = body.analysisModel ?? LLM_FEATURE_DEFAULTS["meta-ads-analysis"]
         const analyzed = analysisTier && !viaCloud
-          ? await analyzeMetaAds(media.ads, { modelId: analysisModel, focus: body.analysisFocus, deadlineAt: startedAt + MEDIA_DEADLINE_MS })
+          ? await analyzeMetaAds(media.ads, {
+            modelId: analysisModel,
+            focus: body.analysisFocus,
+            deadlineAt: startedAt + MEDIA_DEADLINE_MS,
+            ...(tracker ? { complete: tracker.complete } : {}),
+          })
           : null
         const ads = analyzed ? analyzed.ads : media.ads
         const relayedAnalysis = (scraped as Record<string, unknown>).analysis
@@ -400,11 +440,17 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
 
         // false = the user cancelled mid-flight and the cancel path already
         // refunded — returning the data would be a free scrape.
+        // The last running-ledger write lands BEFORE the completion write.
+        await tracker?.flush()
         const completed = await markJobCompleted(job.id, {
           output_data: result,
           ...(analyzed ? { provider_cost: analyzed.stats.providerCostUsd || null } : {}),
         })
         if (!completed) {
+          // Cancelled mid-run: the analyses it billed are charged, never refunded
+          // (D10) — the cancel kept the hold while a call was in flight, so the
+          // job settles it now that its calls have ended.
+          if (analysisHold) await settleFixedPlusLlmCallsAfterCancel(job.id)
           req.log.info({ jobId: job.id }, "[meta-ads-scrape] job left pending before completion; skipping settlement")
           return { ok: false, status: 409, code: "job_cancelled", message: "The job was cancelled before it completed." }
         }
@@ -415,6 +461,13 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
         // caller would get a 502 for ads that are sitting on the job. The
         // reservation stays `reserved` and this line is what ops finds it by.
         const settle = async (): Promise<void> => {
+          if (analysisHold) {
+            // Metered (B5), settled AFTER the completion write (a cancel that
+            // lands first is never charged): the scrape's fixed price plus what
+            // the analyses cost; the receipt writes credits_actual + billing.
+            await settleFixedPlusLlmCalls(job.id, analysisHold, analysisSpend, "charge")
+            return
+          }
           if (!usageLogId) return
           if (analyzed && analysisTier) {
             // The reservation priced analysis per REQUESTED ad; settle per ad
@@ -438,8 +491,14 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
         const message = err instanceof Error ? err.message : "Scrape failed"
         try {
           // Refund only when WE flipped the row — a cancelled job was refunded by cancel.
+          await tracker?.flush()
           const flipped = await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
-          if (flipped && usageLogId) await refundReservedCreditsForJob(job.id)
+          if (flipped && analysisHold) {
+            // The scrape failed, so its fixed price is refunded; any analysis
+            // the provider already billed is charged (never refunded, D10).
+            await settleFixedPlusLlmCalls(job.id, analysisHold, analysisSpend, "refund")
+          } else if (flipped && usageLogId) await refundReservedCreditsForJob(job.id)
+          else if (!flipped && analysisHold) await settleFixedPlusLlmCallsAfterCancel(job.id)
         } catch (failErr) {
           req.log.error({ err: failErr, jobId: job.id }, "[meta-ads-scrape] failed to mark job failed / refund")
         }

@@ -88,6 +88,12 @@ export interface NodeDescriptor {
    *  without a credit system (community/business omit the field entirely;
    *  it is meaningful on Cloud only). */
   creditCost?: number | string
+  /** `creditCost` is an ESTIMATE: a metered LLM node's typical call on its
+   *  default model, charged its actual usage after the run (shown `~N`).
+   *  Absent for a fixed price, and under the tier-pricing rollback. A metered
+   *  LLM node whose default model has no price yet lists `creditCost:
+   *  "unpriced"` (a run on it is refused `llm_model_unpriced`). */
+  estimate?: true
   /** A node charged per unit of its own measure (its `creditCost` is a word
    *  such as `"per-1000-frames"`): the charged price of one unit and how a run
    *  rounds. Cloud only, like `creditCost`. */
@@ -644,7 +650,9 @@ export interface RunAndWaitOptions {
   readonly signal?: AbortSignal
   /**
    * Also cancel the job when `signal` aborts after it was submitted
-   * (`POST /v1/jobs/:id/cancel`, which refunds its credit hold). Best effort:
+   * (`POST /v1/jobs/:id/cancel`, which refunds its credit hold — except a
+   * metered LLM job whose call has started: it answers `inFlight: true`,
+   * finishes, and is charged what it used). Best effort:
    * a failed cancel still rejects with the {@link JobAbortedError}. Default
    * `false` — aborting only stops waiting.
    */

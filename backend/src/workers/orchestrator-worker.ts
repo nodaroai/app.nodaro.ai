@@ -88,6 +88,8 @@ import { mirrorUseCaseProgress } from "../lib/use-case/progress.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { speakerViewRunPreflight, speakerViewVideoRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
+import { unpricedLlmRunPreflight } from "../lib/llm-unpriced-refusal.js"
+import { componentRunGraphs } from "../lib/llm-unpriced-component-graphs.js"
 import { speakerViewRunStartSourceCheck } from "../services/workflow-engine/speaker-view-source.js"
 import { findRelayRehostRefusals, nestedRelayRehostRefusals } from "../services/workflow-engine/relay-rehost-preflight.js"
 import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
@@ -1031,6 +1033,19 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       if (unpricedNested) {
         console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedNested}`)
         await failExecution(executionId, unpricedNested)
+        return
+      }
+      // A metered LLM call on a model with no price (R51) refuses at its own
+      // reservation — after every fixed node upstream of it has run and
+      // charged. Asked here of the run, every graph it nests and every
+      // component it runs (read only when the rest prices clean), with the
+      // run's overrides already merged (a model an override sets is the one it runs).
+      const unpricedLlm = await unpricedLlmRunPreflight(runNodes.map((n) => n.id), nodes, edges, nestedGraphs, () =>
+        componentRunGraphs(runNodes, edges, subWorkflowOwnerId(ctx)),
+      )
+      if (unpricedLlm) {
+        console.warn(`[llm-unpriced-preflight] execution ${executionId} REFUSED — ${unpricedLlm}`)
+        await failExecution(executionId, unpricedLlm)
         return
       }
       const unfitNested = speakerViewVideoRunPreflight([], [], [], nestedGraphs)

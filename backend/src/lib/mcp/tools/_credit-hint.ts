@@ -28,6 +28,11 @@ import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
 import { isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
+import { LLM_FEATURE_DEFAULTS, getLlmModel, llmDefaultsFeature, llmPriceKey, type LlmFeature } from "@nodaro/shared/llm-models"
+import type { MeteredLlmFeature } from "../../../ee/billing/llm-typical-usage.js"
+
+/** Re-exported so tool files name a metered feature without importing ee/ themselves. */
+export type { MeteredLlmFeature }
 
 const OFF_CLOUD = "credits: see list_models"
 
@@ -66,4 +71,49 @@ export function lipSyncPriceSuffix(id: string): string {
     STATIC_CREDIT_COSTS[`${id}:8s:480p`] !== undefined || STATIC_CREDIT_COSTS[`${id}:4s:480p`] !== undefined
   if (typeof STATIC_CREDIT_COSTS[id] === "number" && !tiered) return ` (${stated(creditsOf(id), id)} cr)`
   return " (duration-tiered)"
+}
+
+/** The model a metered LLM feature runs on when the caller names none (borrowed defaults included). */
+export function llmFeatureDefaultModel(feature: MeteredLlmFeature): string {
+  return LLM_FEATURE_DEFAULTS[llmDefaultsFeature(feature) as LlmFeature]
+}
+
+/** Where every model's per-token rate is stated. */
+const LLM_RATES_PAGE = "docs/pricing/llm-models.md"
+
+/**
+ * The estimate hint for a METERED LLM call: `"~N credits typical on <Model>"`
+ * — what the server quotes before a run of `feature` on `modelId` (its
+ * metered price key, `llmPriceKey`; `POST /v1/credits/model-costs` answers it
+ * live), the `~N` the Run button shows. A metered call is charged per token at
+ * the model's rate, never a fixed price, so the figure is always written as
+ * approximate; it still carries its price key when rendering the docs, so the
+ * docs test holds it to the server's estimate.
+ *
+ * NEVER THROWS (tool registration runs at boot). Off-cloud it is the off-cloud
+ * pointer; under the `LLM_TIER_PRICING_ROLLBACK` switch (metered keys are then
+ * priced nowhere) and for a model with no price it names no figure.
+ * `creditsOf` cannot price a metered key and would throw there.
+ */
+export function estimateHint(feature: MeteredLlmFeature, modelId: string = llmFeatureDefaultModel(feature)): string {
+  if (!hasCredits()) return OFF_CLOUD
+  const name = getLlmModel(modelId)?.displayName ?? modelId
+  try {
+    const key = llmPriceKey(feature, modelId)
+    const credits = statedPrices().credits(key)
+    if (credits !== undefined) return `~${stated(credits, key)} credits typical on ${name}`
+  } catch {
+    // fall through to the figure-free hint
+  }
+  return `on ${name}, see ${LLM_RATES_PAGE}`
+}
+
+/**
+ * The pricing sentence for a tool whose LLM call is metered: charged per
+ * token at the model's rate, the typical figure on `modelId` (the feature's
+ * default when omitted), and where every model's rate is stated.
+ */
+export function meteredLlmPriceSentence(feature: MeteredLlmFeature, modelId?: string): string {
+  if (!hasCredits()) return `(${OFF_CLOUD})`
+  return `Charged per token at the model's rate: ${estimateHint(feature, modelId)} (every model: ${LLM_RATES_PAGE}).`
 }

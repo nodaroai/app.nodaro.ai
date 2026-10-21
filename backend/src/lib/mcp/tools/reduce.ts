@@ -6,6 +6,7 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { errorResult, parseFailure } from "./_verb-helpers.js"
+import { meteredLlmPriceSentence } from "./_credit-hint.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -20,7 +21,7 @@ export interface RegisterReduceOpts {
  *
  * The Reduce node merges N upstream results into one — picking the best of
  * a batch, concatenating, voting, etc. Six strategies ship today:
- *   - `pick-best-llm` — an AI judge picks the best item against your criteria (judge model = strategyConfig.llmModel; its tier sets the price).
+ *   - `pick-best-llm` — an AI judge picks the best item against your criteria (judge model = strategyConfig.llmModel; charged per token at that model's rate).
  *   - `concat` — Join all survivors with a separator.
  *   - `first-non-empty` — Return the first survivor (empty strings filtered).
  *   - `count` — Return how many survivors came through.
@@ -45,7 +46,8 @@ export function registerReduce({ server, session, fastify }: RegisterReduceOpts)
         "`count`, `vote`, `merge-json`. Returns `{ jobId, output, meta }` " +
         "with the chosen / merged value as a string and `meta.summary` " +
         "describing what happened. `pick-best-llm` also returns " +
-        "`meta.selectedIndex` and `meta.reasoning` (the LLM rationale).",
+        "`meta.selectedIndex` and `meta.reasoning` (the LLM rationale). " +
+        `\`pick-best-llm\`: ${meteredLlmPriceSentence("reduce:pick-best-llm")}`,
       inputSchema: {
         strategyId: z
           .enum(REDUCE_STRATEGY_IDS as [string, ...string[]])
@@ -56,7 +58,7 @@ export function registerReduce({ server, session, fastify }: RegisterReduceOpts)
           .record(z.string(), z.unknown())
           .optional()
           .describe(
-            "Strategy-specific config. `pick-best-llm`: { criteria: string, inputKind?: 'text'|'image-url', llmModel?: string (judge model id from the LLM registry; omitted = default; its tier sets the credit price) }. " +
+            "Strategy-specific config. `pick-best-llm`: { criteria: string, inputKind?: 'text'|'image-url', llmModel?: string (judge model id from the LLM registry; omitted = default; the judge's call is charged per token at that model's rate) }. " +
             "`concat`: { separator?: string }. `vote`: { caseSensitive?: boolean }. " +
             "`merge-json`: { strategy?: 'deep'|'shallow' }. Others: {}.",
           ),

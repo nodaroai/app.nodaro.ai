@@ -164,3 +164,19 @@ describe("CreditCost — the listing's range", () => {
     }
   })
 })
+
+// Task 13 (spec §8.5): a figure that is an ESTIMATE (a marketplace listing
+// whose price holds a metered LLM call) is written ~N, right before the number.
+describe("CreditCost — approx", () => {
+  it("writes ~ before the figure", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    const { container } = render(<CreditCost credits={12} approx />)
+    expect(container.textContent).toBe("~12 CR")
+  })
+
+  it("leaves a fixed figure unchanged", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    const { container } = render(<CreditCost credits={12} approx={false} />)
+    expect(container.textContent).toBe("12 CR")
+  })
+})

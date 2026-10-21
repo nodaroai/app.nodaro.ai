@@ -4,9 +4,9 @@
 ## Overview
 The Motion Graphics node uses an LLM (configurable via the model selector — any of the shared LLM registry's models, Claude Sonnet by default) to generate a plan for 2D motion graphics compositions. It supports lower thirds, title cards, kinetic typography, animated shapes, and SVG path animations. A live preview is available in the config panel. Maximum duration is 60 seconds.
 
-Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up — see [Pricing](#pricing) below and the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
+Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default). Effort has no price of its own: the call is charged for the tokens it uses at the model's rate, so a higher effort costs more only through the reasoning it writes — see [Pricing](#pricing) below.
 
-**Advanced mode.** Gemini and Claude models offer an **Advanced mode** switch. Turning it on runs the model on the provider's own API instead of through our aggregator, which is the only place `Temperature`, `Max Tokens` and the full reasoning-depth range actually take effect — those controls appear once it is on. It bills **one credit rung up** (a premium model moves to its premium-direct price), and the node's cost badge updates immediately so you can see the change before running. On any other model the switch is visible but disabled, with the reason shown inline. On a Claude model, choosing any reasoning effort runs the call the same way (Anthropic's API is the only place Claude's effort applies) and bills the same.
+**Advanced mode.** Gemini and Claude models offer an **Advanced mode** switch. Turning it on runs the model on the provider's own API instead of through our aggregator, which is the only place `Temperature`, `Max Tokens` and the full reasoning-depth range actually take effect — those controls appear once it is on. The call is charged at that lane's per-token rate ([LLM model rates](../../pricing/llm-models.md)), and the node's cost badge updates immediately so you can see the change before running. On any other model the switch is visible but disabled, with the reason shown inline. On a Claude model, choosing any reasoning effort runs the call the same way (Anthropic's API is the only place Claude's effort applies) and is charged the same way.
 
 The node ships with two **engines** (see below). The default **Lottie** engine has the LLM author a complete Lottie animation with named editable slots. The **Classic** engine produces a compact elements DSL rendered with pure Remotion primitives and a built-in `FONT_MAP`.
 
@@ -59,22 +59,24 @@ Selecting a preset **overwrites** the prompt and canvas settings (engine, aspect
 
 ## Pricing
 
-Credits follow the standard LLM pricing tiers, evaluated at each engine's typical token profile. The Lottie engine authors a much larger payload than the elements DSL, so it costs more at the same tier.
+The authoring call is charged for the tokens it actually used — your prompt and the plan or animation it writes — at the selected model's rate on the lane that served it. Every model's rate is in [LLM model rates](../../pricing/llm-models.md); the rule is the same as [Generate Text](../ai-text/llm-chat.md#credit-pricing), a hold first, then the real charge.
 
-| Engine | Tier | Credits |
-|--------|------|---------|
-| Classic (elements) | Economy | 11<!-- credits: motion-graphics:economy --> |
-| Classic (elements) | Standard | 11<!-- credits: motion-graphics --> |
-| Classic (elements) | Premium | 33<!-- credits: motion-graphics:premium --> |
-| Lottie | Economy | 2<!-- credits: motion-graphics-lottie:economy --> |
-| Lottie | Standard | 37<!-- credits: motion-graphics-lottie --> |
-| Lottie | Premium | 88<!-- credits: motion-graphics-lottie:premium --> |
+The Run button shows an estimate of a typical run:
 
-The tier is determined by the selected LLM model (Economy / Standard / Premium).
+| Engine | Model | Typical run |
+|--------|-------|-------------|
+| Classic (elements) | Gemini 3.6 Flash | ~4<!-- credits: motion-graphics:gemini-3.6-flash --> |
+| Classic (elements) | Claude Sonnet 5.5 (default) | ~6<!-- credits: motion-graphics:claude-sonnet-5.5 --> |
+| Classic (elements) | Claude Opus 5.5 | ~11<!-- credits: motion-graphics:claude-opus-5.5 --> |
+| Lottie | Gemini 3.6 Flash | ~4<!-- credits: motion-graphics-lottie:gemini-3.6-flash --> |
+| Lottie | Claude Sonnet 5.5 (default) | ~6<!-- credits: motion-graphics-lottie:claude-sonnet-5.5 --> |
+| Lottie | Claude Opus 5.5 | ~11<!-- credits: motion-graphics-lottie:claude-opus-5.5 --> |
 
-**Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **37 credits**<!-- credits: motion-graphics-lottie --> for Lottie versus **11 credits**<!-- credits: motion-graphics --> for Classic.
+**Lottie runs usually cost more than the estimate.** A Lottie author call writes a much larger payload than the Classic engine's elements DSL, so it uses more output tokens on the same model; and when the first animation fails validation the engine asks the model once more to repair it, and that repair call is charged too.
 
-**Reasoning effort and tier.** Selecting `xhigh` or `max` effort on a reasoning-capable model bills **one tier up** (economy → standard, standard → premium; premium is unchanged) — the same rule the Generate Text node documents in full at [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort). `Auto` and every other level apply the vendor default and never change the tier shown above.
+**Reasoning effort.** Effort has no price of its own: a higher effort usually spends more output tokens reasoning, and those are charged at the model's rate. On a Claude model any effort runs the call on Anthropic's own API, at that lane's rate.
+
+A failure the provider billed (an answer cut off at the cap, an animation that never validated) is charged for that usage, and the error says how much; one it did not bill is refunded.
 
 ## Configuration
 

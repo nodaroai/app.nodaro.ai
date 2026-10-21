@@ -57,6 +57,8 @@ vi.mock("../../supabase.js", () => {
 })
 
 vi.mock("../../queue.js", () => ({ videoQueue: { getJobs: vi.fn(async () => []), add: vi.fn() } }))
+// R38's cancelled-hold pass has its own suite (cancelled-metered-holds.test.ts).
+vi.mock("../cancelled-metered-holds.js", () => ({ sweepCancelledMeteredHolds: vi.fn(async () => {}) }))
 vi.mock("../hold-expiry.js", () => ({ sweepExpiredHolds: vi.fn(async () => ({ expired: 0, errors: 0 })) }))
 vi.mock("../sync-sweep.js", () => ({
   sweepStaleSyncJob: vi.fn(async (job: { id: string }) => {

@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { RunNodeButton } from "./run-node-button"
+import { llmPickerPriceLabel, useLlmModelPrices } from "@/hooks/use-llm-price"
+import { useLlmPricingMode } from "@/hooks/use-llm-pricing-mode"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
@@ -34,6 +36,7 @@ import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effor
 import type { LLMChatData } from "@/types/nodes"
 
 const AUTO_EFFORT = "__auto__"
+const LLM_MODEL_IDS: readonly string[] = LLM_MODELS.map((m) => m.id)
 
 // Tier labels come from the LLM select's live table so they follow the locale.
 
@@ -70,7 +73,9 @@ export function buildModelChangePatch(data: LLMChatData, nextModelId: string): P
 interface LlmChatQuickToolbarProps {
   readonly nodeId: string
   readonly data: LLMChatData
-  readonly credits: number
+  readonly credits: number | undefined
+  /** `credits` is an estimate (metered pricing): the Run button shows `~`. */
+  readonly creditsEstimate?: boolean
   readonly isRunning: boolean
   /** Fires whenever a select / popover opens or closes, so the parent can
    *  keep the NodeToolbar pinned while a portaled dropdown is active. */
@@ -88,6 +93,7 @@ export function LlmChatQuickToolbar({
   nodeId,
   data,
   credits,
+  creditsEstimate,
   isRunning,
   onAnyOpenChange,
 }: LlmChatQuickToolbarProps) {
@@ -150,7 +156,9 @@ export function LlmChatQuickToolbar({
   // ReasoningEffortSelect, the config-panel counterpart) so wording can't drift.
   const effortLevels = availableReasoningEfforts(currentModel, data.advancedMode)
   const effortValue = data.reasoningEffort ?? AUTO_EFFORT
-  const effortLabel = data.reasoningEffort ? EFFORT_LABELS()[data.reasoningEffort] : t("common.auto")
+  // The pricing mode the server's answers last showed: the labels follow it (a mid-session rollback too).
+  const pricingMode = useLlmPricingMode()
+  const effortLabel = data.reasoningEffort ? EFFORT_LABELS(pricingMode)[data.reasoningEffort] : t("common.auto")
 
   const currentTemplateId = data.templateId ?? "custom"
   // Memoized to match the `modelEntry` precedent above — this toolbar is mounted
@@ -193,6 +201,15 @@ export function LlmChatQuickToolbar({
     "bg-white/85 border-black/10 text-neutral-900 " +
     "node-menu-surface dark:border-white/10 dark:text-white"
 
+  // Each model's estimated price beside its tier — only while the server prices
+  // them as estimates (metered pricing on, D7); the bare tier under rollback.
+  const modelPrices = useLlmModelPrices("llm-chat", LLM_MODEL_IDS, data.reasoningEffort, data.advancedMode === true)
+  const unitShort = t("credits.unitShort")
+  const modelBadge = (m: (typeof LLM_MODELS)[number]) => {
+    const price = llmPickerPriceLabel(modelPrices.get(m.id), unitShort)
+    return price ? `${TIER_LABELS()[m.tier]} · ${price}` : TIER_LABELS()[m.tier]
+  }
+
   const modelItems = (
     <SelectContent className="node-menu-surface">
       {/* Vendor groups, tier-ordered inside each — the shared ordering every
@@ -201,7 +218,7 @@ export function LlmChatQuickToolbar({
         <SelectGroup key={group.vendor}>
           <SelectLabel>{group.label}</SelectLabel>
           {group.models.map((m) => (
-            <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS()[m.tier]} description={localizeDesc(m.desc)} className="text-xs">
+            <SelectItemWithMeta key={m.id} value={m.id} badge={modelBadge(m)} description={localizeDesc(m.desc)} className="text-xs">
               {m.displayName}
             </SelectItemWithMeta>
           ))}
@@ -215,7 +232,7 @@ export function LlmChatQuickToolbar({
       <SelectItem value={AUTO_EFFORT} className="text-xs">{t("cfgshared.effortAutoModelDefault")}</SelectItem>
       {effortLevels.map((level) => (
         <SelectItem key={level} value={level} className="text-xs">
-          {EFFORT_LABELS()[level]}
+          {EFFORT_LABELS(pricingMode)[level]}
         </SelectItem>
       ))}
     </SelectContent>
@@ -311,7 +328,7 @@ export function LlmChatQuickToolbar({
             </ToolbarSetting>
           </PopoverContent>
         </Popover>
-        <RunNodeButton nodeId={nodeId} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={nodeId} credits={credits} creditsEstimate={creditsEstimate} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
       </div>
     )
   }
@@ -360,7 +377,7 @@ export function LlmChatQuickToolbar({
 
 
       {/* Run button — credit × repeat multiplier baked in by RunNodeButton. */}
-      <RunNodeButton nodeId={nodeId} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+      <RunNodeButton nodeId={nodeId} credits={credits} creditsEstimate={creditsEstimate} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
     </div>
   )
 }

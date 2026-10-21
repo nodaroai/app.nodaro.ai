@@ -29,10 +29,11 @@
  * "+ n more" row follows the same rule: credits summed, then converted.
  */
 import { useState } from "react"
-import { creditUnits } from "@/lib/credit-units"
+import { creditUnits, creditUnitsApprox } from "@/lib/credit-units"
 import { useT, type TFunction } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { groupedLabels } from "./render-confirm-detail"
+import { runLinesUnpriced } from "./run-unpriced"
 import type { RunConfirmInfo, RunConfirmLine } from "./types"
 
 /** Up to this many rows show in full; past it, the first `FOLDED_SHOWN` and a "+ n more" row. */
@@ -140,6 +141,10 @@ export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo })
   }
 
   const rows = breakdownRows(lines)
+  // A node the server refuses to price (`llm_model_unpriced`): its row and the total say it is not
+  // priced yet, the server's sentence on hover — never a figure that leaves it out.
+  const unpriced = runLinesUnpriced(lines)
+  const notPriced = t("renderFinal.priceNotPricedYet")
   const folded = !expanded && rows.length > MAX_ROWS
   const shown = folded ? rows.slice(0, FOLDED_SHOWN) : rows
   const rest = rows.slice(FOLDED_SHOWN).flatMap((r) => (r.kind === "line" ? [r.line] : []))
@@ -162,7 +167,10 @@ export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo })
                 <tr key={row.line.nodeId}>
                   <td className={`py-0.5 pe-3 ${row.indented ? "ps-4 text-muted-foreground" : "font-medium"}`}>{localize(row.line.label)}</td>
                   <td className="py-0.5 pe-3 text-muted-foreground">{lineQuantity(row.line, t)}</td>
-                  <td className="py-0.5 text-end tabular-nums">{creditUnits(row.line.credits)}</td>
+                  {/* A metered LLM node's line is its estimate: `~N`. */}
+                  <td className="py-0.5 text-end tabular-nums" title={row.line.unpriced ? row.line.unpricedMessage : undefined}>
+                    {row.line.unpriced ? notPriced : creditUnitsApprox(row.line.credits, row.line.estimate)}
+                  </td>
                 </tr>
               ),
             )}
@@ -177,14 +185,14 @@ export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo })
         >
           {t("renderFinal.moreLines", {
             n: rest.length,
-            credits: creditUnits(rest.reduce((sum, line) => sum + line.credits, 0)),
+            credits: creditUnitsApprox(rest.reduce((sum, line) => sum + line.credits, 0), rest.some((line) => line.estimate === true)),
           })}
         </button>
       )}
       <div className="flex justify-between gap-3 border-t border-border pt-1 font-medium">
         <span>{t("renderFinal.lineTotal")}</span>
-        <span className="tabular-nums">
-          {t("renderFinal.lineTotalCredits", { credits: creditUnits(info.estimatedCredits) })}
+        <span className="tabular-nums" title={unpriced?.message}>
+          {unpriced ? notPriced : t("renderFinal.lineTotalCredits", { credits: creditUnits(info.estimatedCredits) })}
         </span>
       </div>
       {gatedLine}

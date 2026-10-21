@@ -350,6 +350,10 @@ async function applyBlock(
   // "provider delivered ⇒ never refund" doctrine (D19). Money only ever moves
   // behind the CAS boolean.
   await refundReservedCreditsForJob(jobId)
+  // R61: a metered LLM job settled its calls BEFORE this completion (D10), so
+  // its charge is committed, not reserved — reversed here too, with its
+  // settled side holds (R57's shape).
+  await refundSettledLlmChargesSafely(jobId)
   // Both sources, uncapped: what the caller was about to publish AND whatever a
   // mid-run checkpoint already wrote onto the row. `held_objects`' cap is a
   // review-UI bound; applying it here would leave a 25-segment job's tail live
@@ -361,6 +365,24 @@ async function applyBlock(
   // change does not itself repair, made findable instead of invisible.
   await setDecisionApplied(decisionId, true)
   return "blocked"
+}
+
+/**
+ * R61 + R57: the platform's reversal of a refused job's SETTLED metered LLM
+ * charges and side holds (`lib/llm-platform-refund.ts`, loaded lazily: the
+ * money path is Cloud code). Answers how many usage logs it refunded. Never
+ * throws, the import included: it runs between a refusal's CAS and the
+ * deletion of the refused output and the decision's record, which must happen
+ * whatever the money did.
+ */
+async function refundSettledLlmChargesSafely(jobId: string): Promise<number> {
+  try {
+    const { refundSettledLlmCharges } = await import("./llm-platform-refund.js")
+    return await refundSettledLlmCharges(jobId)
+  } catch (err) {
+    console.error(`[job-policy] the platform refund of job ${jobId}'s settled LLM charges failed:`, err)
+    return 0
+  }
 }
 
 /**
@@ -663,9 +685,10 @@ export interface HeldRejectionInput {
 }
 
 /** `refunded` is the number of `usage_logs` rows the refund actually moved —
- *  0 when the reservation was already settled (the smart-loop-cut path commits
- *  at reserved-minus-addon BEFORE the gate speaks, so a later rejection has
- *  nothing left to return). Callers that TELL the user their credits came back
+ *  the reservation's, plus a metered LLM job's settled charges and side holds
+ *  the platform reversed (R61) — 0 when the reservation was already settled
+ *  (the smart-loop-cut path commits at reserved-minus-addon BEFORE the gate
+ *  speaks, so a later rejection has nothing left to return). Callers that TELL the user their credits came back
  *  must read it: the user-facing sentence is written by the CAS above, before
  *  the refund runs, so only the caller can correct a promise that turned out
  *  to be false. */
@@ -720,7 +743,10 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
   })
   if (!flipped) return { ok: false, reason: "lost_race" }
 
-  const refunded = await refundReservedCreditsForJob(jobId)
+  // R61: a metered LLM job's charge settled before it was parked — reversed with
+  // the reservation, and counted with it (a caller checks the count before
+  // telling the user their credits came back).
+  const refunded = (await refundReservedCreditsForJob(jobId)) + (await refundSettledLlmChargesSafely(jobId))
   await deleteOwnedObjects(jobId, [...(row.held_objects ?? []), ...allOwnedObjects(jobId, row.held_output_data)])
   await recordJobPolicyDecision({
     jobId,
@@ -771,7 +797,19 @@ export async function withdrawHeldJob(jobId: string): Promise<HeldResolution> {
     .select("id")
   if (!Array.isArray(flipped) || flipped.length === 0) return { ok: false, reason: "lost_race" }
 
-  const refunded = await refundReservedCreditsForJob(jobId)
+  const reservationRefunded = await refundReservedCreditsForJob(jobId)
+  // 554: the job's metered SIDE holds (a call it made beside its own reservation). Any still open
+  // settle on their own markers after the flip; and — R57 / R61, a deliberate platform refund
+  // (`billing_force_refund`), not the D10 case — what was already charged is refunded too: the
+  // job's own settled metered charge and its side holds, as when they sat inside the reservation
+  // refunded above.
+  try {
+    const sideHolds = await import("./llm-side-hold.js")
+    await sideHolds.settleSideHoldsAfterFlip([jobId])
+  } catch (err) {
+    console.error(`[job-policy] settling the open side holds of withdrawn job ${jobId} failed — left to the side-hold sweep:`, err)
+  }
+  const refunded = reservationRefunded + (await refundSettledLlmChargesSafely(jobId))
   await deleteOwnedObjects(jobId, [...(row.held_objects ?? []), ...allOwnedObjects(jobId, row.held_output_data)])
   await recordJobPolicyDecision({
     jobId,

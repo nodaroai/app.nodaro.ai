@@ -16,6 +16,7 @@ import { REDUCE_STRATEGY_COPY } from "@/lib/reduce-strategy-copy"
 import type { ConfigProps } from "./types"
 import { ReduceStrategyForms } from "./reduce-strategy-forms"
 import { ModelSelectOption } from "./model-select-option"
+import { llmPickerPriceLabel, useLlmPrice } from "@/hooks/use-llm-price"
 
 /**
  * Config panel for the Choose Best node (type id `reduce`).
@@ -47,6 +48,11 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   // The AI judge's price follows the chosen model's tier; the option row
   // shows the price for the model currently picked on this node.
   const judgeModel = typeof data.strategyConfig?.llmModel === "string" ? data.strategyConfig.llmModel : undefined
+  // The judge's metered estimate (`reduce:pick-best-llm:<model>`), shown `~N`
+  // while metered pricing is on; under the rollback the row prices its tier
+  // id exactly as before.
+  const judgePrice = useLlmPrice("reduce:pick-best-llm", judgeModel)
+  const judgeBadge = llmPickerPriceLabel(judgePrice, t("credits.unitShort"))
 
   return (
     <Tabs defaultValue="config" className="w-full">
@@ -87,6 +93,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
                       ? buildLlmCreditIdentifier(s.creditCostKey, judgeModel)
                       : s.creditCostKey
                   }
+                  {...(s.id === "pick-best-llm" && judgeBadge ? { badge: judgeBadge } : {})}
                 />
               ))}
             </SelectContent>

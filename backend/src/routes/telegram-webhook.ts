@@ -10,6 +10,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { canRunWorkflow } from "../lib/workflow-access.js"
 import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
 import { refusePreviewFire } from "../lib/preview-fire-refusal.js"
+import { refuseUnpricedFire } from "../lib/llm-unpriced-fire-refusal.js"
 import { getRouteForToken, downloadTelegramFile } from "../lib/telegram-router.js"
 import { ensureBotRegistration, syncBotRegistration } from "../lib/telegram-trigger-activation.js"
 
@@ -135,6 +136,18 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
       // billed, with one deduped failed row for the owner.
       if (
         await refusePreviewFire({
+          workflowId: trigger.workflowId,
+          userId: trigger.userId,
+          triggerType: "telegram",
+          triggerId: trigger.triggerId,
+          triggerNodeId: trigger.nodeId ?? null,
+        })
+      ) {
+        continue
+      }
+      // A metered LLM model with no price on the branch (R51): refused the same way.
+      if (
+        await refuseUnpricedFire({
           workflowId: trigger.workflowId,
           userId: trigger.userId,
           triggerType: "telegram",

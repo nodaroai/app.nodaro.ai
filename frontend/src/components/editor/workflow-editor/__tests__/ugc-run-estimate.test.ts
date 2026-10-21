@@ -114,6 +114,18 @@ describe("ugcRunCredits: a run set's one figure", () => {
       script: PARTS.script, creator: PARTS.creator, clips: 0, clip: PARTS.clip, cards: PARTS.cards, join: PARTS.join, overlay: PARTS.overlay, captions: PARTS.captions,
     })
   })
+  it("`~` exactly when the server's figure is one: a covered node's part the answer marks an estimate (`estimateParts`)", () => {
+    // No part marked: a fixed figure, no `~`.
+    expect(mod.ugcRunCredits(TOOLBAR, NODES, EDGES, cost, always(ANSWER)).approx).toBe(false)
+    // The creator check is metered (fixed-mode plugin): the run's figure is an estimate.
+    const creatorMetered = { ...ANSWER, estimateParts: ["creator"] } as UgcRunEstimate
+    expect(mod.ugcRunCredits(TOOLBAR, NODES, EDGES, cost, always(creatorMetered)).approx).toBe(true)
+    // A run that does not execute the marked part is not an estimate (the script's ▶ alone).
+    expect(mod.ugcRunCredits(pick("script"), NODES, EDGES, cost, always(creatorMetered)).approx).toBe(false)
+    // A metered clip reading marks the clip part: Run from a node above it is `~` too.
+    const clipMetered = { ...ANSWER, estimateParts: ["clip"] } as UgcRunEstimate
+    expect(mod.ugcRunCredits(pick("clip", "join"), NODES, EDGES, cost, always(clipMetered)).approx).toBe(true)
+  })
   it("no answer yet: the editor's own figure for the whole set, marked as an estimate", () => {
     expect(mod.ugcRunCredits(TOOLBAR, NODES, EDGES, cost, always(undefined))).toMatchObject({ credits: CLIENT_TOOLBAR, hold: CLIENT_TOOLBAR, estimate: "client" })
   })

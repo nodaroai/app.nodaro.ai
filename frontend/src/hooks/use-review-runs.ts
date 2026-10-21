@@ -24,6 +24,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { reviewGate, type ReviewGate } from "@/lib/edl-review/review-gate"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
+import type { RunUnpriced } from "@/components/editor/workflow-editor/run-unpriced"
 import type { ReviewChecks } from "./use-review-checks"
 import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
@@ -40,6 +41,14 @@ export interface ReviewRuns {
   readonly finalUnchecked?: UgcPriceState
   /** Update preview's, likewise. */
   readonly previewUnchecked?: UgcPriceState
+  /** Render final's price holds a metered LLM call's estimate (charged its actual usage): shown approximate. */
+  readonly finalApprox?: true
+  /** Update preview's, likewise. */
+  readonly previewApprox?: true
+  /** Render final's run holds a node the server refuses to price: no figure, not priced yet (`runPriceSuffix`). */
+  readonly finalUnpriced?: RunUnpriced
+  /** Update preview's, likewise. */
+  readonly previewUnpriced?: RunUnpriced
   readonly canUpdatePreview: boolean
   /** Render final can go ahead from here (`useRenderFinal`): a use-case node's
    *  only while its take on show is a Preview its run can finish. */
@@ -115,6 +124,10 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
     previewCredits: refusal ? 0 : controls.previewCredits,
     ...(!refusal && controls.finalUnchecked ? { finalUnchecked: controls.finalUnchecked } : {}),
     ...(!refusal && controls.previewUnchecked ? { previewUnchecked: controls.previewUnchecked } : {}),
+    ...(!refusal && controls.finalApprox ? { finalApprox: true as const } : {}),
+    ...(!refusal && controls.previewApprox ? { previewApprox: true as const } : {}),
+    ...(!refusal && controls.finalUnpriced ? { finalUnpriced: controls.finalUnpriced } : {}),
+    ...(!refusal && controls.previewUnpriced ? { previewUnpriced: controls.previewUnpriced } : {}),
     canUpdatePreview,
     canRenderFinal,
     running: gate.mode === "running" ? started : null,

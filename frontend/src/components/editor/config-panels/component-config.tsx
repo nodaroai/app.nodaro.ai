@@ -121,7 +121,8 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
         exposedSettings: newSettings,
       })
         .then((res) => {
-          if (res.estimatedCredits > 0) onUpdate({ estimatedCredits: res.estimatedCredits })
+          // The flag is always written (true or false), so a re-estimate that is fixed clears a stale `~`.
+          if (res.estimatedCredits > 0) onUpdate({ estimatedCredits: res.estimatedCredits, estimatedCreditsIsEstimate: res.estimatedCreditsIsEstimate === true })
         })
         .catch(() => {})
     }, 400)

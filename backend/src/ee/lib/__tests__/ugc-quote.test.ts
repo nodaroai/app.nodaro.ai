@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { LLM_FEATURE_DEFAULTS, llmPriceKey } from "@nodaro/shared/llm-models"
+import { setLlmMeteredSchemaReadyForTesting } from "../../../lib/llm-metered-schema-gate.js"
 import type { BillingContext } from "../../../lib/billing-context.js"
 
 /**
@@ -13,6 +15,10 @@ const h = vi.hoisted(() => ({
   jobs: [] as Array<Record<string, unknown>>,
   jobsError: null as unknown,
   inCalls: [] as unknown[][],
+  /** Metered price keys' estimates (already charged), as the charged price table quotes them; absent = unpriced. */
+  metered: {} as Record<string, number>,
+  /** A real `LlmUnpricedModelError` (set below, once the module is loaded). */
+  unpriced: (_modelId: string): Error => new Error("not loaded"),
   /** Per-id admin availability; an id not listed is enabled for every tier. */
   availability: {} as Record<string, { isEnabled?: boolean; tierRestriction?: string | null }>,
   profile: { tier: "free", subscription_tier: null, lifetime_topup_credits: 0 } as Record<string, unknown> | null,
@@ -23,6 +29,9 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock("../../billing/credits.js", () => ({
+  getChargedPriceTable: vi.fn(async () => ({})),
+  meteredLlmQuote: vi.fn((_table: unknown, key: string) =>
+    h.metered[key] === undefined ? { kind: "unpriced", error: h.unpriced(key.split(":")[1]!) } : { kind: "estimate", credits: h.metered[key] }),
   // The base row (unmarked): what a computed charge's units are priced at (`unitRateBaseCredits`).
   getModelCreditBaseCost: vi.fn(async (id: string) => {
     const base = h.prices[id]
@@ -72,9 +81,18 @@ vi.mock("../../../lib/supabase.js", () => ({
   },
 }))
 
+// R58: the plugin's reading mode (`ugc.clipReadingMode`) and side-hold availability.
+const mode = vi.hoisted(() => ({ reading: "metered" as "metered" | "fixed" | undefined, sideHolds: true }))
+vi.mock("../../../lib/private-plugins/services-registry.js", () => ({
+  getPluginServices: () => (mode.reading ? { ugc: { clipReadingMode: () => mode.reading } } : {}),
+}))
+vi.mock("../../../lib/llm-side-hold-availability.js", () => ({ sideHoldsAvailable: () => mode.sideHolds }))
+
 const USER = "u1"
 const PAYER = "payer-1"
-const { buildUgcQuote, pricingFor, UgcQuoteError } = await import("../ugc-quote.js")
+const { buildUgcQuote, pricingFor, priceUgcCalls, UgcQuoteError, UgcQuoteUnpricedError, ESTIMATE_CALLER, ugcClipReadingPricedAt } = await import("../ugc-quote.js")
+const { LlmUnpricedModelError } = await import("../../billing/llm-metered.js")
+h.unpriced = (modelId) => new LlmUnpricedModelError(modelId, "kie")
 
 const J = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const item = (tool: string, args: Record<string, unknown> = {}, label = tool) => ({ label, tool, args, count: 1 })
@@ -82,6 +100,8 @@ const quote = (items: ReturnType<typeof item>[], spentJobIds: string[] = [], cli
   buildUgcQuote({ items, clipCount, spentJobIds, userId: USER, ...(billingContext ? { billingContext } : {}) })
 
 beforeEach(() => {
+  mode.reading = "metered"
+  mode.sideHolds = true
   h.prices = {
     "seedance-2-5:8s:720p": 1260, "extract-frame": 10, "image-collage:2K": 20,
     "image-collage:4K": 40, "image-to-text": 3, "elevenlabs-forced-alignment": 30, "elevenlabs-stt": 22,
@@ -89,6 +109,7 @@ beforeEach(() => {
     "silence-detect": 10,
   }
   h.markup = 0
+  h.metered = {}
   h.jobs = []
   h.jobsError = null
   h.inCalls = []
@@ -138,6 +159,80 @@ describe("pricing each item", () => {
       { label: "e", credits: 30 }, { label: "f", credits: 10 }, { label: "g", credits: 20 },
     ])
     expect(q.total).toBe(123)
+  })
+})
+
+describe("metered LLM pricing (R26): a reading is quoted at its estimate", () => {
+  const KEY = llmPriceKey("image-to-text", LLM_FEATURE_DEFAULTS["image-to-text"])
+  beforeEach(() => setLlmMeteredSchemaReadyForTesting(true))
+  afterEach(() => setLlmMeteredSchemaReadyForTesting(undefined))
+
+  it("the guard's id still decides the gates; the amount is the key's estimate, flagged an estimate", async () => {
+    h.metered[KEY] = 6
+    expect(await pricingFor("image_to_text", { custom_prompt: "x" }, { clipCount: 1 })).toEqual({ id: "image-to-text", meteredKey: KEY })
+    const q = await quote([item("image_to_text", { custom_prompt: "x" }, "Reading"), item("extract_frame", {}, "Frame")])
+    expect(q.lines).toEqual([{ label: "Reading", credits: 6, estimate: true }, { label: "Frame", credits: 10 }])
+    expect(q.total).toBe(16)
+    expect(q.totalIsEstimate).toBe(true)
+  })
+
+  it("the model, effort and Advanced flag the verb sends pick the key", async () => {
+    const key = llmPriceKey("image-to-text", "claude-opus-5.5", "high", true)
+    expect(await pricingFor("image_to_text", { llmModel: "claude-opus-5.5", reasoning_effort: "high", advanced_mode: true }, { clipCount: 1 }))
+      .toEqual({ id: expect.any(String), meteredKey: key })
+  })
+
+  it("a model with no price on its lane is refused llm_model_unpriced (R49), never 0", async () => {
+    const err = await quote([item("image_to_text", {}, "Reading")]).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(UgcQuoteUnpricedError)
+    expect(err).toBeInstanceOf(UgcQuoteError)
+    expect((err as InstanceType<typeof UgcQuoteUnpricedError>).code).toBe("llm_model_unpriced")
+    expect((err as Error).message).toMatch(/llm_model_unpriced.*has no price yet/)
+  })
+
+  it("R58 metered mode: the plugin is still handed the tier row (it ignores it); the MCP quote and every quote surface price the reading at its estimate", async () => {
+    h.metered[KEY] = 6
+    expect(await priceUgcCalls(ESTIMATE_CALLER, [{ tool: "image_to_text", args: { custom_prompt: "x" } }])).toEqual([3])
+    expect((await quote([item("image_to_text", { custom_prompt: "x" }, "Reading")])).lines).toEqual([{ label: "Reading", credits: 6, estimate: true }])
+    expect(ugcClipReadingPricedAt()).toBe("estimate")
+    expect(await priceUgcCalls(ESTIMATE_CALLER, [{ tool: "image_to_text", args: { custom_prompt: "x" } }], ugcClipReadingPricedAt())).toEqual([6])
+  })
+
+  it.each([
+    ["an older plugin (no clipReadingMode)", undefined, true],
+    ["a plugin declaring fixed", "fixed", true],
+    ["a metered plugin without side holds", "metered", false],
+  ] as const)("R58 fixed mode WITH the metered schema ready — %s: the in-clip reading would be the tier row, but the MCP quote's frame check is a ROUTE call: its estimate, ~", async (_what, reading, sideHolds) => {
+    mode.reading = reading
+    mode.sideHolds = sideHolds
+    h.metered[KEY] = 6
+    // The plugin's own in-clip reading (quoteTickets) follows the clip mode: the tier row here…
+    expect(ugcClipReadingPricedAt()).toBe("tier")
+    expect(await priceUgcCalls(ESTIMATE_CALLER, [{ tool: "image_to_text", args: { custom_prompt: "x" } }], ugcClipReadingPricedAt())).toEqual([3])
+    // …but the agent runs the frame check through /v1/image-to-text/describe, which meters it.
+    const q = await quote([item("image_to_text", { custom_prompt: "x" }, "Reading")])
+    expect(q.lines).toEqual([{ label: "Reading", credits: 6, estimate: true }])
+    expect(q.totalIsEstimate).toBe(true)
+  })
+
+  it("the plugin's clip reading (CLIP_READING_CALL, no args) is quoted under image-to-text on the feature's default model — the id the plugin settles it under", async () => {
+    const quoted = await pricingFor("image_to_text", {}, { clipCount: 1 })
+    expect(quoted?.meteredKey).toBe(llmPriceKey("image-to-text", LLM_FEATURE_DEFAULTS["image-to-text"]))
+    expect(quoted?.meteredKey).toBe(`image-to-text:${LLM_FEATURE_DEFAULTS["image-to-text"]}`)
+  })
+
+  it("an admin-disabled reading is still refused by the guard's own row", async () => {
+    h.metered[KEY] = 6
+    h.availability["image-to-text"] = { isEnabled: false }
+    await expect(quote([item("image_to_text", {}, "Reading")])).rejects.toThrow(new UgcQuoteError("Reading"))
+  })
+
+  it("rollback: the tier row, exactly as before — no estimate anywhere", async () => {
+    setLlmMeteredSchemaReadyForTesting(false)
+    h.metered[KEY] = 6
+    expect(await pricingFor("image_to_text", { custom_prompt: "x" }, { clipCount: 1 })).toEqual({ id: "image-to-text" })
+    const q = await quote([item("image_to_text", { custom_prompt: "x" }, "Reading")])
+    expect(q).toEqual({ spent: [], lines: [{ label: "Reading", credits: 3 }], total: 3, skipped: [] })
   })
 })
 

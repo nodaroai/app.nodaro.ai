@@ -22,7 +22,9 @@ const rowOf = (id: string): number | undefined =>
   : undefined
 vi.mock("../ugc-quote.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../ugc-quote.js")>()
-  return { ...real, priceUgcCalls: vi.fn(async (_caller: unknown, calls: Call[]) => calls.map(priceOf)) }
+  const { priceUgcCallLinesVia } = await import("./helpers/ugc-price-lines.js")
+  const priceUgcCalls = vi.fn(async (_caller: unknown, calls: Call[]) => calls.map(priceOf))
+  return { ...real, priceUgcCalls, priceUgcCallLines: priceUgcCallLinesVia(priceUgcCalls) }
 })
 vi.mock("../../billing/credits.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../billing/credits.js")>()),

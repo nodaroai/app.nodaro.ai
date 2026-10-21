@@ -128,6 +128,8 @@ vi.mock("../hold-expiry.js", () => ({
 
 // Use-case wrappers are finalised from their inner run (its own suite:
 // use-case-wrapper-sweep.test.ts); here only its place in the tick matters.
+// R38's cancelled-hold pass has its own suite (cancelled-metered-holds.test.ts).
+vi.mock("../cancelled-metered-holds.js", () => ({ sweepCancelledMeteredHolds: vi.fn(async () => {}) }))
 vi.mock("../use-case-wrapper-sweep.js", () => ({
   sweepUseCaseWrappers: vi.fn().mockResolvedValue({ scanned: 0, swept: 0, recovered: 0, notStale: 0, errors: 0 }),
 }))
@@ -448,6 +450,25 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-1" }))
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-2" }))
     expect(result.swept).toBe(2)
+  })
+
+  it("A: every sweepStaleSyncJob lane hands on the row's reconcile_last_error (the metered sweep's billed marker)", async () => {
+    const MARK = "metered_settle_retry:billed: confirmed metered + billed"
+    mocks.rows.push({
+      id: "j-future-mark",
+      status: "processing",
+      provider_kind: "kie-future-model" as unknown as string,
+      provider_task_id: "task-1",
+      provider_call_started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      reconcile_attempts: 1,
+      reconcile_last_error: MARK,
+    })
+    mocks.neverStartedRows.push({ id: "j-never-mark", provider_kind: null, reconcile_attempts: 1, reconcile_last_error: MARK })
+    await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-future-mark", reconcile_last_error: MARK }))
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-never-mark", reconcile_last_error: MARK }))
+    // …and a row without one passes an explicit null, never an absent field.
+    for (const [arg] of (sweepStaleSyncJob as ReturnType<typeof vi.fn>).mock.calls) expect(arg).toHaveProperty("reconcile_last_error")
   })
 
   it("never-started sweep leaves a quietly stopped account's pending jobs alone (they are MEANT to wait)", async () => {

@@ -15,7 +15,8 @@
     "e-commerce"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 152,
+  "estimatedCredits": 159,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "person",

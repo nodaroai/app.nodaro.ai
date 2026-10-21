@@ -2,7 +2,7 @@
  * The KIE SSE stream parser (all three formats) and the `responses` stream integrity rules.
  */
 
-import { calculateLlmCost } from "../pricing/llm-cost.js"
+import { llmCostOrZero } from "../pricing/llm-cost.js"
 import {
   LlmLaneError,
   LlmOutputTruncatedError,
@@ -14,6 +14,7 @@ import {
   type ReplyEnd,
 } from "../llm-errors.js"
 import { assertKieEnvelope, extractActualUsd } from "./response.js"
+import { asStoppedStream, type StreamAbortContext } from "./stream-abort.js"
 import type { LlmResponse } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -160,6 +161,13 @@ export async function parseSseStream(
   onToolJson?: (partialJson: string) => void,
   /** A `stop_reason: "refusal"` throws — a structured call only (`LlmRequest.failOnRefusal`). */
   refusalFails = false,
+  /**
+   * The caller's cancel, on an `llmStream` call (D2): a read the caller stopped
+   * throws `LlmStreamAbortedError` with the estimated usage of the prompt and
+   * of everything streamed so far (`asStoppedStream`). Absent on the collapsed
+   * non-streaming wires, whose signal is their own deadline.
+   */
+  abort?: StreamAbortContext,
 ): Promise<LlmResponse> {
   const reader = response.body?.getReader()
   if (!reader) throw new Error("No response body for SSE stream")
@@ -274,11 +282,11 @@ export async function parseSseStream(
           const detail =
             `KIE.ai ${format} stream ${modelId} returned an error event: ${e?.type ?? "unknown"}: ${e?.message ?? JSON.stringify(parsed).slice(0, 200)}`
           if (usage) {
-            const providerCost = actualUsd ?? calculateLlmCost(modelId, usage)
+            const providerCost = actualUsd ?? llmCostOrZero(modelId, usage)
             throw new LlmStreamResponseError(detail, {
               inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
               providerCost, ...(actualUsd !== undefined ? { creditsUsd: actualUsd } : {}), complete: providerCost !== undefined,
-            })
+            }, "kie")
           }
           throw new Error(detail)
         }
@@ -350,7 +358,7 @@ export async function parseSseStream(
               completedText = responsesFrameText(resp)
             }
             if (eventType !== "response.completed") {
-              const providerCost = actualUsd ?? (usage ? calculateLlmCost(modelId, usage) : undefined)
+              const providerCost = actualUsd ?? (usage ? llmCostOrZero(modelId, usage) : undefined)
               // The provider's own reason, not just the event name. `response.incomplete`
               // carries `incomplete_details.reason` ("max_output_tokens", "content_filter")
               // and `response.failed` carries `error.code`/`error.message` — the difference
@@ -373,9 +381,9 @@ export async function parseSseStream(
               // there, with this lane's own diagnostic kept in the parentheses.
               const incomplete = (resp?.incomplete_details as Record<string, unknown> | undefined)?.reason
               if (isOutputCapStop(incomplete)) {
-                throw new LlmOutputTruncatedError(`${outputCappedMessage()} (${detail})`, failureUsage)
+                throw new LlmOutputTruncatedError(`${outputCappedMessage()} (${detail})`, failureUsage, "kie")
               }
-              throw new LlmStreamResponseError(detail, failureUsage)
+              throw new LlmStreamResponseError(detail, failureUsage, "kie")
             }
             // This event completes the response even if the HTTP connection stays
             // open. Preserve its usage, then release the reader in finally.
@@ -384,6 +392,11 @@ export async function parseSseStream(
         }
       }
     }
+  } catch (err) {
+    // A stopped stream is billed what it already spent: the prompt, and every
+    // character of answer that arrived — text and tool JSON alike.
+    if (abort) throw asStoppedStream(err, { ...abort, modelId, lane: "kie", streamedChars: fullText.length + toolJson.length })
+    throw err
   } finally {
     reader.cancel().catch(() => {})
   }
@@ -405,11 +418,11 @@ export async function parseSseStream(
   }
 
   // Real billing beats the estimate, same precedence as the non-streaming path.
-  const providerCost = actualUsd ?? (usage ? calculateLlmCost(modelId, usage) : undefined)
+  const providerCost = actualUsd ?? (usage ? llmCostOrZero(modelId, usage) : undefined)
   // Last, so a streamed caller has already shown every token it received — the
   // throw is what stops those tokens being saved as a finished answer.
-  if (refusalFails) assertNotContentRefusal({ modelId, lane: `kie ${format} stream`, stopReason, usage, providerCost, creditsUsd: actualUsd })
-  assertNotOutputCapped({ modelId, lane: `kie ${format} stream`, stopReason, cap, usage, providerCost, creditsUsd: actualUsd })
+  if (refusalFails) assertNotContentRefusal({ modelId, lane: `kie ${format} stream`, stopReason, usage, providerCost, creditsUsd: actualUsd, servedLane: "kie" })
+  assertNotOutputCapped({ modelId, lane: `kie ${format} stream`, stopReason, cap, usage, providerCost, creditsUsd: actualUsd, servedLane: "kie" })
 
   return {
     // Text wins when present; the accumulated tool payload is the body only for

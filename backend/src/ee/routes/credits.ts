@@ -14,7 +14,9 @@ import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
-import { chargedCredits, getChargedPriceTable, type UserBalance } from "../billing/credits.js"
+import { chargedCredits, estimateWorkflowCreditsDetailed, getChargedPriceTable, isMeteredLlmQuoteId, meteredLlmQuote, type UserBalance } from "../billing/credits.js"
+import { replyIfLlmUnpriced } from "../../lib/llm-unpriced-refusal.js"
+import { llmModelUnpricedMessage, sendLlmModelUnpriced } from "../billing/llm-unpriced-reply.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
 import { config } from "../../lib/config.js"
 import { firstHeaderValue } from "../../lib/request-helpers.js"
@@ -235,6 +237,10 @@ export async function creditsRoutes(app: FastifyInstance) {
       data: zOpenApi.record(zOpenApi.string(), zOpenApi.number()),
       missing: zOpenApi.array(zOpenApi.string()),
       errors: zOpenApi.array(zOpenApi.string()),
+      errorCodes: zOpenApi.record(zOpenApi.string(), zOpenApi.object({ code: zOpenApi.literal("llm_model_unpriced"), message: zOpenApi.string() })).optional()
+        .describe("Why each identifier in `errors` has no price. Omitted when `errors` is empty."),
+      estimates: zOpenApi.array(zOpenApi.string()).optional()
+        .describe("The identifiers in `data` whose figure is an estimate (a metered LLM price key, `<feature>:<model>[:direct]`) — show it as `~N`. Omitted when there are none."),
     }) } } } },
   })
   /**
@@ -433,6 +439,18 @@ export async function creditsRoutes(app: FastifyInstance) {
     }
 
     try {
+      // A metered LLM price key (`llmPriceKey`) has no fixed price: it is
+      // answered with its estimate, flagged, and never cached — the estimate
+      // moves with the rate table and the rollback switch. Under the rollback
+      // it is not a metered key, and takes today's path (priced nowhere).
+      if (isMeteredLlmQuoteId(model)) {
+        const quote = meteredLlmQuote(await getChargedPriceTable(), model)
+        if (quote) {
+          reply.header("Cache-Control", "no-store")
+          if (quote.kind === "unpriced") return sendLlmModelUnpriced(reply, quote.error)
+          return reply.send({ data: { model, creditCost: quote.credits, estimate: true } })
+        }
+      }
       const creditCost = await CreditsService.getModelCreditCost(model)
       reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
       return reply.send({ data: { model, creditCost } })
@@ -455,8 +473,10 @@ export async function creditsRoutes(app: FastifyInstance) {
    * the model pickers ask for every variant of every variable-priced model at
    * once. An unpriced identifier lands in `missing` and never fails the batch —
    * the hard-fail policy still triggers when the user actually runs the node.
-   * `errors` stays on the wire for older clients; a failed table read prices
-   * from STATIC_CREDIT_COSTS rather than failing identifiers.
+   * A failed table read prices from STATIC_CREDIT_COSTS rather than failing
+   * identifiers. A metered LLM price key is answered with its estimate and
+   * listed in `estimates`; one whose model has no rate lands in `errors`, its
+   * code in `errorCodes`.
    */
   app.post("/v1/credits/model-costs", async (req, reply) => {
     const parsed = modelCostsBody.safeParse(req.body ?? {})
@@ -471,7 +491,27 @@ export async function creditsRoutes(app: FastifyInstance) {
       const prices = await getChargedPriceTable()
       const costs: Record<string, number> = {}
       const missing: string[] = []
+      // A metered LLM price key is priced at its estimate and listed in
+      // `estimates`; a model with no rate on its lane is reported in `errors`
+      // (with its code in `errorCodes`), never priced 0. Both fields are
+      // additive: a batch with no metered key answers exactly as before, and
+      // under the rollback a metered key lands in `missing` (D7).
+      const estimates: string[] = []
+      const errors: string[] = []
+      const errorCodes: Record<string, { code: "llm_model_unpriced"; message: string }> = {}
       for (const model of models) {
+        const quote = meteredLlmQuote(prices, model)
+        // A repeated id is listed once (`data` / `errorCodes` are keyed by it).
+        if (quote?.kind === "estimate") {
+          if (!Object.hasOwn(costs, model)) estimates.push(model)
+          costs[model] = quote.credits
+          continue
+        }
+        if (quote?.kind === "unpriced") {
+          if (!Object.hasOwn(errorCodes, model)) errors.push(model)
+          errorCodes[model] = { code: quote.error.code, message: llmModelUnpricedMessage(quote.error) }
+          continue
+        }
         const cost = chargedCredits(prices, model)
         if (cost === undefined) missing.push(model)
         else costs[model] = cost
@@ -481,7 +521,16 @@ export async function creditsRoutes(app: FastifyInstance) {
           `[credits] model-costs: ${missing.length} unpriced identifier(s): ${missing.join(", ")}`,
         )
       }
-      return { data: costs, missing, errors: [] as string[] }
+      if (errors.length > 0) {
+        console.warn(`[credits] model-costs: ${errors.length} LLM model(s) with no rate: ${errors.join(", ")}`)
+      }
+      return {
+        data: costs,
+        missing,
+        errors,
+        ...(errors.length > 0 ? { errorCodes } : {}),
+        ...(estimates.length > 0 ? { estimates } : {}),
+      }
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to get model costs")
     }
@@ -648,9 +697,15 @@ export async function creditsRoutes(app: FastifyInstance) {
       // A use-case node is priced on what the caller's run reads: several recordings only while Speaker Map
       // is theirs, an `auto` framing source as the even split while Speaker Frames is not.
       const viewer = await usecaseViewerEstimateFor(nodes, req.userId)
-      const totalCredits = viewer.multicam || viewer.framesWithheld
-        ? await CreditsService.estimateWorkflowCredits(nodes, edges, viewer)
-        : await CreditsService.estimateWorkflowCredits(nodes, edges)
+      const detailed = viewer.multicam || viewer.framesWithheld
+        ? await estimateWorkflowCreditsDetailed(nodes, edges, viewer)
+        : await estimateWorkflowCreditsDetailed(nodes, edges)
+      const totalCredits = detailed.credits
+      // A metered LLM line makes the total an ESTIMATE (spec §8.5: the
+      // metered estimates plus the fixed prices, shown `~`). Present only
+      // then — a fixed-only answer, and every answer under the rollback, is
+      // byte-identical to before.
+      const estimate = detailed.estimate ? { estimate: true as const } : {}
       // P14/W8: the payer-aware half. The billing hook already resolved this
       // request's payer (rung 1 via the body's workflowId — which required
       // the run predicate — or rung 2 via the validated workspace header),
@@ -658,7 +713,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       // byte-identical to pre-P14 plus the explicit payer field.
       const ctx = req.billingContext
       if (ctx?.payer !== "workspace") {
-        return { data: { totalCredits, nodeCount: nodes.length, payer: "user" } }
+        return { data: { totalCredits, ...estimate, nodeCount: nodes.length, payer: "user" } }
       }
       // Budget preview through the plugin's ONE headroom formula, reached
       // through the SAME gated seam accessor as every resolve (flag +
@@ -676,6 +731,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       return {
         data: {
           totalCredits,
+          ...estimate,
           nodeCount: nodes.length,
           payer: "workspace",
           workspaceId: ctx.workspaceId,
@@ -685,6 +741,8 @@ export async function creditsRoutes(app: FastifyInstance) {
         },
       }
     } catch (error) {
+      // A metered LLM model with no price (R49): the run would be refused, so is its estimate.
+      if (await replyIfLlmUnpriced(reply, error)) return reply
       console.error("[credits] Failed to estimate workflow:", error)
       return reply.status(500).send({
         error: { code: "internal_error", message: "Failed to estimate workflow" },

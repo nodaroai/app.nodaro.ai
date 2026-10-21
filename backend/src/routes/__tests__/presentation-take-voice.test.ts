@@ -34,7 +34,7 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
 }))
 
 vi.mock("@/ee/billing/credits.js", () => ({
-  estimateWorkflowCredits: vi.fn().mockResolvedValue(0),
+  estimateWorkflowCreditsDetailed: vi.fn().mockResolvedValue({ credits: 0, estimate: false, perNode: {} }),
 }))
 
 import { presentationRoutes } from "../presentation.js"

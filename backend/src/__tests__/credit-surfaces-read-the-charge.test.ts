@@ -31,6 +31,9 @@ const HOLD_READERS: Record<string, string> = {
   "ee/billing/credits.ts": "reservation and settlement mechanics: refunds and commits move the hold",
   "workers/shared.ts": "settlement: the hold is the ceiling a measured or metered actual is clamped to",
   "ee/billing/commit-at-charged-price.ts": "settlement: the hold is the ceiling a fallback's charged price is clamped to",
+  "ee/billing/llm-billing-impl.ts": "settlement: a metered call whose cost cannot be computed commits its hold whole, and records that hold as credits_actual; an already-committed log's uncollected_overrun anomaly records the hold it is about",
+  "ee/billing/llm-cancel-settle.ts":
+    "settlement: a cancelled job whose billed ledger cannot be priced commits its hold whole (D10), never refunded",
   "lib/job-policy-gate.ts": "a policy budget counts what is HELD by in-flight runs",
   "lib/credits-job-lifecycle.ts":
     "jobCreditHolds: a batch job's live holds — which one a job keeps after a race, and the job's credits column pointed back at that hold",

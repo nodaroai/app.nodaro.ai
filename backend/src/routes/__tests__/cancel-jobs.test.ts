@@ -72,6 +72,16 @@ vi.mock("@/lib/job-policy-gate.js", () => ({ withdrawHeldJob: mockWithdrawHeldJo
 const mockCancelInnerRun = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock("@/lib/use-case/cancel-run.js", () => ({ cancelUseCaseInnerExecution: mockCancelInnerRun }))
 
+// D10: the reconcile sweep's metered rule a cancel applies first
+// (lib/cancel-job.ts, dynamic import) — covered in lib/__tests__/cancel-job.test.ts.
+// Here: no billed metered hold, so the cancel is today's.
+vi.mock("@/lib/llm-billing.js", () => ({ settleSweptMeteredLlmJob: vi.fn().mockResolvedValue("not-metered") }))
+vi.mock("@/ee/billing/llm-cancel-settle.js", () => ({
+  settleBilledLedgerBeforeCancelImpl: vi.fn().mockResolvedValue("not-metered"),
+  ledgerBilled: () => false,
+  ledgerInFlight: () => false,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -127,7 +137,9 @@ type TableHandler = () => Record<string, unknown>
 
 function setupTableMocks(handlers: Record<string, TableHandler>) {
   vi.mocked(supabase.from).mockImplementation((table: string) => {
-    const handler = handlers[table]
+    // The D10 evidence read (lib/cancel-job.ts) looks at a job's holds before
+    // its flip: a case that registers no holds has none.
+    const handler = handlers[table] ?? (table === "usage_logs" ? usageLogsHandler([]) : undefined)
     if (!handler) throw new Error(`No mock handler registered for table "${table}"`)
     return handler() as never
   })
@@ -150,8 +162,11 @@ function jobsHandler(opts: {
     const inForList = vi.fn().mockReturnValue({ or: orForList })
     // single-cancel children sweep: select("id").eq(user).eq(parent).in(status) — none here
     const noChildren = { in: vi.fn().mockResolvedValue({ data: [], error: null }) }
-    const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList, eq: vi.fn().mockReturnValue(noChildren) })
-    const select = vi.fn().mockReturnValue({ eq: eqAfterSelect })
+    // The D10 reads (lib/cancel-job.ts): one job's billing ledger
+    // (select().eq().maybeSingle()) and a batch's (select().in()) — none here.
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList, maybeSingle, eq: vi.fn().mockReturnValue(noChildren) })
+    const select = vi.fn().mockReturnValue({ eq: eqAfterSelect, in: vi.fn().mockResolvedValue({ data: [], error: null }) })
 
     // CAS update chains (audit D2 + tenant scoping):
     //   single: update().eq("id").eq("user_id").in("status",[...]).select("id")
@@ -174,12 +189,13 @@ function jobsHandler(opts: {
   }
 }
 
-/** Build a "usage_logs" chain for the refund lookup: select().in().eq(). */
+/** Build a "usage_logs" chain for the refund lookup: select().in().eq() — and the
+ *  D10 evidence read before a flip, select().eq().eq() (no metered action here). */
 function usageLogsHandler(rows: Array<{ id: string }>): TableHandler {
   return () => {
     const eq = vi.fn().mockResolvedValue({ data: rows, error: null })
     const inFn = vi.fn().mockReturnValue({ eq })
-    const select = vi.fn().mockReturnValue({ in: inFn })
+    const select = vi.fn().mockReturnValue({ in: inFn, eq: vi.fn().mockReturnValue({ eq }) })
     return { select }
   }
 }
@@ -454,9 +470,13 @@ describe("POST /v1/jobs/:jobId/cancel — a parent takes its analysis child with
         const row = queue.shift()
         return row ? { data: row, error: null } : { data: null, error: { message: "not found" } }
       })
-      // The children sweep (select("id").eq(user).eq(parent).in(status)) finds none.
+      // The children sweep (select("id").eq(user).eq(parent).in(status)) finds none,
+      // and so do the D10 ledger reads (one job's, a batch's).
       const noChildren = { in: vi.fn().mockResolvedValue({ data: [], error: null }) }
-      const select = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single, eq: vi.fn().mockReturnValue(noChildren) }) })
+      const select = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({ single, maybeSingle: async () => ({ data: null, error: null }), eq: vi.fn().mockReturnValue(noChildren) }),
+        in: async () => ({ data: [], error: null }),
+      })
       const updateSelect = vi.fn().mockImplementation(async () => ({ data: [{ id: "flipped" }], error: null }))
       const inFn = vi.fn().mockReturnValue({ select: updateSelect })
       const eq2 = vi.fn().mockReturnValue({ in: inFn })
@@ -645,6 +665,11 @@ describe("POST /v1/jobs/:jobId/cancel — a parent takes its still-running child
           single: async () => {
             const hit = rows.find((r) => matches(r, filters))
             return hit ? { data: { ...hit }, error: null } : { data: null, error: { message: "not found" } }
+          },
+          // The D10 ledger read (lib/cancel-job.ts): these rows hold none.
+          maybeSingle: async () => {
+            const hit = rows.find((r) => matches(r, filters))
+            return { data: hit ? { ...hit } : null, error: null }
           },
           then: (resolve: (v: unknown) => void) =>
             resolve({ data: rows.filter((r) => matches(r, filters)).map((r) => ({ id: r.id })), error: null }),

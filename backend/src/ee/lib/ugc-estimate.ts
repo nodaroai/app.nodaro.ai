@@ -1,12 +1,15 @@
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
 import { videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
+import type { LlmRequest } from "../../lib/llm/types.js"
+import { llmHoldForCalls } from "../billing/llm-hold-for-calls.js"
 import { getModelCreditCostFromDB } from "../billing/credits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
-import { priceUgcCalls, started, UgcQuoteError, type UgcPriceCaller } from "./ugc-quote.js"
+import { priceUgcCallLines, started, UGC_ROUTE_CALL_PRICED_AT, UgcQuoteError, ugcClipReadingMode, ugcClipReadingPricedAt, type UgcPriceCaller } from "./ugc-quote.js"
 
 /**
  * The UGC canvas quote and the free dry-run estimate (Nodaro Cloud only).
@@ -62,6 +65,49 @@ const heldAt = (factor: number, credits: number): number => Math.ceil(factor * c
 /** Priced as the speech check's reading of a finished clip. */
 const READING = { tool: "image_to_text", args: {} } as const
 
+/** R58's one switch lives beside the pricer (`ugc-quote.ts`); re-exported for callers of the estimate. */
+export { ugcClipReadingMode }
+
+/** The model a metered reading runs (the plugin's pin), else the host's image-to-text default. */
+function clipReadingModel(): string {
+  try {
+    const raw: unknown = getPluginServices().ugc?.clipReadingModel?.()
+    if (typeof raw === "string" && raw.length > 0) return raw
+  } catch {
+    // the default below
+  }
+  return LLM_FEATURE_DEFAULTS["image-to-text"]
+}
+
+/**
+ * A metered reading as it runs (R56): `requireLane: "direct"` — priced at its `:direct` key
+ * (Advanced mode is the direct pin), on the model the plugin runs.
+ */
+function meteredReadingCall(model: string): OpaqueCall {
+  return { tool: "image_to_text", args: { llmModel: model, advanced_mode: true } }
+}
+
+/**
+ * The side hold one metered reading takes — sized as `tk.llmBilling.side.holdFor` sizes it: one
+ * attempt of a one-frame vision call on its direct lane, at its output cap, marked up at its charge id.
+ */
+async function meteredReadingHold(model: string): Promise<number> {
+  const request: LlmRequest = {
+    modelId: model,
+    system: "",
+    messages: [{ role: "user", content: [{ type: "image", url: "https://price.invalid/frame.jpg" }] }],
+    requireLane: "direct",
+  }
+  try {
+    return (await llmHoldForCalls("image-to-text", [{ modelId: model, request }])).holdCredits
+  } catch {
+    throw new UgcQuoteError("the frame check")
+  }
+}
+
+/** How a metered reading counts toward a ceiling: one side hold at a time (`hold`), or every re-render's (`worst`). */
+type ReadingHeld = "hold" | "worst"
+
 /**
  * One public line: its English `label` (API and MCP clients read it), its credits, and the stable
  * id the editor names it by in the person's language (`key`); a clip line its number and length.
@@ -74,6 +120,8 @@ export interface UgcQuoteLineOut {
   seconds?: number
   /** A clip line the run hands back from an earlier render (`reusedClips`): priced at nothing. */
   reused?: true
+  /** The line holds a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `~`. */
+  estimate?: true
 }
 /** Expected credits per part of the video, every part present (0 when the quote has none of it). */
 export type UgcEstimateParts = Readonly<Record<UgcEstimatePart, number>>
@@ -91,25 +139,50 @@ export interface UgcQuoteResult {
   readonly holdParts: UgcEstimateParts
   readonly range?: readonly [number, number]
   readonly worstCase?: number
+  /**
+   * The parts whose expected credits hold a metered LLM call's ESTIMATE (a line
+   * marked `estimate`): charged their actual usage, so a figure that counts one
+   * of them is shown `~`. Absent when no part does (a quote with none is
+   * byte-identical to before). The one rule the server's run estimate and the
+   * editor read (R58: a clip's reading only when the plugin meters it).
+   */
+  readonly estimateParts?: readonly UgcEstimatePart[]
 }
 
 /** A line with the part it prices (the public lines carry only label and credits). */
 interface PartLine extends UgcQuoteLineOut {
   readonly part: UgcEstimatePart
+  /** What the line holds when it is not its price × the clip hold factor (a metered reading's side hold). */
+  readonly held?: number
 }
 
-const publicLine = ({ label, credits, key, n, seconds, reused }: PartLine): UgcQuoteLineOut => ({
+const publicLine = ({ label, credits, key, n, seconds, reused, estimate }: PartLine): UgcQuoteLineOut => ({
   label,
   credits,
   key,
   ...(n !== undefined ? { n } : {}),
   ...(seconds !== undefined ? { seconds } : {}),
   ...(reused ? { reused } : {}),
+  ...(estimate ? { estimate } : {}),
 })
+
+/** The parts any of `lines` marks an estimate, in part order; absent when none (`UgcQuoteResult.estimateParts`). */
+function estimatePartsOf(lines: ReadonlyArray<{ readonly part: UgcEstimatePart; readonly estimate?: true }>): { estimateParts?: UgcEstimatePart[] } {
+  const parts = UGC_ESTIMATE_PARTS.filter((part) => lines.some((l) => l.part === part && l.estimate === true))
+  return parts.length > 0 ? { estimateParts: parts } : {}
+}
+
+/** Several answers' estimate parts, merged (absent when none). */
+function mergedEstimateParts(...answers: ReadonlyArray<{ readonly estimateParts?: readonly UgcEstimatePart[] } | readonly UgcEstimatePart[]>): { estimateParts?: UgcEstimatePart[] } {
+  const all = new Set(answers.flatMap((a) => (Array.isArray(a) ? a : ((a as { estimateParts?: readonly UgcEstimatePart[] }).estimateParts ?? []))))
+  const parts = UGC_ESTIMATE_PARTS.filter((part) => all.has(part))
+  return parts.length > 0 ? { estimateParts: parts } : {}
+}
 
 /** Each part's credits: the sum of its lines; with `holdFactor`, what each clip line holds (`heldAt`). */
 function partsOf(lines: readonly PartLine[], holdFactor?: number): UgcEstimateParts {
-  const creditsOf = (l: PartLine) => (holdFactor !== undefined && l.part === "clip" ? heldAt(holdFactor, l.credits) : l.credits)
+  const creditsOf = (l: PartLine) =>
+    holdFactor === undefined ? l.credits : l.held !== undefined ? l.held : l.part === "clip" ? heldAt(holdFactor, l.credits) : l.credits
   return Object.fromEntries(
     UGC_ESTIMATE_PARTS.map((part) => [part, sum(lines.filter((l) => l.part === part).map(creditsOf))]),
   ) as Record<UgcEstimatePart, number>
@@ -217,7 +290,7 @@ export async function quoteUgcTickets(
   finishes = false,
   reusedClips: ReadonlySet<number> = new Set(),
 ): Promise<UgcQuoteResult> {
-  return quoteTickets(caller, rawTickets, hasCards, clipHoldFactor(), finishes, reusedClips)
+  return quoteTickets(caller, rawTickets, hasCards, clipHoldFactor(), finishes, reusedClips, "hold")
 }
 
 /** UGC Finish's call, as the quote prices it: the job is a flat fee, its segments never change the price. */
@@ -231,14 +304,27 @@ async function quoteTickets(
   holdFactor: number,
   finishes = false,
   reusedClips: ReadonlySet<number> = new Set(),
+  readingHeld: ReadingHeld = "hold",
 ): Promise<UgcQuoteResult> {
   const tickets = rawTickets.map(asTicket)
   const reused = (i: number) => reusedClips.has(i + 1)
+  // The reading as the plugin charges it (`clipReadingMode`): metered — its own line, its own side
+  // hold, never in the clip's reservation (held at the clip factor it would be held twice).
+  const metered = ugcClipReadingMode() === "metered"
+  const readingModel = metered ? clipReadingModel() : undefined
+  const reading = metered && tickets.some((_, i) => !reused(i))
+    ? started(Promise.all([
+        priceUgcCallLines(caller, [meteredReadingCall(readingModel!)], "estimate").then(([l]) => ({ credits: priced("the frame check", l!.credits), estimate: l!.estimate })),
+        meteredReadingHold(readingModel!),
+      ]))
+    : undefined
   // Every clip's calls priced in one pass: the caller's gates are read once per quote, not once per clip.
   // A clip handed back makes no call, so it prices none.
-  const callsOf = tickets.map((t, i) => (reused(i) ? [] : [t.video, ...(t.speech ? [t.speech] : []), READING]))
+  const callsOf = tickets.map((t, i) => (reused(i) ? [] : [t.video, ...(t.speech ? [t.speech] : []), ...(metered ? [] : [READING])]))
   // The clips, the finish and the steps after them are priced at once, and read back in run order.
-  const pricing = started(priceUgcCalls(caller, callsOf.flat()))
+  // R58: a fixed-mode reading inside the clip at the tier row the plugin charges (no `~`); in metered mode
+  // the clip holds no reading (its own line, below), so this answer prices no LLM call.
+  const pricing = started(priceUgcCallLines(caller, callsOf.flat(), ugcClipReadingPricedAt()))
   const finishing = started(finishes ? laneStepLines(caller, [UGC_FINISH_CALL]) : Promise.resolve([]))
   const fixing = started(fixedLines(tickets.map((t) => t.durationSec), hasCards))
   const flat = await pricing
@@ -249,7 +335,7 @@ async function quoteTickets(
   for (const [i, t] of tickets.entries()) {
     const prices = flat.slice(at, at + callsOf[i]!.length)
     at += callsOf[i]!.length
-    const clip = sum(prices.map((p) => priced(`clip ${i + 1}`, p)))
+    const clip = sum(prices.map((p) => priced(`clip ${i + 1}`, p.credits)))
     lines.push({
       label: `Clip ${i + 1} (${t.durationSec} s)${reused(i) ? ", reused" : ""}`,
       key: "clip",
@@ -258,9 +344,21 @@ async function quoteTickets(
       credits: clip,
       part: "clip",
       ...(reused(i) ? { reused: true as const } : {}),
+      ...(prices.some((p) => p.estimate) ? { estimate: true as const } : {}),
     })
     expected += clip
     ceiling += heldAt(holdFactor, clip)
+    if (reading && !reused(i)) {
+      const [quoted, hold] = await reading
+      // Expected: one reading. Held: one side hold at a time — every re-render's in the worst case.
+      const held = readingHeld === "worst" ? heldAt(holdFactor, hold) : hold
+      lines.push({
+        label: `Clip ${i + 1} frame check`, key: "clipReading", n: i + 1, credits: quoted.credits, part: "clip", held,
+        ...(quoted.estimate ? { estimate: true as const } : {}),
+      })
+      expected += quoted.credits
+      ceiling += held
+    }
   }
   // Run order: the clips, the finish (once: a clip's re-render happens inside its own job), the join and the cards' tail.
   const finish = await finishing
@@ -275,6 +373,7 @@ async function quoteTickets(
     // The finish is a step of the clip part, as the estimate counts it, never held at the clip hold factor.
     parts: withSteps(partsOf(all), finishSum),
     holdParts: withSteps(partsOf(all, holdFactor), finishSum),
+    ...estimatePartsOf([...all, ...finish]),
   }
 }
 
@@ -306,6 +405,20 @@ function creatorCallsOf(plan: PluginUgcEstimate, opts: UgcEstimateOptions): Opaq
   return [...images, ...Array.from({ length: checked }, () => checks).flat()]
 }
 
+/** The creator's lines, in call order: an image, or a check (an Image to Text call, `estimate` when metered). */
+function creatorLinesOf(
+  calls: readonly OpaqueCall[],
+  quoted: ReadonlyArray<{ readonly estimate?: true }>,
+  prices: readonly number[],
+): UgcQuoteLineOut[] {
+  return calls.map((c, i) => {
+    const line: UgcQuoteLineOut = c.tool === "image_to_text"
+      ? { label: "Creator check", key: "creatorCheck", credits: prices[i]! }
+      : { label: "Creator image", key: "creatorImage", credits: prices[i]! }
+    return quoted[i]?.estimate ? { ...line, estimate: true } : line
+  })
+}
+
 export async function estimateUgcRun(
   caller: UgcPriceCaller,
   input: PluginUgcEstimateInput,
@@ -325,23 +438,24 @@ export async function estimateUgcRun(
   // The three lengths, the script and the creator are priced at once (a cold estimate is many price-row
   // reads) and read back in this order, so the answer and any error are those of pricing them in turn.
   const plans = ESTIMATE_FACTORS.map((f) => svc.estimate({ ...input, targetDurationSec: Math.max(4, Math.round(input.targetDurationSec * f)) }))
-  const quoting = plans.map((plan) => started(quoteTickets(caller, plan.tickets, hasCards, holdFactor)))
+  // The longest length is the worst case: every re-render's reading held there.
+  const quoting = plans.map((plan, i) => started(quoteTickets(caller, plan.tickets, hasCards, holdFactor, false, new Set(), i === 2 ? "worst" : "hold")))
   const scripting = started(rowCredits("ugc-script", "the script"))
   const creatorCalls = creatorCallsOf(plans[1]!, opts)
-  const creatorPricing = started(priceUgcCalls(caller, creatorCalls))
+  // The creator check is a host-route Image to Text call (metered whenever metered pricing is on), not the plugin's clip reading: it does not follow ugcClipReadingMode (R58).
+  const creatorPricing = started(priceUgcCallLines(caller, creatorCalls, UGC_ROUTE_CALL_PRICED_AT))
   const runs: { plan: ReturnType<typeof svc.estimate>; quote: UgcQuoteResult }[] = []
   for (const [i, plan] of plans.entries()) runs.push({ plan, quote: await quoting[i]! })
   const [low, mid, high] = runs as [(typeof runs)[number], (typeof runs)[number], (typeof runs)[number]]
   const script = await scripting
-  const creatorPrices = (await creatorPricing).map((p) => priced("the creator", p))
-  const creatorLines: UgcQuoteLineOut[] = creatorCalls.map((c, i) =>
-    c.tool === "image_to_text"
-      ? { label: "Creator check", key: "creatorCheck", credits: creatorPrices[i]! }
-      : { label: "Creator image", key: "creatorImage", credits: creatorPrices[i]! },
-  )
+  const creatorQuoted = await creatorPricing
+  const creatorPrices = creatorQuoted.map((p) => priced("the creator", p.credits))
+  const creatorLines = creatorLinesOf(creatorCalls, creatorQuoted, creatorPrices)
   const before: UgcQuoteLineOut[] = [{ label: "Script", key: "script", credits: script }, ...creatorLines]
   const beforeSum = sum(before.map((l) => l.credits))
   return {
+    // The mid run's lines are the ones listed; the creator's and every length's parts count as the figures do.
+    ...mergedEstimateParts(mid.quote, high.quote, creatorLines.some((l) => l.estimate) ? ["creator"] : []),
     lines: [...before, ...mid.quote.lines],
     expected: beforeSum + mid.quote.expected,
     ceiling: beforeSum + mid.quote.ceiling,
@@ -366,11 +480,14 @@ const LANE_STEP_LINES: Readonly<Record<string, { readonly key: UgcQuoteLineKey; 
 
 /** Each of these calls priced once, as a line of the clip part: the prelude (speech, word timings, split) and the finish. */
 async function laneStepLines(caller: UgcPriceCaller, calls: ReadonlyArray<OpaqueCall>): Promise<PartLine[]> {
-  const prices = await priceUgcCalls(caller, calls)
+  const prices = await priceUgcCallLines(caller, calls, UGC_ROUTE_CALL_PRICED_AT)
   return calls.map((c, i) => {
     const step = LANE_STEP_LINES[c.tool]
     if (!step) throw new UgcQuoteError(c.tool)
-    return { label: step.label, key: step.key, credits: priced(step.label, prices[i]!), part: "clip" as const }
+    return {
+      label: step.label, key: step.key, credits: priced(step.label, prices[i]!.credits), part: "clip" as const,
+      ...(prices[i]!.estimate ? { estimate: true as const } : {}),
+    }
   })
 }
 
@@ -403,28 +520,34 @@ async function estimateLaneRun(
   const expectedClips = await quoteTickets(caller, plan.tickets, hasCards, holdFactor)
   const mostClips = await quoteTickets(caller, lane.ceilingTickets, hasCards, holdFactor)
   // The worst case: the dearest of every split the plugin says a take can legally get (each priced as it would
-  // run), never below the two above.
-  let worst = expectedClips.ceiling > mostClips.ceiling ? expectedClips : mostClips
+  // run), never below the two above — each with every re-render's reading held (`worst`).
+  const worstOf = (tickets: unknown[]) => quoteTickets(caller, tickets, hasCards, holdFactor, false, new Set(), "worst")
+  const [expectedWorst, mostWorst] = [await worstOf(plan.tickets), await worstOf(lane.ceilingTickets)]
+  let worst = expectedWorst.ceiling > mostWorst.ceiling ? expectedWorst : mostWorst
   for (const set of worstTicketSetsOf(lane)) {
-    const q = await quoteTickets(caller, set, hasCards, holdFactor)
+    const q = await worstOf(set)
     if (q.ceiling > worst.ceiling) worst = q
   }
   const script = await rowCredits("ugc-script", "the script")
   const creatorCalls = creatorCallsOf(plan, opts)
-  const creatorPrices = (await priceUgcCalls(caller, creatorCalls)).map((p) => priced("the creator", p))
-  const creatorLines: UgcQuoteLineOut[] = creatorCalls.map((c, i) =>
-    c.tool === "image_to_text"
-      ? { label: "Creator check", key: "creatorCheck", credits: creatorPrices[i]! }
-      : { label: "Creator image", key: "creatorImage", credits: creatorPrices[i]! },
-  )
+  // The creator check is a host-route Image to Text call (metered whenever metered pricing is on), not the plugin's clip reading: it does not follow ugcClipReadingMode (R58).
+  const creatorQuoted = await priceUgcCallLines(caller, creatorCalls, UGC_ROUTE_CALL_PRICED_AT)
+  const creatorPrices = creatorQuoted.map((p) => priced("the creator", p.credits))
+  const creatorLines = creatorLinesOf(creatorCalls, creatorQuoted, creatorPrices)
   const before: UgcQuoteLineOut[] = [{ label: "Script", key: "script", credits: script }, ...creatorLines]
   const creator = sum(creatorPrices)
   const steps = sum([...prelude, finish!].map((l) => l.credits))
   const fixed = script + creator + steps
   // Run order: the prelude, the clips, the finish, then the join and the cards' tail.
-  const clipLines = expectedClips.lines.filter((l) => l.key === "clip")
-  const tailLines = expectedClips.lines.filter((l) => l.key !== "clip")
+  const clipLines = expectedClips.lines.filter((l) => l.key === "clip" || l.key === "clipReading")
+  const tailLines = expectedClips.lines.filter((l) => l.key !== "clip" && l.key !== "clipReading")
   return {
+    ...mergedEstimateParts(
+      expectedClips,
+      worst,
+      estimatePartsOf([...prelude, finish!]).estimateParts ?? [],
+      creatorLines.some((l) => l.estimate) ? ["creator"] : [],
+    ),
     lines: [...before, ...prelude.map(publicLine), ...clipLines, publicLine(finish!), ...tailLines],
     expected: fixed + expectedClips.expected,
     ceiling: fixed + expectedClips.ceiling,
@@ -454,7 +577,7 @@ export async function ugcRenderHold(caller: UgcPriceCaller, input: PluginUgcEsti
     ? [plan.tickets, plan.lane.ceilingTickets, ...worstTicketSetsOf(plan.lane)]
     : [svc.estimate({ ...input, targetDurationSec: Math.max(4, Math.round(input.targetDurationSec * ESTIMATE_FACTORS[2])) }).tickets]
   let most = 0
-  for (const set of sets) most = Math.max(most, (await quoteTickets(caller, set, hasCards, holdFactor, finishes)).ceiling)
+  for (const set of sets) most = Math.max(most, (await quoteTickets(caller, set, hasCards, holdFactor, finishes, new Set(), "worst")).ceiling)
   return most
 }
 

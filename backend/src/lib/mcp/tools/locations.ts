@@ -15,6 +15,8 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { meteredLlmPriceSentence } from "./_credit-hint.js"
+import { LOCATION_CAPTION_MODEL } from "../../location-caption.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -516,7 +518,9 @@ function registerWriteTools(opts: RegisterLocationToolsOpts): void {
         "and fires an LLM caption (Claude Sonnet vision) inline to populate " +
         "`canonical_description`. Returns the new main-image URL plus the " +
         "caption. The caption is the empty string on LLM sub-failure (main " +
-        "image still set; retry with `recaption_location`).",
+        "image still set; retry with `recaption_location`). " +
+        `The caption is billed. ${meteredLlmPriceSentence("prompt-helper", LOCATION_CAPTION_MODEL)} ` +
+        "An approval is never refused for credits: with too little balance for the caption, the caption is skipped (the main image is still set) and `recaption_location` writes it later.",
       inputSchema: {
         location_id: z.string().uuid(),
         candidate_job_id: z
@@ -575,7 +579,8 @@ function registerWriteTools(opts: RegisterLocationToolsOpts): void {
         "current main image and persist the new `canonical_description`. Use " +
         "after a main-image update or when the previous caption is " +
         "unsatisfactory. Returns 400 `no_source_image` if no main image is " +
-        "set; 502 on LLM failure.",
+        "set; 502 on LLM failure. " +
+        meteredLlmPriceSentence("prompt-helper", LOCATION_CAPTION_MODEL),
       inputSchema: { location_id: z.string().uuid() },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },

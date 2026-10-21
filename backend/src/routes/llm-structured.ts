@@ -12,16 +12,21 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import {
   llmStructuredBody,
+  plannedStructuredCall,
   prepareStructuredRequest,
   runStructuredCompletion,
+  structuredCompletionRequest,
   structuredJobInputData,
 } from "../lib/llm-structured-request.js"
+import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { chargedFailureMessage, llmPrecheckBody, llmTextChars } from "../lib/llm-metered-route.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { billedContentRefusal, billedProviderCost } from "../lib/llm-errors.js"
 // From its own module, not the client facade a route test replaces.
 import { StructuredLlmError } from "../lib/llm/structured.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
+import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 
 /**
  * The pre-flight, the body schema and the completion live in
@@ -55,7 +60,17 @@ export {
 export async function llmStructuredRoutes(app: FastifyInstance) {
   app.post(
     "/v1/llm/structured",
-    { preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body)) },
+    {
+      preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body), {
+        // Metered (D1): pre-checked at the body's 1-attempt hold — its text
+        // only. Undefined under the rollback, so the tier row prices it as before.
+        computeCredits: (body) => {
+          const precheck = llmPrecheckBody(body)
+          const raw = (body ?? {}) as Record<string, unknown>
+          return precheck && llmPrecheckBaseCredits("llm-structured", precheck, llmTextChars(raw.system, raw.input, raw.jsonSchema))
+        },
+      }),
+    },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same code,
       // so forward the body and pass its answer straight back. FIRST, before
@@ -91,6 +106,43 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
       })
       if (jobError) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
+      }
+
+      // Metered (D1): one attempt of the call, as it will be sent, held under
+      // `llm-structured:<model>`; under the rollback `{ metered: false }` and
+      // the tier id below is reserved exactly as before.
+      const planned = plannedStructuredCall(structuredCompletionRequest(parsed.data, prepared, input), prepared.schema, parsed.data.schemaName)
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "llm-structured", calls: [planned] })
+      if (reply.sent || !reserve) return
+      if (reserve.metered) {
+        // The reconcile sweep's anchor (C3), then call → spend → settle → status.
+        if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+        const spend = new LlmSpend()
+        let answered: Awaited<ReturnType<typeof runStructuredCompletion>>
+        try {
+          answered = await runStructuredCompletion(parsed.data, prepared, input)
+        } catch (err) {
+          spend.add(prepared.model.id, planned.request, { error: err })
+          const message = userFacingMessage(err, "Structured generation failed")
+          const lane = err instanceof StructuredLlmError ? err.lane : undefined
+          // The output first, non-terminal: the settle writes provider_cost and
+          // credits_actual (its ledger to the server-only ledger column), so
+          // nothing may overwrite them after.
+          await supabase.from("jobs").update({ output_data: { error: message }, ...(lane ? { provider: lane } : {}) }).eq("id", job.id).eq("user_id", userId)
+          const settled = await settleLlmJob(job.id, reserve, spend)
+          const shown = chargedFailureMessage(message, settled)
+          // Unsettled: the row stays non-terminal; the sweep fails it and settles the hold.
+          if (settled.outcome !== "unsettled") await markJobFailed(job.id, { error_message: shown })
+          return reply.status(502).send({ error: { code: llmErrorCode(err), message: shown } })
+        }
+        const { output, inputTokens, outputTokens, lane } = answered
+        spend.add(prepared.model.id, planned.request, { output: answered })
+        const usage = { inputTokens, outputTokens }
+        await supabase.from("jobs").update({ output_data: { output, ...usage }, provider: lane }).eq("id", job.id).eq("user_id", userId)
+        const settled = await settleLlmJob(job.id, reserve, spend)
+        if (settled.outcome !== "unsettled") await completeSettledSyncJob(job.id, { userId })
+        // The answer was delivered either way; an unsettled hold is the sweep's.
+        return reply.send({ jobId: job.id, output, usage })
       }
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, prepared.modelIdentifier)

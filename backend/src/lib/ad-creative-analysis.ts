@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT, buildAdCreativeAnalysisUserText, type AdCreativeAnalysisInput } from "@nodaro/prompts/doctrine"
 import { type AdCreativeAnalysis } from "@nodaro/shared/social"
-import { llmCompleteStructured, type LlmContentBlock } from "./llm-client.js"
+import { llmCompleteStructured, type LlmContentBlock, type LlmRequest } from "./llm-client.js"
 import { deadlinePool } from "./deadline-pool.js"
 
 /**
@@ -74,7 +74,40 @@ export interface AnalyzeAdCreativesOptions {
 }
 
 const DEFAULT_CONCURRENCY = 4
-const MAX_OUTPUT_TOKENS = 1_400
+/** One analysis answer's output cap — a metered caller sizes each item's hold from it. */
+export const AD_CREATIVE_ANALYSIS_MAX_OUTPUT_TOKENS = 1_400
+
+/**
+ * The planned call a metered caller holds per requested item BEFORE the items
+ * are known: the real request with a creative (an image is sized as an image)
+ * and the user's focus — the copy is unknown yet, and D1 collects any overrun
+ * at the settle.
+ */
+export function adCreativeAnalysisPlannedCall(opts: { modelId: string; focus?: string; systemPrompt?: string }): { modelId: string; request: LlmRequest } {
+  return {
+    modelId: opts.modelId,
+    request: adCreativeAnalysisRequest({ imageUrl: "hold://creative", focus: opts.focus }, opts),
+  }
+}
+
+/**
+ * The analysis request for one creative, as it is sent — what a metered
+ * caller sizes each item's 1-attempt hold from (`adCreativeAnalysisRequest`
+ * with a representative item, before the items are known).
+ */
+export function adCreativeAnalysisRequest(
+  item: Pick<AdCreativeItem, "imageUrl"> & AdCreativeAnalysisInput,
+  opts: Pick<AnalyzeAdCreativesOptions, "modelId" | "systemPrompt">,
+): LlmRequest {
+  const content: LlmContentBlock[] = [{ type: "text", text: buildAdCreativeAnalysisUserText(item) }]
+  if (item.imageUrl) content.push({ type: "image", url: item.imageUrl })
+  return {
+    modelId: opts.modelId,
+    system: opts.systemPrompt ?? AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT,
+    messages: [{ role: "user", content }],
+    maxTokens: AD_CREATIVE_ANALYSIS_MAX_OUTPUT_TOKENS,
+  }
+}
 
 export async function analyzeAdCreatives(
   items: readonly AdCreativeItem[],
@@ -87,16 +120,9 @@ export async function analyzeAdCreatives(
   let usageComplete = true
 
   const hitDeadline = await deadlinePool(items, opts.concurrency ?? DEFAULT_CONCURRENCY, opts.deadlineAt, now, async (item) => {
-    const content: LlmContentBlock[] = [{ type: "text", text: buildAdCreativeAnalysisUserText(item) }]
-    if (item.imageUrl) content.push({ type: "image", url: item.imageUrl })
     try {
       const out = await complete(
-        {
-          modelId: opts.modelId,
-          system: opts.systemPrompt ?? AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT,
-          messages: [{ role: "user", content }],
-          maxTokens: MAX_OUTPUT_TOKENS,
-        },
+        adCreativeAnalysisRequest(item, opts),
         adCreativeAnalysisSchema,
         { schemaName: "ad_creative_analysis", maxRetries: 1 },
       )

@@ -73,6 +73,13 @@ vi.mock("@nodaro/shared/apps", async (importOriginal) => ({
   mergeExposedSettings: vi.fn(), applyHandleInputOverride: (_e: unknown, n: unknown) => n, isHandleInputWired: () => false,
 }))
 
+// R53: a reused step's charge adds its settled metered side holds (none unless a test says so).
+const stepSide = vi.hoisted(() => ({ map: new Map<string, number>() }))
+vi.mock("../../../lib/job-step-charge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/job-step-charge.js")>()),
+  sideHoldChargesFor: async () => stepSide.map,
+}))
+
 import { loadCompletedFanOutIterations } from "../node-executor.js"
 
 /** A completed iteration job of exec-1, owned by the execution's owner unless overridden. */
@@ -98,6 +105,21 @@ describe("loadCompletedFanOutIterations", () => {
     expect(map.get(0)?.output.imageUrl).toBe("https://img0.png") // first wins (dupe ignored)
     expect(map.get(2)?.output.imageUrl).toBe("https://img2.png")
     expect(map.get(0)?.jobId).toBe("fan-0")
+  })
+
+  it("R53: a reused iteration's charge includes its settled side holds", async () => {
+    jobsRef.value = [
+      row({ id: "fan-0", output_data: { imageUrl: "https://img0.png" }, credits_actual: 2, input_data: { node_id: "fan", iterationIndex: 0 } }),
+      row({ id: "fan-1", output_data: { imageUrl: "https://img1.png" }, credits_actual: 2, input_data: { node_id: "fan", iterationIndex: 1 } }),
+    ]
+    stepSide.map = new Map([["fan-1", 5]])
+    try {
+      const map = await loadCompletedFanOutIterations("exec-1", "owner-1", "fan", "generate-image")
+      expect(map.get(0)?.creditsUsed).toBe(2)
+      expect(map.get(1)?.creditsUsed).toBe(7)
+    } finally {
+      stepSide.map = new Map()
+    }
   })
 
   it("returns an empty map on a first run (no completed iteration jobs yet)", async () => {

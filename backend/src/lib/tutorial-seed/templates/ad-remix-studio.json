@@ -15,7 +15,8 @@
     "formats"
   ],
   "complexity": "beginner",
-  "estimatedCredits": 49,
+  "estimatedCredits": 63,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

@@ -16,6 +16,7 @@
   ],
   "complexity": "advanced",
   "estimatedCredits": 1200,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "text-prompt",
     "upload-image",

@@ -175,6 +175,12 @@ export interface Job {
 export interface CancelJobResult {
   success: true
   cancelled: number
+  /**
+   * `true` when the job could not be stopped because its provider call is
+   * already running — a metered LLM job's call, an external provider task. It
+   * finishes and is charged only what it used.
+   */
+  inFlight?: boolean
 }
 
 export interface DeleteJobResult {
@@ -324,7 +330,12 @@ export class JobsResource {
 
   /**
    * Cancel a job. Server route is `POST /v1/jobs/:jobId/cancel`.
-   * Refunds any reserved credit holds.
+   * Refunds any reserved credit holds. A running LLM job priced per model
+   * (metered) whose call has already started answers
+   * `{ success: true, cancelled: 0, inFlight: true }`: it finishes and is
+   * charged only what it used. A job stopped before its call starts is
+   * refunded, except for what an earlier attempt of the same job already used
+   * (a retry after a billed attempt): that is charged.
    */
   cancel(id: string): Promise<CancelJobResult> {
     return this.client.request(

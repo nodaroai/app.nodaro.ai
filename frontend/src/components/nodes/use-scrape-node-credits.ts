@@ -1,4 +1,6 @@
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useModelCreditCost } from "@/hooks/use-model-credit-cost"
+import { scrapeAnalysisPriceIds, scrapeAnalysisRunCredits } from "@/lib/llm-price-ids"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { estimateNodeCredits } from "@/components/editor/workflow-editor/types"
 import type { WorkflowNode } from "@/types/nodes"
@@ -28,4 +30,24 @@ export function useScrapeNodeCredits(
 ): number {
   const node = { id, type, position: { x: 0, y: 0 }, data } as unknown as WorkflowNode
   return useModelCredits(getModelIdentifier(node), estimateNodeCredits({ type, data }))
+}
+
+/**
+ * A Meta Ads or Instagram scrape WITH AI analysis while metered LLM pricing is
+ * on: its fixed scrape plus the whole analysis's quote (`quoteId`, the server's
+ * own figure for the items' analysis at the analysis model's estimate), so the
+ * Run button and the server estimate cannot price it apart — shown `~`.
+ * Undefined until the server has answered the analysis key as an estimate (and
+ * under the tier-pricing rollback, or without analysis): the node then shows
+ * `useScrapeNodeCredits`' figure, as before.
+ */
+export function useScrapeAnalysisCredits(
+  type: ScrapeNodeType,
+  data: Record<string, unknown>,
+): { readonly credits: number; readonly estimate: true } | undefined {
+  const ids = scrapeAnalysisPriceIds({ type, data })
+  const fixed = useModelCreditCost(ids?.fixedId).data
+  const analysis = useModelCreditCost(ids?.quoteId).data
+  const credits = ids ? scrapeAnalysisRunCredits({ type, data }, (id) => (id === ids.fixedId ? fixed : id === ids.quoteId ? analysis : undefined)) : undefined
+  return credits === undefined ? undefined : { credits, estimate: true }
 }

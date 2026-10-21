@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { useLlmDirectCost } from "@/hooks/use-llm-price"
 import {
   getLlmModel,
   supportsAdvancedMode,
@@ -37,9 +38,10 @@ interface AdvancedModeToggleProps {
  * with a reason tells the user exactly what to change. Matches the house
  * pattern for this — `Switch` plus a muted hint line, not a tooltip.
  *
- * Turning it on both pins the request to the vendor's own API and bills one
- * credit tier up, so the copy says so rather than making the price jump look
- * like a glitch.
+ * Turning it on pins the request to the vendor's own API, which costs more —
+ * one credit tier up under tier pricing, about N× the usual lane's estimate
+ * under metered pricing — so the copy says so rather than making the price
+ * jump look like a glitch.
  */
 export function AdvancedModeToggle({
   feature,
@@ -62,6 +64,14 @@ export function AdvancedModeToggle({
   // A model that rejects `temperature` (Claude 5-era) has it stripped from
   // every wire body, so a slider for it would promise a lever that does nothing.
   const takesTemperature = getLlmModel(effectiveModel)?.supportsTemperature !== false
+  // What the vendor's API costs against the usual lane, from the server's two
+  // estimates (metered pricing). Under the rollback: the tier-era note.
+  const directCost = useLlmDirectCost(feature, effectiveModel, { advancedMode: true })
+  const hint = !directCost.metered
+    ? t("cfgshared.advancedModeHint")
+    : directCost.times !== undefined
+      ? t("cfgshared.advancedModeHintMetered", { n: directCost.times })
+      : t("cfgshared.advancedModeHintMeteredPlain")
 
   // Switching to a model that can't run advanced must clear the flag, not
   // leave it set-but-unreachable — the route would 400 on the next run and the
@@ -91,7 +101,7 @@ export function AdvancedModeToggle({
         <p className="text-[11px] text-muted-foreground">{t("cfgshared.advancedUnavailable")}</p>
       ) : !on ? (
         <p className="text-[11px] text-muted-foreground">
-          {t("cfgshared.advancedModeHint")}
+          {hint}
         </p>
       ) : (
         <div className="space-y-2 pt-1">

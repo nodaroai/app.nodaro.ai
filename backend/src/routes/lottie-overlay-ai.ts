@@ -14,12 +14,13 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.js"
 import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-import { llmComplete } from "../lib/llm-client.js"
+import { llmComplete, type LlmRequest } from "../lib/llm-client.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { finishMeteredSyncLlmJob, llmGuardPrecheck, spendLlmCall } from "../lib/meter-sync-llm.js"
 import { LLM_ROUTE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -51,7 +52,10 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/lottie-overlay/generate",
     {
-      preHandler: [aiRateLimit, creditGuard((req) => resolveLlmCreditId("lottie-overlay", req.body))],
+      preHandler: [aiRateLimit, creditGuard((req) => resolveLlmCreditId("lottie-overlay", req.body), {
+        // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
+        computeCredits: (body) => llmGuardPrecheck("lottie-overlay", body),
+      })],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -106,26 +110,15 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Reserve credits
-      const modelIdentifier = buildLlmCreditIdentifier("lottie-overlay", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
+      // The request as it is sent, so the metered hold is sized from it.
+      const assetLines = lottieAssets?.map((a) =>
+        `- ${a.name} (${a.url})${a.durationSeconds ? ` [${a.durationSeconds}s]` : ""}`,
+      )
+      const assetSection = assetLines?.length
+        ? `\n\nUser-provided Lottie assets (prefer these over built-in ones):\n${assetLines.join("\n")}`
+        : ""
 
-      // Reconciliation: mark this job inflight before invoking the LLM. The
-      // sync-sweep cron uses this to detect stuck rows that the route
-      // handler never completed. Best-effort — never throws.
-      await markProviderCallStart(job.id, "anthropic-sync")
-
-      try {
-        const assetLines = lottieAssets?.map((a) =>
-          `- ${a.name} (${a.url})${a.durationSeconds ? ` [${a.durationSeconds}s]` : ""}`,
-        )
-        const assetSection = assetLines?.length
-          ? `\n\nUser-provided Lottie assets (prefer these over built-in ones):\n${assetLines.join("\n")}`
-          : ""
-
-        const userMessage = `Add Lottie animation overlays to this video:
+      const userMessage = `Add Lottie animation overlays to this video:
 - Source video: ${inputVideoUrl}
 - FPS: ${fps}
 - Resolution: ${width}x${height}
@@ -133,15 +126,35 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
 
 Overlay style: ${prompt}${assetSection}`
 
+      const request: LlmRequest = {
+        modelId: llmModel,
+        system: LOTTIE_OVERLAY_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+        ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["lottie-overlay"]),
+        reasoningEffort: parsed.data.reasoningEffort,
+      }
+
+      // Reserve credits: metered (the call's 1-attempt hold), else the tier id as before.
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "lottie-overlay", calls: [{ modelId: llmModel, request }] })
+      if (!reserve) return
+      const spend = new LlmSpend()
+      let usageLogId: string | undefined
+      if (!reserve.metered) {
+        const modelIdentifier = buildLlmCreditIdentifier("lottie-overlay", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        usageLogId = reservation?.usageLogId
+      }
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+
+      try {
         console.log(`[lottie-overlay-ai] Generating for job ${job.id}, ${durationSeconds}s video`)
 
-        const response = await llmComplete({
-          modelId: llmModel,
-          system: LOTTIE_OVERLAY_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }],
-          ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["lottie-overlay"]),
-          reasoningEffort: parsed.data.reasoningEffort,
-        })
+        const response = await spendLlmCall(reserve.metered ? spend : undefined, llmModel, request, () => llmComplete(request))
 
         const rawText = response.text
 
@@ -163,24 +176,30 @@ Overlay style: ${prompt}${assetSection}`
 
         const overlayPlan = validation.plan ?? rawJson
 
-        // Finalize job
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({
-            status: "completed",
-            ...completedJobColumns(),
-            output_data: {
-              overlayPlan,
-              validationErrors: validation.errors,
-              autoFixes: validation.autoFixed,
-              usage: response.usage,
-            },
-            provider_cost: response.providerCost ?? null,
-          })
-          .eq("id", job.id)
+        const outputData = {
+          overlayPlan,
+          validationErrors: validation.errors,
+          autoFixes: validation.autoFixed,
+          usage: response.usage,
+        }
+        if (reserve.metered) {
+          // Result first, then the settle (what the call cost), then the terminal write.
+          await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "completed", outputData })
+        } else {
+          // Finalize job
+          await supabase
+            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
+            .update({
+              status: "completed",
+              ...completedJobColumns(),
+              output_data: outputData,
+              provider_cost: response.providerCost ?? null,
+            })
+            .eq("id", job.id)
 
-        if (usageLogId) {
-          await CreditsService.commitCredits(usageLogId)
+          if (usageLogId) {
+            await CreditsService.commitCredits(usageLogId)
+          }
         }
 
         console.log(`[lottie-overlay-ai] Job ${job.id} completed, tokens: ${response.usage?.outputTokens}`)
@@ -194,6 +213,14 @@ Overlay style: ${prompt}${assetSection}`
       } catch (err) {
         const message = userFacingMessage(err, "Lottie overlay plan generation failed")
         console.error(`[lottie-overlay-ai] Error for job ${job.id}:`, message)
+
+        if (reserve.metered) {
+          // A billed failure is charged its usage (and says so); an unbilled one is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "failed", errorMessage: message, outputData: { error: message } })
+          return reply.status(502).send({
+            error: { code: llmErrorCode(err), message: finished.errorMessage ?? message },
+          })
+        }
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 

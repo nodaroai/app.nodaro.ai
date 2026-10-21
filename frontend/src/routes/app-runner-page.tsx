@@ -91,6 +91,8 @@ export default function AppRunnerPage() {
       // per-minute listing at the longest recording (decided 2026-10-07).
       // Never below what a run can cost: the "up to" when the app's user has pricier choices.
       estimatedCost: listingCeilingCredits(Math.max(app.estimatedCredits ?? 0, app.maxEstimatedCredits ?? 0), Math.max(app.perMinuteCredits ?? 0, app.maxPerMinuteCredits ?? 0)),
+      // The listing holds a metered LLM estimate (Task 12 / R47): the seeded figure reads `~N`.
+      estimatedCostIsEstimate: app.estimatedCreditsIsEstimate === true,
       // The Run button lists the app run alone, its Render final part left out (review round F4).
       listedPrice: appRunListedPrice(app),
       presentationSettings,

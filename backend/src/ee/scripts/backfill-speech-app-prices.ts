@@ -57,6 +57,7 @@ import { SPEECH_NODE_TYPES, speechEstimate, upstreamSpeechText } from "../../lib
 import { estimateWorkflowListingCredits, type EstimateEdge, type EstimateNode, type ListingPublishType } from "../billing/credits.js"
 import { usecaseViewerForEveryone } from "../../lib/use-case/inner-availability.js"
 import { loadAvailabilityOverridesForScript } from "../../lib/availability-override.js"
+import { unpricedSkip } from "./backfill-listing-range.js"
 
 // ---------------------------------------------------------------------------
 // Pure parts (tested in __tests__/backfill-speech-app-prices.test.ts)
@@ -167,9 +168,12 @@ export interface CandidateLine {
   readonly after: Price
   readonly changed: boolean
   readonly speech: string
+  /** Not priced, and left as stored: its graph holds a metered LLM model with no price (`llm_model_unpriced: <model>`). */
+  readonly skipped?: string
 }
 
 export function formatLine(line: CandidateLine): string {
+  if (line.skipped !== undefined) return `${line.slug} · ${line.kind} · SKIPPED (${line.skipped}) — left as stored`
   const arrow = line.changed ? "→" : "="
   return `${line.slug} · ${line.kind} · base ${line.before.base} ${arrow} ${line.after.base} · listed ${line.before.listed} ${arrow} ${line.after.listed} · ${line.monetized ? "monetized" : "free"} · ${line.speech}`
 }
@@ -249,7 +253,16 @@ export async function runBackfill(opts: BackfillOptions): Promise<{ ok: boolean;
   )
   for (const row of selectCandidates(appRows)) {
     const publishType: ListingPublishType = row.publish_type === "component" ? "component" : "app"
-    const { split, caps, nodes } = await recomputeListing(row, publishType)
+    const kind = row.publish_type === "component" ? "component" : "app"
+    const stored: Price = { base: row.base_estimated_credits ?? 0, listed: row.estimated_credits ?? 0 }
+    const priced = await unpricedSkip(() => recomputeListing(row, publishType))
+    if ("skipped" in priced) {
+      const line: CandidateLine = { kind, id: row.id, slug: row.slug, monetized: row.monetization_enabled === true, before: stored, after: stored, changed: false, speech: "", skipped: priced.skipped }
+      lines.push(line)
+      console.warn(formatLine(line))
+      continue
+    }
+    const { split, caps, nodes } = priced.value
     const after = recomputePrice(row, split)
     const perMinute = hasPerMinutePart(split)
     const write = perMinute ? null : planWrite(row, after)
@@ -278,7 +291,15 @@ export async function runBackfill(opts: BackfillOptions): Promise<{ ok: boolean;
   if (opts.includeTemplates) {
     const templateRows = await readAll<TemplateRow>("workflow_templates", "id, slug, creator_id, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits")
     for (const row of selectCandidates(templateRows)) {
-      const { split, caps, nodes } = await recomputeListing(row, "template")
+      const priced = await unpricedSkip(() => recomputeListing(row, "template"))
+      if ("skipped" in priced) {
+        const stored: Price = { base: row.estimated_credits ?? 0, listed: row.estimated_credits ?? 0 }
+        const line: CandidateLine = { kind: "template", id: row.id, slug: row.slug, monetized: false, before: stored, after: stored, changed: false, speech: "", skipped: priced.skipped }
+        lines.push(line)
+        console.warn(formatLine(line))
+        continue
+      }
+      const { split, caps, nodes } = priced.value
       // A template is not monetized: its listed price is both parts, unmarked.
       const listed = split.preview + split.final
       const after: Price = { base: listed, listed }

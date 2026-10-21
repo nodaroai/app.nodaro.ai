@@ -1,3 +1,4 @@
+// @registry-enumerates prices the run by estimateWorkflowCreditsDetailed over whatever node types the workflow holds
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
@@ -10,7 +11,8 @@ import type { ComponentMetadata } from "@nodaro/shared/apps"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../lib/execution-budget.js"
-import { estimateWorkflowCredits, type EstimateEdge, type EstimateNode } from "../ee/billing/credits.js"
+import { estimateWorkflowCreditsDetailed, type EstimateEdge, type EstimateNode } from "../ee/billing/credits.js"
+import { refuseIfRunUnpriced, replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -163,6 +165,10 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
       }
     }
+
+    // A metered LLM call on a model with no price (R51): refused before the wrapper job exists, so no
+    // fixed node runs and is charged ahead of the call the run would refuse mid-graph.
+    if (await refuseIfRunUnpriced(reply, (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: unknown }>, (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source: string; target: string }>, { overrides: inputOverrides as Record<string, Record<string, unknown>> | undefined })) return reply
 
     // P14: on the DIRECT lane (no forwarded parent context) a DEGRADED
     // resolve on a workspace-homed underlying workflow refuses BEFORE any
@@ -393,7 +399,16 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
     // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
     const viewer = await usecaseViewerEstimateFor(priced, req.userId)
-    return reply.send({ estimatedCredits: await (viewer.multicam || viewer.framesWithheld ? estimateWorkflowCredits(priced, edges, viewer) : estimateWorkflowCredits(priced, edges)) })
+    let estimate: Awaited<ReturnType<typeof estimateWorkflowCreditsDetailed>>
+    try {
+      estimate = await (viewer.multicam || viewer.framesWithheld ? estimateWorkflowCreditsDetailed(priced, edges, viewer) : estimateWorkflowCreditsDetailed(priced, edges))
+    } catch (err) {
+      // A metered LLM model with no price (R49): refused, as its run would be.
+      if (await replyIfLlmUnpriced(reply, err)) return reply
+      throw err
+    }
+    // A metered LLM line makes the figure an estimate (`~`, spec §8.5); present only then.
+    return reply.send({ estimatedCredits: estimate.credits, ...(estimate.estimate ? { estimatedCreditsIsEstimate: true } : {}) })
   })
 
   // ── How long this component run may take (podcast Track 0.11 follow-up) ──

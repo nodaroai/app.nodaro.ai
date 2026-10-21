@@ -17,7 +17,8 @@
     "brand-notes"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 954,
+  "estimatedCredits": 968,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

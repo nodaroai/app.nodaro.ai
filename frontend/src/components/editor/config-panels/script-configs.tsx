@@ -95,6 +95,8 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
         feature="generate-script"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="generate-script"
@@ -276,6 +278,8 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
         feature="qa-check"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="qa-check"
@@ -421,6 +425,8 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
         feature="image-critic"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="image-critic"
@@ -481,6 +487,8 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
         feature="image-to-text"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="image-to-text"
@@ -622,6 +630,8 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
         feature="describe-to-picker"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
         filter={(m) => DESCRIBE_TO_PICKER_MODELS.some((v) => v.id === m.id)}
       />
       <ReasoningEffortSelect

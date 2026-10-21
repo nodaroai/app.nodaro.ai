@@ -40,6 +40,7 @@ import {
   startVideoDownload,
   fetchVideoMetadata,
   generateAIWriterStream,
+  InsufficientCreditsError,
   saveLocation,
   approveLocationMainImage,
   recaptionLocation,
@@ -547,6 +548,25 @@ describe("generateAIWriterStream", () => {
     })
 
     expect(result).toEqual({ jobId: "", generatedText: "partial" })
+  })
+
+  // Task 13: a balance refusal before the stream opens (a metered LLM call's
+  // hold above the balance) reads like every other call's: "Needs up to N credits".
+  it("a 402 before the stream opens is the API's balance refusal", async () => {
+    noSession()
+    const refusal = Object.assign(new Error("SSE request failed (402): …"), {
+      name: "SseHttpError",
+      status: 402,
+      body: JSON.stringify({ error: { code: "insufficient_credits", message: "Needs up to 368 credits" }, required: 368, balance: 200 }),
+    })
+    mockStreamRequest.mockImplementation(async function* () {
+      yield* []
+      throw refusal
+    })
+
+    const err = await generateAIWriterStream({ ...baseParams, onToken: vi.fn() }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(InsufficientCreditsError)
+    expect((err as Error).message).toBe("Needs up to 368 credits")
   })
 
   it("throws 'Stream ended without completion' when no done event", async () => {

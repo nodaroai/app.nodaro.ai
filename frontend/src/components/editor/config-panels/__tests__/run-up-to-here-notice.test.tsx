@@ -8,7 +8,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 const runUpToHere = vi.fn()
 let mockRun: unknown = runUpToHere
 let mockCredits = true
-let mockPrice: { credits: number; hold: number; estimating: boolean; unchecked?: string } = { credits: 240, hold: 240, estimating: false }
+let mockPrice: { credits: number; hold: number; estimating: boolean; unchecked?: string; approx?: boolean; unpriced?: { message?: string } } = { credits: 240, hold: 240, estimating: false }
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: Object.assign((s: (x: unknown) => unknown) => s({ runUpToHere: mockRun }), { getState: () => ({}) }),
 }))
@@ -69,7 +69,8 @@ describe("RunUpToHereNotice", () => {
     mockPrice = { credits: 240, hold: 240, estimating: true, unchecked: "checking" }
     render(unrun())
     const button = screen.getByRole("button", { name: t("runUpToHere.buttonEstimate", { credits: 240 }) })
-    expect(button.textContent).toContain("Run up to here · ≈240 (estimate)")
+    // `~` before every estimate (the owner's rule), as the Execute button's `(~N CR)`.
+    expect(button.textContent).toContain("Run up to here · ~240")
     expect(button.getAttribute("title")).toBe(t("ugc.price.checking"))
   })
 
@@ -81,6 +82,28 @@ describe("RunUpToHereNotice", () => {
     mockPrice = { credits: 240, hold: 240, estimating: true, unchecked: "held" }
     render(unrun())
     expect(screen.getByRole("button", { name: t("runUpToHere.buttonEstimate", { credits: 240 }) }).getAttribute("title")).toBe(t("ugc.price.uncheckedHeld"))
+  })
+
+  it("a figure holding a metered LLM call's estimate reads `~N`, as Execute does — in every locale", () => {
+    mockPrice = { credits: 240, hold: 240, estimating: false, approx: true }
+    render(unrun())
+    const button = screen.getByRole("button", { name: "Run up to here · ~240" })
+    expect(button.getAttribute("title")).toBe(t("runUpToHere.tooltip"))
+    for (const locale of ["en", "he", "ja", "ko", "pt-BR"] as const) {
+      const label = translate(locale, "runUpToHere.buttonEstimate", { credits: 240 })
+      expect(label, locale).toContain("~240")
+      expect(label, locale).not.toContain("≈")
+      expect(translate(locale, "runUpToHere.buttonUnpriced"), locale).not.toContain("{")
+    }
+  })
+
+  it("a node the server refuses to price (llm_model_unpriced): no figure — it says not priced yet, the server's sentence on hover", () => {
+    const message = 'The model "x" has no price yet, so it cannot be run. Choose another model.'
+    mockPrice = { credits: 200, hold: 200, estimating: false, approx: true, unpriced: { message } }
+    render(unrun())
+    const button = screen.getByRole("button", { name: "Run up to here · not priced yet" })
+    expect(button.getAttribute("title")).toBe(message)
+    expect(button.textContent).not.toContain("200")
   })
 
   it("once the server's figure is in: the plain price and the usual tooltip", () => {

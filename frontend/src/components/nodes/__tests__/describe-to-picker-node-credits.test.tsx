@@ -12,11 +12,14 @@ import type { WorkflowNode } from "@/types/nodes"
  * and the run estimate do (`getModelIdentifier`), or one node shows two prices.
  */
 
-const quoted: string[] = []
-vi.mock("@/ee/hooks/use-model-credits", () => ({
-  useModelCredits: (creditId: string) => {
-    quoted.push(creditId)
-    return 0
+// The ids the node's price asks the batch for: its metered key and its tier
+// id, in ONE request (`useLlmPrice`, Task 13).
+const asked: string[][] = []
+vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
+vi.mock("@/hooks/use-model-credit-cost", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-model-credit-cost")>()),
+  prefetchModelCreditCosts: async (ids: readonly string[]) => {
+    asked.push([...ids])
   },
 }))
 
@@ -36,29 +39,39 @@ vi.mock("../handle-with-popover", () => ({ HandleWithPopover: () => null, HANDLE
 
 const { DescribeToPickerNode } = await import("../describe-to-picker-node")
 const { getModelIdentifier } = await import("@/components/editor/config-panels/helpers")
+const { forgetEstimateModels, rememberEstimateModels } = await import("@/hooks/use-model-credit-cost")
 
-/** The row the node's badge asks for, checked against the panel's estimator. */
-function badgeRow(data: Record<string, unknown>): string {
+/**
+ * The tier row the node's badge asks for, checked against the panel's
+ * estimator: with a cold cache (and under the tier-pricing rollback) both
+ * quote that row; once the server marks the metered key an estimate, both
+ * quote the key.
+ */
+function badgeRow(data: Record<string, unknown>): { key: string; tier: string } {
   const nodeData = { label: "Describe to Picker", ...data }
-  quoted.length = 0
+  asked.length = 0
+  forgetEstimateModels()
   const props = { id: "d1", type: "describe-to-picker", data: nodeData, selected: false } as unknown as NodeProps
   render(<DescribeToPickerNode {...props} />)
-  const row = quoted.at(-1)!
+  const [key, tier] = asked.at(-1)!
   const node = { id: "d1", type: "describe-to-picker", position: { x: 0, y: 0 }, data: nodeData } as unknown as WorkflowNode
-  expect(row, "the badge and the run estimate must quote one row").toBe(getModelIdentifier(node))
-  return row
+  expect(tier, "the badge and the run estimate must quote one row").toBe(getModelIdentifier(node))
+  rememberEstimateModels([key!])
+  expect(getModelIdentifier(node), "metered: both quote the key").toBe(key)
+  forgetEstimateModels()
+  return { key: key!, tier: tier! }
 }
 
 describe("Describe to Picker — the credit badge quotes the effort the run uses", () => {
   it("an untouched node quotes Gemini 3.8 Flash at Auto: the economy rung the run reserves", () => {
-    expect(badgeRow({})).toBe("describe-to-picker:economy")
+    expect(badgeRow({})).toEqual({ key: "describe-to-picker:gemini-3.8-flash", tier: "describe-to-picker:economy" })
   })
 
   it("Opus 5.5 with no effort quotes its recipe, high: the direct rung the run reserves", () => {
-    expect(badgeRow({ llmModel: "claude-opus-5.5" })).toBe("describe-to-picker:premium-direct")
+    expect(badgeRow({ llmModel: "claude-opus-5.5" })).toEqual({ key: "describe-to-picker:claude-opus-5.5:direct", tier: "describe-to-picker:premium-direct" })
   })
 
   it("another model with no effort quotes that model's Auto price", () => {
-    expect(badgeRow({ llmModel: "claude-opus-5" })).toBe("describe-to-picker:premium")
+    expect(badgeRow({ llmModel: "claude-opus-5" })).toEqual({ key: "describe-to-picker:claude-opus-5", tier: "describe-to-picker:premium" })
   })
 })

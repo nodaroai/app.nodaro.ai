@@ -211,6 +211,12 @@ export interface RenderFinalQuote {
   /** Estimated credits; `null` in an edition without credits. */
   estimatedCredits: number | null
   /**
+   * Present (`true`) when `estimatedCredits` includes an LLM node's estimate:
+   * an LLM call is charged its actual usage after it runs, so show `~N`.
+   * Absent for a fixed price.
+   */
+  estimatedCreditsIsEstimate?: true
+  /**
    * Whether the payer can cover `estimatedCredits`; `null` in an edition
    * without credits. When `false`, {@link WorkflowsResource.renderFinal} is
    * refused with `InsufficientCreditsError` before any execution exists.

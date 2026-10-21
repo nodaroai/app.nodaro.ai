@@ -109,6 +109,42 @@ export interface ModelCostsResult {
   data: Record<string, number>
   missing: string[]
   errors: string[]
+  /**
+   * Why each identifier in `errors` has no price — today only
+   * `llm_model_unpriced`: a metered LLM price key whose model has no rate on
+   * the lane it would be served on (it cannot be run). Omitted when `errors`
+   * is empty.
+   */
+  errorCodes?: Record<string, ModelCostError>
+  /**
+   * The identifiers in `data` whose figure is an ESTIMATE, not a fixed price:
+   * metered LLM price keys (`llmPriceKey` from `@nodaro/shared/llm-models`,
+   * `<feature>:<model>[:direct]`), charged on what the call actually uses.
+   * Show these as `~N`. Omitted when there are none, so a batch of fixed ids
+   * answers exactly as it always has. A metered key that lands in `missing`
+   * instead means the server is not pricing LLM calls per model — show no
+   * price for it.
+   */
+  estimates?: string[]
+}
+
+/** {@link ModelCostsResult.errorCodes} — why an identifier has no price. */
+export interface ModelCostError {
+  /** Today only `llm_model_unpriced`; open to codes a newer server may add. */
+  code: "llm_model_unpriced" | (string & {})
+  /** A sentence to show the user. */
+  message: string
+}
+
+/**
+ * Result of `GET /v1/credits/model-cost?model=<id>` (`data`): the credits one
+ * identifier is charged. `estimate: true` marks a metered LLM price key's
+ * figure as an estimate (show it as `~N`); such an answer is never cached.
+ */
+export interface ModelCostResult {
+  model: string
+  creditCost: number
+  estimate?: true
 }
 
 /**
@@ -212,7 +248,8 @@ export class CreditsResource {
    * `POST /v1/credits/model-costs` → per-identifier credit cost, for editor
    * cost previews. Capped at the first {@link MODEL_COSTS_LIMIT} identifiers
    * (the route's request limit). Preserves the `{ data, missing, errors }`
-   * fault-isolation shape verbatim (see {@link ModelCostsResult}).
+   * fault-isolation shape verbatim, plus `estimates` / `errorCodes` when a
+   * metered LLM price key was asked (see {@link ModelCostsResult}).
    */
   modelCosts(ids: string[]): Promise<ModelCostsResult> {
     return this.client.request<ModelCostsResult>("POST", "/v1/credits/model-costs", {
@@ -275,7 +312,8 @@ export class CreditsResource {
 
   // NOTE: no `estimate(...)` helper. The backend exposes
   // `POST /v1/credits/estimate-workflow` (body `{ nodes }` → `{ data: {
-  // totalCredits, nodeCount } }`), but no consumer has a settled shape for it
+  // totalCredits, nodeCount, estimate?: true } }` — `estimate` when a metered
+  // LLM node's estimate is in the total), but no consumer has a settled shape for it
   // yet (studio pre-checks `balance >= Σ modelCosts` client-side rather than
   // calling an estimate endpoint). Adding it now would be inventing an API
   // surface ahead of a real caller, so it's deliberately omitted — add it when

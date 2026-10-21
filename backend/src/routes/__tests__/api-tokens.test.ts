@@ -57,8 +57,16 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   },
 }))
 
+const schemaEstimate = vi.hoisted(() => ({ fn: vi.fn() }))
+// The run pre-check (R51; the estimator is unit-tested in workflow-estimate-metered.test.ts):
+// a node naming "unpriced-model" is the call a run would be refused at.
 vi.mock("@/ee/billing/credits.js", () => ({
+  unpricedMeteredLlmOfRun: (nodes: Array<{ data?: { llmModel?: unknown } }>) =>
+    nodes.some((n) => n.data?.llmModel === "unpriced-model")
+      ? Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+      : null,
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowCreditsDetailed: schemaEstimate.fn,
   CreditsService: {
     getModelCreditCost: vi.fn().mockResolvedValue(5),
   },
@@ -898,6 +906,23 @@ describe("POST /v1/api/run — the override lock (issue #1555)", () => {
     }
   })
 
+  it("R51: a run meeting an unpriced metered LLM model is refused 400 llm_model_unpriced before anything is created or enqueued", async () => {
+    mockTokenRunWithGraph([
+      { id: "gen", type: "generate-image", data: { label: "Still", prompt: "a cat" } },
+      { id: "chat", type: "llm-chat", data: { label: "Writer", llmModel: "unpriced-model" } },
+    ])
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "unpriced-model" })
+    expect(vi.mocked(supabase.from).mock.calls.map(([t]) => t)).not.toContain("workflow_executions")
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
   it("still accepts an ordinary input on an input node", async () => {
     mockTokenRunWithGraph([{ id: "text-1", type: "text-prompt", data: { label: "Prompt", text: "" } }])
 
@@ -913,5 +938,53 @@ describe("POST /v1/api/run — the override lock (issue #1555)", () => {
       expect.objectContaining({ inputOverrides: { "text-1": { text: "a cat" } } }),
       expect.anything(),
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /v1/api/schema — its estimate (metered LLM pricing, Task 12)
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/api/schema — estimatedCredits", () => {
+  const WF = "00000000-0000-4000-8000-0000000000c7"
+  function serveWorkflow() {
+    mockResolveToken.mockResolvedValue({ id: TEST_TOKEN_ID, userId: TEST_USER_ID, workflowIds: [], rateLimit: 60, tokenHash: "th", workspaceId: null })
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      for (const m of ["select", "eq", "in", "is", "order", "limit"]) chain[m] = vi.fn().mockReturnValue(chain)
+      chain.single = vi.fn().mockResolvedValue({
+        data: { id: WF, name: "Writer", nodes: [{ id: "c", type: "llm-chat", data: { llmModel: "claude-opus-5.5" } }], edges: [], settings: {} },
+        error: null,
+      })
+      return chain as never
+    })
+  }
+  const get = () => app.inject({ method: "GET", url: `/v1/api/schema?workflowId=${WF}`, headers: { authorization: "Bearer ndr_test_token" } })
+
+  it("a metered LLM line marks the figure an estimate (`estimatedCreditsIsEstimate`); a fixed figure has no such key", async () => {
+    serveWorkflow()
+    schemaEstimate.fn.mockResolvedValueOnce({ credits: 6, estimate: true, perNode: {} })
+    const metered = await get()
+    expect(metered.statusCode).toBe(200)
+    expect(metered.json()).toMatchObject({ estimatedCredits: 6, estimatedCreditsIsEstimate: true })
+    schemaEstimate.fn.mockResolvedValueOnce({ credits: 7, estimate: false, perNode: {} })
+    const fixed = (await get()).json()
+    expect(fixed.estimatedCredits).toBe(7)
+    expect(fixed).not.toHaveProperty("estimatedCreditsIsEstimate")
+  })
+
+  it("R51: an unpriced metered model still describes the workflow — the cost omitted, `estimatedCreditsUnpriced` says why", async () => {
+    serveWorkflow()
+    schemaEstimate.fn.mockRejectedValueOnce(Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" }))
+    const res = await get()
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).not.toHaveProperty("estimatedCredits")
+    expect(body.estimatedCreditsUnpriced).toEqual({
+      reason: "llm_model_unpriced",
+      modelId: "claude-opus-5.5",
+      message: 'The model "claude-opus-5.5" has no price yet, so it cannot be run. Choose another model.',
+    })
+    expect(body.workflowId).toBe(WF)
   })
 })

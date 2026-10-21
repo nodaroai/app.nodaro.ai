@@ -22,8 +22,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test", LLM_TIER_PRICING_ROLLBACK: true },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  // D6: metered pricing is the default; this suite pins the TIER behaviour under
+  // the rollback (`LLM_TIER_PRICING_ROLLBACK`). The metered path is covered by
+  // llm-metered-structured-routes.test.ts.
+  llmMeteredPricing: () => false,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ shouldProxyLlmToCloud: mocks.shouldProxyLlmToCloud }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
@@ -151,6 +155,13 @@ describe("a story run", () => {
     expect(payload).not.toHaveProperty("analysisJobId")
     expect(payload).not.toHaveProperty("userId")
     expect(analysisSeen).toBeNull()
+  })
+  it("rollback is byte-identical: the tier id, reserved with today's four arguments, and its usage log rides to the worker", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-fable-5" })).statusCode).toBe(200)
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mocks.reserveCreditsForJob.mock.calls[0]).toHaveLength(4)
+    expect(mocks.reserveCreditsForJob.mock.calls[0][3]).toBe("llm-structured:premium")
+    expect(mocks.queueAdd.mock.calls[0][1]).toMatchObject({ usageLogId: "usage-1", llmModel: "claude-fable-5" })
   })
   it("stops at the reservation's own answer (402) — nothing enqueued", async () => {
     mocks.reserveCreditsForJob.mockImplementation(async (_req: unknown, reply: { status: (n: number) => { send: (b: unknown) => unknown } }) => {

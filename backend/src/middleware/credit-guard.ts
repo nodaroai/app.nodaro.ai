@@ -429,6 +429,12 @@ export interface ReserveCreditsForJobOptions {
    * that failed would strand the hold (`usage_logs.job_id` is ON DELETE SET NULL).
    */
   readonly retainJobOnFailure?: boolean
+  /**
+   * A metered LLM hold (post-markup credits, `reserveLlmCall`): reserved in
+   * place of any guard pre-check override, after a balance check against
+   * this exact figure (402 "Needs up to N credits" before any usage log).
+   */
+  readonly holdCredits?: number
 }
 
 export async function reserveCreditsForJob(
@@ -513,6 +519,12 @@ export async function reserveCreditsForJob(
   }
   if (!hasCredits()) return undefined
   const impl = await import("../ee/lib/credit-guard-impl.js")
+  if (opts?.holdCredits !== undefined) {
+    return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, {
+      holdCredits: opts.holdCredits,
+      ...(opts.retainJobOnFailure ? { retainJobOnFailure: true } : {}),
+    })
+  }
   return opts?.retainJobOnFailure
     ? impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, { retainJobOnFailure: true })
     : impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier)

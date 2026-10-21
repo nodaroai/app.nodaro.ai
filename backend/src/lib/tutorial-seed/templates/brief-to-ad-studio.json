@@ -16,7 +16,8 @@
     "local-business"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 51,
+  "estimatedCredits": 72,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

@@ -1,7 +1,7 @@
 ---
 node_type: 3d-title
-generated_at: 2026-10-14T00:02:35.904Z
-generated_from: b83a9467d
+generated_at: 2026-10-20T21:12:34.667Z
+generated_from: 9ae3392be
 ---
 
 # 3D Title
@@ -9,7 +9,7 @@ generated_from: b83a9467d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `3d-title`
 **Category:** ai
-**Credit cost:** `11-110` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `~6` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=3d-title:<model id>` (MCP: `list_models` with `priceIds: ["3d-title:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `background`
 **Outputs (source handles):** `composition`
 

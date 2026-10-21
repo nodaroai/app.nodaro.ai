@@ -105,6 +105,37 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: 
   return out
 }
 
+/** The most ids one `list_models` price lookup answers. */
+export const LIST_MODELS_PRICE_IDS_MAX = 50
+
+/** One id's answer in a `list_models` price lookup. */
+export type PriceIdAnswer =
+  | { readonly credits: number; readonly estimate?: true }
+  | { readonly error: "llm_model_unpriced" | "not_priced" }
+
+/**
+ * The price lookup `list_models` answers for `priceIds` — the figures
+ * `POST /v1/credits/model-costs` answers, from the same charged prices: a
+ * metered LLM call's price key (`<feature>:<model id>[:direct]`, any model)
+ * at its estimate, marked `estimate`; a model with no rate on its lane
+ * `llm_model_unpriced` (a run on it is refused); any other id its charged
+ * price, or `not_priced` (under the tier-pricing rollback a metered key lands
+ * here: LLM calls are then not priced per model).
+ */
+export function answerPriceIds(ids: readonly string[], prices: ChargedPrices): Record<string, PriceIdAnswer> {
+  const out: Record<string, PriceIdAnswer> = {}
+  for (const id of ids) {
+    const quote = prices.llmQuote?.(id) ?? null
+    if (quote?.kind === "estimate") out[id] = { credits: quote.credits, estimate: true }
+    else if (quote?.kind === "unpriced") out[id] = { error: "llm_model_unpriced" }
+    else {
+      const credits = prices.credits(id)
+      out[id] = credits === undefined ? { error: "not_priced" } : { credits }
+    }
+  }
+  return out
+}
+
 /**
  * `list_models` is unscoped — model availability is public. `check_balance`
  * + `credit_transactions` are credits:read AND cloud-only (gated by
@@ -142,10 +173,27 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
           .describe("Filter to a specific operation (e.g. 't2i' = text-to-image, 'i2v' = image-to-video)."),
         family: z.string().optional().describe("Filter by vendor / lab name (e.g. 'Google', 'OpenAI', 'Bytedance')."),
         featuredOnly: z.boolean().optional().describe("Return only editor-picked best-in-tier models."),
+        priceIds: z
+          .array(z.string().min(1).max(200))
+          .min(1)
+          .max(LIST_MODELS_PRICE_IDS_MAX)
+          .optional()
+          .describe(
+            "Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API), e.g. `llm-chat:claude-sonnet-5.5`. " +
+              "Answers `{ prices: { <id>: { credits, estimate? } | { error } } }`; `estimate`: charged actual usage, show `~N`.",
+          ),
       },
       annotations: { readOnlyHint: true },
     },
     async (args) => {
+      if (args.priceIds) {
+        // Credit pricing is a Cloud concept: an edition without a credit system prices nothing.
+        if (!hasCredits()) {
+          return { content: [{ type: "text", text: "Error: no_credit_system — this instance charges no credits, so nothing has a price." }], isError: true }
+        }
+        const prices = answerPriceIds([...new Set(args.priceIds)], await loadChargedPrices())
+        return { content: [{ type: "text", text: JSON.stringify({ prices }, null, 2) }] }
+      }
       const filtered = listModels({
         kind: args.kind as ModelKind | undefined,
         mode: args.mode as ModelMode | undefined,

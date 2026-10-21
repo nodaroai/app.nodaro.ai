@@ -99,3 +99,31 @@ describe("usePresentationStore.loadSharedWorkflow — loop→list migration", ()
     expect(nodes.find((n) => n.id === "list_1")!.type).toBe("list")
   })
 })
+
+describe("usePresentationStore.loadSharedWorkflow — the seeded figure's estimate flag (Task 12)", () => {
+  it("carries estimatedCostIsEstimate from the server, false when absent", async () => {
+    vi.mocked(getSharedWorkflow).mockResolvedValue({ workflowId: "wf", name: "W", nodes: [], edges: [], isOwner: false, estimatedCost: 6, estimatedCostIsEstimate: true } as never)
+    await usePresentationStore.getState().loadSharedWorkflow("tok-est")
+    expect(usePresentationStore.getState()).toMatchObject({ estimatedCost: 6, estimatedCostIsEstimate: true })
+    usePresentationStore.setState({ executionStatus: "idle" })
+    vi.mocked(getSharedWorkflow).mockResolvedValue({ workflowId: "wf", name: "W", nodes: [], edges: [], isOwner: false, estimatedCost: 11 } as never)
+    await usePresentationStore.getState().loadSharedWorkflow("tok-fixed")
+    expect(usePresentationStore.getState()).toMatchObject({ estimatedCost: 11, estimatedCostIsEstimate: false, estimatedCostUnpriced: null })
+  })
+
+  it("R51: an unpriced run renders with no figure (0) and keeps why", async () => {
+    const message = 'The model "x-model" has no price yet, so it cannot be run. Choose another model.'
+    usePresentationStore.setState({ executionStatus: "idle" })
+    vi.mocked(getSharedWorkflow).mockResolvedValue({
+      workflowId: "wf", name: "W", nodes: [], edges: [], isOwner: false,
+      estimatedCostUnpriced: { reason: "llm_model_unpriced", modelId: "x-model", message },
+    } as never)
+    await usePresentationStore.getState().loadSharedWorkflow("tok-unpriced")
+    expect(usePresentationStore.getState()).toMatchObject({
+      estimatedCost: 0,
+      estimatedCostIsEstimate: false,
+      estimatedCostUnpriced: { modelId: "x-model", message },
+      executionStatus: "idle",
+    })
+  })
+})

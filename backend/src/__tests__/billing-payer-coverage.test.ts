@@ -7,7 +7,7 @@
  * THE RULE. Every call site matching a billing marker —
  *   `.reserveCredits(` / `.commitCredits(` / `.refundCredits(` (the
  *   CreditsService methods), `reserveCreditsForJob(` (the per-route helper),
- *   or a raw `rpc("reserve_credits"|"commit_credits"|"refund_credits")`
+ *   or a raw `rpc("reserve_credits"|"commit_credits"|"commit_credits_metered"|"refund_credits")`
  * — must satisfy ONE of:
  *
  *   (a) it hands over the REQUEST: `reserveCreditsForJob(req, …)`. The payer
@@ -71,7 +71,7 @@ export function blankComments(source: string): string {
 // Dotless alternatives catch destructured/aliased calls (`const { reserveCredits }`),
 // and the rpc-name quote class includes backticks — both second-review escapes.
 const MARKER_RE =
-  /\.(?:reserveCredits|commitCredits|refundCredits)\s*\(|(?<![.\w])(?<!async )(?:reserveCredits|commitCredits|refundCredits|reserveCreditsForJob)\s*\(|\.rpc\(\s*["'`](?:reserve_credits|commit_credits|refund_credits)["'`]/g
+  /\.(?:reserveCredits|commitCredits|refundCredits)\s*\(|(?<![.\w])(?<!async )(?:reserveCredits|commitCredits|refundCredits|reserveCreditsForJob)\s*\(|\.rpc\(\s*["'`](?:reserve_credits|commit_credits|commit_credits_metered|refund_credits)["'`]/g
 
 const CONTEXT_RE = /\bbillingContext\b|\bp_workspace_id\b|\bworkspaceId\b/
 const REQ_FIRST_ARG_RE = /reserveCreditsForJob\s*\(\s*(?:req|request)\b/
@@ -249,5 +249,10 @@ describe("billing payer coverage — every reserve/commit/refund site names its 
       const { error } = await supabase.rpc("refund_credits", { p_usage_log_id: id })
     `
     expect(findUncoveredBillingSites(settlementRawRpc)).toHaveLength(1)
+    // The metered settle (migration 551) is a raw settlement RPC too.
+    const meteredRawRpc = `
+      const { data } = await supabase.rpc("commit_credits_metered", { p_usage_log_id: id, p_actual_credits: 917 })
+    `
+    expect(findUncoveredBillingSites(meteredRawRpc)).toHaveLength(1)
   })
 })

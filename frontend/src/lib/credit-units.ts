@@ -37,6 +37,16 @@ export function creditUnits(credits: number | null | undefined): number {
 }
 
 /**
+ * {@link creditUnits}, written `~N` when the figure is an ESTIMATE — a metered
+ * LLM call's price, charged its actual usage after the run (spec §8.5). `~` is
+ * a symbol, never a translated string; a fixed figure is returned unchanged.
+ */
+export function creditUnitsApprox(credits: number | null | undefined, estimate: boolean | undefined): number | string {
+  const n = creditUnits(credits)
+  return estimate ? `~${n}` : n
+}
+
+/**
  * The short unit label for a client-computed figure. `codeDefault` is what
  * the site rendered before the display unit existed (the locale's "CR" /
  * "קר׳"), so an unconfigured deployment is byte-identical.

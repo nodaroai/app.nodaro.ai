@@ -1,7 +1,7 @@
 ---
 node_type: image-critic
-generated_at: 2026-10-14T00:02:32.168Z
-generated_from: b83a9467d
+generated_at: 2026-10-20T21:12:33.843Z
+generated_from: 9ae3392be
 ---
 
 # Image Critic
@@ -9,7 +9,7 @@ generated_from: b83a9467d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-critic`
 **Category:** ai
-**Credit cost:** `11-110` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `~6` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=image-critic:<model id>` (MCP: `list_models` with `priceIds: ["image-critic:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`, `reference`, `prompt`
 **Outputs (source handles):** `approved`, `rejected`
 

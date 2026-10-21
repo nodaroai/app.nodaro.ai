@@ -76,6 +76,7 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "maxEstimatedCredits": 9,            // "up to": the most a run can cost over the choices the app's user has (with
   "maxPerMinuteCredits": 0,            // maxPerMinuteCredits / maxPerItemCredits); present only when it differs from the
   "maxPerItemCredits": 0,              // "from" figures above (the saved settings) — show "from 5 – up to 9"
+  "estimatedCreditsIsEstimate": true,  // present when the price holds a metered LLM call's estimate (charged its actual usage): show "~5"
   "runEstimatedCredits": 5,            // the run alone: the listed price less its Render final part
   "runPerMinuteCredits": 0,            // …and its per-minute and per-item parts
   "runPerItemCredits": 0,

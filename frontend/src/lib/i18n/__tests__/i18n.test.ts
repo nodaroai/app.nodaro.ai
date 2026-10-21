@@ -16,6 +16,8 @@ const LEGIT_LATIN_HE: readonly string[] = [
   "ugc.script.languageEn",
   "cfgshared.badgeI2I",
   "node.creditsSuffix",
+  // Its estimate twin ("(~{n} {u})"): format-only, `~` is a symbol.
+  "node.creditsSuffixApprox",
   "cfgext.compBlendMultiply",
   "cfgext.compBlendScreen",
   "cfgext.compBlendOverlay",

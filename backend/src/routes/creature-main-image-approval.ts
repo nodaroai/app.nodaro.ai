@@ -3,7 +3,10 @@ import { z } from "zod"
 import { expectedUpdatedAtSchema } from "../lib/optimistic-token-schema.js"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { captionCreature } from "../lib/creature-caption.js"
+import { captionCreatureCall, creatureCaptionRequest, CREATURE_CAPTION_MODEL } from "../lib/creature-caption.js"
+import { billedFailureMessage, llmGuardPrecheck, meterOptionalSyncLlm, type MeteredSyncLlmMeter } from "../lib/meter-sync-llm.js"
+import { creditGuard } from "../middleware/credit-guard.js"
+import { llmMeteredPricing } from "../lib/config.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -78,6 +81,13 @@ const bodySchema = z.object({
 })
 
 export async function creatureMainImageApprovalRoutes(app: FastifyInstance) {
+  // The caption's payer-aware guard, run INLINE only when the caption bills
+  // metered (meterOptionalSyncLlm) — the approval route itself has none, so
+  // under the rollback nothing about it changes.
+  const captionGuard = creditGuard(() => "prompt-helper", {
+    dedup: false,
+    computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: CREATURE_CAPTION_MODEL, maxTokens: 500 }),
+  })
   app.post(
     "/v1/creatures/:id/approve-main-image",
     {
@@ -199,8 +209,38 @@ export async function creatureMainImageApprovalRoutes(app: FastifyInstance) {
       // captionCreature() swallows internally and returns null on any
       // failure, including > 4000-char truncation. The frontend retries
       // via /llm-caption (which IS fatal-on-null → 502).
-      // TODO Phase 2: deduct 1 CR per LLM call.
-      const caption = await captionCreature(imageUrl)
+      //
+      // Metered (D3/D8): the caption call is BILLED — held and settled under
+      // prompt-helper:<model>, a billed failure charged, an unbilled one
+      // refunded. It was free before metered pricing, so under the rollback it
+      // stays free: no reservation, exactly as before. An approval is NEVER
+      // blocked by credits (owner decision D11): when the caption's hold is refused (a
+      // balance below it, a block) the image is still approved, the caption is
+      // skipped (canonical_description null) and /llm-caption retries it later.
+      const captionRequest = creatureCaptionRequest(imageUrl)
+      let meter: MeteredSyncLlmMeter | null | undefined
+      if (llmMeteredPricing()) {
+        // The caption guard runs inline (spend surface, instance cap, payer
+        // balance); a refusal or a billing error skips the caption, never the approval.
+        const optional = await meterOptionalSyncLlm(req, captionGuard, "creature-main-image-approval", {
+          feature: "prompt-helper",
+          calls: [{ modelId: CREATURE_CAPTION_MODEL, request: captionRequest }],
+        })
+        if ("meter" in optional) meter = optional.meter
+        else {
+          meter = null
+          req.log.info({ creatureId, skipped: optional.skipped }, "[creature-main-image-approval] caption skipped: its hold was refused")
+        }
+      }
+      const captionCall = meter === null ? null : await captionCreatureCall(imageUrl)
+      const caption = captionCall?.caption ?? null
+      if (meter && captionCall) meter.spend.add(CREATURE_CAPTION_MODEL, captionCall.request, captionCall.outcome)
+      /** Settle the caption's job once: completed with a caption, else failed (charged when billed). */
+      const settleCaption = async (failure?: string): Promise<void> => {
+        if (!meter) return
+        if (failure === undefined && caption !== null) return meter.settle("completed")
+        return meter.settle("failed", billedFailureMessage(failure ?? "The caption could not be written.", meter.spend))
+      }
 
       // ----- Persist -----
       // Update both `source_image_url` (always set on approval) and
@@ -245,6 +285,7 @@ export async function creatureMainImageApprovalRoutes(app: FastifyInstance) {
             .eq("user_id", req.userId)
             .single()
           if (current) {
+            await settleCaption("The approval lost a concurrent edit.")
             return reply.status(409).send({
               error: {
                 code: "concurrent_modification",
@@ -254,6 +295,7 @@ export async function creatureMainImageApprovalRoutes(app: FastifyInstance) {
             })
           }
         }
+        await settleCaption(updateErr?.message ?? "Update failed")
         return reply
           .status(500)
           .send({ error: { code: "update_failed", message: updateErr?.message ?? "Update failed" } })
@@ -261,6 +303,7 @@ export async function creatureMainImageApprovalRoutes(app: FastifyInstance) {
 
       // Coerce DB null → "" in the response so the frontend's non-nullable
       // CreatureNodeData.canonicalDescription type stays consistent.
+      await settleCaption()
       return reply.send({
         sourceImageUrl: updated.source_image_url,
         canonicalDescription: updated.canonical_description ?? "",

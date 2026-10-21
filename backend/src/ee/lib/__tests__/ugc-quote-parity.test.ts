@@ -272,3 +272,119 @@ describe("the lane's clip request keeps its wire values through the verb", () =>
     expect(captured.body).toMatchObject({ provider: "minimax-h3", resolution: "768P", duration: 7, aspectRatio: "9:16", referenceAudioUrls: ["https://cdn.example/segment.mp3"] })
   })
 })
+
+// Metered LLM pricing (R26): a screenshot reading is an Image to Text call, held by its route at
+// one attempt at the model's output cap and charged its actual usage. The quote is its ESTIMATE —
+// the same guard id (the row whose switches the guard checks) and, for each model the verb can send,
+// never above what the route's guard holds for the same request. Under the rollback the parity
+// above stays exact (the tier row on both sides).
+const { setLlmMeteredSchemaReadyForTesting } = await import("@/lib/llm-metered-schema-gate.js")
+const { chargedPriceTableFrom, meteredLlmQuote } = await import("@/ee/billing/credits.js")
+const { llmChargeId } = await import("@/ee/billing/llm-metered.js")
+const { parseMeteredLlmId } = await import("@/ee/billing/metered-llm-id.js")
+const { LLM_FEATURE_DEFAULTS, llmPriceKey } = await import("@nodaro/shared/llm-models")
+describe("metered: a reading's quote is an estimate, never above the route's hold", () => {
+
+  it.each([
+    [{}],
+    [{ llmModel: "claude-opus-5.5" }],
+    [{ llmModel: "claude-opus-5.5", advanced_mode: true }],
+    [{ llmModel: "gemini-3.8-flash" }],
+    [{ llmModel: "gpt-5.6-terra", reasoning_effort: "high" }],
+  ] as const)("%j", async (levers) => {
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      const args = { custom_prompt: "Answer yes or no.", ...levers }
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+      const result = await callTool(server, "image_to_text", { ...args, image_url: IMAGE })
+      expect(result.isError, JSON.stringify(result.content)).toBeUndefined()
+      const res = await routes.inject({ method: "POST", url: URLS.image_to_text!, payload: captured.body })
+      expect(res.statusCode, res.body).toBe(299)
+      // The guard holds the call's 1-attempt hold (its base: `llmGuardPrecheck`).
+      expect(typeof guard.base, "the metered guard computes its hold").toBe("number")
+      const quoted = await pricingFor("image_to_text", args, { clipCount: 1 })
+      expect(quoted?.id).toBe(guard.id)
+      expect(quoted?.meteredKey).toBeDefined()
+      // The key is the call the route meters: its charge id (what the settle commits under) is the
+      // route's feature on the model the route resolves, and its lane the one the route holds for.
+      const body = captured.body as { llmModel?: string; reasoningEffort?: string; advancedMode?: boolean }
+      const routeModel = body.llmModel ?? LLM_FEATURE_DEFAULTS["image-to-text"]
+      const parsed = parseMeteredLlmId(quoted!.meteredKey!)!
+      expect(llmChargeId(parsed.feature, parsed.modelId)).toBe(llmChargeId("image-to-text", routeModel))
+      expect(quoted!.meteredKey).toBe(llmPriceKey("image-to-text", routeModel, body.reasoningEffort, body.advancedMode === true))
+      // Both unmarked (a 0% table): the quote's estimate ≤ the hold.
+      const estimate = meteredLlmQuote(chargedPriceTableFrom(new Map(), { cost_markup_percent: 0 } as never), quoted!.meteredKey!)
+      expect(estimate?.kind).toBe("estimate")
+      expect(estimate?.kind === "estimate" ? estimate.credits : Infinity).toBeLessThanOrEqual(guard.base!)
+    } finally {
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
+  })
+})
+
+describe("round 3 — the frame check in both modes (clipReadingMode)", () => {
+  it("fixed (an older plugin): the reading is the route's own tier id, as the plugin's fixed charge reads it", async () => {
+    const quoted = await pricingFor("image_to_text", {}, { clipCount: 1 })
+    // Under tier pricing (no metered schema) the reading is its tier row, exactly as before.
+    expect(quoted?.id.startsWith("image-to-text")).toBe(true)
+    expect(quoted?.meteredKey).toBeUndefined()
+  })
+
+  it("metered (R56): the reading runs requireLane direct, so it is priced at its `:direct` key on the model it runs — the side hold's charge id", async () => {
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      const model = "claude-sonnet-5.5"
+      const quoted = await pricingFor("image_to_text", { llmModel: model, advanced_mode: true }, { clipCount: 1 })
+      expect(quoted?.meteredKey).toBe(llmPriceKey("image-to-text", model, undefined, true))
+      expect(quoted!.meteredKey!.endsWith(":direct")).toBe(true)
+      const parsed = parseMeteredLlmId(quoted!.meteredKey!)!
+      // The charge id the side hold reserves and settles under.
+      expect(llmChargeId(parsed.feature, parsed.modelId)).toBe(`image-to-text:${model}`)
+      // An estimate, never above the side hold `side.holdFor` takes for a one-frame direct call.
+      const { llmHoldForCalls } = await import("@/ee/billing/llm-billing-impl.js")
+      const { holdCredits } = await llmHoldForCalls("image-to-text", [{
+        modelId: model,
+        request: { modelId: model, system: "", messages: [{ role: "user", content: [{ type: "image", url: "https://price.invalid/frame.jpg" }] }], requireLane: "direct" },
+      }])
+      const estimate = meteredLlmQuote(chargedPriceTableFrom(new Map(), { cost_markup_percent: 0 } as never), quoted!.meteredKey!)
+      expect(estimate?.kind).toBe("estimate")
+      expect(estimate?.kind === "estimate" ? estimate.credits : Infinity).toBeLessThanOrEqual(holdCredits)
+    } finally {
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
+  })
+})
+
+describe("round 5 — an MCP frame-check reading is quoted as the describe route reserves it", () => {
+  it("whatever the plugin's clip mode (here: fixed — no plugin), the agent's frame check is priced at the describe route's own metered key, as an estimate", async () => {
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      const { UGC_ROUTE_CALL_PRICED_AT, ugcClipReadingPricedAt } = await import("../ugc-quote.js")
+      expect(ugcClipReadingPricedAt()).toBe("tier")
+      const args = { custom_prompt: "Is the product in frame? Answer yes or no." }
+      // The call as the agent runs it: the verb's body, replayed into the real route.
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+      const result = await callTool(server, "image_to_text", { ...args, image_url: IMAGE })
+      expect(result.isError, JSON.stringify(result.content)).toBeUndefined()
+      const res = await routes.inject({ method: "POST", url: URLS.image_to_text!, payload: captured.body })
+      expect(res.statusCode, res.body).toBe(299)
+      const body = captured.body as { llmModel?: string; reasoningEffort?: string; advancedMode?: boolean }
+      const routeKey = llmPriceKey("image-to-text", body.llmModel ?? LLM_FEATURE_DEFAULTS["image-to-text"], body.reasoningEffort, body.advancedMode === true)
+      // The quote prices route calls at their estimate (buildUgcQuote: UGC_ROUTE_CALL_PRICED_AT), under the
+      // guard's id and the very key the describe route meters — whatever the plugin's clip mode.
+      expect(UGC_ROUTE_CALL_PRICED_AT).toBe("estimate")
+      const quoted = await pricingFor("image_to_text", args, { clipCount: 1 })
+      expect(quoted?.id).toBe(guard.id)
+      expect(quoted?.meteredKey).toBe(routeKey)
+      // …an estimate never above the hold the route reserves for it (both unmarked).
+      const estimate = meteredLlmQuote(chargedPriceTableFrom(new Map(), { cost_markup_percent: 0 } as never), routeKey)
+      expect(estimate?.kind).toBe("estimate")
+      expect(typeof guard.base).toBe("number")
+      expect(estimate?.kind === "estimate" ? estimate.credits : Infinity).toBeLessThanOrEqual(guard.base!)
+    } finally {
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
+  })
+})

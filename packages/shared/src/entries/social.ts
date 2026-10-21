@@ -6,6 +6,7 @@
  * `@nodaro/shared`.
  */
 export { normalizePinterestUrl } from "../pinterest-url.js"
+export { SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, scrapeAnalysisQuoteId, type ScrapeAnalysisPriceParts } from "../scrape-analysis-pricing.js"
 export { SCRAPER_OUTPUT_FIELDS } from "../scraper-output-schemas.js"
 export {
   SOCIAL_POST_NODE_TYPES,

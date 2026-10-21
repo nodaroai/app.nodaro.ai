@@ -17,7 +17,9 @@ interface CommonInput {
    * Gemini and Claude models. Runs the request on the provider's own API so
    * `temperature`, `maxTokens` and the full reasoning range actually take
    * effect — on the default lane those levers are not reliably honoured.
-   * Bills one credit rung up (a premium model moves to premium-direct). A model without a direct lane returns
+   * The call is charged its actual usage at the vendor's direct rate (the price key ends `:direct`), so
+   * it usually costs more than the default lane; where the server prices LLM calls by tier instead, it
+   * bills one credit rung up (a premium model moves to premium-direct). A model without a direct lane returns
    * `400 advanced_mode_unsupported`.
    */
   advancedMode?: boolean

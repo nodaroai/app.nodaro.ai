@@ -19,7 +19,8 @@
     "film"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 1288,
+  "estimatedCredits": 1316,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "animal",
     "style",

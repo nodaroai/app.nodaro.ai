@@ -22,6 +22,8 @@ export const m = {
   coverArgs: [] as unknown[],
   estimateCalls: 0,
   estimatedTypes: [] as Array<string | undefined>,
+  /** An error the estimate throws (an unpriced metered LLM model, R49); null: it answers. */
+  estimateThrows: null as Error | null,
   reserveSeen: [] as Array<{ billingContext: unknown; creditOverride: unknown }>,
   insertJob: vi.fn(),
   insertIdem: vi.fn(),
@@ -74,6 +76,7 @@ vi.mock("@/ee/billing/use-case-estimate.js", () => ({
   estimateUseCaseCredits: async (graph: { nodeType?: string }) => {
     m.estimateCalls++
     m.estimatedTypes.push(graph?.nodeType)
+    if (m.estimateThrows) throw m.estimateThrows
     return { stepsCredits: 922, feeCredits: 10, totalCredits: 932 }
   },
 }))
@@ -151,7 +154,7 @@ export const post = (app: FastifyInstance, payload: Record<string, unknown>, hea
 beforeEach(() => {
   Object.assign(m, {
     credits: true, denied: false, deniedTypes: [], absent: false, authKind: "jwt", prepared: ok(), preflight: null, cover: { ok: true },
-    coverArgs: [], estimateCalls: 0, estimatedTypes: [], reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
+    coverArgs: [], estimateCalls: 0, estimatedTypes: [], estimateThrows: null, reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
     limited: false, limitCalls: 0,
   })
   m.peek.mockReset().mockResolvedValue(null)

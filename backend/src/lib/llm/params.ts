@@ -10,7 +10,7 @@ import {
   type LlmFeature,
   type LlmReasoningEffort,
 } from "@nodaro/shared/llm-models"
-import { raiseToReasoningFloor } from "../llm-node-output-cap.js"
+import { llmEffectiveOutputCap } from "../llm-node-output-cap.js"
 import type { LlmRequest } from "./types.js"
 
 const LLM_TIMEOUT_MS = 120_000
@@ -58,7 +58,6 @@ export function deriveParams(model: LlmModelDef, req: LlmRequest): {
   // top_p rides the same support gate as temperature — a reasoning model that
   // rejects sampling params gets neither.
   const topP = model.supportsTemperature === false ? undefined : req.topP
-  let maxTokens = req.maxTokens ?? model.maxOutputTokens
   // Reasoning tokens share the output budget. Two ways that happens:
   //   - an xhigh/max effort was requested (any reasoning model), or
   //   - the model reasons with no thinking param sent at all
@@ -68,13 +67,14 @@ export function deriveParams(model: LlmModelDef, req: LlmRequest): {
   // persists the old 2048 default, and hardcoded 2048s live in several routes
   // (after-effects/motion-graphics/lottie-overlay); such a call must never
   // truncate its answer because thinking consumed a small legacy cap. The cap
-  // is a ceiling, not spend: billing is flat per call, so raising it costs
-  // nothing unless the model actually generates that much.
+  // is a ceiling, not spend — but a metered call's HOLD prices this cap, which
+  // is why it comes from `llmEffectiveOutputCap`, the one function the hold
+  // reads too.
   //
   // The floor is the model's own (`reasoningOutputFloor`), not a flat 32768:
   // it rides every lane the model can be served on, and the Gemini flash KIE
   // endpoints are only known to take 8192. Issue #1588 is what a missing floor
   // costs — gemini-3.6-flash reasons by default and was sent a node's 1,100.
-  maxTokens = raiseToReasoningFloor(model, eff, maxTokens)
+  const maxTokens = llmEffectiveOutputCap(model, req)
   return { eff, temperature, topP, maxTokens }
 }

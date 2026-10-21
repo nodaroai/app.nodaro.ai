@@ -11,18 +11,32 @@ vi.mock("../../lib/location-caption.js", async () => {
   const actual = await vi.importActual<typeof import("../../lib/location-caption.js")>(
     "../../lib/location-caption.js",
   )
+  // The routes call captionLocationCall (the caption + the call behind it);
+  // it answers through the captionLocation mock so each case still sets the caption.
+  const captionLocation = vi.fn()
   return {
     ...actual,
-    captionLocation: vi.fn(),
+    captionLocation,
+    captionLocationCall: vi.fn(async (imageUrl: string) => ({
+      caption: await captionLocation(imageUrl),
+      request: actual.locationCaptionRequest(imageUrl),
+      outcome: { error: undefined },
+    })),
   }
 })
 // The helper imports llmComplete — mock it too so the truncation test can
 // stub a 5000-char response without going through KIE/Anthropic.
 vi.mock("../../lib/llm-client.js", () => ({ llmComplete: vi.fn() }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+// The caption's guard runs inline only when the caption bills metered (never
+// on the tier path these cases pin) — the metered paths are llm-metered-creative-routes.test.ts.
+vi.mock("../../middleware/credit-guard.js", () => ({ creditGuard: () => async () => {}, reserveCreditsForJob: vi.fn() }))
 // CI has no .env so config.ANTHROPIC_API_KEY / KIE_API_KEY would be empty,
 // tripping the 503 provider_unavailable preflight. Mock as truthy.
 vi.mock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "test-key" },
 }))
 

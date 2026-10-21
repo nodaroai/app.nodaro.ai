@@ -1064,27 +1064,30 @@ export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
 
 /**
  * Models {@link STRUCTURED_VISION_MODELS} carries that describe-to-picker does
- * NOT offer. Its analyzer prompt is a rendered catalog legend — tens of
- * thousands of input tokens per read — and on these models a single read
- * costs far above what any of the node's credit rungs covers (production cost
- * audit, 2026-10-20; the basis is in backend/src/ee/billing/credits.ts).
- * Withheld from this feature only: the scrapers' per-post analysis reads a
- * frame and a caption, not a legend, and keeps the whole list.
+ * NOT offer — now none.
+ *
+ * Claude Fable 5 was withheld here (production cost audit, 2026-10-20): a
+ * legend-sized read cost far above every tier rung. Metered pricing charges
+ * each read what it really costs (tokens × the model's rate on the lane that
+ * served it), so nothing needs withholding and the set is empty.
+ *
+ * @deprecated Always empty since metered LLM pricing. Kept exported so existing
+ * importers keep compiling; it will be removed in a future major.
  */
-export const DESCRIBE_TO_PICKER_WITHHELD_MODELS: ReadonlySet<string> = new Set(["claude-fable-5"])
+export const DESCRIBE_TO_PICKER_WITHHELD_MODELS: ReadonlySet<string> = new Set<string>()
 
 /**
- * The same models, withheld from the other legend-sized structured reads for
- * the same reason: `POST /v1/text-to-picker` (describe-to-picker's text twin,
- * whose default run analyzes every picker's legend) and `POST /v1/llm/structured`
- * (a caller's own legend-sized system prompt). One set, so a model withheld
- * from one read of that size is withheld from all of them.
+ * The same (empty) set for the other legend-sized structured reads:
+ * `POST /v1/text-to-picker` and `POST /v1/llm/structured`.
+ *
+ * @deprecated Always empty since metered LLM pricing; see
+ * {@link DESCRIBE_TO_PICKER_WITHHELD_MODELS}.
  */
 export const LLM_STRUCTURED_WITHHELD_MODELS: ReadonlySet<string> = DESCRIBE_TO_PICKER_WITHHELD_MODELS
 
 /**
  * The models describe-to-picker offers and accepts: the structured vision
- * models minus {@link DESCRIBE_TO_PICKER_WITHHELD_MODELS}. The ONE list the
+ * models minus {@link DESCRIBE_TO_PICKER_WITHHELD_MODELS} (empty — every one). The ONE list the
  * route gate, the config panel and the quick strip read, so a model the route
  * refuses is never offered and a saved node naming one is snapped to the
  * default (the route answers it with a `validation_error`).
@@ -1227,6 +1230,24 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   // the same two defaults for API callers that omit the model.
   "content-recipe": "gemini-3.6-flash",
   "content-ideas": "gemini-3.6-flash",
+}
+
+/**
+ * Billed features with no defaults of their own → the feature whose defaults
+ * (model, {@link LLM_FEATURE_DEFAULT_EFFORTS} effort) their route borrows:
+ * Generate Structured runs on Generate Text's, Text to Picker on Describe to
+ * Picker's, the Choose Best judge on `pick-best-llm`'s. Read it through
+ * {@link llmDefaultsFeature}. Structure only — no prices.
+ */
+export const LLM_FEATURE_DEFAULTS_FROM: Readonly<Record<string, LlmFeature>> = {
+  "llm-structured": "llm-chat",
+  "text-to-picker": "describe-to-picker",
+  "reduce:pick-best-llm": "pick-best-llm",
+}
+
+/** The feature whose defaults a call of `feature` runs with: its {@link LLM_FEATURE_DEFAULTS_FROM} entry, else itself. */
+export function llmDefaultsFeature(feature: string): string {
+  return Object.hasOwn(LLM_FEATURE_DEFAULTS_FROM, feature) ? LLM_FEATURE_DEFAULTS_FROM[feature]! : feature
 }
 
 /**
@@ -1545,6 +1566,33 @@ export function llmServesDirect(
   return Boolean(
     getLlmModel(modelId!)?.effortRequiresDirect && effectiveReasoningEffort(modelId, reasoningEffort) !== undefined,
   )
+}
+
+/**
+ * The price key of a metered LLM call — what a client asks
+ * `POST /v1/credits/model-costs` (or `GET /v1/credits/model-cost?model=`) for
+ * the call's estimated price: `<feature>:<modelId>`, plus `:direct` when the
+ * call is served on the vendor's own API ({@link llmServesDirect}), which is
+ * priced at the direct rate.
+ *
+ * With no `reasoningEffort` the default effort of the feature the call
+ * borrows its defaults from applies ({@link llmDefaultsFeature},
+ * {@link defaultReasoningEffort}) — the effort the call then runs at — so the
+ * key names the lane the call is held and charged on.
+ *
+ * `modelId` must already be resolved: the model the call runs on, never empty
+ * (a caller with no model passes the feature's default, `LLM_FEATURE_DEFAULTS`
+ * of {@link llmDefaultsFeature}). An empty id throws a `TypeError`.
+ */
+export function llmPriceKey(
+  feature: string,
+  modelId: string,
+  reasoningEffort?: string,
+  advancedMode?: boolean,
+): string {
+  if (!modelId) throw new TypeError(`llmPriceKey: modelId must be a resolved model id (feature "${feature}")`)
+  const effort = reasoningEffort ?? defaultReasoningEffort(llmDefaultsFeature(feature), modelId)
+  return llmServesDirect(modelId, effort, advancedMode) ? `${feature}:${modelId}:direct` : `${feature}:${modelId}`
 }
 
 /**

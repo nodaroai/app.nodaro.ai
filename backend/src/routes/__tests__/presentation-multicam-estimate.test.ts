@@ -19,8 +19,8 @@ vi.mock("@/lib/config.js", () => ({
   hasOrganizations: () => false,
 }))
 vi.mock("@/lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: vi.fn() } }))
-const h = vi.hoisted(() => ({ estimate: vi.fn().mockResolvedValue(7), asked: [] as Array<{ types: string[]; userId: unknown }>, multicam: true, framesWithheld: false }))
-vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCredits: h.estimate }))
+const h = vi.hoisted(() => ({ estimate: vi.fn().mockResolvedValue(7), asked: [] as Array<{ types: string[]; userId: unknown }>, multicam: true, framesWithheld: false, metered: false }))
+vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCreditsDetailed: async (...a: unknown[]) => ({ credits: await h.estimate(...a), estimate: h.metered, perNode: {} }) }))
 vi.mock("@/lib/use-case/inner-availability.js", () => ({
   usecaseViewerEstimateFor: async (nodes: Array<{ type?: string }>, userId: unknown) => {
     h.asked.push({ types: nodes.map((n) => String(n.type)), userId })
@@ -98,6 +98,33 @@ describe("GET /v1/present/:token — the estimate is the viewer's", () => {
     await app.inject({ method: "GET", url: "/v1/present/tok", headers: { "x-user-id": VIEWER_ID } })
     expect(h.estimate.mock.calls[0]![2]).toMatchObject({ framesWithheld: true })
     expect(h.estimate.mock.calls[0]![2]).not.toHaveProperty("multicam")
+  })
+
+  it("a metered LLM line marks the seeded figure an estimate (`estimatedCostIsEstimate`); absent otherwise", async () => {
+    h.metered = true
+    try {
+      const res = await app.inject({ method: "GET", url: "/v1/present/tok", headers: { "x-user-id": VIEWER_ID } })
+      expect(res.json()).toMatchObject({ estimatedCost: 7, estimatedCostIsEstimate: true })
+    } finally {
+      h.metered = false
+    }
+    const fixed = await app.inject({ method: "GET", url: "/v1/present/tok", headers: { "x-user-id": VIEWER_ID } })
+    expect(fixed.json()).not.toHaveProperty("estimatedCostIsEstimate")
+  })
+
+  it("R51: a metered LLM model with no price still renders the page — the cost omitted, `estimatedCostUnpriced` says why", async () => {
+    h.estimate.mockRejectedValueOnce(Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" }))
+    const res = await app.inject({ method: "GET", url: "/v1/present/tok", headers: { "x-user-id": VIEWER_ID } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).not.toHaveProperty("estimatedCost")
+    expect(body).not.toHaveProperty("estimatedCostIsEstimate")
+    expect(body.estimatedCostUnpriced).toEqual({
+      reason: "llm_model_unpriced",
+      modelId: "claude-opus-5.5",
+      message: 'The model "claude-opus-5.5" has no price yet, so it cannot be run. Choose another model.',
+    })
+    expect(body.nodes).toHaveLength(3)
   })
 
   it("an anonymous viewer is asked as no one", async () => {

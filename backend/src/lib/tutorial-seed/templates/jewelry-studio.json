@@ -16,7 +16,8 @@
     "catalogue"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 202,
+  "estimatedCredits": 209,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "lighting",

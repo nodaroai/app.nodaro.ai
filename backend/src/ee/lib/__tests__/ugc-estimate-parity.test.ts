@@ -42,10 +42,11 @@ vi.mock("../../billing/credits.js", async (importOriginal) => ({
     return { creditCost: 1, isEnabled: true, tierRestriction: null }
   }),
 }))
-vi.mock("../ugc-quote.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../ugc-quote.js")>()),
-  priceUgcCalls: vi.fn(async (_c: unknown, calls: unknown[]) => calls.map(() => 1)),
-}))
+vi.mock("../ugc-quote.js", async (importOriginal) => {
+  const { priceUgcCallLinesVia } = await import("./helpers/ugc-price-lines.js")
+  const priceUgcCalls = vi.fn(async (_c: unknown, calls: unknown[]) => calls.map(() => 1))
+  return { ...(await importOriginal<typeof import("../ugc-quote.js")>()), priceUgcCalls, priceUgcCallLines: priceUgcCallLinesVia(priceUgcCalls) }
+})
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({})) }))
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))
 

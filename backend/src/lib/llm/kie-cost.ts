@@ -5,6 +5,7 @@
  * wires that count leaves out the caller's own prompt (a few tokens for a
  * long request), so a cost read from it is close to nothing whatever was sent.
  */
+import { getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 import type { LlmFailureUsage } from "../llm-errors.js"
 import { extractActualUsd } from "./response.js"
@@ -12,6 +13,20 @@ import type { LlmRequest } from "./types.js"
 
 /** Characters one image stands for in the size estimate — about 1,600 tokens at 4 characters a token. */
 export const KIE_IMAGE_ESTIMATE_CHARS = 6_400
+
+/**
+ * Whether KIE's reported INPUT token count for `modelId` cannot be billed
+ * from: its Claude wires leave the caller's own prompt out of the count (a few
+ * tokens for a long request), and its GPT-6 endpoint reports a top-level
+ * `input_tokens: 0` (measured 2026-10-08). Such a call is costed from the
+ * request's size (`requestChars ÷ 4`) when KIE stated no charge
+ * (`kieCostUsd`). Its OUTPUT count is sound and is used as is.
+ */
+export function kieInputUntrusted(modelId: string): boolean {
+  const model = getLlmModel(modelId)
+  if (!model) return false
+  return model.vendor === "anthropic" || model.id.startsWith("gpt-6")
+}
 
 /** The request's size in characters: system prompt, schema, text, and {@link KIE_IMAGE_ESTIMATE_CHARS} per media block. */
 export function requestChars(req: LlmRequest): number {
@@ -35,7 +50,13 @@ export function kieInputTokens(promptChars: number): number {
   return Math.ceil(promptChars / 4)
 }
 
-/** KIE's charge (`creditsUsd`) when known, else the size estimate (chars ÷ 4) at the KIE rates of `modelId` (a registry id). */
+/**
+ * KIE's charge (`creditsUsd`) when known, else the size estimate (chars ÷ 4) at
+ * the KIE rates of `modelId` (a registry id). A BILLING input (Copilot, the
+ * pipelines, the metered settle): a model with no KIE rate throws
+ * `LlmRateMissingError` rather than costing the call $0 — a caller that only
+ * logs the figure catches that error itself.
+ */
 export function kieCostUsd(modelId: string, opts: { creditsUsd?: number; promptChars: number; answerChars: number }): number {
   if (opts.creditsUsd !== undefined) return opts.creditsUsd
   return calculateLlmCost(

@@ -75,6 +75,7 @@ import { resumeRouteNodeIds, resumeSource } from "../lib/app-run-resume.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 
 /** The app version the run ran is gone: it cannot be continued; starting over runs the current one. */
 export const APP_RUN_VERSION_UNAVAILABLE = "app_run_version_unavailable"
@@ -254,9 +255,16 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
 
       const billingContext = req.billingContext ?? personalPayer(userId)
       const webFreeMode = await resolveWebSurfaceFlag(req)
-      const price = hasCredits()
-        ? await resumePrice({ userId, billingContext, webFreeMode, version, nodes, edges, runSet, source, effective })
-        : null
+      let price: Awaited<ReturnType<typeof resumePrice>> | null
+      try {
+        price = hasCredits()
+          ? await resumePrice({ userId, billingContext, webFreeMode, version, nodes, edges, runSet, source, effective })
+          : null
+      } catch (err) {
+        // A metered LLM model with no price (R49): refused before anything runs.
+        if (await replyIfLlmUnpriced(reply, err)) return reply
+        throw err
+      }
       const stepList = steps.map((id) => {
         const node = nodes.find((n) => n.id === id)
         const label = typeof node?.data?.label === "string" && node.data.label.trim() ? node.data.label.trim() : null

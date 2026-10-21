@@ -1,3 +1,4 @@
+// @registry-enumerates prices the run by estimateWorkflowCreditsDetailed over whatever node types the workflow holds
 import { executionOutcome } from "@nodaro/shared/workflow"
 /**
  * Presentation mode routes.
@@ -22,7 +23,8 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
-import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { estimateWorkflowCreditsDetailed, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { isLlmUnpricedError, llmUnpricedMessage, refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
@@ -230,11 +232,20 @@ export async function presentationRoutes(app: FastifyInstance) {
     // BEFORE its user types, so an exposed speech text is priced at its input's
     // character limit (or the model's cap), never the author's placeholder.
     const wfEstimateEdges = (workflow.edges ?? []) as EstimateEdge[]
-    const estimatedCost = await estimateWorkflowCredits(shown, wfEstimateEdges, {
-      speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, shown),
-      // A use-case node is priced on the recordings and framing source the viewer's run reads (decided 2026-10-19/20).
-      ...(await usecaseViewerEstimateFor(shown, req.userId)),
-    })
+    // A metered LLM model with no price (R51): the page still renders — its cost is omitted and
+    // `estimatedCostUnpriced` says why; the run is what is refused (POST …/run).
+    let estimate: Awaited<ReturnType<typeof estimateWorkflowCreditsDetailed>> | undefined
+    let estimatedCostUnpriced: { reason: "llm_model_unpriced"; modelId: string; message: string } | undefined
+    try {
+      estimate = await estimateWorkflowCreditsDetailed(shown, wfEstimateEdges, {
+        speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, shown),
+        // A use-case node is priced on the recordings and framing source the viewer's run reads (decided 2026-10-19/20).
+        ...(await usecaseViewerEstimateFor(shown, req.userId)),
+      })
+    } catch (err) {
+      if (!isLlmUnpricedError(err)) throw err
+      estimatedCostUnpriced = { reason: "llm_model_unpriced", modelId: err.modelId, message: await llmUnpricedMessage(err) }
+    }
 
     // Extract presentation settings from workflow settings
     const settings = (workflow.settings ?? {}) as Record<string, unknown>
@@ -247,7 +258,10 @@ export async function presentationRoutes(app: FastifyInstance) {
       nodes: isOwner ? nodes : stripStudioTakeVoiceRecords(shown),
       edges: workflow.edges,
       isOwner,
-      estimatedCost,
+      ...(estimate ? { estimatedCost: estimate.credits } : {}),
+      // A metered LLM line makes the figure an estimate (`~`, spec §8.5); present only then.
+      ...(estimate?.estimate ? { estimatedCostIsEstimate: true } : {}),
+      ...(estimatedCostUnpriced ? { estimatedCostUnpriced } : {}),
       presentationSettings: presentationSettings ?? { runTarget: "workflow" },
     })
   })
@@ -393,6 +407,10 @@ export async function presentationRoutes(app: FastifyInstance) {
       )
       if (refusal) return reply.status(400).send({ error: refusal })
     }
+
+    // A metered LLM call on a model with no price (R51): refused before any row exists, so no fixed
+    // node runs and is charged ahead of the call the run would refuse mid-graph.
+    if (await refuseIfRunUnpriced(reply, (workflow.nodes ?? []) as Array<{ id: string; type?: string; data?: unknown }>, (workflow.edges ?? []) as Array<{ source: string; target: string }>, { runNodeIds: nodeIds, overrides: inputOverrides })) return reply
 
     // Create execution under the VIEWER's userId (viewer pays credits)
     const { data: execution, error: execError } = await supabase

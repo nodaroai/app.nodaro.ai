@@ -3,7 +3,7 @@
 /**
  * The one summed estimate on a macro group (Reframe) — D5, decided 2026-10-11.
  * The group has no price of its own: each of its nodes charges its own, and the
- * figure here is `useRunSetCredits` over exactly those nodes, the same run
+ * figure here is `useRunSetPrice` over exactly those nodes, the same run
  * estimate the Execute button, the confirm and the credit precheck are made of.
  * The group runs Speaker Frames and a video-fed Speaker View, so the chip
  * shows only while both are priced — the one predicate every video-mode surface
@@ -17,7 +17,7 @@ import { useT } from "@/lib/i18n"
 import { hasCredits } from "@/lib/edition"
 import { formatCreditUnits } from "@/lib/credit-units"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useRunSetCredits } from "@/hooks/use-run-from-here-credits"
+import { useRunSetPrice } from "@/hooks/use-run-from-here-credits"
 import { isExecutableNode } from "@/components/editor/workflow-editor/types"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -92,15 +92,16 @@ export function MacroGroupEstimate({ groupId }: { readonly groupId: string }) {
     return { nodes: state.nodes as WorkflowNode[], edges: state.edges as WorkflowEdge[] }
   }, [fingerprint])
   const executable = useMemo(() => nodes.filter((n) => n.parentId === groupId && isExecutableNode(n)), [nodes, groupId])
-  const credits = useRunSetCredits(executable, nodes, edges)
+  const { credits, unpriced } = useRunSetPrice(executable, nodes, edges)
   if (!hasCredits() || !speakerViewVideoModeLive()) return null
   return (
     <div
       data-testid="macro-group-estimate"
-      title={t("reframe.estimateTitle")}
+      // A node in the group the server refuses to price: no figure, not priced yet — the server's sentence on hover.
+      title={unpriced?.message ?? t("reframe.estimateTitle")}
       className="pointer-events-none absolute end-3 bottom-3 rounded-md border border-border bg-card/80 px-2 py-1 text-xs tabular-nums text-muted-foreground"
     >
-      {`≈ ${formatCreditUnits(credits)}`}
+      {unpriced ? t("renderFinal.priceNotPricedYet") : `≈ ${formatCreditUnits(credits)}`}
     </div>
   )
 }

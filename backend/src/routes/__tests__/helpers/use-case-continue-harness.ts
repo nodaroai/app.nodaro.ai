@@ -233,6 +233,7 @@ vi.mock("@/ee/billing/credits.js", async (orig) => ({
     src.estimateArgs = a
     return src.steps
   },
+  runHoldsMeteredLlmEstimate: () => false,
   CreditsService: {
     checkBalanceCovers: async (...a: unknown[]) => {
       src.coverArgs = a

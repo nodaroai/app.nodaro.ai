@@ -7,16 +7,16 @@ import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared/llm-models"
+import { motionGraphicsFeature } from "@nodaro/shared/llm-models"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as MotionGraphicsData
   const mgFeature = motionGraphicsFeature(nodeData.engine)
-  const credits = useModelCredits(buildLlmCreditIdentifier(mgFeature, nodeData.llmModel || LLM_FEATURE_DEFAULTS[mgFeature], nodeData.reasoningEffort, nodeData.advancedMode === true), 10)
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits(mgFeature, nodeData, 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
@@ -49,12 +49,12 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Shapes className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={credits} creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={isRunning}
       hideHeader
       topToolbarContent={
-        <NodeQuickStrip nodeId={id} credits={credits} isRunning={isRunning} />
+        <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={isRunning} />
       }
       handles={[
         { id: "video",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

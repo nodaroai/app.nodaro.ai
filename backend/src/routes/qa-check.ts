@@ -6,7 +6,9 @@ import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { llmComplete } from "../lib/llm-client.js"
+import { llmComplete, type LlmRequest } from "../lib/llm-client.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { finishMeteredSyncLlmJob, llmGuardPrecheck, spendLlmCall } from "../lib/meter-sync-llm.js"
 import { LLM_ROUTE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -46,7 +48,10 @@ export async function qaCheckRoutes(app: FastifyInstance) {
   app.post(
     "/v1/qa-check",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("qa-check", req.body)),
+      preHandler: creditGuard((req) => resolveLlmCreditId("qa-check", req.body), {
+        // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
+        computeCredits: (body) => llmGuardPrecheck("qa-check", body),
+      }),
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -97,29 +102,41 @@ export async function qaCheckRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to check prompt")
       }
 
-      // Reserve credits
-      const reservation = await reserveCreditsForJob(
-        req,
-        reply,
-        job.id,
-        modelIdentifier,
-      )
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
-
-      try {
-        const systemPrompt = `You are a QA evaluation assistant. ${SYSTEM_PROMPTS[checkType]}
+      // The request as it is sent, so the metered hold is sized from it.
+      const systemPrompt = `You are a QA evaluation assistant. ${SYSTEM_PROMPTS[checkType]}
 
 You MUST respond with ONLY a valid JSON object in this exact format, no other text:
 {"score": <number 0.0-1.0>, "approved": <true if score >= ${threshold}, false otherwise>, "reason": "<brief explanation>"}`
 
-        const response = await llmComplete({
-          modelId: llmModel,
-          system: systemPrompt,
-          messages: [{ role: "user", content: `Evaluate the following content:\n\n${content}` }],
-          reasoningEffort: parsed.data.reasoningEffort,
-          ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["qa-check"]),
-        })
+      const request: LlmRequest = {
+        modelId: llmModel,
+        system: systemPrompt,
+        messages: [{ role: "user", content: `Evaluate the following content:\n\n${content}` }],
+        reasoningEffort: parsed.data.reasoningEffort,
+        ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["qa-check"]),
+      }
+
+      // Reserve credits: metered (the call's 1-attempt hold), else the tier id as before.
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "qa-check", calls: [{ modelId: llmModel, request }] })
+      if (!reserve) return
+      const spend = new LlmSpend()
+      let usageLogId: string | undefined
+      if (reserve.metered) {
+        // The reconcile sweep's anchor (C3): an unsettled metered hold is found by it.
+        if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+      } else {
+        const reservation = await reserveCreditsForJob(
+          req,
+          reply,
+          job.id,
+          modelIdentifier,
+        )
+        if (reply.sent) return
+        usageLogId = reservation?.usageLogId
+      }
+
+      try {
+        const response = await spendLlmCall(reserve.metered ? spend : undefined, llmModel, request, () => llmComplete(request))
 
         const rawText = response.text
 
@@ -144,6 +161,14 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
               : "No reason provided"
         } catch {
           // Claude didn't return valid JSON -- use fallback values
+        }
+
+        if (reserve.metered) {
+          await finishMeteredSyncLlmJob(job.id, reserve, spend, {
+            status: "completed",
+            outputData: { score, approved, reason, checkType, usage: response.usage },
+          })
+          return reply.send({ jobId: job.id, score, approved, reason })
         }
 
         // Finalize job and credits
@@ -178,6 +203,14 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
         // the log only.
         const message = userFacingMessage(err, LLM_ANSWER_UNREADABLE_MESSAGE)
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[qa-check] failed")
+
+        if (reserve.metered) {
+          // A billed failure is charged its usage (and says so); an unbilled one is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "failed", errorMessage: message, outputData: { error: message } })
+          return reply.status(502).send({
+            error: { code: llmErrorCode(err), message: finished.errorMessage ?? message },
+          })
+        }
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 

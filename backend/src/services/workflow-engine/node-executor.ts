@@ -41,12 +41,19 @@ import { supabase } from "../../lib/supabase.js"
 import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
-import { hasCredits, config } from "../../lib/config.js"
+import { hasCredits, config, llmMeteredPricing } from "../../lib/config.js"
 import { speechChargeOverride } from "../../lib/speech-estimate.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { freeVideoRequestForJob } from "../../ee/billing/free-video-limits.js"
 import { refundJobCredits } from "../../workers/shared.js"
+import { buildLottieRequest, type MotionGraphicsLottiePayload } from "../../lib/lottie-request.js"
+import { buildScriptRequest, type ScriptProvider } from "../../providers/script/script-generator.js"
+import { settleMeteredHoldAfterFlip, settleMeteredHoldsBeforeCancel } from "../../lib/cancel-job.js"
+import { settleSideHoldsAfterFlip } from "../../lib/llm-side-hold.js"
+import { sideHoldChargesFor, withSideCharge } from "../../lib/job-step-charge.js"
+import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
+import type { LlmPlannedCall, MeteredLlmFeature } from "../../lib/llm-billing.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import {
   PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, buildUgcSyncBody, runUgcCards, runUgcClips, runUgcCreator, runUgcFinish, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed,
@@ -694,7 +701,8 @@ async function executeInlineNode(
  * unpinned creator drawn again) is a job of its own. The node's own calls keep the node's key.
  * A run that is stopping starts nothing new.
  */
-function ugcDepsFor(node: SimpleNode, ctx: OrchestratorContext, iterationIndex?: number, idempotencyScope: readonly string[] = []): UgcDeps {
+/** @internal exported for the step-charge test (R53) only. */
+export function ugcDepsFor(node: SimpleNode, ctx: OrchestratorContext, iterationIndex?: number, idempotencyScope: readonly string[] = []): UgcDeps {
   const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
   const base = `http://localhost:${port}`
   const keyOf = (path: string, body: Record<string, unknown>, step?: string) =>
@@ -729,7 +737,8 @@ function ugcDepsFor(node: SimpleNode, ctx: OrchestratorContext, iterationIndex?:
     jobCharge: async (jobId) => {
       const { data } = await supabase.from("jobs").select("credits_actual, credits").eq("id", jobId).single()
       const row = data as { credits_actual?: number | null; credits?: number | null } | null
-      return row?.credits_actual ?? row?.credits ?? 0
+      // R53: plus its settled metered side holds (554).
+      return withSideCharge(row?.credits_actual ?? row?.credits ?? 0, jobId, await sideHoldChargesFor([jobId]))
     },
   }
 }
@@ -1652,6 +1661,64 @@ export async function computeSpeechCreditOverride(
 }
 
 /**
+ * The one call a worker-queued metered LLM job makes for certain, built from
+ * its payload with the SAME request builder the worker sends it with
+ * (`buildScriptRequest`, `buildLottieRequest`) — so the DAG's hold and the
+ * route's hold for the same settings are one figure. Undefined for every
+ * other job. (The Scene3D nodes run through their route, which reserves.)
+ */
+function meteredLlmPlannedCall(
+  jobName: string,
+  payload: Record<string, unknown>,
+): { feature: MeteredLlmFeature; call: LlmPlannedCall } | undefined {
+  const cheapLanesOnly = payload.cheapLanesOnly === true
+  if (jobName === "generate-script") {
+    const request = buildScriptRequest({
+      prompt: typeof payload.prompt === "string" ? payload.prompt : "",
+      sceneCount: payload.sceneCount as number | undefined,
+      tone: payload.tone as string | undefined,
+      targetDuration: payload.targetDuration as number | undefined,
+      provider: payload.provider as ScriptProvider | undefined,
+      llmModel: payload.llmModel as string | undefined,
+      reasoningEffort: payload.reasoningEffort as string | undefined,
+      advanced: payload.advanced as LlmAdvancedInput | undefined,
+      brief: { styleGuide: payload.styleGuide as string | undefined },
+      lanes: { cheapLanesOnly },
+    })
+    return { feature: "generate-script", call: { modelId: request.modelId, request, cheapLanesOnly } }
+  }
+  if (jobName === "motion-graphics-lottie") {
+    const request = buildLottieRequest({ ...(payload as unknown as MotionGraphicsLottiePayload), cheapLanesOnly })
+    return { feature: "motion-graphics-lottie", call: { modelId: request.modelId, request, cheapLanesOnly } }
+  }
+  return undefined
+}
+
+/**
+ * The metered hold of a worker-queued LLM node (D1, A5): `{ chargeId,
+ * holdCredits }` — `<feature>:<model>` and the marked-up one-attempt hold,
+ * from the ONE hold formula the route guard reserves through
+ * (`llmHoldForCalls`). Undefined when the job is not a metered LLM job, and
+ * under the rollback (the payload's tier id then reserves exactly as before).
+ * Throws `LlmUnpricedModelError` for a model with no price on a lane it may be
+ * served on — refused before any reservation.
+ */
+export async function computeLlmMeteredHold(
+  jobName: string,
+  payload: Record<string, unknown>,
+): Promise<{ chargeId: string; holdCredits: number } | undefined> {
+  const planned = meteredLlmPlannedCall(jobName, payload)
+  if (!planned || !hasCredits() || !llmMeteredPricing()) return undefined
+  const { llmHoldForCalls } = await import("../../ee/billing/llm-billing-impl.js")
+  return llmHoldForCalls(planned.feature, [planned.call])
+}
+
+/** A refusal the metered reservation raises itself, with its stable code (kept through the reservation catch). */
+function meteredReserveRefusal(message: string, errorCode: string): Error {
+  return Object.assign(new Error(message), { errorCode, meteredRefusal: true as const })
+}
+
+/**
  * A Seedance draft finalize whose draft had a reference VIDEO bills input +
  * output seconds, which its per-second `-ref` row cannot express alone — the
  * stamped plan's exact base, marked up once at the stamped id (the same basis
@@ -2283,7 +2350,21 @@ async function executeWorkerNode(
       // video-sfx and video-depth are the same shape: a row per clip length,
       // and the length was measured and stamped above, so the reservation keys
       // off that row.
+      // A worker-queued metered LLM node (generate-script, lottie motion
+      // graphics) reserves its metered hold under `<feature>:<model>` — never
+      // a tier row. The hold is its own override: no other override applies
+      // to an LLM job, so it short-circuits the chain below.
+      let meteredHold: { chargeId: string; holdCredits: number } | undefined
+      try {
+        meteredHold = await computeLlmMeteredHold(jobName, { ...payload, ...(ctx.cheapLanesOnly ? { cheapLanesOnly: true } : {}) })
+      } catch (err) {
+        if (!(err instanceof Error && err.name === "LlmUnpricedModelError")) throw err
+        const { llmModelUnpricedMessage } = await import("../../ee/billing/llm-unpriced-reply.js")
+        throw meteredReserveRefusal(llmModelUnpricedMessage(err as Parameters<typeof llmModelUnpricedMessage>[0]), "llm_model_unpriced")
+      }
+
       const reserveModelIdentifier =
+        meteredHold?.chargeId ??
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??
@@ -2293,6 +2374,7 @@ async function executeWorkerNode(
         modelIdentifier
 
       const creditOverride =
+        meteredHold?.holdCredits ??
         await applyEdlCreditOverride(jobName, payload) ??
         await speakerViewCreditOverride(jobName, payload) ??
         await speakerFramesCreditOverride(jobName, payload) ??
@@ -2325,6 +2407,11 @@ async function executeWorkerNode(
         video: freeVideoRequestForJob(jobName, reserveModelIdentifier, payload as Record<string, unknown>),
       })
       if (!preflight.allowed) {
+        // B15: a metered hold the balance cannot cover says how much the node
+        // may need — the hold, as the route's 402 does (credit-guard-impl).
+        if (meteredHold && preflight.balance !== undefined && preflight.balance < meteredHold.holdCredits) {
+          throw meteredReserveRefusal(`Needs up to ${meteredHold.holdCredits} credits`, "insufficient_credits")
+        }
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
       }
 
@@ -2335,14 +2422,21 @@ async function executeWorkerNode(
         0, // provider cost calculated in worker
         0, // display cost calculated in worker
         {
-          isAppRun: ctx.isAppRun,
-          creditOverride,
-          webFreeMode: ctx.webFreeMode ?? false,
           // P14: resolved at enqueue, carried on the payload — never
           // re-derived here (one payer per execution).
           billingContext: ctx.billingContext,
+          isAppRun: ctx.isAppRun,
+          creditOverride,
+          webFreeMode: ctx.webFreeMode ?? false,
         },
-      )
+      ).catch((err: unknown) => {
+        // B15: the balance moved between the preflight and the reserve — the
+        // same sentence for a metered hold (a mapped refusal keeps its own).
+        if (meteredHold && !mapReserveError(err) && err instanceof Error && /insufficient/i.test(err.message)) {
+          throw meteredReserveRefusal(`Needs up to ${meteredHold.holdCredits} credits`, "insufficient_credits")
+        }
+        throw err
+      })
       usageLogId = reservation.usageLogId
       creditsUsed = reservation.creditsReserved
 
@@ -2366,6 +2460,9 @@ async function executeWorkerNode(
         `Credit reservation failed for ${node.type}: ${mapped ? mapped.message : err instanceof Error ? err.message : String(err)}`,
       )
       if (mapped) (wrapped as Error & { errorCode?: string }).errorCode = mapped.code
+      // A metered refusal (B15 "Needs up to N credits", an unpriced model) keeps its stable code.
+      const metered = err as { meteredRefusal?: true; errorCode?: string } | null
+      if (!mapped && metered?.meteredRefusal && metered.errorCode) (wrapped as Error & { errorCode?: string }).errorCode = metered.errorCode
       throw wrapped
     }
   }
@@ -2401,15 +2498,43 @@ async function executeWorkerNode(
 // Job polling
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether a completed job was settled METERED (A5): its settle wrote the
+ * billing ledger (the server-only ledger column, R32 — read through the
+ * helper, never `output_data`) and `credits_actual` from the commit receipt.
+ * Only asked when it can change the answer — a numeric `credits_actual`
+ * beside a caller's `creditsUsed` (the hold). A read that fails answers false:
+ * the node reports the hold, as before metered pricing.
+ */
+async function settledMetered(jobId: string, jobRecord: { credits_actual?: unknown }, creditsUsed: number | undefined): Promise<boolean> {
+  if (creditsUsed === undefined || typeof jobRecord.credits_actual !== "number") return false
+  const { readLlmBillingLedger } = await import("../../lib/llm-billing-ledger.js")
+  const read = await readLlmBillingLedger(jobId)
+  if (!read.ok) {
+    console.warn(`[node-executor] job ${jobId}: its billing ledger could not be read — reporting the hold: ${read.error}`)
+    return false
+  }
+  return read.ledger !== null
+}
+
+/** R53: a completed step's charge plus its settled metered side holds (554, `lib/job-step-charge.ts`). */
+async function withSideHoldChargeOf(result: ExecuteNodeResult): Promise<ExecuteNodeResult> {
+  if (!result.jobId) return result
+  const creditsUsed = withSideCharge(result.creditsUsed, result.jobId, await sideHoldChargesFor([result.jobId]))
+  return creditsUsed === result.creditsUsed ? result : { ...result, creditsUsed }
+}
+
 /** Build the ExecuteNodeResult for a completed job row. Shared by the poll
  *  success path and the cancel-race adoption path so both extract output and
- *  credits identically. Throws if the job completed with no usable output. */
+ *  credits identically. Throws if the job completed with no usable output.
+ *  `meteredSettled`: {@link settledMetered} for this row. */
 function completedJobResult(
   jobRecord: { output_data?: unknown; credits_actual?: unknown; credits?: unknown },
   nodeType: string,
   jobId: string,
   usageLogId: string | undefined,
   creditsUsed: number | undefined,
+  meteredSettled = false,
 ): ExecuteNodeResult {
   const outputData = (jobRecord.output_data as Record<string, unknown>) ?? {}
   const output = buildNodeOutputFromJobData(outputData, nodeType, jobId)
@@ -2418,9 +2543,18 @@ function completedJobResult(
     throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
   }
   const isScene3D = isScene3DAuthoringType(nodeType)
+  // A metered LLM job reports what it was CHARGED (A5): its settle wrote the
+  // billing ledger and `credits_actual` from the commit receipt, and that
+  // actual — not the hold the caller reserved — is what the execution total
+  // and an app creator's percentage are computed on. Read off the row, so a
+  // resumed (adopted) job and a cancel-race adoption report it too.
+  const meteredActual = typeof jobRecord.credits_actual === "number" && meteredSettled
+    ? jobRecord.credits_actual
+    : undefined
   // Scene authoring commits the reserved fixed-tier charge without mirroring
   // credits_actual. Keep the parent charge alongside its analysis child.
-  const effectiveCreditsUsed = creditsUsed
+  const effectiveCreditsUsed = meteredActual
+    ?? creditsUsed
     ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
     ?? (isScene3D && typeof jobRecord.credits === "number" ? jobRecord.credits : undefined)
   const analysisCredits = isScene3D
@@ -2487,6 +2621,9 @@ export async function loadCompletedFanOutIterations(
       // the iteration re-runs rather than reusing an empty result.
     }
   }
+  // R53: each reused step's charge includes its settled side holds (554) — one read for the batch.
+  const side = await sideHoldChargesFor([...byIndex.values()].map((r) => r.jobId))
+  for (const [idx, r] of byIndex) byIndex.set(idx, { ...r, creditsUsed: withSideCharge(r.creditsUsed, r.jobId, side) })
   return byIndex
 }
 
@@ -2507,6 +2644,14 @@ async function cancelJobAndThrow(
   nodeType: string,
   creditsUsed: number | undefined,
 ): Promise<ExecuteNodeResult> {
+  // D10, BEFORE the flip: a metered LLM hold whose job already recorded a
+  // billed cost is committed, never refunded (the reconcile sweep's rule).
+  // One that cannot be committed yet stays with the sweep: the job is left
+  // as it is — not cancelled, nothing refunded.
+  const meteredVerdict = hasCredits() ? await settleMeteredHoldsBeforeCancel(jobId) : "not-metered"
+  if (meteredVerdict === "retry") {
+    throw new Error(reason)
+  }
   const { data: flipped } = await supabase
     .from("jobs")
     .update({ status: "cancelled" })
@@ -2517,8 +2662,25 @@ async function cancelJobAndThrow(
     .select("id, user_id, provider_task_id, provider_kind, credits")
 
   if (flipped && flipped.length > 0) {
+    // 552: the job's metered SIDE holds settle on their own call-start
+    // markers, after the flip, whatever its own hold's verdict below.
+    await settleSideHoldsAfterFlip([jobId])
+    // R38: a metered worker job judged pre-call before the flip may have sent
+    // its first call in between — re-read now that the row is cancelled (the
+    // worker can no longer start one). Started → its hold is kept and
+    // reported, never refunded: the worker settles it when its call ends.
+    // N1: nothing was committed before the flip — a hold with nothing in
+    // flight is settled at its actual only now (the worker's call-start CAS
+    // can no longer win).
+    const afterFlip = meteredVerdict === "not-started" ? await settleMeteredHoldAfterFlip(jobId) : "refund"
+    if (afterFlip === "kept") {
+      throw new Error(reason)
+    }
     // We genuinely cancelled a still-running job → refund + propagate cancel.
-    await refundJobCredits(usageLogId, jobId, reason)
+    // A hold settled at its actual just now is committed: only what is still
+    // reserved is refunded (never a second metered settle of it).
+    if (afterFlip === "settled") await refundReservedCreditsForJob(jobId).catch(() => {})
+    else await refundJobCredits(usageLogId, jobId, reason)
     // A job polled without its usage log — one its own route reserved (a UGC
     // node's child step, any sync-HTTP job): its reservation is found by the
     // job. The worker drops the result of a job it finds cancelled, trusting
@@ -2575,7 +2737,7 @@ async function cancelJobAndThrow(
   if (jobRecord?.status === "completed") {
     // Charge-with-delivery: honor the completion the user already paid for
     // rather than throwing "cancelled" and discarding the committed output.
-    return completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed)
+    return withSideHoldChargeOf(completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed, await settledMetered(jobId, jobRecord, creditsUsed)))
   }
   // Already failed (worker refunds failed jobs) or already cancelled — no
   // double-refund. Surface the job's own error if present, else the reason,
@@ -2728,7 +2890,8 @@ async function pollJobToCompletion(
 
     // Check terminal statuses BEFORE timeout — avoids cancelling a just-completed job
     if (status === "completed") {
-      return completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed)
+      // R53: a step's charge includes its settled metered side holds (554).
+      return withSideHoldChargeOf(completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed, await settledMetered(jobId, jobRecord, creditsUsed)))
     }
 
     if (status === "failed" || status === "cancelled") {

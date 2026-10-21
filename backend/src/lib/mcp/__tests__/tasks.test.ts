@@ -31,6 +31,9 @@ vi.mock("../../cancel-job.js", () => ({
   cancelRunningChildJobs: taskDb.cancelRunningChildJobs,
 }))
 
+// 554: a job the fast CAS cancels settles its metered side holds after the flip.
+const sideHolds = vi.hoisted(() => ({ settleSideHoldsAfterFlip: vi.fn(async (_ids: readonly string[]) => {}) }))
+vi.mock("../../llm-side-hold.js", () => sideHolds)
 // Mock supabase so cancelTask -> markJobCancelled is a no-op in unit tests.
 // The path is relative to tasks.ts, not to this test file.
 vi.mock("../../supabase.js", () => {
@@ -245,6 +248,8 @@ describe("task lifecycle", () => {
     await cancelTask("j-live", "u1")
 
     expect(taskDb.cancelOwnedJob).not.toHaveBeenCalled()
+    // 554: its side holds settle after the flip.
+    expect(sideHolds.settleSideHoldsAfterFlip).toHaveBeenCalledWith(["j-live"])
   })
 
   // Ruling 23: cancelling a parent cancels its still-running children on EVERY

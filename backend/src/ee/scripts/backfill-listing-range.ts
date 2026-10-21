@@ -47,6 +47,7 @@ import { MAX_COLUMNS } from "../../lib/listing-max-columns.js"
 import { estimateWorkflowListingCredits, type EstimateEdge, type EstimateNode, type ListingPublishType } from "../billing/credits.js"
 import { usecaseViewerForEveryone } from "../../lib/use-case/inner-availability.js"
 import { loadAvailabilityOverridesForScript } from "../../lib/availability-override.js"
+import { isLlmUnpricedError } from "../../lib/llm-unpriced-refusal.js"
 
 // ---------------------------------------------------------------------------
 // Pure parts (tested in __tests__/backfill-listing-range.test.ts)
@@ -67,6 +68,19 @@ export function templateMaxColumns(ceiling: AppListingSplit): Columns {
   return {
     max_estimated_credits: ceiling.preview + ceiling.final,
     max_estimated_per_minute_credits: (ceiling.previewPerMinute ?? 0) + (ceiling.finalPerMinute ?? 0),
+  }
+}
+
+/**
+ * A row whose graph holds a metered LLM model with no price (R49): its estimate refuses, so it is
+ * REPORTED and skipped — never written, never stopping the rows after it. Any other failure throws.
+ */
+export async function unpricedSkip<T>(price: () => Promise<T>): Promise<{ value: T } | { skipped: string }> {
+  try {
+    return { value: await price() }
+  } catch (err) {
+    if (!isLlmUnpricedError(err)) throw err
+    return { skipped: `llm_model_unpriced: ${err.modelId}` }
   }
 }
 
@@ -153,7 +167,7 @@ export async function runRangeBackfill(opts: RangeBackfillOptions): Promise<{ ok
     return { ok: false, written: 0, rows: 0 }
   }
   console.log(`[range-backfill] mode=${opts.apply ? "APPLY" : "dry run"} templates=${opts.includeTemplates ? "yes" : "no"}`)
-  const report: Array<{ table: string; slug: string; before: Record<string, unknown>; after: Columns; changed: boolean }> = []
+  const report: Array<{ table: string; slug: string; before: Record<string, unknown>; after: Columns | null; changed: boolean; skipped?: string }> = []
   let written = 0
 
   const apps = await readAll(
@@ -163,9 +177,15 @@ export async function runRangeBackfill(opts: RangeBackfillOptions): Promise<{ ok
   )
   for (const row of apps) {
     const publishType: ListingPublishType = row.publish_type === "component" ? "component" : "app"
-    const after = appMaxColumns(row as never, await ceilingOf(row, publishType))
-    const write = planRangeWrite(row, after)
     const before = Object.fromEntries(MAX_COLUMNS.published_apps.map((c) => [c, row[c]]))
+    const priced = await unpricedSkip(() => ceilingOf(row, publishType))
+    if ("skipped" in priced) {
+      report.push({ table: "published_apps", slug: row.slug, before, after: null, changed: false, skipped: priced.skipped })
+      console.warn(`${row.slug} · ${publishType} · SKIPPED (${priced.skipped}) — left as stored`)
+      continue
+    }
+    const after = appMaxColumns(row as never, priced.value)
+    const write = planRangeWrite(row, after)
     report.push({ table: "published_apps", slug: row.slug, before, after, changed: write !== null })
     console.log(`${row.slug} · ${publishType} · up to ${String(before.max_estimated_credits)} ${write ? "→" : "="} ${after.max_estimated_credits}`)
     if (write && opts.apply) {
@@ -182,9 +202,15 @@ export async function runRangeBackfill(opts: RangeBackfillOptions): Promise<{ ok
       false,
     )
     for (const row of templates) {
-      const after = templateMaxColumns(await ceilingOf(row, "template"))
-      const write = planRangeWrite(row, after)
       const before = Object.fromEntries(MAX_COLUMNS.workflow_templates.map((c) => [c, row[c]]))
+      const priced = await unpricedSkip(() => ceilingOf(row, "template"))
+      if ("skipped" in priced) {
+        report.push({ table: "workflow_templates", slug: row.slug, before, after: null, changed: false, skipped: priced.skipped })
+        console.warn(`${row.slug} · template · SKIPPED (${priced.skipped}) — left as stored`)
+        continue
+      }
+      const after = templateMaxColumns(priced.value)
+      const write = planRangeWrite(row, after)
       report.push({ table: "workflow_templates", slug: row.slug, before, after, changed: write !== null })
       console.log(`${row.slug} · template · up to ${String(before.max_estimated_credits)} ${write ? "→" : "="} ${after.max_estimated_credits}`)
       if (write && opts.apply) {
@@ -196,6 +222,8 @@ export async function runRangeBackfill(opts: RangeBackfillOptions): Promise<{ ok
   }
 
   const changed = report.filter((r) => r.changed).length
+  const skipped = report.filter((r) => r.skipped !== undefined).length
+  if (skipped > 0) console.warn(`[range-backfill] ${skipped} row(s) skipped: a metered LLM model with no price (llm_model_unpriced)`)
   console.log(`[range-backfill] ${report.length} row(s), ${changed} differ${opts.apply ? `, ${written} written` : " (dry run — nothing written)"}`)
   writeFileSync(opts.report, JSON.stringify({ generatedAt: new Date().toISOString(), apply: opts.apply, rows: report }, null, 2))
   console.log(`[range-backfill] report: ${opts.report}`)

@@ -36,7 +36,7 @@ vi.mock("@/lib/config.js", () => ({
   hasOrganizations: () => false,
 }))
 vi.mock("@/lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: h.queueAdd } }))
-vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCredits: h.estimate }))
+vi.mock("@/ee/billing/credits.js", () => ({ unpricedMeteredLlmOfRun: () => null, estimateWorkflowCreditsDetailed: async (...a: unknown[]) => ({ credits: await h.estimate(...a), estimate: false, perNode: {} }) }))
 
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"

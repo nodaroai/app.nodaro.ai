@@ -18,6 +18,7 @@ import { cardResultText, clientRequestIdSchema, errorResult, idempotencyHeaders 
 import { isPreviewRefusalCode } from "@nodaro/shared/nodes"
 import { isUuid } from "./_id-guard.js"
 import { hasCredits } from "../../config.js"
+import { LISTING_ESTIMATE_FLAG_COLUMN, listingEstimateFlag, selectWithEstimateFlag } from "../../listing-estimate-flag-column.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -115,15 +116,22 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           return query
         }
         // With the listed "up to" (decided 2026-10-14), unless migration 517 has not reached this database.
-        const { data, error } = await selectWithMax<Record<string, unknown>[]>("published_apps", "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, total_run_count, favorite_count, created_at", (columns) =>
-          selectWithPerMinute<Record<string, unknown>[]>("published_apps", columns, buildQuery, "listed"), "listed")
+        // And the estimate flag (migration 553), unless it has not reached this database yet.
+        const { data, error } = await selectWithEstimateFlag<Record<string, unknown>[]>("published_apps", "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, total_run_count, favorite_count, created_at", (flagCols) =>
+          selectWithMax<Record<string, unknown>[]>("published_apps", flagCols, (columns) =>
+            selectWithPerMinute<Record<string, unknown>[]>("published_apps", columns, buildQuery, "listed"), "listed"))
         if (error) {
           return {
             content: [{ type: "text", text: `Error: ${error.message}` }],
             isError: true,
           }
         }
-        const rows = (data ?? []).map(withListedRangeSnake)
+        // `estimated_credits_is_estimate: true` when the listed price holds a metered LLM estimate
+        // (shown `~N`) — only while metered pricing is on; absent otherwise.
+        const rows = (data ?? []).map((row) => {
+          const { [LISTING_ESTIMATE_FLAG_COLUMN]: _stored, ...rest } = withListedRangeSnake(row)
+          return listingEstimateFlag(row).estimatedCreditsIsEstimate ? { ...rest, [LISTING_ESTIMATE_FLAG_COLUMN]: true } : rest
+        })
         const last = rows[rows.length - 1]
         const nextCursor =
           rows.length === limit && last?.created_at ? (last.created_at as string) : null

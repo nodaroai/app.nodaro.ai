@@ -13,6 +13,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const cache = vi.hoisted(() => ({ prices: {} as Record<string, number | undefined> }))
 vi.mock("@/hooks/use-model-credit-cost", () => ({
+  // No metered key is refused here (the run estimate asks for a refused key).
+  isModelRefused: () => false,
   getCachedModelCredits: (id: string) => cache.prices[id],
   prefetchModelCreditCosts: vi.fn(async () => {}),
   isModelUnpriced: () => false,

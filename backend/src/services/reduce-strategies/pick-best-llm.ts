@@ -1,9 +1,59 @@
 import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
-import { llmComplete, type LlmContentBlock, type LlmMessage, type LlmResponse } from "../../lib/llm-client.js"
+import { llmComplete, type LlmContentBlock, type LlmMessage, type LlmRequest, type LlmResponse } from "../../lib/llm-client.js"
 import { LlmOutputTruncatedError } from "../../lib/llm-errors.js"
 import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"
 
 type Config = { criteria: string; inputKind: "text" | "image-url"; llmModel?: string }
+
+/**
+ * A reduce context that also hears about the judge's call — the request as
+ * sent and its outcome (the answer, or the error, a swallowed cut-off
+ * included) — so a metered caller can record what the call billed. Optional:
+ * the dispatcher's plain `StrategyContext` runs the judge exactly as before.
+ */
+export type PickBestLlmContext = StrategyContext & {
+  readonly onLlmCall?: (modelId: string, request: LlmRequest, outcome: { response: LlmResponse } | { error: unknown }) => void
+}
+
+/** The judge model: the user's pick (validated at the route) or the feature default. */
+export function pickBestLlmModel(config: Pick<Config, "llmModel">): string {
+  return config.llmModel || LLM_FEATURE_DEFAULTS["pick-best-llm"]
+}
+
+/** The non-empty candidates, each with its ORIGINAL index (duplicates stay distinct). */
+function survivorsOf(items: string[]): { survivors: string[]; survivorIndices: number[] } {
+  const survivorIndices: number[] = []
+  items.forEach((s, i) => {
+    if (s.trim() !== "") survivorIndices.push(i)
+  })
+  return { survivors: survivorIndices.map((i) => items[i]!), survivorIndices }
+}
+
+/**
+ * The ONE judge call over every surviving candidate, as it is sent — what a
+ * metered caller sizes its hold from (one call: the judge sees all candidates
+ * in a single request).
+ */
+export function pickBestLlmRequest(items: string[], config: Config): LlmRequest {
+  const { survivors } = survivorsOf(items)
+  const messages: LlmMessage[] = config.inputKind === "image-url"
+    ? [{ role: "user", content: buildImageContent(survivors, config.criteria) }]
+    : [{ role: "user", content: buildTextUserPrompt(survivors, config.criteria) }]
+  // The judge model is the user's pick (config.llmModel, validated against
+  // LLM_MODEL_IDS at the route) or the feature default. Every model in the
+  // registry with image support handles the image-url mode; llmComplete picks
+  // the lane per model (direct SDK / KIE) — nothing here is model-specific.
+  return {
+    feature: "pick-best-llm",
+    modelId: pickBestLlmModel(config),
+    system: SYSTEM_PROMPT,
+    messages,
+    // Room for a full one-sentence reasoning plus the JSON envelope on the
+    // wordier models — 200 truncated some replies mid-sentence into an
+    // unparseable JSON, which silently fell back to "first survivor".
+    maxTokens: 400,
+  }
+}
 
 const SYSTEM_PROMPT = "You are judging candidate outputs against criteria. Respond with strict JSON only — no prose, no markdown fences."
 
@@ -35,46 +85,32 @@ function buildImageContent(items: string[], criteria: string): LlmContentBlock[]
 export async function execute(
   items: string[],
   config: Config,
-  ctx: StrategyContext,
+  ctx: PickBestLlmContext,
 ): Promise<StrategyResult<string>> {
   // Track each survivor's ORIGINAL index so the reported selectedIndex is
   // correct even when survivors contain duplicate strings (an indexOf-by-value
   // lookup would collapse duplicates to the first occurrence).
-  const survivorIndices: number[] = []
-  items.forEach((s, i) => {
-    if (s.trim() !== "") survivorIndices.push(i)
-  })
-  const survivors = survivorIndices.map((i) => items[i]!)
+  const { survivors, survivorIndices } = survivorsOf(items)
   if (survivors.length === 0) throw new EmptyInputError()
 
-  const messages: LlmMessage[] = config.inputKind === "image-url"
-    ? [{ role: "user", content: buildImageContent(survivors, config.criteria) }]
-    : [{ role: "user", content: buildTextUserPrompt(survivors, config.criteria) }]
-
-  // The judge model is the user's pick (config.llmModel, validated against
-  // LLM_MODEL_IDS at the route) or the feature default. Every model in the
-  // registry with image support handles the image-url mode; llmComplete picks
-  // the lane per model (direct SDK / KIE) — nothing here is model-specific.
-  const modelId = config.llmModel || LLM_FEATURE_DEFAULTS["pick-best-llm"]
+  const request = pickBestLlmRequest(items, config)
+  const modelId = request.modelId
   let resp: LlmResponse | undefined
   try {
-    resp = await llmComplete({
-      feature: "pick-best-llm",
-      modelId,
-      system: SYSTEM_PROMPT,
-      messages,
-      // Room for a full one-sentence reasoning plus the JSON envelope on the
-      // wordier models — 200 truncated some replies mid-sentence into an
-      // unparseable JSON, which silently fell back to "first survivor".
-      maxTokens: 400,
-    })
+    resp = await llmComplete(request)
   } catch (err) {
+    // Recorded whatever happens next: a cut-off verdict was still billed.
+    ctx.onLlmCall?.(modelId, request, { error: err })
     // A verdict cut off at the cap is an unusable verdict, not a failed
     // reduce: it keeps the same first-survivor fallback an unparseable reply
     // gets. (Since #1588 the client throws on a cut-off instead of returning
     // the fragment; before, the fragment failed to parse and landed here.)
     if (!(err instanceof LlmOutputTruncatedError)) throw err
   }
+
+  // Recorded outside the try: a recording error (a malformed answer) must
+  // neither be recorded again as the call's failure nor be swallowed.
+  if (resp) ctx.onLlmCall?.(modelId, request, { response: resp })
 
   let chosenIndex = 0
   let reasoning = resp

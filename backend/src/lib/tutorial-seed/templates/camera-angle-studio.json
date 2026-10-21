@@ -15,7 +15,8 @@
     "model"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 192,
+  "estimatedCredits": 234,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "lens",

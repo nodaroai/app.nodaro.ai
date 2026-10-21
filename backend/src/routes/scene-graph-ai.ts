@@ -9,14 +9,15 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { SCENE_GRAPH_SYSTEM_PROMPT } from "../prompts/scene-graph-system.js"
 import { validateSceneGraph } from "../lib/scene-graph-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
-import { llmComplete } from "../lib/llm-client.js"
+import { llmComplete, type LlmRequest } from "../lib/llm-client.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { finishMeteredSyncLlmJob, llmGuardPrecheck, spendLlmCall } from "../lib/meter-sync-llm.js"
 import { LLM_ROUTE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -45,7 +46,10 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/scene-graph/generate",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("scene-graph-ai", req.body)),
+      preHandler: creditGuard((req) => resolveLlmCreditId("scene-graph-ai", req.body), {
+        // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
+        computeCredits: (body) => llmGuardPrecheck("scene-graph-ai", body),
+      }),
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -99,26 +103,15 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Reserve credits
-      const modelIdentifier = buildLlmCreditIdentifier("scene-graph-ai", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
+      // Build user message with asset list — the request as it is sent, so the
+      // metered hold is sized from it.
+      const assetList = assets.map((a, i) => {
+        const label = a.label || `Asset ${i + 1}`
+        const duration = a.durationSeconds ? ` (${a.durationSeconds}s)` : ""
+        return `- ${label} [${a.type}]${duration}: ${a.url}`
+      }).join("\n")
 
-      // Reconciliation: mark this job inflight before invoking the LLM. The
-      // sync-sweep cron uses this to detect stuck rows that the route
-      // handler never completed. Best-effort — never throws.
-      await markProviderCallStart(job.id, "anthropic-sync")
-
-      try {
-        // Build user message with asset list
-        const assetList = assets.map((a, i) => {
-          const label = a.label || `Asset ${i + 1}`
-          const duration = a.durationSeconds ? ` (${a.durationSeconds}s)` : ""
-          return `- ${label} [${a.type}]${duration}: ${a.url}`
-        }).join("\n")
-
-        const userMessage = `Create a video composition with these settings:
+      const userMessage = `Create a video composition with these settings:
 - FPS: ${fps}
 - Resolution: ${dimensions.width}x${dimensions.height} (${aspectRatio})
 - Total duration: ${durationSeconds} seconds (${durationInFrames} frames)
@@ -128,15 +121,35 @@ ${assetList}
 
 Composition style: ${prompt}`
 
+      const request: LlmRequest = {
+        modelId: llmModel,
+        system: SCENE_GRAPH_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+        ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["scene-graph-ai"]),
+        reasoningEffort: parsed.data.reasoningEffort,
+      }
+
+      // Reserve credits: metered (the call's 1-attempt hold), else the tier id as before.
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "scene-graph-ai", calls: [{ modelId: llmModel, request }] })
+      if (!reserve) return
+      const spend = new LlmSpend()
+      let usageLogId: string | undefined
+      if (!reserve.metered) {
+        const modelIdentifier = buildLlmCreditIdentifier("scene-graph-ai", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        usageLogId = reservation?.usageLogId
+      }
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+
+      try {
         console.log(`[scene-graph-ai] Generating for job ${job.id}, ${assets.length} assets, ${durationSeconds}s`)
 
-        const response = await llmComplete({
-          modelId: llmModel,
-          system: SCENE_GRAPH_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }],
-          ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["scene-graph-ai"]),
-          reasoningEffort: parsed.data.reasoningEffort,
-        })
+        const response = await spendLlmCall(reserve.metered ? spend : undefined, llmModel, request, () => llmComplete(request))
 
         const rawText = response.text
 
@@ -164,24 +177,30 @@ Composition style: ${prompt}`
 
         const sceneGraph = validation.sceneGraph ?? rawJson
 
-        // Finalize job
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({
-            status: "completed",
-            ...completedJobColumns(),
-            output_data: {
-              sceneGraph,
-              validationErrors: validation.errors,
-              autoFixes: validation.autoFixed,
-              usage: response.usage,
-            },
-            provider_cost: response.providerCost ?? null,
-          })
-          .eq("id", job.id)
+        const outputData = {
+          sceneGraph,
+          validationErrors: validation.errors,
+          autoFixes: validation.autoFixed,
+          usage: response.usage,
+        }
+        if (reserve.metered) {
+          // Result first, then the settle (what the call cost), then the terminal write.
+          await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "completed", outputData })
+        } else {
+          // Finalize job
+          await supabase
+            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
+            .update({
+              status: "completed",
+              ...completedJobColumns(),
+              output_data: outputData,
+              provider_cost: response.providerCost ?? null,
+            })
+            .eq("id", job.id)
 
-        if (usageLogId) {
-          await CreditsService.commitCredits(usageLogId)
+          if (usageLogId) {
+            await CreditsService.commitCredits(usageLogId)
+          }
         }
 
         console.log(`[scene-graph-ai] Job ${job.id} completed, tokens: ${response.usage?.outputTokens}`)
@@ -195,6 +214,14 @@ Composition style: ${prompt}`
       } catch (err) {
         const message = userFacingMessage(err, "Scene graph generation failed")
         console.error(`[scene-graph-ai] Error for job ${job.id}:`, message)
+
+        if (reserve.metered) {
+          // A billed failure is charged its usage (and says so); an unbilled one is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "failed", errorMessage: message, outputData: { error: message } })
+          return reply.status(502).send({
+            error: { code: llmErrorCode(err), message: finished.errorMessage ?? message },
+          })
+        }
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 

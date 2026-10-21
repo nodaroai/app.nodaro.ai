@@ -33,10 +33,15 @@ vi.mock("../../ee/billing/credits.js", () => ({
   CreditsService: { commitCredits: async () => undefined, refundCredits: async () => undefined },
 }))
 
+// D6: metered is the default. This suite pins the route's tier behaviour, so
+// it runs under LLM_TIER_PRICING_ROLLBACK; the metered path (and the
+// rollback's byte-identical reservation) is in llm-metered-text-routes.test.ts.
 vi.mock("../../lib/config.js", () => ({
-  config: { KIE_API_KEY: "kie", ANTHROPIC_API_KEY: "ant" },
+  config: { KIE_API_KEY: "kie", ANTHROPIC_API_KEY: "ant", LLM_TIER_PRICING_ROLLBACK: true },
   // The job-insert block check (lib/access-blocks.ts) has its own suite.
   hasAdmin: () => false,
+  hasCredits: () => true,
+  llmMeteredPricing: () => false,
 }))
 
 /** The route now calls llmCompleteStructured, which returns already-validated

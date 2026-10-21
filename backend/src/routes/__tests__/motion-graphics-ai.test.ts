@@ -6,10 +6,20 @@ vi.mock("@/lib/supabase.js", () => {
   return { supabase: { from: mockFrom } }
 })
 
+// D6: metered is the default; the rollback switch restores the tier billing.
+const pricing = vi.hoisted(() => ({ rollback: false }))
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  llmMeteredPricing: () => !pricing.rollback,
 }))
+// The metered hold and charge are marked up at the global 10%.
+// R38: the metered sync stamp is a CAS — a live row here (its own suite: sync-llm-call-start.test.ts).
+vi.mock("@/lib/reconcile/persistence.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/reconcile/persistence.js")>()),
+  markProviderCallStartIfLive: vi.fn(async () => "started"),
+}))
+vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({ cost_markup_percent: 10 })) }))
 
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue({ id: "queue-job-1" }) },
@@ -61,6 +71,9 @@ import { CreditsService } from "../../ee/billing/credits.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { validateMotionGraphicsPlan } from "../../lib/motion-graphics-validator.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { buildLottieRequest } from "../../lib/lottie-request.js"
+import { llmHoldForCalls } from "../../ee/billing/llm-billing-impl.js"
 
 let app: FastifyInstance
 
@@ -79,6 +92,7 @@ const MOCK_ANTHROPIC_RESPONSE = {
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  pricing.rollback = false
   creditGuardResolvers.length = 0
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req, reply) => {
@@ -117,6 +131,13 @@ beforeEach(async () => {
 afterEach(async () => { await app.close() })
 
 describe("POST /v1/motion-graphics/generate", () => {
+  // The elements cases below assert today's tier billing (commit / refund of
+  // the reserved tier): they run under the rollback, byte-identical. The
+  // metered cases are in their own block.
+  beforeEach(() => {
+    pricing.rollback = true
+  })
+
   it("returns 400 when prompt is missing", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/motion-graphics/generate",
@@ -301,6 +322,22 @@ describe("POST /v1/motion-graphics/generate — engine=lottie (async enqueue)", 
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
+  it("metered: reserves the hold of the worker's FIRST attempt under motion-graphics-lottie:<model>", async () => {
+    await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: LOTTIE_PAYLOAD })
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    const request = buildLottieRequest(enqueued as never)
+    const { chargeId, holdCredits } = await llmHoldForCalls("motion-graphics-lottie", [{ modelId: request.modelId, request }])
+    expect(chargeId).toBe("motion-graphics-lottie:claude-sonnet-5.5")
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", chargeId, { holdCredits })
+  })
+
+  it("rollback: reserves the tier id exactly as before", async () => {
+    pricing.rollback = true
+    await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: LOTTIE_PAYLOAD })
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "motion-graphics-lottie")
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]).toHaveLength(4)
+  })
+
   it("respects an explicit llmModel (economy tier → :economy credit id)", async () => {
     await app.inject({
       method: "POST",
@@ -324,5 +361,74 @@ describe("motion-graphics creditGuard resolver (engine-aware)", () => {
     expect(resolver({ body: undefined })).toBe("motion-graphics")
     // explicit elements engine still maps to the base feature
     expect(resolver({ body: { engine: "elements" } })).toBe("motion-graphics")
+  })
+})
+
+describe("POST /v1/motion-graphics/generate — elements, metered (D1, C3)", () => {
+  beforeEach(() => {
+    vi.mocked(CreditsService.commitCredits).mockResolvedValue({ charged: 5, shortfall: 0 } as never)
+  })
+
+  it("holds the request it sends under motion-graphics:<model>, writes the output, settles the actual, THEN completes", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: VALID_PAYLOAD })
+    expect(res.statusCode).toBe(200)
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-1", "motion-graphics:claude-sonnet-5.5", { holdCredits: expect.any(Number) },
+    )
+    // The actual — never the reserved tier whole.
+    expect(CreditsService.commitCredits).toHaveBeenCalledWith("usage-1", expect.any(Number), { collectOverHold: true })
+    const updates = vi.mocked(supabase.from).mock.results
+      .map((r) => (r.value as { update: ReturnType<typeof vi.fn> }).update)
+      .flatMap((u) => u.mock.calls.map((c) => c[0] as Record<string, unknown>))
+    const outputWrite = updates.findIndex((u) => u.output_data !== undefined && u.status === undefined)
+    const terminal = updates.findIndex((u) => u.status === "completed")
+    expect(outputWrite).toBeGreaterThanOrEqual(0)
+    expect(terminal).toBeGreaterThan(outputWrite)
+    expect(updates[terminal]).not.toHaveProperty("output_data")
+    expect(CreditsService.refundCredits).not.toHaveBeenCalled()
+  })
+
+  it("an unconfirmed settle leaves the job non-terminal for the sweep, and still answers", async () => {
+    vi.mocked(CreditsService.commitCredits).mockResolvedValue(undefined as never)
+    const res = await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: VALID_PAYLOAD })
+    expect(res.statusCode).toBe(200)
+    const updates = vi.mocked(supabase.from).mock.results
+      .map((r) => (r.value as { update: ReturnType<typeof vi.fn> }).update)
+      .flatMap((u) => u.mock.calls.map((c) => c[0] as Record<string, unknown>))
+    expect(updates.some((u) => u.status === "completed")).toBe(false)
+  })
+
+  it("a billed answer that fails to parse is CHARGED (not refunded) and the failure says so", async () => {
+    const mockCreate = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "not json" }],
+      usage: { input_tokens: 100, output_tokens: 200 },
+    })
+    vi.mocked(getAnthropicClient).mockReturnValue({ messages: { create: mockCreate } } as never)
+    const { extractJsonFromAIResponse } = await import("../../lib/json-utils.js")
+    vi.mocked(extractJsonFromAIResponse).mockReturnValueOnce("not json")
+
+    const res = await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: VALID_PAYLOAD })
+    expect(res.statusCode).toBe(502)
+    expect(CreditsService.commitCredits).toHaveBeenCalledWith("usage-1", expect.any(Number), { collectOverHold: true })
+    expect(CreditsService.refundCredits).not.toHaveBeenCalled()
+    const updates = vi.mocked(supabase.from).mock.results
+      .map((r) => (r.value as { update: ReturnType<typeof vi.fn> }).update)
+      .flatMap((u) => u.mock.calls.map((c) => c[0] as Record<string, unknown>))
+    const failed = updates.find((u) => u.status === "failed")
+    expect(String(failed?.error_message)).toMatch(/charged/)
+    // output_data.error is kept: written before the settle (which merges its ledger beside it), never replaced after.
+    const errorWrite = updates.findIndex((u) => (u.output_data as { error?: unknown } | undefined)?.error !== undefined && u.status === undefined)
+    expect(errorWrite).toBeGreaterThanOrEqual(0)
+    expect(errorWrite).toBeLessThan(updates.indexOf(failed!))
+    expect(failed).not.toHaveProperty("output_data")
+  })
+
+  it("a call that billed nothing (the API threw) is refunded", async () => {
+    const mockCreate = vi.fn().mockRejectedValue(new Error("API error"))
+    vi.mocked(getAnthropicClient).mockReturnValue({ messages: { create: mockCreate } } as never)
+    const res = await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: VALID_PAYLOAD })
+    expect(res.statusCode).toBe(502)
+    expect(CreditsService.refundCredits).toHaveBeenCalledWith("usage-1")
+    expect(CreditsService.commitCredits).not.toHaveBeenCalled()
   })
 })

@@ -7,6 +7,9 @@ vi.mock("@/lib/supabase.js", () => {
 })
 
 vi.mock("@/lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))

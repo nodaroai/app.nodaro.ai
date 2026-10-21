@@ -50,7 +50,7 @@ vi.mock("@/lib/queue.js", () => ({
 }))
 vi.mock("@/lib/sse.js", () => ({ createSSEStream: vi.fn() }))
 vi.mock("@/lib/execution-events.js", () => ({ executionEvents: { on: vi.fn(), off: vi.fn(), emit: vi.fn() } }))
-vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { refundCredits: vi.fn() } }))
+vi.mock("@/ee/billing/credits.js", () => ({ unpricedMeteredLlmOfRun: () => null, CreditsService: { refundCredits: vi.fn() } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
 // The leaf the consumers read from forwards to the mock above.
 vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))

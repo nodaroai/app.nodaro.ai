@@ -15,7 +15,8 @@
     "location"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 92,
+  "estimatedCredits": 99,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

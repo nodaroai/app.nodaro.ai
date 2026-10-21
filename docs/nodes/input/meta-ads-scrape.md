@@ -35,7 +35,7 @@ Advertiser picks run exactly like Facebook Pages — each pick is one source for
 | Country | select | All countries | `ALL`, or a 2-letter country code (e.g. `US`) to restrict where the ads were delivered |
 | Platforms | toggles | none (no filter) | Keep only ads delivered on the selected platforms — Facebook, Instagram, Audience Network, Messenger, WhatsApp, Threads. No selection (or all six) means no filter |
 | Creative format | toggles | none (no filter) | Keep only ads whose creative is `vertical` (phone — Stories, Reels, mobile feed; width/height below 0.95), `square` (within ±5 % of 1:1) or `horizontal` (web / feed — above 1.05), classified from the creative's actual pixels. Fewer ads than requested may come back |
-| AI analysis | toggle + model + focus | off | Run an "expert competitor ad analyst" pass on every returned ad — asset type, format, visual hooks, audiences, graphic identity, copywriting hooks, USPs, CTA and a summary. Pick any image-capable analysis model (default: an economy model) and an optional focus line. Priced per **requested** ad by the model's tier and settled per ad **analysed** — an ad the model failed on, or one a long run ran out of time for, is refunded |
+| AI analysis | toggle + model + focus | off | Run an "expert competitor ad analyst" pass on every returned ad — asset type, format, visual hooks, audiences, graphic identity, copywriting hooks, USPs, CTA and a summary. Pick any image-capable analysis model (default: Gemini 3.6 Flash) and an optional focus line. Each analysis is charged for the tokens it used at the model's rate; an ad the run never analysed costs nothing — see the AI analysis add-on under Pricing |
 
 After a run the node card features one ad — creative preview, advertiser, headline, copy, format, platforms, run dates and call-to-action — with a thumbnail strip and ‹ › to move between the returned ads; the **Results** tab lists them all (List / Grid / Raw JSON), filters them by format, and clicking a row features it on the card.
 
@@ -129,14 +129,13 @@ Credits are charged for the requested batch; a narrow period or a quiet keyword 
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds a per-ad cost on top of the scrape, by the analysis model's tier — **+1.1 credits<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> per ad** (economy model), **+3.3**<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> (standard), **+4.4**<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> (premium), **+11**<!-- credits-rate: meta-ads-analysis:premium-direct --> (a premium model that runs only on its provider's own API — Gemini 4 Argon; the premium-direct rung, as in [Generate Text](../ai-text/llm-chat.md#credit-pricing)) — folded into the scrape's own tier and priced with it as one charge. The analysis is reserved for the whole requested batch and **settled for the ads actually analysed**: an ad the model failed on, or one a long run could not reach before its time budget, is refunded.
+Turning on **AI analysis** adds one LLM call per analysed ad — its frame and copy, your focus, and the analysis it writes — charged for the tokens it actually used at the analysis model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)). A run's analyses are added up and charged once, on top of the scrape's own price, as one charge. A typical analysis on the default model, Gemini 3.6 Flash, is estimated at ~4 credits<!-- credits: meta-ads-analysis:gemini-3.6-flash -->; Gemini 4 Argon runs only on its provider's own API and is charged at that lane's rate.
 
-| Requested batch | Analysis model | Total |
-|-----------------|----------------|-------|
-| 20 ads | economy | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 1.1<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> = **44 CR**<!-- credits: meta-ads-scrape:20:analysis:economy --> |
-| 20 ads | standard | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 3.3<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> = **88 CR**<!-- credits: meta-ads-scrape:20:analysis --> |
-| 2 Pages × 30 ads (tier 100) | premium | 110<!-- credits-rate: meta-ads-scrape:100 --> + 100 × 4.4<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> = **550 CR**<!-- credits: meta-ads-scrape:100:analysis:premium --> |
-| 20 ads | premium-direct (Gemini 4 Argon) | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 11<!-- credits-rate: meta-ads-analysis:premium-direct --> = **242 CR**<!-- credits: meta-ads-scrape:20:analysis:premium-direct --> |
+- **Before the run** a hold is reserved: the scrape's price plus a typical analysis per requested ad. A balance below it is refused before anything runs (`402`, "Needs up to N credits").
+- **After the run** it is charged the scrape's price plus what the analyses used. An ad the run never analysed (the batch came back short, or a long run hit its time budget) costs nothing; an analysis the provider billed is charged even when it failed.
+- **A failed run** refunds the scrape's price; analyses the provider had already billed are still charged.
+
+Example: 20 ads on Gemini 3.6 Flash, each analysis about 1,500 tokens in and 400 out (30,000 in and 8,000 out in all) → 22<!-- credits-rate: meta-ads-scrape:20 --> for the scrape + 18<!-- credits-llm-rate: gemini-3.6-flash:kie@30000/8000 --> for the analyses = **40 CR**<!-- credits: n/a -->.
 
 The analysis rides inside each ad in the `json` output (an `analysis` object) and shows on each row in the **Results** tab.
 

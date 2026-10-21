@@ -1,3 +1,4 @@
+// @test-reads-none reads back only the report file the backfill writes to a temp dir in this test
 import { describe, it, expect, vi } from "vitest"
 
 const db = vi.hoisted(() => ({ from: vi.fn() }))
@@ -12,6 +13,23 @@ vi.mock("@/lib/availability-override.js", async (importOriginal) => ({
   },
 }))
 
+// R49 rows: the estimate refuses a graph naming "unpriced-model" (the real estimator is unit-tested in
+// workflow-estimate-metered.test.ts); every other row is priced at a fixed split.
+const est = vi.hoisted(() => ({ split: { preview: 40, final: 0, previewPerMinute: 0, finalPerMinute: 0 } }))
+vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/billing/credits.js")>()),
+  estimateWorkflowListingCredits: async (nodes: Array<{ data?: { llmModel?: unknown } }>) => {
+    if (nodes.some((n) => n.data?.llmModel === "unpriced-model")) {
+      throw Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+    }
+    return est.split
+  },
+}))
+vi.mock("@/lib/canvas-result-ids.js", () => ({ resolveCanvasResultIds: async (nodes: unknown) => nodes }))
+
+import { readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { appMaxColumns, parseRangeArgs, planRangeWrite, runRangeBackfill, templateMaxColumns } from "../backfill-listing-range.js"
 
 /**
@@ -57,5 +75,49 @@ describe("backfill-listing-range — prices as a general user's run", () => {
     expect(error.mock.calls.flat().join(" ")).toContain("Admin → Availability")
     error.mockRestore()
     avail.loaded = true
+  })
+})
+
+/** Each table's rows (one page), and every update written. */
+function serveRows(tables: Record<string, Array<Record<string, unknown>>>): Array<{ table: string; payload: unknown }> {
+  const updates: Array<{ table: string; payload: unknown }> = []
+  db.from.mockImplementation((table: string) => {
+    const chain: Record<string, unknown> = {}
+    for (const m of ["select", "order", "range", "is", "eq"]) chain[m] = () => chain
+    chain.update = (payload: unknown) => {
+      updates.push({ table, payload })
+      return { eq: async () => ({ error: null }) }
+    }
+    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: tables[table] ?? [], error: null })
+    return chain
+  })
+  return updates
+}
+
+describe("backfill-listing-range — a row with an unpriced metered LLM model (R49)", () => {
+  it("is reported and skipped, never written; the rows after it are priced and written", async () => {
+    const report = join(tmpdir(), `range-unpriced-${process.pid}.json`)
+    const updates = serveRows({
+      published_apps: [
+        { id: "a1", slug: "unpriced-app", creator_id: "u", publish_type: "app", snapshot_nodes: [{ id: "c", type: "llm-chat", data: { llmModel: "unpriced-model" } }], snapshot_edges: [], snapshot_settings: {} },
+        { id: "a2", slug: "priced-app", creator_id: "u", publish_type: "app", snapshot_nodes: [{ id: "g", type: "generate-image", data: {} }], snapshot_edges: [], snapshot_settings: {} },
+      ],
+      workflow_templates: [
+        { id: "t1", slug: "unpriced-tpl", creator_id: "u", snapshot_nodes: [{ id: "c", type: "llm-chat", data: { llmModel: "unpriced-model" } }], snapshot_edges: [], snapshot_settings: {} },
+      ],
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined)
+    const result = await runRangeBackfill({ apply: true, includeTemplates: true, report })
+    expect(result).toMatchObject({ ok: true, written: 1 })
+    expect(updates.map((u) => u.table)).toEqual(["published_apps"])
+    const rows = (JSON.parse(readFileSync(report, "utf8")) as { rows: Array<{ slug: string; skipped?: string; changed: boolean }> }).rows
+    expect(rows.find((r) => r.slug === "unpriced-app")).toMatchObject({ skipped: "llm_model_unpriced: unpriced-model", changed: false })
+    expect(rows.find((r) => r.slug === "unpriced-tpl")).toMatchObject({ skipped: "llm_model_unpriced: unpriced-model", changed: false })
+    expect(rows.find((r) => r.slug === "priced-app")).toMatchObject({ changed: true })
+    expect(rows.find((r) => r.slug === "priced-app")).not.toHaveProperty("skipped")
+    expect(warn.mock.calls.flat().join(" ")).toContain("unpriced-app · app · SKIPPED (llm_model_unpriced: unpriced-model)")
+    warn.mockRestore()
+    log.mockRestore()
   })
 })

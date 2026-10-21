@@ -208,15 +208,28 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 
 ## Text & LLM models
 
-LLM-backed nodes (Generate Script, AI Writer, LLM Chat, QA Check, prompt helper, scene-graph/motion-graphics authoring) route through a **tiered model selector** rather than a single fixed model. Pick the tier on the node:
+LLM-backed nodes and helpers (Generate Text, AI Writer, Generate Structured, Generate Script, Describe to Picker, Text to Picker, Image to Text, QA Check, Image Critic, Choose Best's AI judge, the prompt helper, the scene-graph, motion-graphics and 3D authoring nodes, the scrapes' ad analysis, and the description and caption helpers) let you pick the **model** that runs. Each call is **charged for the tokens it actually used, at that model's rate, on the lane that served it** — every model's rate, in credits per million input and output tokens, is in [LLM model rates](pricing/llm-models.md).
 
-| Tier | Use it for | Relative cost |
-| --- | --- | --- |
-| **Economy** | High-volume, simple text — fast drafts, short prompts, QA passes. | Lowest |
-| **Standard** | The default for most writing and structured-output work — balanced quality and cost. | Mid |
-| **Premium** | The hardest reasoning: long scripts, intricate scene graphs, nuanced rewrites. | Highest |
+- **The figure before a run is an estimate.** The Run button, the model pickers and `POST /v1/credits/model-costs` show `~N`: what a typical call of that node on that model is charged. Generate Text on its default model, Gemini 3.6 Flash, shows ~3 credits<!-- credits: llm-chat:gemini-3.6-flash -->; ask the endpoint for `<feature>:<model>` (`llmPriceKey` in `@nodaro/shared/llm-models`, e.g. `llm-chat:claude-fable-5`) to get any other.
+- **A hold, then the real charge.** Before the call, a hold is reserved: the call's first attempt at the model's output cap. A balance below it is refused before anything runs (`402`, "Needs up to N credits"). After the call, the run is charged what it used — usually far below the hold, sometimes above it (a retry on another lane, a long answer). Anything above the hold is taken from your balance; whatever your balance cannot cover is written off, never billed later.
+- **Lanes.** A model runs on its default lane. Advanced mode, any reasoning effort on a Claude model, and a fallback when the default lane fails run the call on the provider's own API instead, at that lane's rate (Gemini 4 Argon always runs there). The rate table lists both lanes.
+- **Effort and Max Tokens change the charge only through the tokens.** A higher reasoning effort usually writes more output tokens, and the output cap sets the size of the hold, not the charge.
+- **Failures.** A failed call the provider still billed — a refusal, an answer cut off at the cap, an answer that could not be used — is charged for that usage, and the error says how much. A failure the provider did not bill is refunded. A Generate Text stream you stop is charged for the prompt and the text produced before you stopped it.
+- **Image approvals never wait on credits.** Approving a character portrait or a creature, location or object main image writes its description with a billed vision caption; with too little balance for it, the image is still approved and the caption is skipped (recaption it later).
 
-Provider availability per node varies (e.g. Generate Script offers multiple providers; QA Check is narrower). The node's config panel shows the exact tier/provider options and their credit cost. Model assignments per tier live in `packages/shared/src/llm-models.ts`.
+**Worked examples** (Nodaro Cloud's charged rates):
+
+| Call | Charged |
+| --- | --- |
+| Generate Text on Claude Fable 5, 2,000 tokens in and 2,000 out on the aggregator | 27 credits<!-- credits-llm-rate: claude-fable-5:kie@2000/2000 --> |
+| The hold for a Claude Fable 5 call with a 2,667-token prompt and a 32,768-token output cap | 368 credits<!-- credits-llm-rate: claude-fable-5:kie@2667/32768 --> |
+| The same call when the aggregator fails and the provider's own API answers using the whole cap | 917 credits<!-- credits-llm-rate: claude-fable-5:direct@2667/32768 --> — the 368-credit<!-- credits: n/a --> hold plus 549<!-- credits: n/a --> taken from the balance |
+| The same, with only 100 credits<!-- credits: n/a --> left after the hold | 468 credits<!-- credits: n/a --> (the hold plus the 100<!-- credits: n/a --> available); the rest is written off |
+| A Generate Text stream on Claude Sonnet 5.5 stopped after 3,200 characters, from a 4,000-character prompt (about 1,000 tokens in, 800 out) | 3 credits<!-- credits-llm-rate: claude-sonnet-5.5:kie@1000/800 --> |
+
+A call's input and output are added up and rounded up to a whole credit once, with a minimum of 2 credits<!-- credits-llm-rate: gemini-3-flash:kie@1/1 --> for any call the provider served. Workflow Copilot is priced separately.
+
+Model availability per node varies (Describe to Picker needs an image-capable structured model; QA Check is narrower), and every node names its default model on its own page. The registry of models lives in `packages/shared/src/llm-models.ts`; their rates in [LLM model rates](pricing/llm-models.md).
 
 ## Keeping this guide accurate
 

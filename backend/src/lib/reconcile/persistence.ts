@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js"
 import type { ProviderKind } from "./types.js"
+import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { noteSlotWaitColumnError, slotWaitColumnAbsent } from "../jobs-slot-wait-column.js"
 
 /**
@@ -55,6 +56,46 @@ export async function markProviderCallStart(
     )
   }
 }
+
+/**
+ * R38: {@link markProviderCallStart} as a CAS on the live statuses — what a
+ * SYNCHRONOUS metered LLM route stamps immediately before its call. A job a
+ * user cancelled between the route's reserve and this stamp is NOT stamped
+ * (`not-live`), so the route never sends the call (a cancel that found no stamp
+ * refunded the hold; an unconditional stamp then let the call run free).
+ * `error` — the write failed: the route must not call either (a later cancel
+ * would read "not started" and refund a call in flight). Never throws.
+ */
+export async function markProviderCallStartIfLive(
+  jobId: string,
+  kind: ProviderKind,
+): Promise<"started" | "not-live" | "error"> {
+  try {
+    const { data, error } = await supabase
+      .from("jobs")
+      .update({
+        provider_kind: kind,
+        provider_call_started_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .in("status", [...SYNC_CALL_LIVE_STATUSES])
+      .select("id")
+    if (error) {
+      console.warn(`[reconcile/persistence] markProviderCallStartIfLive DB write failed for job ${jobId} kind ${kind}: ${error.message}`)
+      return "error"
+    }
+    return Array.isArray(data) && data.length > 0 ? "started" : "not-live"
+  } catch (err) {
+    console.warn(
+      `[reconcile/persistence] markProviderCallStartIfLive DB write failed for job ${jobId} kind ${kind}:`,
+      err instanceof Error ? err.message : err,
+    )
+    return "error"
+  }
+}
+
+/** The statuses a sync call's start may be stamped on: in flight and not parked on a reviewer. */
+const SYNC_CALL_LIVE_STATUSES: readonly string[] = IN_FLIGHT_JOB_STATUSES.filter((s) => !isParkedJobStatus(s))
 
 /**
  * Liveness refresh for the worker's pickup sentinel: moves

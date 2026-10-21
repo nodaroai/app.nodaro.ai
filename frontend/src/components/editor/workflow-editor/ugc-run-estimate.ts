@@ -43,6 +43,7 @@ import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "./estimate-run-credits"
+import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { previewRunnable } from "./preview-gate"
 
 /** How long the confirmation and the balance check wait for the server's figure. */
@@ -70,6 +71,15 @@ export interface UgcRunFigure {
   /** What the run can hold while it renders, the balance check's figure. The price itself without the server's answers. */
   readonly hold: number
   readonly estimate: UgcRunFigureSource
+  /**
+   * The figure holds a metered LLM call's ESTIMATE (charged its actual usage after the run): shown
+   * `~`. With the server's answers: a node priced at a part the server marks an estimate
+   * (`estimateParts`), or any other node's own line; without them, the editor's own lines.
+   */
+  readonly approx: boolean
+  /** A node of the run is a metered LLM call the server refuses to price (`llm_model_unpriced`): the
+   *  figure leaves it out, and the run would be refused — every surface says so (`runLinesUnpriced`). */
+  readonly unpriced?: RunUnpriced
   /** The run renders a video's clips. */
   readonly rendersClips: boolean
   /**
@@ -88,6 +98,9 @@ export interface UgcRunFigure {
    */
   readonly nodeCredits?: ReadonlyMap<string, number>
 }
+
+/** Whether any of a run's lines holds a metered LLM estimate (`runLinesAreEstimate`'s rule). */
+const linesHoldEstimate = (lines: ReadonlyArray<{ readonly estimate?: true }>): boolean => lines.some((line) => line.estimate === true)
 
 /** The UGC parts a run of `executable` executes: only of the nodes it really runs (a Preview render holds back what follows it). */
 export function ugcRunParts(executable: WorkflowNode[], allNodes: WorkflowNode[], edges: WorkflowEdge[]): UgcEstimateRunParts | null {
@@ -198,7 +211,10 @@ export function ugcRunCredits(
   const lines = estimateRunCreditLines(executable, allNodes, edges, cachedCost)
   const own = sumRunCreditLines(lines)
   const ugc = ugcRunParts(executable, allNodes, edges)
-  if (!ugc) return { credits: own, hold: own, estimate: "none", rendersClips: false, mayReuseClips: false, lengthUnread: false, screenshotsUnread: false }
+  const ownApprox = linesHoldEstimate(lines)
+  const unpricedPart = runLinesUnpriced(lines)
+  const unpriced = unpricedPart ? { unpriced: unpricedPart } : {}
+  if (!ugc) return { credits: own, hold: own, estimate: "none", approx: ownApprox, ...unpriced, rendersClips: false, mayReuseClips: false, lengthUnread: false, screenshotsUnread: false }
   const clipNodes = ugc.chains.flatMap((c) => c.nodes.filter((m) => m.part === "clip"))
   const byId = new Map(allNodes.map((n) => [n.id, n] as const))
   // A UGC Clip priced from its saved clips, with what it hands back known: its figure already counts the reuse.
@@ -210,23 +226,31 @@ export function ugcRunCredits(
     screenshotsUnread: ugc.chains.some((c) => c.screenshotsUnread),
   }
   const answers = ugc.chains.map((c) => answerOf(c.input))
-  if (answers.some((a) => a === undefined)) return { credits: own, hold: own, estimate: "client", ...shape }
+  if (answers.some((a) => a === undefined)) return { credits: own, hold: own, estimate: "client", approx: ownApprox, ...unpriced, ...shape }
   const runsOf = (id: string | null) => (id === null ? 1 : (lines.find((l) => l.nodeId === id)?.quantity.fanOut ?? 1))
   const rest = sumRunCreditLines(lines.filter((line) => !ugc.coveredIds.has(line.nodeId)))
   // Each node's figures: a UGC Clip priced from its saved clips takes the clip part of their quote (its
   // UGC Clips does not run, so it runs once); every other node its part of its video's estimate.
   const figuresOf = (m: (typeof ugc.chains)[number]["nodes"][number], answer: UgcRunEstimate) => {
     const tickets = m.ticketQuote ? ticketAnswerOf(m.ticketQuote) : undefined
-    return tickets ? { parts: tickets.parts, holdParts: tickets.holdParts } : { parts: answer.parts, holdParts: answer.holdParts }
+    return tickets
+      ? { parts: tickets.parts, holdParts: tickets.holdParts, estimateParts: tickets.estimateParts ?? [] }
+      : { parts: answer.parts, holdParts: answer.holdParts, estimateParts: answer.estimateParts ?? [] }
   }
   const priced = ugc.chains.flatMap((c, i) => c.nodes.map((m) => ({ id: m.id, runs: runsOf(m.fanOutOf), part: m.part, figures: figuresOf(m, answers[i]!) })))
   const prices = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.figures.parts[p.part] * p.runs })))
   const holds = ugcFiguresPerNode(priced.map((p) => ({ id: p.id, credits: p.figures.holdParts[p.part] * p.runs })))
   const total = (figures: ReadonlyMap<string, number>) => [...figures.values()].reduce((sum, c) => sum + c, 0)
+  // `~` exactly when the server's figure is one: a priced node's part it marks an estimate, or another node's own line.
+  const approx =
+    linesHoldEstimate(lines.filter((line) => !ugc.coveredIds.has(line.nodeId))) ||
+    priced.some((p) => p.figures.parts[p.part] > 0 && p.figures.estimateParts.includes(p.part))
   return {
     credits: rest + total(prices),
     hold: rest + total(holds),
     estimate: "server",
+    approx,
+    ...unpriced,
     ...shape,
     nodeCredits: new Map([...ugc.coveredIds].map((id) => [id, prices.get(id) ?? 0] as const)),
   }

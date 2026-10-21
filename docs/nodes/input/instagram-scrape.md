@@ -32,7 +32,7 @@ The Instagram node scrapes PUBLIC Instagram posts and returns them as a JSON arr
 | Period | select | Last 30 days | `Last 24 hours`, `Last 7 days`, `Last 30 days` or `All time`, by the post's date (honoured by the scraper). Not used in post mode |
 | Creative format | toggles | none (no filter) | Keep only posts whose creative is `vertical` (reels / portrait), `square` or `horizontal`, classified from the post's real pixels. Fewer posts than requested may come back. Not used in post mode |
 | Copy all videos | toggle | off | Copy every returned post's video into your library (the expensive bytes; they count toward storage) |
-| AI analysis | toggle + model + focus | off | Run a content-analyst pass on every post — asset type, format, visual hooks, audiences, graphic identity, content angles, value, CTA and a summary. Priced per requested post by the model's tier, settled per post analysed |
+| AI analysis | toggle + model + focus | off | Run a content-analyst pass on every post — asset type, format, visual hooks, audiences, graphic identity, content angles, value, CTA and a summary. Each analysis is charged for the tokens it used at the model's rate — see the AI analysis add-on under Pricing |
 
 After a run the node card features one post — creative, owner, caption, likes / comments, format — with a thumbnail strip and ‹ › to move between posts; the **Results** tab lists them all, filters by format, and clicking a row features it.
 
@@ -92,13 +92,13 @@ Post mode: 1 link → requested total 1 → **11 CR**<!-- credits: instagram-scr
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds a per-post cost by the model's tier — **+1.1**<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> (economy) / **+3.3**<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> (standard) / **+4.4**<!-- credits-rate: instagram-scrape:10:analysis:premium@0.08 --> (premium) / **+11**<!-- credits-rate: instagram-analysis:premium-direct --> (a premium model that runs only on its provider's own API — Gemini 4 Argon; the premium-direct rung, as in [Generate Text](../ai-text/llm-chat.md#credit-pricing)), priced with the scrape as one charge — settled for the posts actually analysed.
+Turning on **AI analysis** adds one LLM call per analysed post — its frame and copy, your focus, and the analysis it writes — charged for the tokens it actually used at the analysis model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)). A run's analyses are added up and charged once, on top of the scrape's own price, as one charge. A typical analysis on the default model, Gemini 3.6 Flash, is estimated at ~4 credits<!-- credits: meta-ads-analysis:gemini-3.6-flash -->; Gemini 4 Argon runs only on its provider's own API and is charged at that lane's rate.
 
-| Requested batch | Analysis model | Total |
-|-----------------|----------------|-------|
-| 20 posts | economy | 22<!-- credits-rate: instagram-scrape:20 --> + 20 × 1.1<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> = **44 CR**<!-- credits: instagram-scrape:20:analysis:economy --> |
-| 2 profiles × 30 posts (tier 100) | standard | 110<!-- credits-rate: instagram-scrape:100 --> + 100 × 3.3<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> = **440 CR**<!-- credits: instagram-scrape:100:analysis --> |
-| 20 posts | premium-direct (Gemini 4 Argon) | 22<!-- credits-rate: instagram-scrape:20 --> + 20 × 11<!-- credits-rate: instagram-analysis:premium-direct --> = **242 CR**<!-- credits: instagram-scrape:20:analysis:premium-direct --> |
+- **Before the run** a hold is reserved: the scrape's price plus a typical analysis per requested post. A balance below it is refused before anything runs (`402`, "Needs up to N credits").
+- **After the run** it is charged the scrape's price plus what the analyses used. A post the run never analysed (the batch came back short, or a long run hit its time budget) costs nothing; an analysis the provider billed is charged even when it failed.
+- **A failed run** refunds the scrape's price; analyses the provider had already billed are still charged.
+
+Example: 20 posts on Gemini 3.6 Flash, each analysis about 1,500 tokens in and 400 out (30,000 in and 8,000 out in all) → 22<!-- credits-rate: instagram-scrape:20 --> for the scrape + 18<!-- credits-llm-rate: gemini-3.6-flash:kie@30000/8000 --> for the analyses = **40 CR**<!-- credits: n/a -->.
 
 ## Providers
 

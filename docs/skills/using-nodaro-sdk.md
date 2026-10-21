@@ -150,13 +150,16 @@ model-dependent (see the model table in the
 section of the Generate Text - Any LLM node docs). Omit it for the vendor default
 ("Auto") — except on `describe-to-picker` and its text twin `text-to-picker`
 when `llmModel` is `claude-opus-5.5`: there an omitted effort runs at `"high"`,
-which runs on Anthropic's own API and bills the premium-direct rung (see the
+which runs on Anthropic's own API, at that lane's rate (see the
 [Describe to Picker](https://nodaro.ai/docs/node/describe-to-picker) docs);
 send another level to lower it. Any other model, their default Gemini 3.8 Flash
-included, keeps Auto. `xhigh` and `max` bill one tier up (economy → standard, standard →
-premium); see the
-[Credits](https://nodaro.ai/docs/node/llm-chat#credits)
-section for the exact rule. Workflow/canvas LLM nodes carry the same field on
+included, keeps Auto. Every LLM call is charged for the tokens it used at the
+model's rate on the lane that served it, so a higher effort costs more only
+through the tokens it writes; see the
+[Credits](https://nodaro.ai/docs/node/llm-chat#credits) section (every model's
+rate is in the repository's `docs/pricing/llm-models.md`).
+`client.credits.modelCosts([llmPriceKey(feature, model)])` returns a call's
+estimate (listed in `estimates`; show it as `~N`). Workflow/canvas LLM nodes carry the same field on
 their node `data`, and `client.promptHelper.*` accepts it directly in its
 request body.
 

@@ -31,7 +31,9 @@ vi.mock("../../providers/nodaro/client.js", () => ({ createCloudJob: cloudMocks.
 // any environment (CI has no LLM keys); everything else stays the real config.
 vi.mock("../../lib/config.js", async (importActual) => {
   const actual = await importActual<typeof import("../../lib/config.js")>()
-  return { ...actual, config: { ...actual.config, KIE_API_KEY: "test-key" } }
+  // The tier path (the rollback, D6): these cases pin today's count-based
+  // settle; the metered analysis is llm-metered-creative-routes.test.ts.
+  return { ...actual, config: { ...actual.config, KIE_API_KEY: "test-key" }, llmMeteredPricing: () => false }
 })
 vi.mock("../../lib/supabase.js", () => ({
   supabase: { from: () => ({ insert: () => ({ select: () => ({ single: () => ({ data: { id: "job-1" }, error: null }) }) }) }) },

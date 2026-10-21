@@ -4,12 +4,14 @@
 
 import type Anthropic from "@anthropic-ai/sdk"
 import type { LlmModelDef } from "@nodaro/shared/llm-models"
-import { calculateLlmCost } from "../pricing/llm-cost.js"
+import { llmCostOrZero } from "../pricing/llm-cost.js"
 import { getAnthropicClient } from "../anthropic.js"
 import { LlmStreamResponseError, guardLaneAccount } from "../llm-errors.js"
 import { deriveParams, effectiveTimeout } from "./params.js"
 import { anthropicStructuredTool, buildAnthropicMessages } from "./message-builders.js"
+import { requestChars } from "./kie-cost.js"
 import { buildResponse } from "./response.js"
+import { asStoppedStream } from "./stream-abort.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
 // Guarded entry points (see the lane-guard note in ./router.ts).
@@ -152,6 +154,10 @@ async function callAnthropicDirectUnguarded(model: LlmModelDef, req: LlmRequest)
 async function streamAnthropicDirectUnguarded(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
+  // A stop before anything was sent spent nothing: its plain abort error,
+  // refunded. (An abort listener added to an already-fired signal never runs,
+  // so without this the whole stream would run — and bill — anyway.)
+  signal?.throwIfAborted()
   const anthropic = getAnthropicClient()
   const { eff, temperature, maxTokens } = deriveParams(model, req)
   const stream = anthropic.messages.stream(
@@ -167,9 +173,8 @@ async function streamAnthropicDirectUnguarded(
   )
 
   // Abort stream if caller signals (e.g. client disconnect)
-  if (signal) {
-    signal.addEventListener("abort", () => stream.abort(), { once: true })
-  }
+  const abort = (): void => stream.abort()
+  signal?.addEventListener("abort", abort, { once: true })
 
   let fullText = ""
   stream.on("text", (delta) => {
@@ -177,7 +182,21 @@ async function streamAnthropicDirectUnguarded(
     onToken(delta)
   })
 
-  const finalMessage = await stream.finalMessage()
+  let finalMessage: Anthropic.Messages.Message
+  try {
+    finalMessage = await stream.finalMessage()
+  } catch (err) {
+    // Stopped after dispatch (D2): billed the estimated usage of the prompt and
+    // of the text streamed so far, at the direct rate.
+    if (signal) {
+      throw asStoppedStream(err, {
+        signal, requestChars: requestChars(req), modelId: model.id, lane: "direct-anthropic", streamedChars: fullText.length,
+      })
+    }
+    throw err
+  } finally {
+    signal?.removeEventListener("abort", abort)
+  }
   const usage = { inputTokens: finalMessage.usage.input_tokens, outputTokens: finalMessage.usage.output_tokens }
   return buildResponse(
     model,
@@ -267,9 +286,9 @@ function startedStreamFailure(
   const failure = new LlmStreamResponseError(err instanceof Error ? err.message : String(err), {
     inputTokens,
     outputTokens,
-    providerCost: calculateLlmCost(model, { inputTokens, outputTokens }, "direct"),
+    providerCost: llmCostOrZero(model, { inputTokens, outputTokens }, "direct"),
     complete: false,
-  })
+  }, "direct-anthropic")
   failure.cause = err
   return failure
 }

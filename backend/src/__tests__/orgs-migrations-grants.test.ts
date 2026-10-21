@@ -109,14 +109,29 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
   // P15: reporting over usage_logs (346: browser-unreadable) and the variance
   // ledger rows. Read-only, service-role only — the plugin route authorizes
   // (org admin+ / workspace role) and relays; nothing here is an RLS helper.
+  // Metered LLM settle: collects an overrun beyond the hold from the payer's
+  // balance, delegating every payer branch to commit_credits. A mutating
+  // credit RPC called with the service client only.
+  "551_commit_credits_metered.sql": {
+    authenticated: [],
+    serviceRole: ["commit_credits_metered"],
+  },
   "369_orgs_usage_reporting.sql": {
     authenticated: [],
     serviceRole: ["org_usage_report", "org_usage_rows", "org_usage_totals", "org_usage_variance", "org_usage_window"],
   },
 }
 
+/**
+ * Billing-settlement migrations held to the same family rule although their
+ * file names do not carry the `orgs` prefix: they define definers that read
+ * the organizations axis's payer from the usage_logs row. Named explicitly —
+ * a file listed here that is missing on disk fails the on-disk check below.
+ */
+const SETTLEMENT_MIGRATIONS: readonly string[] = ["551_commit_credits_metered.sql"]
+
 const orgMigrations = readdirSync(MIGRATIONS_DIR)
-  .filter((f) => /^\d+_orgs[_-].*\.sql$/.test(f))
+  .filter((f) => /^\d+_orgs[_-].*\.sql$/.test(f) || SETTLEMENT_MIGRATIONS.includes(f))
   .sort()
 
 interface DefinerFn {

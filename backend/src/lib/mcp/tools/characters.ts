@@ -18,6 +18,9 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { meteredLlmPriceSentence } from "./_credit-hint.js"
+import { PORTRAIT_CAPTION_MODEL } from "../../portrait-caption-model.js"
+
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -590,7 +593,9 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         "fires an LLM caption (Claude Sonnet vision) inline to populate " +
         "`canonical_description`. Returns the new portrait URL plus the " +
         "caption. The caption is null on LLM sub-failure (portrait still set; " +
-        "retry with `recaption_character`).",
+        "retry with `recaption_character`). " +
+        `The caption is billed. ${meteredLlmPriceSentence("prompt-helper", PORTRAIT_CAPTION_MODEL)} ` +
+        "An approval is never refused for credits: with too little balance for the caption, the caption is skipped (the portrait is still set) and `recaption_character` writes it later.",
       inputSchema: {
         character_id: z.string().uuid(),
         candidate_job_id: z
@@ -644,7 +649,8 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         "character's current portrait and persist the new " +
         "`canonical_description`. Use after a portrait update or when the " +
         "previous caption is unsatisfactory. Returns 400 `no_portrait` if no " +
-        "portrait is set; 502 on LLM failure.",
+        "portrait is set; 502 on LLM failure. " +
+        meteredLlmPriceSentence("prompt-helper", PORTRAIT_CAPTION_MODEL),
       inputSchema: { id: z.string().uuid() },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },

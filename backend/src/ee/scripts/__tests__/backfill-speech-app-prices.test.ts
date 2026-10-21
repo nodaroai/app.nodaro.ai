@@ -22,6 +22,22 @@ vi.mock("@/lib/availability-override.js", async (importOriginal) => ({
   },
 }))
 
+// R49 rows: the estimate refuses a graph naming "unpriced-model" (the real estimator is unit-tested in
+// workflow-estimate-metered.test.ts); every other row is priced at a fixed split.
+const est = vi.hoisted(() => ({ split: { preview: 40, final: 0, previewPerMinute: 0, finalPerMinute: 0 } }))
+vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/billing/credits.js")>()),
+  estimateWorkflowListingCredits: async (nodes: Array<{ data?: { llmModel?: unknown } }>) => {
+    if (nodes.some((n) => n.data?.llmModel === "unpriced-model")) {
+      throw Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+    }
+    return est.split
+  },
+}))
+vi.mock("@/lib/canvas-result-ids.js", () => ({ resolveCanvasResultIds: async (nodes: unknown) => nodes }))
+
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { formatLine, hasPerMinutePart, hasSpeechNode, parseArgs, planWrite, recomputePrice, runBackfill, selectCandidates, speechNodeSummary } from "../backfill-speech-app-prices.js"
 
 const tts = { id: "t", type: "text-to-speech", data: { textSource: "direct", provider: "elevenlabs-v4", directText: "a".repeat(1000) } }
@@ -154,5 +170,46 @@ describe("a per-minute listing is left for its next publish", () => {
     expect(hasPerMinutePart({ preview: 10, final: 0, previewPerMinute: 0, finalPerMinute: 0 })).toBe(false)
     expect(hasPerMinutePart({ preview: 10, final: 0, previewPerMinute: 4 })).toBe(true)
     expect(hasPerMinutePart({ preview: 10, final: 0, finalPerMinute: 10 })).toBe(true)
+  })
+})
+
+/** Each table's rows (one page), and every update written. */
+function serveRows(tables: Record<string, Array<Record<string, unknown>>>): Array<{ table: string; payload: unknown }> {
+  const updates: Array<{ table: string; payload: unknown }> = []
+  db.from.mockImplementation((table: string) => {
+    const chain: Record<string, unknown> = {}
+    for (const m of ["select", "order", "range", "is", "eq"]) chain[m] = () => chain
+    chain.update = (payload: unknown) => {
+      updates.push({ table, payload })
+      return { eq: async () => ({ error: null }) }
+    }
+    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: tables[table] ?? [], error: null })
+    return chain
+  })
+  return updates
+}
+
+describe("a candidate with an unpriced metered LLM model (R49)", () => {
+  it("is reported and skipped, never written; the candidates after it are priced and written", async () => {
+    flag.on = true
+    flag.credits = true
+    const speech = { id: "t", type: "text-to-speech", data: { textSource: "direct", provider: "elevenlabs-v4", directText: "hello" } }
+    const base = { publish_type: "app", creator_id: "u", snapshot_edges: [], snapshot_settings: {}, base_estimated_credits: 1, estimated_credits: 1, monetization_enabled: false, monetization_flat_fee: null, monetization_percent: null }
+    const updates = serveRows({
+      published_apps: [
+        { ...base, id: "a1", slug: "unpriced-app", snapshot_nodes: [speech, { id: "c", type: "llm-chat", data: { llmModel: "unpriced-model" } }] },
+        { ...base, id: "a2", slug: "priced-app", snapshot_nodes: [speech] },
+      ],
+    })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined)
+    const result = await runBackfill({ apply: true, includeTemplates: false, allowFlagOff: false, report: join(tmpdir(), `speech-unpriced-${process.pid}.json`) })
+    expect(result.ok).toBe(true)
+    expect(result.lines.find((l) => l.slug === "unpriced-app")).toMatchObject({ skipped: "llm_model_unpriced: unpriced-model", changed: false, after: { base: 1, listed: 1 } })
+    expect(result.lines.find((l) => l.slug === "priced-app")).toMatchObject({ changed: true, after: { base: 40, listed: 40 } })
+    expect(updates).toEqual([{ table: "published_apps", payload: { base_estimated_credits: 40, estimated_credits: 40 } }])
+    expect(warn.mock.calls.flat().join(" ")).toContain("unpriced-app · app · SKIPPED (llm_model_unpriced: unpriced-model) — left as stored")
+    warn.mockRestore()
+    log.mockRestore()
   })
 })

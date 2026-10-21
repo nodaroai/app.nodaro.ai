@@ -16,6 +16,7 @@ import type { AskConfirmInfo, RunConfirmInfo } from "./types"
 import { creditUnits } from "@/lib/credit-units"
 import { useT, type TFunction } from "@/lib/i18n"
 import { RunConfirmBreakdown } from "./run-confirm-breakdown"
+import { runLinesUnpriced } from "./run-unpriced"
 import { INSPECTOR_CHILD_DIALOG_Z } from "@/components/inspector/inspector-shell"
 
 interface UseRunConfirm {
@@ -56,6 +57,11 @@ export function runConfirmText(
       : t(finish ? "continueFailed.finishConfirmTitle" : "continueFailed.confirmTitle")
     const body = t(finish ? "continueFailed.finishConfirmBody" : "continueFailed.confirmBody")
     return { title, body, action: runConfirmAction(info, t) }
+  }
+  // A run holding a node the server refuses to price (`llm_model_unpriced`): its title states no
+  // figure — the one it has leaves that node out — but the button's words and "not priced yet".
+  if (info && credits != null && runLinesUnpriced(info.lines ?? [])) {
+    return { title: `${runConfirmAction(info, t)} · ${t("renderFinal.priceNotPricedYet")}`, body: nodeLabel, action: runConfirmAction(info, t) }
   }
   // A run whose UGC price could not be checked asks first whatever its figure: its title states no price,
   // and its body gives the figure the note under it speaks of.

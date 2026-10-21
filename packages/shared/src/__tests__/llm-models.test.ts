@@ -580,22 +580,22 @@ describe("defaultReasoningEffort", () => {
 // DESCRIBE_TO_PICKER_MODELS — what the node offers and its route accepts
 // ---------------------------------------------------------------------------
 describe("DESCRIBE_TO_PICKER_MODELS", () => {
-  it("is the structured vision list minus the withheld models, and withholds Claude Fable 5 (decided 2026-10-20)", () => {
-    expect(DESCRIBE_TO_PICKER_WITHHELD_MODELS).toEqual(new Set(["claude-fable-5"]))
+  it("is the whole structured vision list: nothing is withheld, Claude Fable 5 is offered again (metered pricing, 2026-10-20)", () => {
+    // Metered pricing charges a legend-sized read what it really costs, so the
+    // cost-audit withholding is gone; the deprecated set stays exported, empty.
+    expect(DESCRIBE_TO_PICKER_WITHHELD_MODELS.size).toBe(0)
     const ids = DESCRIBE_TO_PICKER_MODELS.map((m) => m.id)
-    expect(ids).not.toContain("claude-fable-5")
-    expect(ids.sort()).toEqual(
-      STRUCTURED_VISION_MODELS.map((m) => m.id).filter((id) => !DESCRIBE_TO_PICKER_WITHHELD_MODELS.has(id)).sort(),
-    )
+    expect(ids).toContain("claude-fable-5")
+    expect(ids.sort()).toEqual(STRUCTURED_VISION_MODELS.map((m) => m.id).sort())
   })
 
   it("every withheld id is a registered model (a typo would withhold nothing)", () => {
     for (const id of DESCRIBE_TO_PICKER_WITHHELD_MODELS) expect(getLlmModel(id)?.id, id).toBe(id)
   })
 
-  it("the other legend-sized structured reads (text-to-picker, llm-structured) withhold the same models", () => {
+  it("the other legend-sized structured reads (text-to-picker, llm-structured) withhold nothing either", () => {
     expect(LLM_STRUCTURED_WITHHELD_MODELS).toBe(DESCRIBE_TO_PICKER_WITHHELD_MODELS)
-    expect(LLM_STRUCTURED_WITHHELD_MODELS.has("claude-fable-5")).toBe(true)
+    expect(LLM_STRUCTURED_WITHHELD_MODELS.has("claude-fable-5")).toBe(false)
   })
 
   it("offers the default, the fallback and the Opus 5.5 recipe model", () => {

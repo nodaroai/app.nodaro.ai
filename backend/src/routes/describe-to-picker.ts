@@ -19,7 +19,6 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { insertAppReport, type AppReportInput } from "../lib/app-reports.js"
 import { commitReservedCreditsForJob, commitReservedCreditsForJobAtPrice, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
@@ -29,14 +28,15 @@ import { LLM_MAX_LANES_PER_CALL } from "../lib/llm/router.js"
 import { billedContentRefusal, billedProviderCost, describeErrorChain, LlmAdvancedModeUnavailableError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { chargedFailureMessage, llmPrecheckBody, llmTextChars, plannedStructuredCall } from "../lib/llm-metered-route.js"
+import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 
 /** Models the analyzer accepts: vision-capable AND able to return guaranteed
- *  structured output (Anthropic forced-tool or Gemini `response_format`), minus
- *  the ones withheld from this feature (Claude Fable 5 — its legend-sized read
- *  costs far above every rung; `DESCRIBE_TO_PICKER_WITHHELD_MODELS`). Derived
- *  from the SAME shared list the model picker offers, so the UI options and
- *  this route gate can't drift; a saved node naming a withheld model is
- *  refused with the same `validation_error` as any unsupported model. */
+ *  structured output (Anthropic forced-tool or Gemini `response_format`) — all
+ *  of them since metered pricing (Claude Fable 5 is offered again; the
+ *  withheld set is empty). Derived from the SAME shared list the model picker
+ *  offers, so the UI options and this route gate can't drift. */
 const DESCRIBE_TO_PICKER_MODEL_IDS = new Set(DESCRIBE_TO_PICKER_MODELS.map((m) => m.id))
 
 const describeToPickerBody = z
@@ -196,6 +196,10 @@ interface Analysis {
    *  from `body`, which may omit it). */
   reasoningEffort: LlmReasoningEffort | undefined
   body: z.infer<typeof describeToPickerBody>
+  /** Metered billing (D1): the hold and the spend every read — the Gemini
+   *  fallback included — is recorded in. Absent under the rollback, where the
+   *  tier reservation is committed / refunded as before. */
+  metered?: { reserve: Extract<LlmReserveResult, { metered: true }>; spend: LlmSpend }
 }
 
 /** Stream only when the caller asks for it: an `Accept` naming `text/event-stream`. */
@@ -217,9 +221,8 @@ interface AnalyzerRun {
   advanced: boolean
 }
 
-/** The analyzer call: one request, whichever way the answer is delivered.
- *  With `onToolJson`, the first attempt streams its tool input there. */
-async function runAnalyzer(analysis: Analysis, run: AnalyzerRun, onToolJson?: (partialJson: string) => void) {
+/** The analyzer's request for one run, and the forced schema it answers in. */
+function analyzerCall(analysis: Pick<Analysis, "targetPickers" | "body">, run: AnalyzerRun) {
   const { schema, toolName, legend, otherPickersLegend } = buildMultiPickerAnalyzerSpec(analysis.targetPickers)
   const content: LlmContentBlock[] = [run.imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
   // The RESOLVED effort, like the request below: a default read runs at high
@@ -233,9 +236,26 @@ async function runAnalyzer(analysis: Analysis, run: AnalyzerRun, onToolJson?: (p
     ...(run.advanced ? resolveLlmParams(analysis.body) : {}),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
   }
-  return onToolJson
-    ? llmStreamStructured(request, schema, { schemaName: toolName, onToolJson })
-    : llmCompleteStructured(request, schema, { schemaName: toolName })
+  return { request, schema, toolName }
+}
+
+/** The analyzer call: one request, whichever way the answer is delivered.
+ *  With `onToolJson`, the first attempt streams its tool input there. A
+ *  metered analysis records what the call billed — answer or failure — in its
+ *  spend (A6: the Gemini fallback too). */
+async function runAnalyzer(analysis: Analysis, run: AnalyzerRun, onToolJson?: (partialJson: string) => void) {
+  const { request, schema, toolName } = analyzerCall(analysis, run)
+  const spent = analysis.metered && plannedStructuredCall(request, schema, toolName).request
+  try {
+    const answered = await (onToolJson
+      ? llmStreamStructured(request, schema, { schemaName: toolName, onToolJson })
+      : llmCompleteStructured(request, schema, { schemaName: toolName }))
+    if (spent) analysis.metered!.spend.add(run.model.id, spent, { output: answered })
+    return answered
+  } catch (err) {
+    if (spent) analysis.metered!.spend.add(run.model.id, spent, { error: err })
+    throw err
+  }
 }
 
 /** An analysis's answer, and the model that gave it. */
@@ -280,11 +300,27 @@ export function isEmptyPickerRead(pickerJson: Record<string, unknown>, targetPic
   })
 }
 
-/** The message a person reads when the analysis read nothing in the photo. */
-export const EMPTY_PICKER_READ_MESSAGE = "We couldn't read anything in this photo — try a clearer photo of one person. You weren't charged."
+/** What a person is told to do when the analysis read nothing in the photo. */
+export const EMPTY_PICKER_READ_GUIDANCE = "We couldn't read anything in this photo — try a clearer photo of one person."
 
-/** A completed analysis with no picker value at all: the job fails and the
- *  reservation is refunded. Carries the read's usage so the failed row still
+/** The message for an empty read that was refunded: the tier path (rollback),
+ *  and a metered read the vendor billed nothing for. */
+export const EMPTY_PICKER_READ_MESSAGE = `${EMPTY_PICKER_READ_GUIDANCE} You weren't charged.`
+
+/**
+ * The message for an empty read the vendor billed (spec §8.1: a billed call
+ * that then fails is charged): the same guidance, and the charge — with its
+ * figure once the settle confirmed it, without one while the hold awaits the
+ * reconcile sweep. Exported for unit testing.
+ */
+export function emptyPickerReadChargedMessage(charged?: number): string {
+  const credits = charged === undefined ? "" : charged === 1 ? " 1 credit" : ` ${charged} credits`
+  return `${EMPTY_PICKER_READ_GUIDANCE} You were charged${credits} for the model's attempt.`
+}
+
+/** A completed analysis with no picker value at all: the job fails. On the
+ *  tier path (rollback) the reservation is refunded; metered, the read's
+ *  billed usage is charged (§8.1). Carries the read's usage so the failed row
  *  records what the empty answer cost the platform (`billedProviderCost`). */
 class EmptyPickerReadError extends Error {
   readonly usage: { inputTokens: number; outputTokens: number; providerCost?: number }
@@ -474,34 +510,50 @@ async function completeAnalysis(analysis: Analysis, { output, inputTokens, outpu
     throw new EmptyPickerReadError(answeredBy.id, lane, { inputTokens, outputTokens, providerCost })
   }
 
-  await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      ...completedJobColumns(),
-      // `answeredBy`: the model whose answer this is — the requested one, or
-      // the fallback that answered when it could not.
-      output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens }, answeredBy: answeredBy.id },
-      // Which LLM lane served the answer, a fallback included, and what the
-      // run cost the platform on it (the direct rate table on Anthropic's own
-      // API) — what every cost report reads; a run that wrote neither was
-      // invisible to them (production cost audit, 2026-10-20).
-      // `provider` and `provider_cost` are admin-only — outside PUBLIC_JOB_KEYS
-      // (routes/jobs.ts) and outside the browser's column grant on jobs
-      // (migration 347) — while output_data is owner-readable through both, so
-      // neither ever rides there.
-      provider: lane,
-      provider_cost: providerCost ?? null,
-    })
-    .eq("id", jobId)
-    .eq("user_id", userId)
-  // The person pays for the model that answered: the reservation was made at
-  // the requested model's price, and a fallback answer commits at the
-  // fallback's own (the rest of the hold is returned in the same commit).
-  if (answeredBy.id === analysis.model.id) {
-    await commitReservedCreditsForJob(jobId)
+  if (analysis.metered) {
+    // Metered (D1): the output first, non-terminal — the settle writes
+    // provider_cost and credits_actual (its ledger goes to the server-only
+    // ledger column, never output_data), so nothing overwrites them after —
+    // then the settle of EVERY read (a fallback answer is charged
+    // the failed Claude read too, at the requested model's charge id), then
+    // the status. Unsettled: the row stays non-terminal for the sweep.
+    await supabase
+      .from("jobs")
+      .update({ output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens }, answeredBy: answeredBy.id }, provider: lane })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+    const settled = await settleLlmJob(jobId, analysis.metered.reserve, analysis.metered.spend)
+    if (settled.outcome !== "unsettled") await completeSettledSyncJob(jobId, { userId })
   } else {
-    await commitReservedCreditsForJobAtPrice(jobId, buildLlmCreditIdentifier("describe-to-picker", answeredBy.id))
+    await supabase
+      .from("jobs")
+      .update({
+        status: "completed",
+        ...completedJobColumns(),
+        // `answeredBy`: the model whose answer this is — the requested one, or
+        // the fallback that answered when it could not.
+        output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens }, answeredBy: answeredBy.id },
+        // Which LLM lane served the answer, a fallback included, and what the
+        // run cost the platform on it (the direct rate table on Anthropic's own
+        // API) — what every cost report reads; a run that wrote neither was
+        // invisible to them (production cost audit, 2026-10-20).
+        // `provider` and `provider_cost` are admin-only — outside PUBLIC_JOB_KEYS
+        // (routes/jobs.ts) and outside the browser's column grant on jobs
+        // (migration 347) — while output_data is owner-readable through both, so
+        // neither ever rides there.
+        provider: lane,
+        provider_cost: providerCost ?? null,
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+    // The person pays for the model that answered: the reservation was made at
+    // the requested model's price, and a fallback answer commits at the
+    // fallback's own (the rest of the hold is returned in the same commit).
+    if (answeredBy.id === analysis.model.id) {
+      await commitReservedCreditsForJob(jobId)
+    } else {
+      await commitReservedCreditsForJobAtPrice(jobId, buildLlmCreditIdentifier("describe-to-picker", answeredBy.id))
+    }
   }
 
   // Persist catalog-gap feedback (best-effort — never breaks the analysis).
@@ -543,6 +595,34 @@ async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
   // refusal, a cap stop): its cost and lane stay on the row, as a completed
   // run's do, so the spend never vanishes from the cost reports.
   const lane = failedOnLane(err)
+  if (analysis.metered) {
+    // Metered (D1): output first, then the settle, then the terminal status
+    // (unsettled: left non-terminal for the sweep). A billed failure — a
+    // refusal, a cap stop, answers that never validated, a failed fallback
+    // after a paid read, an EMPTY read — is charged what it billed (spec
+    // §8.1); nothing billed is refunded. An empty read the vendor billed
+    // nothing for keeps today's "You weren't charged".
+    const emptyRead = err instanceof EmptyPickerReadError
+    const spend = analysis.metered.spend
+    // An answered call is charged at least the floor even at zero usage; an
+    // empty read with NO usage at all is refunded instead (its promise holds).
+    const emptyBilled = emptyRead && spend.attempts.some((a) =>
+      a.inputTokens > 0 || a.outputTokens > 0 || (a.providerCost ?? 0) > 0 || (a.creditsUsd ?? 0) > 0)
+    const recorded = emptyRead ? (emptyBilled ? emptyPickerReadChargedMessage() : EMPTY_PICKER_READ_MESSAGE) : message
+    await supabase
+      .from("jobs")
+      .update({ output_data: { error: recorded }, ...(lane ? { provider: lane } : {}) })
+      .eq("id", analysis.jobId)
+      .eq("user_id", analysis.userId)
+    const settled = await settleLlmJob(analysis.jobId, analysis.metered.reserve, emptyRead && !emptyBilled ? new LlmSpend() : spend)
+    const shown = !emptyRead
+      ? chargedFailureMessage(message, settled)
+      : settled.outcome === "charged"
+        ? emptyPickerReadChargedMessage(settled.charged)
+        : recorded
+    if (settled.outcome !== "unsettled") await markJobFailed(analysis.jobId, { error_message: shown })
+    return shown
+  }
   await markJobFailed(analysis.jobId, {
     error_message: message,
     extra: { output_data: { error: message }, provider_cost: billedProviderCost(err), ...(lane ? { provider: lane } : {}) },
@@ -631,7 +711,17 @@ export function withDescribeToPickerDefaults(body: unknown): Record<string, unkn
 export async function describeToPickerRoutes(app: FastifyInstance) {
   app.post(
     "/v1/describe-to-picker",
-    { preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body))) },
+    {
+      preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body)), {
+        // Metered (D1): pre-checked at one attempt over the body's TEXT (the
+        // image and the legend are counted at the reserve). Undefined under
+        // the rollback: the tier row prices it as before.
+        computeCredits: (body) => {
+          const precheck = llmPrecheckBody(body)
+          return precheck && llmPrecheckBaseCredits("describe-to-picker", precheck, llmTextChars(((body ?? {}) as Record<string, unknown>).instructions))
+        },
+      }),
+    },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
@@ -687,13 +777,28 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
-      void reservation
+      // Metered (D1): the requested model's read alone is held — the Gemini
+      // fallback is collected at settle. The photo counts as one image (it is
+      // fetched after the hold, so the hold's request names it by URL).
+      const held = analyzerCall({ targetPickers, body: parsed.data }, { model, reasoningEffort, advanced: true, imageBlock: { type: "image", url: imageUrl } })
+      const reserve = await reserveLlmCall(req, reply, job.id, {
+        feature: "describe-to-picker",
+        calls: [plannedStructuredCall(held.request, held.schema, held.toolName)],
+      })
+      if (reply.sent || !reserve) return
+      if (!reserve.metered) {
+        // The rollback: the tier id, reserved exactly as before.
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        void reservation
+      }
 
-      await markProviderCallStart(job.id, "anthropic-sync")
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
 
-      const analysis: Analysis = { req, jobId: job.id, userId, imageUrl, targetPickers, model, reasoningEffort, body: parsed.data }
+      const analysis: Analysis = {
+        req, jobId: job.id, userId, imageUrl, targetPickers, model, reasoningEffort, body: parsed.data,
+        ...(reserve.metered ? { metered: { reserve, spend: new LlmSpend() } } : {}),
+      }
       if (wantsEventStream(req)) return streamAnalysis(reply, analysis)
 
       try {

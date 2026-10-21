@@ -17,7 +17,8 @@
     "keyframes"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 2031,
+  "estimatedCredits": 2052,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "text-prompt",
     "llm-chat",

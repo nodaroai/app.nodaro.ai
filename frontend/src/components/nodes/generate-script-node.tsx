@@ -18,10 +18,9 @@ const ExpandStoryboardDialog = lazy(() => import("@/components/editor/expand-sto
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useLlmNodePrice } from "@/hooks/use-llm-price"
 import { creditUnits } from "@/lib/credit-units"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
@@ -35,7 +34,8 @@ const ACCEPTS_DURATION = acceptsOn(GENERATE_SCRIPT_FIELD_HANDLES.targetLength)
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as GenerateScriptData
-  const credits = useModelCredits(buildLlmCreditIdentifier("generate-script", nodeData.llmModel || LLM_FEATURE_DEFAULTS["generate-script"], nodeData.reasoningEffort, nodeData.advancedMode === true), 10)
+  // Priced as the run is: a legacy script provider resolves to its model (`llmNodePriceIds`).
+  const { credits, estimate: creditsEstimate } = useLlmNodePrice({ type: "generate-script", data: nodeData }, 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const generateSceneImage = useWorkflowStore((s) => s.generateSceneImage)
@@ -70,12 +70,12 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<BookOpen className="h-4 w-4" />}
       category="script"
-      credits={credits}
+      credits={credits} creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
       }
       handles={[
         { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

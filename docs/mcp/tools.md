@@ -667,8 +667,10 @@ Writing the review (the Edit Plan's edits) is not part of this tool.
 
 AI assistance for writing prompts for generation nodes. All three delegate to
 `POST /v1/prompt-helper/wizard` (the same endpoint as the SDK
-`client.promptHelper` and the CLI `nodaro prompt` commands) and reserve credits
-per call.
+`client.promptHelper` and the CLI `nodaro prompt` commands). Each call is
+charged for the tokens it used at the model's rate — ~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on the
+default Gemini 3.6 Flash ([LLM model rates](../pricing/llm-models.md)); a hold
+is reserved first and the call is settled on what it used.
 
 **Scope (all three):** `workflows:execute`
 
@@ -685,7 +687,7 @@ Turns a rough idea into guided questions with options for a target node type
 | `nodeType` | string | Required. Target node type. |
 | `prompt` | string (max 5000) | Optional. The rough idea. Omit to build from scratch. |
 | `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional. |
-| `advanced_mode` / `temperature` / `max_tokens` | — | Optional. Gemini and Claude models — runs on the provider's own API so the sampling levers and the full reasoning range actually apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns `400 advanced_mode_unsupported`. |
+| `advanced_mode` / `temperature` / `max_tokens` | — | Optional. Gemini and Claude models — runs on the provider's own API so the sampling levers and the full reasoning range actually apply. Charged per token at that lane's rate ([LLM model rates](../pricing/llm-models.md)); any other model returns `400 advanced_mode_unsupported`. |
 
 **Response:** `{ jobId, questions }` — each question is
 `{ category, label, options[], selected, allowCustom, multi? }`.
@@ -702,7 +704,7 @@ Builds a single optimized prompt from `analyze_prompt` selections.
 | `selections` | array | Required. One `{ category, value, isCustom }` per answered question. |
 | `originalPrompt` | string (max 5000) | Optional. Woven into the result. |
 | `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional. |
-| `advanced_mode` / `temperature` / `max_tokens` | — | Optional. Gemini and Claude models — runs on the provider's own API so the sampling levers and the full reasoning range actually apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns `400 advanced_mode_unsupported`. |
+| `advanced_mode` / `temperature` / `max_tokens` | — | Optional. Gemini and Claude models — runs on the provider's own API so the sampling levers and the full reasoning range actually apply. Charged per token at that lane's rate ([LLM model rates](../pricing/llm-models.md)); any other model returns `400 advanced_mode_unsupported`. |
 
 **Response:** `{ jobId, prompt, recommendedModel? }`.
 
@@ -718,7 +720,7 @@ prompt with no questions round-trip.
 | `nodeType` | string | Required. |
 | `prompt` | string (max 5000) | Optional. The rough idea to improve. |
 | `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional. |
-| `advanced_mode` / `temperature` / `max_tokens` | — | Optional. Gemini and Claude models — runs on the provider's own API so the sampling levers and the full reasoning range actually apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns `400 advanced_mode_unsupported`. |
+| `advanced_mode` / `temperature` / `max_tokens` | — | Optional. Gemini and Claude models — runs on the provider's own API so the sampling levers and the full reasoning range actually apply. Charged per token at that lane's rate ([LLM model rates](../pricing/llm-models.md)); any other model returns `400 advanced_mode_unsupported`. |
 
 **Response:** `{ jobId, prompt, recommendedModel? }`.
 
@@ -738,7 +740,7 @@ prompt with no questions round-trip.
 | `image_collage` | Composite 2–30 images into one 2K/4K image with a smart (justified) or grid layout — no image is ever cropped (smart floats the output height; grid letterboxes). Accepts `images[]` (`url` or `asset_id`, each with an optional `size` hint: 0 auto / 1 big / 2 medium / 3 small — relative sizing for the smart layout), `layout`, `resolution` (default `4K`), `aspect_ratio` (any `W:H`, default `4:3`), `gap`, `background_color`. For storyboards it also accepts a per-image `label` (caption shown after the number, ≤ 80 chars) top-level `numbered` (stamp 1-based sequence numbers at each image's corner in `images` order) and `badge_position` (`top-left`, the default, or `top-right`). |
 | `image_overlay` | Place 1–12 layers on a base image, pixel-exactly — local, deterministic, no AI. Base as `image_url` or `image_asset_id`; each `layers[]` item has a `kind` (`image` — `url` or `asset_id`; `text` — a `text` object: content, `fontId`, `fontWeight`, `fontSize` as % of base height, colour, align, outline, background box; `qr` — a `qr` object; `shape` — a `shape` object: rect / rounded / pill / circle / ribbon / triangle / diamond / hexagon / star / burst / arrow) plus `anchor` (9 positions, default `center`), `x` / `y` (offset in % of the base width / height; negative on a right / bottom anchor moves inward), `width` (% of base width, default 25; height follows the layer's aspect unless `height` is set), `opacity`, `rotation` (degrees), `blend` (`over` / `multiply` / `screen`), `fit`, `shadow`, `rounded_corners`, `z_index` (stacking order; default = array order). Optional `canvas` (`width`, `height`, `background_color`) + `base_fit` change the output size; `variants` renders extra platform sizes (any of the 12 platform ids, all at once if you like; 2.2 credits<!-- credits-rate: image-overlay@0.2 --> each on top of the 11-credit<!-- credits-rate: image-overlay --> base, priced as one charge) and the job's output carries them as `variants[]` (`{ id, label, width, height, url }`); `qr_text` fills every QR layer with `qr.fromInput: true` (the node's QR link handle — a List column gives one code per row); `mask_mode` (`around` default / `layers` / `outside` / `none`) + `mask_spread` shape the mask the job also emits as `maskUrl` (white = may change — the ring an AI finish repaints); the output also carries `width` / `height`; `output_format` `png` (default) / `jpg` / `webp`. SVG logos are rasterised crisp at the target size. |
 | `suggest_overlay_placement` | Ask a vision model WHERE one overlay layer should sit on a base image (`image_url` or `image_asset_id`): it reads the picture and keeps the element off the faces, the subject and the busiest texture. Answers `anchor`, `x` / `y` and `width` in `image_overlay`'s own percent units plus a one-sentence `reason` — apply it by passing those values on a layer to `image_overlay`; nothing is composited here. Optional `intent` (what the element is, in words), `layer_aspect` (its width / height, 1 = square) and `safe_area` (`x`, `y`, `w`, `h` as fractions of the canvas — a platform preset's always-visible region, which the placement is kept inside). Billed as one image-to-text call. |
-| `image_to_text` | Extract a text description (caption/transcription) from an image using a vision model. Accepts `llmModel`, `reasoning_effort`, and the Advanced-mode trio (`advanced_mode` / `temperature` / `max_tokens`) — Advanced mode (Gemini and Claude models) bills one credit rung up, a premium model moving to premium-direct. |
+| `image_to_text` | Extract a text description (caption/transcription) from an image using a vision model. Accepts `llmModel`, `reasoning_effort`, and the Advanced-mode trio (`advanced_mode` / `temperature` / `max_tokens`) — the call is charged per token at the model's rate (~6 credits<!-- credits: image-to-text:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5; [LLM model rates](../pricing/llm-models.md)), and Advanced mode (Gemini and Claude models) at the provider's own API rate. |
 | `generate_script` | Generate a short video script from a prompt (LLM-backed; outputs scene-by-scene copy). Optional `scene_count` (1–20, default 5), `tone` (≤ 200 characters), `target_duration` (5–600 s, default 60), `style_guide` (how the script should read and look: voice, visual style, pacing — sent to the model with the prompt) and `model` (`gemini` default, `claude`, `gpt`). |
 | `save_image_defaults` | Persist preferred `model`, `aspect_ratio`, and `quality` values so they become the defaults for subsequent `generate_image` calls in the same session. |
 
@@ -817,7 +819,7 @@ prompt with no questions round-trip.
 | `revoice_studio_clip` | (Cloud only) Replace the voices inside a scene's current motion — the dialogue is re-performed and mixed back over the same picture. Takes a `plan` naming which speaker gets which voice (see the operating skill). Spends credits and returns a job id; the new mix reaches the scene only on your next `get_studio_production` (`get_job` / `wait_for_job` land nothing). Needs both `workflows:write` and `workflows:execute`. |
 | `score_studio_production` | (Cloud only) Write the film a soundtrack from a `prompt` describing the music — one track for the whole production, not per scene. Spends credits and returns a job id; the track reaches the production only on your next `get_studio_production` (`get_job` / `wait_for_job` land nothing). Needs both `workflows:write` and `workflows:execute`. |
 | `build_ugc_creator` | (Cloud only) Prepares the creator for a UGC-style video — newly sampled, a saved Character, or the caller's own photo — and returns the arguments for the next generation calls: for a sampled creator, one image per candidate, for the user to pick one. Ungated and free; using a saved Character needs `assets:read`. Used by the ugc-website recipe (get_recipe). |
-| `build_ugc_clips` | (Cloud only) Checks a UGC video script — every problem at once, each with a fix — and returns one `generate_video` call per clip, the call that joins them, and a credit quote for the rest of the video. Scripts can be written in English or Hebrew. A Hebrew script is answered in two steps: the first call returns the speech to record and how to split it, with the quote; call again with the `segments` from `ugc_split_speech` to get one `generate_video` call per segment. Ungated, free. Used by the ugc-website recipe (get_recipe). |
+| `build_ugc_clips` | (Cloud only) Checks a UGC video script — every problem at once, each with a fix — and returns one `generate_video` call per clip, the call that joins them, and a credit quote for the rest of the video. Scripts can be written in English or Hebrew. A Hebrew script is answered in two steps: the first call returns the speech to record and how to split it, with the quote; call again with the `segments` from `ugc_split_speech` to get one `generate_video` call per segment. A quote line with `estimate: true` (a screenshot reading's Image to Text call) is a metered LLM call's estimate — charged its actual usage — and the quote then carries `totalIsEstimate: true` (show it `~N`); a model with no price is refused `llm_model_unpriced`. Ungated, free. Used by the ugc-website recipe (get_recipe). |
 | `build_ugc_cards` | (Cloud only) Times the screenshot cards and captions from word timings (`forced_alignment` or `transcribe`) and returns the `overlay_images` layers and the `add_captions` segments. Optional `caption_style` sets how the captions after the opening line look: `body-captions` (word by word, the default), `karaoke`, `clean-subtitles`, or `none`. Ungated, free. Used by the ugc-website recipe (get_recipe). |
 | `ugc_split_speech` | (Cloud only) Cuts a UGC video's recorded speech into segments at its own pauses, each saved as an audio file with a short silence either side. Takes the speech, its word timings and the script; returns a job whose output lists the segments for `build_ugc_clips`. Charges a flat fee per call. |
 | `ugc_finish_clips` | (Cloud only) Checks each rendered clip against the audio it was given, puts that original audio on each clip, trims the dead air between words and returns the finished clips in order. On the Hebrew (segmented) lane it also gives each clip the sound of its setting: reverb matched to the setting, levelled to -16 LUFS, with room tone underneath (outdoor, car and hall settings get the reverb and level but no room tone); if that step fails the clips are returned dry, with a warning. If a clip does not match its audio it names the clips to render again and changes nothing. Charges a flat fee per call. |
@@ -1207,7 +1209,7 @@ Supports optimistic concurrency via `expected_updated_at`.
 **Scope:** `assets:write`
 
 Approves a completed `generate_character` job as the character's canonical
-portrait. Fires an LLM caption inline to populate `canonical_description`.
+portrait. Fires an LLM caption inline to populate `canonical_description`. The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens it used (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](../pricing/llm-models.md)). The approval is never refused for credits: with too little balance for the caption, the image is still approved, the caption is skipped, and the recaption tool writes it later.
 
 **Input:** `{ character_id: uuid, candidate_job_id: uuid }`
 
@@ -1218,7 +1220,7 @@ portrait. Fires an LLM caption inline to populate `canonical_description`.
 **Scope:** `assets:write`
 
 Re-runs the LLM caption against the character's current portrait and
-persists the new `canonical_description`.
+persists the new `canonical_description`. Charged like the approval's caption: per token at Claude Sonnet 4.6's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical).
 
 **Input:** `{ id: uuid }`
 
@@ -1329,7 +1331,7 @@ Update identity fields (`name`, `description`, `category`, `style`,
 **Scope:** `assets:write`
 
 Approve a completed `generate_location` candidate as the location's main
-image. Fires the LLM caption inline.
+image. Fires the LLM caption inline. The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens it used (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](../pricing/llm-models.md)). The approval is never refused for credits: with too little balance for the caption, the image is still approved, the caption is skipped, and the recaption tool writes it later.
 
 **Input:** `{ location_id: uuid, candidate_job_id: uuid }`
 
@@ -1339,7 +1341,7 @@ image. Fires the LLM caption inline.
 
 **Scope:** `assets:write`
 
-Re-run the LLM caption against the current main image.
+Re-run the LLM caption against the current main image. Charged like the approval's caption: per token at Claude Sonnet 4.6's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical).
 
 **Input:** `{ id: uuid }`
 
@@ -1410,7 +1412,7 @@ Generate a main image or variant asset for an object. Parallel to `generate_char
 **Scope:** `assets:write`
 
 Approve a completed `generate_object` candidate as the object's main
-image. Fires the LLM caption inline.
+image. Fires the LLM caption inline. The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens it used (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](../pricing/llm-models.md)). The approval is never refused for credits: with too little balance for the caption, the image is still approved, the caption is skipped, and the recaption tool writes it later.
 
 **Input:** `{ object_id: uuid, candidate_job_id: uuid }` + optional `expected_updated_at`
 
@@ -1420,7 +1422,7 @@ image. Fires the LLM caption inline.
 
 **Scope:** `assets:write`
 
-Re-run the LLM caption against the current main image.
+Re-run the LLM caption against the current main image. Charged like the approval's caption: per token at Claude Sonnet 4.6's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical).
 
 **Input:** `{ id: uuid }`
 
@@ -1491,7 +1493,7 @@ objects.
 **Scope:** `assets:write`
 
 Approve a completed `generate_creature` candidate as the creature's main
-image. Fires the LLM caption inline.
+image. Fires the LLM caption inline. The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens it used (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](../pricing/llm-models.md)). The approval is never refused for credits: with too little balance for the caption, the image is still approved, the caption is skipped, and the recaption tool writes it later.
 
 **Input:** `{ creature_id: uuid, candidate_job_id: uuid }` + optional `expected_updated_at`
 
@@ -1501,7 +1503,7 @@ image. Fires the LLM caption inline.
 
 **Scope:** `assets:write`
 
-Re-run the LLM caption against the current main image.
+Re-run the LLM caption against the current main image. Charged like the approval's caption: per token at Claude Sonnet 4.6's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical).
 
 **Input:** `{ creature_id: uuid }`
 
@@ -1837,6 +1839,11 @@ where set). They appear only when they differ from "from", and are absent on an
 app published before the range existed until its next publish. `list_components`
 rows carry the same fields.
 
+`estimated_credits_is_estimate: true` marks a listed price that holds a metered
+LLM call's estimate (its model's typical call, charged its actual usage per
+token): show it `~N`. It is absent for a fixed price. `list_components` rows
+carry it too.
+
 ---
 
 ### `get_app_inputs`
@@ -2013,7 +2020,21 @@ carries `doctrineCovered`: `true` only when a sourced per-family prompt
 doctrine exists for it. Gate "vendor doctrine · real rewrite" badges on
 that flag and show a generic label otherwise — never overclaim.
 
-**Input:** `kind` (`image`/`video`/`audio`), `mode`, `family`, `featuredOnly`
+**Input:** `kind` (`image`/`video`/`audio`), `mode`, `family`, `featuredOnly`,
+`priceIds`
+
+**Price lookup (`priceIds`, Cloud only):** pass up to 50 price ids instead of
+listing models and the tool answers `{ "prices": { "<id>": … } }` — the figures
+`POST /v1/credits/model-costs` answers. An LLM call on any model is quoted by its
+price key `<feature>:<model id>` (`:direct` when it runs on the vendor's own
+API — Advanced mode), e.g. `llm-chat:claude-sonnet-5.5` or
+`reduce:pick-best-llm:claude-opus-5.5`: `{ "credits": N, "estimate": true }`, the
+feature's typical call on that model (charged its actual usage — show it `~N`).
+A model with no price yet answers `{ "error": "llm_model_unpriced" }` (a run on it
+is refused); any other id its charged price `{ "credits": N }`, or
+`{ "error": "not_priced" }` — which is also what an LLM key answers where LLM
+calls are priced by tier rather than per model. An edition without credits
+refuses the lookup (`no_credit_system`).
 
 ---
 
@@ -2379,7 +2400,7 @@ Fold a list of candidates into one result — the engine behind the
 canvas **Choose Best** node. Six strategies: `pick-best-llm` (an LLM
 judge picks the best candidate against your `criteria` — works on texts
 or images via `inputKind: "text" | "image-url"`, with an optional
-`llmModel` judge override; economy/standard/premium credit tiers apply),
+`llmModel` judge override; the judge's call is charged per token at that model's rate, ~6 credits<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5),
 `concat`, `first-non-empty`, `count`, `vote`, and `merge-json`. Pass the
 candidates as `inputs` (up to 1000 strings — text fragments or URLs),
 the strategy as `strategyId`, and its config as `strategyConfig`. The

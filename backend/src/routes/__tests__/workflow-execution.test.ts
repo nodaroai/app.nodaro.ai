@@ -96,7 +96,13 @@ vi.mock("@/lib/execution-events.js", () => ({
 const mockRefundCredits = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockInvalidateBalanceCache = vi.hoisted(() => vi.fn())
 
+// The run pre-check (R51; the estimator is unit-tested in workflow-estimate-metered.test.ts):
+// a node naming "unpriced-model" is the call a run would be refused at.
 vi.mock("@/ee/billing/credits.js", () => ({
+  unpricedMeteredLlmOfRun: (nodes: Array<{ id?: string; data?: { llmModel?: unknown } }>, _edges: unknown, runNodeIds?: ReadonlySet<string>) =>
+    nodes.some((n) => (!runNodeIds || runNodeIds.has(n.id ?? "")) && n.data?.llmModel === "unpriced-model")
+      ? Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+      : null,
   CreditsService: { refundCredits: mockRefundCredits },
 }))
 
@@ -112,7 +118,25 @@ vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: 
 const mockCancelOwnedJob = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ kind: "cancelled", analysisJobId: null }),
 )
-vi.mock("@/lib/cancel-job.js", () => ({ cancelOwnedJob: mockCancelOwnedJob }))
+// The cancel refund itself is the REAL shared one (`refundReservedHolds`): the
+// route's job-level and bulk cancels refund through it, so its D10 rule (a
+// billed metered hold is committed, never refunded) applies here too.
+vi.mock("@/lib/cancel-job.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/cancel-job.js")>()),
+  cancelOwnedJob: mockCancelOwnedJob,
+}))
+// R45 (D14): a cancel with nothing in flight settles a metered hold at the
+// ACTUAL the row recorded billed (lib/llm-row-spend.ts → lib/llm-billing.ts);
+// one whose call has started keeps it for the worker / sweep. Default: the
+// row recorded nothing billed.
+const mockRowSpend = vi.hoisted(() => vi.fn(async (_job: string, _charge: string) => ({ spend: { billedAnything: false }, modelId: "m", fromRow: false, readFailed: false })))
+vi.mock("@/lib/llm-row-spend.js", () => ({ meteredSpendFromRow: mockRowSpend }))
+const mockSettleActual = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => ({ outcome: "charged", charged: 9, shortfall: 0 }) as { outcome: string; charged?: number }))
+vi.mock("@/lib/llm-billing.js", () => ({ settleLlmUsageLog: mockSettleActual }))
+/** R38: the row's provider_call_started_at, as every maybeSingle() read of a jobs row answers it. */
+const callStarted = vi.hoisted(() => ({ at: null as string | null }))
+const mockAppReport = vi.hoisted(() => vi.fn(async (_r: unknown) => true))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: mockAppReport }))
 // The live use-case wrappers an execution's node states name (lib/use-case/execution-wrappers.ts).
 const mockLiveWrappers = vi.hoisted(() => vi.fn(async (_exec: string, _owner: string): Promise<string[]> => []))
 vi.mock("@/lib/use-case/execution-wrappers.js", () => ({ liveUseCaseWrappersOf: mockLiveWrappers }))
@@ -136,6 +160,7 @@ const TEST_JOB_ID = "00000000-0000-4000-8000-000000000070"
 let app: FastifyInstance
 
 beforeEach(async () => {
+  callStarted.at = null
   previewFlag.on = true
   vi.clearAllMocks()
 
@@ -603,6 +628,44 @@ describe("POST /v1/workflows/:id/run", () => {
       { id: "e2", source: "cut", target: "cap" },
     ],
   ]
+
+  // -------------------------------------------------------------------------
+  // R51: a run meeting an unpriced metered LLM model is refused up front —
+  // the node's own reservation would refuse it only after the fixed nodes
+  // upstream had run and charged.
+  // -------------------------------------------------------------------------
+
+  const unpricedGraph = (): [Array<{ id: string; type: string; data?: Record<string, unknown> }>, Array<{ id: string; source: string; target: string }>] => [
+    [
+      { id: "gen", type: "generate-image", data: { prompt: "a cat" } },
+      { id: "chat", type: "llm-chat", data: { llmModel: "unpriced-model" } },
+    ],
+    [{ id: "e1", source: "gen", target: "chat" }],
+  ]
+
+  it("R51: refuses a run meeting an unpriced metered model — 400 llm_model_unpriced, nothing enqueued", async () => {
+    mockRunWithGraph(...unpricedGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "api_token" },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "unpriced-model" })
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("R51: a partial run that does not execute the unpriced call starts", async () => {
+    mockRunWithGraph(...unpricedGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "api_token" },
+      payload: { nodeIds: ["gen"] },
+    })
+    expect(res.statusCode).toBe(202)
+  })
 
   it("refuses an API-token run of a Preview render — 400 with the stable code, nothing enqueued", async () => {
     mockRunWithGraph(...previewGraph())
@@ -1194,6 +1257,57 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(mockLiveWrappers).toHaveBeenCalledWith(TEST_EXEC_ID, TEST_USER_ID)
   })
 
+  /**
+   * D10 on the canvas Stop (the execution bulk cancel): its child jobs are
+   * refunded through the shared `refundReservedHolds`, so a billed metered
+   * hold among them is settled by the sweep's rule, never refunded; one that
+   * cannot be committed is kept and reported; the tier holds beside it are
+   * refunded as before.
+   */
+  it("bulk cancel (canvas Stop): a billed metered child hold is never refunded; the tier child is", async () => {
+    const METERED_JOB = "00000000-0000-4000-8000-000000000081"
+    const TIER_JOB = "00000000-0000-4000-8000-000000000082"
+    const holds = [
+      { id: "metered-log", job_id: METERED_JOB, action: "generate-script:claude-sonnet-5.5" },
+      { id: "tier-log", job_id: TIER_JOB, action: "nano-banana" },
+    ]
+    const bulkIds: unknown[] = []
+    let jobsReads = 0
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "workflow_executions") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ single: async () => ({ data: { id: TEST_EXEC_ID, status: "running" }, error: null }) }) }) }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
+        }
+      }
+      if (table === "usage_logs") {
+        return { select: () => ({ in: () => ({ eq: async () => ({ data: holds, error: null }) }), eq: () => ({ eq: async () => ({ data: holds, error: null }) }) }) }
+      }
+      // jobs: the execution's live jobs, the batch ledger read, a counters read, the bulk CAS.
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ in: async () => { jobsReads++; return { data: [{ id: METERED_JOB, provider: "kie" }, { id: TIER_JOB, provider: "kie" }], error: null } } }),
+            maybeSingle: async () => ({ data: { reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: callStarted.at }, error: null }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: () => ({ in: (_c: string, ids: unknown[]) => { bulkIds.push(...ids); return { in: async () => ({ data: null, error: null }) } } }),
+      }
+    }) as never)
+    // The metered child's call has started: its hold is kept for its own settle at the actual.
+    callStarted.at = "2026-10-20T10:00:00Z"
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`)
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(mockRefundCredits).toHaveBeenCalledWith("tier-log"))
+    expect(jobsReads).toBe(1)
+    expect(bulkIds).toEqual([METERED_JOB, TIER_JOB])
+    expect(mockSettleActual).not.toHaveBeenCalled() // never committed (whole or otherwise) at the cancel
+    expect(mockRefundCredits).not.toHaveBeenCalledWith("metered-log")
+    expect(mockAppReport).toHaveBeenCalledWith(expect.objectContaining({ kind: "metered-hold-unsettled-on-cancel", jobId: METERED_JOB }))
+  })
+
   it("returns success for pending execution (immediate cancel)", async () => {
     const mockFrom = vi.mocked(supabase.from)
     let callNum = 0
@@ -1565,6 +1679,76 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     // financial leak the route previously suffered.
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
     expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
+  })
+
+  /**
+   * D10 / R22 on the canvas Stop path: a standalone job whose hold is a
+   * metered LLM charge id (an answered Generate Script waiting in the sweep's
+   * retry window) is committed by the sweep's rule — never refunded — and one
+   * that cannot be committed is left reserved and REPORTED.
+   */
+  function standaloneMeteredCancel(holds: Array<{ id: string; job_id: string; action: string }>) {
+    const jobsUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [{ id: TEST_JOB_ID }], error: null }) }),
+        }),
+      }),
+    })
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "workflow_executions") {
+        return { select: () => ({ eq: () => ({ eq: () => ({ single: async () => ({ data: null, error: { code: "PGRST116" } }) }) }) }) }
+      }
+      if (table === "usage_logs") {
+        // refundReservedHolds: select().in().eq(); the evidence read: select().eq().eq()
+        return {
+          select: () => ({
+            in: () => ({ eq: async () => ({ data: holds, error: null }) }),
+            eq: () => ({ eq: async () => ({ data: holds, error: null }) }),
+          }),
+        }
+      }
+      // jobs: the standalone lookup, the batch ledger read, the counters read, the CAS.
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ single: async () => ({ data: { id: TEST_JOB_ID, status: "pending" }, error: null }) }),
+            maybeSingle: async () => ({ data: { reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: callStarted.at }, error: null }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: jobsUpdate,
+      }
+    }) as never)
+    return { jobsUpdate }
+  }
+
+  it("R45: a standalone job with nothing in flight whose earlier attempt billed is charged at the ACTUAL (never refunded, never the whole hold)", async () => {
+    standaloneMeteredCancel([{ id: "metered-log", job_id: TEST_JOB_ID, action: "generate-script:claude-sonnet-5.5" }])
+    mockRowSpend.mockResolvedValueOnce({ spend: { billedAnything: true }, modelId: "m", fromRow: true, readFailed: false })
+    const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
+    expect(res.statusCode).toBe(200)
+    expect(mockSettleActual).toHaveBeenCalledWith("metered-log", TEST_JOB_ID, "generate-script:claude-sonnet-5.5", expect.objectContaining({ billedAnything: true }))
+    // The settled hold is committed (no longer reserved in the database); this mock still lists it,
+    // so the refund call below is the shared refund's no-op on a committed row — never a free call.
+    expect(mockAppReport).not.toHaveBeenCalled()
+  })
+
+  it("D10: a metered hold whose call has started is left reserved and reported (the row is already cancelled; its own settle charges the actual)", async () => {
+    standaloneMeteredCancel([{ id: "metered-log", job_id: TEST_JOB_ID, action: "generate-script:claude-sonnet-5.5" }])
+    callStarted.at = "2026-10-20T10:00:00Z"
+    const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
+    expect(res.statusCode).toBe(200)
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+    expect(mockAppReport).toHaveBeenCalledWith(expect.objectContaining({ kind: "metered-hold-unsettled-on-cancel", jobId: TEST_JOB_ID }))
+  })
+
+  it("a tier hold on a cancelled standalone job is refunded exactly as before (no metered check)", async () => {
+    standaloneMeteredCancel([{ id: "tier-log", job_id: TEST_JOB_ID, action: "generate-script:economy" }])
+    const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
+    expect(res.statusCode).toBe(200)
+    expect(mockRowSpend).not.toHaveBeenCalled()
+    expect(mockRefundCredits).toHaveBeenCalledWith("tier-log")
   })
 
   it("returns 404 when neither execution nor job found", async () => {

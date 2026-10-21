@@ -109,7 +109,9 @@ const CHECK_ONLY_ROUTES = ["nodaro-exclusive.ts", "save-to-storage.ts", "collect
  * `meter-sync-llm.ts` carries a comment pointing new wrappers back at this
  * list.
  */
-const RESERVE_MARKERS = ["reserveCreditsForJob", "reserveCredits(", "meterSyncLlm("]
+// meterOptionalSyncLlm( (lib/meter-sync-llm.ts) runs the route's guard inline and
+// reserves through meterSyncLlmMetered — an optional metered step (an approval's caption).
+const RESERVE_MARKERS = ["reserveCreditsForJob", "reserveCredits(", "meterSyncLlm(", "reserveLlmCall(", "meterSyncLlmMetered(", "meterOptionalSyncLlm("]
 
 /**
  * Every route file this guard reads, labelled: a basename in the two route
@@ -156,6 +158,14 @@ describe("check-only creditGuard routes (P14 scope rule)", () => {
       expect(optOuts, `${file}: every creditGuard install must carry checkOnly: true — see this test's header`).toBe(installs)
     }
     expect(seen).toBe(CHECK_ONLY_ROUTES.length)
+  })
+
+  it("RESERVE_MARKERS knows reserveLlmCall( and meterSyncLlmMetered(", () => {
+    // The metered LLM wrappers reserve in-request (lib/llm-billing.ts); a route
+    // that reserves only through them must never be classified check-only.
+    expect(RESERVE_MARKERS).toEqual(expect.arrayContaining(["reserveLlmCall(", "meterSyncLlmMetered("]))
+    // "meterSyncLlm(" does not match "meterSyncLlmMetered(" — each needs its own marker.
+    expect("meterSyncLlmMetered(".includes("meterSyncLlm(")).toBe(false)
   })
 })
 

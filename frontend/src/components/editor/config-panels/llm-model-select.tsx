@@ -20,6 +20,7 @@ import {
 } from "@nodaro/shared/llm-models"
 import { modelMatchesQuery } from "@/lib/model-search"
 import { ModelDescriptionHint } from "./model-description-hint"
+import { llmPickerPriceLabel, useLlmModelPrices } from "@/hooks/use-llm-price"
 
 export function TIER_LABELS(): Record<LlmTier, string> {
   return {
@@ -53,6 +54,13 @@ interface LlmModelSelectProps {
   filter?: (model: LlmModelDef) => boolean
   /** Shown at the end of the label row, e.g. the node's "Compare models" docs link. */
   labelAction?: ReactNode
+  /** The metered feature the node's run is charged under, when it differs
+   *  from `feature` (a Choose Best judge: `reduce:pick-best-llm`). */
+  priceFeature?: string
+  /** The node's effort and Advanced mode: each model's price is quoted at
+   *  them (where that model accepts them), as the run would be. */
+  reasoningEffort?: string
+  advancedMode?: boolean
 }
 
 /**
@@ -63,7 +71,7 @@ interface LlmModelSelectProps {
  * 17 models. Props are unchanged from the old flat Select on purpose: the six
  * consumer panels didn't have to move.
  */
-export function LlmModelSelect({ feature, value, onChange, filter, labelAction }: LlmModelSelectProps) {
+export function LlmModelSelect({ feature, value, onChange, filter, labelAction, priceFeature, reasoningEffort, advancedMode }: LlmModelSelectProps) {
   const t = useT()
   const localizeDesc = useLocalizeModelDescription()
   const [open, setOpen] = useState(false)
@@ -73,6 +81,12 @@ export function LlmModelSelect({ feature, value, onChange, filter, labelAction }
   const currentValue = value || defaultModel
   const models = filter ? LLM_MODELS.filter(filter) : LLM_MODELS
   const current = models.find((m) => m.id === currentValue) ?? LLM_MODELS.find((m) => m.id === currentValue)
+  // Each model's estimated price beside its tier badge — only while the server
+  // prices them as estimates (metered pricing on, D7); none under rollback.
+  const modelIds = useMemo(() => models.map((m) => m.id), [models])
+  const prices = useLlmModelPrices(priceFeature ?? feature, modelIds, reasoningEffort, advancedMode)
+  const unitShort = t("credits.unitShort")
+  const priceOf = (id: string) => llmPickerPriceLabel(prices.get(id), unitShort)
 
   const groups = useMemo(() => {
     const q = query.trim()
@@ -107,6 +121,9 @@ export function LlmModelSelect({ feature, value, onChange, filter, labelAction }
                 <span className={cn("shrink-0 text-[10px]", TIER_BADGE_CLASSES[current.tier])}>
                   {TIER_LABELS()[current.tier]}
                 </span>
+              )}
+              {current && priceOf(current.id) && (
+                <span className="shrink-0 text-[10px] text-muted-foreground" data-testid="llm-model-price">{priceOf(current.id)}</span>
               )}
             </span>
             <ChevronsUpDown className="ms-1 size-3.5 shrink-0 opacity-50" />
@@ -144,6 +161,11 @@ export function LlmModelSelect({ feature, value, onChange, filter, labelAction }
                           <span className={cn("ms-auto shrink-0 text-[10px]", TIER_BADGE_CLASSES[model.tier])}>
                             {TIER_LABELS()[model.tier]}
                           </span>
+                          {priceOf(model.id) && (
+                            <span className="shrink-0 text-[10px] text-muted-foreground" data-testid={`llm-model-price-${model.id}`}>
+                              {priceOf(model.id)}
+                            </span>
+                          )}
                         </span>
                         <span className="ps-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
                           {localizeDesc(model.desc)}

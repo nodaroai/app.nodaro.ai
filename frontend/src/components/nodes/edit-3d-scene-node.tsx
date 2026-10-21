@@ -7,23 +7,22 @@ import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useLlmNodePrice } from "@/hooks/use-llm-price"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { planObjects, planRevisionId } from "@/lib/scene3d/plan-view"
 import type { Edit3DSceneData } from "@/types/nodes"
 
 function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as Edit3DSceneData
-  const credits = useModelCredits(
-    buildLlmCreditIdentifier(
-      "3d-scene",
-      nodeData.llmModel || LLM_FEATURE_DEFAULTS["3d-scene"],
-      nodeData.reasoningEffort,
-    ),
-    30,
-  )
+  // An instruction edit is a metered 3d-scene call (`~N`); a deterministic edit (`operations`)
+  // reaches no model and is priced at its own row (`3d-scene-ops`), as the server prices it.
+  const llm = useLlmNodePrice({ type: "edit-3d-scene", data: nodeData }, 30)
+  const opsCredits = useModelCredits("3d-scene-ops", 0)
+  const deterministic = Array.isArray(nodeData.operations)
+  const credits = deterministic ? opsCredits : llm.credits
+  const creditsEstimate = deterministic ? false : llm.estimate
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
@@ -45,7 +44,7 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<PencilRuler className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={credits} creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={isRunning}
       hideHeader
@@ -55,7 +54,7 @@ function Edit3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         { id: "composition", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
       topToolbarContent={
-        <NodeQuickStrip nodeId={id} credits={credits} isRunning={isRunning} />
+        <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={isRunning} />
       }
     >
       <div className="flex flex-col gap-1">

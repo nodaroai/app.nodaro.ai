@@ -1,7 +1,7 @@
 ---
 node_type: component
-generated_at: 2026-10-14T00:02:40.802Z
-generated_from: b83a9467d
+generated_at: 2026-10-20T21:12:35.862Z
+generated_from: 9ae3392be
 ---
 
 # Component
@@ -27,6 +27,7 @@ generated_from: b83a9467d
 
 **Optional data fields:**
 - `outputResults?: Record<string, string>`
+- `estimatedCreditsIsEstimate?: boolean`
 - `errorMessage?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`

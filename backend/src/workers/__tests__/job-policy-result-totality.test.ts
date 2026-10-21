@@ -62,7 +62,8 @@ const COMPLETED_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ["lib/reconcile/replicate.ts", "the TRAINING branch (:137) completes a LoRA model; the media branch goes through finalizeJobWithMedia"],
   ["routes/suno.ts", "the direct-KIE voice-create lane settles in-route (no worker)"],
   ["ee/copilot/reconcile.ts", "copilot turns own their own lifecycle"],
-  ["lib/meter-sync-llm.ts", "the LLM meter's own commit closure — a text lane"],
+  ["lib/sync-llm-meter.ts", "the LLM meter's own commit closure — a text lane"],
+  ["lib/metered-sync-completion.ts", "the terminal write of a settled SYNCHRONOUS metered LLM job (meterSyncLlmMetered, finishMeteredSyncLlmJob and the metered text routes; a CAS on the live statuses, R38) — a text lane"],
   ["routes/pipelines.ts", "pipeline bookkeeping rows, not a media completion"],
 ])
 

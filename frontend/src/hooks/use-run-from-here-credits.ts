@@ -22,6 +22,7 @@ import { hashKey, useQueries } from "@tanstack/react-query"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getCachedModelCredits, prefetchModelCreditCosts } from "@/hooks/use-model-credit-cost"
 import { runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
+import type { RunUnpriced } from "@/components/editor/workflow-editor/run-unpriced"
 import { runFromHereExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import {
   ugcRunCredits,
@@ -44,9 +45,20 @@ export interface RunSetPrice {
   /** The figure is marked as an estimate: `unchecked` says why. */
   readonly estimating: boolean
   readonly unchecked?: UgcPriceState
+  /**
+   * The figure holds a metered LLM call's ESTIMATE (charged its actual usage after the run) — the
+   * server's own flag, a UGC part's included: shown `~`, with no "unchecked" note.
+   */
+  readonly approx: boolean
+  /**
+   * A node of the set is a metered LLM call the server refuses to price (`llm_model_unpriced`): the
+   * figure leaves it out and the run would be refused, so every surface says it is unpriced instead
+   * of quoting it — with the server's sentence (`message`) on hover.
+   */
+  readonly unpriced?: RunUnpriced
 }
 
-const NO_PRICE: RunSetPrice = { credits: 0, hold: 0, estimating: false }
+const NO_PRICE: RunSetPrice = { credits: 0, hold: 0, estimating: false, approx: false }
 
 /** The server's answers for a run set's UGC videos. */
 export interface UgcRunAnswers {
@@ -129,7 +141,14 @@ export function useRunSetPrice(
     if (!hasCredits()) return NO_PRICE
     const figure = ugcRunCredits(executable, nodes, edges, getCachedModelCredits, answers.answerOf, answers.ticketAnswerOf)
     const unchecked = runSetPriceState(figure, answers)
-    return { credits: figure.credits, hold: figure.hold, estimating: unchecked !== undefined, ...(unchecked ? { unchecked } : {}) }
+    return {
+      credits: figure.credits,
+      hold: figure.hold,
+      estimating: unchecked !== undefined,
+      approx: figure.approx,
+      ...(unchecked ? { unchecked } : {}),
+      ...(figure.unpriced ? { unpriced: figure.unpriced } : {}),
+    }
     // `pricesLoaded` re-reads the cache once fetched prices land.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executable, nodes, edges, pricesLoaded, answers])

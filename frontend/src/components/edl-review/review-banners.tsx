@@ -138,8 +138,8 @@ export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps
         <Banner
           id="stale-take"
           action={canRun && runs.canUpdatePreview && (
-            <button type="button" className={BANNER_ACTION} disabled={gate.hold !== null} title={runs.previewCredits > 0 ? runPriceTitle(t, runs.previewUnchecked) : undefined} onClick={runs.updatePreview}>
-              {t("renderFinal.updatePreview")}{runPriceSuffix(t, runs.previewCredits, runs.previewUnchecked)}
+            <button type="button" className={BANNER_ACTION} disabled={gate.hold !== null} title={runs.previewUnpriced || runs.previewCredits > 0 ? runPriceTitle(t, runs.previewUnchecked, runs.previewUnpriced) : undefined} onClick={runs.updatePreview}>
+              {t("renderFinal.updatePreview")}{runPriceSuffix(t, runs.previewCredits, runs.previewUnchecked, { approx: runs.previewApprox === true, unpriced: runs.previewUnpriced })}
             </button>
           )}
         >

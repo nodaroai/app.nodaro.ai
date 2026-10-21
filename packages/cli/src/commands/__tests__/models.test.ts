@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { Command } from "commander"
-import { modelsCommand } from "../models.js"
+import { costRows, modelsCommand } from "../models.js"
 import { emit, table } from "../../output.js"
 
 const mocks = { list: vi.fn() }
+const credits = { modelCosts: vi.fn() }
 
 vi.mock("../../client.js", () => ({
-  buildClient: () => ({ models: mocks }),
+  buildClient: () => ({ models: mocks, credits }),
   handleError: (err: unknown) => {
     throw err
   },
@@ -100,5 +101,48 @@ describe("models command", () => {
     const model = (emitted as typeof CATALOG).sections[0]!.families[0]!.models[0]!
     expect(model.maker).toEqual({ id: "alibaba", name: "Alibaba" })
     expect(model.logoUrl).toBe("https://cdn.example.com/brand/makers/alibaba.svg?v=0a1b2c3d4e5f6a7b")
+  })
+})
+
+describe("models cost", () => {
+  beforeEach(() => {
+    credits.modelCosts.mockReset()
+    vi.mocked(emit).mockReset()
+    vi.mocked(table).mockReset()
+  })
+
+  const RESULT = {
+    data: { "nano-banana-pro": 33, "llm-chat:gemini-3.6-flash": 3 },
+    missing: ["mystery-model"],
+    errors: ["llm-chat:unpriced-model"],
+    errorCodes: { "llm-chat:unpriced-model": { code: "llm_model_unpriced", message: "This model has no price yet." } },
+    estimates: ["llm-chat:gemini-3.6-flash"],
+  }
+
+  it("asks the batch endpoint for every id and prints an estimate as ~N", async () => {
+    credits.modelCosts.mockResolvedValueOnce(RESULT)
+    await runCmd("models", "cost", "nano-banana-pro", "llm-chat:gemini-3.6-flash", "mystery-model", "llm-chat:unpriced-model")
+    expect(credits.modelCosts).toHaveBeenCalledWith(["nano-banana-pro", "llm-chat:gemini-3.6-flash", "mystery-model", "llm-chat:unpriced-model"])
+    const [rows, columns] = vi.mocked(table).mock.calls[0]!
+    expect(columns).toEqual(["id", "credits", "note"])
+    expect(rows).toEqual([
+      { id: "nano-banana-pro", credits: "33", note: "" },
+      { id: "llm-chat:gemini-3.6-flash", credits: "~3", note: "estimate: charged per token used" },
+      { id: "mystery-model", credits: "-", note: "no price on this server" },
+      { id: "llm-chat:unpriced-model", credits: "-", note: "This model has no price yet." },
+    ])
+  })
+
+  it("an older server that sends no estimates prints every figure as fixed", () => {
+    expect(costRows(["seedance-2-fast"], { data: { "seedance-2-fast": 40 }, missing: [], errors: [] })).toEqual([
+      { id: "seedance-2-fast", credits: "40", note: "" },
+    ])
+  })
+
+  it("--json passes the server's answer through whole", async () => {
+    credits.modelCosts.mockResolvedValueOnce(RESULT)
+    await runCmd("models", "cost", "llm-chat:gemini-3.6-flash", "--json")
+    expect(table).not.toHaveBeenCalled()
+    expect(vi.mocked(emit).mock.calls[0]![0]).toEqual(RESULT)
   })
 })

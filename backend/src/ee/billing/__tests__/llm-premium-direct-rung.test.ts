@@ -1,4 +1,12 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+
+// D6: metered LLM pricing is the default; the rollback restores the tier ids
+// these rungs price (the estimate cases below assert the rollback's figures).
+const llmPricing = vi.hoisted(() => ({ rollback: false }))
+vi.mock("@/lib/config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/config.js")>()),
+  llmMeteredPricing: () => !llmPricing.rollback,
+}))
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { LLM_MODELS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared/llm-models"
@@ -101,6 +109,11 @@ describe("premium-direct rung (decided 2026-10-08)", () => {
 })
 
 describe("a directOnly model bills premium-direct on every path (gemini-4-argon, 2026-10-17)", () => {
+  // The tier figures — under the rollback, byte-identical. Metered, the
+  // estimate prices `llm-chat:gemini-4-argon:direct` (llm-metered-node-ids.test.ts).
+  beforeEach(() => { llmPricing.rollback = true })
+  afterEach(() => { llmPricing.rollback = false })
+
   // It runs on Google's own API and nowhere else, so the charge must sit on the
   // rung priced for that lane — whatever the effort, Advanced or not.
   it("the guard, the route's reservation id and the workflow estimate agree on premium-direct", () => {

@@ -146,6 +146,9 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
     .or("provider.is.null,provider.neq.use-case")
     .select("id, input_data")
   if (flipped && flipped.length > 0) {
+    // 554: the job's metered SIDE holds settle on their own markers, after the flip.
+    const { settleSideHoldsAfterFlip } = await import("../llm-side-hold.js")
+    await settleSideHoldsAfterFlip([jobId])
     // A cancelled parent takes its still-running children with it, as on
     // POST /v1/jobs/:id/cancel — through the one shared sweep (lazy for the
     // same reason as below).

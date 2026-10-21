@@ -212,6 +212,30 @@ export interface LlmRequest {
  */
 export type LlmServedLane = "kie" | "direct-gemini" | "direct-anthropic"
 
+/**
+ * What ONE attempt of a metered LLM call spent, as the settle prices it
+ * (`llmAttemptCostUsd`, lib/llm-billing.ts): each attempt is costed on the lane
+ * that served it, from the size of the request it sent — so a structured
+ * correction re-ask (whose prompt carries the previous answer) and a lane
+ * fallback each bill what they really cost.
+ */
+export interface LlmAttemptSpend {
+  /** The lane that served (or, for a failure that names none, was asked) this attempt. */
+  lane: LlmServedLane
+  /** The registry model id. */
+  modelId: string
+  /** The request's size in characters (`requestChars`) — what a KIE Claude / GPT-6 lane is costed from. */
+  requestChars: number
+  inputTokens: number
+  outputTokens: number
+  /** The adapter's cost figure (USD), when it reported one. */
+  providerCost?: number
+  /** KIE's own stated charge (USD), when the reply carried one. */
+  creditsUsd?: number
+  /** The usage is an estimate (a client-stopped stream, `LlmStreamAbortedError`). */
+  estimated?: true
+}
+
 export interface LlmResponse {
   text: string
   usage?: { inputTokens: number; outputTokens: number }

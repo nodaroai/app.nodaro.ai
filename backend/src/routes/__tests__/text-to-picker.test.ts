@@ -15,8 +15,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test", LLM_TIER_PRICING_ROLLBACK: true },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  // D6: metered pricing is the default; this suite pins the TIER behaviour under
+  // the rollback (`LLM_TIER_PRICING_ROLLBACK`). The metered path is covered by
+  // llm-metered-structured-routes.test.ts.
+  llmMeteredPricing: () => false,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
 // insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
@@ -150,6 +154,21 @@ describe("POST /v1/text-to-picker — the default model and reasoning effort", (
 
   afterEach(async () => { await app.close() })
 
+  it("T9: under the rollback the run's spend is never recorded — an answer the metered ledger would reject still completes, byte-identically", async () => {
+    const { LlmSpend } = await import("../../lib/llm-billing.js")
+    const add = vi.spyOn(LlmSpend.prototype, "add").mockImplementation(() => {
+      throw new TypeError("LlmSpend.add: a metered-only check")
+    })
+    try {
+      expect((await post(VALID)).statusCode).toBe(200)
+      expect(add).not.toHaveBeenCalled()
+      expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+      expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    } finally {
+      add.mockRestore()
+    }
+  })
+
   it("no model and no effort: Gemini 3.8 Flash at Auto, reserved — and pre-checked — on economy", async () => {
     expect((await post(VALID)).statusCode).toBe(200)
     const { request, creditId, guardId } = sent()
@@ -192,15 +211,17 @@ describe("POST /v1/text-to-picker — the default model and reasoning effort", (
     expect(guardId).toBe(creditId)
   })
 
-  // Decided 2026-10-20 (production cost audit): Claude Fable 5 is withheld from
-  // every legend-sized structured read. Refused before any row or reservation.
-  it("refuses Claude Fable 5 with a validation_error before reserving, like an unknown model", async () => {
+  // Claude Fable 5 is offered again (metered pricing charges what a read
+  // costs). Under the rollback it bills the premium rung (C8).
+  it("accepts Claude Fable 5; under the rollback it reserves the premium rung, byte-identically", async () => {
     const res = await post({ ...VALID, llmModel: "claude-fable-5" })
-    expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe("validation_error")
-    expect(mocks.insertJob).not.toHaveBeenCalled()
-    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
-    expect(mocks.llmCompleteStructured).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    const { request, creditId, guardId } = sent()
+    expect(request).toMatchObject({ modelId: "claude-fable-5" })
+    expect(creditId).toBe("text-to-picker:premium")
+    expect(guardId).toBe(creditId)
+    // Exactly today's call: four arguments, no metered hold option.
+    expect(mocks.reserveCreditsForJob.mock.calls[0]).toHaveLength(4)
   })
 
   /** The failed job row as the route wrote it. */

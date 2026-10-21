@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeEach, afterAll } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -6,6 +6,9 @@ import { ugcChains } from "@nodaro/render-rules"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
+import { config, llmMeteredPricing } from "../../config.js"
+import { setLlmMeteredSchemaReadyForTesting } from "../../llm-metered-schema-gate.js"
+import rollbackFixture from "./fixtures/template-listing-prices-rollback.json"
 
 /**
  * Every built-in template that stores a listing price stores the estimator's
@@ -31,6 +34,14 @@ import type { TutorialTemplateDoc } from "../types.js"
  * rule (decided 2026-10-08, `templateForPreviewStopRule`): a render set to
  * Preview is written at Final where the rule is off, with the listing of that
  * graph. Each state's stored figure is checked against its own graph.
+ *
+ * Metered LLM pricing (Task 12, R30) is the default (D6), so the stored figure
+ * prices each LLM node at its model's typical-usage estimate — checked here
+ * with metered pricing ON (the R33 schema gate pinned ready). Under the
+ * tier-pricing rollback the same functions derive today's tier figures, byte
+ * for byte: a template holding an LLM node derives the figure in
+ * `fixtures/template-listing-prices-rollback.json` (the one it stored before
+ * metered pricing), every other template its stored figure.
  */
 const here = dirname(fileURLToPath(import.meta.url))
 const templatesDir = join(here, "..", "templates")
@@ -55,7 +66,21 @@ const holdsUgcVideo = (f: string) => (load(f).nodes as Node[]).some((n) => n.typ
 const priced = files.filter((f) => load(f).estimatedCredits !== undefined && !holdsUgcVideo(f))
 const pricedByTheUgcEstimate = files.filter((f) => load(f).estimatedCredits !== undefined && holdsUgcVideo(f))
 
+type PricingMode = "metered" | "rollback"
+const setMode = (mode: PricingMode) => {
+  setLlmMeteredSchemaReadyForTesting(true)
+  ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = mode === "rollback"
+  expect(llmMeteredPricing(), `${mode}: the switch under test`).toBe(mode === "metered")
+}
+afterAll(() => {
+  ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = false
+  setLlmMeteredSchemaReadyForTesting(undefined)
+})
+const ROLLBACK_FIGURES: Readonly<Record<string, { estimatedCredits: number }>> = rollbackFixture.templates
+
 describe("built-in template listing prices", () => {
+  beforeEach(() => setMode("metered"))
+
   it("finds the templates the seeder reads, and the ones that store a price", () => {
     // A guard against an empty glob passing every case below vacuously.
     expect(files.length).toBeGreaterThan(40)
@@ -76,6 +101,9 @@ describe("built-in template listing prices", () => {
       const l = CreditsService.estimateWorkflowBaseListing(rest, restEdges, "template")
       expect([file, l.preview + l.final + l.previewPerMinute + l.finalPerMinute]).toEqual([file, 0])
       expect(t.estimatedPerMinuteCredits, file).toBeUndefined()
+      // Its creator check runs through the host's metered Image to Text route: its listing is an
+      // estimate (R58: the clips' frame readings are an estimate only in the plugin's metered mode).
+      expect(t.estimatedCreditsIsEstimate, file).toBe(true)
     }
   })
 
@@ -87,6 +115,29 @@ describe("built-in template listing prices", () => {
       fixed: l.preview + l.final,
       perMinute: l.previewPerMinute + l.finalPerMinute,
     })
+    // R47: the doc says the figure is an estimate exactly when the listing holds a metered LLM call.
+    expect(t.estimatedCreditsIsEstimate === true, "estimatedCreditsIsEstimate").toBe(l.estimate === true)
+  })
+
+  it.each(priced.flatMap((f) => [[f, "on"], [f, "off"]] as const))("rollback: %s, preview stop rule %s derives today's tier figure", (file, rule) => {
+    setMode("rollback")
+    const t = templateForPreviewStopRule(load(file), rule === "on")
+    const l = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
+    const tier = ROLLBACK_FIGURES[file]
+    // A template with no LLM node lists the same figure either way.
+    expect({ fixed: l.preview + l.final, perMinute: l.previewPerMinute + l.finalPerMinute }).toEqual({
+      fixed: tier?.estimatedCredits ?? t.estimatedCredits,
+      perMinute: t.estimatedPerMinuteCredits ?? 0,
+    })
+    // Nothing is an estimate under the rollback.
+    expect(l.estimate).toBeUndefined()
+  })
+
+  it("the rollback fixture lists only templates whose figure the switch moves", () => {
+    for (const file of Object.keys(ROLLBACK_FIGURES)) {
+      expect(priced, file).toContain(file)
+      expect(ROLLBACK_FIGURES[file]!.estimatedCredits, file).not.toBe(load(file).estimatedCredits)
+    }
   })
 
   it("a template with no length-dependent part stores no per-minute figure", () => {
@@ -110,6 +161,7 @@ describe("built-in template listing prices", () => {
 // Preview rate; the final part is its Render final: the render again at
 // Final, and every node after it (Camera Switch first, in Multicam).
 describe("the podcast templates per minute", () => {
+  beforeEach(() => setMode("metered"))
   const CAP = 180
   const FINAL = STATIC_CREDIT_COSTS["apply-edl"]!
   const PREVIEW = STATIC_CREDIT_COSTS["apply-edl:proxy"]!

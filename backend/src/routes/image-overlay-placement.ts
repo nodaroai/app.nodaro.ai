@@ -8,13 +8,14 @@ import { markJobCompleted } from "../workers/shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared/llm-models"
-import { llmCompleteStructured, type LlmContentBlock } from "../lib/llm-client.js"
+import { llmCompleteStructured, type LlmContentBlock, type LlmRequest } from "../lib/llm-client.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { chargedFailureMessage, finishMeteredSyncLlmJob, llmGuardPrecheck, spendLlmStructuredCall } from "../lib/meter-sync-llm.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { OVERLAY_ANCHORS } from "../providers/image/overlay.js"
@@ -58,12 +59,20 @@ Answer with the placement in the compositor's units:
 - reason: one short sentence, plain language, saying why this spot.
 Keep the element fully inside the image and inside the safe area when one is given.`
 
+/** The placement answer's output cap — the hold is sized from it. */
+const PLACEMENT_MAX_TOKENS = 400
+
 const suggestRateLimit = rateLimiter({ windowMs: 60_000, max: 20, keyPrefix: "image-overlay-suggest" })
 
 export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-overlay/suggest-placement",
-    { preHandler: [suggestRateLimit, creditGuard((req) => resolveLlmCreditId("image-to-text", req.body))] },
+    {
+      preHandler: [suggestRateLimit, creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
+        // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
+        computeCredits: (body) => llmGuardPrecheck("image-to-text", body, { maxTokens: PLACEMENT_MAX_TOKENS }),
+      })],
+    },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
@@ -95,10 +104,33 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
       })
       if (jobError) return sendInternalError(reply, req, jobError, "Failed to create job")
 
-      await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
+      const ask = [
+        `Element: ${intent?.trim() || "a logo"}.`,
+        `Element proportions: width/height = ${layerAspect.toFixed(2)}.`,
+        safeArea ? `Safe area (fractions of the image): x ${safeArea.x.toFixed(2)}, y ${safeArea.y.toFixed(2)}, w ${safeArea.w.toFixed(2)}, h ${safeArea.h.toFixed(2)}. Keep the element inside it.` : "",
+        "Where should it go?",
+      ].filter(Boolean).join("\n")
+      /** The request for this image block — the URL form sizes the hold (an image is priced as an image either way). */
+      const placementRequest = (imageBlock: LlmContentBlock): LlmRequest => ({
+        modelId: llmModel,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: [imageBlock, { type: "text", text: ask }] }],
+        maxTokens: PLACEMENT_MAX_TOKENS,
+      })
 
-      await markProviderCallStart(job.id, "anthropic-sync")
+      // Reserve credits: metered (the call's 1-attempt hold), else the tier id as before.
+      const reserve = await reserveLlmCall(req, reply, job.id, {
+        feature: "image-to-text",
+        calls: [{ modelId: llmModel, request: placementRequest({ type: "image", url: imageUrl }) }],
+      })
+      if (!reserve) return
+      const spend = new LlmSpend()
+      if (!reserve.metered) {
+        await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+      }
+
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
 
       try {
         // Pre-fetch to base64 so CDNs that block provider IPs still work; the
@@ -115,24 +147,24 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
           // fall back to the URL form
         }
 
-        const ask = [
-          `Element: ${intent?.trim() || "a logo"}.`,
-          `Element proportions: width/height = ${layerAspect.toFixed(2)}.`,
-          safeArea ? `Safe area (fractions of the image): x ${safeArea.x.toFixed(2)}, y ${safeArea.y.toFixed(2)}, w ${safeArea.w.toFixed(2)}, h ${safeArea.h.toFixed(2)}. Keep the element inside it.` : "",
-          "Where should it go?",
-        ].filter(Boolean).join("\n")
-
-        const result = await llmCompleteStructured(
-          {
-            modelId: llmModel,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: "user", content: [imageBlock, { type: "text", text: ask }] }],
-            maxTokens: 400,
-          },
-          placementSchema,
-          { schemaName: "placement" },
+        const request = placementRequest(imageBlock)
+        const result = await spendLlmStructuredCall(reserve.metered ? spend : undefined, llmModel, request, () =>
+          llmCompleteStructured(request, placementSchema, { schemaName: "placement" }),
         )
         const placement = result.output
+
+        if (reserve.metered) {
+          // Result first, then the settle (what the call cost), then the completion
+          // funnel (CAS + result gate) with the output as the settle left it.
+          await finishMeteredSyncLlmJob(
+            job.id,
+            reserve,
+            spend,
+            { status: "completed", outputData: { placement, usage: { inputTokens: result.inputTokens, outputTokens: result.outputTokens } } },
+            { complete: (outputData) => markJobCompleted(job.id, { output_data: outputData }) },
+          )
+          return reply.send({ jobId: job.id, placement })
+        }
 
         // Text/JSON result, no media — but it still goes through the completion
         // funnel so the CAS, the result gate and the credit commit stay one path.
@@ -149,6 +181,12 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
         // the log only.
         const message = userFacingMessage(err, "LLM call failed")
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-overlay-placement] failed")
+        if (reserve.metered) {
+          // A billed failure (a refusal, a structured re-ask that never parsed) is
+          // charged its usage and says so; an unbilled one is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "failed", errorMessage: message, outputData: { error: message } })
+          return reply.status(502).send({ error: { code: "llm_error", message: chargedFailureMessage(laneUserMessage(err) ?? "Could not suggest a placement.", finished.settled) } })
+        }
         if (await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })) {
           // A content refusal the provider billed is a paid answer: committed, not refunded.
           if (billedContentRefusal(err)) await commitReservedCreditsForJob(job.id)

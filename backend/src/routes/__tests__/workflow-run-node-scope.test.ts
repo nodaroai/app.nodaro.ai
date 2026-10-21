@@ -73,6 +73,9 @@ vi.mock("@/lib/execution-events.js", () => ({ executionEvents: { on: vi.fn(), of
 vi.mock("@/ee/billing/credits.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/ee/billing/credits.js")>()
   return {
+    // The run pre-check (R51): no metered model here is unpriced.
+    unpricedMeteredLlmOfRun: () => null,
+    runHoldsMeteredLlmEstimate: actual.runHoldsMeteredLlmEstimate,
     CreditsService: { refundCredits: vi.fn() },
     estimateRunSetCredits: async (
       nodes: Parameters<typeof actual.estimateRunSetCredits>[0],

@@ -2,9 +2,13 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { creditsOf, creditHint, creditLadderHint, lipSyncPriceSuffix } from "../_credit-hint.js"
+import { creditsOf, creditHint, creditLadderHint, estimateHint, lipSyncPriceSuffix, meteredLlmPriceSentence } from "../_credit-hint.js"
+import { config } from "../../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../../ee/billing/credits.js"
 import { statedPrices } from "../../../../ee/billing/stated-prices.js"
+import { setLlmMeteredSchemaReadyForTesting } from "../../../llm-metered-schema-gate.js"
+// What is measured is the hosted deployment, where metered LLM pricing is on (R33: its schema is applied).
+setLlmMeteredSchemaReadyForTesting(true)
 
 // Audit 2026-09-06 fix #4 (A-1 / C-7, R2b-L2 — worse since June): credit
 // figures typed by hand into tool descriptions were 10–12× off the pricing
@@ -47,6 +51,51 @@ describe("_credit-hint — derived credit figures", () => {
       else process.env.NODARO_PRICE_ANNOTATIONS = was
     }
     expect(creditHint("latentsync")).not.toContain("<!--")
+  })
+})
+
+describe("estimateHint — a metered LLM call's typical figure", () => {
+  it("states the server's estimate for the feature on the model, as approximate, never a tier price", () => {
+    const quoted = statedPrices().credits("llm-chat:gemini-3.6-flash")!
+    expect(quoted).toBeGreaterThan(0)
+    expect(estimateHint("llm-chat", "gemini-3.6-flash")).toBe(`~${quoted} credits typical on Gemini 3.6 Flash`)
+    // The default model when none is named — Choose Best's judge borrows pick-best-llm's.
+    expect(estimateHint("reduce:pick-best-llm")).toBe(
+      `~${statedPrices().credits("reduce:pick-best-llm:claude-sonnet-5.5")} credits typical on Claude Sonnet 5.5`,
+    )
+    // A default effort that serves direct is quoted on the direct key (Describe to Picker on Opus 5.5 at high).
+    expect(estimateHint("describe-to-picker", "claude-opus-5.5")).toBe(
+      `~${statedPrices().credits("describe-to-picker:claude-opus-5.5:direct")} credits typical on Claude Opus 5.5`,
+    )
+    expect(meteredLlmPriceSentence("prompt-helper", "claude-sonnet-4.6")).toBe(
+      `Charged per token at the model's rate: ~${statedPrices().credits("prompt-helper:claude-sonnet-4.6")} credits typical on Claude Sonnet 4.6 (every model: docs/pricing/llm-models.md).`,
+    )
+  })
+
+  it("names its price key only when rendering the docs (NODARO_PRICE_ANNOTATIONS=1)", () => {
+    const was = process.env.NODARO_PRICE_ANNOTATIONS
+    try {
+      process.env.NODARO_PRICE_ANNOTATIONS = "1"
+      expect(estimateHint("llm-chat", "gemini-3.6-flash")).toBe(
+        `~${statedPrices().credits("llm-chat:gemini-3.6-flash")}<!-- credits: llm-chat:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash`,
+      )
+    } finally {
+      if (was === undefined) delete process.env.NODARO_PRICE_ANNOTATIONS
+      else process.env.NODARO_PRICE_ANNOTATIONS = was
+    }
+  })
+
+  it("never throws at registration: under the rollback, and for a model with no price, it names no figure", () => {
+    const was = config.LLM_TIER_PRICING_ROLLBACK
+    try {
+      ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = true
+      expect(estimateHint("llm-chat", "gemini-3.6-flash")).toBe("on Gemini 3.6 Flash, see docs/pricing/llm-models.md")
+      // creditsOf cannot price a metered key at all — the reason estimateHint exists.
+      expect(() => creditsOf("llm-chat:gemini-3.6-flash")).toThrow(/unknown credit id/)
+    } finally {
+      ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = was
+    }
+    expect(estimateHint("llm-chat", "not-a-model")).toBe("on not-a-model, see docs/pricing/llm-models.md")
   })
 })
 

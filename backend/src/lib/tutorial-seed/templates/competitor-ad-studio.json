@@ -16,7 +16,8 @@
     "stories"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 34,
+  "estimatedCredits": 48,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

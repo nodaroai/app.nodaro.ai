@@ -8,7 +8,16 @@
  * cannot silently re-introduce the mismatches.
  */
 
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// D6: metered LLM pricing is the default; the rollback switch restores the
+// tier ids byte-identically. One toggle for the LLM credit-id cases below.
+const pricing = vi.hoisted(() => ({ rollback: false }))
+vi.mock("../../../lib/config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/config.js")>()),
+  llmMeteredPricing: () => !pricing.rollback,
+}))
+
 import { buildPayload } from "../payload-builder.js"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"
 import { resolveNodeInputs } from "../input-resolver.js"
@@ -125,31 +134,91 @@ describe("entity nodes — orchestrator replicates route prompt building", () =>
 // Fix: generate-script must forward llmModel and use buildLlmCreditIdentifier
 // ---------------------------------------------------------------------------
 
-describe("generate-script — tiered credit + llmModel forwarding", () => {
-  it("uses tiered credit identifier for economy model", () => {
+describe("generate-script — metered credit id + llmModel forwarding", () => {
+  beforeEach(() => {
+    pricing.rollback = false
+  })
+
+  it("is charged under generate-script:<model> — never a tier row (A1)", () => {
     const n = node("s1", "generate-script", {
       prompt: "storyboard",
       llmModel: "gemini-3-flash",
     })
     const result = buildPayload(n, JOB_ID, {})
-    expect(result.modelIdentifier).toBe("generate-script:economy")
+    expect(result.modelIdentifier).toBe("generate-script:gemini-3-flash")
     expect(result.payload.llmModel).toBe("gemini-3-flash")
   })
 
-  it("uses flat identifier for default/unknown model", () => {
+  it("an unset model is the model the worker runs: the feature default", () => {
     const n = node("s1", "generate-script", { prompt: "storyboard" })
     const result = buildPayload(n, JOB_ID, {})
-    expect(result.modelIdentifier).toBe("generate-script")
+    expect(result.modelIdentifier).toBe("generate-script:gemini-3.6-flash")
     expect(result.payload.llmModel).toBeUndefined()
   })
 
-  it("uses premium identifier for premium-tier model", () => {
+  it("the legacy provider alias names the model it resolves to (resolveScriptModelId)", () => {
+    const n = node("s1", "generate-script", { prompt: "storyboard", provider: "claude" })
+    expect(buildPayload(n, JOB_ID, {}).modelIdentifier).toBe("generate-script:claude-sonnet-4.6")
+  })
+
+  it("premium models price per model too, no premium rung", () => {
     const n = node("s1", "generate-script", {
       prompt: "storyboard",
       llmModel: "gpt-5.4",
     })
     const result = buildPayload(n, JOB_ID, {})
-    expect(result.modelIdentifier).toBe("generate-script:premium")
+    expect(result.modelIdentifier).toBe("generate-script:gpt-5.4")
+  })
+
+  describe("rollback (LLM_TIER_PRICING_ROLLBACK): the tier ids, byte-identical", () => {
+    beforeEach(() => {
+      pricing.rollback = true
+    })
+
+    it("uses tiered credit identifier for economy model", () => {
+      const n = node("s1", "generate-script", {
+        prompt: "storyboard",
+        llmModel: "gemini-3-flash",
+      })
+      const result = buildPayload(n, JOB_ID, {})
+      expect(result.modelIdentifier).toBe("generate-script:economy")
+      expect(result.payload.llmModel).toBe("gemini-3-flash")
+    })
+
+    it("uses flat identifier for default/unknown model", () => {
+      const n = node("s1", "generate-script", { prompt: "storyboard" })
+      const result = buildPayload(n, JOB_ID, {})
+      expect(result.modelIdentifier).toBe("generate-script")
+      expect(result.payload.llmModel).toBeUndefined()
+    })
+
+    it("uses premium identifier for premium-tier model", () => {
+      const n = node("s1", "generate-script", {
+        prompt: "storyboard",
+        llmModel: "gpt-5.4",
+      })
+      const result = buildPayload(n, JOB_ID, {})
+      expect(result.modelIdentifier).toBe("generate-script:premium")
+    })
+  })
+})
+
+describe("motion-graphics (lottie) — metered credit id", () => {
+  beforeEach(() => {
+    pricing.rollback = false
+  })
+
+  it("is charged under motion-graphics-lottie:<model>; the feature default when unset", () => {
+    const n = node("m1", "motion-graphics", { engine: "lottie", motionPrompt: "a bouncing logo" })
+    expect(buildPayload(n, JOB_ID, {}).modelIdentifier).toBe("motion-graphics-lottie:claude-sonnet-5.5")
+    const pinned = node("m2", "motion-graphics", { engine: "lottie", motionPrompt: "a bouncing logo", llmModel: "gpt-5.4" })
+    expect(buildPayload(pinned, JOB_ID, {}).modelIdentifier).toBe("motion-graphics-lottie:gpt-5.4")
+  })
+
+  it("rollback: the tier id, byte-identical", () => {
+    pricing.rollback = true
+    const n = node("m1", "motion-graphics", { engine: "lottie", motionPrompt: "a bouncing logo" })
+    expect(buildPayload(n, JOB_ID, {}).modelIdentifier).toBe("motion-graphics-lottie")
   })
 })
 

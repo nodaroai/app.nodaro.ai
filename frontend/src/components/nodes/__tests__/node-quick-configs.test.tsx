@@ -511,7 +511,46 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
     // Auto is the sentinel (unset ⇒ vendor default); levels use the shared friendly labels
     expect(effortControl.sentinelUndefined).toBe("auto")
     expect(opts[0]).toEqual({ value: "auto", label: "Auto" })
-    expect(opts.find((o) => o.value === "max")?.label).toBe("Max (may bill one tier up)")
+    // No price answer yet: the bare level, true in either pricing mode.
+    expect(opts.find((o) => o.value === "max")?.label).toBe("Max")
+  })
+
+  it("the effort labels say what a level costs in the pricing mode the server's LAST answer showed — a rollback mid-session included", async () => {
+    const { notePricingAnswer, forgetLlmPricingMode } = await import("@/hooks/use-llm-pricing-mode")
+    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const optsOf = () => (typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.6-terra" }) : effortControl.options)
+    try {
+      notePricingAnswer({ estimates: ["llm-chat:gpt-5.6-terra"] })
+      expect(optsOf().find((o) => o.value === "max")?.label).toBe("Max (the most reasoning tokens, charged per token)")
+      expect(optsOf().find((o) => o.value === "xhigh")?.label).toBe("Very high (more reasoning tokens, charged per token)")
+      // The rollback: the next answer reports a metered key `missing` — the tier wording.
+      notePricingAnswer({ missing: ["generate-script:claude-opus-5.5"] })
+      expect(optsOf().find((o) => o.value === "max")?.label).toBe("Max (may bill one tier up)")
+      // An answer about other ids only (a tier row, an image composite) says nothing about the mode.
+      notePricingAnswer({ missing: ["llm-chat:premium", "gpt-image:high"] })
+      expect(optsOf().find((o) => o.value === "max")?.label).toBe("Max (may bill one tier up)")
+      // Metered again: per-token wording, never the tier's.
+      notePricingAnswer({ estimates: ["llm-chat:gpt-5.6-terra"], missing: ["speech:100c"] })
+      expect(optsOf().find((o) => o.value === "max")?.label).toBe("Max (the most reasoning tokens, charged per token)")
+    } finally {
+      forgetLlmPricingMode()
+    }
+  })
+
+  it("a strip already on screen re-words its effort levels when an answer changes the pricing mode (no remount)", async () => {
+    const { notePricingAnswer, forgetLlmPricingMode } = await import("@/hooks/use-llm-pricing-mode")
+    const { act } = await import("@testing-library/react")
+    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const { getByTestId } = render(<QuickConfigSelect nodeId="n1" control={effortControl} value="max" data={{ llmModel: "gpt-5.6-terra", reasoningEffort: "max" }} />)
+    try {
+      expect(getByTestId("item-max").textContent).toBe("Max")
+      act(() => notePricingAnswer({ estimates: ["llm-chat:gpt-5.6-terra"] }))
+      expect(getByTestId("item-max").textContent).toBe("Max (the most reasoning tokens, charged per token)")
+      act(() => notePricingAnswer({ missing: ["llm-chat:gpt-5.6-terra"] }))
+      expect(getByTestId("item-max").textContent).toBe("Max (may bill one tier up)")
+    } finally {
+      act(() => forgetLlmPricingMode())
+    }
   })
 
   it("the other LLM nodes keep their effort control as it was: an unset effort reads unset, whatever the model", () => {
@@ -537,17 +576,14 @@ describe("describe-to-picker quick configs — the strip shows the default the r
     expect(optionsOf(modelControl, {}).map((o) => o.value)).toContain(modelControl.defaultValue)
   })
 
-  // Decided 2026-10-20: Claude Fable 5 is withheld from the node. The strip no
-  // longer offers it, and a saved node still naming it snaps to the default —
-  // the model the run would use anyway — not to the first listed vendor's.
-  it("does not offer Claude Fable 5, and snaps a node still naming it to the default model — stored as UNSET, like the panel", () => {
-    expect(optionsOf(modelControl, {}).map((o) => o.value)).not.toContain("claude-fable-5")
-    expect(modelControl.retainedOptions?.map((o) => o.value) ?? []).not.toContain("claude-fable-5")
-    expect(modelControl.snap?.("claude-fable-5", {})).toBe(LLM_FEATURE_DEFAULTS["describe-to-picker"])
+  // Metered LLM pricing (2026-10-20): each read is charged what it really
+  // costs, so Claude Fable 5 — withheld earlier the same day by the cost
+  // audit — is offered again, and a node naming it keeps it.
+  it("offers Claude Fable 5 again, and keeps a node that names it", () => {
+    expect(optionsOf(modelControl, {}).map((o) => o.value)).toContain("claude-fable-5")
     render(<QuickConfigSelect nodeId="n1" control={modelControl} value="claude-fable-5" data={{ llmModel: "claude-fable-5" }} />)
-    // The default is never stored (DescribeToPickerData): the snap clears the field.
-    expect(updateNodeData).toHaveBeenCalledWith("n1", { llmModel: undefined })
-    expect(updateNodeData).not.toHaveBeenCalledWith("n1", expect.objectContaining({ llmModel: LLM_FEATURE_DEFAULTS["describe-to-picker"] }))
+    // An offered value is never snapped: the fail-safe writes nothing.
+    expect(updateNodeData).not.toHaveBeenCalled()
   })
 
   it("choosing the default model from the strip leaves the field unset; choosing another stores it", () => {

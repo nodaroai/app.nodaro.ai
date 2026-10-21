@@ -6,7 +6,8 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError } from "../lib/llm-advanced-mode.js"
 import { LLM_CHEAP_LANES_SHAPE } from "../lib/llm-cheap-lanes.js"
-import { resolveScriptModelId } from "../providers/script/script-generator.js"
+import { buildScriptRequest, resolveScriptModelId, type ScriptProvider } from "../providers/script/script-generator.js"
+import { llmPrecheckBaseCredits, reserveLlmCall } from "../lib/llm-billing.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -35,8 +36,29 @@ const generateScriptBody = z.object({
   ...LLM_CHEAP_LANES_SHAPE,
 })
 
+/**
+ * The guard's metered pre-check (a UX check — the reserve below holds the real
+ * request): the hold of the model the worker will run (the legacy `provider`
+ * alias resolved) over the body's TEXT. Undefined under the rollback, so the
+ * tier row prices the check exactly as before.
+ */
+function scriptPrecheck(body: unknown): Promise<number | undefined> {
+  const b = (body ?? {}) as Record<string, unknown>
+  const text = (v: unknown) => (typeof v === "string" ? v.length : 0)
+  return llmPrecheckBaseCredits(
+    "generate-script",
+    {
+      llmModel: resolveScriptModelId(b.provider as ScriptProvider | undefined, typeof b.llmModel === "string" ? b.llmModel : undefined),
+      reasoningEffort: typeof b.reasoningEffort === "string" ? b.reasoningEffort : undefined,
+      advancedMode: b.advancedMode === true,
+      maxTokens: typeof b.maxTokens === "number" ? b.maxTokens : undefined,
+    },
+    text(b.prompt) + text(b.tone) + text(b.styleGuide),
+  )
+}
+
 export async function generateScriptRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-script", { preHandler: creditGuard((req) => resolveLlmCreditId("generate-script", req.body)) }, async (req, reply) => {
+  app.post("/v1/generate-script", { preHandler: creditGuard((req) => resolveLlmCreditId("generate-script", req.body), { computeCredits: scriptPrecheck }) }, async (req, reply) => {
     const parsed = generateScriptBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -74,10 +96,28 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    // Reserve credits
-    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-    if (reply.sent) return
-    const usageLogId = reservation?.usageLogId
+    // Reserve credits. Metered (D1): the hold of the request the worker will
+    // send, under `generate-script:<model>`; the worker settles the actual.
+    // Under the rollback: the tier id, exactly as before.
+    const request = buildScriptRequest({
+      prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort,
+      advanced: { advancedMode: parsed.data.advancedMode, temperature: parsed.data.temperature, maxTokens: parsed.data.maxTokens },
+      brief: { styleGuide },
+      lanes: { cheapLanesOnly: parsed.data.cheapLanesOnly },
+    })
+    const metered = await reserveLlmCall(req, reply, job.id, {
+      feature: "generate-script",
+      calls: [{ modelId: request.modelId, request, cheapLanesOnly: parsed.data.cheapLanesOnly === true }],
+    })
+    if (!metered || reply.sent) return
+    let usageLogId: string | undefined
+    if (metered.metered) {
+      usageLogId = metered.reservation.usageLogId
+    } else {
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      if (reply.sent) return
+      usageLogId = reservation?.usageLogId
+    }
 
     await videoQueue.add("generate-script", {
       jobId: job.id,

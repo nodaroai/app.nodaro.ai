@@ -16,7 +16,8 @@
     "product"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 2098,
+  "estimatedCredits": 2126,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

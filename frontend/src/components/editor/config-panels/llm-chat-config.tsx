@@ -351,6 +351,8 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           feature="llm-chat"
           value={data.llmModel}
           onChange={(v) => onUpdate({ llmModel: v })}
+          reasoningEffort={data.reasoningEffort}
+          advancedMode={data.advancedMode === true}
           labelAction={<CompareModelsLink />}
         />
         <ReasoningEffortSelect

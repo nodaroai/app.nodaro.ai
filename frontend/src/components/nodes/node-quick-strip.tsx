@@ -25,6 +25,8 @@ export const QuickStripOpenChangeContext = createContext<((open: boolean) => voi
 interface NodeQuickStripProps {
   readonly nodeId: string
   readonly credits?: number
+  /** `credits` is an estimate (a metered LLM call): the Run button shows `~`. */
+  readonly creditsEstimate?: boolean
   readonly disabled?: boolean
   readonly disabledReason?: string
   readonly isRunning: boolean
@@ -42,7 +44,7 @@ interface NodeQuickStripProps {
  * which would let the hover toolbar hide mid-pick — so we pin the node via
  * `setQuickStripPinned` (BaseNode keeps the toolbar visible while pinned).
  */
-export function NodeQuickStrip({ nodeId, credits, isRunning, children, disabled, disabledReason }: NodeQuickStripProps) {
+export function NodeQuickStrip({ nodeId, credits, creditsEstimate, isRunning, children, disabled, disabledReason }: NodeQuickStripProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const setQuickStripPinned = useWorkflowStore((s) => s.setQuickStripPinned)
   const node = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId))
@@ -114,6 +116,7 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children, disabled,
       <RunNodeButton
         nodeId={nodeId}
         credits={credits}
+        creditsEstimate={creditsEstimate}
         disabled={disabled || !!refused}
         disabledReason={refusedReason ?? disabledReason}
         isRunning={isRunning}

@@ -42,6 +42,10 @@ vi.mock("@nodaro/shared/llm-models", async (importOriginal) => ({
 }))
 
 import { generateScript, resolveScriptModelId } from "../script-generator.js"
+// The model resolution is the shared rule (`@nodaro/shared/llm-models` resolveScriptModelId), which reads the
+// package's own feature defaults — never this file's mock of them.
+const { LLM_FEATURE_DEFAULTS: SHARED_DEFAULTS } = await vi.importActual<typeof import("@nodaro/shared/llm-models")>("@nodaro/shared/llm-models")
+const SCRIPT_DEFAULT = SHARED_DEFAULTS["generate-script"]
 
 const VALID_SCRIPT = {
   title: "The Awakening",
@@ -112,7 +116,7 @@ describe("generateScript — model resolution", () => {
     await generateScript("p")
 
     expect(mocks.llmComplete).toHaveBeenCalledWith(
-      expect.objectContaining({ modelId: "default-script-model" }),
+      expect.objectContaining({ modelId: SCRIPT_DEFAULT }),
     )
   })
 })
@@ -468,12 +472,12 @@ describe("resolveScriptModelId", () => {
   })
 
   it("falls back to the feature default when neither is given", () => {
-    expect(resolveScriptModelId()).toBe("default-script-model")
+    expect(resolveScriptModelId()).toBe(SCRIPT_DEFAULT)
   })
 
   it("an unknown provider value falls through to the default, never undefined", () => {
     // The route hands this straight to `advancedModeError`, which would treat
     // undefined as "no model" and skip the capability check entirely.
-    expect(resolveScriptModelId("not-a-provider" as never)).toBe("default-script-model")
+    expect(resolveScriptModelId("not-a-provider" as never)).toBe(SCRIPT_DEFAULT)
   })
 })

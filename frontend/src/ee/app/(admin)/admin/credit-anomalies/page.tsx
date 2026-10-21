@@ -130,6 +130,9 @@ export default function AdminCreditAnomaliesPage() {
               <SelectItem value="undercharge">Undercharge</SelectItem>
               <SelectItem value="unknown_model">Unknown Model</SelectItem>
               <SelectItem value="zero_cost">Zero Cost</SelectItem>
+              <SelectItem value="reconcile_exhausted">Reconcile Exhausted</SelectItem>
+              <SelectItem value="uncollected_overrun">Uncollected Overrun</SelectItem>
+              <SelectItem value="metered_settle_unconfirmed">Settle Unconfirmed</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -292,6 +295,9 @@ const ANOMALY_TYPE_STYLES: Record<string, { label: string; cls: string }> = {
   undercharge: { label: "Undercharge", cls: "bg-red-500/10 text-red-400 border-red-500/20" },
   unknown_model: { label: "Unknown", cls: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   zero_cost: { label: "Zero Cost", cls: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20" },
+  reconcile_exhausted: { label: "Reconcile Exhausted", cls: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  uncollected_overrun: { label: "Uncollected Overrun", cls: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  metered_settle_unconfirmed: { label: "Settle Unconfirmed", cls: "bg-rose-500/10 text-rose-400 border-rose-500/20" },
 }
 
 const STATUS_STYLES: Record<string, { label: string; cls: string }> = {

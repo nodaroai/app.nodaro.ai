@@ -123,14 +123,31 @@ export function computeLiveRunEstimate(
   args: Omit<LiveRunEstimateArgs, "enabled">,
   getCachedCredits: LiveRunEstimateDeps["getCachedCredits"],
   isModelUnpriced: NonNullable<LiveRunEstimateDeps["isModelUnpriced"]> = () => false,
-): { total: number; uncachedModelIds: string[] } {
+): { total: number; estimate: boolean; uncachedModelIds: string[] } {
   const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues, args.mediaLengths)
   return estimateWholeRun(effectiveNodes, args.edges, getCachedCredits, isModelUnpriced)
 }
 
+/** The live figure, and whether it holds a metered LLM call's ESTIMATE (shown `~`). */
+export interface LiveRunFigure {
+  readonly total: number
+  readonly estimate: boolean
+}
+
+const NO_FIGURE: LiveRunFigure = { total: 0, estimate: false }
+
+/** The live BASE figure (see the module comment). */
 export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstimateDeps): number {
+  return useLiveRunFigure(args, deps).total
+}
+
+/**
+ * {@link useLiveRunEstimate}, plus whether the figure holds a metered LLM
+ * call's estimate — any metered node in the run makes its Run label `~N`.
+ */
+export function useLiveRunFigure(args: LiveRunEstimateArgs, deps: LiveRunEstimateDeps): LiveRunFigure {
   const { nodes, edges, inputValues, enabled, mediaLengths } = args
-  const [estimate, setEstimate] = useState(0)
+  const [estimate, setEstimate] = useState<LiveRunFigure>(NO_FIGURE)
   // Edit Plan's id follows the server's per-minute answer, which can land after
   // the nodes (the runner seeds it from the app detail, the dashboard asks the
   // capabilities route): recompute when it does.
@@ -148,15 +165,16 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
     const compute = () => {
       const { getCachedCredits, prefetchModelCredits, isModelUnpriced } = depsRef.current
       const first = computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced)
+      const figureOf = (r: { total: number; estimate: boolean }): LiveRunFigure => ({ total: r.total, estimate: r.estimate })
       if (first.uncachedModelIds.length === 0) {
-        setEstimate(first.total)
+        setEstimate(figureOf(first))
         return
       }
       // Quote what is known now, then the exact figure once prices land.
-      setEstimate(first.total)
+      setEstimate(figureOf(first))
       prefetchModelCredits(first.uncachedModelIds).then(() => {
         if (cancelled) return
-        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced).total)
+        setEstimate(figureOf(computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced)))
       })
     }
 

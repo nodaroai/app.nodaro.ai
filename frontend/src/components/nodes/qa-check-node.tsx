@@ -8,8 +8,7 @@ import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import type { QACheckData } from "@/types/nodes"
 
 function QACheckNodeComponent({ id, data, selected }: NodeProps) {
@@ -17,7 +16,7 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
-  const credits = useModelCredits(buildLlmCreditIdentifier("qa-check", nodeData.llmModel || LLM_FEATURE_DEFAULTS["qa-check"], nodeData.reasoningEffort, nodeData.advancedMode === true), 1)
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("qa-check", nodeData, 1)
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
@@ -31,13 +30,13 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<ShieldCheck className="h-4 w-4" />}
         category="ai"
-        credits={credits}
+        credits={credits} creditsEstimate={creditsEstimate}
         selected={selected}
         isRunning={status === "running"}
         hideHeader
         minWidth={220}
         topToolbarContent={
-                      <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                      <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
         }
         handles={[
           { id: "in",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

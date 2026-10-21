@@ -5,18 +5,20 @@
 import type { LlmModelDef } from "@nodaro/shared/llm-models"
 import { z, type ZodType } from "zod"
 import { config } from "../config.js"
-import { LlmPlatformExhaustedError, LlmStreamResponseError } from "../llm-errors.js"
+import { LlmPlatformExhaustedError, LlmStreamAbortedError, LlmStreamResponseError } from "../llm-errors.js"
 import { directLaneLatch } from "../llm-platform-exhaustion.js"
 import { extractJsonFromAIResponse } from "../json-utils.js"
 import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
+import { llmPrimaryLane } from "../pricing/llm-cost.js"
 import { anthropicKeySet } from "./anthropic-availability.js"
 import { assertInlineVideoLane, claudeMustServeDirect, llmComplete } from "./router.js"
 import { directFallbackAllowed, kieFallback, serveFromFallback } from "./lane-fallback.js"
 import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
 import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
-import type { LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
+import { requestChars } from "./kie-cost.js"
+import type { LlmAttemptSpend, LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
 
 // ---------------------------------------------------------------------------
 // Structured (schema-validated) completion
@@ -31,6 +33,21 @@ export interface StructuredLlmOutput<T> {
   usageComplete?: boolean
   /** The lane that served the attempt whose answer this is. */
   lane: LlmServedLane
+  /**
+   * Every attempt the call made, in order — each on its own lane and request
+   * size (a correction re-ask's prompt carries the previous answer), so the
+   * metered settle costs each one as it was served (`LlmSpend`).
+   */
+  attempts: LlmAttemptSpend[]
+}
+
+/** {@link StructuredLlmError.usage}: the summed spend, and every attempt behind it. */
+export interface StructuredLlmUsage {
+  inputTokens: number
+  outputTokens: number
+  providerCost?: number
+  complete: boolean
+  attempts: LlmAttemptSpend[]
 }
 
 /** Known usage remains available when a later attempt fails or is malformed. */
@@ -43,11 +60,13 @@ export class StructuredLlmError extends Error {
    */
   readonly lane?: LlmServedLane
 
-  constructor(message: string, readonly usage: {
-    inputTokens: number; outputTokens: number; providerCost?: number; complete: boolean
-  }, options?: ErrorOptions & { lane?: LlmServedLane }) {
+  readonly usage: StructuredLlmUsage
+
+  constructor(message: string, usage: Omit<StructuredLlmUsage, "attempts"> & { attempts?: LlmAttemptSpend[] },
+    options?: ErrorOptions & { lane?: LlmServedLane }) {
     super(message, options)
     this.name = "StructuredLlmError"
+    this.usage = { ...usage, attempts: usage.attempts ?? [] }
     if (options?.lane !== undefined) this.lane = options.lane
   }
 }
@@ -243,6 +262,7 @@ async function runStructuredAttempts<T>(
   let lastLane: LlmServedLane | undefined
   for (let attempt = 0; attempt <= retries; attempt++) {
     let resp: LlmResponse
+    let attemptReq: LlmRequest = req
     try {
       // `maxRetries` is NOT passed down as a transport policy. It bounds how many times a
       // provider that ANSWERED is asked again for a better-shaped answer — each of those is
@@ -253,17 +273,17 @@ async function runStructuredAttempts<T>(
       // verbatim.
       // failOnRefusal: a refusal here is an answer, never a malformed reply
       // to correct or a lane to route around (LlmContentRefusalError).
-      resp = await callAttempt({ ...req, messages, failOnRefusal: true,
-        jsonSchema: { name: schemaName, schema: jsonSchema } }, attempt)
+      attemptReq = { ...req, messages, failOnRefusal: true, jsonSchema: { name: schemaName, schema: jsonSchema } }
+      resp = await callAttempt(attemptReq, attempt)
     } catch (error) {
-      throw failureWithSpend(spend, error)
+      throw failureWithSpend(spend, error, attemptReq)
     }
-    spend = addSpend(spend, resp)
+    spend = addSpend(spend, resp, attemptReq)
     const answer = parseStructuredAnswer(schema, resp.text)
     if (answer.ok) {
       const usage = spendUsage(spend)
       return { output: answer.data, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
-        providerCost: usage.providerCost, usageComplete: usage.complete, lane: resp.lane }
+        providerCost: usage.providerCost, usageComplete: usage.complete, lane: resp.lane, attempts: usage.attempts }
     }
     lastError = answer.error
     lastLane = resp.lane
@@ -278,19 +298,20 @@ async function runStructuredAttempts<T>(
         "asking the direct-anthropic tool once",
     )
     let resp: LlmResponse
+    // The caller's own messages, not the correction turns: a fresh ask on
+    // the lane whose tool enforces the schema.
+    const backupReq: LlmRequest = { ...req, failOnRefusal: true, jsonSchema: { name: schemaName, schema: jsonSchema } }
     try {
-      // The caller's own messages, not the correction turns: a fresh ask on
-      // the lane whose tool enforces the schema.
-      resp = await backup.call({ ...req, failOnRefusal: true, jsonSchema: { name: schemaName, schema: jsonSchema } })
+      resp = await backup.call(backupReq)
     } catch (error) {
-      throw failureWithSpend(spend, error)
+      throw failureWithSpend(spend, error, backupReq, "direct-anthropic")
     }
-    spend = addSpend(spend, resp)
+    spend = addSpend(spend, resp, backupReq)
     const answer = parseStructuredAnswer(schema, resp.text)
     if (answer.ok) {
       const usage = spendUsage(spend)
       return { output: answer.data, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
-        providerCost: usage.providerCost, usageComplete: usage.complete, lane: resp.lane }
+        providerCost: usage.providerCost, usageComplete: usage.complete, lane: resp.lane, attempts: usage.attempts }
     }
     lastError = answer.error
     lastLane = resp.lane
@@ -369,38 +390,97 @@ interface StructuredSpend {
   costSeen: boolean
   /** Every attempt reported both token usage and cost. */
   complete: boolean
+  /** Each attempt, in order (see {@link StructuredLlmOutput.attempts}). */
+  attempts: readonly LlmAttemptSpend[]
 }
 
-const NO_SPEND: StructuredSpend = { inputTokens: 0, outputTokens: 0, cost: 0, costSeen: false, complete: true }
+const NO_SPEND: StructuredSpend = { inputTokens: 0, outputTokens: 0, cost: 0, costSeen: false, complete: true, attempts: [] }
 
-function addSpend(spend: StructuredSpend, resp: LlmResponse): StructuredSpend {
+/** The registry id an attempt ran on — `req.modelId` when it does not resolve (the attempt then threw anyway). */
+function attemptModelId(req: LlmRequest): string {
+  try {
+    return resolveModel(req).id
+  } catch {
+    return req.modelId
+  }
+}
+
+function addSpend(spend: StructuredSpend, resp: LlmResponse, attemptReq: LlmRequest): StructuredSpend {
+  const attempt: LlmAttemptSpend = {
+    lane: resp.lane,
+    modelId: attemptModelId(attemptReq),
+    requestChars: requestChars(attemptReq),
+    inputTokens: resp.usage?.inputTokens ?? 0,
+    outputTokens: resp.usage?.outputTokens ?? 0,
+    ...(resp.providerCost !== undefined ? { providerCost: resp.providerCost } : {}),
+    ...(resp.creditsUsd !== undefined ? { creditsUsd: resp.creditsUsd } : {}),
+  }
   return {
     inputTokens: spend.inputTokens + (resp.usage?.inputTokens ?? 0),
     outputTokens: spend.outputTokens + (resp.usage?.outputTokens ?? 0),
     cost: spend.cost + (resp.providerCost ?? 0),
     costSeen: spend.costSeen || resp.providerCost != null,
     complete: spend.complete && resp.usage !== undefined && resp.providerCost !== undefined,
+    attempts: [...spend.attempts, attempt],
   }
 }
 
-function spendUsage(spend: StructuredSpend): StructuredLlmError["usage"] {
+function spendUsage(spend: StructuredSpend): StructuredLlmUsage {
   return {
     inputTokens: spend.inputTokens,
     outputTokens: spend.outputTokens,
     providerCost: spend.costSeen ? spend.cost : undefined,
     complete: spend.complete,
+    attempts: [...spend.attempts],
   }
 }
 
+/**
+ * The attempt a usage-carrying failure stands for, or undefined when the
+ * failure billed nothing (no tokens, no cost). The lane is the error's own
+ * (`LlmStreamResponseError.lane`, which every lane adapter sets); only an
+ * error thrown without one falls back to the lane the attempt was asked on
+ * (`laneHint`), else the lane the router serves the request on first.
+ */
+function failedAttempt(error: unknown, attemptReq: LlmRequest, laneHint?: LlmServedLane): LlmAttemptSpend | undefined {
+  if (!(error instanceof LlmStreamResponseError)) return undefined
+  const u = error.usage
+  if (!(u.inputTokens > 0 || u.outputTokens > 0 || (u.providerCost ?? 0) > 0 || (u.creditsUsd ?? 0) > 0)) return undefined
+  return {
+    lane: error.lane ?? laneHint ?? primaryServedLane(attemptReq),
+    modelId: attemptModelId(attemptReq),
+    requestChars: requestChars(attemptReq),
+    inputTokens: u.inputTokens,
+    outputTokens: u.outputTokens,
+    ...(u.providerCost !== undefined ? { providerCost: u.providerCost } : {}),
+    ...(u.creditsUsd !== undefined ? { creditsUsd: u.creditsUsd } : {}),
+    ...(error instanceof LlmStreamAbortedError ? { estimated: true as const } : {}),
+  }
+}
+
+/** The served lane `llmPrimaryLane` names for this request (a direct lane is the model's own API). */
+function primaryServedLane(req: LlmRequest): LlmServedLane {
+  let model: LlmModelDef
+  try {
+    model = resolveModel(req)
+  } catch {
+    return "kie"
+  }
+  if (llmPrimaryLane(model, req) === "kie") return "kie"
+  return model.directGeminiModel ? "direct-gemini" : "direct-anthropic"
+}
+
 /** An attempt that threw ends the call; the usage it reported (if any) joins the total. */
-function failureWithSpend(spend: StructuredSpend, error: unknown): StructuredLlmError {
+function failureWithSpend(spend: StructuredSpend, error: unknown, attemptReq: LlmRequest, laneHint?: LlmServedLane): StructuredLlmError {
   const terminalUsage = error instanceof LlmStreamResponseError ? error.usage : undefined
+  const terminal = failedAttempt(error, attemptReq, laneHint)
   return new StructuredLlmError(error instanceof Error ? error.message : "Structured completion failed", {
     inputTokens: spend.inputTokens + (terminalUsage?.inputTokens ?? 0),
     outputTokens: spend.outputTokens + (terminalUsage?.outputTokens ?? 0),
     providerCost: spend.costSeen || terminalUsage?.providerCost !== undefined
       ? spend.cost + (terminalUsage?.providerCost ?? 0) : undefined,
     complete: spend.complete && terminalUsage?.complete === true,
+    attempts: terminal ? [...spend.attempts, terminal] : [...spend.attempts],
   }, { cause: error })
 }
 

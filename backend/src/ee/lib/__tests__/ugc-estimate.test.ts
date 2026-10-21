@@ -23,15 +23,14 @@ const priceOf = (c: Call): number =>
 
 vi.mock("../ugc-quote.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../ugc-quote.js")>()
-  return {
-    ...real,
-    priceUgcCalls: vi.fn(async (_caller: unknown, calls: Call[]) => {
-      h.begun += 1
-      if (h.gate) await h.gate
-      if (h.priceFails) throw new real.UgcQuoteError("Clip 1")
-      return calls.map(priceOf)
-    }),
-  }
+  const { priceUgcCallLinesVia } = await import("./helpers/ugc-price-lines.js")
+  const priceUgcCalls = vi.fn(async (_caller: unknown, calls: Call[]) => {
+    h.begun += 1
+    if (h.gate) await h.gate
+    if (h.priceFails) throw new real.UgcQuoteError("Clip 1")
+    return calls.map(priceOf)
+  })
+  return { ...real, priceUgcCalls, priceUgcCallLines: priceUgcCallLinesVia(priceUgcCalls) }
 })
 vi.mock("../../billing/credits.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../billing/credits.js")>()
@@ -51,9 +50,15 @@ vi.mock("../../../lib/private-plugins/load.js", () => ({ getPluginServices: () =
 // The leaf the consumers read from forwards to the mock above.
 vi.mock("../../../lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../../../lib/private-plugins/load.js")).getPluginServices }))
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({})) }))
+// The metered side of a clip's reading (round 3): side holds on/off, and the one-frame side hold.
+const side = vi.hoisted(() => ({ available: false, hold: 7, holdCalls: [] as unknown[][] }))
+vi.mock("../../../lib/llm-side-hold-availability.js", () => ({ sideHoldsAvailable: () => side.available }))
+vi.mock("../../billing/llm-hold-for-calls.js", () => ({
+  llmHoldForCalls: vi.fn(async (...a: unknown[]) => (side.holdCalls.push(a), { chargeId: "image-to-text:m", holdCredits: side.hold })),
+}))
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))
 
-import { ESTIMATE_CALLER, UgcQuoteError } from "../ugc-quote.js"
+import { ESTIMATE_CALLER, UgcQuoteError, priceUgcCalls } from "../ugc-quote.js"
 import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets } from "../ugc-estimate.js"
 
 /**
@@ -94,6 +99,8 @@ beforeEach(() => {
   h.priceFails = false
   h.gate = null
   h.begun = 0
+  side.available = false
+  side.holdCalls = []
 })
 
 describe("the dry-run estimate (spec §6.7)", () => {
@@ -125,6 +132,25 @@ describe("the dry-run estimate (spec §6.7)", () => {
     // 1–2 screenshots are dropped by the script, so they price like none
     const two = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 2, source: "photo" })
     expect(two.expected).toBe(r.expected)
+  })
+  it("R58: fixed mode (every deployed plugin) prices the in-clip reading at the TIER row the plugin charges; the creator check (a host route) at its estimate", async () => {
+    vi.mocked(priceUgcCalls).mockClear()
+    await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12)], false)
+    const clipCall = vi.mocked(priceUgcCalls).mock.calls.find(([, calls]) => (calls as Call[]).some((c) => c.tool === "generate_video"))!
+    expect((clipCall[1] as Call[]).map((c) => c.tool)).toEqual(["generate_video", "image_to_text"])
+    expect(clipCall[2]).toBe("tier")
+    vi.mocked(priceUgcCalls).mockClear()
+    await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    const creatorCall = vi.mocked(priceUgcCalls).mock.calls.find(([, calls]) => (calls as Call[]).some((c) => c.tool === "generate_image"))!
+    expect(creatorCall[2]).toBe("estimate")
+  })
+  it("R58 flags: fixed mode marks only the creator check an estimate (its part `~`); the ticket form marks nothing", async () => {
+    const tickets = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12)], false)
+    expect(tickets.estimateParts).toBeUndefined()
+    expect(tickets.lines.some((l) => l.estimate)).toBe(false)
+    const run = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    expect(run.estimateParts).toEqual(["creator"])
+    expect(run.lines.filter((l) => l.estimate).map((l) => l.key)).toEqual(["creatorCheck"])
   })
   it("an absent plugin service → UgcEstimateUnavailable", async () => {
     h.services = {}
@@ -384,5 +410,69 @@ describe("the multiple of a clip's price a run holds comes from the plugin", () 
     // 1.5 x 1213 = 1819.5 and 1.5 x 1003 = 1504.5, each rounded up.
     expect(quote.holdParts.clip).toBe(1820 + 1505)
     expect(quote.ceiling).toBe(1820 + 1505 + join + FIXED)
+  })
+})
+
+describe("round 3 — a clip's reading as the plugin charges it (clipReadingMode)", () => {
+  const metered = (model?: string) => {
+    h.services = { ugc: { estimate, clipReadingMode: () => "metered", ...(model ? { clipReadingModel: () => model } : {}) } }
+    side.available = true
+  }
+
+  it("absent (an older plugin) → today's fixed model: the reading inside each clip, held at the clip factor", async () => {
+    side.available = true
+    const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
+    expect(r.lines.some((l) => l.key === "clipReading")).toBe(false)
+    expect(r.lines[0]!.credits).toBe(1200 + 10 + 3)
+    expect(r.ceiling).toBe(2 * 1213 + 2 * 1003 + joinOf(12, 10) + FIXED)
+  })
+
+  it("metered but side holds unavailable (the rollback) → fixed, exactly as today", async () => {
+    metered()
+    side.available = false
+    const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12)], false)
+    expect(r.lines.some((l) => l.key === "clipReading")).toBe(false)
+    expect(r.lines[0]!.credits).toBe(1200 + 3)
+  })
+
+  it("metered: the clip holds video + speech only; one reading line per clip — expected one reading, held one side hold", async () => {
+    metered("claude-sonnet-5.5")
+    const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
+    expect(r.lines.slice(0, 4).map(({ key, n, credits }) => ({ key, n, credits }))).toEqual([
+      { key: "clip", n: 1, credits: 1210 },
+      { key: "clipReading", n: 1, credits: 3 },
+      { key: "clip", n: 2, credits: 1000 },
+      { key: "clipReading", n: 2, credits: 3 },
+    ])
+    // The reading lines are estimates (charged their actual usage), and so is the clip part: the editor shows `~`.
+    expect(r.lines.filter((l) => l.estimate).map((l) => l.key)).toEqual(["clipReading", "clipReading"])
+    expect(r.estimateParts).toEqual(["clip"])
+    const join = joinOf(12, 10)
+    expect(r.expected).toBe(1210 + 3 + 1000 + 3 + join + FIXED)
+    // Never the reading at the clip factor (held twice, affordable users refused): the clips at 2x, each reading's side hold once.
+    expect(r.ceiling).toBe(2 * 1210 + 7 + 2 * 1000 + 7 + join + FIXED)
+    expect(r.holdParts.clip).toBe(2 * 1210 + 7 + 2 * 1000 + 7)
+    // R56: priced at the lane it runs — direct (Advanced) — on the model the plugin pins, as an estimate.
+    const { priceUgcCalls: priced } = await import("../ugc-quote.js")
+    const readingCall = vi.mocked(priced).mock.calls.find(([, calls]) => (calls as Call[]).some((c) => c.args.advanced_mode === true))
+    expect(readingCall?.[1]).toEqual([{ tool: "image_to_text", args: { llmModel: "claude-sonnet-5.5", advanced_mode: true } }])
+    expect(readingCall?.[2]).toBe("estimate")
+    // The side hold sized as `side.holdFor`: a one-frame call pinned direct, under image-to-text.
+    expect(side.holdCalls[0]![0]).toBe("image-to-text")
+    expect((side.holdCalls[0]![1] as Array<{ request: { requireLane: string } }>)[0]!.request.requireLane).toBe("direct")
+  })
+
+  it("a reused clip makes no reading", async () => {
+    metered()
+    const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12), ticket(1, 10)], false, false, new Set([1]))
+    expect(r.lines.filter((l) => l.key === "clipReading").map((l) => l.n)).toEqual([2])
+  })
+
+  it("the estimate's worst case holds every re-render's reading (hold factor × the reading's side hold)", async () => {
+    metered()
+    const r = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 0, source: "photo" })
+    const high = Math.round(15 * 1.2)
+    expect(r.holdParts.clip).toBe(2 * 100 * high + 2 * 7)
+    expect(r.ceiling).toBe(r.expected - 3 - 1500 + 2 * 1500 + 7)
   })
 })

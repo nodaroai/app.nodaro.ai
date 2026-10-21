@@ -15,7 +15,8 @@
     "editorial"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 141,
+  "estimatedCredits": 162,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "person",

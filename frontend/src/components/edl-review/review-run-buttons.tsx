@@ -32,11 +32,11 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
           className={cn(RUN_BUTTON, "border-border bg-background hover:bg-accent")}
           disabled={disabled}
           aria-busy={runs.checking === "proxy" || undefined}
-          title={runs.previewCredits > 0 ? runPriceTitle(t, runs.previewUnchecked) : undefined}
+          title={runs.previewUnpriced || runs.previewCredits > 0 ? runPriceTitle(t, runs.previewUnchecked, runs.previewUnpriced) : undefined}
           onClick={runs.updatePreview}
         >
           {runs.checking === "proxy" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <RefreshCw className="h-3 w-3" aria-hidden />}
-          {t("renderFinal.updatePreview")}{runPriceSuffix(t, runs.previewCredits, runs.previewUnchecked)}
+          {t("renderFinal.updatePreview")}{runPriceSuffix(t, runs.previewCredits, runs.previewUnchecked, { approx: runs.previewApprox === true, unpriced: runs.previewUnpriced })}
         </button>
       )}
       {runs.canRenderFinal && (
@@ -45,11 +45,11 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
         className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
         disabled={disabled}
         aria-busy={runs.checking === "final" || undefined}
-        title={runs.finalCredits > 0 ? runPriceTitle(t, runs.finalUnchecked) : undefined}
+        title={runs.finalUnpriced || runs.finalCredits > 0 ? runPriceTitle(t, runs.finalUnchecked, runs.finalUnpriced) : undefined}
         onClick={runs.renderFinal}
       >
         {runs.checking === "final" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Film className="h-3 w-3" aria-hidden />}
-        {t("renderFinal.action")}{runPriceSuffix(t, runs.finalCredits, runs.finalUnchecked)}
+        {t("renderFinal.action")}{runPriceSuffix(t, runs.finalCredits, runs.finalUnchecked, { approx: runs.finalApprox === true, unpriced: runs.finalUnpriced })}
       </button>
       )}
     </>

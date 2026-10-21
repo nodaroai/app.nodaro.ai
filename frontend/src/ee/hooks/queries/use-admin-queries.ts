@@ -1066,7 +1066,14 @@ export interface CreditAnomaly {
   readonly credits_actual: number
   readonly diff: number
   readonly provider_cost_usd: number | null
-  readonly anomaly_type: "overcharge" | "undercharge" | "unknown_model" | "zero_cost"
+  readonly anomaly_type:
+    | "overcharge"
+    | "undercharge"
+    | "unknown_model"
+    | "zero_cost"
+    | "reconcile_exhausted"
+    | "uncollected_overrun"
+    | "metered_settle_unconfirmed"
   readonly status: "pending" | "acknowledged" | "dismissed"
   readonly admin_notes: string | null
   readonly resolved_at: string | null

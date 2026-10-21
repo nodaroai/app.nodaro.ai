@@ -9,6 +9,7 @@ import {
   LlmLaneError,
   LlmOutputTruncatedError,
   LlmPlatformExhaustedError,
+  LlmStreamAbortedError,
   LlmStreamResponseError,
   describeErrorChain,
 } from "../llm-errors.js"
@@ -100,7 +101,11 @@ export async function serveFromFallback<T>(ctx: LaneFallbackCtx, primaryErr: unk
 export function laneFallbackAllowed(err: unknown): boolean {
   // Nor a content refusal: it is the model's answer to the request, and the
   // other lane serves the same model the same request (LlmContentRefusalError).
-  return !(err instanceof LlmOutputTruncatedError) && !(err instanceof LlmContentRefusalError)
+  // Nor a stopped stream (D2): the caller asked for no answer at all, and one
+  // stopped while still reasoning has emitted no token, so the tainted-stream
+  // rule would not catch it — the other lane would be asked, and billed, anew.
+  return !(err instanceof LlmOutputTruncatedError) && !(err instanceof LlmContentRefusalError) &&
+    !(err instanceof LlmStreamAbortedError)
 }
 
 /**

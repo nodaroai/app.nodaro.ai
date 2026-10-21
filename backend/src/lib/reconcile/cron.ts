@@ -18,6 +18,8 @@ import { sweepExpiredHolds } from "./hold-expiry.js"
 import { markJobFailed } from "../job-failure.js"
 import { isUserQuietStopped } from "../access-blocks.js"
 import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
+import { sweepCancelledMeteredHolds } from "./cancelled-metered-holds.js"
+import { sweepSideLlmHolds } from "./side-llm-holds.js"
 
 export interface ReconcileResult {
   scanned: number
@@ -45,6 +47,7 @@ interface CandidateRow {
   provider_task_id: string | null
   provider_call_started_at: string | null
   reconcile_attempts: number
+  reconcile_last_error?: string | null
   job_type: string | null
   input_data: Record<string, unknown> | null
   finalize_claimed_at: string | null
@@ -117,7 +120,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
       .limit(BATCH_LIMIT)
 
   const BASE_COLUMNS =
-    "id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, job_type, input_data"
+    "id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, reconcile_last_error, job_type, input_data"
   let { data, error } = await candidateScan(`${BASE_COLUMNS}, finalize_claimed_at`)
 
   // Migration-window resilience (audit H2): if migration 210/211 hasn't
@@ -162,6 +165,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           id: row.id,
           provider_kind: row.provider_kind,
           reconcile_attempts: row.reconcile_attempts,
+          reconcile_last_error: row.reconcile_last_error ?? null,
         })
         result.swept++
       } else if (KIE_KINDS.has(kind)) {
@@ -231,6 +235,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           id: row.id,
           provider_kind: row.provider_kind,
           reconcile_attempts: row.reconcile_attempts,
+          reconcile_last_error: row.reconcile_last_error ?? null,
         })
         result.swept++
       }
@@ -245,6 +250,13 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   await sweepStuckUseCaseWrappers(result)
   await sweepStuckOrchestratorJobs(result)
   await sweepHeldJobsPastTtl(result)
+  // R38: a cancelled job's reserved metered LLM hold (kept by the cancel when
+  // its call had started) is settled from its ledger after the same grace.
+  await sweepCancelledMeteredHolds(result)
+  // 554: metered LLM SIDE holds (a call a job makes beside its own
+  // reservation) — no job-keyed pass can see them; this one settles any
+  // nobody settled, after the grace, whatever the job's state.
+  await sweepSideLlmHolds(result)
 
   return result
 }
@@ -267,7 +279,7 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - NEVER_STARTED_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, user_id, provider_kind, reconcile_attempts")
+    .select("id, user_id, provider_kind, reconcile_attempts, reconcile_last_error")
     .eq("status", "pending")
     .is("provider_call_started_at", null)
     .lt("created_at", cutoff)
@@ -290,6 +302,7 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
         id: row.id as string,
         provider_kind: (row.provider_kind as string | null) ?? null,
         reconcile_attempts: (row.reconcile_attempts as number | null) ?? 0,
+        reconcile_last_error: (row.reconcile_last_error as string | null) ?? null,
       })
       result.swept++
     } catch (err) {
@@ -387,6 +400,7 @@ interface StuckOrchestratorRow {
   id: string
   provider_kind: string | null
   reconcile_attempts: number | null
+  reconcile_last_error?: string | null
   user_id: string | null
   usage_log_id: string | null
   input_data: Record<string, unknown> | null
@@ -471,7 +485,7 @@ async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void
   const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, provider_kind, reconcile_attempts, user_id, usage_log_id, input_data, output_data")
+    .select("id, provider_kind, reconcile_attempts, reconcile_last_error, user_id, usage_log_id, input_data, output_data")
     .eq("status", "processing")
     .is("provider_call_started_at", null)
     .in("input_data->>type", STUCK_ORCHESTRATOR_JOB_TYPES)
@@ -501,6 +515,7 @@ async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void
         id: row.id,
         provider_kind: row.provider_kind ?? null,
         reconcile_attempts: row.reconcile_attempts ?? 0,
+        reconcile_last_error: row.reconcile_last_error ?? null,
       })
       result.swept++
     } catch (err) {

@@ -11,9 +11,9 @@ Describe Image (internally `image-to-text`) analyzes an input image using Claude
 |-------|------|---------|-------------|
 | Detail Level | select | `"detailed"` | Controls description depth: `brief` (1-2 sentences), `detailed` (3-6 sentences, flowing prose), `structured` (labeled sections: Subject, Setting, Colors, Lighting, Mood, Details) |
 | Custom Prompt | text | `""` | Optional override for the system prompt. When provided, replaces the default detail-level prompt entirely. Max 2000 characters. |
-| Model | select | Gemini 3.6 Flash | Any vision-capable LLM. Drives capability and credit tier. |
+| Model | select | Claude Sonnet 5.5 | Any vision-capable LLM. Drives capability and what a run is charged (see [Supported Providers](#supported-providers)). |
 | Effort | select | `Auto` | Reasoning effort for models that support it. |
-| Advanced mode | boolean | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature** and **Max Tokens** actually apply. Bills one credit rung up (a premium model moves to premium-direct); disabled with an inline reason on other models. |
+| Advanced mode | boolean | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature** and **Max Tokens** actually apply. The call is charged at that lane's per-token rate ([LLM model rates](../../pricing/llm-models.md)); disabled with an inline reason on other models. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
@@ -25,7 +25,7 @@ Describe Image (internally `image-to-text`) analyzes an input image using Claude
 - `text` -- generated text description
 ## Supported Providers
 
-This node uses Claude Sonnet exclusively via the Anthropic API. There is no provider selection -- the model is fixed.
+Any vision-capable model from the shared LLM selector; with none chosen the node runs on Claude Sonnet 5.5. A run is charged for the tokens it actually used — the image, the instructions and the description — at the model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical description: ~6 credits<!-- credits: image-to-text:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ~4<!-- credits: image-to-text:gemini-3.6-flash --> on Gemini 3.6 Flash. A failure the provider billed is charged for that usage; one it did not bill is refunded.
 
 ## Best Practices
 

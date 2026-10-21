@@ -21,7 +21,7 @@ Pick one option in the config panel ("What to do with the candidates"). The AI j
 
 | Option | Use when | Credits |
 |--------|----------|---------|
-| **AI picks the best** (`pick-best-llm`) | You want an AI judge to compare every candidate against your criteria and pick one | by judge model tier — 4<!-- credits: reduce:pick-best-llm:economy --> / 11<!-- credits: reduce:pick-best-llm --> / 28 cr<!-- credits: reduce:pick-best-llm:premium --> (see below) |
+| **AI picks the best** (`pick-best-llm`) | You want an AI judge to compare every candidate against your criteria and pick one | per token at the judge model's rate — ~6 cr<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default judge (see below) |
 | **Join into one text** (`concat`) | You want every candidate in a single text, with a separator between them | 0 cr |
 | **First that has content** (`first-non-empty`) | You want the first candidate that is not empty | 0 cr |
 | **Count them** (`count`) | You want how many candidates arrived | 0 cr |
@@ -33,23 +33,23 @@ Pick one option in the config panel ("What to do with the candidates"). The AI j
 Sends the candidates to an AI judge with your criteria. The judge replies with the chosen index + a one-sentence reason, shown on the node and in the Candidates tab.
 
 **Config:**
-- **AI Model** — the judge. The same model selector every LLM node has (Economy / Standard / Premium tiers, with descriptions). Default: the Standard-tier default for this feature. Stored as `strategyConfig.llmModel`; the API / MCP / SDK take the same field (any id from the LLM model registry; an unknown id is a 400 before any credits reserve).
+- **AI Model** — the judge. The same model selector every LLM node has (grouped by provider, with descriptions). Default: Claude Sonnet 5.5. Stored as `strategyConfig.llmModel`; the API / MCP / SDK take the same field (any id from the LLM model registry; an unknown id is a 400 before any credits reserve).
 - **Judge by** — describe what a winner looks like. Example: "The most eye-catching cover for a dark editorial Instagram feed — one clear focal point, readable as a thumbnail."
 - **The candidates are** — Texts (default) or Images. Set it on the node (the chip next to the model) or in the side panel — same field (`strategyConfig.inputKind`). **Pick Images when the candidates are pictures**: on Texts the judge is handed the image *links* as text and compares those, which reads like a real pick and is not one.
 
-**Pricing** follows the chosen judge model's tier, exactly like every other LLM node (`buildLlmCreditIdentifier` over the feature id `reduce:pick-best-llm`):
+**Pricing.** The judge is one LLM call over all the candidates, charged for the tokens it actually used — your criteria, every candidate (each image counts as an image) and the verdict — at the judge model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). Its price key is `reduce:pick-best-llm:<model>` (`:direct` on the provider's own API). The strategy picker shows the estimate for the model currently chosen on the node:
 
-| Judge model tier | Credit identifier | Credits |
+| Judge model | Price key | Typical judge call |
 |---|---|---|
-| Economy (e.g. Gemini Flash, Haiku) | `reduce:pick-best-llm:economy` | 4 cr<!-- credits: reduce:pick-best-llm:economy --> |
-| Standard (default) | `reduce:pick-best-llm` | 11 cr<!-- credits: reduce:pick-best-llm --> |
-| Premium (e.g. Opus) | `reduce:pick-best-llm:premium` | 28 cr<!-- credits: reduce:pick-best-llm:premium --> |
+| Gemini 3.6 Flash | `reduce:pick-best-llm:gemini-3.6-flash` | ~4 cr<!-- credits: reduce:pick-best-llm:gemini-3.6-flash --> |
+| Claude Sonnet 5.5 (default) | `reduce:pick-best-llm:claude-sonnet-5.5` | ~6 cr<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> |
+| Claude Opus 5.5 | `reduce:pick-best-llm:claude-opus-5.5` | ~11 cr<!-- credits: reduce:pick-best-llm:claude-opus-5.5 --> |
 
-The strategy picker shows the price for the model currently chosen on the node.
+More or longer candidates cost more. A judge answer the provider billed is charged even when it is cut off (the node then falls back to the first candidate).
 
 **Worked example:**
-- Upstream: List of 5 prompts → Generate Image (Z-Image) → Choose Best(pick-best-llm, criteria="brightest colors", inputKind="image-url", default Standard judge)
-- Cost: 5 image generations + 11 cr<!-- credits: reduce:pick-best-llm --> for the AI judge = 5 × 3<!-- credits: z-image --> + 11<!-- credits: reduce:pick-best-llm --> = 26 cr<!-- credits: 5*z-image + reduce:pick-best-llm -->. With a Premium judge: 5 × 3 + 28 = 43 cr<!-- credits: 5*z-image + reduce:pick-best-llm:premium -->; with an Economy judge: 5 × 3 + 4 = 19 cr<!-- credits: 5*z-image + reduce:pick-best-llm:economy -->.
+- Upstream: List of 5 prompts → Generate Image (Z-Image) → Choose Best(pick-best-llm, criteria="brightest colors", inputKind="image-url", default judge)
+- Cost: 5 image generations + the AI judge = 5 × 3<!-- credits: z-image --> + ~6<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> = ~21 cr<!-- credits: 5*z-image + reduce:pick-best-llm:claude-sonnet-5.5 --> estimated; the judge is then charged what its call used.
 
 ### Join into one text, First that has content, Count them, Most common answer, Merge JSON objects
 

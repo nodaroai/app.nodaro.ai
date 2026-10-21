@@ -149,7 +149,7 @@ function sourceFiles(dir: string): string[] {
   })
 }
 /** A call of a run estimator that expands use-case nodes for a viewer (the billing module's own definitions excluded). */
-const ESTIMATE_CALL = /\b(?:estimateWorkflowCredits|estimateRunSetCredits|estimateRunSetCreditsWithoutUgc|appRunResumeCredits)\s*\(/
+const ESTIMATE_CALL = /\b(?:estimateWorkflowCredits(?:Detailed)?|estimateRunSetCredits|estimateRunSetCreditsWithoutUgc|appRunResumeCredits)\s*\(/
 /** A listing: priced for everyone (`usecaseViewerForEveryone`: Speaker Map and Speaker Frames), never per viewer. */
 const LISTING_CALL = /\bestimateWorkflowListingCredits\s*\(/
 /** A viewer's own answer (Speaker Map's or Speaker Frames'). */

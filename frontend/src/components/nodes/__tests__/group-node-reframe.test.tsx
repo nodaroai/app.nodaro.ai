@@ -28,6 +28,8 @@ const gate = vi.hoisted(() => ({ live: true }))
 vi.mock("@nodaro/render-rules", async (orig) => ({ ...(await orig<typeof import("@nodaro/render-rules")>()), speakerViewVideoModeLive: () => gate.live }))
 vi.mock("@/lib/edition", async (orig) => ({ ...(await orig<typeof import("@/lib/edition")>()), hasCredits: () => credits.on }))
 vi.mock("@/hooks/use-model-credit-cost", () => ({
+  // No metered key is refused here (the run estimate asks for a refused key).
+  isModelRefused: () => false,
   getCachedModelCredits: () => undefined,
   prefetchModelCreditCosts: async () => {},
 }))

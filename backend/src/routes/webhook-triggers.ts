@@ -32,6 +32,7 @@ import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billin
 import { billingPairColumns } from "../lib/insert-job.js"
 import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
 import { refusePreviewFire } from "../lib/preview-fire-refusal.js"
+import { refuseUnpricedFire } from "../lib/llm-unpriced-fire-refusal.js"
 import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { isMissingColumnError } from "../lib/postgrest-errors.js"
@@ -264,6 +265,16 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       triggerNodeId: typeof fireNodeId === "string" ? fireNodeId : null,
     })
     if (previewRefusal) return reply.status(400).send({ error: previewRefusal })
+    // The branch meets a metered LLM model with no price (R51): refused the same way, before
+    // anything is created, so no fixed node upstream of it runs and charges.
+    const unpricedRefusal = await refuseUnpricedFire({
+      workflowId: trigger.workflow_id as string,
+      userId: trigger.user_id as string,
+      triggerType: "webhook",
+      triggerId: trigger.id as string,
+      triggerNodeId: typeof fireNodeId === "string" ? fireNodeId : null,
+    })
+    if (unpricedRefusal) return reply.status(400).send({ error: unpricedRefusal })
 
     // Check for an execution this trigger's owner already has running. Scoped
     // to them: before sharing, "an active execution of this workflow" and "an

@@ -15,7 +15,8 @@
     "campaign-remake"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 107,
+  "estimatedCredits": 114,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

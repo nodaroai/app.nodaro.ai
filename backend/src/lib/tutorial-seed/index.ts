@@ -40,6 +40,7 @@
 
 // @reads backend/src/lib/tutorial-seed/templates/**
 import { writeWithPerMinute } from "../listing-per-minute-columns.js"
+import { writeWithEstimateFlag } from "../listing-estimate-flag-column.js"
 import { createHash } from "node:crypto"
 import { readFile, readdir } from "node:fs/promises"
 import { dirname, join } from "node:path"
@@ -263,6 +264,11 @@ async function seedOne(
     ...r,
     markdown_description: `<!-- seed:${hash}:without-per-minute -->\n${doc.markdownDescription ?? ""}`,
   })
+  // Likewise without the listing's estimate flag (migration 552 not here yet).
+  const markWithoutFlag = <R extends Record<string, unknown>>(r: R): R => ({
+    ...r,
+    markdown_description: `<!-- seed:${hash}:without-estimate-flag -->\n${doc.markdownDescription ?? ""}`,
+  })
   if (existing && typeof existing.markdown_description === "string" &&
       existing.markdown_description.startsWith(marker)) {
     return "unchanged"
@@ -321,6 +327,10 @@ async function seedOne(
     // is EE). Absent → the same DB defaults the columns already carry.
     estimated_credits: doc.estimatedCredits ?? 0,
     estimated_per_minute_credits: doc.estimatedPerMinuteCredits ?? 0,
+    // The listed price holds a metered LLM estimate (Task 12 / R47): authored on the doc beside the
+    // figure and held to the listing by template-listing-prices.test.ts; a reader shows it only while
+    // metered pricing is on.
+    estimated_credits_is_estimate: doc.estimatedCreditsIsEstimate === true,
     node_types_used: doc.nodeTypesUsed ?? [],
     providers_used: doc.providersUsed ?? [],
     // Migration 114's CHECK is one-directional — 'tutorial' in listed_in
@@ -348,11 +358,16 @@ async function seedOne(
     // The per-minute column drops out until migration 483 reaches this
     // database, folded into the fixed price; the row is then marked stale so
     // the first boot with the column writes it whole.
-    const { error } = await writeWithPerMinute(
+    const { error } = await writeWithEstimateFlag(
       "workflow_templates",
       row,
-      (r) => db.from("workflow_templates").update(r).eq("id", existing.id),
-      markFolded,
+      (flagged) => writeWithPerMinute(
+        "workflow_templates",
+        flagged,
+        (r) => db.from("workflow_templates").update(r).eq("id", existing.id),
+        markFolded,
+      ),
+      markWithoutFlag,
     )
     if (error) throw error
     return "updated"
@@ -360,11 +375,11 @@ async function seedOne(
   // `listedIn` overrides the default channel on INSERT only (a marketplace
   // template declares `["marketplace"]`); every other OPERATOR_OWNED default
   // still applies. Spread order matters — the explicit key wins.
-  const { error } = await writeWithPerMinute(
+  const { error } = await writeWithEstimateFlag(
     "workflow_templates",
     { ...row, ...SEEDED_DEFAULTS, listed_in: doc.listedIn ?? SEEDED_DEFAULTS.listed_in },
-    (r) => db.from("workflow_templates").insert(r),
-    markFolded,
+    (flagged) => writeWithPerMinute("workflow_templates", flagged, (r) => db.from("workflow_templates").insert(r), markFolded),
+    markWithoutFlag,
   )
   if (error) throw error
   return "created"

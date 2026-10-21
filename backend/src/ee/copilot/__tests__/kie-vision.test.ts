@@ -123,4 +123,11 @@ describe("describeImageUrls", () => {
     const req = h.callKie.mock.calls[0]![1]
     expect(out.costUsd).toBeCloseTo(kieCostUsd("claude-sonnet-5", { promptChars: requestChars(req), answerChars: "A red square.".length }), 12)
   })
+
+  it("a model with no KIE rate fails the description loudly, never costs it $0", async () => {
+    // gemini-4-argon is directOnly: it carries no KIE rate row, so kieCostUsd throws.
+    h.callKie.mockResolvedValue(answer("A red square."))
+    const { LlmRateMissingError } = await import("../../../lib/pricing/llm-cost.js")
+    await expect(describeImageUrls("gemini-4-argon", ["https://r2.example/a.png"])).rejects.toBeInstanceOf(LlmRateMissingError)
+  })
 })

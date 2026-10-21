@@ -34,7 +34,15 @@ import {
   editScenePlan,
   generateScenePlan,
 } from "../../services/scene3d/index.js"
-import { markJobCompleted, setJobProgress, type HandlerFn, type JobContext } from "../shared.js"
+import {
+  attachLlmSpend,
+  markJobCompleted,
+  setJobProgress,
+  workerLlmBilling,
+  type HandlerFn,
+  type JobContext,
+  type WorkerLlmBilling,
+} from "../shared.js"
 import { waitForAnalysis, type AnalysisRow } from "./llm-structured.js"
 
 /** Re-stamp the reconcile sentinel this often. The parent can wait 20 minutes
@@ -127,39 +135,80 @@ async function complete(
   return markJobCompleted(ctx.jobId, { output_data: { ...output, ...extra } })
 }
 
+/**
+ * The authoring lanes' finish: a metered hold is settled from the planner's
+ * summed spend BEFORE the completion (the settle writes the billing ledger to
+ * its own server-only column — never output_data, R32); an unconfirmed settle
+ * leaves the row for the reconcile sweep. A tier hold completes, then commits
+ * as before.
+ */
+async function settleAndComplete(
+  ctx: JobContext,
+  billing: WorkerLlmBilling,
+  output: Scene3DJobOutput,
+  extra: Record<string, unknown>,
+): Promise<void> {
+  const settled = await billing.settle()
+  if (settled.metered && settled.outcome === "unsettled") return
+  const ok = settled.metered && settled.charged !== undefined
+    ? await markJobCompleted(ctx.jobId, {
+        output_data: { ...output, ...extra },
+        credits_actual: settled.charged,
+      })
+    : await complete(ctx, output, extra)
+  if (!ok) return // cancelled or held mid-flight — that path owns the hold
+  if (!settled.metered) await commitReservedCreditsForJob(ctx.jobId)
+}
+
 export const handleGenerate3dScene: HandlerFn = async function handleGenerate3dScene(job, ctx) {
   const payload = job.data as Scene3DGeneratePayload
   const heartbeat = setInterval(() => {
     void markProviderCallStart(ctx.jobId, "pre-task")
   }, SCENE3D_HEARTBEAT_MS)
+  let billing: WorkerLlmBilling | undefined
   try {
+    billing = await workerLlmBilling(ctx, job)
     const { analysis, analysisCredits } = await awaitReferenceAnalysis(payload, job, ctx)
     await throwIfJobCancelled()
     await setJobProgress(job, ctx.jobId, AUTHORING_PROGRESS)
 
-    const authored = await generateScenePlan({
-      prompt: payload.prompt,
-      width: payload.width,
-      height: payload.height,
-      fps: payload.fps,
-      durationInFrames: payload.durationInFrames,
-      llmModel: payload.llmModel ?? LLM_FEATURE_DEFAULTS["3d-scene"],
-      reasoningEffort: payload.reasoningEffort,
-      references: payload.references ?? [],
-      analysis,
-      analyzedReferenceId: payload.analyzedReferenceId,
-      revisionId: payload.revisionId,
-    })
+    // R38: the planner's first call is next — the row stops being "pre-call".
+    await billing.callStarting()
+    let authored: Awaited<ReturnType<typeof generateScenePlan>>
+    try {
+      authored = await generateScenePlan({
+        prompt: payload.prompt,
+        width: payload.width,
+        height: payload.height,
+        fps: payload.fps,
+        durationInFrames: payload.durationInFrames,
+        llmModel: payload.llmModel ?? LLM_FEATURE_DEFAULTS["3d-scene"],
+        reasoningEffort: payload.reasoningEffort,
+        references: payload.references ?? [],
+        analysis,
+        analyzedReferenceId: payload.analyzedReferenceId,
+        revisionId: payload.revisionId,
+        spend: billing.recorder,
+        afterCall: billing.noteSpend,
+      })
+    } catch (err) {
+      // Every planner call it made (each revision included) rides the error
+      // to the failure net, which charges them on a metered hold.
+      await billing.noteSpend()
+      throw attachLlmSpend(err, billing.spend)
+    }
 
-    const ok = await complete(ctx, { scenePlan: authored.plan }, {
+    await settleAndComplete(ctx, billing, { scenePlan: authored.plan }, {
       inputTokens: authored.inputTokens,
       outputTokens: authored.outputTokens,
       revisions: authored.revisions,
       ...(payload.analysisJobId ? { analysisJobId: payload.analysisJobId } : {}),
       ...(analysisCredits != null ? { analysisCredits } : {}),
     })
-    if (!ok) return // cancelled or held mid-flight — that path owns the refund
-    await commitReservedCreditsForJob(ctx.jobId)
+  } catch (err) {
+    // Any failure — a pre-call one too (the reference analysis wait) — carries
+    // the job's spend (an earlier BullMQ attempt's billed calls, R31).
+    throw billing ? attachLlmSpend(err, billing.spend) : err
   } finally {
     clearInterval(heartbeat)
   }
@@ -170,6 +219,7 @@ export const handleEdit3dScene: HandlerFn = async function handleEdit3dScene(job
   const heartbeat = setInterval(() => {
     void markProviderCallStart(ctx.jobId, "pre-task")
   }, SCENE3D_HEARTBEAT_MS)
+  let billing: WorkerLlmBilling | undefined
   try {
     // The DETERMINISTIC lane. No analysis to wait on, no model to call, no
     // provider window to hold — apply and settle.
@@ -198,26 +248,38 @@ export const handleEdit3dScene: HandlerFn = async function handleEdit3dScene(job
       return
     }
 
+    billing = await workerLlmBilling(ctx, job)
     const { analysis, analysisCredits } = await awaitReferenceAnalysis(payload, job, ctx)
     await throwIfJobCancelled()
     await setJobProgress(job, ctx.jobId, AUTHORING_PROGRESS)
 
-    const authored = await editScenePlan({
-      plan: payload.plan,
-      replaceReferences: payload.replaceReferences,
-      instruction: payload.instruction ?? "",
-      lockedObjectIds: payload.lockedObjectIds ?? [],
-      selectedObjectIds: payload.selectedObjectIds ?? [],
-      llmModel: payload.llmModel ?? LLM_FEATURE_DEFAULTS["3d-scene"],
-      reasoningEffort: payload.reasoningEffort,
-      references: payload.references ?? [],
-      analysis,
-      analyzedReferenceId: payload.analyzedReferenceId,
-      revisionId: payload.revisionId,
-    })
+    // R38: the planner's first call is next — the row stops being "pre-call".
+    await billing.callStarting()
+    let authored: Awaited<ReturnType<typeof editScenePlan>>
+    try {
+      authored = await editScenePlan({
+        plan: payload.plan,
+        replaceReferences: payload.replaceReferences,
+        instruction: payload.instruction ?? "",
+        lockedObjectIds: payload.lockedObjectIds ?? [],
+        selectedObjectIds: payload.selectedObjectIds ?? [],
+        llmModel: payload.llmModel ?? LLM_FEATURE_DEFAULTS["3d-scene"],
+        reasoningEffort: payload.reasoningEffort,
+        references: payload.references ?? [],
+        analysis,
+        analyzedReferenceId: payload.analyzedReferenceId,
+        revisionId: payload.revisionId,
+        spend: billing.recorder,
+        afterCall: billing.noteSpend,
+      })
+    } catch (err) {
+      await billing.noteSpend()
+      throw attachLlmSpend(err, billing.spend)
+    }
 
-    const ok = await complete(
+    await settleAndComplete(
       ctx,
+      billing,
       { scenePlan: authored.plan, changeSummary: authored.changeSummary },
       {
         mode: "prompt",
@@ -228,8 +290,10 @@ export const handleEdit3dScene: HandlerFn = async function handleEdit3dScene(job
         ...(analysisCredits != null ? { analysisCredits } : {}),
       },
     )
-    if (!ok) return
-    await commitReservedCreditsForJob(ctx.jobId)
+  } catch (err) {
+    // Any failure — a pre-call one too (the reference analysis wait) — carries
+    // the job's spend (an earlier BullMQ attempt's billed calls, R31).
+    throw billing ? attachLlmSpend(err, billing.spend) : err
   } finally {
     clearInterval(heartbeat)
   }

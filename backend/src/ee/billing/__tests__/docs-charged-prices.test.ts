@@ -1,4 +1,4 @@
-// @test-watches docs/**/*.{md,txt} frontend/src/nodes/** backend/src/nodes/**
+// @test-watches docs/**/*.{md,txt} docs/pricing/** frontend/src/nodes/** backend/src/nodes/**
 /**
  * THE DOCS STATE THE CHARGED PRICE.
  *
@@ -35,11 +35,18 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
 })
 
 import { STATIC_CREDIT_COSTS, chargedCredits, chargedPriceTableFrom } from "../credits.js"
+import { setLlmMeteredSchemaReadyForTesting } from "@/lib/llm-metered-schema-gate.js"
+// What is measured is the hosted deployment, where metered LLM pricing is on (R33: its schema is applied).
+setLlmMeteredSchemaReadyForTesting(true)
 import { BUILD_ASSETS } from "../../../../scripts/copy-build-assets.mjs"
+import { LLM_RATE_TABLE_PAGE, renderLlmRateTable } from "../../../../scripts/gen-llm-rate-table.js"
+import { METERED_LLM_FEATURES } from "../llm-typical-usage.js"
+import { effectiveMarkupPercent } from "../service-margin.js"
 import {
   REPO_ROOT,
   annotationIds,
   docsPricing,
+  llmFigurePricing,
   findUnannotatedFigures,
   listPricedPages,
   loadDocsPriceSettings,
@@ -53,6 +60,7 @@ import {
 const settings = loadDocsPriceSettings()
 const table = chargedPriceTableFrom(new Map(), settings)
 const { chargeOf, rateOf } = docsPricing(table, chargedCredits, settings.charged)
+const llmOf = llmFigurePricing(settings)
 const pages = listPricedPages()
 const textOf = (file: string) => readFileSync(join(REPO_ROOT, file), "utf8")
 const figures: DocFigure[] = pages.flatMap((file) => readDocFigures(file, textOf(file)))
@@ -64,13 +72,13 @@ describe("every price figure in docs/ is the charged price", () => {
   })
 
   it("every annotated id is priced", () => {
-    const unpriced = figures.filter((f) => f.annotation.kind !== "none" && priceOf(f.annotation, chargeOf, rateOf) === undefined)
+    const unpriced = figures.filter((f) => f.annotation.kind !== "none" && priceOf(f.annotation, chargeOf, rateOf, llmOf) === undefined)
     expect(unpriced.map(where), "annotated with an id that has no price").toEqual([])
   })
 
   it("every annotated figure equals its charged price", () => {
     const wrong = figures.flatMap((f) => {
-      const charged = priceOf(f.annotation, chargeOf, rateOf)
+      const charged = priceOf(f.annotation, chargeOf, rateOf, llmOf)
       return charged === undefined || charged === f.figure ? [] : [`${where(f)}: page ${f.figure}, charged ${charged}`]
     })
     expect(wrong, "run `npm run docs:prices -- --fix` and re-read the sentence around each figure").toEqual([])
@@ -99,6 +107,40 @@ describe("every price figure in docs/ is the charged price", () => {
     const asset = BUILD_ASSETS.find((a) => a.dir === "ee/billing")
     expect(asset, "add docs-price-settings.json to BUILD_ASSETS in scripts/copy-build-assets.mjs").toBeDefined()
     expect(asset!.match.test("docs-price-settings.json")).toBe(true)
+  })
+})
+
+describe("the per-model LLM rate table (docs/pricing/llm-models.md)", () => {
+  it("is the generator's output for the current rates and settings", () => {
+    expect(textOf(LLM_RATE_TABLE_PAGE), "run: cd backend && npx tsx scripts/gen-llm-rate-table.ts").toBe(renderLlmRateTable(settings))
+  })
+
+  it("states charged credits per million tokens: Claude Fable 5 output on the aggregator is 11,000", () => {
+    // usdToCredits(20) = 10000 base → applyMarkupPercent(10000, 10) = ceil(10000 × 1.1) = 11000
+    expect(llmOf({ kind: "per-million", modelId: "claude-fable-5", lane: "kie", direction: "output", band: "base" })).toBe(11000)
+    expect(textOf(LLM_RATE_TABLE_PAGE)).toContain("11,000<!-- credits-llm-rate: claude-fable-5:kie:output -->")
+  })
+
+  it("prices a call as the metered settle does: summed, floored at the minimum, charged once", () => {
+    // Fable on the aggregator, 2,000 in / 2,000 out = 0.048 USD → 24 base → 27 (the plan's settle figure)
+    expect(llmOf({ kind: "call", modelId: "claude-fable-5", lane: "kie", inputTokens: 2000, outputTokens: 2000 })).toBe(27)
+    // A first attempt of 2,667 in at the 32,768-token output cap: 368 on the aggregator (the hold), 917 direct.
+    expect(llmOf({ kind: "call", modelId: "claude-fable-5", lane: "kie", inputTokens: 2667, outputTokens: 32768 })).toBe(368)
+    expect(llmOf({ kind: "call", modelId: "claude-fable-5", lane: "direct", inputTokens: 2667, outputTokens: 32768 })).toBe(917)
+    // 0.004 USD → 2 base → 3 (the plan's stopped-stream figure)
+    expect(llmOf({ kind: "call", modelId: "claude-sonnet-5.5", lane: "kie", inputTokens: 1000, outputTokens: 800 })).toBe(3)
+    // A call that computed next to nothing is charged the floor: 1 base → 2
+    expect(llmOf({ kind: "call", modelId: "gemini-3-flash", lane: "kie", inputTokens: 1, outputTokens: 1 })).toBe(2)
+    // A lane with no rate of its own is priced nowhere (gemini-4-argon never runs on the aggregator).
+    expect(llmOf({ kind: "call", modelId: "gemini-4-argon", lane: "kie", inputTokens: 1, outputTokens: 1 })).toBeUndefined()
+  })
+
+  it("every metered feature is charged at the global setting the table states (no metered feature has a margin of its own)", () => {
+    // Workflow Copilot keeps its own pricing (D4): a tier-billed feature, not in METERED_LLM_FEATURES.
+    const own = METERED_LLM_FEATURES.filter(
+      (f) => effectiveMarkupPercent(settings, `${f}:claude-fable-5`) !== settings.cost_markup_percent,
+    )
+    expect(own, "a feature with its own margin is not charged the table's rates — state its rates or drop the margin").toEqual([])
   })
 })
 
@@ -132,6 +174,33 @@ describe("the annotation reader", () => {
     expect(parseAnnotation(false, "n/a")).toEqual({ kind: "none" })
     expect(() => parseAnnotation(false, "a - b")).toThrow()
     expect(() => parseAnnotation(false, "(12 + 3)")).toThrow(/names no price id/)
+  })
+
+  it("reads credits-llm-rate figures: per million tokens (base and long band) and one call's usage", () => {
+    expect(readDocFigures("x.md", "| 11,000<!-- credits-llm-rate: claude-fable-5:kie:output --> |")[0]!.annotation).toEqual({
+      kind: "llm",
+      figure: { kind: "per-million", modelId: "claude-fable-5", lane: "kie", direction: "output", band: "base" },
+    })
+    expect(parseAnnotation("llm-rate", "gemini-3.1-pro:direct:input:long")).toEqual({
+      kind: "llm",
+      figure: { kind: "per-million", modelId: "gemini-3.1-pro", lane: "direct", direction: "input", band: "long" },
+    })
+    expect(parseAnnotation("llm-rate", "claude-fable-5:direct@2667/32768")).toEqual({
+      kind: "llm",
+      figure: { kind: "call", modelId: "claude-fable-5", lane: "direct", inputTokens: 2667, outputTokens: 32768 },
+    })
+    expect(() => parseAnnotation("llm-rate", "claude-fable-5:premium:output")).toThrow(/credits-llm-rate/)
+    expect(() => parseAnnotation("llm-rate", "n/a")).toThrow(/credits-llm-rate/)
+  })
+
+  it("holds a credits-llm-rate figure to the rule (a wrong one is caught, --fix rewrites it)", () => {
+    const [wrong] = readDocFigures("x.md", "costs 28 credits<!-- credits-llm-rate: claude-fable-5:kie@2000/2000 -->")
+    expect(priceOf(wrong!.annotation, chargeOf, rateOf, llmOf)).toBe(27)
+    expect(wrong!.figure).toBe(28)
+    // Without the LLM evaluator it is priced nowhere — never silently "correct".
+    expect(priceOf(wrong!.annotation, chargeOf, rateOf)).toBeUndefined()
+    const fixed = rewriteDocFigures("costs 28 credits<!-- credits-llm-rate: claude-fable-5:kie@2000/2000 -->", (a) => priceOf(a, chargeOf, rateOf, llmOf))
+    expect(fixed).toBe("costs 27 credits<!-- credits-llm-rate: claude-fable-5:kie@2000/2000 -->")
   })
 
   it("prices a whole-run charge once and separate charges each", () => {

@@ -16,7 +16,8 @@
     "placements"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 96,
+  "estimatedCredits": 117,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

@@ -68,6 +68,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
               route, the estimator and the SDK all read one field. */}
           <LlmModelSelect
             feature="pick-best-llm"
+            priceFeature="reduce:pick-best-llm"
             value={typeof config.llmModel === "string" ? config.llmModel : undefined}
             onChange={(llmModel) => onChange({ ...config, llmModel })}
           />
