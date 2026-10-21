@@ -191,6 +191,32 @@ describe("GET /v1/sessions/:id/items", () => {
     expect(has(items, "eq", "user_id", OWNER)).toBe(true)
   })
 
+  it("leaves a child job out of a non-admin's feed, and replaces a trend run's failure text", async () => {
+    db.respond = (q) => {
+      if (q.table === "generation_sessions") return { data: SESSION_ROW, error: null }
+      if (q.table === "session_items") {
+        return {
+          data: [
+            { job_id: JOB_B, kind: "native", added_at: "2026-10-15T11:00:00+00:00", imported_from_session_id: null,
+              job: { id: JOB_B, status: "completed", user_id: OWNER, parent_job_id: JOB_A, input_data: { prompt: "hidden wording" } } },
+            { job_id: JOB_A, kind: "native", added_at: "2026-10-15T10:01:00+00:00", imported_from_session_id: null,
+              job: { id: JOB_A, status: "failed", user_id: OWNER, parent_job_id: null, error_message: "failed for the hidden role",
+                input_data: { type: "cast-swap", trend: { slug: "t" } } } },
+          ],
+          error: null,
+        }
+      }
+      return { data: null, error: null }
+    }
+    const res = await app.inject({ method: "GET", url: `/v1/sessions/${SESSION}/items`, headers: { "x-user-id": OWNER } })
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data as Array<{ jobId: string; job: Record<string, unknown> }>
+    expect(data.map((d) => d.jobId)).toEqual([JOB_A])
+    expect(data[0]!.job.error_message).toBe("This run didn't finish.")
+    expect(data[0]!.job.parent_job_id).toBeUndefined()
+    expect(res.body).not.toContain("hidden")
+  })
+
   it("404s a session that is not the caller's, and reads no items", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/sessions/${SESSION}/items`, headers: { "x-user-id": OWNER } })
     expect(res.statusCode).toBe(404)
@@ -241,6 +267,16 @@ describe("POST /v1/sessions/:id/items (import)", () => {
     })
     expect(res.statusCode).toBe(404)
     expect(queries("session_items")).toHaveLength(0)
+  })
+
+  it("never imports a child job: it reads as a job that does not exist", async () => {
+    respondWithJobs([{ id: JOB_A, session_id: null }])
+    await app.inject({
+      method: "POST", url: `/v1/sessions/${SESSION}/items`, headers: { "x-user-id": OWNER },
+      payload: { jobIds: [JOB_A] },
+    })
+    const [jobLookup] = queries("jobs")
+    expect(has(jobLookup, "is", "parent_job_id", null)).toBe(true)
   })
 
   it("caps a call at 100 ids", async () => {

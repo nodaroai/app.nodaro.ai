@@ -352,7 +352,7 @@ describe("favorited and rating on every listed job", () => {
 
   it("GET /v1/jobs/:id answers the job when its owner state cannot be read — without the two fields", async () => {
     vi.mocked(supabase.from).mockImplementation(() => {
-      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: listedJob(JOB), error: null }) }
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: listedJob(JOB), error: null }) }
       return chain as never
     })
     vi.mocked(jobOwnerStateFor).mockRejectedValueOnce(new Error("job_ratings timeout"))
@@ -368,7 +368,7 @@ describe("favorited and rating on every listed job", () => {
   it("GET /v1/jobs/:id stamps the job with its owner's state", async () => {
     const row = { ...listedJob(JOB), user_id: OWNER }
     vi.mocked(supabase.from).mockImplementation(() => {
-      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
       return chain as never
     })
     vi.mocked(jobOwnerStateFor).mockResolvedValueOnce(new Map([[JOB, { favorited: true, rating: "bad" as const }]]))
@@ -382,7 +382,7 @@ describe("favorited and rating on every listed job", () => {
 
   it("GET /v1/jobs/:id answers a never-marked job as not favorited, not rated", async () => {
     vi.mocked(supabase.from).mockImplementation(() => {
-      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: listedJob(JOB), error: null }) }
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: listedJob(JOB), error: null }) }
       return chain as never
     })
     const res = await app.inject({ method: "GET", url: `/v1/jobs/${JOB}?__userId=${OWNER}` })

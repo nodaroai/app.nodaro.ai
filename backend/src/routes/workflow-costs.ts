@@ -6,6 +6,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { requireScope } from "../lib/scopes.js"
 import { getBillingProvider, type Charge } from "../lib/billing-provider.js"
 import { sanitizeCostSummaryForPublic } from "./jobs.js"
+import { CHILD_JOB_COLUMN } from "../lib/public-job-data.js"
 
 const costSummaryBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(500),
@@ -63,8 +64,10 @@ export async function workflowCostRoutes(app: FastifyInstance) {
       .from("jobs")
       .select("id, status, input_data")
       .in("id", jobIds)
+    // A non-admin prices only their own jobs, and never a child job: it reads
+    // as a job that does not exist, as on every job read by id (CHILD_JOB_COLUMN).
     if (!isAdmin) {
-      query = query.eq("user_id", req.userId)
+      query = query.eq("user_id", req.userId).is(CHILD_JOB_COLUMN, null)
     }
     const { data: jobs, error } = await query
 

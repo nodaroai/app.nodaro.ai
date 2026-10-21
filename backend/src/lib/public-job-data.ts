@@ -31,6 +31,71 @@ export function redactPrivateJobOutput<T>(output: T): T {
   return redactPrivateJobData(withoutServerOnlyKeys(output))
 }
 
+// ── child jobs and trend runs: what a NON-ADMIN job read leaves out ─────────
+
+/**
+ * The column that makes a job a CHILD: a step a worker-side handler ran for
+ * its parent (`tk.http.workerRequest`). A child's `input_data` is what the
+ * handler sent on the user's behalf — for Cast Swap, the engine's own prompt
+ * wording and a silent copy of the source clip — and the parent's
+ * `output_data` names it, so its owner can learn its id. A child is shown only
+ * through its parent: the lists leave it out (`applyJobListFilters`), and every
+ * read of a job BY ID answers a non-admin `query.is(CHILD_JOB_COLUMN, null)`,
+ * so a child reads exactly as a job that does not exist. Admins keep reading
+ * children. Workers and server-side waits read the raw row and are untouched.
+ */
+export const CHILD_JOB_COLUMN = "parent_job_id"
+
+/** What a non-admin reads in place of a trend run's failure text. */
+export const TREND_RUN_FAILURE_MESSAGE = "This run didn't finish."
+
+/**
+ * The select fragment a job read adds when it does not read `input_data`
+ * itself (the lean status reads), so `maskTrendRunError` can tell a trend run.
+ * The alias is removed by `maskTrendRunError` for every caller.
+ */
+export const TREND_RUN_MARKER_SELECT = "trend_run_marker:input_data->trend"
+const TREND_RUN_MARKER = "trend_run_marker"
+
+function isTrendRun(row: Record<string, unknown>): boolean {
+  if (row[TREND_RUN_MARKER] != null) return true
+  const input = row.input_data
+  return !!input && typeof input === "object" && !Array.isArray(input) && (input as Record<string, unknown>).trend != null
+}
+
+/**
+ * A job row as a job read returns it: the trend-run marker (if selected)
+ * removed, and — for a NON-ADMIN — a trend run's `error_message` replaced with
+ * `TREND_RUN_FAILURE_MESSAGE`. A trend run's failure can quote any part of its
+ * hidden input (the source clip, a role name, the trend prompt), whole or in
+ * pieces, so no filter over the text is safe. `error_hint` stays: it is the
+ * user-safe channel. A row with no failure text keeps its null. Admins author
+ * the hidden data and read the real text. Never mutates the row.
+ */
+export function maskTrendRunError<T extends object>(row: T, isAdmin: boolean): T {
+  const rec = row as unknown as Record<string, unknown>
+  const trend = isTrendRun(rec)
+  if (!(TREND_RUN_MARKER in rec) && (isAdmin || !trend || rec.error_message == null)) return row
+  const { [TREND_RUN_MARKER]: _marker, ...rest } = rec
+  if (!isAdmin && trend && rest.error_message != null) rest.error_message = TREND_RUN_FAILURE_MESSAGE
+  return rest as unknown as T
+}
+
+/** `maskTrendRunError` over a list of rows. */
+export function maskTrendRunErrors<T extends object>(rows: readonly T[], isAdmin: boolean): T[] {
+  return rows.map((row) => maskTrendRunError(row, isAdmin))
+}
+
+/** A trend run's failure text as a non-admin reads it, from the text and the job's `input_data` (or marker). */
+export function trendRunErrorText(
+  errorMessage: string | null | undefined,
+  inputData: unknown,
+  isAdmin: boolean,
+): string | null {
+  const masked = maskTrendRunError({ error_message: errorMessage ?? null, input_data: inputData }, isAdmin)
+  return masked.error_message
+}
+
 function redact(value: unknown, seen: WeakMap<object, unknown>): unknown {
   if (value === null || typeof value !== "object") return value
 

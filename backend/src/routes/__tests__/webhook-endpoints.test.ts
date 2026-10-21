@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import rateLimit from "@fastify/rate-limit"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
 type Op = [string, unknown[]]
@@ -188,7 +188,7 @@ afterEach(async () => {
 
 describe("POST /v1/webhook-endpoints", () => {
   it("creates an endpoint in this environment and returns its secret, once", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : {})
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : {})
     const res = await app.inject({
       method: "POST", url: "/v1/webhook-endpoints", headers: as(OWNER),
       payload: { url: "https://hooks.example.com/in", description: "orders" },
@@ -278,7 +278,7 @@ describe("POST /v1/webhook-endpoints", () => {
   })
 
   it("stores the address normalized, so two spellings of one address are one address", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : {})
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : {})
     const res = await app.inject({
       method: "POST", url: "/v1/webhook-endpoints", headers: as(OWNER),
       payload: { url: "  https://HOOKS.Example.com:443/in  " },
@@ -667,7 +667,7 @@ describe("POST /v1/webhook-endpoints/:id/rotate-secret", () => {
 
 describe("GET /v1/webhook-endpoints/:id/deliveries/:deliveryId", () => {
   it("returns one delivery of the caller's own endpoint, by its id", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : { data: DELIVERY_ROW })
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : { data: DELIVERY_ROW })
     const res = await app.inject({ method: "GET", url: `/v1/webhook-endpoints/${EP}/deliveries/${DELIVERY}`, headers: as(OWNER) })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toMatchObject({ id: DELIVERY, webhookId: EP, status: "failed", error: "http_500" })
@@ -677,8 +677,21 @@ describe("GET /v1/webhook-endpoints/:id/deliveries/:deliveryId", () => {
     expect(has(read, "eq", "user_id", OWNER)).toBe(true)
   })
 
+  it("never shows the kept body of a delivery for a child job", async () => {
+    // Recorded before migration 550 stopped the capture for child jobs.
+    const childRow = { ...DELIVERY_ROW, payload: '{"data":{"job":{"input_data":{"prompt":"hidden wording"}}}}' }
+    db.respond = (q) => (q.table === "jobs" ? { data: [{ id: DELIVERY_ROW.job_id }] } : q.table === "webhooks" ? { data: ROW } : { data: childRow })
+    const res = await app.inject({ method: "GET", url: `/v1/webhook-endpoints/${EP}/deliveries/${DELIVERY}`, headers: as(OWNER) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ id: DELIVERY, requestBody: null })
+    expect(res.body).not.toContain("hidden wording")
+    const [jobs] = queries("jobs")
+    expect(has(jobs, "in", "id", [DELIVERY_ROW.job_id])).toBe(true)
+    expect(has(jobs, "not", "parent_job_id", "is", null)).toBe(true)
+  })
+
   it("404s a delivery that is not this endpoint's", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : { data: null })
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : { data: null })
     const res = await app.inject({ method: "GET", url: `/v1/webhook-endpoints/${EP}/deliveries/${DELIVERY}`, headers: as(OWNER) })
     expect(res.statusCode).toBe(404)
   })
@@ -719,11 +732,64 @@ describe("events and the jobs list", () => {
     expect(jobsRoute).toContain(`return execution?.is_component_execution !== true && execution?.trigger_type !== "use_case"`)
     expect(migration).toContain(`AND (e.is_component_execution IS TRUE OR e.trigger_type = 'use_case')`)
   })
+
+  // Migration 550 redefines the capture so a child job (`parent_job_id` set),
+  // which every job read hides from its owner, records no event either — and
+  // keeps 521's inner-run rule and endpoint match unchanged.
+  it("the capture records nothing for a child job", () => {
+    const dir = join(__dirname, "..", "..", "..", "..", "supabase", "migrations")
+    const latest = readFileSync(join(dir, "550_webhooks_skip_child_jobs.sql"), "utf8")
+    const original = readFileSync(join(dir, "521_outbound_webhooks.sql"), "utf8")
+    expect(latest).toMatch(/CREATE OR REPLACE FUNCTION public\.webhooks_record_job_event\(/)
+    expect(latest).toMatch(/SELECT 1 FROM public\.jobs j\s+WHERE j\.id = p_job_id\s+AND j\.parent_job_id IS NOT NULL\s+\) THEN\s+RETURN;/)
+    expect(latest).toContain(`AND (e.is_component_execution IS TRUE OR e.trigger_type = 'use_case')`)
+    // The child check aside, the function body is 521's.
+    const body = (sql: string) => sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.webhooks_record_job_event("), sql.indexOf("$$;", sql.indexOf("CREATE OR REPLACE FUNCTION public.webhooks_record_job_event(")))
+    const withoutChildCheck = body(latest).replace(/\n  -- A child job is reported only through its parent\.\n  IF EXISTS \([\s\S]*?END IF;\n/, "")
+    expect(withoutChildCheck).toBe(body(original))
+    // No other migration from 550 on — a later one, or another branch's file
+    // that took the same number — redefines it without the check. Matched by
+    // file name, so a sibling 550 is checked too.
+    const ours = "550_webhooks_skip_child_jobs.sql"
+    for (const file of readdirSync(dir).filter((f) => /^\d+_.*\.sql$/.test(f) && f !== ours && Number(f.split("_")[0]) >= 550)) {
+      expect(readFileSync(join(dir, file), "utf8"), file).not.toContain("FUNCTION public.webhooks_record_job_event(")
+    }
+  })
+
+  // Deliveries recorded for a child job BEFORE 550 keep the child's body: 550
+  // drops every such body and closes a delivery not yet sent for good, the way
+  // the dispatcher closes one whose job is gone (`failed`, no due time, no lease).
+  it("550 scrubs the deliveries already recorded for a child job", () => {
+    const sql = readFileSync(join(__dirname, "..", "..", "..", "..", "supabase", "migrations", "550_webhooks_skip_child_jobs.sql"), "utf8")
+    const update = sql.slice(sql.indexOf("UPDATE public.webhook_deliveries d"))
+    expect(update).toMatch(/SET payload = NULL,/)
+    expect(update).toMatch(/status = CASE WHEN d\.status = 'pending' THEN 'failed' ELSE d\.status END/)
+    expect(update).toMatch(/next_retry_at = CASE WHEN d\.status = 'pending' THEN NULL ELSE d\.next_retry_at END/)
+    expect(update).toMatch(/lease_until = CASE WHEN d\.status = 'pending' THEN NULL ELSE d\.lease_until END/)
+    expect(update).toMatch(/last_error = CASE WHEN d\.status = 'pending' THEN 'child_job' ELSE d\.last_error END/)
+    expect(update).toMatch(/AND j\.parent_job_id IS NOT NULL/)
+    // Only the statuses 521's state machine allows (webhook_deliveries_status_valid).
+    expect(update).not.toMatch(/'skipped'|'cancelled'/)
+  })
+})
+
+describe("GET /v1/webhook-endpoints/:id/deliveries — a child job's delivery", () => {
+  it("lists it without its kept body; other deliveries keep theirs", async () => {
+    const CHILD_JOB = "00000000-0000-4000-8000-0000000000c1"
+    const childRow = { ...DELIVERY_ROW, id: "00000000-0000-4000-8000-0000000000d2", job_id: CHILD_JOB, status: "pending", payload: '{"data":{"job":{"input_data":{"prompt":"hidden wording"}}}}' }
+    db.respond = (q) => (q.table === "jobs" ? { data: [{ id: CHILD_JOB }] } : q.table === "webhooks" ? { data: ROW } : { data: [childRow, DELIVERY_ROW] })
+    const res = await app.inject({ method: "GET", url: `/v1/webhook-endpoints/${EP}/deliveries`, headers: as(OWNER) })
+    expect(res.statusCode).toBe(200)
+    const [child, other] = res.json().data as Array<{ jobId: string; requestBody: string | null }>
+    expect(child).toMatchObject({ jobId: CHILD_JOB, requestBody: null })
+    expect(other!.requestBody).toBe(DELIVERY_ROW.payload)
+    expect(res.body).not.toContain("hidden wording")
+  })
 })
 
 describe("GET /v1/webhook-endpoints/:id/deliveries", () => {
   it("pages the endpoint's delivery log, newest first", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : { data: [DELIVERY_ROW] })
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : { data: [DELIVERY_ROW] })
     const res = await app.inject({ method: "GET", url: `/v1/webhook-endpoints/${EP}/deliveries?limit=1&status=failed`, headers: as(OWNER) })
     expect(res.statusCode).toBe(200)
     const body = res.json()
@@ -745,7 +811,7 @@ describe("GET /v1/webhook-endpoints/:id/deliveries", () => {
   })
 
   it("continues after a cursor it issued, and refuses one it did not", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : { data: [] })
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : { data: [] })
     const cursor = encodeCursor({ at: DELIVERY_ROW.created_at, id: DELIVERY })
     const res = await app.inject({ method: "GET", url: `/v1/webhook-endpoints/${EP}/deliveries?cursor=${cursor}`, headers: as(OWNER) })
     expect(res.statusCode).toBe(200)
@@ -815,7 +881,7 @@ describe("POST /v1/webhook-endpoints/:id/test", () => {
   })
 
   it("is rate-limited to 10 a minute", async () => {
-    db.respond = (q) => (q.table === "webhooks" ? { data: ROW } : { data: { ...DELIVERY_ROW, event: "ping", status: "pending" } })
+    db.respond = (q) => (q.table === "jobs" ? { data: [] } : q.table === "webhooks" ? { data: ROW } : { data: { ...DELIVERY_ROW, event: "ping", status: "pending" } })
     const codes: number[] = []
     for (let i = 0; i < 11; i++) {
       codes.push((await app.inject({ method: "POST", url: `/v1/webhook-endpoints/${EP}/test`, headers: as(OWNER) })).statusCode)

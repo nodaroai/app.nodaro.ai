@@ -1354,7 +1354,11 @@ async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<s
  */
 
 function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
-  return withJobSubmissionContext(opts, () => app.inject({
+  // `trustedPluginCaller`: plugin code is trusted, so a route it reaches may let
+  // it name its own child job as a source (mayUseChildJobAsSource). Set here
+  // and only here, after the plugin's options, so no option can unset it; MCP's
+  // `mcpInject` and the trend routes' `engineRequest` never set it.
+  return withJobSubmissionContext({ ...opts, trustedPluginCaller: true }, () => app.inject({
     method: opts.method,
     url: opts.url,
     headers: {

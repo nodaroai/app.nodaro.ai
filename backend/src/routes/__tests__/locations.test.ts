@@ -252,6 +252,7 @@ describe("GET /v1/locations/:id", () => {
   function jobsChain(jobsResult: { data: unknown; error: unknown } = { data: [], error: null }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       filter: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),

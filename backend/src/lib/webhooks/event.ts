@@ -25,6 +25,7 @@
 import { supabase } from "../supabase.js"
 import { PUBLIC_JOB_KEYS, sanitizeJobForPublic, type JobRecord } from "../../routes/jobs.js"
 import { fillJobRenderQuality } from "../render-label-fill.js"
+import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import { creditStatusMapFor, creditStatusOf, creditsChargedOf } from "../job-credit-status.js"
 import type { WebhookEventType } from "./event-types.js"
 
@@ -72,6 +73,13 @@ function envelope(d: ClaimedDelivery, data: Record<string, unknown>): string {
   return JSON.stringify({ id: d.deliveryId, type: d.event, createdAt: isoTime(d.createdAt), data })
 }
 
+/** Whether the delivery's job is a child job (CHILD_JOB_COLUMN). Throws on a database error (the attempt is retried). */
+async function isChildJob(jobId: string, deliveryId: string): Promise<boolean> {
+  const { data, error } = await supabase.from("jobs").select(CHILD_JOB_COLUMN).eq("id", jobId).maybeSingle()
+  if (error) throw new Error(`could not read the job for webhook delivery ${deliveryId}`)
+  return (data as Record<string, unknown> | null)?.[CHILD_JOB_COLUMN] != null
+}
+
 async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | null> {
   if (!d.jobId) return null
   const { data, error } = await supabase
@@ -79,6 +87,10 @@ async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | nul
     .select(JOB_EVENT_COLUMNS)
     .eq("id", d.jobId)
     .eq("user_id", d.userId)
+    // A child job is reported only through its parent: the capture records no
+    // event for one (migration 550), and should one be queued anyway it reads
+    // as gone, so its input is never sent.
+    .is(CHILD_JOB_COLUMN, null)
     .maybeSingle()
   if (error) throw new Error(`could not read the job for webhook delivery ${d.deliveryId}`)
   if (!data) return null
@@ -143,6 +155,10 @@ function jobEventBody(d: ClaimedDelivery, job: Record<string, unknown>): string 
  */
 export async function eventBodyFor(d: ClaimedDelivery): Promise<BuiltEvent> {
   if (typeof d.payload === "string" && d.payload.length > 0) {
+    // A kept body is trusted only for a job that is not a child: one recorded
+    // for a child (before migration 550 stopped the capture) holds the child's
+    // input, so it is never sent again — the job reads as gone.
+    if (d.jobId && (await isChildJob(d.jobId, d.deliveryId))) return { kind: "missing" }
     return { kind: "body", body: d.payload, fresh: false }
   }
   if (d.event === "ping") {

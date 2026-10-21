@@ -17,6 +17,11 @@
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — the routes are
  * the cloud plugin's, and a cloud boot without it answers `not_available`.
+ *
+ * STANDING RULE: the body below is built field by field from the tool's own
+ * arguments and never carries `trendRun`. Any internal relay of a
+ * user-supplied body to `/v1/cast-swap` must never forward `trendRun` — only
+ * the platform's trend routes compose a run that sets it.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"

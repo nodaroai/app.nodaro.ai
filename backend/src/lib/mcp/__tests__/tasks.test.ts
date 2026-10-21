@@ -161,6 +161,23 @@ describe("task lifecycle", () => {
    * leaves an agent polling a job that will never move on its own; the MCP task
    * enum's one non-working, non-terminal member says exactly the right thing.
    */
+  it("replaces a trend run's failure text in tasks/get and tasks/result", async () => {
+    // The row as the select's marker alias (`input_data->trend`) returns it.
+    taskDb.row = {
+      status: "failed",
+      output_data: null,
+      error_message: "failed for the hidden role",
+      trend_run_marker: { slug: "the-trend" },
+    }
+    registerTask({ taskId: "j-trend", userId: "u1", kind: "video" })
+    const handlers = handlersFor("u1")
+    const got = (await handlers.get(GetTaskRequestSchema)!({ params: { taskId: "j-trend" } })) as { statusMessage?: string }
+    expect(got.statusMessage).toBe("This run didn't finish.")
+    const result = await handlers.get(GetTaskPayloadRequestSchema)!({ params: { taskId: "j-trend" } })
+    expect(JSON.stringify(result)).toContain("This run didn't finish.")
+    expect(JSON.stringify(result)).not.toContain("hidden role")
+  })
+
   it("tasks/get maps a pending_review job to input_required, not working", async () => {
     taskDb.row = { status: "pending_review", output_data: null, error_message: null }
     registerTask({ taskId: "j-held", userId: "u1", kind: "image" })

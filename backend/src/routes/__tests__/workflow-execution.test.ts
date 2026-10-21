@@ -932,6 +932,7 @@ describe("GET /v1/workflow-executions/:id", () => {
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               is: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnThis(),
                 single: vi.fn().mockResolvedValue({
                   data: null,
                   error: { code: "PGRST116", message: "not found" },
@@ -1016,6 +1017,7 @@ describe("GET /v1/workflow-executions/:id", () => {
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               is: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnThis(),
                 single: vi.fn().mockResolvedValue({
                   data: {
                     id: TEST_JOB_ID,
@@ -1071,6 +1073,7 @@ describe("GET /v1/workflow-executions/:id", () => {
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               is: vi.fn().mockReturnValue({
+                is: vi.fn().mockReturnThis(),
                 single: vi.fn().mockResolvedValue({
                   data: {
                     id: TEST_JOB_ID,
@@ -1704,6 +1707,7 @@ describe("GET /v1/workflows/:id/executions", () => {
               }),
             }),
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               order: vi.fn().mockReturnValue({
                 limit: vi.fn().mockResolvedValue({
                   data: [],
@@ -1749,6 +1753,7 @@ describe("GET /v1/workflows/:id/executions", () => {
               }),
             }),
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               order: vi.fn().mockReturnValue({
                 limit: vi.fn().mockResolvedValue({
                   data: [],
@@ -1795,6 +1800,7 @@ describe("GET /v1/workflows/:id/executions", () => {
               }),
             }),
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               order: vi.fn().mockReturnValue({
                 limit: vi.fn().mockResolvedValue({
                   data: [jobRow],
@@ -1853,6 +1859,7 @@ describe("GET /v1/executions", () => {
         return {
           select: vi.fn().mockReturnValue({
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               not: vi.fn().mockReturnValue({
                 order: vi.fn().mockReturnValue({
                   limit: vi.fn().mockReturnValue({
@@ -1895,6 +1902,7 @@ describe("GET /v1/executions", () => {
           }),
         }),
         is: vi.fn().mockReturnValue({
+          is: vi.fn().mockReturnThis(),
           not: vi.fn().mockReturnValue({
             order: vi.fn().mockReturnValue({
               limit: vi.fn().mockResolvedValue({
@@ -1912,6 +1920,7 @@ describe("GET /v1/executions", () => {
             }),
           }),
           is: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnThis(),
             not: vi.fn().mockReturnValue({
               order: vi.fn().mockReturnValue({
                 limit: vi.fn().mockResolvedValue({
@@ -2046,6 +2055,7 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               single: vi.fn().mockResolvedValue(nullMiss),
             }),
           }),
@@ -2118,6 +2128,7 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               single: vi.fn().mockResolvedValue({ data: jobRow, error: null }),
             }),
           }),
@@ -2184,6 +2195,7 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               single: vi.fn().mockResolvedValue({ data: jobRow, error: null }),
             }),
           }),
@@ -2257,6 +2269,7 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             is: vi.fn().mockReturnValue({
+              is: vi.fn().mockReturnThis(),
               single: vi.fn().mockResolvedValue({ data: jobRow, error: null }),
             }),
           }),
@@ -2490,6 +2503,20 @@ describe("held jobs are restorable — pending_review in the active-status query
     expect(state.status).toBe("pending_review")
     expect(state.awaitingReview).toBe(true)
     expect(state.jobId).toBe("job-uuid-held")
+  })
+
+  it("jobToExecutionSummary replaces a trend run's failure text for a non-admin, not for an admin", () => {
+    const row = {
+      id: "job-trend", node_id: null, status: "failed", provider: "cast-swap",
+      input_data: { type: "cast-swap", trend: { slug: "t" } }, progress: 100, credits: 4,
+      error_message: "failed for the hidden role", started_at: "t0", completed_at: "t1", created_at: "t-1",
+    }
+    const user = jobToExecutionSummary(row) as { errorMessage: unknown; nodeStates: Record<string, Record<string, unknown>> }
+    expect(user.errorMessage).toBe("This run didn't finish.")
+    expect(user.nodeStates["job-trend"]!.error).toBe("This run didn't finish.")
+    expect(JSON.stringify(user)).not.toContain("hidden role")
+    const admin = jobToExecutionSummary(row, true) as { errorMessage: unknown }
+    expect(admin.errorMessage).toBe("failed for the hidden role")
   })
 
   it("a normal running job carries no awaitingReview sidecar", () => {

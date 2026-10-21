@@ -21,6 +21,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { mayUseChildJobAsSource } from "../lib/job-submission-context.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
@@ -89,6 +90,9 @@ async function seedanceDraftFinalizePreHandler(req: FastifyRequest, reply: Fasti
     userId: req.userId,
     taskId: str(body.taskId) ?? str(body.kieTaskId),
     sourceJobId: str(body.sourceJobId),
+    // Only a worker-side handler's own request may finalize a child job
+    // (Cast Swap's Full Quality upscale of its edit child).
+    allowChildSource: mayUseChildJobAsSource(req),
   })
   if (!resolved.ok) {
     return reply.status(resolved.status).send({ error: { code: resolved.code, message: resolved.message } })

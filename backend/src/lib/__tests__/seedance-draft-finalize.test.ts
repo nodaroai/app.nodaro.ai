@@ -13,6 +13,7 @@ type Row = {
   provider_task_id: string | null
   provider_kind: string | null
   relay_job_id?: string | null
+  parent_job_id?: string | null
   input_data: Record<string, unknown> | null
   output_data: Record<string, unknown> | null
 }
@@ -83,6 +84,19 @@ describe("resolveSeedanceDraftFinalize — refusals", () => {
   it("an unknown id is 404 (also a malformed job id, without a query)", async () => {
     expect(await resolveSeedanceDraftFinalize({ userId: USER, taskId: "nope" })).toMatchObject({ ok: false, status: 404, code: "draft_not_found" })
     expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: "not-a-uuid" })).toMatchObject({ ok: false, status: 404 })
+  })
+
+  it("a child job reads exactly as an unknown draft, by job id and by task id", async () => {
+    db.rows = [draftRow({ parent_job_id: "99999999-9999-4999-8999-999999999999" })]
+    const missing = await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: "aaaaaaaa-2222-4333-8444-555555555555" })
+    expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })).toEqual(missing)
+    expect(await resolveSeedanceDraftFinalize({ userId: USER, taskId: "task-draft" })).toEqual(missing)
+  })
+
+  it("a worker-side handler's own request may finalize its child (allowChildSource)", async () => {
+    db.rows = [draftRow({ parent_job_id: "99999999-9999-4999-8999-999999999999" })]
+    const r = await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID, allowChildSource: true })
+    expect(r).toMatchObject({ ok: true, sourceJobId: DRAFT_ID })
   })
 
   it("another user's draft is refused (IDOR), by task id and by job id", async () => {

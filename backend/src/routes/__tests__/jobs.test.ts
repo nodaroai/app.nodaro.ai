@@ -306,7 +306,10 @@ function seedJobs(rows: SeedJob[], usageLogStatuses: Record<string, string> = {}
               .map((col) => [col, r[col as keyof SeedJob]]),
           ),
         )
-      return Promise.resolve({ data: filtered, error: null })
+      // A non-admin read also leaves child jobs out (`.is("parent_job_id", null)`);
+      // no seeded row is one.
+      const result = Promise.resolve({ data: filtered, error: null })
+      return Object.assign(result, { is: () => result })
     })
     const inFn = vi.fn().mockImplementation((_col: string, ids: string[]) => {
       capturedIds = ids
@@ -472,10 +475,12 @@ describe("GET /v1/jobs/status", () => {
 
     // `job_type` + `input_quality` are the two read-only columns the Preview
     // label fill needs (render-label-fill.ts); the route removes both again
-    // before answering (jobs-render-label.test.ts pins that).
+    // before answering (jobs-render-label.test.ts pins that). The trend-run
+    // marker (only `input_data.trend`, never the rest of the input) tells the
+    // failure-text mask a trend run; it is removed before answering too.
     expect(capturedSelect).toEqual([
       "id", "status", "progress", "output_data", "error_message", "error_hint", "usage_log_id",
-      "job_type", "input_quality:input_data->>quality",
+      "job_type", "input_quality:input_data->>quality", "trend_run_marker:input_data->trend",
     ])
     for (const secret of ["provider_cost", "display_cost", "credits", "provider"]) {
       expect(capturedSelect).not.toContain(secret)
@@ -601,6 +606,7 @@ describe("GET /v1/jobs/:id/status", () => {
     const chain: Record<string, unknown> = {
       select: vi.fn((cols: unknown) => { selected.push(cols); return chain }),
       eq: vi.fn(() => chain),
+      is: vi.fn(() => chain),
       single: vi.fn().mockResolvedValue({ data: row, error: null }),
     }
     vi.mocked(supabase.from).mockReturnValue(chain as never)
@@ -637,6 +643,7 @@ describe("GET /v1/jobs/:id/status", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: row, error: null }),
       }
       return chain as never
@@ -669,6 +676,7 @@ describe("GET /v1/jobs/:id/status", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: row, error: null }),
       }
       return chain as never
@@ -990,6 +998,7 @@ describe("GET /v1/jobs/:id — job_type", () => {
       const chain = {
         select: vi.fn((cols: string) => { selected = cols; return chain }),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: { ...sampleJob, user_id: TEST_USER_ID }, error: null }),
       }
       return chain as never
@@ -1018,6 +1027,7 @@ describe("server-only `__` output keys are never returned", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: { ...sampleJob, user_id: TEST_USER_ID, output_data: withCheckpoint }, error: null }),
       }
       return chain as never
@@ -1097,6 +1107,7 @@ describe("server-only `__` output keys are never returned", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({
           data: { ...sampleJob, user_id: TEST_USER_ID, input_data: trendRun, output_data: { videoUrl: "https://out.example/r.mp4" } },
           error: null,
@@ -1153,6 +1164,7 @@ describe("GET /v1/jobs/:id — a job held for review", () => {
       const chain = {
         select: vi.fn((cols: string) => { selected = cols; return chain }),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: { ...heldRow, user_id: TEST_USER_ID }, error: null }),
       }
       return chain as never
@@ -1188,7 +1200,7 @@ describe("credits_charged — the settled charge beside the hold", () => {
     const row = { ...sampleJob, user_id: TEST_USER_ID, credits: 888, credits_actual: 444, usage_log_id: "ul-partial" }
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "usage_logs") return usageLogsAnswer([PARTIAL])
-      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
       return chain as never
     })
 
@@ -1209,7 +1221,7 @@ describe("credits_charged — the settled charge beside the hold", () => {
       const row = { ...sampleJob, user_id: TEST_USER_ID, usage_log_id: usageLog ? usageLog.id : null }
       vi.mocked(supabase.from).mockImplementation((table: string) => {
         if (table === "usage_logs") return usageLogsAnswer(usageLog ? [usageLog] : [])
-        const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+        const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
         return chain as never
       })
       const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
@@ -1275,6 +1287,7 @@ describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: row, error: null }),
       }
       return chain as never
@@ -1292,6 +1305,7 @@ describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: { ...sampleJob, user_id: TEST_USER_ID }, error: null }),
       }
       return chain as never
@@ -1316,6 +1330,7 @@ describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        is: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: row, error: null }),
       }
       return chain as never

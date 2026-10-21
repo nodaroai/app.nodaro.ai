@@ -261,6 +261,12 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
  * to its free pool under free-tier semantics — its own surface check would
  * read false on the internal hop (no Origin). The pool-aware flag replaces a
  * hard `paygSurfaceGuard` block here, as on 3d-scene's paid run.
+ *
+ * STANDING RULE: `payload` is a body the platform composed (`composeTrendRun`),
+ * never a user-supplied body passed through. Any internal relay of a caller's
+ * body to `/v1/cast-swap` must never forward `trendRun`: that field makes a
+ * run a trend run and carries the record the trend routes show of it, so only
+ * the platform's own composition may set it.
  */
 export async function engineRequest(
   app: FastifyInstance,

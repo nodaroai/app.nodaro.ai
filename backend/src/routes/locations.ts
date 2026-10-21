@@ -6,6 +6,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
+import { CHILD_JOB_COLUMN } from "../lib/public-job-data.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { deleteKeysRecordingFailures } from "../lib/storage-delete.js"
@@ -364,6 +365,8 @@ export async function locationRoutes(app: FastifyInstance) {
         .from("jobs")
         .select("id, input_data, status")
         .eq("user_id", userId)
+        // Never a child job's input (CHILD_JOB_COLUMN): it is shown only through its parent.
+        .is(CHILD_JOB_COLUMN, null)
         .in("status", [...IN_FLIGHT_JOB_STATUSES])
         .filter("input_data->>attachToLocationId", "eq", id)
         .order("created_at", { ascending: false })

@@ -32,7 +32,7 @@ import {
   GetTaskRequestSchema,
   ListTasksRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
-import { redactPrivateJobOutput } from "../public-job-data.js"
+import { TREND_RUN_MARKER_SELECT, redactPrivateJobOutput, trendRunErrorText } from "../public-job-data.js"
 
 export interface Task {
   taskId: string
@@ -265,7 +265,7 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const { supabase } = await import("../supabase.js")
     const { data } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message, created_at, started_at, completed_at")
+      .select(`status, output_data, error_message, created_at, started_at, completed_at, ${TREND_RUN_MARKER_SELECT}`)
       .eq("id", taskId)
       .maybeSingle()
 
@@ -292,7 +292,9 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
       createdAt: created,
       lastUpdatedAt: updated,
     }
-    if (data?.error_message) result.statusMessage = data.error_message
+    // A trend run's failure text is replaced (an MCP session is never an admin one).
+    const statusMessage = trendRunErrorText(data?.error_message, { trend: data?.trend_run_marker }, false)
+    if (statusMessage) result.statusMessage = statusMessage
     return result
   })
 
@@ -354,7 +356,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
   while (Date.now() - start < TIMEOUT_MS && !signal.aborted) {
     const { data } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message")
+      .select(`status, output_data, error_message, ${TREND_RUN_MARKER_SELECT}`)
       .eq("id", jobId)
       .maybeSingle()
     if (!data) {
@@ -391,7 +393,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
         taskId: jobId,
         status: data.status,
         output: redactPrivateJobOutput(data.output_data ?? null),
-        error: data.error_message ?? null,
+        error: trendRunErrorText(data.error_message, { trend: data.trend_run_marker }, false),
       }
     }
     await new Promise((r) => setTimeout(r, 1000))

@@ -59,6 +59,21 @@ describe("trendVersionDataSchema", () => {
     expect(trendVersionDataSchema.safeParse(data({ slots: [slot("a".repeat(33), "person")] })).success).toBe(false)
   })
 
+  it("rejects a built-in object property name as a slot key (it matches the pattern)", () => {
+    for (const key of ["__proto__", "constructor"]) {
+      const r = trendVersionDataSchema.safeParse(data({ slots: [slot(key, "person")] }))
+      expect(r.success, key).toBe(false)
+      expect(messages(r).join(" ")).toMatch(/built-in/)
+    }
+  })
+
+  it("rejects a built-in object property name as an example's slot key", () => {
+    // As a request body arrives: JSON.parse makes `__proto__` an own key.
+    const slots = JSON.parse(`{"__proto__":["${IMG}"]}`) as Record<string, unknown>
+    const example = { videoUrl: IMG, width: 1, height: 1, durationSec: 4, slots, sourceJobId: "j" }
+    expect(trendVersionDataSchema.safeParse(data({ examples: [example] })).success).toBe(false)
+  })
+
   describe("chip defaults are per kind", () => {
     it("accepts person body/outfit/hair, pet body/coat and product shape/finish", () => {
       const r = trendVersionDataSchema.safeParse(data({
@@ -187,6 +202,18 @@ describe("trendRunRequestSchema", () => {
   it("rejects 4 images in a slot", () => {
     const r = trendRunRequestSchema.safeParse({ slots: { dancer: { images: [IMG, IMG, IMG, IMG] } } })
     expect(r.success).toBe(false)
+  })
+
+  it("rejects a built-in object property name as a slot key", () => {
+    for (const key of ["__proto__", "constructor", "toString"]) {
+      // As a request body arrives: JSON.parse makes `__proto__` an own key.
+      const body = JSON.parse(`{"slots":{"${key}":{"body":"new"}}}`) as unknown
+      expect(trendRunRequestSchema.safeParse(body).success, key).toBe(false)
+    }
+  })
+
+  it("leaves a slot key of any other shape to the trend (unknown_slot)", () => {
+    expect(trendRunRequestSchema.safeParse({ slots: { Ghost: { body: "new" } } }).success).toBe(true)
   })
 
   it("rejects an unknown chip key", () => {

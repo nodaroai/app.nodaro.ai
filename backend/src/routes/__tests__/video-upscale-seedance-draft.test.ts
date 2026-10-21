@@ -74,6 +74,13 @@ describe("POST /v1/video-upscale — seedance-2-5-hd", () => {
     app.addHook("preHandler", async (req) => {
       const body = req.body as Record<string, unknown> | undefined
       if (typeof body?.userId === "string") req.userId = body.userId
+      if (req.headers["x-test-internal"] === "1") req.authKind = "internal"
+      // The internal lane as the auth hook reads it (the real hook: lib/__tests__/child-source-trust.test.ts).
+      const internalUser = req.headers["x-internal-user-id"]
+      if (req.headers["x-internal-orchestrator-secret"] !== undefined && typeof internalUser === "string") {
+        req.userId = internalUser
+        req.authKind = "internal"
+      }
     })
     await app.register(async (i) => { await videoUpscaleRoutes(i) })
     await app.ready()
@@ -82,6 +89,40 @@ describe("POST /v1/video-upscale — seedance-2-5-hd", () => {
 
   const post = (payload: Record<string, unknown>) =>
     app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "seedance-2-5-hd", userId: "user-a", ...payload } })
+
+  it("a caller may not finalize a child job: the gate is asked with allowChildSource false", async () => {
+    // A browser, an API key, and an internal hop relaying a caller's body (MCP) alike.
+    await post({ sourceJobId: PLAN.sourceJobId })
+    await app.inject({ method: "POST", url: "/v1/video-upscale", headers: { "x-test-internal": "1" }, payload: { provider: "seedance-2-5-hd", userId: "user-a", sourceJobId: PLAN.sourceJobId } })
+    expect(resolver.calls.map((c) => c.allowChildSource)).toEqual([false, false])
+  })
+
+  it("a worker-side handler's own request may (Cast Swap's Full Quality upscale of its edit child)", async () => {
+    const { withJobSubmissionContext } = await import("../../lib/job-submission-context.js")
+    await withJobSubmissionContext(
+      { userId: "user-a", method: "POST", url: "/v1/video-upscale", parentJobId: "88888888-8888-4888-8888-888888888888" },
+      () => app.inject({ method: "POST", url: "/v1/video-upscale", headers: { "x-test-internal": "1" }, payload: { provider: "seedance-2-5-hd", userId: "user-a", sourceJobId: PLAN.sourceJobId } }),
+    )
+    expect(resolver.calls[0]!.allowChildSource).toBe(true)
+  })
+
+  it("the plugin toolkit's internalRequest may finalize a child; an MCP relay may not", async () => {
+    // The toolkit's internalRequest, as it calls (the toolkit itself, through
+    // the real auth hook: lib/__tests__/child-source-trust.test.ts).
+    const { withJobSubmissionContext } = await import("../../lib/job-submission-context.js")
+    await withJobSubmissionContext(
+      { userId: "user-a", method: "POST", url: "/v1/video-upscale", trustedPluginCaller: true },
+      () => app.inject({
+        method: "POST", url: "/v1/video-upscale",
+        headers: { "x-internal-orchestrator-secret": "s", "x-internal-user-id": "user-a" },
+        payload: { provider: "seedance-2-5-hd", sourceJobId: PLAN.sourceJobId },
+      }),
+    )
+    const { mcpInject } = await import("../../lib/mcp/internal-request.js")
+    const { newSession } = await import("../../lib/mcp/session.js")
+    await mcpInject(app, newSession({ userId: "user-a", scopes: [], clientName: "Claude" }), { method: "POST", url: "/v1/video-upscale", payload: { provider: "seedance-2-5-hd", sourceJobId: PLAN.sourceJobId } })
+    expect(resolver.calls.map((c) => c.allowChildSource)).toEqual([true, false])
+  })
 
   it("needs the draft's taskId or sourceJobId", async () => {
     resolver.result = { ok: false, status: 400, code: "draft_source_required", message: "x" }
@@ -104,7 +145,7 @@ describe("POST /v1/video-upscale — seedance-2-5-hd", () => {
   it("prices from the source draft and sends the DRAFT's task id, not the body's", async () => {
     const res = await post({ sourceJobId: PLAN.sourceJobId, taskId: "something-else" })
     expect(res.statusCode).toBe(200)
-    expect(resolver.calls[0]).toEqual({ userId: "user-a", taskId: "something-else", sourceJobId: PLAN.sourceJobId })
+    expect(resolver.calls[0]).toEqual({ userId: "user-a", taskId: "something-else", sourceJobId: PLAN.sourceJobId, allowChildSource: false })
     expect(guardSeen).toEqual([{ id: "seedance-2-5-hd:4s", computes: false }])
     expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-hd:4s")
     expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("video-upscale", expect.objectContaining({

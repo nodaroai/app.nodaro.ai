@@ -39,6 +39,7 @@ vi.mock("../../../lib/supabase.js", () => {
   chain.single = async () => ({ data: null, error: { code: "PGRST116", message: "no rows" } })
   return { supabase: { from: () => chain } }
 })
+vi.mock("../../../lib/queue.js", () => ({ videoQueue: { add: vi.fn() }, redis: {} }))
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: async () => ({ cost_markup_percent: 0 }) }))
 vi.mock("../../../lib/config.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/config.js")>()),
@@ -71,6 +72,12 @@ describe("POST /v1/credits/seedance-hd-estimate", () => {
     app.addHook("preHandler", async (req) => {
       const user = req.headers["x-test-user"]
       if (typeof user === "string") req.userId = user
+      // The internal lane as the auth hook reads it (the real hook: lib/__tests__/child-source-trust.test.ts).
+      const internalUser = req.headers["x-internal-user-id"]
+      if (req.headers["x-internal-orchestrator-secret"] !== undefined && typeof internalUser === "string") {
+        req.userId = internalUser
+        req.authKind = "internal"
+      }
     })
     registerSeedanceHdEstimate(app)
     await app.ready()
@@ -79,6 +86,21 @@ describe("POST /v1/credits/seedance-hd-estimate", () => {
 
   const post = (payload: Record<string, unknown>, user: string | null = "user-a") =>
     app.inject({ method: "POST", url: URL_, payload, headers: user ? { "x-test-user": user } : {} })
+
+  it("a caller's child source is refused like a missing one: the gate is asked with allowChildSource false", async () => {
+    await post({ sourceJobId: PLAN.sourceJobId })
+    const { mcpInject } = await import("../../../lib/mcp/internal-request.js")
+    const { newSession } = await import("../../../lib/mcp/session.js")
+    await mcpInject(app, newSession({ userId: "user-a", scopes: [], clientName: "Claude" }), { method: "POST", url: URL_, payload: { sourceJobId: PLAN.sourceJobId } })
+    expect(resolver.calls.map((c) => c.allowChildSource)).toEqual([false, false])
+  })
+
+  it("the plugin toolkit's internalRequest may quote a child (Cast Swap's Full Quality quote of its edit child)", async () => {
+    const { buildToolkit } = await import("../../../lib/private-plugins/toolkit.js")
+    const res = await buildToolkit().http.internalRequest!(app, { method: "POST", url: URL_, userId: "user-a", payload: { sourceJobId: PLAN.sourceJobId } })
+    expect(res.statusCode).toBe(200)
+    expect(resolver.calls[0]).toMatchObject({ userId: "user-a", sourceJobId: PLAN.sourceJobId, allowChildSource: true })
+  })
 
   it("needs a signed-in caller", async () => {
     const res = await post({ taskId: "task-draft" }, null)
@@ -96,7 +118,7 @@ describe("POST /v1/credits/seedance-hd-estimate", () => {
     const res = await post({ taskId: "task-draft" })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: { credits: 1580, minimum: false } })
-    expect(resolver.calls).toEqual([{ userId: "user-a", taskId: "task-draft", sourceJobId: undefined }])
+    expect(resolver.calls).toEqual([{ userId: "user-a", taskId: "task-draft", sourceJobId: undefined, allowChildSource: false }])
   })
 
   it("prices a named reference-video draft on input + output seconds (4 s in + 4 s out → 1900)", async () => {

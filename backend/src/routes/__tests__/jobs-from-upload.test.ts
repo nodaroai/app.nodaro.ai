@@ -24,11 +24,13 @@ vi.mock("@/lib/supabase.js", () => {
       const row = store.get(String(filters.id))
       if (!row) return null
       if (filters.user_id !== undefined && row.user_id !== filters.user_id) return null
+      if ("parent_job_id" in filters && filters.parent_job_id === null && row.parent_job_id != null) return null
       return row
     }
     const b: Record<string, unknown> = {
       select: () => b,
       eq: (col: string, value: unknown) => { filters[col] = value; return b },
+      is: (col: string, value: unknown) => { filters[col] = value; return b },
       maybeSingle: async () => ({ data: rowOf(), error: null }),
       single: async () => { const row = rowOf(); return row ? { data: row, error: null } : { data: null, error: { message: "0 rows" } } },
     }
@@ -80,6 +82,7 @@ beforeEach(async () => {
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     req.userId = USER
+    if (req.headers["x-test-internal"] === "1") req.authKind = "internal"
     const scopes = req.headers["x-app-scopes"]
     if (typeof scopes === "string") {
       req.appAuthorization = { appId: "app", authorizationId: "auth", scopes: scopes.split(",") } as never
@@ -193,6 +196,32 @@ describe("POST /v1/jobs/from-upload", () => {
   it("is 404 for a source job that is not the caller's", async () => {
     h.jobs.set(SOURCE_JOB, { ...h.jobs.get(SOURCE_JOB), user_id: "someone-else" })
     expect((await post({ assetId: ASSET, sourceJobId: SOURCE_JOB })).statusCode).toBe(404)
+  })
+
+  it("a child job as the source reads exactly as a source that does not exist", async () => {
+    h.jobs.set(SOURCE_JOB, { ...h.jobs.get(SOURCE_JOB), parent_job_id: "99999999-9999-4999-8999-999999999999" })
+    const child = await post({ assetId: ASSET, sourceJobId: SOURCE_JOB })
+    h.jobs.delete(SOURCE_JOB)
+    const missing = await post({ assetId: ASSET, sourceJobId: SOURCE_JOB })
+    expect(child.statusCode).toBe(404)
+    expect(child.json()).toEqual(missing.json())
+    expect(h.insert).not.toHaveBeenCalled()
+  })
+
+  it("an internal hop that relays a caller's body may not name a child source either", async () => {
+    h.jobs.set(SOURCE_JOB, { ...h.jobs.get(SOURCE_JOB), parent_job_id: "99999999-9999-4999-8999-999999999999" })
+    const res = await post({ assetId: ASSET, sourceJobId: SOURCE_JOB }, { "x-test-internal": "1" })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("a worker-side handler's own request may name its child as the source", async () => {
+    h.jobs.set(SOURCE_JOB, { ...h.jobs.get(SOURCE_JOB), parent_job_id: "99999999-9999-4999-8999-999999999999" })
+    const { withJobSubmissionContext } = await import("../../lib/job-submission-context.js")
+    const res = await withJobSubmissionContext(
+      { userId: USER, method: "POST", url: "/v1/jobs/from-upload", parentJobId: "88888888-8888-4888-8888-888888888888" },
+      () => post({ assetId: ASSET, sourceJobId: SOURCE_JOB }, { "x-test-internal": "1" }),
+    )
+    expect(res.statusCode).toBe(201)
   })
 
   it("refuses a source job with no finished image", async () => {

@@ -43,6 +43,8 @@ import { judgeUrlForRecording, storageUrlPath } from "../lib/key-ownership.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
 import { markJobCompletedDetailed } from "../workers/shared.js"
 import { sanitizeJobForPublic, type JobRecord } from "./jobs.js"
+import { CHILD_JOB_COLUMN } from "../lib/public-job-data.js"
+import { mayUseChildJobAsSource } from "../lib/job-submission-context.js"
 
 /** The job type this route writes (`input_data.type` and `job_type`). */
 export const IMAGE_EDIT_JOB_TYPE = "image-edit"
@@ -119,14 +121,17 @@ function outputImages(output: unknown): string[] {
 }
 
 /** What the job records about its source, read from the source itself. */
-async function sourceFields(userId: string, body: JobFromUploadBody): Promise<Record<string, unknown>> {
+async function sourceFields(userId: string, body: JobFromUploadBody, allowChildSource: boolean): Promise<Record<string, unknown>> {
   if (body.sourceJobId) {
-    const { data, error } = await supabase
+    let sourceQuery = supabase
       .from("jobs")
       .select("id, status, input_data, output_data")
       .eq("id", body.sourceJobId)
       .eq("user_id", userId)
-      .maybeSingle()
+    // A child job reads as a source that does not exist, unless the caller is
+    // a worker-side handler naming one of its own (mayUseChildJobAsSource).
+    if (!allowChildSource) sourceQuery = sourceQuery.is(CHILD_JOB_COLUMN, null)
+    const { data, error } = await sourceQuery.maybeSingle()
     if (error) throw error
     const job = data as { status: string; input_data: Record<string, unknown> | null; output_data: unknown } | null
     if (!job) throw notFound("Source job")
@@ -216,7 +221,7 @@ export async function jobsFromUploadRoutes(app: FastifyInstance): Promise<void> 
       const body = parsed.data
 
       try {
-        const [image, source] = await Promise.all([editedImageUrl(userId, body.assetId), sourceFields(userId, body)])
+        const [image, source] = await Promise.all([editedImageUrl(userId, body.assetId), sourceFields(userId, body, mayUseChildJobAsSource(req))])
         const editState = editStateUrlOf(body.editStateUrl)
 
         // `sessionId` and `origin` are stamped by the funnel from the raw body /

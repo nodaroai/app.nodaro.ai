@@ -47,6 +47,7 @@ import {
   environmentFilter,
   findOwnEndpoint,
   toDeliveryResponse,
+  childJobIdsOf,
   toEndpointResponse,
   type DeliveryRow,
   type EndpointCaller,
@@ -361,7 +362,15 @@ export async function webhookEndpointRoutes(app: FastifyInstance) {
     if (!data) {
       return reply.status(404).send({ error: { code: "not_found", message: "Webhook delivery not found" } })
     }
-    return { data: toDeliveryResponse(data as DeliveryRow) }
+    const row = data as DeliveryRow
+    // A child job's kept body is never shown (childJobIdsOf).
+    let children: Set<string>
+    try {
+      children = await childJobIdsOf([row.job_id])
+    } catch (err) {
+      return dbFailure(reply, req, err, "Failed to fetch the webhook delivery")
+    }
+    return { data: toDeliveryResponse(row, row.job_id !== null && children.has(row.job_id)) }
   })
 
   // The delivery log: the endpoint's deliveries, newest first (kept 30 days).
@@ -391,8 +400,15 @@ export async function webhookEndpointRoutes(app: FastifyInstance) {
     if (error) return dbFailure(reply, req, error, "Failed to list webhook deliveries")
     const rows = (data ?? []) as DeliveryRow[]
     const last = rows[rows.length - 1]
+    // A child job's kept body is never shown (childJobIdsOf).
+    let children: Set<string>
+    try {
+      children = await childJobIdsOf(rows.map((r) => r.job_id))
+    } catch (err) {
+      return dbFailure(reply, req, err, "Failed to list webhook deliveries")
+    }
     return {
-      data: rows.map(toDeliveryResponse),
+      data: rows.map((r) => toDeliveryResponse(r, r.job_id !== null && children.has(r.job_id))),
       next: rows.length === limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
     }
   })

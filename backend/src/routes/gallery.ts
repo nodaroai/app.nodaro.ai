@@ -138,7 +138,8 @@ export async function galleryRoutes(app: FastifyInstance) {
     }
 
     try {
-      const outcome = await toggleGalleryFavorite(req.userId, parsed.data.jobId)
+      const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+      const outcome = await toggleGalleryFavorite(req.userId, parsed.data.jobId, { isAdmin })
       if (outcome.kind === "not_found") {
         return reply.status(404).send({ error: { code: "not_found", message: "Gallery item not found" } })
       }

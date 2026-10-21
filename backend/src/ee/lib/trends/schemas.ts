@@ -32,6 +32,48 @@ export type ChipKey = (typeof CHIPS_BY_KIND)[Exclude<TrendSlotKind, "location">]
 
 const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
 
+/**
+ * A slot key indexes plain objects (a run's `slots`, an example's images), so
+ * no name `Object.prototype` already has is ever one — `__proto__` and
+ * `constructor` match SLOT_KEY_RE, and as a key either would reach the
+ * prototype instead of an own entry.
+ */
+function isOwnableKey(key: string): boolean {
+  return !(key in Object.prototype)
+}
+const PROTOTYPE_KEY_MESSAGE = "A slot key cannot be a built-in object property name."
+
+/** A slot key as a trend version declares it. */
+const slotKeySchema = z
+  .string()
+  .regex(SLOT_KEY_RE, "A slot key is 1–32 of a–z, 0–9 and _.")
+  .refine(isOwnableKey, PROTOTYPE_KEY_MESSAGE)
+
+/**
+ * A slot key as a run request names it. Its format is left to the trend (a key
+ * the trend does not have is the route's `unknown_slot`); a built-in object
+ * property name is refused here.
+ */
+const runSlotKeySchema = z.string().refine(isOwnableKey, PROTOTYPE_KEY_MESSAGE)
+
+/**
+ * A record keyed by slot, refusing a built-in property name among the keys it
+ * is sent. The key schema alone cannot: a record drops an own `__proto__` key
+ * (as `JSON.parse` makes one) before its keys are checked, so it would pass
+ * silently instead of being refused.
+ */
+function slotRecord<T extends z.ZodType<Record<string, unknown>>>(record: T) {
+  return z
+    .unknown()
+    .superRefine((value, ctx) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return
+      for (const key of Object.keys(value)) {
+        if (!isOwnableKey(key)) ctx.addIssue({ code: "custom", path: [key], message: PROTOTYPE_KEY_MESSAGE })
+      }
+    })
+    .pipe(record)
+}
+
 const httpUrl = z.url({ protocol: /^https?$/ })
 const choice = z.enum(["new", "original"] satisfies Choice[])
 
@@ -49,7 +91,7 @@ function chips<K extends ChipKey>(keys: readonly K[]) {
 }
 
 const slotBase = {
-  key: z.string().regex(SLOT_KEY_RE, "A slot key is 1–32 of a–z, 0–9 and _."),
+  key: slotKeySchema,
   label: localizedText(100),
   required: z.boolean(),
   hint: localizedText(500).optional(),
@@ -76,7 +118,7 @@ const trendExampleSchema = z.strictObject({
   width: z.int().positive(),
   height: z.int().positive(),
   durationSec: z.number().positive(),
-  slots: z.record(z.string(), z.array(httpUrl).min(1).max(MAX_IMAGES_PER_SLOT)),
+  slots: slotRecord(z.record(slotKeySchema, z.array(httpUrl).min(1).max(MAX_IMAGES_PER_SLOT))),
   sourceJobId: z.string().min(1),
 })
 
@@ -144,7 +186,7 @@ const trendRunSlotSchema = z.strictObject({
 
 export const trendRunRequestSchema: z.ZodType<TrendRunRequest> = z
   .object({
-    slots: z.record(z.string(), trendRunSlotSchema),
+    slots: slotRecord(z.record(runSlotKeySchema, trendRunSlotSchema)),
     example: z.int().min(1).optional(),
     details: z.string().max(1000).optional(),
     preview: z.boolean().optional(),
