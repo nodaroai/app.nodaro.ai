@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.38.0
+
+### Minor Changes
+
+- 5730599: Mask Composite takes `fill`: `"video"` (the default — the foreground, as before), `"pixelate"` (the background itself in blocks of `pixelSizePct` % of the frame width, 0.2–10, default 1.25) or `"blur"` (the background blurred, gaussian sigma `blurStrengthPct` % of the frame width, 0.1–5, default 2) — both relative, so a setting looks the same at any resolution. Pixelate and blur take no foreground: `MaskCompositeRequest.foregroundUrl` is now optional (required for the video fill), the result follows and is priced on the background, and the result always carries the background's sound (`audioSource` is ignored for these fills). `@nodaro/shared` adds `MASK_COMPOSITE_FILLS`, the `PIXEL_SIZE_PCT_*` / `BLUR_STRENGTH_PCT_*` bounds, the new defaults and settings fields, and `maskCompositeFillOf` / `maskCompositeUsesForeground` / `maskCompositeLeadHandle` / `maskCompositeEffectiveAudioSource`. `nodaro media mask-composite` gains `--fill`, `--pixel-size-pct` and `--blur-strength-pct`; with `--fill pixelate|blur` it takes `<backgroundUrl> <maskUrl>`.
+- 23af759: Mask Composite takes `opacity` (0–1, default 1): how strongly the foreground covers the background inside the mask — inside it the result is `opacity × foreground + (1 − opacity) × background`. `MASK_COMPOSITE_BOUNDS` gains `OPACITY_MIN` / `OPACITY_MAX`, `MASK_COMPOSITE_DEFAULTS` and `MaskCompositeSettings` gain `opacity`, and `resolveMaskCompositeSettings` clamps it. `client.media.maskComposite` documents the field (its `MaskCompositeRequest` carries it).
+- 5730599: Video Mask takes `holdLastMask` (default false): frames where the subject is lost — a mask covering under 0.002 % of the picture (`VIDEO_MASK_LIMITS.HOLD_EMPTY_BELOW_FRACTION`) — repeat the most recent non-empty mask; frames before the first detection stay empty, and the frame count, rate and size are unchanged. `VIDEO_MASK_DEFAULTS` and `VideoMaskRequest` gain the field; the job output reports `heldFrames` when it is on. `nodaro media video-mask` gains `--hold-last-mask`.
+
+  Video Mask also takes `minSubjectHeightPct` (0–100, default 0 = off): every connected region (8-connected) whose bounding box is shorter than that % of the frame height is dropped from each frame, before `holdLastMask` — so a frame left with only small regions is held from the last frame with a big subject. `VIDEO_MASK_LIMITS` gains `MIN_SUBJECT_HEIGHT_PCT_MIN` / `MAX`; the job output reports `droppedRegions` when it is on. `nodaro media video-mask` gains `--min-subject-height <pct>`.
+
+  Video Mask also takes `maxSubjectHeightPct` (0–100, default 0 = off), the mirror of the minimum: regions TALLER than that % of the frame height are dropped, in the same pass and before `holdLastMask`. With both set a region is kept when min ≤ height ≤ max; min > max is refused (400). `VIDEO_MASK_LIMITS` gains `MAX_SUBJECT_HEIGHT_PCT_MIN` / `MAX`. `nodaro media video-mask` gains `--max-subject-height <pct>`.
+
 ## 3.37.0
 
 ### Minor Changes
