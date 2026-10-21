@@ -1485,7 +1485,7 @@ backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
 The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
-plus, for two classes of failure, a structured `error_hint`.
+plus, for three classes of failure, a structured `error_hint`.
 
 A provider content-policy block:
 
@@ -1498,6 +1498,22 @@ Or, on a deployment that registers a job policy, a rejection by that policy:
 ```json
 { "kind": "policy-block", "policyId": string, "reason": string, "hookPoint": "request" | "result" }
 ```
+
+Or, when the job ran out of credits partway — a step that reserves its own
+credits (for example the video a Cast Swap or trend run dispatches) was
+refused:
+
+```json
+{ "kind": "credits", "code": string }
+```
+
+`code` is the refusal's own code, a lowercase snake_case token:
+`insufficient_credits` (the balance could not cover it), or a plan or
+workspace cap such as `free_video_limit`, `instance_cap_reached`,
+`budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. Treat an
+unknown code like `insufficient_credits`. The job's credits are refunded; ask
+the person to top up (or raise the cap) and run it again — the same request
+fails the same way until then.
 
 `reason` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is.
 `hookPoint` says whether the request was refused before the job ran or the
@@ -4024,8 +4040,11 @@ with their OWN codes and fixed messages; the engine's message and any
 A run in `GET /v1/trends/runs` that did not finish has
 `error: { code, message }`: the message is always the same fixed sentence
 (the job's own failure text is never passed on), and the code is
-`safety-block` or `policy-block` when the job was blocked, else `cancelled` or
-`failed`. A run that did not fail or get cancelled has `error: null`.
+`safety-block` or `policy-block` when the job was blocked, `credits` when the
+run ran out of credits partway (it was refunded: top up, then run it again),
+else `cancelled` or `failed`. The message stays the fixed sentence for every
+code, `credits` included — branch on the code, not the text. A run that did
+not fail or get cancelled has `error: null`.
 
 ## 14. Pipelines
 

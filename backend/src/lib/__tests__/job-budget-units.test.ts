@@ -44,6 +44,6 @@ describe("a unit's budget.ts in the job-budget registry", () => {
 
   it("with no unit budget, the registry is the legacy table alone", async () => {
     const { BUDGETED_JOB_NAMES } = await registryWith({})
-    expect([...BUDGETED_JOB_NAMES].sort()).toEqual(["apply-edl", "audio-sync", "cast-swap", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
+    expect([...BUDGETED_JOB_NAMES].sort()).toEqual(["apply-edl", "audio-sync", "cast-swap", "cast-swap-full-quality", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
   })
 })

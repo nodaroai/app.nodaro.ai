@@ -244,6 +244,31 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.retryable).toBe(false)
   })
 
+  it("a credits hint says the run ran out of credits: top up, then retry — not retryable as-is", () => {
+    const message = "You don't have enough credits to finish this run. Top up and try again."
+    const result = failureGuidance({
+      error_message: message,
+      error_hint: { kind: "credits", code: "insufficient_credits" },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toMatch(/ran out of credits/i)
+    expect(result.guidance).toMatch(/refunded/i)
+    expect(result.guidance).toContain("check_balance")
+    // The refusal code is named so an agent can tell a balance from a cap.
+    expect(result.guidance).toContain("insufficient_credits")
+  })
+
+  it("a credits hint with a malformed code still gets the top-up guidance, without echoing the code", () => {
+    const result = failureGuidance({
+      error_message: "Failed.",
+      error_hint: { kind: "credits", code: "Not a token <b>" },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.guidance).toMatch(/ran out of credits/i)
+    expect(result.guidance).not.toContain("<b>")
+  })
+
   it("ignores a malformed/unknown error_hint shape and falls back to the plain sentences", () => {
     const result = failureGuidance({
       error_message: "Provider timeout after 30s",

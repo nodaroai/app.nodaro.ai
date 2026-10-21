@@ -193,6 +193,13 @@ export interface TrendRun {
   jobId: string
   status: string
   progress: number | null
+  /**
+   * Why a failed or cancelled run did not finish; `null` otherwise. `code` is
+   * `safety-block` or `policy-block` when the job was blocked, `credits` when
+   * it ran out of credits partway (it was refunded: ask the person to top up,
+   * then run it again), else `cancelled` or `failed`. `message` is the same
+   * fixed sentence for every code — branch on `code`, not on the text.
+   */
   error: { code?: string; message: string } | null
   createdAt: string
   completedAt: string | null

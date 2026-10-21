@@ -473,6 +473,7 @@ describe("every registered budgeted job is dispatched under its node type's own 
   // fixture replaces it.
   const AWAITING_NODE: Record<string, string> = {
     "cast-swap": "node lands in Plan 3",
+    "cast-swap-full-quality": "a trend run's Full Quality redo; no node of its own",
   }
 
   it("a budget awaiting its node is not a node yet", () => {

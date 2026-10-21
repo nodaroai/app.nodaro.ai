@@ -37,4 +37,9 @@ describe("cast-swap job budget", () => {
     expect(declaredJobBudgetMs("cast-swap", {})).toBe(120 * MINUTE)
     expect(declaredJobBudgetMs("cast-swap", { preview: true })).toBe(30 * MINUTE)
   })
+
+  it("the Full Quality redo (`cast-swap-full-quality`) declares the same full-clip bound", () => {
+    expect(declaredJobBudgetMs("cast-swap-full-quality", {})).toBe(120 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap-full-quality", { fullQualityOf: "job-1" })).toBe(120 * MINUTE)
+  })
 })

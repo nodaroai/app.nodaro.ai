@@ -59,9 +59,26 @@ export type PolicyBlockHint = {
 }
 
 /**
+ * The job ran out of credits partway: a step that reserves its own credits
+ * (for example, the video a Cast Swap or trend run dispatches) was refused —
+ * the balance could not cover it, or a plan or workspace cap was reached. The
+ * job failed and its credits were refunded; ask the person to top up (or raise
+ * the cap), then run it again.
+ *
+ * `code` is the refusal's own code, a lowercase snake_case token — for
+ * example `insufficient_credits`, `free_video_limit`, `instance_cap_reached`,
+ * `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. Treat
+ * an unknown code like `insufficient_credits`.
+ */
+export type CreditsHint = {
+  kind: "credits"
+  code: string
+}
+
+/**
  * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
  * failure verdict, so a caller can act on it without parsing `error_message`
- * prose. One column, two verdict sources; `kind` is the discriminant.
+ * prose. One column, several verdict sources; `kind` is the discriminant.
  *
  * HAND-COPIED MIRROR of `ErrorHint` in the platform's
  * `backend/src/lib/safety-block.ts` (which names this file in its own
@@ -69,7 +86,7 @@ export type PolicyBlockHint = {
  * pasted here verbatim in the same change, with a changeset.
  * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`

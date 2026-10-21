@@ -1232,7 +1232,11 @@ Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-block
 for what it means and when a fallback model is offered) or that a job policy
 registered by the deployment rejected (`kind: "policy-block"`, carrying
 `policyId`, `hookPoint: "request" | "result"` and `reason` — user-safe text
-written by the deployment's policy, or by the platform when the policy supplies none; show it as-is). Admin callers
+written by the deployment's policy, or by the platform when the policy supplies none; show it as-is),
+or that ran out of credits partway (`kind: "credits"`, carrying the refusal's
+`code` — `insufficient_credits`, or a plan or workspace cap such as
+`free_video_limit` or `budget_exceeded`; the job was refunded, so ask the
+person to top up and run it again). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
@@ -2045,7 +2049,7 @@ interface TrendEstimate {
 
 interface TrendRun {
   jobId: string; status: string; progress: number | null
-  error: { code?: string; message: string } | null
+  error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | cancelled | failed
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
   example: number

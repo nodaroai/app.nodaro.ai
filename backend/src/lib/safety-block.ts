@@ -22,9 +22,16 @@ export type SafetyBlock = {
 }
 
 function classOf(err: unknown): SafetyBlock["class"] | null {
-  if (!(err instanceof Error)) return null
-  const cls = (err as KieError).contentPolicyClass
-  return cls === "copyright" || cls === "likeness" || cls === "safety" ? cls : null
+  // Never throws: the worker's failure path calls this before it marks the
+  // row failed and refunds, so a thrown value with a throwing getter (or a
+  // Proxy) must read as "not a block", not abort that path.
+  try {
+    if (!(err instanceof Error)) return null
+    const cls = (err as KieError).contentPolicyClass
+    return cls === "copyright" || cls === "likeness" || cls === "safety" ? cls : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -88,7 +95,21 @@ export type PolicyBlockHint = {
   hookPoint: "request" | "result"
 }
 
-/** One jsonb column, two verdict sources. A DISCRIMINATED UNION on `kind` —
+/** The run could not be paid for partway through: a handler's own credit
+ *  reservation (a child job it dispatches) was refused — the balance ran out,
+ *  or a plan or workspace cap was reached. The job is refunded like any plain
+ *  failure; the hint lets a client say "top up" instead of "it failed".
+ *
+ *  `code` is the refusal code the reserving route answered with
+ *  (`insufficient_credits`, `free_video_limit`, `budget_exceeded`, …): a
+ *  lowercase snake_case token, never free text — `creditsHintOf` drops
+ *  anything else, so it is user-safe like the other arms. */
+export type CreditsHint = {
+  kind: "credits"
+  code: string
+}
+
+/** One jsonb column, several verdict sources. A DISCRIMINATED UNION on `kind` —
  *  which was already the discriminant every reader tested
  *  (`hint.kind === "safety-block"`), so widening it breaks none of them.
  *
@@ -96,7 +117,38 @@ export type PolicyBlockHint = {
  *  its own comment): `frontend/src/types/nodes.ts` `JobErrorHint`,
  *  `packages/client/src/resources/jobs.ts` `JobErrorHint` (minor + changeset).
  *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
-export type ErrorHint = SafetyBlockHint | PolicyBlockHint
+export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
+
+/** A credits refusal code as a route sends it; anything else is not passed on. */
+const CREDITS_CODE_RE = /^[a-z0-9_]{1,64}$/
+
+/** A handler's credits refusal, read off the thrown error (or anything on its
+ *  `cause` chain): a duck-typed `failureHint: { kind: "credits", code }` own
+ *  property, which survives the plugin boundary where a class would not.
+ *  Returns a FRESH object of exactly those two fields — the column reaches
+ *  non-admins verbatim, so nothing else the thrower attached may ride along.
+ *  A malformed hint (other kind, a code that is not a plain token) is null.
+ *  Never throws: the worker calls it before it marks the row failed and
+ *  refunds, so a throwing getter or Proxy anywhere on the chain reads as "no
+ *  hint" rather than aborting that path. */
+export function creditsHintOf(err: unknown): CreditsHint | null {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      const hint = (cur as { failureHint?: unknown }).failureHint
+      if (typeof hint === "object" && hint !== null) {
+        const { kind, code } = hint as { kind?: unknown; code?: unknown }
+        if (kind === "credits" && typeof code === "string" && CREDITS_CODE_RE.test(code)) {
+          return { kind: "credits", code }
+        }
+      }
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 /** Constructor for the policy arm, so no call site hand-writes the literal
  *  `kind` (the way a mistyped discriminant silently falls through every

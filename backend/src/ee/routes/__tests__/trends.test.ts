@@ -868,6 +868,16 @@ describe("GET /v1/trends/runs", () => {
     expect(res.json().data[0].error).toEqual({ code: "safety-block", message: "This run didn't finish." })
   })
 
+  it("a run that ran out of credits partway has the code `credits` (the message stays the fixed sentence)", async () => {
+    feed([jobRow(FAILED_JOB, {
+      status: "failed", output_data: null, completed_at: null,
+      error_message: "You don't have enough credits to finish this run. Top up and try again.",
+      error_hint: { kind: "credits", code: "insufficient_credits" },
+    })])
+    const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
+    expect(res.json().data[0].error).toEqual({ code: "credits", message: "This run didn't finish." })
+  })
+
   it("a run whose trend was unpublished since still reads back (the stamp, not the catalog)", async () => {
     mem.trends = []
     feed([jobRow(DRAFT_JOB)])

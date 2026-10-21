@@ -249,7 +249,18 @@ export interface PolicyBlockHint {
 }
 
 /**
- * Structured hint attached to a job's failure. One jsonb column, two verdict
+ * The job ran out of credits partway: a step that reserves its own credits (a
+ * child job it dispatches) was refused — the balance, or a plan or workspace
+ * cap. The job was refunded. `code` is the refusal's own snake_case code
+ * (`insufficient_credits`, `free_video_limit`, …).
+ */
+export interface CreditsHint {
+  readonly kind: "credits"
+  readonly code: string
+}
+
+/**
+ * Structured hint attached to a job's failure. One jsonb column, several verdict
  * sources — a DISCRIMINATED UNION on `kind`, which was already the
  * discriminant every reader tested, so widening it breaks none of them.
  *
@@ -259,7 +270,7 @@ export interface PolicyBlockHint {
  * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
  * change (that file's comment says the same thing).
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {

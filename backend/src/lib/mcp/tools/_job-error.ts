@@ -174,8 +174,13 @@ export function isRetryableFailure(errorMessage: string | null | undefined): boo
  * arbitrary registered policy in whatever language its deployment speaks, so it
  * matches none of NON_RETRYABLE_PATTERNS and `isRetryableFailure` answers
  * `true` — and an MCP agent then re-runs a permanently blocked request in a
- * loop against a gate that will block it identically every time. For that arm,
- * and only that arm, the hint IS the source of truth.
+ * loop against a gate that will block it identically every time. For that arm
+ * the hint IS the source of truth.
+ *
+ * `kind: "credits"` is the same case: the job ran out of credits partway (a
+ * step's own reservation was refused), was refunded, and the identical request
+ * fails again until the balance or the cap changes — so `retryable: false` and
+ * guidance to top up, whatever words the message happens to use.
  */
 export function failureGuidance(job: {
   error_message?: string | null
@@ -183,7 +188,7 @@ export function failureGuidance(job: {
 }): { retryable: boolean; suggestedProvider?: string; guidance: string } {
   const retryable = isRetryableFailure(job.error_message)
   const hint = job.error_hint as
-    | { kind?: unknown; suggestedProvider?: unknown; reason?: unknown }
+    | { kind?: unknown; suggestedProvider?: unknown; reason?: unknown; code?: unknown }
     | null
     | undefined
 
@@ -200,6 +205,21 @@ export function failureGuidance(job: {
         "Retrying the identical request will be blocked again, and switching providers will not help. " +
         (reason ? `Reason given: ${reason}. ` : "") +
         "Change the prompt or inputs, or report the reason to the user.",
+    }
+  }
+
+  // A credits refusal partway through (a step's own reservation was refused):
+  // the job was refunded, and the same request fails again until the balance
+  // or the cap changes — so not retryable as-is, whatever the message says.
+  if (hint && hint.kind === "credits") {
+    const code = typeof hint.code === "string" && /^[a-z0-9_]{1,64}$/.test(hint.code) ? hint.code : null
+    return {
+      retryable: false,
+      guidance:
+        "The account ran out of credits partway through this job" +
+        (code ? ` (${code})` : "") +
+        ", so it stopped and its credits were refunded. Ask the user to top up (check_balance shows the balance) " +
+        "or raise the plan or workspace cap, then run the same request again.",
     }
   }
 

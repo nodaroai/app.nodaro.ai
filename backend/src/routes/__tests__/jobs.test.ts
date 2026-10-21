@@ -1329,6 +1329,41 @@ describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
   })
 })
 
+describe("GET /v1/jobs/:id — a credits failure hint", () => {
+  it("returns a run's credits hint to its owner, with the refunded credit status", async () => {
+    const row = {
+      ...sampleJob,
+      user_id: TEST_USER_ID,
+      status: "failed",
+      output_data: null,
+      error_message: "You don't have enough credits to finish this run. Top up and try again.",
+      error_hint: { kind: "credits", code: "insufficient_credits" },
+      usage_log_id: "ul-credits",
+    }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [{ id: "ul-credits", status: "refunded" }], error: null }),
+          }),
+        } as never
+      }
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: row, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.error_hint).toEqual({ kind: "credits", code: "insufficient_credits" })
+    expect(res.json().data.credit_status).toBe("refunded")
+  })
+})
+
 describe("POST /v1/jobs/batch-status", () => {
   it("redacts private remux bases from the direct status projection", async () => {
     seedJobs([
