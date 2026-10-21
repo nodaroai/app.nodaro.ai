@@ -10,6 +10,7 @@ import {
   MASK_COMPOSITE_AUDIO_SOURCES,
   MASK_COMPOSITE_BACKGROUND_FITS,
   MASK_COMPOSITE_BOUNDS,
+  MASK_COMPOSITE_FILLS,
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
 } from "@nodaro/shared/media"
@@ -71,6 +72,9 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
           .optional()
           .describe(`Detection confidence (default ${L.THRESHOLD_DEFAULT}). Lower finds more — try 0.3 when nothing matches.`),
         provider: z.enum(VIDEO_MASK_PROVIDERS).optional().describe("Segmentation model: sam-3.1 (default) or sam-3 (half the price)."),
+        hold_last_mask: z.boolean().optional().describe("Keep the last mask on frames where the subject is lost (default false)."),
+        min_subject_height_pct: z.number().min(L.MIN_SUBJECT_HEIGHT_PCT_MIN).max(L.MIN_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions shorter than this % of the frame height (default 0 = off)."),
+        max_subject_height_pct: z.number().min(L.MAX_SUBJECT_HEIGHT_PCT_MIN).max(L.MAX_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions taller than this % of the frame height (default 0 = off)."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -84,6 +88,9 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         prompt: args.prompt,
         ...(args.threshold !== undefined ? { threshold: args.threshold } : {}),
         ...(args.provider ? { provider: args.provider } : {}),
+        ...(args.hold_last_mask !== undefined ? { holdLastMask: args.hold_last_mask } : {}),
+        ...(args.min_subject_height_pct !== undefined ? { minSubjectHeightPct: args.min_subject_height_pct } : {}),
+        ...(args.max_subject_height_pct !== undefined ? { maxSubjectHeightPct: args.max_subject_height_pct } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -105,8 +112,8 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         "Place a foreground video over a background video through a mask video (white = foreground shows, black = background shows) — local ffmpeg, no AI. " +
         "Typical use: the mask from video_mask cuts the subject out of its own footage and drops it into a new scene. " +
         "The result follows the FOREGROUND's size, frame rate and length; the background is fitted to that frame (`background_fit`: cover / contain / stretch, default cover) and loops when shorter; the mask is stretched to the frame and holds its last frame when shorter. " +
-        `Optional: \`invert_mask\`, \`feather\` (0–${B.FEATHER_MAX} px edge softening, default 2), \`grow\` (${B.GROW_MIN}–${B.GROW_MAX} px — positive widens the foreground, negative trims halos), \`opacity\` (0–1, default 1), ` +
-        `priced per started 5 s of the result (foreground up to ${B.MAX_DURATION_SEC} s), ` +
+        `Optional: \`invert_mask\`, \`feather\` (0–${B.FEATHER_MAX} px edge softening, default 2), \`grow\` (${B.GROW_MIN}–${B.GROW_MAX} px — positive widens the foreground, negative trims halos), \`opacity\` (0–1, default 1), \`fill\` (pixelate / blur: the background itself, no foreground needed), ` +
+        `priced per started 5 s of the result (the video it follows up to ${B.MAX_DURATION_SEC} s), ` +
         "`audio_source` (foreground / background / mix / none, default foreground). Returns a job_id; widget renders the video.",
       inputSchema: {
         foreground_url: z.string().url().optional().describe("Foreground video URL (the subject's footage)."),
@@ -118,7 +125,10 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         invert_mask: z.boolean().optional().describe("Swap which side of the mask shows the foreground."),
         feather: z.number().int().min(B.FEATHER_MIN).max(B.FEATHER_MAX).optional().describe("Edge softening, px (default 2)."),
         grow: z.number().int().min(B.GROW_MIN).max(B.GROW_MAX).optional().describe("Grow (+) or shrink (−) the foreground region, px (default 0)."),
-        opacity: z.number().min(B.OPACITY_MIN).max(B.OPACITY_MAX).optional().describe("How strongly the foreground covers the background inside the mask, 0–1 (default 1 = fully)."),
+        opacity: z.number().min(B.OPACITY_MIN).max(B.OPACITY_MAX).optional().describe("How strongly the fill covers the background inside the mask, 0–1 (default 1 = fully)."),
+        fill: z.enum(MASK_COMPOSITE_FILLS).optional().describe("What fills the mask (default video)."),
+        pixel_size_pct: z.number().min(B.PIXEL_SIZE_PCT_MIN).max(B.PIXEL_SIZE_PCT_MAX).optional().describe("Pixelate block size, % of frame width (default 1.25)."),
+        blur_strength_pct: z.number().min(B.BLUR_STRENGTH_PCT_MIN).max(B.BLUR_STRENGTH_PCT_MAX).optional().describe("Blur sigma, % of frame width (default 2)."),
         background_fit: z.enum(MASK_COMPOSITE_BACKGROUND_FITS).optional().describe("How the background fills the foreground's frame (default cover)."),
         audio_source: z.enum(MASK_COMPOSITE_AUDIO_SOURCES).optional().describe("Which sound the result carries (default foreground)."),
       },
@@ -127,20 +137,25 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
       _meta: VIDEO_WIDGET,
     },
     async (args) => {
-      const fg = await videoFrom("foreground", args.foreground_url, args.foreground_asset_id, session.userId)
-      if ("refusal" in fg) return fg.refusal
+      // Pixelate / blur take no foreground: none is resolved or sent.
+      const withForeground = (args.fill ?? "video") === "video"
+      const fg = withForeground ? await videoFrom("foreground", args.foreground_url, args.foreground_asset_id, session.userId) : undefined
+      if (fg && "refusal" in fg) return fg.refusal
       const bg = await videoFrom("background", args.background_url, args.background_asset_id, session.userId)
       if ("refusal" in bg) return bg.refusal
       const mask = await videoFrom("mask", args.mask_url, args.mask_asset_id, session.userId)
       if ("refusal" in mask) return mask.refusal
       const payload: Record<string, unknown> = {
-        foregroundUrl: fg.url,
+        ...(fg ? { foregroundUrl: fg.url } : {}),
         backgroundUrl: bg.url,
         maskUrl: mask.url,
         ...(args.invert_mask !== undefined ? { invertMask: args.invert_mask } : {}),
         ...(args.feather !== undefined ? { feather: args.feather } : {}),
         ...(args.grow !== undefined ? { grow: args.grow } : {}),
         ...(args.opacity !== undefined ? { opacity: args.opacity } : {}),
+        ...(args.fill ? { fill: args.fill } : {}),
+        ...(args.pixel_size_pct !== undefined ? { pixelSizePct: args.pixel_size_pct } : {}),
+        ...(args.blur_strength_pct !== undefined ? { blurStrengthPct: args.blur_strength_pct } : {}),
         ...(args.background_fit ? { backgroundFit: args.background_fit } : {}),
         ...(args.audio_source ? { audioSource: args.audio_source } : {}),
         mcp_client: session.clientName,

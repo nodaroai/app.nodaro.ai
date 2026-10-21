@@ -28,6 +28,7 @@ import type {
   VideoMaskProvider,
   MaskCompositeBackgroundFit,
   MaskCompositeAudioSource,
+  MaskCompositeFill,
 } from "@nodaro/shared/media"
 import type { Pro3DRenderQuote, Pro3DRenderSource } from "@nodaro/shared/scene3d"
 import type { ReduceMeta, WorkflowExport, WorkflowImportReport } from "@nodaro/shared/workflow"
@@ -4292,13 +4293,17 @@ export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDura
  *  background video through a mask video (white = foreground). Settings are the
  *  normalised `resolveMaskCompositeSettings` output (bounds in @nodaro/shared). */
 export async function maskCompositeApi(params: {
-  foregroundUrl: string
+  /** Required by the video fill; pixelate / blur take none. */
+  foregroundUrl?: string
   backgroundUrl: string
   maskUrl: string
   invertMask?: boolean
   feather?: number
   grow?: number
   opacity?: number
+  fill?: MaskCompositeFill
+  pixelSizePct?: number
+  blurStrengthPct?: number
   backgroundFit?: MaskCompositeBackgroundFit
   audioSource?: MaskCompositeAudioSource
   userId?: string
@@ -6560,6 +6565,12 @@ export async function videoMaskApi(params: {
   prompt: string
   threshold?: number
   provider?: VideoMaskProvider
+  /** Hold the last mask where the subject is lost (default false). */
+  holdLastMask?: boolean
+  /** Ignore subjects smaller than this % of the frame height (default 0 = off). */
+  minSubjectHeightPct?: number
+  /** Ignore subjects larger than this % of the frame height (default 0 = off). */
+  maxSubjectHeightPct?: number
   userId?: string
 }): Promise<{ jobId: string }> {
   const { userId, ...rest } = params

@@ -5,7 +5,12 @@
  *
  * The render follows the FOREGROUND (size, frame rate, length). The background
  * is fitted to that frame and loops when shorter; the mask is stretched to the
- * frame and holds its last frame when shorter. The settings come from
+ * frame and holds its last frame when shorter.
+ *
+ * With `fill` pixelate / blur there is no foreground: the masked area shows
+ * the BACKGROUND itself, pixelated or blurred, so the render follows the
+ * background (`buildMaskCompositeFillArgs`). The video fill's graph is
+ * untouched by that mode. The settings come from
  * `resolveMaskCompositeSettings` (`@nodaro/shared`), the one normaliser every
  * engine calls.
  *
@@ -17,6 +22,8 @@
 import { join } from "node:path"
 import {
   MASK_COMPOSITE_BOUNDS,
+  maskCompositeEffectiveAudioSource,
+  maskCompositeUsesForeground,
   type MaskCompositeAudioSource,
   type MaskCompositeBackgroundFit,
   type MaskCompositeSettings,
@@ -36,7 +43,8 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 
 /** What the graph needs to know about the inputs (probed by `maskComposite`). */
 export interface MaskCompositeProbe {
-  /** Foreground DISPLAY size (rotation applied), any parity. */
+  /** Foreground DISPLAY size (rotation applied), any parity. (For pixelate / blur, every
+   *  foreground field here describes the BACKGROUND, the video the render follows.) */
   readonly width: number
   readonly height: number
   /** Foreground frame rate as an ffmpeg rational ("30000/1001"), or undefined when it has none. */
@@ -165,8 +173,86 @@ export function buildMaskCompositeArgs(args: {
   ]
 }
 
+/**
+ * The effect a pixelate / blur fill applies to its copy of the background.
+ * Both sizes are relative to the frame's WIDTH (`w`, the rendered frame), so
+ * a setting looks the same at any resolution.
+ *
+ * - Pixelate: blocks of max(2, round(w × pixelSizePct / 100)) px (1.25 % → 16
+ *   px on a 1280-wide frame). Area-average down to one pixel per block (the
+ *   block counts as integers, at least one each way), then back up with
+ *   nearest-neighbour, so every block is one flat colour.
+ * - Blur: a gaussian with sigma = w × blurStrengthPct / 100 px (2 % → 25.6 px
+ *   on a 1280-wide frame, 0.1 % → 1.28, 5 % → 64).
+ */
+export function maskCompositePixelBlockPx(s: Pick<MaskCompositeSettings, "pixelSizePct">, w: number): number {
+  return Math.max(2, Math.round((w * s.pixelSizePct) / 100))
+}
+
+export function maskCompositeBlurSigma(s: Pick<MaskCompositeSettings, "blurStrengthPct">, w: number): number {
+  return (w * s.blurStrengthPct) / 100
+}
+
+export function maskCompositeFillEffect(s: MaskCompositeSettings, w: number, h: number): string {
+  if (s.fill === "pixelate") {
+    const block = maskCompositePixelBlockPx(s, w)
+    const bw = Math.max(1, Math.round(w / block))
+    const bh = Math.max(1, Math.round(h / block))
+    return `scale=${bw}:${bh}:flags=area,scale=${w}:${h}:flags=neighbor`
+  }
+  return `gblur=sigma=${maskCompositeBlurSigma(s, w).toFixed(2)}`
+}
+
+/**
+ * The ffmpeg argv for a pixelate / blur composite. Inputs: 0 = background
+ * (the video the render follows, NOT looped), 1 = mask. The background is
+ * split: one copy is the frame, the other is pixelated / blurred and laid
+ * over it through the same mask chain as the video fill (invert / grow /
+ * feather / opacity), so inside the mask the result is
+ * opacity × effect + (1 − opacity) × background. Pure: no I/O.
+ */
+export function buildMaskCompositeFillArgs(args: {
+  readonly backgroundPath: string
+  readonly maskPath: string
+  readonly outputPath: string
+  readonly settings: MaskCompositeSettings
+  /** The BACKGROUND's probe (its foreground* audio flag is unused). */
+  readonly probe: MaskCompositeProbe
+}): string[] {
+  const { settings: s, probe } = args
+  const w = even(probe.width * (probe.sar && probe.sar > 0 ? probe.sar : 1))
+  const h = even(probe.height)
+  const startSec = probe.startSec && probe.startSec > 0 ? probe.startSec : 0
+  const rate = probe.frameRate
+  // The only sound there is: always the background's (audioSource is ignored for these fills).
+  const withAudio = maskCompositeEffectiveAudioSource(s) !== "none" && probe.backgroundHasAudio
+  const graph = [
+    // Like the video fill's foreground: the leading input keeps its own clock, and the mask is put on it.
+    `[0:v]scale=${w}:${h},setsar=1,format=yuv420p,split=2[bg][src]`,
+    `[src]${maskCompositeFillEffect(s, w, h)},format=yuva420p[fx]`,
+    `[1:v]${maskChain(s, w, h, rate, startSec)}[m]`,
+    "[fx][m]alphamerge[fxa]",
+    "[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+  ].join(";")
+  return [
+    "-y",
+    "-i", args.backgroundPath,
+    "-i", args.maskPath,
+    "-filter_complex", graph,
+    "-map", "[vout]",
+    ...(withAudio ? ["-map", "0:a:0"] : []),
+    // The render runs to the background's last frame, whatever the mask does.
+    "-t", (startSec + probe.durationSec).toFixed(3),
+    "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+    ...(withAudio ? ["-c:a", "aac", "-b:a", "192k"] : ["-an"]),
+    "-movflags", "+faststart",
+    args.outputPath,
+  ]
+}
+
 export interface MaskCompositeParams {
-  readonly foregroundUrl: string
+  /** Required by the video fill; unused (never downloaded) by pixelate / blur. */
+  readonly foregroundUrl?: string
   readonly backgroundUrl: string
   readonly maskUrl: string
   readonly settings: MaskCompositeSettings
@@ -186,6 +272,9 @@ export function maskCompositeTimeoutMs(durationSec: number): number {
 }
 
 export async function maskComposite(params: MaskCompositeParams): Promise<MaskCompositeResult> {
+  if (!maskCompositeUsesForeground(params.settings.fill)) return maskCompositeFill(params)
+  if (!params.foregroundUrl) throw new DeterministicJobError("Mask Composite needs a foreground video when the fill is Video.")
+  const foregroundUrl = params.foregroundUrl
   const workDir = await createWorkDir("mask-composite")
   try {
     const foregroundPath = join(workDir, "foreground.mp4")
@@ -193,7 +282,7 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
     const maskPath = join(workDir, "mask.mp4")
     const outputPath = join(workDir, "output.mp4")
     await Promise.all([
-      downloadFile(params.foregroundUrl, foregroundPath),
+      downloadFile(foregroundUrl, foregroundPath),
       downloadFile(params.backgroundUrl, backgroundPath),
       downloadFile(params.maskUrl, maskPath),
     ])
@@ -226,6 +315,43 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
       peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 3, cameraMegapixels: undefined }),
     })
     return { outputPath, width: canvas.width, height: canvas.height, durationSec: fg.streamDurationSec }
+  } catch (err) {
+    await cleanupWorkDir(workDir)
+    throw err
+  }
+}
+
+/** Pixelate / blur: the background, partly pixelated or blurred through the mask. No foreground is downloaded. */
+async function maskCompositeFill(params: MaskCompositeParams): Promise<MaskCompositeResult> {
+  const workDir = await createWorkDir("mask-composite")
+  try {
+    const backgroundPath = join(workDir, "background.mp4")
+    const maskPath = join(workDir, "mask.mp4")
+    const outputPath = join(workDir, "output.mp4")
+    await Promise.all([downloadFile(params.backgroundUrl, backgroundPath), downloadFile(params.maskUrl, maskPath)])
+    const [bg, backgroundHasAudio] = await Promise.all([probeVideoOverlayBase(backgroundPath), hasAudioStream(backgroundPath)])
+    if (bg.streamDurationSec > MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC) {
+      throw new DeterministicJobError(
+        `The background is ${Math.ceil(bg.streamDurationSec)} seconds; Mask Composite takes at most ${MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC}.`,
+      )
+    }
+    const probe: MaskCompositeProbe = {
+      width: bg.width,
+      height: bg.height,
+      frameRate: bg.avgFrameRate && bg.avgFrameRate !== "0/0" ? bg.avgFrameRate : bg.rFrameRate,
+      durationSec: bg.streamDurationSec,
+      startSec: bg.startTimeSec,
+      sar: bg.sar,
+      foregroundHasAudio: false,
+      backgroundHasAudio,
+    }
+    const argv = buildMaskCompositeFillArgs({ backgroundPath, maskPath, outputPath, settings: params.settings, probe })
+    const canvas = { width: even(bg.width * (bg.sar > 0 ? bg.sar : 1)), height: even(bg.height) }
+    await runFfmpeg(argv, maskCompositeTimeoutMs(bg.streamDurationSec), {
+      // Two input files, three pictures at the background's size (the frame, its filtered copy, the mask).
+      peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 2, cameraMegapixels: undefined }),
+    })
+    return { outputPath, width: canvas.width, height: canvas.height, durationSec: bg.streamDurationSec }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err

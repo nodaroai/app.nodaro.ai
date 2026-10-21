@@ -19,6 +19,7 @@
  */
 import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import { extractVideoDurationFromNode } from "@nodaro/shared/video"
+import { MASK_COMPOSITE_BOUNDS, maskCompositeLeadHandle } from "@nodaro/shared/media"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
   renderLengthSec,
@@ -142,6 +143,26 @@ export function videoSfxClipSec(
   const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
   const sec = videoWire >= 0 ? secs[videoWire] : secs.find((s) => s !== undefined)
   return sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The length, in seconds, a RUN estimate prices a Mask Composite at: its
+ * leading video's (`maskCompositeLeadHandle`). The video fill reads the
+ * foreground exactly as {@link videoSfxClipSec} does; pixelate / blur read
+ * the `background-video` wire only (a wired foreground is ignored by those
+ * fills). `undefined` when that length is not known: the 300-second cap.
+ */
+export function maskCompositeLeadSec(
+  data: Readonly<Record<string, unknown>> | null | undefined,
+  inputs: ReadonlyArray<{ targetHandle?: string | null }>,
+  secs: ReadonlyArray<number | undefined>,
+): number | undefined {
+  const lead = maskCompositeLeadHandle(data)
+  const wire = inputs.findIndex((e) => e.targetHandle === lead)
+  // The video fill falls back to the first wire with a known length (Video SFX's reading); pixelate / blur read the background only.
+  const sec = wire >= 0 ? secs[wire] : lead === "video" ? secs.find((s) => s !== undefined) : undefined
+  // Mask Composite's own cap (the same 300 s as Video SFX today, but never tied to it).
+  return sec === undefined ? undefined : Math.min(sec, MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC)
 }
 
 /**

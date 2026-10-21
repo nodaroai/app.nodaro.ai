@@ -454,6 +454,18 @@ export class MediaResource {
    * `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
    * `height`, `frames` and `coverage` (the fraction of pixels selected). Feed
    * the mask to {@link MediaResource.maskComposite}.
+   *
+   * `holdLastMask: true` keeps the last mask on frames where the subject is
+   * lost (a mask covering under 0.002 % of the frame, e.g. a face behind a
+   * hand): each such frame after the first detection repeats the most recent
+   * non-empty one; the output then also carries `heldFrames`.
+   * `minSubjectHeightPct` (0–100, default 0 = off) drops every connected
+   * region whose bounding box is shorter than that % of the frame height
+   * (extras' small faces behind the main subject); it runs before
+   * `holdLastMask`, and the output then carries `droppedRegions`.
+   * `maxSubjectHeightPct` (0–100, default 0 = off) is its mirror: it drops
+   * regions TALLER than that % (keep only the small background faces). With
+   * both set a region is kept when min ≤ height ≤ max; min > max is a 400.
    */
   videoMask(input: VideoMaskRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-mask", { body: input })
@@ -468,7 +480,16 @@ export class MediaResource {
    * `invertMask`, `feather` (0–20 px), `grow` (−10–10 px), `opacity` (0–1,
    * default 1: how strongly the foreground covers the background inside the
    * mask) and `audioSource` (foreground / background / mix / none). Priced per started 5 seconds of
-   * the result (foreground up to 300 s). Poll `jobs.get(jobId)` for `videoUrl`.
+   * the result (the video it follows up to 300 s). Poll `jobs.get(jobId)` for `videoUrl`.
+   *
+   * `fill` picks what fills the masked area: `video` (default — the
+   * foreground, required then), `pixelate` (the background itself in
+   * blocks of `pixelSizePct` % of the frame width, 0.2–10, default 1.25) or
+   * `blur` (the background blurred, sigma `blurStrengthPct` % of the frame
+   * width, 0.1–5, default 2). Pixelate and blur take no
+   * `foregroundUrl` (one sent is ignored): the result follows the background
+   * and is priced on its length, and it always carries the background's sound
+   * (`audioSource` is ignored).
    */
   maskComposite(input: MaskCompositeRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/mask-composite", { body: input })

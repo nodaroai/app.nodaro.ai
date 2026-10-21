@@ -117,6 +117,78 @@ describe("video-mask handler — one request", () => {
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/vm")
   })
 
+  it("holdLastMask off (the default): the model's frames are drawn as they are, and the output has no heldFrames", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 4, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["1 10", "1 900", "", ""], requestId: "r", cost: 0.03 })
+    await run({})
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["1 10", "1 900", "", ""], geometry, "/tmp/vm/mask.mp4")
+    expect((mocks.markJobCompleted.mock.calls[0] as unknown as [string, { output_data: object }])[1].output_data).not.toHaveProperty("heldFrames")
+  })
+
+  it("holdLastMask on: empty frames after the first detection are drawn from the last non-empty one, and counted", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 5, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["", "1 900", "", "1 800", ""], requestId: "r", cost: 0.03 })
+    await run({ holdLastMask: true })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", "1 900", "1 900", "1 800", "1 800"], geometry, "/tmp/vm/mask.mp4")
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, expect.objectContaining({ output_data: expect.objectContaining({ frames: 5, heldFrames: 2 }) }))
+    // What a retry reuses is the model's answer, not the held one.
+    const cached = JSON.parse((await import("node:zlib")).gunzipSync((mocks.uploadJobScratchBuffer.mock.calls[0] as unknown as [Buffer])[0]).toString()) as { rle: string[] }
+    expect(cached.rle).toEqual(["", "1 900", "", "1 800", ""])
+  })
+
+  it("minSubjectHeightPct 0 (the default): no size filter, no droppedRegions", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 2, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["1 900", "1 900"], requestId: "r", cost: 0.03 })
+    await run({ minSubjectHeightPct: 0 })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["1 900", "1 900"], geometry, "/tmp/vm/mask.mp4")
+    expect((mocks.markJobCompleted.mock.calls[0] as unknown as [string, { output_data: object }])[1].output_data).not.toHaveProperty("droppedRegions")
+  })
+
+  it("minSubjectHeightPct > 0 drops the small regions first, then holds", async () => {
+    // 640×360: 20 % = 72 rows. A 100-row region (x 10–29) and a 10-row one (x 400–419).
+    const rows = (x: number, y: number, h: number) => Array.from({ length: h }, (_, i) => `${(y + i) * 640 + x + 1} 20`).join(" ")
+    const big = rows(10, 0, 100), small = rows(400, 0, 10)
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 3, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: [`${big} ${small}`, small, ""], requestId: "r", cost: 0.03 })
+    await run({ minSubjectHeightPct: 20, holdLastMask: true })
+    const drawn = (mocks.renderMaskVideo.mock.calls[0] as unknown as [string[]])[0]
+    expect(drawn).toEqual([big, big, big])
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, expect.objectContaining({ output_data: expect.objectContaining({ frames: 3, droppedRegions: 2, heldFrames: 2 }) }))
+  })
+
+  it("maxSubjectHeightPct keeps only the small regions; both cuts keep a band; both 0 leave the frames as they are", async () => {
+    const rows = (x: number, y: number, h: number) => Array.from({ length: h }, (_, i) => `${(y + i) * 640 + x + 1} 20`).join(" ")
+    const big = rows(10, 0, 100), small = rows(400, 0, 10)
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 1, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: [`${big} ${small}`], requestId: "r", cost: 0.03 })
+    await run({ maxSubjectHeightPct: 20 }) // 72 rows
+    expect((mocks.renderMaskVideo.mock.calls[0] as unknown as [string[]])[0]).toEqual([small])
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, expect.objectContaining({ output_data: expect.objectContaining({ droppedRegions: 1 }) }))
+    vi.clearAllMocks()
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 1, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: [`${big} ${small}`], requestId: "r", cost: 0.03 })
+    await run({ minSubjectHeightPct: 0, maxSubjectHeightPct: 0 })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith([`${big} ${small}`], geometry, "/tmp/vm/mask.mp4")
+    expect((mocks.markJobCompleted.mock.calls[0] as unknown as [string, { output_data: object }])[1].output_data).not.toHaveProperty("droppedRegions")
+  })
+
+  it("delivers an empty mask (completed and charged) when no region on any frame reaches the cut", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 2, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["1 20", "1 20"], requestId: "r", cost: 0.03 })
+    mocks.renderMaskVideo.mockResolvedValueOnce({ coveredFraction: 0 })
+    await run({ minSubjectHeightPct: 50 })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", ""], geometry, "/tmp/vm/mask.mp4", { allowEmpty: true })
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith(ctx.jobId, expect.objectContaining({ output_data: expect.objectContaining({ frames: 2, coverage: 0, droppedRegions: 2 }) }))
+    expect(mocks.commitJobCredits).toHaveBeenCalledWith("ul1", ctx.jobId)
+  })
+
+  it("still refuses a run where the model itself matched nothing, with the size filter on", async () => {
+    mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 2, geometry })
+    mocks.runSam3Video.mockResolvedValue({ rle: ["", ""], requestId: "r", cost: 0.03 })
+    await run({ minSubjectHeightPct: 50 }).catch(() => {})
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", ""], geometry, "/tmp/vm/mask.mp4")
+  })
+
   it("does not complete a job cancelled mid-flight", async () => {
     mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 90, geometry })
     mocks.shouldSaveJobResult.mockResolvedValueOnce(false)
@@ -200,13 +272,28 @@ describe("mask-composite handler", () => {
     await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", feather: 99, backgroundFit: "contain" }), ctx)
     expect(mocks.maskComposite).toHaveBeenCalledWith({
       foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
-      settings: { invertMask: false, feather: 20, grow: 0, opacity: 1, backgroundFit: "contain", audioSource: "foreground" },
+      settings: { invertMask: false, feather: 20, grow: 0, opacity: 1, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "contain", audioSource: "foreground" },
     })
     expect(mocks.completeFfmpegVideoJob).toHaveBeenCalledWith("/tmp/mc/output.mp4", ctx, { width: 640, height: 360, durationSec: 3 })
   })
 
   it("refuses a missing input as a deterministic failure", async () => {
     await expect(videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4" }), ctx)).rejects.toThrow(/needs a foreground video, a background video and a mask video/)
+    expect(mocks.maskComposite).not.toHaveBeenCalled()
+  })
+
+  it("pixelate / blur run without a foreground, and never pass one on", async () => {
+    await videoMaskHandlers["mask-composite"]!(job({ backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "pixelate", pixelSizePct: 3 }), ctx)
+    expect(mocks.maskComposite).toHaveBeenLastCalledWith({
+      backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
+      settings: expect.objectContaining({ fill: "pixelate", pixelSizePct: 3 }),
+    })
+    await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "blur" }), ctx)
+    expect((mocks.maskComposite.mock.lastCall as unknown[] | undefined)?.[0]).not.toHaveProperty("foregroundUrl")
+  })
+
+  it("pixelate / blur still refuse a missing background or mask", async () => {
+    await expect(videoMaskHandlers["mask-composite"]!(job({ maskUrl: "https://x/m.mp4", fill: "blur" }), ctx)).rejects.toThrow(/needs a background video and a mask video/)
     expect(mocks.maskComposite).not.toHaveBeenCalled()
   })
 })

@@ -2067,7 +2067,10 @@ Needs `workflows:execute`.
 | `invert_mask` | boolean |  | Swap which side of the mask shows the foreground. |
 | `feather` | integer |  | Edge softening, px (default 2). From 0 to 20. |
 | `grow` | integer |  | Grow (+) or shrink (−) the foreground region, px (default 0). From -10 to 10. |
-| `opacity` | number |  | How strongly the foreground covers the background inside the mask, 0–1 (default 1 = fully). From 0 to 1. |
+| `opacity` | number |  | How strongly the fill covers the background inside the mask, 0–1 (default 1 = fully). From 0 to 1. |
+| `fill` | string |  | What fills the mask (default video). One of `video`, `pixelate`, `blur`. |
+| `pixel_size_pct` | number |  | Pixelate block size, % of frame width (default 1.25). From 0.2 to 10. |
+| `blur_strength_pct` | number |  | Blur sigma, % of frame width (default 2). From 0.1 to 5. |
 | `background_fit` | string |  | How the background fills the foreground's frame (default cover). One of `cover`, `contain`, `stretch`. |
 | `audio_source` | string |  | Which sound the result carries (default foreground). One of `foreground`, `background`, `mix`, `none`. |
 
@@ -3358,6 +3361,9 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | What to track (e.g. 'the woman in the red coat'). From 1 to 500 characters. |
 | `threshold` | number |  | Detection confidence (default 0.5). Lower finds more — try 0.3 when nothing matches. From 0.05 to 0.95. |
 | `provider` | string |  | Segmentation model: sam-3.1 (default) or sam-3 (half the price). One of `sam-3.1`, `sam-3`. |
+| `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost (default false). |
+| `min_subject_height_pct` | number |  | Drop regions shorter than this % of the frame height (default 0 = off). From 0 to 100. |
+| `max_subject_height_pct` | number |  | Drop regions taller than this % of the frame height (default 0 = off). From 0 to 100. |
 
 ## `video_upscale`
 

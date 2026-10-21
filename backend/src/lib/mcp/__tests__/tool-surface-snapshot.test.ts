@@ -1160,6 +1160,28 @@ const CAST_SWAP_V1_BYTES = 1_551
 // carry across.
 const MASK_COMPOSITE_OPACITY_BYTES = 188
 
+// RAISED 2026-10-21 by `mask_composite` taking `fill` (video / pixelate / blur) with `pixel_size_pct` and
+// `blur_strength_pct` (both % of the frame width) — three args and one clause in its description, and
+// nothing else. No tool was added, so the fixture does NOT move. Measured by this suite on the same tree
+// with and without the change: 485_799 + 442 B (with the hold arg below on top; +4 B when its wording
+// moved from "foreground" to the video the result follows); the 103 B of headroom carry across.
+const MASK_COMPOSITE_FILL_BYTES = 442
+
+// RAISED 2026-10-21 by `video_mask` taking `hold_last_mask` (keep the last mask on frames where the
+// subject is lost) — one arg, nothing else; no tool added, so the fixture does NOT move. Measured by
+// this suite with and without the change: 486_323 total − 486_199 = 124 B; the 103 B of headroom carry across.
+const VIDEO_MASK_HOLD_BYTES = 124
+
+// RAISED 2026-10-21 by `video_mask` taking `min_subject_height_pct` (drop regions shorter than that %
+// of the frame height) — one arg, nothing else; no tool added, so the fixture does NOT move. Measured
+// by this suite with and without the change: 486_518 total − 486_361 = 157 B; the 103 B of headroom carry across.
+const VIDEO_MASK_MIN_SUBJECT_BYTES = 157
+
+// RAISED 2026-10-21 by `video_mask` taking `max_subject_height_pct` (drop regions taller than that % of the
+// frame height) — one arg, nothing else; no tool added, so the fixture does NOT move. Measured by this suite
+// with and without the change: 486_678 total − 486_522 = 156 B; the 103 B of headroom carry across.
+const VIDEO_MASK_MAX_SUBJECT_BYTES = 156
+
 // RAISED 2026-10-21 by `cast_swap` taking `pre_prompt` (instructions placed before the role
 // instructions, mentioning roles as post_prompt does) — one arg, and its `roles` description
 // saying a pre_prompt alone is enough too — and nothing else. No tool was added, so the fixture
@@ -1301,6 +1323,10 @@ export const TOOL_WIRE_BUDGET = {
     MODIFY_VIDEO_SEEDANCE_REFS_BYTES +
     CAST_SWAP_V1_BYTES +
     MASK_COMPOSITE_OPACITY_BYTES +
+    MASK_COMPOSITE_FILL_BYTES +
+    VIDEO_MASK_HOLD_BYTES +
+    VIDEO_MASK_MIN_SUBJECT_BYTES +
+    VIDEO_MASK_MAX_SUBJECT_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +

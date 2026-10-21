@@ -87,7 +87,7 @@ describe("POST /v1/mask-composite", () => {
     expect(guardedCredits).toBe(30)
     expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-mc-1", "mask-composite")
     expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", {
-      jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, opacity: 1, backgroundFit: "cover", audioSource: "foreground", usageLogId: "u-1",
+      jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, opacity: 1, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "cover", audioSource: "foreground", usageLogId: "u-1",
     })
   })
 
@@ -109,6 +109,82 @@ describe("POST /v1/mask-composite", () => {
     expect((await post({ ...URLS, opacity: -0.1, userId: USER })).statusCode).toBe(400)
     expect((await post({ ...URLS, opacity: "0.5", userId: USER })).statusCode).toBe(400)
     expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  describe("fill", () => {
+    const { foregroundUrl: _f, ...NO_FG } = URLS
+
+    it("defaults to video, which still needs a foreground (400, nothing probed or queued)", async () => {
+      const res = await post({ ...NO_FG, userId: USER })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(res.json().error.message).toMatch(/foregroundUrl/)
+      expect((await post({ ...NO_FG, fill: "video", userId: USER })).statusCode).toBe(400)
+      expect(probe).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it.each(["pixelate", "blur"] as const)("%s runs without a foreground, measuring and pricing the background", async (fill) => {
+      probe.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 21, fps: 30 })
+      const res = await post({ ...NO_FG, fill, userId: USER })
+      expect(res.statusCode).toBe(200)
+      expect(probe).toHaveBeenCalledTimes(1)
+      expect(probe).toHaveBeenCalledWith("https://example.com/bg.mp4")
+      // 21 s of background → 5 units × the 10-credit row.
+      expect(guardedCredits).toBe(50)
+      expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", expect.objectContaining({ fill, backgroundUrl: URLS.backgroundUrl, maskUrl: URLS.maskUrl }))
+      expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("foregroundUrl")
+    })
+
+    it("ignores a foreground sent with pixelate: the background is measured, and the foreground is neither probed nor queued", async () => {
+      probe.mockImplementation(async (url: string) => ({ width: 1280, height: 720, durationSeconds: url.endsWith("bg.mp4") ? 6 : 200, fps: 30 }))
+      const res = await post({ ...URLS, fill: "pixelate", userId: USER })
+      expect(res.statusCode).toBe(200)
+      expect(probe).toHaveBeenCalledTimes(1)
+      expect(probe).toHaveBeenCalledWith("https://example.com/bg.mp4")
+      expect(guardedCredits).toBe(20)
+      expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("foregroundUrl")
+      const insert = vi.mocked(supabase.from).mock.results[0]!.value.insert as ReturnType<typeof vi.fn>
+      expect(insert.mock.calls[0]![0].input_data).not.toHaveProperty("foregroundUrl")
+    })
+
+    it("ignores even a malformed foreground with blur (dropped, never validated or probed)", async () => {
+      const res = await post({ ...URLS, foregroundUrl: "not a url", fill: "blur", userId: USER })
+      expect(res.statusCode).toBe(200)
+      expect(probe).toHaveBeenCalledWith("https://example.com/bg.mp4")
+      expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("foregroundUrl")
+      // The video fill still validates it.
+      expect((await post({ ...URLS, foregroundUrl: "not a url", userId: USER })).statusCode).toBe(400)
+    })
+
+    it("refuses a background over 300 s or unreadable with the background named, before anything is priced", async () => {
+      probe.mockResolvedValueOnce({ width: 1280, height: 720, durationSeconds: 301, fps: 30 })
+      const over = await post({ ...NO_FG, fill: "blur", userId: USER })
+      expect(over.statusCode).toBe(400)
+      expect(over.json().error.code).toBe("video_duration_exceeds_limit")
+      expect(over.json().error.message).toMatch(/background/)
+      probe.mockRejectedValueOnce(new Error("bad"))
+      const bad = await post({ ...NO_FG, fill: "blur", userId: USER })
+      expect(bad.json().error.code).toBe("invalid_video_duration")
+      expect(bad.json().error.message).toMatch(/background/)
+      expect(guardedCredits).toBeUndefined()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it("passes pixelSizePct and blurStrengthPct through, with their defaults", async () => {
+      expect((await post({ ...NO_FG, fill: "pixelate", pixelSizePct: 0.2, userId: USER })).statusCode).toBe(200)
+      expect(videoQueue.add).toHaveBeenLastCalledWith("mask-composite", expect.objectContaining({ pixelSizePct: 0.2, blurStrengthPct: 2 }))
+      expect((await post({ ...NO_FG, fill: "blur", blurStrengthPct: 5, userId: USER })).statusCode).toBe(200)
+      expect(videoQueue.add).toHaveBeenLastCalledWith("mask-composite", expect.objectContaining({ pixelSizePct: 1.25, blurStrengthPct: 5 }))
+      expect((await post({ ...NO_FG, fill: "blur", blurStrengthPct: 0.1, pixelSizePct: 10, userId: USER })).statusCode).toBe(200)
+    })
+
+    it("refuses an unknown fill and out-of-bounds pixelSizePct / blurStrengthPct", async () => {
+      expect((await post({ ...URLS, fill: "mosaic", userId: USER })).statusCode).toBe(400)
+      for (const pixelSizePct of [0.1, 10.5, "2"]) expect((await post({ ...NO_FG, fill: "pixelate", pixelSizePct, userId: USER })).statusCode).toBe(400)
+      for (const blurStrengthPct of [0, 5.5, "2"]) expect((await post({ ...NO_FG, fill: "blur", blurStrengthPct, userId: USER })).statusCode).toBe(400)
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
   })
 
   it("refuses a missing input and out-of-range settings", async () => {

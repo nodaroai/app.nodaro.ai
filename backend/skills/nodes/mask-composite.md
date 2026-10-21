@@ -1,7 +1,7 @@
 ---
 node_type: mask-composite
-generated_at: 2026-10-20T22:24:23.407Z
-generated_from: f0e2ec34a
+generated_at: 2026-10-21T00:47:32.978Z
+generated_from: d5b7c2cee
 ---
 
 # Mask Composite
@@ -25,6 +25,9 @@ generated_from: f0e2ec34a
 **Optional data fields:**
 - `currentJobProgress?: number`
 - `opacity?: number`
+- `fill?: MaskCompositeFill`
+- `pixelSizePct?: number`
+- `blurStrengthPct?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `currentJobId?: string`
@@ -40,6 +43,9 @@ generated_from: f0e2ec34a
   "feather": 2,
   "grow": 0,
   "opacity": 1,
+  "fill": "video",
+  "pixelSizePct": 1.25,
+  "blurStrengthPct": 2,
   "backgroundFit": "cover",
   "audioSource": "foreground",
   "fieldMappings": {},
@@ -78,6 +84,9 @@ generated_from: f0e2ec34a
     "feather": 2,
     "grow": 0,
     "opacity": 1,
+    "fill": "video",
+    "pixelSizePct": 1.25,
+    "blurStrengthPct": 2,
     "backgroundFit": "cover",
     "audioSource": "foreground",
     "fieldMappings": {},

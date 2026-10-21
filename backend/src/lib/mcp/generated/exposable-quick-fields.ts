@@ -99,8 +99,8 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "mask-composite": {
-    "audioSource": { valueType: "string", fixed: true, values: ["background","foreground","mix","none"] },
-    "backgroundFit": { valueType: "string", fixed: true, values: ["contain","cover","stretch"] },
+    "audioSource": { valueType: "string", fixed: false, values: ["background","foreground","mix","none"] },
+    "backgroundFit": { valueType: "string", fixed: false, values: ["contain","cover","stretch"] },
   },
   "motion-graphics": {
     "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.8-flash","gemini-4-argon","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"], retained: ["gemini-3.7-flash"] },

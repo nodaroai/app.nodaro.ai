@@ -25,6 +25,7 @@
  * node is priced at the cut's length by this rule, not by a special case.
  */
 import { DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { maskCompositeLeadHandle } from "@nodaro/shared/media"
 import { resolveGraphOrigin, type EstimateGraphEdge, type EstimateGraphNode } from "./apply-edl-estimate"
 import { UNIT_KEPT_LENGTHS } from "./unit-kept-lengths.generated"
 
@@ -54,7 +55,8 @@ export const LENGTH_KEEPING_VIDEO_TYPES: ReadonlySet<string> = composeUnits("LEN
   "resize-video",
   "social-media-format",
   "fade-video",
-  // The mask has its clip's frames; the composite follows its foreground (the `video` wire).
+  // The mask has its clip's frames; the composite follows its foreground (the `video` wire),
+  // or its background with a pixelate / blur fill (keptLengthWire reads the node's fill).
   "video-mask",
   "mask-composite",
   "transcode-video",
@@ -116,6 +118,10 @@ export function keptLengthWire(
   const type = node.type ?? ""
   const into = edges.filter((e) => e.target === node.id)
   if ((mode === "exact" ? EXACT_LENGTH_VIDEO_TYPES : LENGTH_KEEPING_VIDEO_TYPES).has(type)) {
+    // Mask Composite with a pixelate / blur fill has no foreground: it follows its background.
+    if (type === "mask-composite" && maskCompositeLeadHandle(dataOf(node)) === "background-video") {
+      return into.find((e) => e.targetHandle === "background-video")
+    }
     return (
       into.find((e) => e.targetHandle === "video") ??
       into.find((e) => (e.targetHandle == null || MAIN_INPUT_HANDLES.has(e.targetHandle)) && carriesVideo(e, nodes, edges))

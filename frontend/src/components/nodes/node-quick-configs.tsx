@@ -83,7 +83,9 @@ import {
   VIDEO_MASK_LIMITS,
   MASK_COMPOSITE_AUDIO_SOURCES,
   MASK_COMPOSITE_BACKGROUND_FITS,
-  MASK_COMPOSITE_DEFAULTS
+  MASK_COMPOSITE_DEFAULTS,
+  maskCompositeFillOf,
+  maskCompositeUsesForeground
 } from "@nodaro/shared/media"
 import { MASK_COMPOSITE_AUDIO_LABEL_KEYS, MASK_COMPOSITE_FIT_LABEL_KEYS } from "@/components/editor/config-panels/mask-composite-config"
 import { cachedFreeVideoLimits, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
@@ -778,18 +780,27 @@ const videoMaskThresholdControl = (): QuickConfigControl => ({
 
 /** mask-composite's two enum levers — static lists straight from the shared
  *  enums (no provider lever), captions from the panel's own label maps. */
-const maskCompositeQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
-  {
-    field: "backgroundFit", ariaLabel: tx("proccfg.maskCompositeBackgroundFit"), icon: Maximize2,
-    defaultValue: MASK_COMPOSITE_DEFAULTS.backgroundFit,
-    options: MASK_COMPOSITE_BACKGROUND_FITS.map((v) => ({ value: v, label: tx(MASK_COMPOSITE_FIT_LABEL_KEYS[v]) })),
-  },
-  {
-    field: "audioSource", ariaLabel: tx("proccfg.maskCompositeAudio"), icon: Volume2,
-    defaultValue: MASK_COMPOSITE_DEFAULTS.audioSource,
-    options: MASK_COMPOSITE_AUDIO_SOURCES.map((v) => ({ value: v, label: tx(MASK_COMPOSITE_AUDIO_LABEL_KEYS[v]) })),
-  },
-]
+/** Background fit and Audio do nothing with a pixelate / blur fill (the background is the frame and
+ *  the only sound), so both hide there — like the panel — keeping the stored value for the Video fill. */
+const maskCompositeQuickConfigs = (): ReadonlyArray<QuickConfigControl> => {
+  const fits = MASK_COMPOSITE_BACKGROUND_FITS.map((v) => ({ value: v, label: tx(MASK_COMPOSITE_FIT_LABEL_KEYS[v]) }))
+  const sounds = MASK_COMPOSITE_AUDIO_SOURCES.map((v) => ({ value: v, label: tx(MASK_COMPOSITE_AUDIO_LABEL_KEYS[v]) }))
+  const onVideoFill = (data: Record<string, unknown>) => maskCompositeUsesForeground(maskCompositeFillOf(data))
+  return [
+    {
+      field: "backgroundFit", ariaLabel: tx("proccfg.maskCompositeBackgroundFit"), icon: Maximize2,
+      defaultValue: MASK_COMPOSITE_DEFAULTS.backgroundFit,
+      preserveOnHide: true,
+      options: (data) => (onVideoFill(data) ? fits : []),
+    },
+    {
+      field: "audioSource", ariaLabel: tx("proccfg.maskCompositeAudio"), icon: Volume2,
+      defaultValue: MASK_COMPOSITE_DEFAULTS.audioSource,
+      preserveOnHide: true,
+      options: (data) => (onVideoFill(data) ? sounds : []),
+    },
+  ]
+}
 
 /** assemble-narrated-video's three ffmpeg-fit knobs. No provider lever exists
  *  on this node (pure ffmpeg logic — see assemble-narrated-video-config.tsx),

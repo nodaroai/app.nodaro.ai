@@ -1,7 +1,7 @@
 ---
 node_type: video-mask
-generated_at: 2026-10-14T00:02:31.780Z
-generated_from: b83a9467d
+generated_at: 2026-10-21T01:49:16.034Z
+generated_from: 3ece3d99e
 ---
 
 # Video Mask
@@ -21,6 +21,9 @@ generated_from: b83a9467d
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `holdLastMask?: boolean`
+- `minSubjectHeightPct?: number`
+- `maxSubjectHeightPct?: number`
 - `videoUrl?: string`
 - `activeResultIndex?: number`
 - `generatedResults?: GeneratedResult[]`
@@ -39,6 +42,9 @@ generated_from: b83a9467d
   "prompt": "",
   "threshold": 0.5,
   "provider": "sam-3.1",
+  "holdLastMask": false,
+  "minSubjectHeightPct": 0,
+  "maxSubjectHeightPct": 0,
   "fieldMappings": {},
   "executionStatus": "idle",
   "generatedResults": [],
@@ -74,6 +80,9 @@ generated_from: b83a9467d
     "prompt": "",
     "threshold": 0.5,
     "provider": "sam-3.1",
+    "holdLastMask": false,
+    "minSubjectHeightPct": 0,
+    "maxSubjectHeightPct": 0,
     "fieldMappings": {},
     "executionStatus": "idle",
     "generatedResults": [],

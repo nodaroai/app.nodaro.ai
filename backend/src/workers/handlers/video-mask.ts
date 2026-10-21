@@ -16,7 +16,7 @@
 
 import { dirname, join } from "node:path"
 import { gzipSync, gunzipSync } from "node:zlib"
-import { resolveMaskCompositeSettings, resolveVideoMaskProvider, VIDEO_MASK_LIMITS } from "@nodaro/shared/media"
+import { maskCompositeEffectiveAudioSource, maskCompositeUsesForeground, resolveMaskCompositeSettings, resolveVideoMaskProvider, VIDEO_MASK_LIMITS } from "@nodaro/shared/media"
 import { listObjectsByPrefixWithMeta, readR2ObjectBuffer, uploadFileToR2 } from "../../lib/storage.js"
 import { jobScratchPrefix, uploadJobScratchBuffer, uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -29,6 +29,8 @@ import {
   prepareVideoMaskSource,
   renderMaskVideo,
   splitMaskSource,
+  holdLastMaskFrames,
+  dropMaskRegionsBySize,
   type MaskChunk,
   type MaskGeometry,
 } from "../../providers/video/video-mask.js"
@@ -136,12 +138,15 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
 }
 
 const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
-  const { videoUrl, prompt, threshold, provider } = job.data as {
+  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct } = job.data as {
     jobId: string
     videoUrl: string
     prompt: string
     threshold?: number
     provider?: string
+    holdLastMask?: boolean
+    minSubjectHeightPct?: number
+    maxSubjectHeightPct?: number
   }
   const model = resolveVideoMaskProvider(provider)
   const detection = threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
@@ -179,12 +184,35 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         return { rle: answer.rle, cost: answer.cost }
       }),
     )
-    const rle = answers.flatMap((a) => a.rle)
     const cost = answers.every((a) => a.cost === null) ? null : answers.reduce((sum, a) => sum + (a.cost ?? 0), 0)
-    assertFrameCountMatches(rle.length, totalFrames)
+    const modelRle = answers.flatMap((a) => a.rle)
+    // The chunks' own arrays are no longer needed: let them go, so a frame the size filter replaces
+    // leaves no second copy behind (the retry cache already holds the model's answer).
+    answers.length = 0
+    cached.clear()
+    // The model's frame count is checked first: a wrong count is refused as itself, never as a post-processing error.
+    assertFrameCountMatches(modelRle.length, totalFrames)
+    // All off by default: the model's mask, frame for frame. The size filter (min ≤ height ≤ max) runs
+    // FIRST, so a frame left with nothing in the band counts as empty and is held from the last one.
+    const pctOf = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0)
+    const minPct = pctOf(minSubjectHeightPct)
+    const maxPct = pctOf(maxSubjectHeightPct)
+    // In place, frame by frame, yielding to the event loop (other jobs on this worker keep running).
+    const sized = minPct > 0 || maxPct > 0 ? await dropMaskRegionsBySize(modelRle, prepared.geometry, minPct, maxPct) : undefined
+    // The model matched something but no region is in the band: the person asked to ignore those
+    // subjects, so an all-black mask (coverage 0) is the answer — delivered and charged as usual.
+    const allSmall = sized !== undefined && sized.matched && !sized.kept
+    if (sized) console.log(`[worker] video-mask ${ctx.jobId}: dropped ${sized.droppedRegions} region(s) outside ${minPct}–${maxPct || 100}% of the frame height${allSmall ? " — none left: an empty mask" : ""}`)
+    const afterSize = sized?.rle ?? modelRle
+    // In place, yielding to the event loop like the size filter.
+    const held = holdLastMask === true ? await holdLastMaskFrames(afterSize, prepared.geometry.width * prepared.geometry.height) : undefined
+    const rle = held?.rle ?? afterSize
+    if (held) console.log(`[worker] video-mask ${ctx.jobId}: held the last mask over ${held.heldFrames} empty frame(s)`)
 
     const maskPath = join(workDir, "mask.mp4")
-    const { coveredFraction } = await renderMaskVideo(rle, prepared.geometry, maskPath)
+    const { coveredFraction } = allSmall
+      ? await renderMaskVideo(rle, prepared.geometry, maskPath, { allowEmpty: true })
+      : await renderMaskVideo(rle, prepared.geometry, maskPath)
     await setJobProgress(job, ctx.jobId, 90)
 
     // POST-PROVIDER: the segmentation is delivered and paid for; an upload
@@ -201,6 +229,8 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         frames: rle.length,
         chunks: chunks.length,
         coverage: Number(coveredFraction.toFixed(4)),
+        ...(held ? { heldFrames: held.heldFrames } : {}),
+        ...(sized ? { droppedRegions: sized.droppedRegions } : {}),
       },
       provider: model,
       provider_cost: cost,
@@ -214,14 +244,21 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
 }
 
 const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, ctx) {
-  const data = job.data as { jobId: string; foregroundUrl: string; backgroundUrl: string; maskUrl: string } & Record<string, unknown>
-  if (!data.foregroundUrl || !data.backgroundUrl || !data.maskUrl) {
-    throw new DeterministicJobError("Mask Composite needs a foreground video, a background video and a mask video.")
-  }
+  const data = job.data as { jobId: string; foregroundUrl?: string; backgroundUrl: string; maskUrl: string } & Record<string, unknown>
   const settings = resolveMaskCompositeSettings(data)
-  console.log(`[worker] mask-composite ${ctx.jobId} (fit ${settings.backgroundFit}, audio ${settings.audioSource}${settings.invertMask ? ", inverted" : ""})`)
+  // Pixelate / blur fill from the background: no foreground is needed (one sent is ignored).
+  const usesForeground = maskCompositeUsesForeground(settings.fill)
+  if ((usesForeground && !data.foregroundUrl) || !data.backgroundUrl || !data.maskUrl) {
+    throw new DeterministicJobError(
+      usesForeground
+        ? "Mask Composite needs a foreground video, a background video and a mask video."
+        : "Mask Composite needs a background video and a mask video.",
+    )
+  }
+  // The audio the render carries (pixelate / blur: always the background's), not the stored choice.
+  console.log(`[worker] mask-composite ${ctx.jobId} (fill ${settings.fill}, fit ${settings.backgroundFit}, audio ${maskCompositeEffectiveAudioSource(settings)}${settings.invertMask ? ", inverted" : ""})`)
   const result = await maskComposite({
-    foregroundUrl: data.foregroundUrl,
+    ...(usesForeground ? { foregroundUrl: data.foregroundUrl } : {}),
     backgroundUrl: data.backgroundUrl,
     maskUrl: data.maskUrl,
     settings,

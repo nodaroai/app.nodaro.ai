@@ -39,6 +39,14 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
   })
   const threshold = data.threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
   const provider = resolveVideoMaskProvider(data.provider)
+  const minSubjectHeightPct = typeof data.minSubjectHeightPct === "number" && Number.isFinite(data.minSubjectHeightPct)
+    ? Math.min(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX, Math.max(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN, data.minSubjectHeightPct))
+    : VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN
+  const maxSubjectHeightPct = typeof data.maxSubjectHeightPct === "number" && Number.isFinite(data.maxSubjectHeightPct)
+    ? Math.min(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX, Math.max(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN, data.maxSubjectHeightPct))
+    : VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN
+  // Both cuts set with the minimum above the maximum: nothing could be kept (the run is refused).
+  const emptyBand = minSubjectHeightPct > 0 && maxSubjectHeightPct > 0 && minSubjectHeightPct > maxSubjectHeightPct
 
   return (
     <div className="flex flex-col gap-4">
@@ -109,6 +117,57 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskPricingHint")}</p>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="video-mask-hold-last"
+            checked={data.holdLastMask === true}
+            onChange={(e) => onUpdate({ holdLastMask: e.target.checked })}
+            className="accent-[#ff0073]"
+          />
+          <label htmlFor="video-mask-hold-last" className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskHoldLastMask")}</label>
+        </div>
+        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskHoldLastMaskHint")}</p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="video-mask-min-subject-height" className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskMinSubjectHeight")}</label>
+          <span className="text-xs text-muted-foreground shrink-0">{minSubjectHeightPct > 0 ? `${minSubjectHeightPct}%` : t("vidcfg.videoMaskMinSubjectHeightOff")}</span>
+        </div>
+        <input
+          id="video-mask-min-subject-height"
+          type="range"
+          min={VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN}
+          max={VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX}
+          step={1}
+          value={minSubjectHeightPct}
+          onChange={(e) => onUpdate({ minSubjectHeightPct: parseInt(e.target.value, 10) })}
+          className="w-full accent-[#ff0073]"
+        />
+        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskMinSubjectHeightHint")}</p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="video-mask-max-subject-height" className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskMaxSubjectHeight")}</label>
+          <span className="text-xs text-muted-foreground shrink-0">{maxSubjectHeightPct > 0 ? `${maxSubjectHeightPct}%` : t("vidcfg.videoMaskMinSubjectHeightOff")}</span>
+        </div>
+        <input
+          id="video-mask-max-subject-height"
+          type="range"
+          min={VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN}
+          max={VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX}
+          step={1}
+          value={maxSubjectHeightPct}
+          onChange={(e) => onUpdate({ maxSubjectHeightPct: parseInt(e.target.value, 10) })}
+          className="w-full accent-[#ff0073]"
+        />
+        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskMaxSubjectHeightHint")}</p>
+        {emptyBand && <p role="alert" className="text-[10px] text-amber-600 dark:text-amber-400">{t("vidcfg.videoMaskSizeBandEmpty")}</p>}
       </div>
     </div>
   )

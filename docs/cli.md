@@ -497,15 +497,20 @@ nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--
                                                          # "1.2-2.6"); --preset/--corner apply to every positional layer. --layers-file takes the full API
                                                          # layers array instead (per-layer boxes, opacity, animate, zIndex). --base-fit and --background-color
                                                          # need --aspect. See docs/nodes/processing-video/video-overlay.md.
-nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--model sam-3.1|sam-3] [--watch] [--poll-interval <ms>] [--json]
+nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--model sam-3.1|sam-3] [--hold-last-mask] [--min-subject-height <pct>] [--max-subject-height <pct>] [--watch] [--poll-interval <ms>] [--json]
                                                          # tracks a subject described in text through a video (SAM 3.1 by default; --model sam-3 costs
                                                          # half) and returns a black-and-white mask video (white = the subject). --threshold 0.05-0.95
                                                          # (default 0.5; lower finds more). Clips up to 5 minutes at 30 fps (a faster clip counts
-                                                         # proportionally longer), priced by length. See docs/nodes/ai-video/video-mask.md.
+                                                         # proportionally longer), priced by length. --hold-last-mask keeps the last mask on frames where
+                                                         # the subject is lost; --min-subject-height 0-100 drops subjects shorter than that % of the
+                                                         # frame height, --max-subject-height those taller (applied first). See docs/nodes/ai-video/video-mask.md.
 nodaro media mask-composite <foregroundUrl> <backgroundUrl> <maskUrl> [--invert] [--feather <px>] [--grow <px>] [--background-fit cover|contain|stretch] [--audio foreground|background|mix|none] [--watch] [--poll-interval <ms>] [--json]
+nodaro media mask-composite <backgroundUrl> <maskUrl> --fill pixelate|blur [--pixel-size-pct <pct>] [--blur-strength-pct <pct>] [--invert] [--feather <px>] [--grow <px>] [--audio …] [--watch] [--json]
                                                          # the foreground over the background through the mask (white = foreground), local FFmpeg, priced per started 5 s of the result (foreground up to 300 s).
                                                          # The result follows the foreground's size, rate and length; the background loops, the mask holds its
-                                                         # last frame. --feather 0-20 px, --grow -10..10 px. See docs/nodes/processing-video/mask-composite.md.
+                                                         # last frame. --feather 0-20 px, --grow -10..10 px. --fill pixelate|blur fills the mask with the
+                                                         # background itself (--pixel-size-pct 0.2-10 % of the width, default 1.25; --blur-strength-pct 0.1-5 %, default 2) and takes
+                                                         # no foreground: two URLs, the result follows the background. See docs/nodes/processing-video/mask-composite.md.
 nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
 
 # Audio — the primitives Voice Changer Pro composes, standalone, plus speech-to-text

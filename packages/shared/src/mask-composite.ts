@@ -10,6 +10,15 @@
  * background is fitted to that frame (`backgroundFit`) and loops when shorter;
  * the mask is stretched to the frame and holds its last frame when shorter.
  *
+ * `fill` picks what fills the masked area. `"video"` (the default) is the
+ * foreground, as above. `"pixelate"` and `"blur"` fill it with the BACKGROUND
+ * itself, pixelated or blurred: there is no foreground then (a sent
+ * `foregroundUrl` is ignored), so the render follows the BACKGROUND (its size,
+ * frame rate and length; `backgroundFit` has nothing to fit), and the run is
+ * priced on the background's length. With no foreground the result always
+ * carries the background's sound — `audioSource` is ignored there
+ * ({@link maskCompositeEffectiveAudioSource}); the canvas hides the control.
+ *
  * Priced per started 5 seconds of the result (the foreground's length), like
  * Trim / Loop / Combine Videos: the node's own `model_pricing` row is ONE unit
  * (`maskCompositeUnits` counts them). Worked examples (repeated in
@@ -22,6 +31,10 @@
 /** How the background is fitted to the foreground's frame. */
 export const MASK_COMPOSITE_BACKGROUND_FITS = ["cover", "contain", "stretch"] as const
 export type MaskCompositeBackgroundFit = (typeof MASK_COMPOSITE_BACKGROUND_FITS)[number]
+
+/** What fills the masked area: the foreground video, or the background itself pixelated or blurred. */
+export const MASK_COMPOSITE_FILLS = ["video", "pixelate", "blur"] as const
+export type MaskCompositeFill = (typeof MASK_COMPOSITE_FILLS)[number]
 
 /** Which sound the result carries. `mix` blends both tracks at equal level. */
 export const MASK_COMPOSITE_AUDIO_SOURCES = ["foreground", "background", "mix", "none"] as const
@@ -38,7 +51,15 @@ export const MASK_COMPOSITE_BOUNDS = {
    *  (1 = fully, today's output; 0 = not at all). */
   OPACITY_MIN: 0,
   OPACITY_MAX: 1,
-  /** The longest foreground a run accepts, seconds. */
+  /** Pixelate: the block size as a % of the frame's WIDTH (relative, so a
+   *  setting looks the same at any resolution); the worker makes the blocks
+   *  max(2, round(width × pct / 100)) px. 1.25 % = 16 px on a 1280-wide frame. */
+  PIXEL_SIZE_PCT_MIN: 0.2,
+  PIXEL_SIZE_PCT_MAX: 10,
+  /** Blur: the gaussian's sigma as a % of the frame's WIDTH (2 % ≈ sigma 25 px on a 1280-wide frame). */
+  BLUR_STRENGTH_PCT_MIN: 0.1,
+  BLUR_STRENGTH_PCT_MAX: 5,
+  /** The longest leading video (the foreground; the background when `fill` is not video) a run accepts, seconds. */
   MAX_DURATION_SEC: 300,
 } as const
 
@@ -65,6 +86,9 @@ export const MASK_COMPOSITE_DEFAULTS = {
   feather: 2,
   grow: 0,
   opacity: 1,
+  fill: "video" as MaskCompositeFill,
+  pixelSizePct: 1.25,
+  blurStrengthPct: 2,
   backgroundFit: "cover" as MaskCompositeBackgroundFit,
   audioSource: "foreground" as MaskCompositeAudioSource,
 } as const
@@ -75,6 +99,12 @@ export interface MaskCompositeSettings {
   readonly grow: number
   /** Inside the mask: opacity × foreground + (1 − opacity) × background. */
   readonly opacity: number
+  /** What fills the masked area (`video` = the foreground). */
+  readonly fill: MaskCompositeFill
+  /** Pixelate block size, % of the frame width (used when `fill` is `pixelate`). */
+  readonly pixelSizePct: number
+  /** Blur strength: the gaussian's sigma as a % of the frame width (used when `fill` is `blur`). */
+  readonly blurStrengthPct: number
   readonly backgroundFit: MaskCompositeBackgroundFit
   readonly audioSource: MaskCompositeAudioSource
 }
@@ -99,6 +129,9 @@ export function resolveMaskCompositeSettings(data: Readonly<Record<string, unkno
     feather: clampInt(data.feather, b.FEATHER_MIN, b.FEATHER_MAX, d.feather),
     grow: clampInt(data.grow, b.GROW_MIN, b.GROW_MAX, d.grow),
     opacity: clampNumber(data.opacity, b.OPACITY_MIN, b.OPACITY_MAX, d.opacity),
+    fill: maskCompositeFillOf(data),
+    pixelSizePct: clampNumber(data.pixelSizePct, b.PIXEL_SIZE_PCT_MIN, b.PIXEL_SIZE_PCT_MAX, d.pixelSizePct),
+    blurStrengthPct: clampNumber(data.blurStrengthPct, b.BLUR_STRENGTH_PCT_MIN, b.BLUR_STRENGTH_PCT_MAX, d.blurStrengthPct),
     backgroundFit: (MASK_COMPOSITE_BACKGROUND_FITS as readonly string[]).includes(data.backgroundFit as string)
       ? (data.backgroundFit as MaskCompositeBackgroundFit)
       : d.backgroundFit,
@@ -108,10 +141,43 @@ export function resolveMaskCompositeSettings(data: Readonly<Record<string, unkno
   }
 }
 
+/** The fill a node, payload or request body asks for: an unknown value is `video` (the default). */
+export function maskCompositeFillOf(data: Readonly<Record<string, unknown>> | null | undefined): MaskCompositeFill {
+  const f = data?.fill
+  return (MASK_COMPOSITE_FILLS as readonly string[]).includes(f as string) ? (f as MaskCompositeFill) : MASK_COMPOSITE_DEFAULTS.fill
+}
+
+/** Does this fill take a foreground video? Only `video` does; pixelate and blur fill from the background. */
+export function maskCompositeUsesForeground(fill: MaskCompositeFill): boolean {
+  return fill === "video"
+}
+
+/**
+ * The input whose size, rate and length the result has (and so the one a run
+ * is measured and priced on): the canvas handle — `video` (the foreground) for
+ * the video fill, `background-video` for pixelate and blur. The one rule the
+ * route, the workflow run, the run estimates and the length walks read.
+ */
+export function maskCompositeLeadHandle(data: Readonly<Record<string, unknown>> | null | undefined): "video" | "background-video" {
+  return maskCompositeUsesForeground(maskCompositeFillOf(data)) ? "video" : "background-video"
+}
+
+/**
+ * The sound a render actually carries. With no foreground (pixelate / blur) it
+ * is ALWAYS the background's — the only track there is — whatever
+ * `audioSource` says (the canvas hides that control for these fills, so a
+ * stored `none` from the Video fill can never silently mute the result).
+ */
+export function maskCompositeEffectiveAudioSource(s: Pick<MaskCompositeSettings, "fill" | "audioSource">): MaskCompositeAudioSource {
+  if (maskCompositeUsesForeground(s.fill)) return s.audioSource
+  return "background"
+}
+
 /** `POST /v1/mask-composite` request body. */
 export interface MaskCompositeRequest extends Partial<MaskCompositeSettings> {
-  /** The video whose white-masked region is kept (its size, rate and length lead). */
-  readonly foregroundUrl: string
+  /** The video whose white-masked region is kept (its size, rate and length lead).
+   *  Required when `fill` is `video` (the default); not used by `pixelate` / `blur`. */
+  readonly foregroundUrl?: string
   /** The video shown where the mask is black. */
   readonly backgroundUrl: string
   /** The mask video — white = foreground (Video Mask's output). */

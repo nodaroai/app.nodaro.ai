@@ -5843,6 +5843,9 @@ videoMask(input: {
   prompt: string                  // ≤500 chars; commas track several subjects
   threshold?: number              // 0.05..0.95, default 0.5 (lower finds more)
   provider?: "sam-3.1" | "sam-3"  // default sam-3.1; sam-3 is half the price
+  holdLastMask?: boolean          // default false; keep the last mask where the subject is lost
+  minSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions shorter than this % of the frame height
+  maxSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions taller than this % (min > max is a 400)
 }): Promise<{ jobId: string }>
 ```
 
@@ -5859,13 +5862,16 @@ priced by length (`sam-3.1-video:5s` … `:300s`, 55<!-- credits: sam-3.1-video:
 
 ```ts
 maskComposite(input: {
-  foregroundUrl: string
+  foregroundUrl?: string          // required when fill is "video" (the default)
   backgroundUrl: string
   maskUrl: string                 // white = foreground
   invertMask?: boolean
   feather?: number                // 0..20 px, default 2
   grow?: number                   // -10..10 px, default 0
-  opacity?: number                // 0..1, default 1 (how strongly the foreground covers the background inside the mask)
+  opacity?: number                // 0..1, default 1 (how strongly the fill covers the background inside the mask)
+  fill?: "video" | "pixelate" | "blur"                       // default video (the foreground)
+  pixelSizePct?: number           // pixelate: block size, 0.2..10 % of the width, default 1.25
+  blurStrengthPct?: number        // blur: sigma, 0.1..5 % of the width, default 2
   backgroundFit?: "cover" | "contain" | "stretch"           // default cover
   audioSource?: "foreground" | "background" | "mix" | "none" // default foreground
 }): Promise<{ jobId: string }>
@@ -5873,9 +5879,13 @@ maskComposite(input: {
 
 Place a foreground video over a background video through a mask video
 (`POST /v1/mask-composite`) — local FFmpeg, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s** of
-the result (foreground up to 300 s). The result follows
+the result (the video it follows up to 300 s). The result follows
 the foreground's size, frame rate and length; the background is fitted and
-loops when shorter, the mask holds its last frame. Full reference:
+loops when shorter, the mask holds its last frame. With `fill: "pixelate"`
+or `"blur"` the masked area is the background itself, pixelated or blurred:
+no `foregroundUrl` is needed (one sent is ignored), the result follows the
+background and is priced on its length, and it always carries the
+background's sound (`audioSource` is ignored). Full reference:
 [Mask Composite](./nodes/processing-video/mask-composite.md).
 
 #### `saveToStorage(input)`
