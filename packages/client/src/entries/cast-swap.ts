@@ -8,6 +8,7 @@
 export {
   CastSwapResource,
   type CastSwapTraitSource,
+  type CastSwapRolePreviewSettings,
   type CastSwapPersonRole,
   type CastSwapLocationRole,
   type CastSwapPetRole,

@@ -390,16 +390,19 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a post_prompt. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt. |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person` or `pet` or `product`. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
 | `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
 | `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
+| `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
 | `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
 | `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
 | `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
+| `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |

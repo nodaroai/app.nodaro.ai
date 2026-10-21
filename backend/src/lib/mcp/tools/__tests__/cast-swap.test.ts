@@ -61,9 +61,10 @@ const ARGS = {
   video_url: "https://cdn.example/clip.mp4",
   roles: [
     { kind: "person", name: "the singer", images: ["https://cdn.example/me.png"], outfit: "original" },
-    { kind: "person", name: "the drummer" },
+    { kind: "person", name: "the drummer", preview_name: "the tall drummer", in_preview: false },
     { kind: "location", images: ["https://cdn.example/beach.png"] },
   ],
+  pre_prompt: "{role:2} in slow motion",
   post_prompt: "{role:1} smiles at the end",
   preview: true,
   preview_start: 2,
@@ -75,9 +76,10 @@ const BODY = {
   videoUrl: "https://cdn.example/clip.mp4",
   roles: [
     { kind: "person", name: "the singer", images: ["https://cdn.example/me.png"], outfit: "original" },
-    { kind: "person", name: "the drummer", images: null },
+    { kind: "person", name: "the drummer", images: null, previewName: "the tall drummer", inPreview: false },
     { kind: "location", images: ["https://cdn.example/beach.png"] },
   ],
+  prePrompt: "{role:2} in slow motion",
   postPrompt: "{role:1} smiles at the end",
   preview: true,
   previewStart: 2,
@@ -119,13 +121,13 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).not.toMatch(/prepar/i)
   })
 
-  it("sends pet and product roles, resolution, draft and prepare_references to the route in camelCase", async () => {
+  it("sends pet and product roles, their preview settings, resolution, draft and prepare_references to the route in camelCase", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     const res = await callTool(serverWith(fastify), "cast_swap", {
       video_url: "https://cdn.example/clip.mp4",
       roles: [
-        { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original" },
-        { kind: "product", name: "the can", images: ["https://cdn.example/can.png"], finish: "original" },
+        { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original", preview_name: "  the puppy  " },
+        { kind: "product", name: "the can", images: ["https://cdn.example/can.png"], finish: "original", in_preview: true },
       ],
       resolution: "720p",
       draft: false,
@@ -136,8 +138,8 @@ describe("cast_swap", () => {
     expect(calls[0]!.payload).toEqual({
       videoUrl: "https://cdn.example/clip.mp4",
       roles: [
-        { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original" },
-        { kind: "product", name: "the can", images: ["https://cdn.example/can.png"], finish: "original" },
+        { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original", previewName: "the puppy" },
+        { kind: "product", name: "the can", images: ["https://cdn.example/can.png"], finish: "original", inPreview: true },
       ],
       resolution: "720p",
       draft: false,

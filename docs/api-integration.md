@@ -3902,7 +3902,12 @@ Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
 `{ kind: "product", name, images, shape?, finish? }`, each with 0–3 images and
 at most 30 images in all; a role with no images keeps that subject or place as
 in the video; each trait is `"new"` — the default, from your images — or
-`"original"`, kept from the video), and optionally `postPrompt`, `preview`,
+`"original"`, kept from the video; any role may also take `previewName`, the
+name used instead of `name` in a preview, and `inPreview: false`, which leaves
+it out of a preview — not sent, prepared or charged; a full run ignores both),
+and optionally `prePrompt` (your own
+words placed at the start of the prompt, before the role instructions; it
+mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `resolution` (`"480p"` — the default — `"720p"` or `"1080p"`),
 `draft` (on by default at 480p, off above it; `true` above 480p is refused),
 `prepareReferences` (default `true`, see below), `sessionId` and `origin`.
@@ -3935,12 +3940,14 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images and no `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), or a `postPrompt` over 4,000 characters. Also an invalid `origin`. |
-| `400` | `raw_reference_token` | A role's `name` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
-| `400` | `invalid_role_mention` | `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
+| `400` | `validation_error` | The body does not validate: no role with images and no `prePrompt` or `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), or a `prePrompt` or `postPrompt` over 4,000 characters. Also an invalid `origin`. |
+| `400` | `raw_reference_token` | A role's `name` or `previewName`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
+| `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
 | `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
+| `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
+| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the model's limit. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
 | `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |

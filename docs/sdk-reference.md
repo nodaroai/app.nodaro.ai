@@ -1903,8 +1903,10 @@ interface CastSwapParams {
         body?: "new" | "original"; coat?: "new" | "original" }                              // each default "new"
     | { kind: "product"; name: string; images: string[] | null
         shape?: "new" | "original"; finish?: "new" | "original" }                           // each default "new"
-  >                                // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
+  >                                // every role also takes previewName? / inPreview? (preview only, see below);
+                                   // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
                                    // 0–3 images of ONE subject / place each, ≤ 30 images in all
+  prePrompt?: string               // your own words at the start, before the role instructions; {role:N} as in postPrompt
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
@@ -1928,10 +1930,18 @@ interface CastSwapEstimate {
 ```
 
 A role with no images (empty or `null`) is skipped: that subject or place
-stays as in the video. At least one role with images, or a `postPrompt`, is
-required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+stays as in the video. At least one role with images, or a `prePrompt` or
+`postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.
+
+**Preview-only role settings** (any kind; a full run ignores both):
+`previewName` is the name used instead of `name` in a preview, and
+`inPreview: false` leaves the role out of the preview (its images are not sent,
+prepared or charged; `{role:N}` keeps its numbering and reads as its
+`previewName`, else its `name`). A preview with every role left out (always,
+even with a `prePrompt` or `postPrompt`), or with no role kept in it that has
+images and no `prePrompt` or `postPrompt`, answers `400 no_roles_in_preview`.
 
 **Reference preparation** (`prepareReferences`, on by default): before the
 video, each person, pet and product role's images are turned into one clean
@@ -1944,9 +1954,11 @@ Pass `prepareReferences: false` to use your images as they are.
 Both routes answer `400` before charging for more roles of a kind than allowed
 or more than 30 images in all (`validation_error`), `draft: true` with
 `resolution` `"720p"` or `"1080p"` (`validation_error`, "Draft is 480p only."),
-a `postPrompt` over 4,000 characters, a `{role:N}` with N outside
-1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name` or the
-`postPrompt`, a clip outside 4–30 s, or a preview past the clip's end
+a `prePrompt` or `postPrompt` over 4,000 characters, a `{role:N}` with N outside
+1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name`, the
+`prePrompt` or the `postPrompt`, a prompt that would build too long
+(`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
+images), a clip outside 4–30 s, or a preview past the clip's end
 (`previewStart + 4` > its length); also for an invalid body
 (`validation_error`), an address that is not public http(s) (`unsafe_url`) or a
 clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,

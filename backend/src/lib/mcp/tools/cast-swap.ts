@@ -10,8 +10,8 @@
  * followed with `get_job` / `wait_for_job` like any other.
  *
  * The route is the authority on every rule (role counts, the 30-image total,
- * draft only at 480p, the clip's length, the post prompt's `{role:N}`
- * mentions); this tool maps snake_case to the route's body and leaves the rest
+ * draft only at 480p, the clip's length, the pre / post prompt's `{role:N}`
+ * mentions, the preview-only role settings); this tool maps snake_case to the route's body and leaves the rest
  * to it. The user travels in `mcpInject`'s
  * header, never the body.
  *
@@ -51,6 +51,11 @@ interface CastSwapQuote {
 
 const trait = z.enum(["new", "original"]).optional()
 const images = z.array(z.string().url()).max(3).nullable().optional()
+/** Preview-only settings, on every role kind; a full run ignores them. Exported for the schema walk. */
+export const castSwapRolePreviewArgs = {
+  preview_name: z.string().trim().min(1).max(200).optional().describe("Name used instead of name in a preview."),
+  in_preview: z.boolean().optional().describe("false = left out of a preview (not prepared or charged). Default true."),
+}
 
 function refusal(statusCode: number, body: string) {
   if (isRouterNotFound(statusCode, body)) {
@@ -85,6 +90,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
                 body: trait.describe('"new" (default) from the images, or "original" from the video.'),
                 outfit: trait.describe("As body."),
                 hair: trait.describe("Hairstyle and haircut; as body."),
+                ...castSwapRolePreviewArgs,
               }),
               z.object({
                 kind: z.literal("pet"),
@@ -92,6 +98,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
                 images,
                 body: trait.describe("As a person's body."),
                 coat: trait.describe("Fur, colors and markings; as body."),
+                ...castSwapRolePreviewArgs,
               }),
               z.object({
                 kind: z.literal("product"),
@@ -99,15 +106,22 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
                 images,
                 shape: trait.describe("Shape and proportions; as a person's body."),
                 finish: trait.describe("Colors, materials and markings; as shape."),
+                ...castSwapRolePreviewArgs,
               }),
               z.object({
                 kind: z.literal("location"),
                 name: z.string().min(1).optional().describe('Default "the setting".'),
                 images,
+                ...castSwapRolePreviewArgs,
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a post_prompt."),
+          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt."),
+        pre_prompt: z
+          .string()
+          .max(4000)
+          .optional()
+          .describe("Instructions placed before the role instructions. Mention roles as in post_prompt."),
         post_prompt: z
           .string()
           .max(4000)
@@ -128,7 +142,13 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
     async (args) => {
       const payload = {
         videoUrl: args.video_url,
-        roles: args.roles.map((role) => ({ ...role, images: role.images ?? null })),
+        roles: args.roles.map(({ preview_name, in_preview, ...role }) => ({
+          ...role,
+          images: role.images ?? null,
+          ...(preview_name !== undefined ? { previewName: preview_name } : {}),
+          ...(in_preview !== undefined ? { inPreview: in_preview } : {}),
+        })),
+        ...(args.pre_prompt !== undefined ? { prePrompt: args.pre_prompt } : {}),
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
         ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),

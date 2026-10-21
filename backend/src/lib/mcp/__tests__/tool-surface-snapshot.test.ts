@@ -1160,6 +1160,20 @@ const CAST_SWAP_V1_BYTES = 1_551
 // carry across.
 const MASK_COMPOSITE_OPACITY_BYTES = 188
 
+// RAISED 2026-10-21 by `cast_swap` taking `pre_prompt` (instructions placed before the role
+// instructions, mentioning roles as post_prompt does) — one arg, and its `roles` description
+// saying a pre_prompt alone is enough too — and nothing else. No tool was added, so the fixture
+// does NOT move. Measured by this suite on the same tree with and without the change:
+// 485_946 total − 485_799 = 147 B for the arg, 486_912 − 486_898 = 14 B for the wording; the
+// 103 B of headroom carry across.
+const CAST_SWAP_PRE_PROMPT_BYTES = 161
+
+// RAISED 2026-10-21 by `cast_swap` roles taking the preview-only `preview_name` and `in_preview`
+// (on each of the four role kinds, so four times in the schema), and nothing else. No tool was
+// added, so the fixture does NOT move. Measured by this suite on the same tree with and without
+// the change: 486_898 total − 485_946 = 952 B; the 103 B of headroom carry across.
+const CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES = 952
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1298,7 +1312,9 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_LAYOUT_TOOL_BYTES +
     CAST_SWAP_TOOL_BYTES +
     TRENDS_TOOL_BYTES +
-    TRENDS_WORDING_BYTES,
+    TRENDS_WORDING_BYTES +
+    CAST_SWAP_PRE_PROMPT_BYTES +
+    CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
