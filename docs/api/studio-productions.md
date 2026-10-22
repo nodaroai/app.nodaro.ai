@@ -150,6 +150,17 @@ wants to know what an agent just did. `warnings` is a flat list of things worth
 saying that are not failures: an operation that changed nothing, a rename that
 rewrote four prompts.
 
+A receipt can also carry `detail` — `{ template, vars }`, the same line as
+data — and the answer can carry `warningDetails`, the same for `warnings`. They
+are for a client that words the answer in the person's language. `summary` and
+`warnings` stay the English wording and are always there, so a client with no
+wording for a `template`, or whose `vars` do not fill it, shows the English line
+and loses nothing. A template id is permanent: a change to its slots or its
+meaning ships as a new id. `warningDetails` is sent only when it is exactly as
+long as `warnings` — entry `i` words warning `i`, and `null` marks a warning with
+no wording but the English one; treat a list of any other length as absent. A
+deployment that predates them sends neither.
+
 ## Previewing a batch
 
 `dryRun: true` asks what a batch WOULD do. The route runs the write's own
@@ -186,7 +197,7 @@ deciding needs:
 
 | Field | Meaning |
 | --- | --- |
-| `op`, `summary`, `ids`, `impact` | The receipt the apply reports, built by the same projection — so `summary` reads in the same past tense there and here, and `impact` carries the dependency scope (`{ keyframeIds, shotIds }`) where the operation reports one. |
+| `op`, `summary`, `ids`, `impact`, `detail` | The receipt the apply reports, built by the same projection — so `summary` reads in the same past tense there and here, `impact` carries the dependency scope (`{ keyframeIds, shotIds }`) where the operation reports one, and `detail` is the line as data, as above. The answer's `warningDetails` does the same for its `warnings`. |
 | `class` | The operation's confirmation class, read from the vocabulary's own table: `S` safe, `D` deletes, `P` changes who can reach the work, `$` spends. |
 | `restorable` | Present, and `true`, only where the operation put something in the bin that can be restored. Absent everywhere else — including a delete that destroys, because there would be no entry to fetch back. |
 

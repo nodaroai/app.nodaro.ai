@@ -83,20 +83,42 @@ function backgroundFitFilter(fit: MaskCompositeBackgroundFit, w: number, h: numb
   }
 }
 
-/** Restart an input's timestamps at `startSec`: the clock of the video the render follows. */
-const onClockFrom = (startSec: number): string => `setpts=PTS-STARTPTS${startSec > 0 ? `+${startSec.toFixed(6)}/TB` : ""}`
+/**
+ * Every input is composited on a clock starting at 0: ffmpeg pairs frames by
+ * timestamp, and a mask's frame N belongs to the followed video's frame N
+ * (Video Mask draws one per decoded frame, starting at 0). Shifting the mask
+ * to a picture that starts late instead fails when the start is not a whole
+ * number of frames (a 23.976 fps clip starting at 0.041 s): `fps` then snaps
+ * the shifted mask onto the next frame, so every frame met the mask before
+ * its own and frame 0 met none at all. The picture's own start comes back on
+ * the output (`restoreStart`), so it stays where it was against the sound.
+ */
+const ZERO_CLOCK = "setpts=PTS-STARTPTS"
 
 /**
- * The mask chain: put the mask on the foreground's clock, stretch it to the
- * frame, normalise its range, then invert / grow / feather. A mask's frame N
- * belongs to the foreground's frame N (Video Mask draws one per decoded
- * frame, starting at 0), so its timestamps restart at the foreground's own
- * picture start — ffmpeg pairs frames by timestamp, and a foreground whose
- * picture starts at 0.1 s would otherwise meet the mask 0.1 s early.
+ * The followed video on the same clock and frame grid as the mask: `fps` puts
+ * its frames exactly on the grid the mask's `fps` makes, whatever its own
+ * timescale (a 1/90000 or 1/600 file lands a hair before each grid point
+ * otherwise, and meets the mask frame before its own).
  */
-function maskChain(s: MaskCompositeSettings, w: number, h: number, rate: string | undefined, startSec: number): string {
+const leadingClock = (startSec: number, rate: string | undefined): string =>
+  `${startSec > 0 ? `${ZERO_CLOCK},` : ""}${rate ? `fps=${rate},` : ""}`
+
+/**
+ * Put the rendered picture back at the followed video's own start (nothing
+ * for a picture starting at 0). Rounded to whole ticks of the output's
+ * timebase: after `fps` a tick is a frame, and setpts would truncate a
+ * 0.98-tick offset to nothing.
+ */
+const restoreStart = (startSec: number): string => (startSec > 0 ? `,setpts=PTS+round(${startSec.toFixed(6)}/TB)` : "")
+
+/**
+ * The mask chain: start the mask's clock at 0 (see `ZERO_CLOCK`), stretch it
+ * to the frame, normalise its range, then invert / grow / feather.
+ */
+function maskChain(s: MaskCompositeSettings, w: number, h: number, rate: string | undefined): string {
   const parts = [
-    onClockFrom(startSec),
+    ZERO_CLOCK,
     `scale=${w}:${h}`,
     "setsar=1",
     "format=gray",
@@ -154,13 +176,13 @@ export function buildMaskCompositeArgs(args: {
   const fpsStep = rate ? `,fps=${rate}` : ""
   const audio = audioArgs(s.audioSource, probe)
   const graph = [
-    `[0:v]scale=${w}:${h},setsar=1,format=yuva420p[fg]`,
-    // The background goes on the foreground's clock too. Overlay emits one frame per background
-    // frame, so a background starting before a late foreground would add bare background frames.
-    `[1:v]${onClockFrom(startSec)},${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=yuv420p[bg]`,
-    `[2:v]${maskChain(s, w, h, rate, startSec)}[m]`,
+    // Every input on a clock starting at 0 (`ZERO_CLOCK`). Overlay emits one frame per background
+    // frame, so the background starts with the foreground: a bare background frame never comes first.
+    `[0:v]${leadingClock(startSec, rate)}scale=${w}:${h},setsar=1,format=yuva420p[fg]`,
+    `[1:v]${ZERO_CLOCK},${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=yuv420p[bg]`,
+    `[2:v]${maskChain(s, w, h, rate)}[m]`,
     "[fg][m]alphamerge[fga]",
-    "[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+    `[bg][fga]overlay=format=auto:shortest=1,format=yuv420p${restoreStart(startSec)}[vout]`,
     ...(audio.filter ? [audio.filter] : []),
   ].join(";")
   return [
@@ -237,12 +259,12 @@ export function buildMaskCompositeFillArgs(args: {
   // The only sound there is: always the background's (audioSource is ignored for these fills).
   const withAudio = maskCompositeEffectiveAudioSource(s) !== "none" && probe.backgroundHasAudio
   const graph = [
-    // Like the video fill's foreground: the leading input keeps its own clock, and the mask is put on it.
-    `[0:v]scale=${w}:${h},setsar=1,format=yuv420p,split=2[bg][src]`,
+    // Like the video fill: every input on a clock starting at 0 (`ZERO_CLOCK`), the start restored on the output.
+    `[0:v]${leadingClock(startSec, rate)}scale=${w}:${h},setsar=1,format=yuv420p,split=2[bg][src]`,
     `[src]${maskCompositeFillEffect(s, w, h)},format=yuva420p[fx]`,
-    `[1:v]${maskChain(s, w, h, rate, startSec)}[m]`,
+    `[1:v]${maskChain(s, w, h, rate)}[m]`,
     "[fx][m]alphamerge[fxa]",
-    "[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+    `[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p${restoreStart(startSec)}[vout]`,
   ].join(";")
   return [
     "-y",

@@ -105,7 +105,9 @@ against the newest document**:
   names the offending operation by its zero-based index, so fix that one and
   send the same batch again.
 - `receipts` is one past-tense line per operation — the thing to show a user who
-  asks what you just did.
+  asks what you just did. A receipt may also carry `detail`, and the reply
+  `warningDetails`: the same lines as data, for a client that words them in the
+  person's language. Read `summary` and `warnings`; you can ignore both.
 - Many deletes are recoverable: a removed scene, take or planned frame goes to
   the production's bin and can be restored. Others are not — clearing a cast
   member, a voice or the soundtrack, deleting a cut, removing a sequence,

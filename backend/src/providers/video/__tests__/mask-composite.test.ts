@@ -16,27 +16,30 @@ describe("buildMaskCompositeArgs", () => {
   it("renders on the foreground's (even) frame and length, looping the background", () => {
     const argv = build({})
     const g = graphOf(argv)
-    expect(g).toContain("[0:v]scale=640:360")
+    expect(g).toContain("[0:v]fps=30/1,scale=640:360")
     expect(g).toContain("[2:v]setpts=PTS-STARTPTS,scale=640:360")
     expect(argv.join(" ")).toContain("-stream_loop -1 -i bg.mp4")
     expect(argv[argv.indexOf("-t") + 1]).toBe("2.000")
     // The mask holds its last frame so a short mask never ends the render.
     expect(g).toContain("tpad=stop_mode=clone:stop=-1")
   })
-  it("puts the mask on the foreground's clock when the foreground's picture starts late, and renders to its last frame", () => {
+  it("composites a late foreground on a clock starting at 0 and puts its start back on the output, rendering to its last frame", () => {
     const argv = build({}, { ...PROBE, startSec: 0.1 })
-    expect(graphOf(argv)).toContain("[2:v]setpts=PTS-STARTPTS+0.100000/TB,")
+    const g = graphOf(argv)
+    expect(g).toContain("[0:v]setpts=PTS-STARTPTS,fps=30/1,scale=640:360,")
+    expect(g).toContain("[2:v]setpts=PTS-STARTPTS,scale=640:360,")
+    expect(g).toContain("format=yuv420p,setpts=PTS+round(0.100000/TB)[vout]")
     expect(argv[argv.indexOf("-t") + 1]).toBe("2.100")
-    // A picture starting at 0 adds no offset.
-    expect(graphOf(build({}))).toContain("[2:v]setpts=PTS-STARTPTS,")
+    // A picture starting at 0: the foreground and the output are left as they were.
+    expect(graphOf(build({}))).toContain("[0:v]fps=30/1,scale=640:360,")
+    expect(graphOf(build({}))).toContain("format=yuv420p[vout]")
   })
-  it("puts the background on the foreground's clock too, so no bare background frame comes before a late foreground (23.976 fps, one frame late)", () => {
-    const probe = { ...PROBE, frameRate: "24000/1001", durationSec: 97 * 1001 / 24000, startSec: 1001 / 24000 }
+  it("starts the background with the foreground, so no bare background frame comes before a late foreground (23.976 fps, a fraction of a frame late)", () => {
+    const probe = { ...PROBE, frameRate: "24000/1001", durationSec: 97 * 1001 / 24000, startSec: 0.041 }
     const g = graphOf(build({ invertMask: true, backgroundFit: "stretch" }, probe))
-    expect(g).toContain("[1:v]setpts=PTS-STARTPTS+0.041708/TB,scale=640:360,setsar=1,fps=24000/1001,format=yuv420p[bg]")
-    expect(g).toContain("[2:v]setpts=PTS-STARTPTS+0.041708/TB,")
-    // A picture starting at 0 leaves the background where it was.
-    expect(graphOf(build({ backgroundFit: "stretch" }, { ...probe, startSec: 0 }))).toContain("[1:v]setpts=PTS-STARTPTS,scale=640:360,")
+    expect(g).toContain("[1:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,fps=24000/1001,format=yuv420p[bg]")
+    expect(g).toContain("[2:v]setpts=PTS-STARTPTS,scale=640:360,")
+    expect(g).toContain(",setpts=PTS+round(0.041000/TB)[vout]")
   })
   it("bounds the render to the foreground's frame count when the probe has one (the overlay follows the looped background)", () => {
     const argv = build({}, { ...PROBE, frameCount: 60 })
@@ -45,7 +48,7 @@ describe("buildMaskCompositeArgs", () => {
     expect(build({})).not.toContain("-frames:v")
   })
   it("squares a non-square-pixel foreground instead of stretching it", () => {
-    expect(graphOf(build({}, { ...PROBE, width: 720, height: 480, sar: 32 / 27 }))).toContain("[0:v]scale=852:480")
+    expect(graphOf(build({}, { ...PROBE, width: 720, height: 480, sar: 32 / 27 }))).toContain("[0:v]fps=30/1,scale=852:480")
   })
   it("normalises the mask range so near-black is fully background and near-white fully foreground", () => {
     expect(graphOf(build({}))).toContain("lut=c0='clip((val-24)*255/206,0,255)'")
@@ -101,11 +104,12 @@ describe("buildMaskCompositeArgs", () => {
     expect(graphOf(build({ opacity: 0 }))).toContain("lut=c0='val*0.0000'")
   })
   it("the video fill's argv is byte-identical to the graph before fills existed (defaults, and every setting at once)", () => {
-    // Captured from the builder before `fill` was added; the video fill must never move.
+    // Captured from the builder before `fill` was added; the video fill must never move — except
+    // for `fps` on the foreground, which puts it on the mask's frame grid (frame N meets mask N).
     expect(build({})).toEqual([
       "-y", "-i", "fg.mp4", "-stream_loop", "-1", "-i", "bg.mp4", "-i", "m.mp4",
       "-filter_complex",
-      "[0:v]scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=increase,crop=640:360,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=increase,crop=640:360,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout]",
       "-map", "[vout]", "-map", "0:a:0", "-t", "2.000",
       "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "o.mp4",
     ])
@@ -113,7 +117,7 @@ describe("buildMaskCompositeArgs", () => {
     const before = [
       "-y", "-i", "fg.mp4", "-stream_loop", "-1", "-i", "bg.mp4", "-i", "m.mp4",
       "-filter_complex",
-      "[0:v]scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout];[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout];[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[aout]",
       "-map", "[vout]", "-map", "[aout]", "-t", "2.000",
       "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "o.mp4",
     ]
@@ -138,7 +142,7 @@ describe("buildMaskCompositeFillArgs (pixelate / blur)", () => {
     expect(argv).not.toContain("-stream_loop")
     expect(argv).not.toContain("fg.mp4")
     expect(graphOf(argv)).toBe(
-      "[0:v]scale=640:360,setsar=1,format=yuv420p,split=2[bg][src];" +
+      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuv420p,split=2[bg][src];" +
         // 640/32 = 20, 360/32 = 11.25 → 11 blocks.
         "[src]scale=20:11:flags=area,scale=640:360:flags=neighbor,format=yuva420p[fx];" +
         "[1:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];" +
@@ -170,10 +174,12 @@ describe("buildMaskCompositeFillArgs (pixelate / blur)", () => {
     expect(graphOf(fillBuild({ fill: "blur", opacity: 0.5 }))).toContain("lut=c0='val*0.5000'")
     expect(graphOf(fillBuild({ fill: "blur" }))).not.toContain("val*")
   })
-  it("follows the background's clock and frame: a late picture start offsets the mask, non-square pixels are squared", () => {
+  it("follows the background's clock and frame: a late picture is composited from 0 and its start put back, non-square pixels are squared", () => {
     const argv = fillBuild({ fill: "blur" }, { ...BG_PROBE, startSec: 0.1, width: 720, height: 480, sar: 32 / 27 })
-    expect(graphOf(argv)).toContain("[0:v]scale=852:480,")
-    expect(graphOf(argv)).toContain("[1:v]setpts=PTS-STARTPTS+0.100000/TB,scale=852:480,")
+    expect(graphOf(argv)).toContain("[0:v]setpts=PTS-STARTPTS,fps=30/1,scale=852:480,")
+    expect(graphOf(argv)).toContain("[1:v]setpts=PTS-STARTPTS,scale=852:480,")
+    expect(graphOf(argv)).toContain("format=yuv420p,setpts=PTS+round(0.100000/TB)[vout]")
+    expect(graphOf(fillBuild({ fill: "blur" }))).toContain("[0:v]fps=30/1,scale=")
     expect(argv[argv.indexOf("-t") + 1]).toBe("2.100")
   })
   it("always carries the background's sound, whatever audioSource says (none included); silent only when the background is", () => {
@@ -263,6 +269,72 @@ describe("mask composite (real ffmpeg)", () => {
       // Foreground frame 15 (t = 0.5 + 1.5): mask white → the green foreground.
       const [, g2, b2] = at(15)
       expect(g2).toBeGreaterThan(100); expect(b2).toBeLessThan(60)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  // A picture starting a FRACTION of a frame late (a 23.976 fps clip whose picture starts at 0.041 s while
+  // its sound starts at 0, as trimmed film clips do): the mask's frame N must still meet frame N — never
+  // the frame before, and never no mask at all on frame 0. The mask is white on odd frames only, so a
+  // one-frame slip shows.
+  const lateParityScene = async (dir: string, source: string, vf: string[] = [], timescale = "24000") => {
+    const raw = join(dir, "src-raw.mp4"), late = join(dir, "src-late.mp4"), mask = join(dir, "mask.mp4")
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `${source}:s=160x90:r=24000/1001`, "-frames:v", "12", ...vf, "-c:v", "libx264", "-pix_fmt", "yuv444p", "-crf", "0", raw])
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-itsoffset", "0.041", "-i", raw, "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+      "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-t", "0.6", "-video_track_timescale", timescale, late])
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=160x90:r=24000/1001", "-frames:v", "12",
+      "-vf", "format=gray,geq=lum='if(mod(N,2),255,0)'", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-qp", "0", mask])
+    const { probeVideoOverlayBase } = await import("../ffmpeg-utils.js")
+    const p = await probeVideoOverlayBase(late)
+    expect(p.startTimeSec).toBeCloseTo(0.041, 2)
+    expect(p.frameCount).toBe(12)
+    const probe: MaskCompositeProbe = { width: 160, height: 90, frameRate: "24000/1001", durationSec: p.streamDurationSec, startSec: p.startTimeSec, frameCount: p.frameCount, foregroundHasAudio: true, backgroundHasAudio: true }
+    return { late, mask, probe }
+  }
+  const frameRgb = (file: string, n: number, pixFmt: "rgb24" | "gray") =>
+    execFileSync("ffmpeg", ["-v", "error", "-i", file, "-vf", `select=eq(n\\,${n})`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", pixFmt, "-"])
+
+  // The output's picture starts where the source's did (a frame ahead of the sound otherwise).
+  const videoStart = (file: string) =>
+    Number(execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=start_time", "-of", "csv=p=0", file]).toString().trim())
+
+  it.each(["24000", "90000", "600"])("video fill: mask frame N meets foreground frame N when the picture starts a fraction of a frame late (timescale 1/%s)", async (timescale) => {
+    const dir = await mkdtemp(join(tmpdir(), "mask-composite-late-video-"))
+    try {
+      const { late, mask, probe } = await lateParityScene(dir, "color=c=red", [], timescale)
+      const bg = join(dir, "bg.mp4"), out = join(dir, "out.mp4")
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=24000/1001:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", bg])
+      await runFfmpeg(buildMaskCompositeArgs({ foregroundPath: late, backgroundPath: bg, maskPath: mask, outputPath: out, settings: resolveMaskCompositeSettings({ feather: 0 }), probe }), 60_000)
+      expect(frameCount(out)).toBe(12)
+      const i = (45 * 160 + 80) * 3
+      const seen = Array.from({ length: 8 }, (_, n) => {
+        const rgb = frameRgb(out, n, "rgb24")
+        return rgb[i]! > 200 && rgb[i + 2]! < 60 ? "fg" : rgb[i + 2]! > 200 && rgb[i]! < 60 ? "bg" : "?"
+      })
+      // Even frames: mask black → background; odd frames: mask white → foreground.
+      expect(seen).toEqual(["bg", "fg", "bg", "fg", "bg", "fg", "bg", "fg"])
+      expect(Math.abs(videoStart(out) - videoStart(late))).toBeLessThan(0.002)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each(["24000", "90000", "600"])("blur fill: mask frame N meets frame N when the picture starts a fraction of a frame late, frame 0 never blurred whole (timescale 1/%s)", async (timescale) => {
+    const dir = await mkdtemp(join(tmpdir(), "mask-composite-late-blur-"))
+    try {
+      // 1-px black / white columns: blurred, neighbouring columns read the same grey.
+      const { late, mask, probe } = await lateParityScene(dir, "color=c=gray", ["-vf", "geq=lum='if(mod(X,2),235,16)':cb=128:cr=128"], timescale)
+      const out = join(dir, "out.mp4")
+      await runFfmpeg(buildMaskCompositeFillArgs({ backgroundPath: late, maskPath: mask, outputPath: out, settings: resolveMaskCompositeSettings({ fill: "blur", blurStrengthPct: 5, feather: 0 }), probe }), 60_000)
+      expect(frameCount(out)).toBe(12)
+      const seen = Array.from({ length: 8 }, (_, n) => {
+        const g = frameRgb(out, n, "gray")
+        const swing = Math.abs(g[45 * 160 + 80]! - g[45 * 160 + 81]!)
+        return swing > 100 ? "sharp" : swing < 40 ? "blurred" : "?"
+      })
+      expect(seen).toEqual(["sharp", "blurred", "sharp", "blurred", "sharp", "blurred", "sharp", "blurred"])
+      expect(Math.abs(videoStart(out) - videoStart(late))).toBeLessThan(0.002)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

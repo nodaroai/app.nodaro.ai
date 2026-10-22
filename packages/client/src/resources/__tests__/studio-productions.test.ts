@@ -18,6 +18,7 @@ import type {
   StudioOpsReceipt,
   StudioOpsRequest,
   StudioOpsResponse,
+  StudioOpsText,
   WorkflowConflictCode,
 } from "../../index.js"
 
@@ -201,6 +202,32 @@ describe("client.studio.productions — the write protocol", () => {
         clientRequestId: "req-1",
       },
     })
+  })
+
+  it("ops() hands back the sentence as data beside the English one, exactly as the route sent it", async () => {
+    // `detail` and `warningDetails` are for a client that words the answer in
+    // the person's language. The SDK reads neither: what the route sent is what
+    // the caller gets, and the English `summary` / `warnings` stay the fallback.
+    const detail: StudioOpsText = { template: "rename_shot", vars: { from: "Opening", to: "Arrival", count: 2 } }
+    const warningDetail: StudioOpsText = { template: "stale_frame", vars: { shot: "Shot 1" } }
+    const payload: StudioOpsResponse = {
+      production: view,
+      version: 8,
+      rebased: false,
+      receipts: [{ op: "rename_shot", summary: "Renamed Opening to Arrival.", detail }],
+      warnings: ["Shot 1 is stale.", "Left as it was."],
+      warningDetails: [warningDetail, null],
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    const answer = await client.studio.productions.ops(view.id, { ops: [{ op: "rename_shot" }] })
+
+    expect(answer).toEqual(payload)
+    expect(answer.receipts[0]?.detail).toEqual(detail)
+    expect(answer.warningDetails).toEqual([warningDetail, null])
+    expectTypeOf(answer.receipts[0]?.detail).toEqualTypeOf<StudioOpsText | undefined>()
+    expectTypeOf(answer.warningDetails).toEqualTypeOf<Array<StudioOpsText | null> | undefined>()
   })
 
   it("reconcile() lands what finished and reports what is still running", async () => {
@@ -792,6 +819,27 @@ describe("client.studio.productions — previewing a batch", () => {
       keyframeIds: ["frame-a", "frame-b"],
       shotIds: ["shot-1"],
     })
+  })
+
+  it("the sentence as data is typed the same on the apply and the preview", () => {
+    // Same reasoning as `impact` above: one projection builds both answers, so
+    // a preview receipt that spelled `detail` differently from an applied one
+    // would describe a wire nothing writes. `null` in `warningDetails` is a
+    // warning with no wording but the English one.
+    expectTypeOf<StudioOpsReceipt["detail"]>().toEqualTypeOf<StudioOpsText | undefined>()
+    expectTypeOf<StudioOpsDryRunReceipt["detail"]>().toEqualTypeOf<StudioOpsText | undefined>()
+    expectTypeOf<StudioOpsResponse["warningDetails"]>().toEqualTypeOf<Array<StudioOpsText | null> | undefined>()
+    expectTypeOf<StudioOpsDryRunResponse["warningDetails"]>().toEqualTypeOf<Array<StudioOpsText | null> | undefined>()
+    expectTypeOf<StudioOpsText["template"]>().toEqualTypeOf<string>()
+    expectTypeOf<StudioOpsText["vars"]>().toEqualTypeOf<Record<string, string | number>>()
+
+    const previewed: StudioOpsDryRunResponse = {
+      ...preview,
+      receipts: [{ ...preview.receipts[0]!, detail: { template: "delete_take", vars: { take: 2, shot: "Shot 1" } } }],
+      warningDetails: [{ template: "one_take_left", vars: { shot: "Shot 1" } }],
+    }
+    expect(previewed.receipts[0]?.detail?.vars.take).toBe(2)
+    expect(previewed.warningDetails).toHaveLength(previewed.warnings.length)
   })
 
   it("the refusal is reachable from the package root and reads as a NodaroError", () => {

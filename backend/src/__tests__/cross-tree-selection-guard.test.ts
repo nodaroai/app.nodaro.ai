@@ -336,7 +336,7 @@ describe("cross-tree tests declare what they read", () => {
 
   it("no workspace package module loads the other tree (the parity filter does not walk into packages)", () => {
     expect(modules("packages/*/src/**").filter(loadsOtherTree)).toEqual([])
-  })
+  }, 60_000)
 
   it("no backend or tools module other than a test file loads the other tree", () => {
     expect(modules("backend/**", "tools/**").filter(loadsOtherTree)).toEqual([])

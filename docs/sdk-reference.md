@@ -1678,7 +1678,10 @@ The ENVELOPES are typed; the production DOCUMENT is not. `production` is
 `Record<string, unknown>` and `ops` is `unknown[]` — the field-level types ship
 with the studio app, the one consumer that narrows them. Everything a caller
 branches on is typed: `version`, `rebased`, `receipts`, `warnings`, a quote's
-`credits`, a run's `jobIds`.
+`credits`, a run's `jobIds`. A receipt's `detail` and an answer's
+`warningDetails` are typed too (`StudioOpsText`, `{ template, vars }`): the same
+lines as data, for a client that words them in the person's language, with the
+English `summary` and `warnings` as the fallback.
 
 ##### Reads
 
@@ -1717,8 +1720,11 @@ atomic: one bad operation refuses the whole batch as a `StudioOpError` naming
 its index, and nothing is written. `receipts` is one past-tense line per
 operation, each carrying `impact` — `{ keyframeIds, shotIds }` — where the
 operation's effect reaches past the thing it names, so the caller knows what
-else to refresh. Adopt `production` wholesale and carry `version` forward as the next
-`baseVersion`. The operation vocabulary is served, not shipped: read it from
+else to refresh. A receipt may also carry `detail` (`StudioOpsText`), and the
+reply `warningDetails` — one entry per warning, `null` where only the English
+one exists — the same lines as data; show `summary` and `warnings` whenever you
+have no wording for a `template`. Adopt `production` wholesale and carry `version`
+forward as the next `baseVersion`. The operation vocabulary is served, not shipped: read it from
 `skill()`'s `operating` part.
 
 **Previewing a batch.** `dryRun: true` asks what the batch WOULD do, so a person

@@ -27,6 +27,7 @@ export {
   type StudioClientRequestId,
   type StudioOpsRequest,
   type StudioOpsImpact,
+  type StudioOpsText,
   type StudioOpsReceipt,
   type StudioOpsResponse,
   type StudioOpClass,

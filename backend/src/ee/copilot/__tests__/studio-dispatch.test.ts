@@ -145,8 +145,8 @@ function receipt(op: string, cls: "S" | "D" | "P" | "$", extra: Record<string, u
   return { op, summary: `${op} done`, class: cls, ...extra }
 }
 
-function preview(receipts: ReturnType<typeof receipt>[], warnings: string[] = []): McpToolCallResult {
-  return textResult({ dryRun: true, version: 7, receipts, warnings })
+function preview(receipts: ReturnType<typeof receipt>[], warnings: unknown[] = [], warningDetails?: unknown): McpToolCallResult {
+  return textResult({ dryRun: true, version: 7, receipts, warnings, ...(warningDetails === undefined ? {} : { warningDetails }) })
 }
 
 const editPreviewOf = (proposal?: ActionProposal) => proposal?.preview as EditPreview
@@ -219,6 +219,167 @@ describe("a document write", () => {
     const [carried] = editPreviewOf(outcome?.proposal).receipts
     expect(carried).toEqual(sent)
     expect(carried.detail).toEqual(detail)
+  })
+
+  it("carries the data behind each warning to the card, one entry per warning", async () => {
+    const reworded = { template: "stale_frame", vars: { shot: "Shot 1", count: 2 } }
+    const h = harness({
+      edit_studio_production: preview([receipt("add_shot", "S")], ["First", "Second"], [reworded, null]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).warnings).toEqual(["First", "Second"])
+    expect(editPreviewOf(outcome?.proposal).warningDetails).toEqual([reworded, null])
+  })
+
+  it("uses none of the warning data when its list is not as long as the warnings", async () => {
+    // An entry belongs to a warning by position alone. A list of another length
+    // cannot say which sentence it words, so the card shows the English ones.
+    const h = harness({
+      edit_studio_production: preview([receipt("add_shot", "S")], ["First", "Second"], [{ template: "stale_frame", vars: {} }]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).warnings).toEqual(["First", "Second"])
+    expect(editPreviewOf(outcome?.proposal)).not.toHaveProperty("warningDetails")
+  })
+
+  it("reads an entry that is not a sentence as data as English only", async () => {
+    const h = harness({
+      edit_studio_production: preview([receipt("add_shot", "S")], ["A", "B", "C", "D", "E", "F", "G", "H", "I"], [
+        { template: 5, vars: {} },
+        { template: "stale_frame", vars: { count: { nested: true } } },
+        "stale_frame",
+        { template: "stale_frame", vars: { shot: "Shot 1" } },
+        { template: "stale_frame" },
+        { template: "stale_frame", vars: "ab" },
+        { template: "stale_frame", vars: { shot: "Shot 1", count: { nested: true } } },
+        { template: "stale_frame", vars: { count: Infinity } },
+        { template: "stale_frame", vars: { count: NaN } },
+      ]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).warningDetails).toEqual([
+      null,
+      null,
+      null,
+      { template: "stale_frame", vars: { shot: "Shot 1" } },
+      null,
+      null,
+      null,
+      null,
+      null,
+    ])
+  })
+
+  it("uses none of the warning data when its list is longer than the warnings", async () => {
+    const h = harness({
+      edit_studio_production: preview([receipt("add_shot", "S")], ["First"], [
+        { template: "stale_frame", vars: {} },
+        { template: "stale_frame", vars: {} },
+      ]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).warnings).toEqual(["First"])
+    expect(editPreviewOf(outcome?.proposal)).not.toHaveProperty("warningDetails")
+  })
+
+  it("uses none of the warning data when a warning was not text", async () => {
+    // A warning that is not a string is left out of the list the card gets, so
+    // every position after it has moved. The lengths can still agree (here the
+    // card ends up with three warnings and three entries) and each later entry
+    // would then word the line beside it wrongly.
+    const h = harness({
+      edit_studio_production: preview([receipt("add_shot", "S")], ["w-a", 42, "w-b", "w-c"], [
+        { template: "for_a", vars: {} },
+        { template: "for_forty_two", vars: {} },
+        { template: "for_b", vars: {} },
+      ]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).warnings).toEqual(["w-a", "w-b", "w-c"])
+    expect(editPreviewOf(outcome?.proposal)).not.toHaveProperty("warningDetails")
+  })
+
+  it("uses none of the warning data when a warning was not text, even if the list matched what was sent", async () => {
+    const h = harness({
+      edit_studio_production: preview([receipt("add_shot", "S")], ["First", 42, "Third"], [
+        { template: "for_first", vars: {} },
+        { template: "for_forty_two", vars: {} },
+        { template: "for_third", vars: {} },
+      ]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).warnings).toEqual(["First", "Third"])
+    expect(editPreviewOf(outcome?.proposal)).not.toHaveProperty("warningDetails")
+  })
+
+  it("keeps a valid sentence whole, including a field this layer has never heard of", async () => {
+    // Checked, not rebuilt: a field the service adds later must reach the card
+    // the way a receipt's `impact` does, not be dropped by a fixed field list.
+    const detail = { template: "rename_shot", vars: { from: "Opening" }, revision: 2 }
+    const warningDetail = { template: "stale_frame", vars: { shot: "Shot 1" }, revision: 3 }
+    const h = harness({
+      edit_studio_production: preview([receipt("rename_shot", "S", { detail })], ["Shot 1 is stale."], [warningDetail]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "rename_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal).receipts[0]?.detail).toEqual(detail)
+    expect(editPreviewOf(outcome?.proposal).warningDetails).toEqual([warningDetail])
+  })
+
+  it("drops a receipt's detail that is not a sentence as data, and keeps the rest of the receipt", async () => {
+    const h = harness({
+      edit_studio_production: preview([
+        receipt("a_op", "S", { detail: "rename_shot" }),
+        receipt("b_op", "D", { detail: { template: 5, vars: {} }, restorable: true }),
+        receipt("c_op", "S", { detail: { template: "t", vars: { n: { nested: true } } } }),
+        receipt("d_op", "S"),
+      ]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "a_op" }] })
+
+    const carried = editPreviewOf(outcome?.proposal).receipts
+    expect(carried.map((r) => r.op)).toEqual(["a_op", "b_op", "c_op", "d_op"])
+    for (const r of carried) {
+      expect(r).not.toHaveProperty("detail")
+      expect(r.summary).toBe(`${r.op} done`)
+    }
+    expect(carried[1]).toMatchObject({ class: "D", restorable: true })
+  })
+
+  it("sends no warning data when there are no warnings to word", async () => {
+    const h = harness({ edit_studio_production: preview([receipt("add_shot", "S")], [], []) })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "add_shot" }] })
+
+    expect(editPreviewOf(outcome?.proposal)).not.toHaveProperty("warningDetails")
+  })
+
+  it("keeps the data out of the text the model reads back, and on the card", async () => {
+    // `detail` and `warningDetails` are for the card to word in the person's
+    // language. The model re-reads this text on every later turn, where a
+    // template id is noise: it must see the English wording and nothing else.
+    const detail = { template: "receipt.rename-shot", vars: { from: "Opening" } }
+    const warningDetail = { template: "warning.stale-frame", vars: { shot: "Shot 1" } }
+    const h = harness({
+      edit_studio_production: preview([receipt("rename_shot", "S", { detail })], ["Shot 1 is stale."], [warningDetail]),
+    })
+    const outcome = await dispatchStudioTool(h.deps, "edit_studio_production", { ops: [{ op: "rename_shot" }] })
+
+    expect(outcome?.text).toContain("rename_shot done")
+    expect(outcome?.text).toContain("Shot 1 is stale.")
+    expect(outcome?.text).not.toContain("receipt.rename-shot")
+    expect(outcome?.text).not.toContain("warning.stale-frame")
+    expect(outcome?.text).not.toContain("warningDetails")
+    expect(outcome?.text).not.toContain('"detail"')
+
+    const [carried] = editPreviewOf(outcome?.proposal).receipts
+    expect(carried.detail).toEqual(detail)
+    expect(editPreviewOf(outcome?.proposal).warningDetails).toEqual([warningDetail])
   })
 
   it("never lets the model choose the preview flag, the version or the strict flag", async () => {

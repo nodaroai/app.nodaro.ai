@@ -156,6 +156,24 @@ export interface StudioOpsImpact {
 }
 
 /**
+ * A sentence as data: the id of the template a client words it from, and the
+ * values that fill the template's slots.
+ *
+ * It travels beside the English wording, never instead of it. A client that
+ * words the sentence in the person's language builds it from `template` and
+ * `vars`, and shows the English wording whenever it has no wording for
+ * `template` or `vars` does not fill it — so a template id it has never heard of
+ * costs nothing. A template id is permanent: a change to its slots or its
+ * meaning ships as a new id.
+ */
+export interface StudioOpsText {
+  /** The template's id. */
+  template: string
+  /** What fills the template's slots, by slot name. */
+  vars: Record<string, string | number>
+}
+
+/**
  * One line of what an operation did, in the words a change log would use.
  *
  * Past tense, the target named the way the user sees it, the side effect in a
@@ -166,6 +184,13 @@ export interface StudioOpsReceipt {
   op: string
   /** Past tense, naming the target the way a person would. */
   summary: string
+  /**
+   * `summary` as data, for a client that words receipts in the person's
+   * language. `summary` is always present and always English; read `detail`
+   * only when you have wording for its template, and show `summary` when you do
+   * not. Absent when the studio service that answered predates it.
+   */
+  detail?: StudioOpsText
   /** Ids the operation MINTED — never ids the caller supplied. */
   ids?: string[]
   /**
@@ -192,6 +217,14 @@ export interface StudioOpsResponse {
    * batch; a refusal does.
    */
   warnings: string[]
+  /**
+   * `warnings` as data, by position: entry `i` words `warnings[i]`, and `null`
+   * means that warning has no wording but the English one. The service sends it
+   * only when it is exactly as long as `warnings`, so treat a list of any other
+   * length as absent. Absent too when the studio service that answered predates
+   * it.
+   */
+  warningDetails?: Array<StudioOpsText | null>
 }
 
 /**
@@ -243,6 +276,8 @@ export interface StudioOpsDryRunResponse {
   receipts: StudioOpsDryRunReceipt[]
   /** The same things an apply would have said. */
   warnings: string[]
+  /** The same data behind them an apply would have sent: see {@link StudioOpsResponse.warningDetails}. */
+  warningDetails?: Array<StudioOpsText | null>
 }
 
 /** What landing the finished jobs did. */
