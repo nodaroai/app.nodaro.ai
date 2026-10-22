@@ -189,7 +189,9 @@ const MEDIA_MIME: Record<MediaType, string> = { video: "video/mp4", audio: "audi
  * transcoded AND are served with an honest content type. Opt-in per call —
  * `mp4`/`video/mp4` stays the default for every existing caller, and the
  * browser-safe deliverable paths (`uploadVideoMaybeWatermark`,
- * `watermarkLocalVideoAndUpload`) never pass it.
+ * `watermarkLocalVideoAndUpload`) never pass it. The other writer is a
+ * text-to-video CHILD job that asked Seedance 2.5 for mov: its video is never
+ * shown to its owner, and its parent re-encodes it before delivery.
  */
 const VIDEO_EXT_MIME = { mp4: "video/mp4", mov: "video/quicktime" } as const
 export type VideoContainerExt = keyof typeof VIDEO_EXT_MIME

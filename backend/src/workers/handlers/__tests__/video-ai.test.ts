@@ -413,6 +413,60 @@ describe("video-to-video handler", () => {
 describe("text-to-video handler", () => {
   const handler = videoAIHandlers["text-to-video"]
 
+  /**
+   * Seedance 2.5 MOV output for a child job (the route sets `outputFormat`
+   * only when it honoured it): the provider is asked for mov, and a mov the
+   * provider returned is kept as `.mov` — never through the browser-safe
+   * transcode, which would turn it back into an mp4. Watermarked → the
+   * watermark step's mp4.
+   */
+  describe("seedance 2.5 mov output", () => {
+    const MOV_RESULT = { ...VIDEO_RESULT, url: "https://provider.example.com/out/edit.mov?sig=abc", providerUsed: "seedance-2-5" }
+
+    it("asks the provider for mov and stores the mov result with ext mov", async () => {
+      mocks.mockTextToVideo.mockResolvedValue(MOV_RESULT)
+      mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/videos/job-1.mov")
+      await handler(makeJob("text-to-video", { prompt: "edit", provider: "seedance-2-5", outputFormat: "mov" }) as never, makeCtx())
+
+      expect(mocks.mockTextToVideo.mock.calls[0][4]).toMatchObject({ outputFormat: "mov" })
+      expect(mocks.mockUploadToR2).toHaveBeenCalledWith(MOV_RESULT.url, "job-1", "video", "user-1", { ext: "mov" })
+      expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+      expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalledWith("https://r2.example.com/videos/job-1.mov", "job-1", "user-1")
+      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example.com/videos/job-1.mov" }))
+    })
+
+    it("watermarked: the watermark step writes the stored file (an mp4), never a mov", async () => {
+      mocks.mockTextToVideo.mockResolvedValue(MOV_RESULT)
+      await handler(makeJob("text-to-video", { prompt: "edit", provider: "seedance-2-5", outputFormat: "mov" }) as never, makeCtx({ shouldWatermark: true }))
+
+      expect(mocks.mockTextToVideo.mock.calls[0][4]).toMatchObject({ outputFormat: "mov" })
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(MOV_RESULT.url, "job-1", "user-1", true)
+      expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+    })
+
+    it("an mp4 answer to a mov request is stored as the mp4 it is", async () => {
+      mocks.mockTextToVideo.mockResolvedValue({ ...VIDEO_RESULT, providerUsed: "seedance-2-5" })
+      await handler(makeJob("text-to-video", { prompt: "edit", provider: "seedance-2-5", outputFormat: "mov" }) as never, makeCtx())
+
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
+      expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+    })
+
+    it("absent: the provider options carry no outputFormat key and the upload is today's", async () => {
+      await handler(makeJob("text-to-video", { prompt: "edit", provider: "seedance-2-5" }) as never, makeCtx())
+
+      expect(mocks.mockTextToVideo.mock.calls[0][4]).not.toHaveProperty("outputFormat")
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
+    })
+
+    it("another provider never asks for mov, whatever the payload says", async () => {
+      await handler(makeJob("text-to-video", { prompt: "edit", provider: "kling", outputFormat: "mov" }) as never, makeCtx())
+
+      expect(mocks.mockTextToVideo.mock.calls[0][4]).not.toHaveProperty("outputFormat")
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
+    })
+  })
+
   it("happy path: generates, uploads, saves, commits credits", async () => {
     const job = makeJob("text-to-video", { prompt: "a sunset" })
     await handler(job as never, makeCtx())

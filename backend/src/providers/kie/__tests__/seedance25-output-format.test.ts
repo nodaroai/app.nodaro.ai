@@ -125,6 +125,16 @@ describe("applySeedance2Params — output_format", () => {
     expect("output_format" in input).toBe(false)
   })
 
+  // A draft keeps the container its caller asked for: the 480p draft task is
+  // the same `bytedance/seedance-2-5` model, so `draft` and `output_format`
+  // are independent fields (the draft-finalize task even requires one). A
+  // text-to-video child's draft (Cast Swap's default) is where mov is asked.
+  it('a draft with outputFormat "mov" on seedance-2-5 ⇒ draft, 480p and output_format: "mov"', () => {
+    const input: Record<string, unknown> = extendInput()
+    applySeedance2Params(input, { ...extendOptions(), draft: true, outputFormat: "mov" } as never, "seedance-2-5")
+    expect(input).toEqual({ ...EXPECTED_TODAY, draft: true, resolution: "480p", output_format: "mov" })
+  })
+
   it("seedance-2-fast / seedance-2-mini never receive the field either", () => {
     for (const provider of ["seedance-2-fast", "seedance-2-mini"]) {
       const input: Record<string, unknown> = extendInput()

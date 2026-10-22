@@ -229,7 +229,8 @@ export function applySeedance2Params(
   // provider video `.mp4`/`video/mp4`, so mov bytes under that key would be an
   // unplayable result). Deliberately NOT read from the env here — the lever is
   // consulted by the seedance extend worker, whose deliverable is re-encoded by
-  // the stitch, and passed in as `options.outputFormat`. `mp4` is KIE's default
+  // the stitch, and passed in as `options.outputFormat` (as is a t2v child
+  // job's own request, which its parent re-encodes). `mp4` is KIE's default
   // and is sent as no field, keeping the mp4 payload byte-identical.
   if (provider === "seedance-2-5" && options?.outputFormat === "mov") {
     input.output_format = "mov"
