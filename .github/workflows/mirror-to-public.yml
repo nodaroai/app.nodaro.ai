@@ -81,7 +81,15 @@ jobs:
           if [ -n "${TOK:-}" ]; then
             TOK=$(printf '%s' "$TOK" | tr -d '[:space:]')   # strip stray newline/whitespace from the secret (PATs have none)
             echo "token access check: HTTP $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token ${TOK}" https://api.github.com/repos/nodaroai/app.nodaro.ai) — 200=has access, 404=invalid/no access"
-            export PUBLIC_REMOTE="https://${TOK}@github.com/nodaroai/app.nodaro.ai.git"
+            # The token rides in a header scoped to the public repo's URL, never in
+            # the URL itself: since 2026-10-21 GitHub answers the runners' git calls
+            # with a redirect, and git drops URL credentials when it follows one —
+            # every push failed "could not read Username" with a valid token. A
+            # URL-matched header is sent on the redirected requests too.
+            echo "::add-mask::$(printf 'x-access-token:%s' "$TOK" | base64 -w0)"
+            git config --local http.https://github.com/nodaroai/app.nodaro.ai.git.extraheader \
+              "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOK" | base64 -w0)"
+            export PUBLIC_REMOTE="https://github.com/nodaroai/app.nodaro.ai.git"
           else
             echo "PUBLIC_MIRROR_TOKEN not set — running gate-only (dry run), no publish."
             echo "Add the token (fine-grained PAT, Contents:RW on nodaroai/app.nodaro.ai) to enable nightly auto-publish."
