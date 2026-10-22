@@ -88,6 +88,11 @@ function zoneBody({ left_pct, right_pct, top_pct, bottom_pct }: NonNullable<Face
 
 const trait = z.enum(["new", "original"]).optional()
 const images = z.array(z.string().url()).max(3).nullable().optional()
+/** A fixed reference exactly as the route parses it: http(s) images of at most 4096 characters, a trimmed non-empty line. */
+const reference = z.object({
+  images: z.array(z.url({ protocol: /^https?$/ }).max(4096)).min(1).max(3),
+  line: z.string().trim().min(1).max(500),
+})
 /** Preview-only settings, on every role kind; a full run ignores them. Exported for the schema walk. */
 export const castSwapRolePreviewArgs = {
   preview_name: z.string().trim().min(1).max(200).optional().describe("Name used instead of name in a preview."),
@@ -153,7 +158,12 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt."),
+          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, or a pre_prompt or post_prompt."),
+        references: z
+          .array(reference)
+          .max(5)
+          .optional()
+          .describe('Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30.'),
         pre_prompt: z
           .string()
           .max(4000)
@@ -207,6 +217,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           ...(preview_name !== undefined ? { previewName: preview_name } : {}),
           ...(in_preview !== undefined ? { inPreview: in_preview } : {}),
         })),
+        ...(args.references !== undefined ? { references: args.references } : {}),
         ...(args.pre_prompt !== undefined ? { prePrompt: args.pre_prompt } : {}),
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),

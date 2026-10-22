@@ -166,6 +166,44 @@ describe("cast_swap", () => {
     })
   })
 
+  it("sends fixed references to the route as given", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const references = [
+      { images: ["https://cdn.example/glass.png"], line: "the glass she drinks from" },
+      { images: ["https://cdn.example/sky.png", "https://cdn.example/sky2.png"], line: "Use {image} for the sky" },
+    ]
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, references })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({ ...BODY, references })
+  })
+
+  it("trims a reference's line, as the route does", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const references = [{ images: ["https://cdn.example/glass.png"], line: "  the glass she drinks from \n" }]
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, references })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({
+      ...BODY,
+      references: [{ images: ["https://cdn.example/glass.png"], line: "the glass she drinks from" }],
+    })
+  })
+
+  it("refuses a reference the route would refuse, before any call", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const server = serverWith(fastify)
+    const cases: Array<[string, { images: string[]; line: string }]> = [
+      ["a whitespace-only line", { images: ["https://cdn.example/glass.png"], line: "   " }],
+      ["a non-http(s) image", { images: ["ftp://cdn.example/glass.png"], line: "the glass" }],
+      ["a data: image", { images: ["data:image/png;base64,AAAA"], line: "the glass" }],
+      ["an image URL over 4096 characters", { images: [`https://cdn.example/${"a".repeat(4096)}.png`], line: "the glass" }],
+    ]
+    for (const [what, reference] of cases) {
+      const res = await callTool(server, "cast_swap", { ...ARGS, references: [reference] })
+      expect(res.isError, what).toBe(true)
+    }
+    expect(calls).toHaveLength(0)
+  })
+
   it("sends face_masking to the route as faceMasking, every key in camelCase", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     const res = await callTool(serverWith(fastify), "cast_swap", {
@@ -356,6 +394,16 @@ describe("cast_swap's session_id reaches the job", () => {
     const seen: { sessionId?: string | null } = {}
     const app = await realApp(seen)
     const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: FOREIGN, confirm: true })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("not_found")
+    expect(seen.sessionId).toBeUndefined()
+    await app.close()
+  })
+
+  it("a grant without assets:write may not file it, even in the caller's own session: the route's 404", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const res = await callTool(serverWith(app, ["workflows:execute"]), "cast_swap", { ...ARGS, session_id: OWN, confirm: true })
     expect(res.isError).toBe(true)
     expect(res.content[0]!.text).toContain("not_found")
     expect(seen.sessionId).toBeUndefined()

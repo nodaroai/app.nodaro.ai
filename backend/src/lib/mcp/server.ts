@@ -22,6 +22,7 @@ import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerRecastTools } from "./tools/recast.js"
 import { registerCastSwapTools } from "./tools/cast-swap.js"
 import { registerTrendTools } from "./tools/trends.js"
+import { registerCastSwapFullQualityTools } from "./tools/cast-swap-full-quality.js"
 import { registerStudioProductionTools } from "./tools/studio-production.js"
 import { registerUgcTools } from "./tools/ugc.js"
 import { registerResearchTools } from "./tools/research.js"
@@ -217,6 +218,9 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     // Trends (list, read, quote, then run): Cloud-only — `/v1/trends` is
     // registered under hasCredits() (ee/routes/trends.ts).
     registerTrendTools({ server, session, fastify: opts.fastify })
+    // Full Quality of a Cast Swap / trend draft (quote, then run): Cloud-only —
+    // `/v1/cast-swap/:jobId/full-quality` is the cloud plugin's.
+    registerCastSwapFullQualityTools({ server, session, fastify: opts.fastify })
     // Studio productions: Cloud-only for the same reason — the
     // `/v1/studio/productions/*` routes these tools dispatch to are served by
     // the cloud plugin, so off-cloud the whole family answers `not_available`.

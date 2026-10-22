@@ -4056,7 +4056,7 @@ in the video; each trait is `"new"` — the default, from your images — or
 `"original"`, kept from the video; any role may also take `previewName`, the
 name used instead of `name` in a preview, and `inPreview: false`, which leaves
 it out of a preview — not sent, prepared or charged; a full run ignores both),
-and optionally `prePrompt` (your own
+and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `resolution` (`"480p"` — the default — `"720p"` or `"1080p"`),
@@ -4066,6 +4066,14 @@ default, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
+
+**Fixed references.** `references` (at most 5) are things the video should
+show that no role replaces, each `{ images, line }`: 1–3 images of ONE thing
+and the line that says what it is (1–500 characters, e.g.
+`"the glass she drinks from"`). `{image}` in a line stands for that
+reference's first image (`"Use {image} for the sky"`); a line without it gets
+it appended. They are sent as given, never prepared, and their images count
+toward the 30. A reference alone is enough for a run: no role needs images.
 
 **Reference preparation.** Unless `prepareReferences` is `false`, each person,
 pet and product role's images are first turned into one clean reference
@@ -4128,10 +4136,10 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images and no `prePrompt` or `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, or a `faceMasking` setting out of range (including a `maxFaceHeightPct` above 0 and below `minFaceHeightPct`). Also an invalid `origin`. |
-| `400` | `raw_reference_token` | A role's `name` or `previewName`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
-| `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
-| `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |
+| `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, or a `faceMasking` setting out of range (including a `maxFaceHeightPct` above 0 and below `minFaceHeightPct`). Also an invalid `origin`. |
+| `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
+| `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
+| `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
@@ -4143,6 +4151,54 @@ Refusals, all before anything is charged (bodies are
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
 | `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
 | `503` | `estimate_unavailable` | The video model's price cannot be quoted right now (`/estimate` only); try again shortly. |
+
+### Full Quality
+
+A finished DRAFT run (a Cast Swap run made as a draft, or a trend run, whose
+default is a draft) can be finished at Full Quality: the same take re-rendered
+at 1080p, fitted to the clip and given its original audio back, as a new job
+linked to the draft. It is available for 7 days after the draft completed
+(SDK: [`client.castSwap.fullQuality`](./sdk-reference.md#clientcastswap),
+MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
+`nodaro cast-swap full-quality estimate|run`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedanceHd }, availableUntil }`. |
+| `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this draft's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
+
+`:jobId` is the draft run's job id. The quote is `totalCredits` =
+`breakdown.castSwap` (the Full Quality job's own steps) +
+`breakdown.seedanceHd` (the 1080p render). `seedanceHd` is 0 when an earlier
+failed try of this draft already finished that render: it is reused, and only
+the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
+the price depends on the draft. The quote does not look for a Full Quality
+already running; when one is, the start answers it (`existing: true`) free.
+
+One Full Quality per draft: the job is keyed by the draft, so a repeated or
+concurrent request answers the same job, and a client `Idempotency-Key` is
+not used. A failed or cancelled one may be asked again, a few times. The new
+job keeps the draft's `origin`; `sessionId` files it in a session of yours.
+
+Refusals, all before anything is charged (bodies are
+`{ error: { code, message } }`). Only `full_quality_pending` ends on its own
+(its body also carries `retryable: true`); tell it from the final
+`full_quality_unavailable` by its code:
+
+| Status | `code` | When |
+|---|---|---|
+| `401` | `unauthorized` | No authenticated user. |
+| `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `404` | `not_found` | Not your job, or not a Cast Swap run; also a `sessionId` you may not use (start only). |
+| `409` | `not_completed` | The run has not finished. |
+| `409` | `not_a_draft` | The run was not made as a draft. |
+| `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
+| `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
+| `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
+| `422` | `job_blocked` | The request was blocked by the job policy (start only). |
+| `503` | `job_read_failed` | The draft could not be read just now (`retryable: true`); try again. |
+| `503` | `estimate_unavailable` | The 1080p render cannot be quoted right now; try again shortly. |
+| `503` | `host_too_old` | This platform version cannot run Full Quality. |
 
 ## 13g. Trends (Cloud edition)
 

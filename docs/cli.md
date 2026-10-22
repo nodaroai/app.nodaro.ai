@@ -321,6 +321,15 @@ nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-ke
 nodaro trends runs [--trend <slug>] [--limit <n>] [--cursor <c>] [--json]   # your trend runs, newest first (--limit 1-60, here and on list)
 nodaro trends favorite <slug>                            # and: nodaro trends unfavorite <slug>
 
+# Cast Swap — Full Quality: finish a draft run (a Cast Swap or trend run made as a draft) at 1080p (Cloud edition)
+nodaro cast-swap full-quality estimate <jobId> [--json]
+#   free quote: "about N credits" (castSwap + seedanceHd; seedanceHd is 0 when an earlier try's 1080p render
+#   is reused) and until when the draft can be finished (7 days after it completed)
+nodaro cast-swap full-quality run <jobId> [--session <id>] [--json]
+#   SPENDS CREDITS — run `estimate` first; prints the new job id (follow it with `nodaro jobs get <id>`).
+#   One Full Quality per draft: when it already exists, that job is printed and nothing new is charged.
+#   full_quality_pending (an earlier try's 1080p render is being reviewed or has not started yet) is not final: run it again later
+
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
 nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>]   # interactive Q&A; node picker if --node-type omitted
 nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # return guided questions

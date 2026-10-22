@@ -172,6 +172,15 @@ export interface TrendRunRequest {
    * (else 400 `validation_error`).
    */
   previewJobId?: string
+  /**
+   * `run()`: your client app's slug (e.g. `"tools"`: lowercase letters,
+   * digits and `-`, 1–40 characters, starting with a letter or digit), as on
+   * any job: the run's job carries it as `input_data.origin`, so
+   * `client.jobs.list({ origin })` finds it. Not a slug is a 400
+   * `validation_error`; without it the run has no origin. `estimate()`
+   * ignores it.
+   */
+  origin?: string
 }
 
 /** What a run would cost, in credits (`estimate()`). */

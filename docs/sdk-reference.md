@@ -1942,11 +1942,13 @@ video with your own reference images, keeping its motion, framing, timing and
 sound (the clip's audio is kept, and the result is the clip's length). **Cloud
 edition only**: these routes 404 on self-hosted installs. Also importable as
 `@nodaro/sdk/cast-swap`. Routes: [Cast Swap](./api-integration.md#13f-cast-swap-cloud-edition);
-MCP: `cast_swap`.
+MCP: `cast_swap`, `estimate_full_quality`, `full_quality`.
 
 ```ts
 run(params: CastSwapParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/cast-swap → 202 (200 + deduped on a keyed repeat)
 estimate(params: CastSwapParams): Promise<CastSwapEstimate> // POST /v1/cast-swap/estimate, free
+fullQualityEstimate(jobId: string): Promise<CastSwapFullQualityEstimate> // POST /v1/cast-swap/:jobId/full-quality/estimate, free
+fullQuality(jobId: string, params?: { sessionId?: string }): Promise<CastSwapFullQualityResult> // POST /v1/cast-swap/:jobId/full-quality → 202 (200 + existing)
 ```
 
 ```ts
@@ -1963,6 +1965,7 @@ interface CastSwapParams {
   >                                // every role also takes previewName? / inPreview? (preview only, see below);
                                    // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
                                    // 0–3 images of ONE subject / place each, ≤ 30 images in all
+  references?: Array<{ images: string[]; line: string }> // ≤ 5 fixed references (see below)
   prePrompt?: string               // your own words at the start, before the role instructions; {role:N} as in postPrompt
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
@@ -1998,13 +2001,35 @@ interface CastSwapEstimate {
   maskingCredits?: number // faceMasking "auto": charged only if the masked retry runs; not in totalCredits
   settlesLower: boolean // Auto length: the final charge is expected to be lower
 }
+
+interface CastSwapFullQualityEstimate {
+  totalCredits: number // castSwap + seedanceHd
+  breakdown: {
+    castSwap: number     // the Full Quality job's own steps
+    seedanceHd: number   // the 1080p render; 0 when an earlier try's render is reused
+  }
+  availableUntil: string // ISO time: 7 days after the draft completed
+}
+
+interface CastSwapFullQualityResult {
+  jobId: string
+  existing?: boolean // true: this draft's Full Quality was already running or done; nothing new started or charged
+}
 ```
 
 A role with no images (empty or `null`) is skipped: that subject or place
-stays as in the video. At least one role with images, or a `prePrompt` or
-`postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+stays as in the video. At least one role with images, a reference, or a
+`prePrompt` or `postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.
+
+**Fixed references** (`references`, `CastSwapReference[]`, at most 5): things
+the video should show that no role replaces, each 1–3 images of ONE thing and
+the `line` that says what it is (1–500 characters, e.g.
+`"the glass she drinks from"`). `{image}` in a line stands for that
+reference's first image; a line without it gets it appended. They are sent as
+given (never prepared) and their images count toward the 30. A `{role:N}` or
+a raw `{image:` / `{video:` / `{audio:` token in a line answers `400`.
 
 **Preview-only role settings** (any kind; a full run ignores both):
 `previewName` is the name used instead of `name` in a preview, and
@@ -2072,6 +2097,34 @@ const params: CastSwapParams = {
 }
 const quote = await client.castSwap.estimate(params)
 const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
+```
+
+**Full Quality.** A finished draft run (a Cast Swap run made as a draft, or a
+trend run, whose default is a draft) can be finished at Full Quality within 7
+days: `fullQuality(jobId)` re-renders the same take at 1080p, with the clip's
+audio, as a new job linked to the draft. It spends credits; quote it first with
+`fullQualityEstimate(jobId)` (free), whose `totalCredits` is
+`breakdown.castSwap + breakdown.seedanceHd` (`seedanceHd` is 0 when an earlier
+failed try of this draft already finished the 1080p render, which is then
+reused). One Full Quality per draft: a repeat answers the same job with
+`existing: true` and charges nothing; the server keys it by the draft, so no
+idempotency key is taken. The new job keeps the draft's origin; `sessionId`
+files it in a session. Refusals carry a `CastSwapFullQualityRefusalCode`:
+`401 unauthorized`, `404 not_found`, `409 not_completed`, `409 not_a_draft`,
+`410 draft_expired`, `409 full_quality_pending`, `409 full_quality_unavailable`,
+`402 insufficient_credits` (or a workspace cap), `422 job_blocked`,
+`503 job_read_failed` (retryable), `503 estimate_unavailable`,
+`503 host_too_old` — the full table is in the
+[route reference](./api-integration.md#full-quality).
+`full_quality_pending` (`err.details.retryable === true`) is not final: while
+an earlier try's 1080p render of the draft is being reviewed, or has not
+started yet, both calls refuse with it; try again later.
+`full_quality_unavailable` is final (nothing kept to re-render, the finalize
+refuses the draft, every try failed). Tell them apart by `err.code`.
+
+```ts
+const quote = await client.castSwap.fullQualityEstimate(draftJobId) // free
+const { jobId, existing } = await client.castSwap.fullQuality(draftJobId)
 ```
 
 ---
@@ -2142,6 +2195,7 @@ interface TrendRunRequest {
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
+  origin?: string       // run(): your app's slug (e.g. "tools"), as on any job: the run's job carries it as input_data.origin
 }
 
 interface TrendEstimate {

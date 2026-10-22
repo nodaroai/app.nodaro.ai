@@ -1238,6 +1238,24 @@ const CAST_SWAP_FACE_MASKING_BYTES = 1_238
 // headroom carry across.
 const TRENDS_PREVIEW_JOB_ID_BYTES = 472
 
+// RAISED 2026-10-21 by `cast_swap` taking `references` (fixed references no role replaces: 1–3 images
+// of one thing and the line naming it, at most 5) and its `roles` description naming a reference as
+// enough on its own, and nothing else. No tool was added, so the fixture does NOT move. Measured by
+// this suite on the same tree with and without the change: cast_swap 5_798 → 6_275 B = 477 B, then
+// 6_275 → 6_292 B = 17 B more when the reference images took the route's 4096-character cap
+// (`maxLength`; the http(s)-only rule and the trimmed line add no bytes): 494 B in all; the
+// headroom the list had before carries across.
+const CAST_SWAP_REFERENCES_BYTES = 494
+
+// RAISED 2026-10-21 by two NEW tools and nothing else: `estimate_full_quality` and `full_quality`
+// (the MCP face of POST /v1/cast-swap/:jobId/full-quality(/estimate): a finished Cast Swap or trend
+// draft re-rendered as the same take at 1080p; the quote, then the run behind `confirm`), registered
+// together in cast-swap-full-quality.ts behind hasCredits() and workflows:execute, so the fixture
+// moves by exactly those two names in cloud/all alone. Measured by this suite: 490_035 total −
+// 488_268 before = 1_767 B (681 + 1_086), far under the per-tool budget; the headroom the list had
+// before carries across.
+const CAST_SWAP_FULL_QUALITY_TOOLS_BYTES = 1_767
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1388,7 +1406,9 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_PRE_PROMPT_BYTES +
     CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES +
     CAST_SWAP_FACE_MASKING_BYTES +
-    TRENDS_PREVIEW_JOB_ID_BYTES,
+    TRENDS_PREVIEW_JOB_ID_BYTES +
+    CAST_SWAP_REFERENCES_BYTES +
+    CAST_SWAP_FULL_QUALITY_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

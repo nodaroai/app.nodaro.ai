@@ -218,6 +218,16 @@ describe("trends resource", () => {
     expect(Object.keys(init.headers).map((k) => k.toLowerCase())).not.toContain("idempotency-key")
   })
 
+  it("run sends the client app's origin in the body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { jobId: "job-1" } }, 202))
+    const client = make(fetchMock)
+    const withOrigin: TrendRunRequest = { ...request, origin: "tools" }
+
+    await client.trends.run("dance-off", withOrigin)
+
+    expect(JSON.parse(call(fetchMock).init.body as string)).toEqual({ ...request, origin: "tools" })
+  })
+
   it("run sends idempotencyKey as the Idempotency-Key header (an empty one sends none)", async () => {
     const fetchMock = vi.fn().mockReturnValue(mockOk({ data: { jobId: "job-1" } }, 202))
     const client = make(fetchMock)

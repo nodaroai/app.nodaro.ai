@@ -19,4 +19,9 @@ export {
   type CastSwapParams,
   type CastSwapEstimate,
   type CastSwapRunOptions,
+  type CastSwapReference,
+  type CastSwapFullQualityEstimate,
+  type CastSwapFullQualityParams,
+  type CastSwapFullQualityResult,
+  type CastSwapFullQualityRefusalCode,
 } from "../resources/cast-swap.js"

@@ -1,14 +1,22 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   createClient,
+  NodaroError,
   StaticTokenAuth,
   type CastSwapEstimate,
+  type CastSwapFullQualityEstimate,
+  type CastSwapFullQualityRefusalCode,
+  type CastSwapFullQualityResult,
   type CastSwapFaceMasking,
   type CastSwapParams,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
   return Promise.resolve({ ok: true, status, json: async () => body } as unknown as Response)
+}
+
+function mockErr(status: number, body: unknown) {
+  return Promise.resolve({ ok: false, status, json: async () => body, headers: new Headers() } as unknown as Response)
 }
 
 function make(fetchMock: ReturnType<typeof vi.fn>) {
@@ -170,5 +178,109 @@ describe("castSwap resource", () => {
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
     expect(init.method).toBe("POST")
     expect(JSON.parse(init.body)).toEqual(params)
+  })
+  it("run posts fixed references unchanged", async () => {
+    const withReferences: CastSwapParams = {
+      videoUrl: "https://cdn.example.com/clip.mp4",
+      roles: [{ kind: "person", name: "the woman", images: null }],
+      references: [
+        { images: ["https://cdn.example.com/glass.png"], line: "the glass she drinks from" },
+        { images: ["https://cdn.example.com/sky1.png", "https://cdn.example.com/sky2.png"], line: "Use {image} for the sky" },
+      ],
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-3" }, 202))
+    const client = make(fetchMock)
+
+    await client.castSwap.run(withReferences)
+
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    expect(JSON.parse(init.body).references).toEqual(withReferences.references)
+  })
+
+  it("fullQualityEstimate posts to the draft's /full-quality/estimate", async () => {
+    const quote: CastSwapFullQualityEstimate = {
+      totalCredits: 12,
+      breakdown: { castSwap: 5, seedanceHd: 7 },
+      availableUntil: "2026-10-28T10:00:00.000Z",
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote))
+    const client = make(fetchMock)
+
+    await expect(client.castSwap.fullQualityEstimate("draft-1")).resolves.toEqual(quote)
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/draft-1/full-quality/estimate")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    // An empty JSON object, never an empty body: a JSON content type with no body is refused.
+    expect(JSON.parse(init.body)).toEqual({})
+  })
+
+  it("fullQuality posts the session to the draft's /full-quality and returns the job", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "fq-1" }, 202))
+    const client = make(fetchMock)
+
+    const out: CastSwapFullQualityResult = await client.castSwap.fullQuality("draft-1", { sessionId: "session-1" })
+    expect(out).toEqual({ jobId: "fq-1" })
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/draft-1/full-quality")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string; headers: Record<string, string> }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ sessionId: "session-1" })
+    // The server keys the job by the draft; a client key would be replaced, so none is sent.
+    expect(Object.keys(init.headers).map((k) => k.toLowerCase())).not.toContain("idempotency-key")
+  })
+
+  it("fullQuality without options sends an empty JSON object", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "fq-1" }, 202))
+    const client = make(fetchMock)
+
+    await client.castSwap.fullQuality("draft-1")
+
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({})
+  })
+
+  it("fullQuality passes an existing try through as { jobId, existing: true }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "fq-0", existing: true }, 200))
+    const client = make(fetchMock)
+
+    await expect(client.castSwap.fullQuality("draft-1")).resolves.toEqual({ jobId: "fq-0", existing: true })
+  })
+
+  it("encodes the job id into the path", async () => {
+    const fetchMock = vi.fn().mockReturnValue(mockOk({ jobId: "fq-1" }, 202))
+    const client = make(fetchMock)
+
+    await client.castSwap.fullQuality("a/b?c")
+    await client.castSwap.fullQualityEstimate("a/b?c")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/a%2Fb%3Fc/full-quality")
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.example.com/v1/cast-swap/a%2Fb%3Fc/full-quality/estimate")
+  })
+
+  it("a Full Quality refusal throws a NodaroError carrying the route's code", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, { error: { code: "full_quality_unavailable", message: "This run cannot be finished at full quality." } }),
+    )
+    const client = make(fetchMock)
+
+    const err = await client.castSwap.fullQuality("draft-1").catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    const code: CastSwapFullQualityRefusalCode = (err as NodaroError).code
+    expect(code).toBe("full_quality_unavailable")
+    expect((err as NodaroError).status).toBe(409)
+  })
+
+  it("full_quality_pending, the refusal that ends on its own, carries retryable in its details", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, { error: { code: "full_quality_pending", message: "An earlier try is still being finished.", retryable: true } }),
+    )
+    const client = make(fetchMock)
+
+    const err = await client.castSwap.fullQualityEstimate("draft-1").catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    const code: CastSwapFullQualityRefusalCode = (err as NodaroError).code
+    expect(code).toBe("full_quality_pending")
+    expect((err as NodaroError).status).toBe(409)
+    expect((err as NodaroError).details.retryable).toBe(true)
   })
 })

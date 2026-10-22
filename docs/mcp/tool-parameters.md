@@ -390,7 +390,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, or a pre_prompt or post_prompt. |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person` or `pet` or `product`. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
@@ -402,6 +402,9 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
 | `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
 | `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
+| `references` | object[] |  | Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30. At most 5 items. |
+| `references[].images` | string (URL)[] | yes | From 1 to 3 items. |
+| `references[].line` | string | yes | From 1 to 500 characters. |
 | `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
@@ -802,6 +805,14 @@ Needs `workflows:execute`.
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 
+## `estimate_full_quality`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The finished draft run's job id (a Cast Swap or trend run made as a draft). |
+
 ## `estimate_trend`
 
 Needs `workflows:execute` · Nodaro Cloud only.
@@ -896,6 +907,16 @@ Needs `workflows:execute`.
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  | Nodaro audio or video job id. |
 | `transcript` | string | yes | The exact words spoken in the audio. From 1 to 50000 characters. |
+
+## `full_quality`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The finished draft run's job id (a Cast Swap or trend run made as a draft). |
+| `session_id` | string |  | A generation session to file the result in. At least 1 character. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 
 ## `generate_3d_scene`
 

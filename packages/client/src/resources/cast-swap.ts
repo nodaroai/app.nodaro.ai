@@ -23,11 +23,12 @@ import type { NodaroClientCore } from "../core.js"
  * `jobId`. Nothing new is started or charged.
  *
  * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`), before
- * anything is charged: 400 `validation_error` (the body: no role with images
- * and no `prePrompt` or `postPrompt`, more roles of a kind
+ * anything is charged: 400 `validation_error` (the body: no role with images,
+ * no reference and no `prePrompt` or `postPrompt`, more roles of a kind
  * than allowed, more than 30 images in all, `draft: true` above 480p, a
  * `prePrompt` or `postPrompt` over 4,000 characters, a `faceMasking` setting
- * out of range), `raw_reference_token`, `invalid_role_mention`,
+ * out of range), `raw_reference_token` (also in a reference's `line`),
+ * `invalid_role_mention` (also any `{role:N}` in a reference's `line`),
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
  * `preview_out_of_range`, `no_roles_in_preview` (a preview with every role
  * `inPreview: false`, always refused even with a prompt, or with no role kept
@@ -112,6 +113,23 @@ export interface CastSwapProductRole extends CastSwapRolePreviewSettings {
 export type CastSwapRole = CastSwapPersonRole | CastSwapLocationRole | CastSwapPetRole | CastSwapProductRole
 
 /**
+ * A fixed reference: 1–3 images of ONE thing that no role replaces, and the
+ * line that says what it is (`"the glass she drinks from"`). Sent as given,
+ * never prepared; its images count toward the 30.
+ */
+export interface CastSwapReference {
+  /** 1–3 http(s) image URLs of one thing. */
+  images: string[]
+  /**
+   * What it is, 1–500 characters. `{image}` in the line stands for this
+   * reference's first image (`"Use {image} for the sky"`); a line without it
+   * gets it appended. A `{role:N}` or a raw `{image:` / `{video:` / `{audio:`
+   * token answers 400.
+   */
+  line: string
+}
+
+/**
  * Margins of the frame, each 0–49 % (default 0): a face whose centre lies in a
  * margin is not masked, so only faces inside the inner rectangle are.
  */
@@ -176,6 +194,12 @@ export interface CastSwapParams {
    * with images, or a `prePrompt` or `postPrompt`, is required.
    */
   roles: CastSwapRole[]
+  /**
+   * Fixed references (at most 5): things the video should show that no role
+   * replaces, each with the line that names it. Their images count toward the
+   * 30. A reference alone is enough for a run (no role needs images).
+   */
+  references?: CastSwapReference[]
   /**
    * Your own words placed at the start of the prompt, before the role
    * instructions; at most 4,000 characters. Mention a role as `{role:N}`, as in
@@ -264,6 +288,80 @@ export interface CastSwapRunOptions {
   idempotencyKey?: string
 }
 
+/**
+ * What finishing a draft at Full Quality would cost
+ * (`POST /v1/cast-swap/:jobId/full-quality/estimate`).
+ */
+export interface CastSwapFullQualityEstimate {
+  /** The quote in credits: `breakdown.castSwap + breakdown.seedanceHd`. */
+  totalCredits: number
+  /**
+   * `castSwap`: the Full Quality job's own steps; `seedanceHd`: the 1080p
+   * render of the draft's take (0 when an earlier try of this draft already
+   * finished that render, which is then reused).
+   */
+  breakdown: { castSwap: number; seedanceHd: number }
+  /** ISO time until which the draft can be finished at Full Quality (7 days after it completed). */
+  availableUntil: string
+}
+
+/** Options for {@link CastSwapResource.fullQuality}. */
+export interface CastSwapFullQualityParams {
+  /** A generation session to file the Full Quality result in. */
+  sessionId?: string
+}
+
+/** The Full Quality job (`POST /v1/cast-swap/:jobId/full-quality`). */
+export interface CastSwapFullQualityResult {
+  jobId: string
+  /** `true` when this draft's Full Quality was already running or done: that job is answered, nothing new is started or charged. */
+  existing?: boolean
+}
+
+/**
+ * The `code` of a Full Quality refusal (`NodaroError.code`), all before
+ * anything is charged:
+ * - `unauthorized` (401): no authenticated user;
+ * - `not_found` (404): not your job, or not a Cast Swap run; also a
+ *   `sessionId` you may not use;
+ * - `not_completed` (409): the run has not finished;
+ * - `not_a_draft` (409): the run was not made as a draft;
+ * - `draft_expired` (410): more than 7 days after the draft completed, or
+ *   the draft can no longer be finished at Full Quality;
+ * - `full_quality_pending` (409, `details.retryable: true`): not final — an
+ *   earlier try's 1080p render of this draft is being reviewed, or has not
+ *   started yet; try again later (once the review ends). The only refusal
+ *   that ends on its own;
+ * - `full_quality_unavailable` (409): final — nothing kept to re-render, no
+ *   readable completion time, or the 1080p finalize refuses this draft; on
+ *   the start only, also "failed too many times" (every try failed) or no
+ *   try can be started for this run;
+ * - `insufficient_credits` (402), or in a workspace `budget_exceeded`,
+ *   `member_cap_exceeded` or `user_allowance_exceeded`;
+ * - `job_blocked` (422): the request was blocked by the job policy;
+ * - `job_read_failed` (503, retryable), `estimate_unavailable` (503, try
+ *   again shortly), `host_too_old` (503).
+ *
+ * Open-ended: a code not listed here may still arrive.
+ */
+export type CastSwapFullQualityRefusalCode =
+  | "unauthorized"
+  | "not_found"
+  | "not_completed"
+  | "not_a_draft"
+  | "draft_expired"
+  | "full_quality_pending"
+  | "full_quality_unavailable"
+  | "insufficient_credits"
+  | "budget_exceeded"
+  | "member_cap_exceeded"
+  | "user_allowance_exceeded"
+  | "job_blocked"
+  | "job_read_failed"
+  | "estimate_unavailable"
+  | "host_too_old"
+  | (string & {})
+
 export class CastSwapResource {
   constructor(private client: NodaroClientCore) {}
 
@@ -284,5 +382,33 @@ export class CastSwapResource {
   /** Quote a run before starting it (`POST /v1/cast-swap/estimate`); spends nothing. */
   estimate(params: CastSwapParams): Promise<CastSwapEstimate> {
     return this.client.request("POST", "/v1/cast-swap/estimate", { body: params })
+  }
+
+  /**
+   * Quote finishing a draft at Full Quality (`POST
+   * /v1/cast-swap/:jobId/full-quality/estimate`); spends nothing. `jobId` is a
+   * finished DRAFT run (a Cast Swap or trend run made as a draft). The quote
+   * does not look for a Full Quality already running: when one is,
+   * {@link fullQuality} answers it (`existing: true`) and charges nothing.
+   * Refusals: {@link CastSwapFullQualityRefusalCode}.
+   */
+  fullQualityEstimate(jobId: string): Promise<CastSwapFullQualityEstimate> {
+    return this.client.request("POST", `/v1/cast-swap/${encodeURIComponent(jobId)}/full-quality/estimate`, { body: {} })
+  }
+
+  /**
+   * Finish a draft at Full Quality (`POST /v1/cast-swap/:jobId/full-quality`):
+   * the same take re-rendered at 1080p, with the clip's audio, as a new job
+   * linked to the draft. SPENDS CREDITS: quote it first with
+   * {@link fullQualityEstimate}. Answers 202 `{ jobId }`, or 200
+   * `{ jobId, existing: true }` when this draft's Full Quality is already
+   * running or done (one per draft; a failed one may be asked again). Follow
+   * the job with `client.jobs.get(jobId)`. No `Idempotency-Key` is taken: the
+   * server keys the job by the draft. The new job keeps the draft's origin.
+   * Refusals: {@link CastSwapFullQualityRefusalCode}.
+   */
+  fullQuality(jobId: string, params: CastSwapFullQualityParams = {}): Promise<CastSwapFullQualityResult> {
+    const body = params.sessionId !== undefined ? { sessionId: params.sessionId } : {}
+    return this.client.request("POST", `/v1/cast-swap/${encodeURIComponent(jobId)}/full-quality`, { body })
   }
 }
