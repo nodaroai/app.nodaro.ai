@@ -1,5 +1,19 @@
 # @nodaro/sdk
 
+## 2.37.0
+
+### Minor Changes
+
+- 27048fa: Cast Swap (`client.castSwap`) finishes a draft at Full Quality: `fullQualityEstimate(jobId)` (`POST /v1/cast-swap/:jobId/full-quality/estimate`, free) returns `CastSwapFullQualityEstimate` (`{ totalCredits, breakdown: { castSwap, seedanceHd }, availableUntil }`; `seedanceHd` is 0 when an earlier try's 1080p render is reused), and `fullQuality(jobId, { sessionId? })` (`POST /v1/cast-swap/:jobId/full-quality`, spends credits) re-renders the draft's take at 1080p as a new job, answering `{ jobId }`, or `{ jobId, existing: true }` when this draft's Full Quality is already running or done. `jobId` is a finished draft run (a Cast Swap or trend run made as a draft), within 7 days of completing. Refusal codes are typed as `CastSwapFullQualityRefusalCode` (`unauthorized`, `not_found`, `not_completed`, `not_a_draft`, `draft_expired`, `full_quality_pending`, `full_quality_unavailable`, `insufficient_credits` and the workspace caps, `job_blocked`, `job_read_failed`, `estimate_unavailable`, `host_too_old`); `full_quality_pending` (409, `details.retryable: true`) is not final — an earlier try's 1080p render of the draft is being reviewed or has not started yet, so try again later — while `full_quality_unavailable` is final. `CastSwapParams` gains `references` (`CastSwapReference[]`, at most 5): fixed references, each 1–3 images of one thing plus the `line` that names it (`{image}` in the line stands for its first image), sent as given and counted toward the 30 images.
+
+  Trends (`client.trends`): `TrendRunRequest` gains `origin` — on `run()`, the client app's slug (e.g. `"tools"`), stored on the run's job as `input_data.origin` so `jobs.list({ origin })` finds it.
+
+- 45a4c2d: Errors keep more of the server's answer. Every `NodaroError` now carries `details`: the error envelope's fields other than `code` and `message`, as sent (a trend refusal's `slot`, a publish refusal's `reasons`, a validation error's `issues`, …), so a caller can act on them without an SDK release.
+
+  A 402 keeps its own code (a behaviour change). `InsufficientCreditsError.code` now carries the server's code — the 402 envelope's `error.code` — instead of always `insufficient_credits` (for example `free_video_limit`, `insufficient_app_credits`), and a spending cap someone else set — `budget_exceeded` (a workspace's budget), `member_cap_exceeded` (your cap in a workspace), `user_allowance_exceeded` (a deployment's per-user allowance) — is the new `CreditCapExceededError`, a subclass of `InsufficientCreditsError` (so existing `instanceof` catches still catch it). `CREDIT_CAP_CODES` and the `CreditCapCode` type are exported. An allowance's `remaining` is read as `available`. Code that compared `err.code === "insufficient_credits"` to mean "any 402" should check `err instanceof InsufficientCreditsError` instead.
+
+- 45a4c2d: `client.trends` gains `getRun(jobId)` (`GET /v1/trends/runs/:jobId`: one of your trend runs, in the same shape as `runs()`; a job that is not your own trend run is a `NotFoundError`) and `tags({ locale? })` (`GET /v1/trends/tags`: the tags in use on published trends, most used first, as `TrendTag { tag, label, count }` with the label in your language). A Full Quality version of a draft is now listed as a run of its own: `TrendRun` gains `fullQualityOf` (the draft it was made from, else `null`); only the newest Full Quality try per draft is listed (running, done, or its last failure; an older failed or cancelled try is left out of `runs()`, and `getRun()` still reads it by its id); a draft's `fullQuality` becomes a pointer only to that newest try, `{ jobId, status } | null` (its `videoUrl` is gone — read the upgrade's video from its own run). `"tags"` joins `"runs"` as a slug the slug methods refuse before any request.
+
 ## 2.36.0
 
 ### Minor Changes
