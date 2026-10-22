@@ -84,7 +84,7 @@ export const jobFromUploadBody = z
 type JobFromUploadBody = z.infer<typeof jobFromUploadBody>
 
 class RequestRefusal extends Error {
-  constructor(readonly statusCode: 400 | 404, readonly code: string, message: string) {
+  constructor(readonly statusCode: 400 | 404 | 409, readonly code: string, message: string) {
     super(message)
   }
 }
@@ -178,6 +178,19 @@ async function readJob(userId: string, id: string): Promise<JobRecord> {
   return data as unknown as JobRecord
 }
 
+/** Back to pending so the completion funnel can finish it — this route's own free rows only. */
+async function reopenJob(userId: string, id: string): Promise<void> {
+  const { error } = await supabase
+    .from("jobs")
+    .update({ status: "pending", error_message: null, error_hint: null, completed_at: null })
+    .eq("id", id)
+    .eq("user_id", userId)
+    .eq("job_type", IMAGE_EDIT_JOB_TYPE)
+    .eq("credits", 0)
+    .in("status", ["failed", "cancelled"])
+  if (error) throw error
+}
+
 /** The job policy's verdict on a failed job, when one refused it. */
 function policyBlockOf(job: JobRecord): { reason?: string } | null {
   const hint = job.error_hint as { kind?: string; reason?: string } | null | undefined
@@ -205,6 +218,7 @@ openApiRegistry.registerPath({
     401: { description: "Unauthorized" },
     403: { description: "An OAuth app without `assets:write`" },
     404: { description: "The asset, the source or the session is not yours" },
+    409: { description: "The key `image-edit:<assetId>` already names a job of another type" },
     422: { description: "A job policy of this deployment blocked the image" },
   },
 })
@@ -227,7 +241,7 @@ export async function jobsFromUploadRoutes(app: FastifyInstance): Promise<void> 
         // `sessionId` and `origin` are stamped by the funnel from the raw body /
         // headers; a session the caller may not use throws its 404 from here.
         // Throws on a block or a database error — answered by the catch below.
-        const inserted = await insertSyncJobIdempotent<{ id: string; status: string }>(
+        const inserted = await insertSyncJobIdempotent<{ id: string; status: string; job_type: string | null }>(
           req,
           {
             user_id: userId,
@@ -238,26 +252,36 @@ export async function jobsFromUploadRoutes(app: FastifyInstance): Promise<void> 
             input_data: { type: IMAGE_EDIT_JOB_TYPE, assetId: body.assetId, ...source, ...editState },
           },
           `${IMAGE_EDIT_JOB_TYPE}:${body.assetId}`,
-          "id, status",
+          "id, status, job_type",
         )
         const { row, created } = inserted
-
-        // A retry whose first attempt died after the insert finishes the job;
-        // any other earlier outcome is answered as it stands — a blocked image
-        // with the same 422 every time, never a 200 carrying a failed job.
-        if (row.status !== "pending") {
-          const earlier = await readJob(userId, row.id)
-          const blockedHint = policyBlockOf(earlier)
-          if (blockedHint) return reply.status(422).send(jobBlockedBody({ userMessage: blockedHint.reason }))
-          return send(req, reply, 200, earlier)
+        // The key column also holds callers' own `Idempotency-Key` headers: a
+        // row of another type under this key is not this upload's job.
+        if (row.job_type !== IMAGE_EDIT_JOB_TYPE) {
+          throw new RequestRefusal(409, "conflict", "This idempotency key belongs to another job")
         }
 
-        const outcome = await markJobCompletedDetailed(row.id, {
-          output_data: { imageUrl: image.url, ...(image.thumbnailUrl ? { thumbnailUrl: image.thumbnailUrl } : {}) },
-        })
+        // A retry finishes what an earlier attempt left: a row still pending
+        // (the attempt died after the insert), or one a sweep failed since,
+        // which is reopened first. A policy block is never reopened.
+        if (row.status === "failed" || row.status === "cancelled") {
+          const blocked = policyBlockOf(await readJob(userId, row.id))
+          if (blocked) return reply.status(422).send(jobBlockedBody({ userMessage: blocked.reason }))
+          await reopenJob(userId, row.id)
+        }
+        if (row.status !== "completed") {
+          await markJobCompletedDetailed(row.id, {
+            output_data: { imageUrl: image.url, ...(image.thumbnailUrl ? { thumbnailUrl: image.thumbnailUrl } : {}) },
+          })
+        }
+
+        // Answered from the row as it now stands: only a completed job is a
+        // success, a blocked one the same 422 every time, anything else an error.
         const job = await readJob(userId, row.id)
-        if (outcome === "blocked") return reply.status(422).send(jobBlockedBody({ userMessage: policyBlockOf(job)?.reason }))
-        return send(req, reply, created ? 201 : 200, job)
+        if (job.status === "completed") return send(req, reply, created ? 201 : 200, job)
+        const blocked = policyBlockOf(job)
+        if (blocked) return reply.status(422).send(jobBlockedBody({ userMessage: blocked.reason }))
+        throw new Error(`image-edit job ${job.id} is ${job.status} after completion`)
       } catch (err) {
         if (err instanceof RequestRefusal) {
           return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })

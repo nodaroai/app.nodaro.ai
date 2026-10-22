@@ -3759,14 +3759,19 @@ handed to a tool that takes a job id. Record it as one:
   keeps that link, so it lists with the entity and the main-image approvals
   accept it for that entity only. `GET /v1/jobs?type=image-edit` lists them.
 - **One upload, one job.** Sending the same `assetId` again answers the same
-  job, so a retry or a double click never makes two. To show it in a second
-  session, add it there with `POST /v1/sessions/:id/items`.
+  job, so a retry or a double click never makes two. A retry also finishes a
+  job an earlier attempt left unfinished, so a `2xx` always carries a
+  completed job. The job keeps the source, design state and session of the
+  request that created it: a retry's own are not applied. To show it in a
+  second session, add it there with `POST /v1/sessions/:id/items`.
 - **Refusals.** `404 not_found` when the asset, the source or the session is
   not yours. `400 validation_error` when the asset is not an image, is not a
   file you stored, the source job has no finished image, `sourceImageUrl` is
   not one of its images, both sources are sent, or `editStateUrl` is not a url
-  `POST /v1/upload-json` returned. `422 job_blocked` when a job policy of this
-  deployment refuses the image.
+  `POST /v1/upload-json` returned. `409 conflict` when you already used
+  `image-edit:<assetId>` as the `Idempotency-Key` of another request.
+  `422 job_blocked` when a job policy of this deployment refuses the image,
+  on every retry.
 - **Deleting.** Deleting the job leaves the uploaded file in your uploads.
   Deleting the upload from your library keeps the file while this job still
   shows it.
