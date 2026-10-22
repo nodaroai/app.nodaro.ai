@@ -1,5 +1,55 @@
 # @nodaro/cli
 
+## 1.36.0
+
+### Minor Changes
+
+- da72776: `nodaro models cost <ids…>`: the credits each identifier is charged, from `POST /v1/credits/model-costs` — a model id, a credit id, or a metered LLM price key (`<feature>:<model>[:direct]`). A metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as `~N`; an identifier the server cannot price prints `-` with the reason. `--json` passes the answer through whole (`estimates`, `errorCodes` included).
+- 5730599: Mask Composite takes `fill`: `"video"` (the default — the foreground, as before), `"pixelate"` (the background itself in blocks of `pixelSizePct` % of the frame width, 0.2–10, default 1.25) or `"blur"` (the background blurred, gaussian sigma `blurStrengthPct` % of the frame width, 0.1–5, default 2) — both relative, so a setting looks the same at any resolution. Pixelate and blur take no foreground: `MaskCompositeRequest.foregroundUrl` is now optional (required for the video fill), the result follows and is priced on the background, and the result always carries the background's sound (`audioSource` is ignored for these fills). `@nodaro/shared` adds `MASK_COMPOSITE_FILLS`, the `PIXEL_SIZE_PCT_*` / `BLUR_STRENGTH_PCT_*` bounds, the new defaults and settings fields, and `maskCompositeFillOf` / `maskCompositeUsesForeground` / `maskCompositeLeadHandle` / `maskCompositeEffectiveAudioSource`. `nodaro media mask-composite` gains `--fill`, `--pixel-size-pct` and `--blur-strength-pct`; with `--fill pixelate|blur` it takes `<backgroundUrl> <maskUrl>`.
+- 71f379d: `nodaro trends` (Cloud edition): `list` (`--search`, `--tag`, `--favorites`, `--locale`, `--limit`, `--cursor`), `get <slug>`, `estimate <slug>` (free quote: "about N credits", and the hold when it differs), `run <slug>` (SPENDS CREDITS; prints the job id; `--session`, `--idempotency-key`), `runs` (`--trend`), `favorite <slug>` and `unfavorite <slug>`. `estimate` and `run` take repeatable `--slot key=url[,url]` (a slot's pictures) and `--choice key.chip=new|original` (e.g. `person.outfit=original`), plus `--example <n>`, `--details <text>`, `--preview`, `--resolution 480p|720p|1080p` and `--no-draft`. A slot key is checked locally (1–32 of a–z, 0–9 and `_`, never `__proto__`) before anything is sent; `--slot` pictures are split only where a new http(s) URL starts, so a URL holding commas stays whole; `--limit` is checked locally (1–60). `--session` is accepted but not yet applied: trend runs are not filed into sessions yet.
+- 5730599: Video Mask takes `holdLastMask` (default false): frames where the subject is lost — a mask covering under 0.002 % of the picture (`VIDEO_MASK_LIMITS.HOLD_EMPTY_BELOW_FRACTION`) — repeat the most recent non-empty mask; frames before the first detection stay empty, and the frame count, rate and size are unchanged. `VIDEO_MASK_DEFAULTS` and `VideoMaskRequest` gain the field; the job output reports `heldFrames` when it is on. `nodaro media video-mask` gains `--hold-last-mask`.
+
+  Video Mask also takes `minSubjectHeightPct` (0–100, default 0 = off): every connected region (8-connected) whose bounding box is shorter than that % of the frame height is dropped from each frame, before `holdLastMask` — so a frame left with only small regions is held from the last frame with a big subject. `VIDEO_MASK_LIMITS` gains `MIN_SUBJECT_HEIGHT_PCT_MIN` / `MAX`; the job output reports `droppedRegions` when it is on. `nodaro media video-mask` gains `--min-subject-height <pct>`.
+
+  Video Mask also takes `maxSubjectHeightPct` (0–100, default 0 = off), the mirror of the minimum: regions TALLER than that % of the frame height are dropped, in the same pass and before `holdLastMask`. With both set a region is kept when min ≤ height ≤ max; min > max is refused (400). `VIDEO_MASK_LIMITS` gains `MAX_SUBJECT_HEIGHT_PCT_MIN` / `MAX`. `nodaro media video-mask` gains `--max-subject-height <pct>`.
+
+- a7b7f73: Video Mask `zone` and `perShot`, on every surface.
+
+  - `@nodaro/shared`: `VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN` / `ZONE_MARGIN_PCT_MAX` (0–49 % a side), `VIDEO_MASK_DEFAULTS.zone` (`null`, off), `VIDEO_MASK_DEFAULTS.perShot` (`false`, off), the `VideoMaskZone` type (`{ leftPct, rightPct, topPct, bottomPct }`) and `resolveVideoMaskZone`, which reads a zone the way the region filter does (margins clamped to 0–49, anything else 0, all 0 = null).
+  - `POST /v1/video-mask` accepts `zone`: only the regions whose bounding-box centre lies inside the inner rectangle the margins leave are kept, after the size cuts and before `holdLastMask`. It accepts `perShot`: the clip's scene cuts are found first and every cut starts a new model request, so the subject is detected again in every shot (a subject that appears after a cut is found) and `holdLastMask` never carries a mask across a cut; each shot's mask is fitted to that shot's exact frame count, so a clip with no cut gives the same mask, fitted to the clip's exact frame count. The job's output reports `shots`.
+  - `@nodaro/sdk`: `VideoMaskRequest` (and so `client.media.videoMask`) gains `zone?: { leftPct?, rightPct?, topPct?, bottomPct? } | null` (each 0–49 % of the frame, a margin left out is 0; null = off) and `perShot?: boolean`.
+  - `@nodaro/cli`: `nodaro media video-mask` gains `--zone L,R,T,B` (each margin a plain decimal — `5`, `5.`, `.5` — as the API reads it) and `--per-shot`.
+
+### Patch Changes
+
+- da72776: `nodaro nodes list` (and the node picker) show a metered LLM node's credit figure as `~N`: its default model's typical-call estimate, charged its actual usage after the run. A node whose default model has no price yet shows `unpriced`.
+- da72776: `nodaro workflows render-final --estimate` prints the estimate as `~N` when the run executes an LLM node (the quote's `estimatedCreditsIsEstimate`), which is charged its actual usage.
+- Updated dependencies [e6b7cbb]
+- Updated dependencies [e6b7cbb]
+- Updated dependencies [a62ed2b]
+- Updated dependencies [b64cf61]
+- Updated dependencies [b64cf61]
+- Updated dependencies [6ca1576]
+- Updated dependencies [a7b7f73]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [da72776]
+- Updated dependencies [5730599]
+- Updated dependencies [23af759]
+- Updated dependencies [23af759]
+- Updated dependencies [e6b7cbb]
+- Updated dependencies [71f379d]
+- Updated dependencies [5730599]
+- Updated dependencies [a7b7f73]
+- Updated dependencies [a7b7f73]
+  - @nodaro/sdk@2.36.0
+  - @nodaro/shared@3.38.0
+
 ## 1.35.0
 
 ### Minor Changes
