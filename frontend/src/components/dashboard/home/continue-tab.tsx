@@ -14,6 +14,7 @@ import type { UserFilterUser } from "@/components/user-filter"
 import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useT } from "@/lib/i18n"
+import { useSharedHeaderActive } from "@/lib/shared-header"
 import { surfaceTabs, surfacePlatformLinks } from "@/lib/surface-selectors"
 import { SectionTitle, SegmentedControl, ThemeSwitch, type SegmentOption } from "./home-section"
 import { NODARO_APPS_KEY } from "./home-tabs"
@@ -100,7 +101,10 @@ export function ContinueTab({
   }
   const options: readonly SegmentOption<WorkspaceTab>[] = visibleTabs.map((value) => ({ value, label: labels[value] }))
 
-  const showApps = surfacePlatformLinks() && surfaceTabs([NODARO_APPS_KEY]).length > 0
+  // The shared site header's worlds row already links every Nodaro product, so
+  // with it on the band is left out, like the sidebar's logo and credits.
+  const sharedHeader = useSharedHeaderActive()
+  const showApps = !sharedHeader && surfacePlatformLinks() && surfaceTabs([NODARO_APPS_KEY]).length > 0
   const searchPlaceholder =
     activeTab === "projects"
       ? showAll
