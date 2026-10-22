@@ -3365,6 +3365,12 @@ Needs `workflows:execute`.
 | `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost (default false). |
 | `min_subject_height_pct` | number |  | Drop regions shorter than this % of the frame height (default 0 = off). From 0 to 100. |
 | `max_subject_height_pct` | number |  | Drop regions taller than this % of the frame height (default 0 = off). From 0 to 100. |
+| `zone` | object |  | Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too). |
+| `zone.left_pct` | number |  | From 0 to 49. |
+| `zone.right_pct` | number |  | From 0 to 49. |
+| `zone.top_pct` | number |  | From 0 to 49. |
+| `zone.bottom_pct` | number |  | From 0 to 49. |
+| `per_shot` | boolean |  | Detect the subject again in every shot after a scene cut (default false). |
 
 ## `video_upscale`
 

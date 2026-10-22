@@ -68,6 +68,12 @@ export class KieError extends Error {
   /** Which kind of content block, when `contentPolicy` is true; null otherwise.
    *  Additive beside the boolean — the boolean is the cross-repo contract. */
   public readonly contentPolicyClass: ContentPolicyClass | null
+  /** True when the provider refused the INPUT VIDEO itself — not the prompt,
+   *  a reference image or the output (see `isInputVideoRefusal`). Independent
+   *  of `contentPolicyClass`: a refusal can carry a class (copyright) or none.
+   *  Read duck-typed by `lib/safety-block.ts` (`inputVideoRefusedOf`) to mark
+   *  the job's `error_hint`; it never changes the user-facing message. */
+  public readonly inputVideoRefused: boolean
 
   constructor(
     sanitizedMessage: string,
@@ -76,6 +82,7 @@ export class KieError extends Error {
     isUpstreamFailure = false,
     contentPolicy = false,
     contentPolicyClass: ContentPolicyClass | null = null,
+    inputVideoRefused = false,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
@@ -84,6 +91,7 @@ export class KieError extends Error {
     this.isUpstreamFailure = isUpstreamFailure
     this.contentPolicy = contentPolicy
     this.contentPolicyClass = contentPolicy ? contentPolicyClass : null
+    this.inputVideoRefused = inputVideoRefused
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -118,8 +126,9 @@ export function createSanitizedError(
   context: string,
   isUpstreamFailure = false,
   contentPolicy = false,
-  opts?: { userSafeMessage?: string | null; upstreamStatus?: UpstreamStatus },
+  opts?: { userSafeMessage?: string | null; upstreamStatus?: UpstreamStatus; inputVideoRefused?: boolean },
 ): KieError {
+  const inputVideoRefused = opts?.inputVideoRefused === true
   // Log the full internal error for debugging (visible in Railway logs)
   console.error(
     `[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`
@@ -132,7 +141,7 @@ export function createSanitizedError(
   // mark is not a mark.
   const marked = opts?.userSafeMessage
   if (typeof marked === "string" && marked.trim()) {
-    return new KieError(marked, internalMessage, context, isUpstreamFailure, contentPolicy)
+    return new KieError(marked, internalMessage, context, isUpstreamFailure, contentPolicy, null, inputVideoRefused)
   }
 
   // Parse specific error patterns and return user-friendly messages
@@ -298,7 +307,7 @@ export function createSanitizedError(
     sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`
   }
 
-  return new KieError(sanitizedMessage, internalMessage, context, isUpstreamFailure, contentPolicy)
+  return new KieError(sanitizedMessage, internalMessage, context, isUpstreamFailure, contentPolicy, null, inputVideoRefused)
 }
 
 /** Construct a KieError for a TERMINAL upstream provider failure (KIE reported
@@ -323,8 +332,13 @@ export function createUpstreamFailureError(
     userMessage?: string
     /** The provider's own status for this failure — see isRequestRejectStatus. */
     upstreamStatus?: UpstreamStatus
+    /** The provider refused the input video itself (see isInputVideoRefusal).
+     *  Never inferred here from `internalMessage`: the caller decides it on the
+     *  provider's bare failMsg (pollKieTask does). Default false. */
+    inputVideoRefused?: boolean
   },
 ): KieError {
+  const inputVideoRefused = options?.inputVideoRefused === true
   // W0: every terminal upstream failure is classified HERE, so the 9
   // non-`pollKieTask` throw sites across six client files (kie/veo in this file,
   // suno, kling3, luma, runway, kontext) all get the class + the honest message
@@ -343,10 +357,11 @@ export function createUpstreamFailureError(
     // (its generic pattern matching would clobber the caller-supplied
     // userMessage), so log here instead to keep the same Railway visibility.
     console.error(`[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`)
-    return new KieError(userMessage, internalMessage, context, true, contentPolicy, cls)
+    return new KieError(userMessage, internalMessage, context, true, contentPolicy, cls, inputVideoRefused)
   }
   return createSanitizedError(internalMessage, context, true, contentPolicy, {
     upstreamStatus: options?.upstreamStatus,
+    inputVideoRefused,
   })
 }
 
@@ -418,6 +433,17 @@ export function classifyContentPolicyClass(failMsg: string): ContentPolicyClass 
   // fixable parameter (see SAFETY_WEAK_RE).
   if (SAFETY_WEAK_RE.test(failMsg) && !PARAM_REJECT_RE.test(failMsg)) return "safety"
   return null
+}
+
+/** The provider's refusals of the INPUT VIDEO (as opposed to the prompt, a
+ *  reference image or the output): "Input video may be related to copyright
+ *  restrictions…" (also classified `copyright` above) and "File processing
+ *  failed" (no class). */
+const INPUT_VIDEO_REFUSAL_RE = /input video may be related to copyright|file processing failed/i
+
+/** True when a provider `failMsg` says the input video itself was refused. */
+export function isInputVideoRefusal(failMsg: string): boolean {
+  return INPUT_VIDEO_REFUSAL_RE.test(failMsg)
 }
 
 /** Boolean twin, kept for the existing call sites and the plugin contract. */
@@ -823,7 +849,12 @@ export async function pollKieTask(
       throw createUpstreamFailureError(
         `task failed: [${failCode}] ${failMsg}`,
         "Generation",
-        { contentPolicy: cls !== null, contentPolicyClass: cls, upstreamStatus: failCode },
+        {
+          contentPolicy: cls !== null,
+          contentPolicyClass: cls,
+          upstreamStatus: failCode,
+          inputVideoRefused: isInputVideoRefusal(failMsg),
+        },
       )
     }
 

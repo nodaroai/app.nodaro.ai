@@ -452,8 +452,11 @@ export class MediaResource {
    * to 5 minutes at 30 fps (a faster clip counts
    * proportionally longer), priced by the clip's length. Poll
    * `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
-   * `height`, `frames` and `coverage` (the fraction of pixels selected). Feed
-   * the mask to {@link MediaResource.maskComposite}.
+   * `height`, `frames`, `coverage` (the fraction of pixels selected, rounded
+   * to 4 decimals) and `kept` (any region left on any frame: false only when
+   * the size / zone filters left an empty mask — read it rather than
+   * `coverage`, which a few pixels round to 0). Feed the mask to
+   * {@link MediaResource.maskComposite}.
    *
    * `holdLastMask: true` keeps the last mask on frames where the subject is
    * lost (a mask covering under 0.002 % of the frame, e.g. a face behind a
@@ -466,6 +469,15 @@ export class MediaResource {
    * `maxSubjectHeightPct` (0–100, default 0 = off) is its mirror: it drops
    * regions TALLER than that % (keep only the small background faces). With
    * both set a region is kept when min ≤ height ≤ max; min > max is a 400.
+   * `zone` (`{ leftPct, rightPct, topPct, bottomPct }`, each 0–49 % of the
+   * frame, a margin left out = 0; default null = off) keeps only the regions
+   * whose bounding-box centre lies inside the frame minus those margins (after
+   * the size cuts, before `holdLastMask`). `perShot: true` finds the clip's
+   * scene cuts first and segments each shot on its own: the subject is
+   * detected again after every cut, `holdLastMask` never crosses a cut, and
+   * each shot's mask is fitted to that shot's exact frame count; on a clip
+   * with no cut it gives the same mask, fitted to the clip's exact frame
+   * count. The output carries `shots` (1 when off).
    */
   videoMask(input: VideoMaskRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-mask", { body: input })

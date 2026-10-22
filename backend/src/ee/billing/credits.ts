@@ -87,7 +87,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -5070,11 +5070,12 @@ function sumEstimatedNodes(
   const gateEdges = listingGateEdges(edges ?? [])
   const unitsOf = (n: EstimateNode) => graphPricingUnits(n, nodes, edges, rerunIds)
   const wireSec = runWireLengthOf(nodes, edges, rerunIds)
+  const wireFps = runWireFpsOf(nodes, edges)
   return nodes.reduce((sum, node) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
     if (runs === 0) return sum
-    const credits = runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds)
+    const credits = runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps)
     // Its line is an estimate when the node is priced at a metered call — as
     // it runs: a wired Settings input may set the model, never the type — or
     // is a Component whose published price holds one (`componentHoldsMeteredEstimate`).
@@ -5110,13 +5111,33 @@ function oneRunCredits(
   wireSec: WireSecOf,
   /** The nodes the priced run executes: a render's price tier reads its graph through them. */
   rerunIds: ReadonlySet<string>,
+  /** The frame rate of the video on a wire (`runWireFpsOf`): Video Mask is priced by it. */
+  wireFps: WireFpsOf,
 ): number {
   const variants = nodeProviders(node.type, node.data)?.map((provider) => ({ ...node, data: { ...(node.data ?? {}), provider } })) ?? [node]
-  return variants.reduce((t, v) => t + estimateNodeCredits(v, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds), 0)
+  return variants.reduce((t, v) => t + estimateNodeCredits(v, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps), 0)
 }
 
 /** The length, in seconds, of the video on a wire when a run is estimated; undefined when not known. */
 type WireSecOf = (sourceId: string | undefined) => number | undefined
+
+/** The frame rate of the video on a wire when a run is estimated; undefined when not known (the 30 fps basis). */
+type WireFpsOf = (sourceId: string | undefined) => number | undefined
+
+/**
+ * A run estimate's read of a wire's frame rate (`runWireFps`, shared with the
+ * editor's estimate): the rate its origin (through teleports, as
+ * `runWireLengthSec` reads the length) declares — an upload's `fps`, while it
+ * holds a file — carried through Trim, Loop and a Combine Videos whose clips
+ * share one rate. Only Video Mask is priced by it (`videoMaskClipSec`, the
+ * rule billing charges by); every other step reads seconds only.
+ */
+function runWireFpsOf(nodes: ReadonlyArray<EstimateNode>, edges: ReadonlyArray<EstimateEdge> | undefined): WireFpsOf {
+  if (!edges) return () => undefined
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  return (sourceId) => runWireFps(sourceId, gateNodes, gateEdges)
+}
 
 /**
  * A run estimate's read of a wire's video length (`runWireLengthSec`, shared
@@ -5192,6 +5213,7 @@ function estimateNodeCredits(
   unitsOf: (node: EstimateNode, priced: EstimateNode) => number,
   wireSec: WireSecOf,
   rerunIds: ReadonlySet<string>,
+  wireFps: WireFpsOf,
 ): number {
   // A parameter node (Provider, Duration, a picker) is read, never run: no
   // job, no charge. A Provider's data names a model ("veo3"), which the
@@ -5275,7 +5297,7 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, edges, wireSec) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
-    videoMaskSec: node.type === "video-mask" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
+    videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
   })
   return (meteredChargedOrThrow(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
@@ -5365,6 +5387,24 @@ function videoSfxClipSecOf(
   if (node.id === undefined || !edges) return undefined
   const inputs = edges.filter((e) => e.target === node.id)
   return videoSfxClipSec(inputs, inputs.map((e) => wireSec(e.source)))
+}
+
+/**
+ * The PRICED length a Video Mask is quoted at when a run is estimated: the
+ * clip Video SFX reads ({@link videoSfxClipSecOf}), at the 30 fps basis when
+ * its wire carries a frame rate (`videoMaskClipSec` — `videoMaskBilledSeconds`,
+ * the rule a run is charged by), so a faster clip is quoted the row its run
+ * is charged. Undefined when no length is known: the longest row.
+ */
+function videoMaskClipSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+  wireFps: WireFpsOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const inputs = edges.filter((e) => e.target === node.id)
+  return videoMaskClipSec(inputs, inputs.map((e) => wireSec(e.source)), inputs.map((e) => wireFps(e.source)))
 }
 
 /**
@@ -5777,6 +5817,7 @@ function sumListingParts(
   // (`withoutMediaLength`), so a render or plan that follows it lists per minute.
   const lengthNodes = nodes.map((n) => (n.id && replacedMediaIds.has(n.id) ? { ...n, data: withoutMediaLength(n.data) } : n))
   const wireSec = runWireLengthOf(lengthNodes, edges, rerunIds)
+  const wireFps = runWireFpsOf(lengthNodes, edges)
   return nodes.reduce<ListingParts>((sum, node, i) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
@@ -5785,7 +5826,7 @@ function sumListingParts(
     // Several providers on one node: each runs, at its own price (the run's
     // expansion), as the run estimate and the editor's estimate sum them.
     const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps) ?? {
-      fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds),
+      fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps),
       perMinute: 0,
     }
     return { fixed: sum.fixed + parts.fixed * runs, perMinute: sum.perMinute + parts.perMinute * runs }

@@ -20,6 +20,7 @@ import {
   KieError,
   createSanitizedError,
   createUpstreamFailureError,
+  isInputVideoRefusal,
   isUpstreamKieFailure,
   PARAM_REJECT_RE,
   pollKieTask,
@@ -183,6 +184,127 @@ describe('pollKieTask — state:"fail" content-policy classification', () => {
     expect((err as KieError).contentPolicy).toBe(false)
     expect((err as KieError).isUpstreamFailure).toBe(true)
     expect((err as KieError).message).not.toBe(CONTENT_POLICY_MESSAGE)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The provider refused the INPUT VIDEO itself (not the prompt, not a reference
+// image, not the output). A caller can act on that (send a different clip), so
+// it rides on the error as `inputVideoRefused` — beside, never instead of, the
+// content-policy class, and with the user-facing message unchanged.
+// ---------------------------------------------------------------------------
+const INPUT_VIDEO_COPYRIGHT =
+  "Input video may be related to copyright restrictions. Please replace the material and try again"
+const FILE_PROCESSING_FAILED = "File processing failed"
+
+describe("isInputVideoRefusal", () => {
+  it("matches the two input-video refusals", () => {
+    expect(isInputVideoRefusal(INPUT_VIDEO_COPYRIGHT)).toBe(true)
+    expect(isInputVideoRefusal(FILE_PROCESSING_FAILED)).toBe(true)
+    expect(isInputVideoRefusal("task failed: [500] file processing failed.")).toBe(true)
+  })
+
+  it("does not match a refused prompt, reference or output", () => {
+    expect(isInputVideoRefusal("prompt may be related to copyright")).toBe(false)
+    expect(
+      isInputVideoRefusal("The request failed because the output video may be related to copyright restrictions."),
+    ).toBe(false)
+    expect(isInputVideoRefusal("internal error")).toBe(false)
+  })
+})
+
+describe('pollKieTask — state:"fail" input-video refusal', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    vi.useFakeTimers()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  function failWith(failMsg: string) {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/recordInfo")) {
+        return new Response(
+          JSON.stringify({ code: 0, data: { taskId: "t-in", state: "fail", failCode: "500", failMsg } }),
+          { status: 200 },
+        )
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+  }
+
+  async function failure(): Promise<KieError> {
+    const promise = pollKieTask("t-in")
+    promise.catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(60_000)
+    return promise.catch((e) => e) as Promise<KieError>
+  }
+
+  it("an input-video copyright refusal keeps the copyright class and message, and is flagged", async () => {
+    failWith(INPUT_VIDEO_COPYRIGHT)
+    const err = await failure()
+
+    expect(err).toBeInstanceOf(KieError)
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.inputVideoRefused).toBe(true)
+    expect(err.isUpstreamFailure).toBe(true)
+    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.copyright)
+  })
+
+  it("\"File processing failed\" has no class, keeps the generic message, and is flagged", async () => {
+    failWith(FILE_PROCESSING_FAILED)
+    const err = await failure()
+
+    expect(err).toBeInstanceOf(KieError)
+    expect(err.contentPolicy).toBe(false)
+    expect(err.contentPolicyClass).toBeNull()
+    expect(err.inputVideoRefused).toBe(true)
+    expect(err.isUpstreamFailure).toBe(true)
+    // Unchanged user-facing text: the same message an unflagged failure gets.
+    expect(err.message).toBe(createSanitizedError("task failed: [500] File processing failed", "Generation", true).message)
+  })
+
+  it("an output-video copyright refusal is not flagged", async () => {
+    failWith("The request failed because the output video may be related to copyright restrictions.")
+    const err = await failure()
+
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.inputVideoRefused).toBe(false)
+  })
+})
+
+describe("createUpstreamFailureError — inputVideoRefused option", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("carries the flag on both the classified and the sanitized path", () => {
+    expect(
+      createUpstreamFailureError("task failed: [500] x", "Generation", {
+        contentPolicy: true,
+        contentPolicyClass: "copyright",
+        inputVideoRefused: true,
+      }).inputVideoRefused,
+    ).toBe(true)
+    expect(
+      createUpstreamFailureError("task failed: [500] x", "Generation", {
+        contentPolicy: false,
+        inputVideoRefused: true,
+      }).inputVideoRefused,
+    ).toBe(true)
+  })
+
+  it("defaults to false, and never infers it from the message", () => {
+    expect(createUpstreamFailureError(`task failed: [500] ${FILE_PROCESSING_FAILED}`, "Generation").inputVideoRefused).toBe(false)
+    expect(new KieError("m", "d", "c").inputVideoRefused).toBe(false)
   })
 })
 

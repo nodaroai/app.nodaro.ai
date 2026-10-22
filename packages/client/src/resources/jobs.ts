@@ -37,6 +37,11 @@ export type SafetyBlockHint = {
   class: "copyright" | "likeness" | "safety"
   retried: boolean
   suggestedProvider?: string
+  /**
+   * Present when the provider refused the INPUT VIDEO itself — not the prompt,
+   * a reference image or the output. Sending a different clip is the fix.
+   */
+  subject?: "input_video"
 }
 
 /**
@@ -76,6 +81,17 @@ export type CreditsHint = {
 }
 
 /**
+ * The provider refused the job's input video without naming a content-policy
+ * class (its message is about the file, not a policy). Treat it like any
+ * other failure — no fallback model is offered — except that the input to
+ * change is known: send a different clip.
+ */
+export type InputRefusedHint = {
+  kind: "input-refused"
+  subject: "input_video"
+}
+
+/**
  * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
  * failure verdict, so a caller can act on it without parsing `error_message`
  * prose. One column, several verdict sources; `kind` is the discriminant.
@@ -86,7 +102,7 @@ export type CreditsHint = {
  * pasted here verbatim in the same change, with a changeset.
  * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`

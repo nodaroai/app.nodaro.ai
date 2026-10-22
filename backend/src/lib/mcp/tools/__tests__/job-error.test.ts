@@ -269,6 +269,57 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.guidance).not.toContain("<b>")
   })
 
+  it("an input-refused hint is not retryable and asks for a different clip, even when the message reads as transient", () => {
+    const message = "File processing failed"
+    // Proof the hint is load-bearing: the classifier alone says "retry this".
+    expect(isRetryableFailure(message)).toBe(true)
+
+    const result = failureGuidance({
+      error_message: message,
+      error_hint: { kind: "input-refused", subject: "input_video" },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toMatch(/refused the input video itself/)
+    expect(result.guidance).toMatch(/different clip/)
+    expect(result.guidance).not.toMatch(/may be transient/)
+  })
+
+  it("a safety-block on the input video asks for a different clip, not a fallback model or a new prompt", () => {
+    const result = failureGuidance({
+      error_message: "Blocked for copyright: the provider refused this generation.",
+      error_hint: {
+        kind: "safety-block",
+        class: "copyright",
+        retried: false,
+        subject: "input_video",
+        suggestedProvider: "some-fallback-model",
+      },
+    })
+    expect(result.retryable).toBe(false)
+    // The clip is what was refused: the fallback would be sent the same clip.
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toMatch(/refused the input video itself/)
+    expect(result.guidance).toMatch(/different clip/)
+    expect(result.guidance).not.toMatch(/change the prompt or the input image/)
+  })
+
+  it("a safety-block WITHOUT subject keeps today's guidance", () => {
+    const plain = failureGuidance({
+      error_message: "Blocked for copyright: the provider refused this generation.",
+      error_hint: { kind: "safety-block", class: "copyright", retried: false },
+    })
+    expect(plain.retryable).toBe(false)
+    expect(plain.guidance).toBe("The provider's safety filter blocked this output; change the prompt or the input image.")
+
+    const withFallback = failureGuidance({
+      error_message: "The provider's safety filter blocked this output.",
+      error_hint: { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" },
+    })
+    expect(withFallback.suggestedProvider).toBe("nano-banana-pro")
+    expect(withFallback.guidance).not.toMatch(/different clip/)
+  })
+
   it("ignores a malformed/unknown error_hint shape and falls back to the plain sentences", () => {
     const result = failureGuidance({
       error_message: "Provider timeout after 30s",

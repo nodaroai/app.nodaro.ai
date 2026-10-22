@@ -181,6 +181,13 @@ export function isRetryableFailure(errorMessage: string | null | undefined): boo
  * step's own reservation was refused), was refunded, and the identical request
  * fails again until the balance or the cap changes — so `retryable: false` and
  * guidance to top up, whatever words the message happens to use.
+ *
+ * A refused INPUT VIDEO is the same case again: `kind: "input-refused"` (the
+ * provider refused the file without naming a policy class — "File processing
+ * failed" reads as transient to the classifier) or a safety-block with
+ * `subject: "input_video"`. The provider refused the clip itself, so the same
+ * clip is refused again on any retry — `retryable: false`, and the guidance
+ * names the input to change instead of the prompt or a fallback model.
  */
 export function failureGuidance(job: {
   error_message?: string | null
@@ -188,7 +195,7 @@ export function failureGuidance(job: {
 }): { retryable: boolean; suggestedProvider?: string; guidance: string } {
   const retryable = isRetryableFailure(job.error_message)
   const hint = job.error_hint as
-    | { kind?: unknown; suggestedProvider?: unknown; reason?: unknown; code?: unknown }
+    | { kind?: unknown; suggestedProvider?: unknown; reason?: unknown; code?: unknown; subject?: unknown }
     | null
     | undefined
 
@@ -220,6 +227,21 @@ export function failureGuidance(job: {
         (code ? ` (${code})` : "") +
         ", so it stopped and its credits were refunded. Ask the user to top up (check_balance shows the balance) " +
         "or raise the plan or workspace cap, then run the same request again.",
+    }
+  }
+
+  // The provider refused the INPUT VIDEO itself (with or without a policy
+  // class): the clip is what failed, so neither the same request nor the
+  // fallback model is offered — only a different clip can succeed.
+  if (
+    hint &&
+    (hint.kind === "input-refused" || (hint.kind === "safety-block" && hint.subject === "input_video"))
+  ) {
+    return {
+      retryable: false,
+      guidance:
+        "The provider refused the input video itself; the same clip will be refused again. " +
+        "Send a different clip (or ask the user for one) — changing the prompt or retrying will not help.",
     }
   }
 

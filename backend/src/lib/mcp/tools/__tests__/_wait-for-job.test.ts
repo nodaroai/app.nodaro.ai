@@ -1,22 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest"
 
-const mocks = vi.hoisted(() => ({
-  maybeSingle: vi.fn(),
-}))
+const mocks = vi.hoisted(() => {
+  const maybeSingle = vi.fn()
+  return { maybeSingle, select: vi.fn((_columns: string) => ({ eq: vi.fn(() => ({ maybeSingle })) })) }
+})
 
 vi.mock("../../../supabase.js", () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: mocks.maybeSingle,
-        })),
-      })),
-    })),
-  },
+  supabase: { from: vi.fn(() => ({ select: mocks.select })) },
 }))
 
 import { waitForJob } from "../_wait-for-job.js"
+import type { ErrorHint } from "../../../safety-block.js"
+import type { PluginJobErrorHint, PluginWaitForJobResult } from "../../../private-plugins/types.js"
 
 describe("waitForJob", () => {
   beforeEach(() => {
@@ -173,5 +168,96 @@ describe("waitForJob — the loop", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+// A cloud plugin waits on its child job through the toolkit's `jobs.waitForJob`
+// and decides a retry from the child's structured failure verdict
+// (`jobs.error_hint`), never from its message text.
+describe("waitForJob — the child's error_hint", () => {
+  beforeEach(() => {
+    mocks.maybeSingle.mockReset()
+  })
+
+  it("reads error_hint in the poll", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: { status: "completed", output_data: { videoUrl: "https://r2/v.mp4" }, job_type: "video-to-video", error_message: null, error_hint: null },
+      error: null,
+    })
+    await waitForJob({ jobId: "job-1", timeoutMs: 100 })
+    expect(String(mocks.select.mock.calls.at(-1)?.[0])).toContain("error_hint")
+  })
+
+  it("returns a failed job's error_hint", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        status: "failed",
+        output_data: null,
+        job_type: "video-to-video",
+        error_message: "The provider refused the input video",
+        error_hint: { kind: "input-refused", subject: "input_video" },
+      },
+      error: null,
+    })
+    const result = await waitForJob({ jobId: "job-1", timeoutMs: 100 })
+    expect(result.status).toBe("failed")
+    expect(result.errorHint).toEqual({ kind: "input-refused", subject: "input_video" })
+  })
+
+  it("answers errorHint null for a failed job without one", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: { status: "failed", output_data: null, job_type: "video-to-video", error_message: "boom" },
+      error: null,
+    })
+    const result = await waitForJob({ jobId: "job-1", timeoutMs: 100 })
+    expect(result.errorHint).toBeNull()
+  })
+
+  // The column is shape-checked on `kind` only: anything else is not a hint.
+  it.each([
+    ["an array", [{ kind: "input-refused" }]],
+    ["an object with no kind", { subject: "input_video" }],
+    ["a non-string kind", { kind: 3, subject: "input_video" }],
+    ["a string", "input-refused"],
+  ])("answers errorHint null for a failed job whose error_hint is %s", async (_label, errorHint) => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: { status: "failed", output_data: null, job_type: "video-to-video", error_message: "boom", error_hint: errorHint },
+      error: null,
+    })
+    const result = await waitForJob({ jobId: "job-1", timeoutMs: 100 })
+    expect(result.status).toBe("failed")
+    expect(result.errorHint).toBeNull()
+  })
+
+  it("answers errorHint null for a completed job", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        status: "completed",
+        output_data: { videoUrl: "https://r2/v.mp4" },
+        job_type: "video-to-video",
+        error_message: null,
+        // Never read off a job that did not fail.
+        error_hint: { kind: "input-refused", subject: "input_video" },
+      },
+      error: null,
+    })
+    const result = await waitForJob({ jobId: "job-1", timeoutMs: 100 })
+    expect(result.status).toBe("completed")
+    expect(result.errorHint).toBeNull()
+  })
+
+  it("answers errorHint null when the job is not found", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: null, error: null })
+    const result = await waitForJob({ jobId: "job-gone", timeoutMs: 100 })
+    expect(result.status).toBe("failed")
+    expect(result.errorHint).toBeNull()
+  })
+
+  it("types the hint a plugin gets exactly like the plugin contract's PluginJobErrorHint", () => {
+    // The contract's union is a hand-copied mirror of the host's: a new arm
+    // on either side without the other fails here, not in a plugin.
+    expectTypeOf<PluginJobErrorHint>().toEqualTypeOf<ErrorHint>()
+    expectTypeOf<PluginWaitForJobResult["errorHint"]>().toEqualTypeOf<PluginJobErrorHint | null | undefined>()
+    expectTypeOf<Awaited<ReturnType<typeof waitForJob>>["errorHint"]>().toExtend<PluginWaitForJobResult["errorHint"]>()
   })
 })

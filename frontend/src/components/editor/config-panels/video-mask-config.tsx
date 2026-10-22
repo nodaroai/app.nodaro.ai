@@ -1,7 +1,8 @@
 "use client"
 
-import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, resolveVideoMaskProvider, type VideoMaskProvider } from "@nodaro/shared/media"
+import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, resolveVideoMaskProvider, resolveVideoMaskZone, type VideoMaskProvider, type VideoMaskZone } from "@nodaro/shared/media"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { PromptEditor } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
@@ -18,6 +19,16 @@ const VIDEO_MASK_PROVIDER_LABELS: Record<VideoMaskProvider, string> = {
   "sam-3.1": "SAM 3.1",
   "sam-3": "SAM 3",
 }
+
+/** The zone's four margins, in the order the panel lays them out (i18n key, field). */
+const ZONE_SIDES = [
+  ["vidcfg.videoMaskZoneLeft", "leftPct"],
+  ["vidcfg.videoMaskZoneRight", "rightPct"],
+  ["vidcfg.videoMaskZoneTop", "topPct"],
+  ["vidcfg.videoMaskZoneBottom", "bottomPct"],
+] as const satisfies ReadonlyArray<readonly [string, keyof VideoMaskZone]>
+
+const NO_ZONE: VideoMaskZone = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
 
 /**
  * Video Mask settings: the subject to track (prompt, with the Edit⇄Final
@@ -47,6 +58,9 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
     : VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN
   // Both cuts set with the minimum above the maximum: nothing could be kept (the run is refused).
   const emptyBand = minSubjectHeightPct > 0 && maxSubjectHeightPct > 0 && minSubjectHeightPct > maxSubjectHeightPct
+  // The zone as a run reads it (clamped, all 0 = off); a margin edit keeps the others and stores null when all are 0.
+  const zone = resolveVideoMaskZone(data.zone) ?? NO_ZONE
+  const setZoneMargin = (field: keyof VideoMaskZone, pct: number) => onUpdate({ zone: resolveVideoMaskZone({ ...zone, [field]: pct }) })
 
   return (
     <div className="flex flex-col gap-4">
@@ -168,6 +182,41 @@ export function VideoMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Config
         />
         <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskMaxSubjectHeightHint")}</p>
         {emptyBand && <p role="alert" className="text-[10px] text-amber-600 dark:text-amber-400">{t("vidcfg.videoMaskSizeBandEmpty")}</p>}
+      </div>
+
+      <fieldset className="flex flex-col gap-1.5 min-w-0">
+        <legend className="text-xs font-medium text-muted-foreground mb-1.5">{t("vidcfg.videoMaskZone")}</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {ZONE_SIDES.map(([labelKey, field]) => (
+            <div key={field} className="flex flex-col gap-1 min-w-0">
+              <label htmlFor={`video-mask-zone-${field}`} className="text-[11px] text-muted-foreground">{t(labelKey)}</label>
+              <ClampedNumberInput
+                id={`video-mask-zone-${field}`}
+                min={VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN}
+                max={VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX}
+                step={1}
+                value={zone[field]}
+                onCommit={(v) => setZoneMargin(field, v ?? 0)}
+                className="h-11 md:h-8 text-base md:text-xs"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskZoneHint")}</p>
+      </fieldset>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="video-mask-per-shot" className="flex items-center gap-2 min-h-11 cursor-pointer">
+          <input
+            type="checkbox"
+            id="video-mask-per-shot"
+            checked={data.perShot === true}
+            onChange={(e) => onUpdate({ perShot: e.target.checked })}
+            className="accent-[#ff0073] size-4 shrink-0"
+          />
+          <span className="text-xs font-medium text-muted-foreground">{t("vidcfg.videoMaskPerShot")}</span>
+        </label>
+        <p className="text-[10px] text-muted-foreground">{t("vidcfg.videoMaskPerShotHint")}</p>
       </div>
     </div>
   )

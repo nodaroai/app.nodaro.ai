@@ -19,6 +19,11 @@ import {
   maskRleCoveredPixels,
   dropMaskRegionsBySize,
   dropMaskRegionsBySizeInFrame,
+  dropMaskRegionsOutsideZone,
+  dropMaskRegions,
+  shotCutFrames,
+  fitMaskFrames,
+  VIDEO_MASK_MIN_SHOT_FRAMES,
 } from "../video-mask.js"
 import { DeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { assertFrameCountMatches } from "../../../workers/handlers/video-mask.js"
@@ -121,6 +126,16 @@ describe("holdLastMaskFrames (holdLastMask)", () => {
   it("changes nothing when no frame is empty, or when no frame is ever detected", async () => {
     expect(await holdLastMaskFrames([A, B, C], PIX)).toEqual({ rle: [A, B, C], heldFrames: 0 })
     expect(await holdLastMaskFrames(["", ""], PIX)).toEqual({ rle: ["", ""], heldFrames: 0 })
+  })
+
+  it("perShot: a held mask never crosses a cut — each shot starts with nothing to hold", async () => {
+    // Shots start at frames 0, 4 and 7. Shot 2 (frames 4–6) starts empty: it does not inherit shot 1's A.
+    const rle = ["", A, "", "", "", B, "", "", "", C]
+    const { rle: out, heldFrames } = await holdLastMaskFrames([...rle], PIX, [4, 7])
+    expect(out).toEqual(["", A, A, A, "", B, B, "", "", C])
+    expect(heldFrames).toBe(3)
+    // No cuts: exactly the single pass.
+    expect(await holdLastMaskFrames([...rle], PIX, [])).toEqual(await holdLastMaskFrames([...rle], PIX))
   })
 
   it("counts without allocating, holds in place, and keeps the worker responsive on noisy frames", async () => {
@@ -280,6 +295,134 @@ describe("dropMaskRegionsBySize (minSubjectHeightPct)", () => {
   }, 60_000)
 })
 
+describe("dropMaskRegionsOutsideZone (zone)", () => {
+  // A 100×20 frame, so x in pixels is x in % of the width. Pixel (x, y) is y*100 + x + 1 (one-based).
+  const W = 100, H = 20
+  const rect = (x: number, y: number, w: number, h: number) =>
+    Array.from({ length: h }, (_, i) => `${(y + i) * W + x + 1} ${w}`).join(" ")
+  const draw = (rle: string) => {
+    const out = new Uint8Array(W * H)
+    decodeMaskRle(rle, out)
+    return out
+  }
+  const off = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
+
+  it("drops a region whose bounding-box centre is outside the inner rectangle, keeps the rest pixel for pixel", async () => {
+    const edge = rect(3, 5, 4, 6) // x 3–6: centre at x = 5 (5 %)
+    const middle = rect(48, 5, 4, 6) // x 48–51: centre at x = 50 (50 %)
+    const frames = [`${edge} ${middle}`]
+    const out = await dropMaskRegionsOutsideZone(frames, { width: W, height: H }, { ...off, leftPct: 10, rightPct: 10 })
+    expect(out.rle).toBe(frames) // in place
+    expect(draw(out.rle[0]!)).toEqual(draw(middle))
+    expect(out).toMatchObject({ droppedRegions: 1, kept: true, matched: true })
+  })
+
+  it("judges the CENTRE, not the extent: a region reaching into the margin stays when its centre is inside", async () => {
+    // x 4–25 reaches into the 10 % margin, but its centre (x = 15) is inside.
+    const wide = rect(4, 5, 22, 6)
+    const out = await dropMaskRegionsOutsideZone([wide], { width: W, height: H }, { ...off, leftPct: 10 })
+    expect(out.rle[0]).toBe(wide)
+    expect(out.droppedRegions).toBe(0)
+  })
+
+  it("top and bottom margins work on the height the same way", async () => {
+    const high = rect(40, 0, 4, 2) // rows 0–1: centre at y = 1 (5 % of 20)
+    const low = rect(60, 17, 4, 3) // rows 17–19: centre at y = 18.5 (92.5 %)
+    const mid = rect(10, 8, 4, 4) // rows 8–11: centre at y = 10 (50 %)
+    const out = await dropMaskRegionsOutsideZone([`${high} ${low} ${mid}`], { width: W, height: H }, { ...off, topPct: 10, bottomPct: 10 })
+    expect(draw(out.rle[0]!)).toEqual(draw(mid))
+    expect(out.droppedRegions).toBe(2)
+  })
+
+  it("an all-zero or null zone is a no-op: the same array, every frame the same string", async () => {
+    const frames = [`${rect(3, 5, 4, 6)} ${rect(48, 5, 4, 6)}`, ""]
+    const copy = [...frames]
+    for (const zone of [off, null]) {
+      const out = await dropMaskRegionsOutsideZone(frames, { width: W, height: H }, zone)
+      expect(out.rle).toBe(frames)
+      expect(out.rle).toEqual(copy)
+      expect(out).toMatchObject({ droppedRegions: 0, kept: true, matched: true })
+    }
+  })
+
+  it("a zone that leaves nothing on any frame reports matched but not kept (the worker's all-black rule)", async () => {
+    const out = await dropMaskRegionsOutsideZone([rect(0, 0, 4, 4), "", rect(95, 15, 5, 5)], { width: W, height: H }, { ...off, leftPct: 20, rightPct: 20 })
+    expect(out.rle).toEqual(["", "", ""])
+    expect(out).toMatchObject({ droppedRegions: 2, matched: true, kept: false })
+  })
+
+  it("size and zone in one pass: the same frames as size then zone, and droppedRegions counts both", async () => {
+    const tallEdge = rect(1, 0, 4, 16) // tall, centre at x = 3: outside the zone
+    const tallMiddle = rect(45, 0, 6, 16) // tall, centre at x = 48: kept
+    const smallMiddle = rect(70, 2, 3, 2) // small (2 rows), centre inside: dropped by size
+    const smallEdge = rect(96, 2, 3, 2) // small AND outside: dropped once (by size)
+    const frame = [tallEdge, tallMiddle, smallMiddle, smallEdge].join(" ")
+    const zone = { ...off, leftPct: 10, rightPct: 10 }
+    const both = await dropMaskRegions([frame], { width: W, height: H }, { minSubjectHeightPct: 25, zone })
+    const sized = await dropMaskRegionsBySize([frame], { width: W, height: H }, 25)
+    const zoned = await dropMaskRegionsOutsideZone(sized.rle, { width: W, height: H }, zone)
+    expect(draw(both.rle[0]!)).toEqual(draw(tallMiddle))
+    expect(draw(zoned.rle[0]!)).toEqual(draw(tallMiddle))
+    expect(both).toMatchObject({ droppedRegions: 3, droppedBySize: 2, droppedByZone: 1, matched: true, kept: true })
+    expect(sized.droppedRegions + zoned.droppedRegions).toBe(3)
+  })
+
+  it("runs before the hold: a frame whose only face is near the edge is held from the last centred one", async () => {
+    const middle = rect(48, 5, 4, 6), edge = rect(1, 5, 4, 6)
+    const zoned = await dropMaskRegionsOutsideZone([edge, middle, edge, `${edge} ${middle}`], { width: W, height: H }, { ...off, leftPct: 10 })
+    const { rle, heldFrames } = await holdLastMaskFrames(zoned.rle, W * H)
+    expect(rle[0]).toBe("")
+    expect(rle.slice(1).map((f) => [...draw(f)])).toEqual(Array(3).fill([...draw(middle)]))
+    expect(heldFrames).toBe(1)
+  })
+
+  it("keeps a region centred exactly on the end-side bounds (no floating-point loss on right / bottom)", async () => {
+    // 720×720 with right and bottom margins of 30 %: the rectangle ends at x = y = 504 exactly
+    // (720 × (1 − 30/100) would be 503.99999999999994 and drop it).
+    const w = 720, h = 720
+    // Columns 494–513 (centre (494 + 514) / 2 = 504), rows 494–513 (centre (494 + 513 + 1) / 2 = 504).
+    const onEdge = Array.from({ length: 20 }, (_, i) => `${(494 + i) * w + 494 + 1} 20`).join(" ")
+    const out = await dropMaskRegionsOutsideZone([onEdge], { width: w, height: h }, { ...off, rightPct: 30, bottomPct: 30 })
+    expect(out.rle[0]).toBe(onEdge)
+    expect(out.droppedRegions).toBe(0)
+    // One pixel further down and right, the centre (505) is outside.
+    const past = Array.from({ length: 20 }, (_, i) => `${(495 + i) * w + 495 + 1} 20`).join(" ")
+    expect((await dropMaskRegionsOutsideZone([past], { width: w, height: h }, { ...off, bottomPct: 30 })).droppedRegions).toBe(1)
+    expect((await dropMaskRegionsOutsideZone([past], { width: w, height: h }, { ...off, rightPct: 30 })).droppedRegions).toBe(1)
+  })
+
+  it("keeps up with a crowd-like 1080p mask with size AND zone on, without stalling the worker", async () => {
+    // The size filter's heavy case (40 small faces, 5 people a frame), with a 10 % side zone on top: one labelling pass a frame.
+    const w = 1920, h = 1080
+    const frame = (n: number) => {
+      const runs: Array<[number, number]> = []
+      const shift = n % 7
+      for (let f = 0; f < 40; f++) {
+        const x = 20 + (f % 20) * 90 + shift, y = 30 + Math.floor(f / 20) * 70
+        for (let r = 0; r < 60; r++) runs.push([(y + r) * w + x, 60])
+      }
+      for (let p = 0; p < 5; p++) for (let r = 0; r < 900; r++) runs.push([(170 + r) * w + 100 + p * 360 + shift, 200])
+      return runs.sort((a, b) => a[0] - b[0]).map(([s, l]) => `${s + 1} ${l}`).join(" ")
+    }
+    const frames = Array.from({ length: 1500 }, (_, i) => frame(i))
+    let maxGap = 0
+    let last = performance.now()
+    const tick = setInterval(() => { const now = performance.now(); maxGap = Math.max(maxGap, now - last); last = now }, 2)
+    const t0 = performance.now()
+    const out = await dropMaskRegions(frames, { width: w, height: h }, { minSubjectHeightPct: 15, zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } })
+    const ms = performance.now() - t0
+    clearInterval(tick)
+    // Per frame: the 40 small faces go by size; of the 5 people (centres at x ≈ 200, 560, 920, 1280, 1640), the first
+    // (≈ 10.4 % of 1920) stays and the last (≈ 85.4 %) stays too — the 10 % margins are 192 px and 1728 px.
+    expect(out.droppedBySize).toBe(1500 * 40)
+    expect(out.droppedByZone).toBe(0)
+    const tight = await dropMaskRegions(frames.slice(0, 10), { width: w, height: h }, { minSubjectHeightPct: 15, zone: { leftPct: 15, rightPct: 15, topPct: 0, bottomPct: 0 } })
+    expect(tight.droppedByZone).toBe(10 * 2)
+    expect(ms).toBeLessThan(8_000)
+    expect(maxGap).toBeLessThan(500)
+  }, 60_000)
+})
+
 describe("renderMaskVideo (real ffmpeg)", () => {
   it("a held mask goes through the same encode: same frame count, size and rate, the lost frames white", async () => {
     const dir = await mkdtemp(join(tmpdir(), "video-mask-hold-"))
@@ -361,6 +504,67 @@ describe("chunking a long clip", () => {
     expect(argv).toContain("-force_key_frames expr:eq(mod(n,1800),0)")
     expect(argv).toContain("-segment_frames 1800,3600")
   })
+  it("perShot: every cut starts a chunk, and a shot longer than N is still cut every N frames from its start", () => {
+    expect(planMaskChunks(97, 1800, [31])).toEqual([
+      { index: 0, startFrame: 0, frames: 31 },
+      { index: 1, startFrame: 31, frames: 66 },
+    ])
+    expect(planMaskChunks(97, 40, [31])).toEqual([
+      { index: 0, startFrame: 0, frames: 31 },
+      { index: 1, startFrame: 31, frames: 40 },
+      { index: 2, startFrame: 71, frames: 26 },
+    ])
+    // Cuts out of range (0, past the end), repeated or unsorted are ignored; no cuts = today's plan.
+    expect(planMaskChunks(97, 1800, [97, 0, 60, 31, 31, -5, 200])).toEqual([
+      { index: 0, startFrame: 0, frames: 31 },
+      { index: 1, startFrame: 31, frames: 29 },
+      { index: 2, startFrame: 60, frames: 37 },
+    ])
+    expect(planMaskChunks(4000, 1800, [])).toEqual(planMaskChunks(4000, 1800))
+  })
+  it("perShot: a shot is at least 8 frames — a cut that would start a shorter one is dropped (the earlier cut is kept), so is one leaving a short last shot", () => {
+    expect(VIDEO_MASK_MIN_SHOT_FRAMES).toBe(8)
+    // 31 → 35 would be a 4-frame shot: 35 is dropped, frames 31–96 are one shot.
+    expect(shotCutFrames(97, [31, 35])).toEqual([31])
+    // 92 → 97 would leave a 5-frame last shot: dropped (it joins the shot before).
+    expect(shotCutFrames(97, [92])).toEqual([])
+    expect(shotCutFrames(97, [31, 92])).toEqual([31])
+    // A first shot under 8 frames: the cut is dropped.
+    expect(shotCutFrames(97, [5, 40])).toEqual([40])
+    // Exactly 8 frames is enough, at either end and between cuts.
+    expect(shotCutFrames(97, [8, 16, 89])).toEqual([8, 16, 89])
+    // A run of close cuts keeps every cut at least 8 frames after the last kept one.
+    expect(shotCutFrames(97, [30, 33, 36, 39, 50])).toEqual([30, 39, 50])
+    // Out of range, unsorted and repeated cuts are cleaned first (validCutFrames).
+    expect(shotCutFrames(97, [0, 50, 50, 20, 200])).toEqual([20, 50])
+    expect(shotCutFrames(10, [5])).toEqual([])
+  })
+  it("perShot: a chunk's masks are fitted to exactly its planned frames (short: its last frame repeats; long: the tail goes)", () => {
+    expect(fitMaskFrames(["a", "b", "c"], 5)).toEqual(["a", "b", "c", "c", "c"])
+    expect(fitMaskFrames(["a", "b", "c", "d", "e"], 3)).toEqual(["a", "b", "c"])
+    const exact = ["a", "b"]
+    expect(fitMaskFrames(exact, 2)).toBe(exact)
+    expect(fitMaskFrames([], 2)).toEqual(["", ""])
+  })
+  it("split argv on uneven chunks forces a keyframe on each boundary itself", () => {
+    const argv = buildSplitArgs("in.mp4", "out-%03d.mp4", planMaskChunks(97, 40, [31])).join(" ")
+    expect(argv).toContain("-force_key_frames expr:eq(n,31)+eq(n,71)")
+    expect(argv).toContain("-segment_frames 31,71")
+  })
+  it("cuts a real clip at uneven shot boundaries into exactly the planned frames (real ffmpeg)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "video-mask-split-shots-"))
+    try {
+      const src = join(dir, "src.mp4")
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=160x90:r=10:d=9.7", "-c:v", "libx264", "-pix_fmt", "yuv420p", src])
+      const total = await countVideoFrames(src)
+      expect(total).toBe(97)
+      const chunks = planMaskChunks(total!, 40, [31])
+      const paths = await splitMaskSource(src, dir, { width: 160, height: 90, frameRate: "10/1", durationSec: 9.7 }, chunks)
+      expect(await Promise.all(paths.map((p) => countVideoFrames(p)))).toEqual([31, 40, 26])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
   it("gives longer clips longer kill budgets", () => {
     expect(videoMaskFfmpegTimeoutMs(300)).toBeGreaterThan(videoMaskFfmpegTimeoutMs(10))
   })

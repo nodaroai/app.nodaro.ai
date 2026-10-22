@@ -1249,7 +1249,10 @@ written by the deployment's policy, or by the platform when the policy supplies 
 or that ran out of credits partway (`kind: "credits"`, carrying the refusal's
 `code` — `insufficient_credits`, or a plan or workspace cap such as
 `free_video_limit` or `budget_exceeded`; the job was refunded, so ask the
-person to top up and run it again). Admin callers
+person to top up and run it again), or whose input video the provider refused
+without naming a content-policy class (`kind: "input-refused"`, `subject:
+"input_video"` — send a different clip; a `safety-block` carries the same
+`subject` when the refused input video also has a class). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
@@ -5873,6 +5876,10 @@ videoMask(input: {
   holdLastMask?: boolean          // default false; keep the last mask where the subject is lost
   minSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions shorter than this % of the frame height
   maxSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions taller than this % (min > max is a 400)
+  zone?: {                        // default null (off); keep regions whose centre is inside these margins
+    leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number  // 0..49 % each, left out = 0
+  } | null
+  perShot?: boolean               // default false; detect the subject again in every shot (scene cuts found first)
 }): Promise<{ jobId: string }>
 ```
 
@@ -5882,7 +5889,14 @@ black-and-white **mask video** back — white = the subject.
 Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer),
 priced by length (`sam-3.1-video:5s` … `:300s`, 55<!-- credits: sam-3.1-video:5s -->–3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3 about half). Poll
 `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
-`height`, `frames` and `coverage`. Full reference:
+`height`, `frames`, `shots`, `coverage` (rounded to 4 decimals) and `kept`
+(false only when the size / zone filters left nothing on any frame). `zone` drops, on every frame, the
+regions whose bounding-box centre lies outside the frame minus the margins
+(after the size cuts, before `holdLastMask`). `perShot` finds the clip's scene
+cuts first and segments each shot on its own — the subject is detected again
+after every cut, `holdLastMask` never crosses a cut, and each shot's mask is
+fitted to that shot's exact frame count; on a clip with no cut it gives the
+same mask, fitted to the clip's exact frame count. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
 
 #### `maskComposite(input)`

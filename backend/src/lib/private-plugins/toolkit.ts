@@ -576,10 +576,19 @@ async function trimVideoToUrl(
   }
 }
 
-/** `tk.ffmpeg.probeVideoMeta` — mirrors `probeVideoSource`, field rename only. */
-async function probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }> {
-  const { width, height, durationSeconds } = await probeVideoSource(url)
-  return { width, height, durationSec: durationSeconds }
+/** `tk.ffmpeg.probeVideoMeta` — mirrors `probeVideoSource`, field rename only.
+ *  `fps` rides along only when the probe reports a usable (positive, finite)
+ *  constant rate; otherwise it is absent, which a plugin reads as "unknown". */
+async function probeVideoMeta(
+  url: string,
+): Promise<{ durationSec: number; width: number; height: number; fps?: number }> {
+  const { width, height, durationSeconds, fps } = await probeVideoSource(url)
+  return {
+    width,
+    height,
+    durationSec: durationSeconds,
+    ...(typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? { fps } : {}),
+  }
 }
 
 /**

@@ -25,6 +25,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoMaskLength } from "../lib/video-mask-length.js"
 
+const zoneMargin = z.number().min(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN).max(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX).optional().default(0)
+
 export const videoMaskBody = z.object({
   videoUrl: safeUrlSchema,
   prompt: z.string().trim().min(1).max(VIDEO_MASK_LIMITS.PROMPT_MAX_LENGTH),
@@ -36,6 +38,12 @@ export const videoMaskBody = z.object({
   minSubjectHeightPct: z.number().min(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN).max(VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX).optional().default(0),
   // Drop regions taller than this % of the frame height (0 = off); with both set, keep min ≤ h ≤ max.
   maxSubjectHeightPct: z.number().min(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN).max(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX).optional().default(0),
+  // Keep only regions whose bounding-box centre is inside these margins (% of the frame, 0–49 each; a margin
+  // left out is 0). null / omitted / all 0 = off. Applied after the size cut, before holdLastMask.
+  zone: z.object({ leftPct: zoneMargin, rightPct: zoneMargin, topPct: zoneMargin, bottomPct: zoneMargin }).nullable().optional().default(null),
+  // Segment each shot on its own: the clip's scene cuts become chunk boundaries (the model starts afresh after
+  // every cut and finds the subjects of the new shot), and holdLastMask never carries a mask across a cut.
+  perShot: z.boolean().optional().default(false),
 })
 
 /**

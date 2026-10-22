@@ -583,8 +583,18 @@ export interface PluginFfmpegToolkit {
    * Mirrors `probeVideoSource` (`providers/video/ffmpeg-utils.ts`) — remote-
    * capable ffprobe (SSRF-asserted, protocol-whitelisted), field rename only
    * (`durationSeconds` → `durationSec`).
+   *
+   * `durationSec` — the CONTAINER's duration (`format=duration`), not the
+   * video stream's: it can be longer than the video (a clip whose audio runs
+   * past its last frame), so `durationSec × fps` is an estimate of the frame
+   * count, not an exact one.
+   *
+   * `fps` — the video stream's CONSTANT frame rate, when `probeVideoSource`
+   * reports one (absent for a variable rate or none usable). ADDITIVE-OPTIONAL
+   * (no CONTRACT_VERSION bump): a host predating it never sets it, so a caller
+   * treats absent as "unknown" and keeps its old behaviour.
    */
-  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }>
+  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number; fps?: number }>
   /**
    * Mirrors `runFfprobe` (`providers/video/ffmpeg-utils.ts`) — runs ffprobe with
    * the given args and resolves its stdout (the video-analysis segmenter reads
@@ -1278,6 +1288,51 @@ export interface PluginStorageToolkit {
 // tk.jobs — backend/src/workers/shared.ts
 // ============================================================================
 
+/**
+ * Structural mirror of `ErrorHint` (`backend/src/lib/safety-block.ts`) — the
+ * `jobs.error_hint` column (migration 376): a user-safe, machine-readable
+ * verdict on a FAILED job, so a caller can act on a child's failure (say "the
+ * safety filter blocked it", offer the fallback model, say "top up") without
+ * parsing `error_message`. Switch on `kind`; treat a kind you do not know as
+ * an unclassified failure (the union may grow).
+ */
+export type PluginJobErrorHint =
+  | {
+      /** A provider's content-policy block. */
+      kind: "safety-block"
+      class: "copyright" | "likeness" | "safety"
+      /** The request was retried once inline before this verdict. */
+      retried: boolean
+      /** A catalog model id the same request may pass on. */
+      suggestedProvider?: string
+      /**
+       * What was blocked, when the provider named it: `"input_video"` = the
+       * job's input video (not its prompt). Absent ⇒ unknown. ADDITIVE-OPTIONAL.
+       */
+      subject?: "input_video"
+    }
+  | {
+      /**
+       * The provider could not take the job's INPUT VIDEO (refused or failed
+       * to process it) without naming a content class. ADDITIVE-OPTIONAL.
+       */
+      kind: "input-refused"
+      subject: "input_video"
+    }
+  | {
+      /** Nodaro's own job policy refused the request or withheld the result. */
+      kind: "policy-block"
+      policyId: string
+      /** User-safe by contract. */
+      reason: string
+      hookPoint: "request" | "result"
+    }
+  | {
+      /** A credit reservation was refused partway (`insufficient_credits`, …). */
+      kind: "credits"
+      code: string
+    }
+
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */
 export interface PluginOwnedJobRow {
   id: string
@@ -1320,6 +1375,14 @@ export interface PluginWaitForJobResult {
   outputData: Record<string, unknown> | null
   error: string | null
   jobType: string | null
+  /**
+   * A `failed` child's structured failure verdict, as stored on
+   * `jobs.error_hint` (see `PluginJobErrorHint`) — a child's failure class
+   * without parsing `error`; null on every other status, or when the job has
+   * none. ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — absent on an older
+   * host; treat `undefined` like null.
+   */
+  errorHint?: PluginJobErrorHint | null
 }
 
 export interface PluginJobSettlement {

@@ -67,6 +67,7 @@ import {
   type OverlayImageEffects,
   type OverlayAnchor,
   type VideoMaskProvider,
+  type VideoMaskZone,
   type MaskCompositeBackgroundFit,
   type MaskCompositeAudioSource,
   type MaskCompositeFill,
@@ -229,6 +230,9 @@ export interface SafetyBlockHint {
   readonly class: "copyright" | "likeness" | "safety"
   readonly retried: boolean
   readonly suggestedProvider?: string
+  /** Present when the provider refused the INPUT VIDEO itself (not the
+   *  prompt, a reference image or the output). */
+  readonly subject?: "input_video"
 }
 
 /**
@@ -261,6 +265,15 @@ export interface CreditsHint {
 }
 
 /**
+ * The provider refused the job's input video without naming a content-policy
+ * class. Shown like any unclassified failure — no fallback model is offered.
+ */
+export interface InputRefusedHint {
+  readonly kind: "input-refused"
+  readonly subject: "input_video"
+}
+
+/**
  * Structured hint attached to a job's failure. One jsonb column, several verdict
  * sources — a DISCRIMINATED UNION on `kind`, which was already the
  * discriminant every reader tested, so widening it breaks none of them.
@@ -271,7 +284,7 @@ export interface CreditsHint {
  * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
  * change (that file's comment says the same thing).
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {
@@ -2559,6 +2572,12 @@ export interface VideoMaskNodeData extends PromptAffixFields {
   /** Ignore subjects larger than this % of the frame height (0 = off). Optional:
    *  older saved nodes lack it. */
   maxSubjectHeightPct?: number
+  /** Keep only subjects whose bounding-box centre is inside these margins (% of the frame; null = off).
+   *  Optional: older saved nodes lack it. */
+  zone?: VideoMaskZone | null
+  /** Segment each shot on its own (scene cuts found first; the hold never crosses a cut).
+   *  Optional: older saved nodes lack it. */
+  perShot?: boolean
   /** Resolved at execution time from the connected video edge. */
   videoUrl?: string
   activeResultIndex?: number

@@ -26,6 +26,7 @@ import { describe, expect, it } from "vitest"
 import {
   creditsHintOf,
   errorHintFor,
+  inputRefusedHint,
   policyBlockHint,
   safetyBlockOf,
   type CreditsHint,
@@ -81,6 +82,8 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
           return `nodaro:${hint.policyId}`
         case "credits":
           return `credits:${hint.code}`
+        case "input-refused":
+          return `input:${hint.subject}`
         default: {
           const exhaustive: never = hint
           return exhaustive
@@ -90,6 +93,7 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
     expect(describeHint(safety)).toBe("provider:safety")
     expect(describeHint(policy)).toBe("nodaro:sai-moderation")
     expect(describeHint({ kind: "credits", code: "insufficient_credits" })).toBe("credits:insufficient_credits")
+    expect(describeHint(inputRefusedHint())).toBe("input:input_video")
   })
 
   it("keeps errorHintFor producing the safety arm (migration 376 readers unchanged)", () => {

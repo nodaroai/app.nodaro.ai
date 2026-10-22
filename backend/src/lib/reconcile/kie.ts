@@ -5,6 +5,14 @@ import { markJobFailed } from "../job-failure.js"
 import { uploadToR2 } from "../storage.js"
 import { providerDetailOf, logProviderFailure } from "../provider-error-detail.js"
 import {
+  safetyBlockOf,
+  inputVideoRefusedOf,
+  sentVideoInput,
+  refusalHintFor,
+  jobModelIdOf,
+  type ErrorHint,
+} from "../safety-block.js"
+import {
   pollKieTask,
   pollVeoTask,
   runVeo1080pTask,
@@ -213,7 +221,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
     // instead of riding to the 18-attempt exhaustion (the old msg.includes match
     // never matched the sanitized message).
     if (isUpstreamKieFailure(err)) {
-      await markFailed(row.id, msg, providerDetailOf(err))
+      await markFailed(row.id, msg, providerDetailOf(err), refusalHintOf(err, row))
       await refundReservedCreditsForJob(row.id)
     } else {
       await bumpAttemptsOrExhaust(row.id, err)
@@ -275,7 +283,30 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
   }
 }
 
-async function markFailed(jobId: string, reason: string, detail: string | null = null): Promise<void> {
+/** The `error_hint` the worker would have written for this terminal failure
+ *  (`refusalHintFor`, the one shared mapping): a job re-picked after a worker
+ *  restart is failed HERE instead of in the worker's catch, and a caller that
+ *  acts on the hint (offer the fallback model, send a different clip) must see
+ *  the same verdict either way. The thrown poll error carries the provider's
+ *  classification (`contentPolicyClass` / `inputVideoRefused`, decided on its
+ *  bare failMsg by the poll client); the job's `input_data` is the request it
+ *  was enqueued with, so it answers the worker's model + "sent a video" reads.
+ *  `retried` is false: the re-picked job never ran the worker's inline retry. */
+function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
+  const input = row.input_data ?? null
+  return refusalHintFor(
+    safetyBlockOf(err, jobModelIdOf(input)),
+    false,
+    inputVideoRefusedOf(err) && sentVideoInput(input),
+  )
+}
+
+async function markFailed(
+  jobId: string,
+  reason: string,
+  detail: string | null = null,
+  hint: ErrorHint | null = null,
+): Promise<void> {
   // Log BEFORE the write: this module had no per-job output at all, so a
   // cron-failed job was invisible in Railway (spec §11.3).
   logProviderFailure("reconcile/kie", jobId, reason, detail)
@@ -287,6 +318,7 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
     error_message: reason,
     error_detail: detail,
     reconcile_last_error: "upstream_failed",
+    ...(hint ? { error_hint: hint } : {}),
   })
 }
 
@@ -321,7 +353,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // poll clients now set the flag (createUpstreamFailureError), so every
     // provider fails fast here — not just kie-standard.
     if (isUpstreamKieFailure(err)) {
-      await markFailed(row.id, msg, providerDetailOf(err))
+      await markFailed(row.id, msg, providerDetailOf(err), refusalHintOf(err, row))
       await refundReservedCreditsForJob(row.id)
     } else {
       // still pending / transient / unsupported kind — try again next tick

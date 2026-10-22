@@ -18,7 +18,10 @@ import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { isDrainAbortError } from "../lib/worker-drain.js"
 import {
   safetyBlockOf,
-  errorHintFor,
+  refusalHintFor,
+  jobModelIdOf,
+  inputVideoRefusedOf,
+  sentVideoInput,
   creditsHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
@@ -265,10 +268,7 @@ export function createVideoWorker() {
       // The model this job runs under (the i2i variant id for referenced image
       // requests). Read once: both the inline safety retry and the final failure
       // path key their policy off it.
-      const modelId =
-        (job.data as { provider?: string; model?: string }).model ??
-        (job.data as { provider?: string }).provider ??
-        null
+      const modelId = jobModelIdOf(job.data)
       let safetyRetried = false
 
       try {
@@ -556,7 +556,10 @@ export function createVideoWorker() {
         // apply-edl's window check) fails identically on every retry — so it
         // is final now, like a content-policy block (lib/deterministic-job-error.ts).
         const deterministic = isDeterministicJobError(err)
-        const finalAttempt = block || deterministic ? true : isFinalJobAttempt(job)
+        // The provider refused the INPUT VIDEO of a job that sent one: the
+        // same clip is refused again, so it is final now too.
+        const inputVideoRefused = inputVideoRefusedOf(err) && sentVideoInput(job.data)
+        const finalAttempt = block || deterministic || inputVideoRefused ? true : isFinalJobAttempt(job)
 
         // Post-provider self-heal (audit spec, worker branch). On the FINAL
         // attempt, a PostProcessingError means the provider already delivered
@@ -619,7 +622,10 @@ export function createVideoWorker() {
           // "completed"/"cancelled" → "failed" — which would orphan its committed
           // credits + delivered asset and fail the workflow despite delivery — and
           // what keeps this worker off a `pending_review` row (spec D11).
-          const errorHint = block ? errorHintFor(block, safetyRetried) : creditsHintOf(err)
+          // The provider refused the INPUT VIDEO: said on the hint (beside the
+          // class when there is one), so a caller can send a different clip.
+          // Shared with the reconcile path (lib/reconcile/kie.ts).
+          const errorHint = refusalHintFor(block, safetyRetried, inputVideoRefused) ?? creditsHintOf(err)
           const flipped = await markJobFailed(jobId, {
             error_message: errorMessage,
             // W0: the provider's own error, redacted — the sanitized message
@@ -628,7 +634,7 @@ export function createVideoWorker() {
             // Migration 376: a user-safe, machine-readable hint the editor/MCP
             // can act on (offer the fallback model, say "top up") without
             // parsing prose. A classified content-policy block, else a
-            // handler's credits refusal (`failureHint` on the error or its
+            // refused input video, else a handler's credits refusal (`failureHint` on the error or its
             // cause chain — a plugin's child job refused for credits); NULL
             // for anything else. The refund below is unchanged either way.
             ...(errorHint ? { error_hint: errorHint } : {}),
@@ -656,8 +662,8 @@ export function createVideoWorker() {
           // machinery (precedent: social-publish-worker.ts's `definitive`
           // branch). A deterministic refusal is the same case: the row is
           // already failed + refunded above, and a retry would re-download
-          // every input to fail the same way.
-          if (block || deterministic) {
+          // every input to fail the same way. A refused input video, likewise.
+          if (block || deterministic || inputVideoRefused) {
             throw new UnrecoverableError(errorMessage)
           }
         }

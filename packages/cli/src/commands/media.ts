@@ -146,6 +146,19 @@ function parseSafeArea(raw: string): { x: number; y: number; w: number; h: numbe
   return { x, y, w, h }
 }
 
+/** Parse Video Mask's `--zone L,R,T,B` (% of the frame, each 0–49) into the route's zone.
+ *  A margin is a plain decimal: `5`, `5.`, `.5` and `0.5` all read as the API reads the number. */
+function parseVideoMaskZone(raw: string): { leftPct: number; rightPct: number; topPct: number; bottomPct: number } {
+  const parts = raw.split(",").map((n) => n.trim())
+  const nums = parts.map((n) => (/^(?:\d+\.?\d*|\.\d+)$/.test(n) ? Number(n) : Number.NaN))
+  if (nums.length !== 4 || nums.some((n) => !(n >= VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN && n <= VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX))) {
+    warn(`--zone must be "left,right,top,bottom", each a % of the frame from ${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN} to ${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX}, e.g. 10,10,5,5 (got "${raw}")`)
+    process.exit(1)
+  }
+  const [leftPct, rightPct, topPct, bottomPct] = nums
+  return { leftPct, rightPct, topPct, bottomPct }
+}
+
 export function mediaCommand(): Command {
   const cmd = new Command("media").description(
     "media ingestion + compositing — pull a social video into storage, trim video/audio, burn captions, still-to-video, slideshow, collage images, overlay layers on an image or timed images on a video, save a URL to storage, probe metadata",
@@ -1071,6 +1084,8 @@ image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for 
     .option("--hold-last-mask", "keep the last mask on frames where the subject is lost (e.g. hidden behind a hand)")
     .option("--min-subject-height <pct>", `ignore subjects smaller than this % of the frame height, ${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MIN_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
     .option("--max-subject-height <pct>", `ignore subjects larger than this % of the frame height, ${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN}–${VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX} (default 0 = off)`, (v) => Number(v))
+    .option("--zone <L,R,T,B>", `keep only subjects whose centre is inside these left,right,top,bottom margins, each ${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN}–${VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX} % of the frame (default off)`)
+    .option("--per-shot", "detect the subject again in every shot after a scene cut")
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
@@ -1080,10 +1095,11 @@ Examples:
   $ nodaro media video-mask https://x/dance.mp4 "the dancer" --watch
   $ nodaro media video-mask https://x/street.mp4 "person, dog" --threshold 0.3 --watch
   $ nodaro media video-mask https://x/long-take.mp4 "the skater" --model sam-3 --watch
+  $ nodaro media video-mask https://x/edit.mp4 "face" --per-shot --zone 10,10,5,5 --watch
 
 Clips up to ${VIDEO_MASK_LIMITS.MAX_BILLED_SEC} s at ${VIDEO_MASK_LIMITS.FPS_BASIS} fps (a faster clip counts proportionally longer); priced by the
 clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
-    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string; holdLastMask?: boolean; minSubjectHeight?: number; maxSubjectHeight?: number } & WatchOpts) => {
+    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string; holdLastMask?: boolean; minSubjectHeight?: number; maxSubjectHeight?: number; zone?: string; perShot?: boolean } & WatchOpts) => {
       try {
         if (opts.model && !(VIDEO_MASK_PROVIDERS as readonly string[]).includes(opts.model)) {
           warn(`--model must be one of ${VIDEO_MASK_PROVIDERS.join(", ")} (got "${opts.model}")`)
@@ -1105,6 +1121,7 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
           warn("--min-subject-height is above --max-subject-height: no subject could be kept")
           process.exit(1)
         }
+        const zone = opts.zone !== undefined ? parseVideoMaskZone(opts.zone) : undefined
         const client = buildClient(opts.profile)
         const result = await client.media.videoMask({
           videoUrl,
@@ -1114,6 +1131,8 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
           ...(opts.holdLastMask ? { holdLastMask: true } : {}),
           ...(opts.minSubjectHeight !== undefined ? { minSubjectHeightPct: opts.minSubjectHeight } : {}),
           ...(opts.maxSubjectHeight !== undefined ? { maxSubjectHeightPct: opts.maxSubjectHeight } : {}),
+          ...(zone ? { zone } : {}),
+          ...(opts.perShot ? { perShot: true } : {}),
         })
         await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video mask" })
       } catch (err) {

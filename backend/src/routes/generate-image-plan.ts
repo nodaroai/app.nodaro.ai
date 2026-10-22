@@ -373,6 +373,13 @@ export async function planImageJob(args: {
     inputData: {
       ...buildJobInputData(data, "generate-image"),
       prompt,
+      // The model the worker runs (`queueData.provider` / `.model` below): the
+      // image-to-image sibling with references, the trained-character model on
+      // the LoRA path. `provider` stays the caller's choice (the gallery label,
+      // a batch replay's group model and the run stats read it); a reconcile
+      // that fails the job reads this one (`jobModelIdOf`), so its safety class
+      // and fallback match the worker's.
+      resolvedModel: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.modelId,
       ...(warnings.length > 0 ? { warnings } : {}),
     },
     queueData: {

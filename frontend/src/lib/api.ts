@@ -26,6 +26,7 @@ import type {
   VideoDepthColormap,
   VideoDepthResolution,
   VideoMaskProvider,
+  VideoMaskZone,
   MaskCompositeBackgroundFit,
   MaskCompositeAudioSource,
   MaskCompositeFill,
@@ -6578,6 +6579,10 @@ export async function videoMaskApi(params: {
   minSubjectHeightPct?: number
   /** Ignore subjects larger than this % of the frame height (default 0 = off). */
   maxSubjectHeightPct?: number
+  /** Keep only subjects whose bounding-box centre is inside these margins (% of the frame, 0–49 each; null = off). */
+  zone?: VideoMaskZone | null
+  /** Detect the subjects again in every shot (scene cuts found first; default false). */
+  perShot?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const { userId, ...rest } = params

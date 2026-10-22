@@ -31,6 +31,7 @@ import {
   overlayVariantIdFromHandle,
   VIDEO_MASK_LIMITS,
   resolveVideoMaskProvider,
+  resolveVideoMaskZone,
   resolveMaskCompositeSettings,
   maskCompositeFillOf,
   maskCompositeUsesForeground,
@@ -5019,6 +5020,9 @@ export function buildPayload(
           holdLastMask: data.holdLastMask === true,
           minSubjectHeightPct: minCut,
           maxSubjectHeightPct: maxCut,
+          // The worker's own reading of a zone (margins clamped to 0–49, all 0 = null = off).
+          zone: resolveVideoMaskZone(data.zone),
+          perShot: data.perShot === true,
           usageLogId,
         },
       }

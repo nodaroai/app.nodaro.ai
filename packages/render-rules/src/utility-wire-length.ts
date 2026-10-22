@@ -19,7 +19,7 @@
  */
 import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import { extractVideoDurationFromNode } from "@nodaro/shared/video"
-import { MASK_COMPOSITE_BOUNDS, maskCompositeLeadHandle } from "@nodaro/shared/media"
+import { MASK_COMPOSITE_BOUNDS, maskCompositeLeadHandle, videoMaskBilledSeconds } from "@nodaro/shared/media"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
   renderLengthSec,
@@ -140,9 +140,30 @@ export function videoSfxClipSec(
   inputs: ReadonlyArray<{ targetHandle?: string | null }>,
   secs: ReadonlyArray<number | undefined>,
 ): number | undefined {
-  const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
-  const sec = videoWire >= 0 ? secs[videoWire] : secs.find((s) => s !== undefined)
+  const sec = secs[clipWireIndex(inputs, secs)]
   return sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC)
+}
+
+/** The wire whose clip a Video SFX / Video Mask is priced by: the `video` wire, else the first with a known length (-1: none). */
+function clipWireIndex(inputs: ReadonlyArray<{ targetHandle?: string | null }>, secs: ReadonlyArray<number | undefined>): number {
+  const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
+  return videoWire >= 0 ? videoWire : secs.findIndex((s) => s !== undefined)
+}
+
+/**
+ * The PRICED length, in seconds, a RUN estimate quotes a Video Mask at: the
+ * clip {@link videoSfxClipSec} reads, at the 30 fps basis billing charges by
+ * (`videoMaskBilledSeconds`) when that same wire carries a frame rate
+ * (`fpss`, in the order of `inputs`; {@link forwardedVideoFps}), else its own
+ * length, as before. `undefined` when no length is known: the longest row.
+ */
+export function videoMaskClipSec(
+  inputs: ReadonlyArray<{ targetHandle?: string | null }>,
+  secs: ReadonlyArray<number | undefined>,
+  fpss: ReadonlyArray<number | undefined>,
+): number | undefined {
+  const sec = videoSfxClipSec(inputs, secs)
+  return sec === undefined ? undefined : Math.ceil(videoMaskBilledSeconds(sec, fpss[clipWireIndex(inputs, secs)]))
 }
 
 /**
@@ -213,6 +234,63 @@ export function forwardedVideoLengthSec(origin: { readonly type?: string | null;
     return url === "" ? undefined : (recordedLengthOfUrl(data, url) ?? positiveSec(data?.duration))
   }
   return extractVideoDurationFromNode(data)
+}
+
+/**
+ * The frame rate of the video a source passes on, when the estimate can know
+ * it: an upload that declares one with the node (`fps`, a positive number —
+ * as a workflow written through the API may carry it beside `duration`),
+ * only while the node holds a file (`url`), as {@link forwardedVideoLengthSec}
+ * reads its length. `undefined` otherwise: the clip is priced at the 30 fps
+ * basis, as before. Only Video Mask is priced by it ({@link videoMaskClipSec}).
+ */
+export function forwardedVideoFps(origin: { readonly type?: string | null; readonly data?: unknown }): number | undefined {
+  if (!URL_OUTPUT_VIDEO_TYPES.has(origin.type ?? "")) return undefined
+  const data = origin.data as Record<string, unknown> | undefined
+  const url = typeof data?.url === "string" ? data.url.trim() : ""
+  return url === "" ? undefined : positiveSec(data?.fps)
+}
+
+/** The steps whose output keeps the frame rate of the video they are given. */
+const RATE_KEEPING_UTILITY_TYPES: ReadonlySet<string> = new Set(["trim-video", "loop-video"])
+
+/**
+ * The frame rate of the video on a wire when a RUN is estimated, or
+ * `undefined` when it is not known (the 30 fps basis): an upload's declared
+ * rate ({@link forwardedVideoFps}), carried through the steps that keep it, the
+ * way {@link runWireLengthSec} carries the length (decided 2026-10-21):
+ * - Trim and Loop: the rate of the video they are given (a cut or a repeat
+ *   never changes it).
+ * - Combine Videos: the rate its clips share, when every clip's is known and
+ *   they agree (the run conforms them to it, at most 60 fps —
+ *   `pickTargetFps`); clips at different or unknown rates: unknown.
+ * Any other step: unknown. Only Video Mask is priced by it
+ * ({@link videoMaskClipSec}); the editor's and the server's run estimates both
+ * read a wire through this one function.
+ */
+export function runWireFps(
+  sourceId: string | undefined,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  /** The steps already walked: a cycle stops at unknown. */
+  seen: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const origin = resolveGraphOrigin(
+    nodes.find((n) => n.id === sourceId),
+    nodes,
+    edges,
+  )
+  if (!origin) return undefined
+  const type = origin.type ?? ""
+  if (!RATE_KEEPING_UTILITY_TYPES.has(type) && type !== "combine-videos") return forwardedVideoFps(origin)
+  if (seen.has(origin.id)) return undefined
+  const walked = new Set(seen).add(origin.id)
+  const rates = edges.filter((e) => e.target === origin.id).map((e) => runWireFps(e.source, nodes, edges, walked))
+  if (RATE_KEEPING_UTILITY_TYPES.has(type)) return rates.find((r) => r !== undefined)
+  // Combine Videos: one shared rate, keyed to 0.001 as the run tallies them (29.97 = 30000/1001).
+  const first = rates[0]
+  if (first === undefined || rates.some((r) => r === undefined || Math.round(r * 1000) !== Math.round(first * 1000))) return undefined
+  return Math.min(60, Math.max(1, first))
 }
 
 /**
