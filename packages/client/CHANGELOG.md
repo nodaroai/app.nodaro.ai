@@ -1,5 +1,11 @@
 # @nodaro/sdk
 
+## 2.38.0
+
+### Minor Changes
+
+- d20adcd: Studio operation receipts type `detail` and the ops answers type `warningDetails`: the same lines as data (`StudioOpsText`, `{ template, vars }`), for a client that words them in the person's language. `summary` and `warnings` stay the English fallback.
+
 ## 2.37.0
 
 ### Minor Changes
