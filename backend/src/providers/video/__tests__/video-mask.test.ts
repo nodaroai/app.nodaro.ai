@@ -565,6 +565,33 @@ describe("chunking a long clip", () => {
       await rm(dir, { recursive: true, force: true })
     }
   }, 60_000)
+  it("cuts a clip whose picture starts a fraction of a frame late exactly on the shot's first frame (real ffmpeg)", async () => {
+    // A 23.976 fps clip whose picture starts at 0.041 s and its sound at 0 (trimmed film): red for frames 0–30, green from
+    // frame 31. A frame duplicated to fill the 0.041 s would move every cut one frame early, putting the
+    // last frame of the shot before the cut at the start of the next shot's chunk.
+    const dir = await mkdtemp(join(tmpdir(), "video-mask-split-late-"))
+    try {
+      const raw = join(dir, "raw.mp4"), src = join(dir, "src.mp4")
+      execFileSync("ffmpeg", ["-v", "error", "-y",
+        "-f", "lavfi", "-i", "color=c=red:s=160x90:r=24000/1001", "-f", "lavfi", "-i", "color=c=green:s=160x90:r=24000/1001",
+        "-filter_complex", "[0]trim=end_frame=31[a];[1]trim=end_frame=66,setpts=PTS-STARTPTS[b];[a][b]concat=n=2:v=1[v]", "-map", "[v]",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", raw])
+      // Its sound starts at 0, so the picture's 0.041 s stays in front of it.
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-itsoffset", "0.041", "-i", raw, "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+        "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-t", "4.1", src])
+      expect(await countVideoFrames(src)).toBe(97)
+      const paths = await splitMaskSource(src, dir, { width: 160, height: 90, frameRate: "24000/1001", durationSec: 97 * 1001 / 24000 }, planMaskChunks(97, 1800, [31]))
+      expect(await Promise.all(paths.map((p) => countVideoFrames(p)))).toEqual([31, 66])
+      const pixel = (file: string, n: number) => {
+        const rgb = execFileSync("ffmpeg", ["-v", "error", "-i", file, "-vf", `select=eq(n\\,${n})`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+        const i = (45 * 160 + 80) * 3
+        return rgb[i]! > 150 && rgb[i + 1]! < 100 ? "red" : rgb[i + 1]! > 100 && rgb[i]! < 100 ? "green" : "?"
+      }
+      expect([pixel(paths[0]!, 0), pixel(paths[0]!, 30), pixel(paths[1]!, 0), pixel(paths[1]!, 65)]).toEqual(["red", "red", "green", "green"])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
   it("gives longer clips longer kill budgets", () => {
     expect(videoMaskFfmpegTimeoutMs(300)).toBeGreaterThan(videoMaskFfmpegTimeoutMs(10))
   })

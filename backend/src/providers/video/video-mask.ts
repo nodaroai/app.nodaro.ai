@@ -135,7 +135,8 @@ export function planMaskChunks(totalFrames: number, chunkFrames: number = VIDEO_
  * a keyframe), so each chunk holds exactly its planned frames and their masks
  * join back frame for frame. An even grid (chunk i = frames [i·N, (i+1)·N))
  * forces every N-th frame; uneven boundaries (`perShot` cuts) are forced one
- * by one. Same size, same rate (the mask geometry is unchanged). Pure.
+ * by one. Same size, same rate (the mask geometry is unchanged), no frame
+ * added or dropped (`-fps_mode passthrough`). Pure.
  */
 export function buildSplitArgs(inputPath: string, outputPattern: string, chunks: readonly MaskChunk[]): string[] {
   const n = chunks.length > 1 ? chunks[1]!.startFrame : chunks[0]!.frames
@@ -145,6 +146,10 @@ export function buildSplitArgs(inputPath: string, outputPattern: string, chunks:
   return [
     "-y", "-i", inputPath, "-an",
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p",
+    // Frame for frame: the segment muxer would otherwise pad a picture that starts after the sound
+    // (0.041 s into a trimmed 23.976 fps clip) with a copy of its first frame, and every cut — counted
+    // in frames — would land one frame early, opening a shot's chunk on the shot before it.
+    "-fps_mode", "passthrough",
     "-force_key_frames", keyframes,
     "-f", "segment", "-segment_frames", starts.join(","), "-reset_timestamps", "1",
     outputPattern,
