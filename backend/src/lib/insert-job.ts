@@ -32,7 +32,13 @@ import { supabase } from "./supabase.js"
 import { insertWithIdempotencyKey, type IdempotentInsertResult } from "./idempotent-insert.js"
 import { jobSourceColumns } from "./job-source.js"
 import { extractMcpClient } from "./extract-mcp-client.js"
-import { JobSubmissionIdentityError, jobSubmissionColumns, jobSubmissionParentJobId, withoutJobSubmissionContext } from "./job-submission-context.js"
+import {
+  JobSubmissionIdentityError,
+  jobSubmissionColumns,
+  jobSubmissionParentJobId,
+  trustedProvenanceOf,
+  withoutJobSubmissionContext,
+} from "./job-submission-context.js"
 import type { BillingContext } from "./billing-context.js"
 import {
   ALL_POLICIES_ALLOWED_ID,
@@ -98,6 +104,11 @@ export function billingPairColumns(ctx: BillingContext | undefined): Record<stri
  * job is tied to the job that asked for it by the scope, never by a body field
  * (the DB trigger of migration 480 holds the parent to the same owner). With
  * no scope it adds nothing, so a caller's own column is left as it was.
+ *
+ * `source` / `source_detail` are the request's own surface — or, on an
+ * internal hop whose server-side scope names the ORIGINATING request's
+ * surface (the trend routes relaying a run), that one, so a browser's run
+ * does not read as `internal`. Caller columns still win over either.
  */
 export function withJobProvenance(
   req: FastifyRequest,
@@ -107,8 +118,9 @@ export function withJobProvenance(
 ): Record<string, unknown> {
   const mcpClient = extractMcpClient(req.body)
   const parentJobId = jobSubmissionParentJobId(req)
+  const originating = trustedProvenanceOf(req)?.source
   return {
-    ...jobSourceColumns(req),
+    ...(originating ? { source: originating.source, source_detail: originating.sourceDetail } : jobSourceColumns(req)),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
     ...withRequestOrigin(withoutSessionColumn(withoutJobSubmissionContext(row)), origin),
     ...billingPairColumns(req.billingContext),

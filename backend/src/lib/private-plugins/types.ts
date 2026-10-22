@@ -2325,13 +2325,28 @@ export interface PluginHttpToolkit {
    * hook reads. The route handling the outer request has a `userId` but no
    * JWT it could replay, which is the same situation the MCP tools are in.
    *
-   * `headers` is spread FIRST on purpose — a caller adds what its route needs
-   * (an `idempotency-key`, say) and cannot override the ones this member owns.
-   * The body cannot pick the identity either: a top-level `userId` in
-   * `payload` that is not `opts.userId` is replaced by it before the request
-   * is sent (one that already names the caller, or none at all, leaves the
-   * body untouched). `payload` must be a JSON-serializable object; a string,
-   * Buffer, typed array or stream is refused, because it could not be checked.
+   * `headers` adds what the reached route needs (an `idempotency-key`, say);
+   * a header that decides identity, billing or how the body is read is
+   * dropped, so only this member's typed options set those (see
+   * `PluginInternalRequestOptions.headers`). The body cannot pick the
+   * identity either: a top-level `userId` in `payload` that is not
+   * `opts.userId` is replaced by it before the request is sent (one that
+   * already names the caller, or none at all, leaves the body untouched).
+   * `payload` must be a JSON-serializable object; a string, Buffer, typed
+   * array, stream, FormData, URLSearchParams or Blob is refused, because it
+   * could not be checked. A refused option (that payload, or a `request` of
+   * another user) rejects the call with a 400 `PluginHttpError`
+   * (`validation_error`) and nothing is sent.
+   *
+   * Provenance is opt-in per call: the payload's `origin` / `sessionId` are
+   * IGNORED (a payload can carry records the plugin's caller controls). The
+   * job the reached route creates carries only what `opts.provenance`
+   * declares — fields the plugin validated itself — checked as a public
+   * request's are: `origin` against the slug rule (else a 400), `sessionId`
+   * as the caller's own session on the request's side of the workspace line,
+   * under the outer caller's grant (else the route's 404). See
+   * `PluginInternalRequestOptions.provenance` / `.request`; gate on
+   * `tk.capabilities?.internalRequestProvenance`.
    *
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
@@ -2350,7 +2365,9 @@ export interface PluginHttpToolkit {
    *
    * `parentJobId` is the id (a UUID) of the job the handler is running. It
    * travels only in the server-side submission scope, never on the wire, so
-   * the route's job insert can be tied to it.
+   * the route's job insert can be tied to it. A job with a parent is a step
+   * of that job, so it carries no `origin` and no session, whatever the
+   * payload or `provenance` says.
    *
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
@@ -2378,6 +2395,44 @@ export interface PluginInternalRequestOptions {
    * letter case: only the options above set them, and a body is sent as JSON.
    */
   headers?: Record<string, string>
+  /**
+   * The client provenance the job the reached route creates should carry —
+   * opt-in, per call: without it the job carries none, whatever the payload
+   * holds. Fill it only from fields the plugin validated (never by spreading
+   * an open record); every other key is ignored.
+   *  - `origin`: the calling client's origin slug (`input_data.origin`); not a
+   *    slug is the route's 400.
+   *  - `sessionId`: a generation session to file the job in. Applied only
+   *    with `request` (the host reads the outer caller's grant from it): the
+   *    caller's own session, on the request's side of the workspace line, and
+   *    `assets:write` for an OAuth app or an MCP session, else the route's 404.
+   *    Without `request`, or when the outer request's grant cannot be told
+   *    (an internal hop no server-side scope vouches for), it is not applied.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): an older host ignores it,
+   * so gate on `tk.capabilities?.internalRequestProvenance`.
+   */
+  provenance?: { origin?: string; sessionId?: string }
+  /**
+   * The plugin route's OWN request this call serves (the `req` its handler
+   * got), so a declared `provenance.sessionId` is held to the outer caller's
+   * grant. What holds:
+   *  - no option states a grant: the host reads it off this object, by the
+   *    credential its auth hook recorded (`authKind`, and an OAuth app's
+   *    `appAuthorization`), or, for an internal request, from the scope server
+   *    code attached to it (an MCP session's grant);
+   *  - only an object the host itself received counts (registered when the
+   *    request arrived); one merely shaped like a request, or one with no or
+   *    an unrecognised `authKind`, names no grant, and the session is not
+   *    applied;
+   *  - it must be the same user as `userId`, else the call is refused (a 400
+   *    `PluginHttpError`) before anything is sent.
+   * Which received request is passed is still the plugin's choice: the host
+   * cannot tell that it is the one this call serves rather than another
+   * request of the same user, so pass the handler's own `req`.
+   * ADDITIVE-OPTIONAL, as `provenance`.
+   */
+  request?: FastifyRequest
 }
 
 /** What `fastify.inject()` answers with, narrowed to what a caller reads. */
@@ -3175,6 +3230,13 @@ export interface PluginCapabilities {
    * characters itself unless this is true.
    */
   readonly voiceChangerProRespeakSlotArgs?: boolean
+  /**
+   * `tk.http.internalRequest` honours `PluginInternalRequestOptions.provenance`
+   * and `.request` (the declared client origin and generation session of the
+   * job the reached route creates). An older host ignores both silently: the
+   * job carries no origin and no session.
+   */
+  readonly internalRequestProvenance?: boolean
 }
 
 /**

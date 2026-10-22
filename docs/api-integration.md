@@ -4165,7 +4165,7 @@ Names, descriptions, slot labels and hints come in `?locale=` when it is a
 platform language, else your profile's language, else English.
 
 The estimate and run body is
-`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId?, previewJobId? }`:
+`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId?, origin?, previewJobId? }`:
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
@@ -4182,6 +4182,11 @@ The estimate and run body is
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
 - `projectId`: accepted, but not used by the run today.
+- `origin`: your app's slug (lowercase letters, digits and dashes), as on
+  any job: the run's job carries it (`input_data.origin`, what
+  `GET /v1/jobs?origin=` filters on), and records the surface you called
+  from. Not a slug is a `400` `validation_error`. Without it the run has no
+  origin.
 - `previewJobId` (a uuid): on a full run, the `jobId` of your own completed
   preview run of this trend. When the preview showed the clip needs its faces
   masked, the full run masks them from the start (and the quote says so)
@@ -4198,7 +4203,7 @@ anything is charged:
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body or a query does not validate, or the `cursor` is not one this list gave. |
+| `400` | `validation_error` | The body or a query does not validate, the `cursor` is not one this list gave, or (`/runs`) `origin` is not a slug. |
 | `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |

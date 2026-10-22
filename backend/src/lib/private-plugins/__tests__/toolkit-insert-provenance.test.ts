@@ -56,6 +56,7 @@ function makeReq(body: unknown, extra: Record<string, unknown> = {}): FastifyReq
     headers: {},
     body,
     userId: OWNER,
+    authKind: "jwt",
     log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
     ...extra,
   } as unknown as FastifyRequest

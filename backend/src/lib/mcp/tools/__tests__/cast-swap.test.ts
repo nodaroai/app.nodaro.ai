@@ -13,13 +13,29 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
  *    without quoting again;
  *  - it is registered only on Nodaro Cloud (`hasCredits()`), and only for a
  *    session that may execute;
- *  - a router 404 (the plugin is not served here) reads `not_available`.
+ *  - a router 404 (the plugin is not served here) reads `not_available`;
+ *  - `session_id` reaches the job: the route files it in the caller's own
+ *    session, and refuses one that is not theirs as it would a public request.
  *
  * The numbers are neutral on purpose: this repo is publicly mirrored.
  */
 const h = vi.hoisted(() => ({ credits: true }))
+const db = vi.hoisted(() => ({ ownSession: "" }))
 
-vi.mock("../../../supabase.js", () => ({ supabase: { from: vi.fn() } }))
+vi.mock("../../../supabase.js", async () => {
+  const { makeFakeFrom, has } = await import("../../../__tests__/fake-supabase-query.js")
+  return {
+    supabase: {
+      // Only the caller's own session (user u1, personal side) is found.
+      from: makeFakeFrom([], (q) => ({
+        data: q.table === "generation_sessions" && has(q, "eq", "id", db.ownSession) && has(q, "eq", "user_id", "u1") && has(q, "is", "workspace_id", null)
+          ? { id: db.ownSession }
+          : null,
+        error: null,
+      })),
+    },
+  }
+})
 vi.mock("../../../config.js", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>
   return { ...orig, hasCredits: () => h.credits }
@@ -27,6 +43,9 @@ vi.mock("../../../config.js", async (importOriginal) => {
 
 const { registerCastSwapTools } = await import("../cast-swap.js")
 const { buildMcpServer } = await import("../../server.js")
+const { resolveRequestSession } = await import("../../../generation-session-scope.js")
+const { sendInternalError } = await import("../../../http-errors.js")
+const { config } = await import("../../../config.js")
 
 interface InjectCall {
   method?: string
@@ -294,6 +313,63 @@ describe("cast_swap", () => {
     const { fastify } = stubFastify({})
     const names = (await listTools(serverWith(fastify, ["workflows:read"]))).map((t) => t.name)
     expect(names).not.toContain("cast_swap")
+  })
+})
+
+describe("cast_swap's session_id reaches the job", () => {
+  const OWN = "00000000-0000-4000-8000-0000000005e1"
+  const FOREIGN = "00000000-0000-4000-8000-0000000005e2"
+  db.ownSession = OWN
+
+  /** A real app: the internal hop as the auth hook sets it, and a /v1/cast-swap that files its job through the funnel's session read. */
+  async function realApp(seen: { sessionId?: string | null }) {
+    const app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      if (req.headers["x-internal-orchestrator-secret"] === config.INTERNAL_ORCHESTRATOR_SECRET) {
+        req.authKind = "internal"
+        req.isInternalCall = true
+        req.userId = req.headers["x-internal-user-id"] as string
+      }
+    })
+    app.post("/v1/cast-swap", async (req, reply) => {
+      try {
+        seen.sessionId = await resolveRequestSession(req)
+      } catch (err) {
+        return sendInternalError(reply, req, err, "cast swap")
+      }
+      return reply.status(202).send({ jobId: "job-9" })
+    })
+    await app.ready()
+    return app
+  }
+
+  it("files the run in the caller's own session", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: OWN, confirm: true })
+    expect(res.isError).toBeFalsy()
+    expect(seen.sessionId).toBe(OWN)
+    await app.close()
+  })
+
+  it("a session that is not the caller's is the route's 404, as a tool error", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: FOREIGN, confirm: true })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("not_found")
+    expect(seen.sessionId).toBeUndefined()
+    await app.close()
+  })
+
+  it("without session_id the run is filed in none", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const { session_id: _s, ...noSession } = ARGS
+    const res = await callTool(serverWith(app), "cast_swap", { ...noSession, confirm: true })
+    expect(res.isError).toBeFalsy()
+    expect(seen.sessionId).toBeNull()
+    await app.close()
   })
 })
 

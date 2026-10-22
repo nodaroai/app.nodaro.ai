@@ -30,6 +30,12 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.voiceChangerProRespeakSlotArgs).toBe(true)
   })
 
+  it("advertises that internalRequest honours a declared provenance", () => {
+    // An older host ignores `provenance` / `request` silently: the job then
+    // carries no origin and no session, so a plugin gates on this flag.
+    expect(buildToolkit().capabilities?.internalRequestProvenance).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

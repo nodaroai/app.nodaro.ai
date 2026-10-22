@@ -145,7 +145,7 @@ import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
 import { redactPrivateJobOutput } from "../public-job-data.js"
-import { assertParentJobId, withJobSubmissionContext } from "../job-submission-context.js"
+import { assertParentJobId, hostRequestGrantOf, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
@@ -1361,7 +1361,18 @@ async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<s
  * ({@link callerHeaders}): those come only from the typed options, and a body
  * always goes out as JSON. The payload's `userId` is pinned to `opts.userId`
  * ({@link pinPayloadToCaller}), so the body cannot pick the identity either.
- * The request acts as `opts.userId` and nobody else.
+ * The request acts as `opts.userId` and nobody else. (MCP's `mcpInject` and
+ * the trend routes' `engineRequest` do not pin the body: on those hops a body
+ * `userId` still decides the identity, so server code composes those bodies
+ * and never relays a caller's `userId`.)
+ *
+ * Provenance is opt-in ({@link pluginSubmissionScope}): the job the route
+ * creates carries only the `origin` / `sessionId` declared in
+ * `opts.provenance`, held to the outer caller's grant; a payload's are
+ * ignored, and a `workerRequest` child (a parent job) carries neither.
+ *
+ * A refusal of the options themselves (a payload that cannot be checked, a
+ * `request` of another user) is a 400 `PluginHttpError`, and nothing is sent.
  */
 
 /**
@@ -1381,12 +1392,15 @@ async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<s
  * Only a JSON-serializable object can be checked. A string, a Buffer, a typed
  * array or a stream is sent raw and parsed by whatever content type rides with
  * it (JSON, form-encoded), so it is refused rather than sent unchecked; so is a
- * FormData, URLSearchParams or Blob, which would otherwise go out as `{}`.
+ * FormData, URLSearchParams or Blob, which would otherwise go out as `{}`. The
+ * refusal is a 400 `PluginHttpError` (`validation_error`), shaped like the
+ * toolkit's other refusals of a bad option.
  */
 export function pinPayloadToCaller(payload: object, userId: string): object {
-  const refuse = () => new Error(
-    "tk.http.internalRequest: payload must be a plain object (a string, Buffer, typed array or stream cannot be checked for the caller's identity)",
-  )
+  const refuse = () => {
+    const message = "tk.http.internalRequest: payload must be a plain object (a string, Buffer, typed array or stream cannot be checked for the caller's identity)"
+    return new PluginHttpError(400, { error: { code: "validation_error", message } }, new Error(message))
+  }
   if (
     typeof payload !== "object" || payload === null || Buffer.isBuffer(payload) || ArrayBuffer.isView(payload)
     || payload instanceof ArrayBuffer || typeof (payload as { pipe?: unknown }).pipe === "function"
@@ -1428,18 +1442,10 @@ export function callerHeaders(headers: Record<string, string> | undefined): Reco
   )
 }
 
-function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
-  let payload: object | undefined
-  try {
-    payload = opts.payload !== undefined ? pinPayloadToCaller(opts.payload, opts.userId) : undefined
-  } catch (err) {
-    return Promise.reject(err)
-  }
-  // `trustedPluginCaller`: plugin code is trusted, so a route it reaches may let
-  // it name its own child job as a source (mayUseChildJobAsSource). Set here
-  // and only here, after the plugin's options, so no option can unset it; MCP's
-  // `mcpInject` and the trend routes' `engineRequest` never set it.
-  return withJobSubmissionContext({ ...opts, trustedPluginCaller: true }, () => app.inject({
+async function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions & { parentJobId?: string }) {
+  // Both checks run before anything is sent; a throw here is the call's rejection.
+  const payload = opts.payload !== undefined ? pinPayloadToCaller(opts.payload, opts.userId) : undefined
+  return withJobSubmissionContext(pluginSubmissionScope(opts), () => app.inject({
     method: opts.method,
     url: opts.url,
     headers: {
@@ -1453,6 +1459,49 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
     },
     ...(payload !== undefined ? { payload } : {}),
   }))
+}
+
+/**
+ * The submission scope of a plugin's internal request, built field by field
+ * from what the contract declares — never a spread of the plugin's options,
+ * so no undeclared key (a `source`, a `grant`, a trust flag) reaches it.
+ *
+ * `trustedPluginCaller` is pinned here and only here: plugin code is trusted,
+ * so a route it reaches may let it name its own child job as a source
+ * (`mayUseChildJobAsSource`). MCP's `mcpInject` and the trend routes'
+ * `engineRequest` never set it.
+ *
+ * The outer caller's grant is derived from the plugin route's own `request`
+ * (`hostRequestGrantOf`, read BEFORE the new scope replaces the outer one):
+ * only a request object the host itself received, by the credential its auth
+ * hook recorded, names one. It is carried on, so the reached route holds the
+ * caller to it. A declared `sessionId` rides only when that grant is known; a
+ * child job (a parent) carries no provenance at all.
+ */
+function pluginSubmissionScope(opts: PluginInternalRequestOptions & { parentJobId?: string }) {
+  const request = opts.request
+  if (request && request.userId !== opts.userId) {
+    // A bad option, refused as the toolkit refuses a request: shaped to be
+    // sent (a 400), never a 500 — and nothing is sent.
+    const message = "internalRequest: `request` belongs to another user than `userId`"
+    throw new PluginHttpError(400, { error: { code: "validation_error", message } }, new Error(message))
+  }
+  const grant = request ? hostRequestGrantOf(request) : undefined
+  const declared = opts.parentJobId === undefined ? opts.provenance : undefined
+  const origin = typeof declared?.origin === "string" ? declared.origin : undefined
+  const sessionId = grant !== undefined && typeof declared?.sessionId === "string" ? declared.sessionId : undefined
+  return {
+    userId: opts.userId,
+    method: opts.method,
+    url: opts.url,
+    ...(opts.jobSubmission ? { jobSubmission: opts.jobSubmission } : {}),
+    ...(opts.parentJobId !== undefined ? { parentJobId: opts.parentJobId } : {}),
+    trustedPluginCaller: true,
+    ...(origin !== undefined || sessionId !== undefined
+      ? { provenance: { ...(origin !== undefined ? { origin } : {}), ...(sessionId !== undefined ? { sessionId } : {}) } }
+      : {}),
+    ...(grant !== undefined ? { grant } : {}),
+  }
 }
 
 /**
@@ -1482,6 +1531,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   audioFxLossless: true,
   seedanceDraft: true,
   voiceChangerProRespeakSlotArgs: true,
+  internalRequestProvenance: true,
 })
 
 export interface BuildToolkitOptions {

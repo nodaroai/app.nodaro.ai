@@ -30,10 +30,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
 import { supabase } from "../../lib/supabase.js"
-import { hasScope, requireScope } from "../../lib/scopes.js"
+import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { afterKeyset, decodeCursor, encodeCursor, findOwnSession } from "../../lib/generation-sessions.js"
+import { resolveRequestOrigin } from "../../lib/client-origin-scope.js"
+import { callerGrantOf, grantMayWriteSessions } from "../../lib/job-submission-context.js"
+import { deriveJobSource } from "../../lib/job-source.js"
 import {
   InvalidTrendCursorError,
   favoriteIds,
@@ -472,13 +475,18 @@ export async function trendRoutes(app: FastifyInstance) {
         const prepared = await prepareRun(req, reply)
         if (!prepared) return reply
         const { composed, sessionId } = prepared
+        // The run's job carries the caller's client origin (checked as any
+        // job's: not a slug is a 400 before anything runs) and surface.
+        const origin = resolveRequestOrigin(req)
 
-        // The internal hop skips the job funnel's own session check, so the
-        // session is checked here: the caller's own (filing a job in it is a
-        // session write — `assets:write` for an OAuth app), else a 404.
+        // A run is filed in no session yet, but the session is still checked
+        // here, so a client that sends one learns now that it may not use it:
+        // the caller's own (filing a job in it is a session write —
+        // `assets:write` for an OAuth app, and for an MCP session, whose grant
+        // reaches this internal hop through `mcpInject`'s scope), else a 404.
         if (sessionId) {
           if (!UUID_RE.test(sessionId)) return err(reply, 404, "not_found", "Session not found")
-          if (req.appAuthorization && !hasScope(req.appAuthorization.scopes, "assets:write")) {
+          if (!grantMayWriteSessions(callerGrantOf(req))) {
             return err(reply, 404, "not_found", "Session not found")
           }
           const own = await findOwnSession(req, req.userId, sessionId)
@@ -494,8 +502,9 @@ export async function trendRoutes(app: FastifyInstance) {
           app,
           req,
           "/v1/cast-swap",
-          { ...composed.body, ...(sessionId ? { sessionId } : {}), origin: "trends" },
+          composed.body,
           typeof key === "string" && key ? { "idempotency-key": key } : {},
+          { ...(origin ? { origin } : {}), source: deriveJobSource(req) },
         )
         if (res.statusCode < 200 || res.statusCode >= 300) return publicRefusal(reply, res)
         const jobId = jobIdOf(res.body)

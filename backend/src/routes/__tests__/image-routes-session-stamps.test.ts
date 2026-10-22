@@ -97,7 +97,12 @@ beforeEach(async () => {
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const body = req.body as Record<string, unknown> | undefined
-    if (typeof body?.userId === "string") req.userId = body.userId
+    if (typeof body?.userId === "string") {
+      req.userId = body.userId
+      // As the auth hook leaves a signed-in request: a request with no
+      // credential kind names no grant, and may not file a session.
+      req.authKind = "jwt"
+    }
   })
   await app.register(async (instance) => {
     await imageToImageRoutes(instance)

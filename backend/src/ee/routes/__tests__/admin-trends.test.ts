@@ -188,6 +188,8 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => {
 
 import { adminTrendsRoutes } from "../admin-trends.js"
 import { trendRoutes } from "../trends.js"
+import { resolveRequestOrigin } from "../../../lib/client-origin-scope.js"
+import { resolveRequestSession } from "../../../lib/generation-session-scope.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
@@ -292,7 +294,7 @@ const world = {
 }
 
 const engine = {
-  calls: [] as Array<{ url: string; headers: Record<string, unknown>; body: Record<string, unknown> }>,
+  calls: [] as Array<{ url: string; headers: Record<string, unknown>; body: Record<string, unknown>; stamps?: { origin: string | null; sessionId: string | null } }>,
 }
 
 function respond(q: RecordedQuery): QueryResult {
@@ -352,7 +354,12 @@ beforeEach(async () => {
     if (typeof user === "string") req.userId = user
   })
   app.post("/v1/cast-swap", async (req, reply) => {
-    engine.calls.push({ url: "/v1/cast-swap", headers: { ...req.headers }, body: req.body as Record<string, unknown> })
+    engine.calls.push({
+      url: "/v1/cast-swap",
+      headers: { ...req.headers },
+      body: req.body as Record<string, unknown>,
+      stamps: { origin: resolveRequestOrigin(req), sessionId: await resolveRequestSession(req) },
+    })
     return reply.status(202).send({ jobId: RUN })
   })
   await app.register(trendRoutes)
@@ -889,7 +896,10 @@ describe("test runs", () => {
     expect(engine.calls).toHaveLength(1)
     const { headers, body } = engine.calls[0]!
     expect(headers["x-internal-user-id"]).toBe(ADMIN)
-    expect(body.origin).toBe("trends-admin")
+    // The origin rides the server-side scope, never the relayed body.
+    expect(body).not.toHaveProperty("origin")
+    expect(body).not.toHaveProperty("sessionId")
+    expect(engine.calls[0]!.stamps).toEqual({ origin: "trends-admin", sessionId: null })
     expect(body.postPrompt).toBe("DRAFT-PROMPT v2")
     expect(body.preview).toBe(true)
     expect((body.trendRun as { display: { trend: unknown } }).display.trend).toEqual({ id: T1, slug: "neon-dance", version: 2, name: "Neon Dance II" })

@@ -74,6 +74,13 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
 })
 
 import { trendRoutes } from "../trends.js"
+import { resolveRequestOrigin } from "../../../lib/client-origin-scope.js"
+import { resolveRequestSession } from "../../../lib/generation-session-scope.js"
+import { withJobProvenance } from "../../../lib/insert-job.js"
+import { callerGrantOf } from "../../../lib/job-submission-context.js"
+import { mcpInject } from "../../../lib/mcp/internal-request.js"
+import { newSession } from "../../../lib/mcp/session.js"
+import type { Scope } from "../../../lib/scopes.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 
 // ── fixtures ───────────────────────────────────────────────────────────────
@@ -146,8 +153,11 @@ const CAST_SWAP_ALL = {
   trendPrePrompt: true,
 }
 
+/** What the job funnel would stamp on the engine's job for this request. */
+interface Stamps { origin: string | null; sessionId: string | null; source: unknown; sourceDetail: unknown; grant: unknown }
+
 const engine = {
-  calls: [] as Array<{ url: string; headers: Record<string, unknown>; body: Record<string, unknown> }>,
+  calls: [] as Array<{ url: string; headers: Record<string, unknown>; body: Record<string, unknown>; stamps?: Stamps }>,
   runStatus: 202,
   runBody: { jobId: "00000000-0000-4000-8000-0000000000j1" } as unknown,
   estimateStatus: 200,
@@ -185,8 +195,10 @@ beforeEach(async () => {
     const user = req.headers["x-user-id"]
     if (typeof user === "string") req.userId = user
     const kind = req.headers["x-auth-kind"]
-    if (typeof kind === "string") req.authKind = kind as never
     const scopes = req.headers["x-app-scopes"]
+    // As the auth hook leaves a request: a signed-in one by default, an OAuth
+    // app's when it carries scopes.
+    if (typeof user === "string") req.authKind = typeof kind === "string" ? kind as never : typeof scopes === "string" ? "app_token" : "jwt"
     if (typeof scopes === "string") req.appAuthorization = { scopes: scopes.split(" ") } as never
   })
   const record = (url: string) => (req: { headers: Record<string, unknown>; body: unknown }) => {
@@ -194,6 +206,14 @@ beforeEach(async () => {
   }
   app.post("/v1/cast-swap", async (req, reply) => {
     record("/v1/cast-swap")(req)
+    const row = withJobProvenance(req, {})
+    engine.calls[engine.calls.length - 1]!.stamps = {
+      origin: resolveRequestOrigin(req),
+      sessionId: await resolveRequestSession(req),
+      source: row.source,
+      sourceDetail: row.source_detail,
+      grant: callerGrantOf(req),
+    }
     return reply.status(engine.runStatus).send(engine.runBody)
   })
   app.post("/v1/cast-swap/estimate", async (req, reply) => {
@@ -413,8 +433,11 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(call.headers["x-internal-user-id"]).toBe(USER)
     expect(call.headers["idempotency-key"]).toBe("tools-run-42")
     expect(call.headers["content-type"]).toBe("application/json")
-    expect(call.body.origin).toBe("trends")
-    expect(call.body.sessionId).toBe(SESSION)
+    // Provenance never rides the relayed body: the job's origin and session
+    // come from the server-side scope (a run is filed in no session).
+    expect(call.body).not.toHaveProperty("origin")
+    expect(call.body).not.toHaveProperty("sessionId")
+    expect(call.stamps).toMatchObject({ origin: null, sessionId: null })
     expect(call.body).not.toHaveProperty("userId")
     // The engine gets the hidden parts; the display is the public record.
     expect(call.body.videoUrl).toBe(SOURCE)
@@ -523,6 +546,30 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(engine.calls).toHaveLength(0)
   })
 
+  it("the run's job carries the calling client's origin and surface, and no session", async () => {
+    db.respond = (q) => (q.table === "generation_sessions" ? { data: { id: SESSION }, error: null } : { data: null, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/trends/neon-dance/runs",
+      headers: as({ "x-auth-kind": "jwt", origin: "https://tools.nodaro.ai" }),
+      payload: { ...RUN_BODY, origin: "trends-app", sessionId: SESSION },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(engine.calls[0]!.stamps).toEqual({ origin: "trends-app", sessionId: null, source: "web", sourceDetail: "tools.nodaro.ai", grant: null })
+    // The session was still checked (a session you may not use is a 404).
+    expect(db.log.filter((q) => q.table === "generation_sessions")).toHaveLength(1)
+  })
+
+  it("an origin that is not a slug is a 400, with no dispatch", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(),
+      payload: { ...RUN_BODY, origin: "Not A Slug" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(engine.calls).toHaveLength(0)
+  })
+
   it("a session that is not the caller's is a 404, with no dispatch", async () => {
     db.respond = () => ({ data: null, error: null })
     const res = await app.inject({
@@ -551,6 +598,47 @@ describe("POST /v1/trends/:slug/runs", () => {
     })
     expect(res.statusCode).toBe(404)
     expect(engine.calls).toHaveLength(0)
+  })
+
+  it("the caller's grant rides the hop to Cast Swap (an OAuth app's scopes; none for a first-party caller)", async () => {
+    await app.inject({
+      method: "POST", url: "/v1/trends/neon-dance/runs", headers: as({ "x-app-scopes": "workflows:execute assets:write" }),
+      payload: RUN_BODY,
+    })
+    await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })
+    expect(engine.calls.map((c) => c.stamps?.grant)).toEqual([["workflows:execute", "assets:write"], null])
+  })
+
+  describe("over MCP (run_trend): the MCP session's grant decides, as an OAuth app's does", () => {
+    const viaMcp = (scopes: Scope[]) =>
+      mcpInject(app, newSession({ userId: USER, scopes, clientName: "test" }), {
+        method: "POST", url: "/v1/trends/neon-dance/runs", payload: { ...RUN_BODY, sessionId: SESSION },
+      })
+    beforeEach(() => {
+      db.respond = (q) => (q.table === "generation_sessions" ? { data: { id: SESSION }, error: null } : { data: null, error: null })
+    })
+
+    it("a session without assets:write is a 404, with no dispatch", async () => {
+      const res = await viaMcp(["workflows:execute"])
+      expect(res.statusCode).toBe(404)
+      expect(engine.calls).toHaveLength(0)
+    })
+
+    it("with assets:write the run starts, and the grant rides on to Cast Swap", async () => {
+      const res = await viaMcp(["workflows:execute", "assets:write"])
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.stamps?.grant).toEqual(["workflows:execute", "assets:write"])
+    })
+
+    it("an internal call no server-side scope vouches for cannot pass a session (404)", async () => {
+      const res = await app.inject({
+        method: "POST", url: "/v1/trends/neon-dance/runs",
+        headers: { "x-internal-orchestrator-secret": SECRET, "x-internal-user-id": USER },
+        payload: { ...RUN_BODY, sessionId: SESSION },
+      })
+      expect(res.statusCode).toBe(404)
+      expect(engine.calls).toHaveLength(0)
+    })
   })
 
   it("passes a credit refusal (402) on as the engine gave it", async () => {

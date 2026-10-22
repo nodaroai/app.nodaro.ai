@@ -56,6 +56,9 @@ function makeReq(body: unknown, extra: Partial<FastifyRequest> = {}): FastifyReq
     headers: {},
     body,
     userId: OWNER,
+    // As the auth hook leaves a signed-in request (an unrecognised or absent
+    // credential names no grant, and may not file a session).
+    authKind: "jwt",
     log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
     ...extra,
   } as unknown as FastifyRequest
@@ -137,10 +140,10 @@ describe("resolveRequestSession", () => {
   })
 
   it("refuses an OAuth app without assets:write, before asking the database", async () => {
-    const req = makeReq({ sessionId: SESSION }, { appAuthorization: { scopes: ["jobs:read"] } } as never)
+    const req = makeReq({ sessionId: SESSION }, { authKind: "app_token", appAuthorization: { scopes: ["jobs:read"] } } as never)
     await expect(resolveRequestSession(req)).rejects.toBeInstanceOf(GenerationSessionNotFoundError)
     expect(sessionLookups()).toHaveLength(0)
-    const ok = makeReq({ sessionId: SESSION }, { appAuthorization: { scopes: ["assets:write"] } } as never)
+    const ok = makeReq({ sessionId: SESSION }, { authKind: "app_token", appAuthorization: { scopes: ["assets:write"] } } as never)
     await expect(resolveRequestSession(ok)).resolves.toBe(SESSION)
   })
 

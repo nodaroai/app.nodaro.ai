@@ -16,7 +16,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { config } from "../../../lib/config.js"
 import { supabase } from "../../../lib/supabase.js"
-import { withJobSubmissionContext } from "../../../lib/job-submission-context.js"
+import { callerGrantOf, withJobSubmissionContext, type TrustedJobProvenance } from "../../../lib/job-submission-context.js"
 import { resolveWebSurfaceFlag } from "../../../middleware/credit-guard.js"
 import { redactPrivateJobData } from "../../../lib/public-job-data.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../../lib/job-credit-status.js"
@@ -314,6 +314,14 @@ export async function followPreviewMasking(
  * read false on the internal hop (no Origin). The pool-aware flag replaces a
  * hard `paygSurfaceGuard` block here, as on 3d-scene's paid run.
  *
+ * `provenance` is what the run's job carries of the caller's request: its
+ * client `origin` and its surface (`source` / `source_detail`). It travels in
+ * the server-side submission scope, never in the payload (the internal hop
+ * ignores a body `origin` / `sessionId`). A trend run is filed in no session.
+ * The caller's grant (`callerGrantOf`: an OAuth app's or an MCP session's
+ * scopes) rides the same scope, so the engine route and the requests it makes
+ * hold the caller to it.
+ *
  * STANDING RULE: `payload` is a body the platform composed (`composeTrendRun`),
  * never a user-supplied body passed through. Any internal relay of a caller's
  * body to `/v1/cast-swap` must never forward `trendRun`: that field makes a
@@ -326,10 +334,19 @@ export async function engineRequest(
   url: string,
   payload: object,
   headers: Record<string, string> = {},
+  provenance?: Pick<TrustedJobProvenance, "origin" | "source">,
 ) {
   const userId = req.userId!
   const webFreeMode = await resolveWebSurfaceFlag(req)
-  return withJobSubmissionContext({ userId, method: "POST", url }, () =>
+  const carried = provenance
+    ? { ...(provenance.origin ? { origin: provenance.origin } : {}), ...(provenance.source ? { source: provenance.source } : {}) }
+    : undefined
+  const grant = callerGrantOf(req)
+  return withJobSubmissionContext({
+    userId, method: "POST", url,
+    ...(carried ? { provenance: carried } : {}),
+    ...(grant !== undefined ? { grant } : {}),
+  }, () =>
     app.inject({
       method: "POST",
       url,

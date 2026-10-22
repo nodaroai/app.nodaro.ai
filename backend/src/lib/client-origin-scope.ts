@@ -16,12 +16,18 @@
  *  - a value that is not a slug is refused (400 `validation_error`) before any
  *    row exists — the same answer the routes that also declare the field give
  *    from their own schema, so every lane refuses it alike;
- *  - the orchestrator's own hops carry none: a workflow run is not a client
- *    app's request, whatever a node's data holds.
+ *  - an internal request carries one only when trusted server code attached it
+ *    to that very request (`trustedProvenanceOf`): the trend routes' scope,
+ *    or the `provenance` option a plugin declares on `tk.http.internalRequest`
+ *    (an origin it validated). An internal request's BODY is never read for
+ *    it — not the orchestrator's (a workflow run is not a client app's
+ *    request, whatever a node's data holds), not an MCP relay's, and not a
+ *    plugin's payload, which can carry records its caller controls.
  */
 import type { FastifyRequest } from "fastify"
 import { clientOriginSchema } from "./client-origin-schema.js"
 import { InvalidClientOriginError } from "./client-origin-error.js"
+import { trustedProvenanceOf } from "./job-submission-context.js"
 
 export { InvalidClientOriginError, isInvalidClientOrigin } from "./client-origin-error.js"
 
@@ -37,9 +43,13 @@ export function rawOriginOf(body: unknown): unknown {
  * THROWS `InvalidClientOriginError` for a value that is not a slug.
  */
 export function resolveRequestOrigin(req: FastifyRequest): string | null {
-  if (req.authKind === "internal") return null
-  const raw = rawOriginOf(req.body)
-  if (raw === undefined) return null
+  let raw: unknown
+  if (req.authKind === "internal") {
+    raw = trustedProvenanceOf(req)?.origin
+  } else {
+    raw = rawOriginOf(req.body)
+  }
+  if (raw === undefined || raw === null || raw === "") return null
   const parsed = clientOriginSchema.safeParse(raw)
   if (!parsed.success) throw new InvalidClientOriginError()
   return parsed.data

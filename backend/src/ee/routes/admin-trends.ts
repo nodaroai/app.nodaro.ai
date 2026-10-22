@@ -44,6 +44,7 @@ import { supabase } from "../../lib/supabase.js"
 import { ADMIN_ROLES, checkIsAdmin } from "../../lib/admin-check.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { findOwnSession } from "../../lib/generation-sessions.js"
+import { deriveJobSource } from "../../lib/job-source.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
 import {
@@ -489,8 +490,11 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         app,
         req,
         "/v1/cast-swap",
-        { ...composed.body, ...(sessionId ? { sessionId } : {}), origin: "trends-admin" },
+        composed.body,
         typeof key === "string" && key ? { "idempotency-key": key } : {},
+        // A test run is labelled as one; like a public run it is filed in no
+        // session (the session above is checked, not applied).
+        { origin: "trends-admin", source: deriveJobSource(req) },
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       const jobId = jobIdOf(res.body)

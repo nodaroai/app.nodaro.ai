@@ -40,6 +40,12 @@ afterEach(async () => {
 })
 
 const tk = () => buildToolkit({ workerApp: async () => app })
+/** A payload that cannot be checked is refused like any bad option: a 400 PluginHttpError, nothing sent. */
+const REFUSED = {
+  name: "PluginHttpError",
+  statusCode: 400,
+  body: { error: { code: "validation_error", message: expect.stringMatching(/plain object/) } },
+}
 
 async function ranAs(payload: unknown) {
   const res = await tk().http.internalRequest!(app, {
@@ -92,7 +98,7 @@ describe("tk.http.internalRequest pins the caller's identity", () => {
       await expect(tk().http.internalRequest!(app, {
         method: "POST", url: "/v1/echo", userId: CALLER, payload: payload as object,
         headers: { "content-type": "application/json" },
-      })).rejects.toThrow(/plain object/)
+      })).rejects.toMatchObject(REFUSED)
     }
   })
 
@@ -239,7 +245,7 @@ describe("tk.http.internalRequest owns how the body is read and who it acts as",
     for (const payload of [form, new URLSearchParams({ userId: VICTIM }), new Blob([JSON.stringify({ userId: VICTIM })])]) {
       await expect(tk().http.internalRequest!(app, {
         method: "POST", url: "/v1/echo", userId: CALLER, payload,
-      })).rejects.toThrow(/plain object/)
+      })).rejects.toMatchObject(REFUSED)
     }
   })
 })

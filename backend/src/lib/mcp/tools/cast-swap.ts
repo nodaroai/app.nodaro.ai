@@ -263,6 +263,9 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         url: "/v1/cast-swap",
         payload,
         headers: idempotencyHeaders(args.client_request_id),
+        // The session reaches the job through the server-side scope (the
+        // route ignores a relayed body's `sessionId`).
+        ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
       })
       if (res.statusCode >= 400) return refusal(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
