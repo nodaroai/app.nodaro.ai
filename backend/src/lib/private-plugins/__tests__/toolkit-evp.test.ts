@@ -171,6 +171,33 @@ describe("toolkit.ts — edit-video-pro members", () => {
       })
       expect(mockProbeVideoSource).toHaveBeenCalledWith("https://src.example.com/c.mp4")
     })
+
+    it("passes the clip's frame rate through when the probe reports one", async () => {
+      mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 12.5, fps: 23.976 })
+
+      await expect(tk.ffmpeg.probeVideoMeta("https://src.example.com/c.mp4")).resolves.toEqual({
+        width: 1920,
+        height: 1080,
+        durationSec: 12.5,
+        fps: 23.976,
+      })
+    })
+
+    it("leaves fps absent when the rate is unknown", async () => {
+      mockProbeVideoSource.mockResolvedValue({ width: 640, height: 360, durationSeconds: 4 })
+
+      const meta = await tk.ffmpeg.probeVideoMeta("https://src.example.com/vfr.mp4")
+      expect(meta).toEqual({ width: 640, height: 360, durationSec: 4 })
+      expect(meta).not.toHaveProperty("fps")
+    })
+
+    it.each([0, -25, Number.NaN, Number.POSITIVE_INFINITY])("drops an unusable frame rate (%s)", async (fps) => {
+      mockProbeVideoSource.mockResolvedValue({ width: 640, height: 360, durationSeconds: 4, fps })
+
+      const meta = await tk.ffmpeg.probeVideoMeta("https://src.example.com/odd.mp4")
+      expect(meta).toEqual({ width: 640, height: 360, durationSec: 4 })
+      expect(meta).not.toHaveProperty("fps")
+    })
   })
 
   describe("ffmpeg.combineVideos", () => {

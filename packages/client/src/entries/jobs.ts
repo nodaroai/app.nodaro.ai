@@ -23,6 +23,7 @@ export type {
   SafetyBlockHint,
   PolicyBlockHint,
   CreditsHint,
+  InputRefusedHint,
   CreditStatus,
   JobRating,
   JobRatingFilter,

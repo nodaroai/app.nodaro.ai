@@ -694,8 +694,11 @@ const job = await client.jobs.get(jobId)
 ```
 
 Your past runs, with their pictures and results, come back from
-`client.trends.runs({ trend: trend.slug })`. See
-[SDK Reference → client.trends](./sdk-reference.md#clienttrends).
+`client.trends.runs({ trend: trend.slug })`, and one of them from
+`client.trends.getRun(jobId)`; a draft's newest Full Quality try is a run of
+its own there (`fullQualityOf` names the draft). `client.trends.tags()` lists
+the catalog's tags with their labels in your language, to filter `list({ tag })`
+by. See [SDK Reference → client.trends](./sdk-reference.md#clienttrends).
 
 ### Discover available nodes
 

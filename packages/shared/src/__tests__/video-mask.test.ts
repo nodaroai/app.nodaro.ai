@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import {
+  VIDEO_MASK_DEFAULTS,
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
   resolveVideoMaskProvider,
+  resolveVideoMaskZone,
   videoMaskBilledSeconds,
   videoMaskCreditId,
   videoMaskCreditIds,
@@ -62,6 +64,31 @@ describe("Video Mask pricing", () => {
     expect(resolveVideoMaskProvider("sam-3.1")).toBe("sam-3.1")
     expect(resolveVideoMaskProvider("sam-9")).toBe("sam-3.1")
     expect(resolveVideoMaskProvider(undefined)).toBe("sam-3.1")
+  })
+})
+
+describe("Video Mask zone", () => {
+  it("is off by default, and each margin is 0–49 % (the inner rectangle can never be empty)", () => {
+    expect(VIDEO_MASK_DEFAULTS.zone).toBeNull()
+    expect(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN).toBe(0)
+    expect(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX).toBe(49)
+    expect(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX * 2).toBeLessThan(100)
+  })
+
+  it("resolveVideoMaskZone reads a zone as the filter does: margins clamped to 0–49, anything else 0, all 0 = null", () => {
+    expect(resolveVideoMaskZone({ leftPct: 10, rightPct: 20, topPct: 5, bottomPct: 0 })).toEqual({ leftPct: 10, rightPct: 20, topPct: 5, bottomPct: 0 })
+    expect(resolveVideoMaskZone({ leftPct: 80, rightPct: -3 })).toEqual({ leftPct: 49, rightPct: 0, topPct: 0, bottomPct: 0 })
+    expect(resolveVideoMaskZone({ leftPct: "10", topPct: Number.NaN, bottomPct: Infinity })).toBeNull()
+    expect(resolveVideoMaskZone({ leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 })).toBeNull()
+    expect(resolveVideoMaskZone(null)).toBeNull()
+    expect(resolveVideoMaskZone(undefined)).toBeNull()
+    expect(resolveVideoMaskZone("10,10,10,10")).toBeNull()
+  })
+})
+
+describe("Video Mask perShot", () => {
+  it("is off by default (one pass over the whole clip)", () => {
+    expect(VIDEO_MASK_DEFAULTS.perShot).toBe(false)
   })
 })
 

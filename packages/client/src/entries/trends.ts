@@ -24,4 +24,5 @@ export {
   type ListTrendsParams,
   type ListTrendRunsParams,
   type TrendPage,
+  type TrendTag,
 } from "../resources/trends.js"

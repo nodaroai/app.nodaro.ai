@@ -8,8 +8,17 @@
  * location none), and no optional text whose English is empty.
  */
 import { LANGUAGES } from "@nodaro/shared/i18n"
+import {
+  CAST_SWAP_FACE_MASKING_BOUNDS,
+  CAST_SWAP_FACE_MASKING_DEFAULTS,
+  CAST_SWAP_POST_PROMPT_MAX,
+  getMaxVideoPromptChars,
+  TREND_PROMPT_LIMITS,
+} from "@nodaro/shared/models"
 import type {
   AdminTrendData,
+  AdminTrendFaceMasking,
+  AdminTrendFaceMaskingZone,
   AdminTrendReference,
   AdminTrendSlot,
   TrendChipKey,
@@ -23,8 +32,50 @@ export const MAX_TREND_IMAGES = 30
 export const MAX_IMAGES_PER_SLOT = 3
 export const MAX_REFERENCES = 5
 export const PREVIEW_SECONDS = 4
-export const MAX_TREND_PROMPT = 3000
+export const MAX_TREND_PROMPT = TREND_PROMPT_LIMITS.trendPromptMax
+export const MAX_PRE_PROMPT = TREND_PROMPT_LIMITS.prePromptMax
+
+/**
+ * The room a trend's prompts leave for the user's details, as the server's
+ * publish check counts it (backend/src/ee/lib/trends/prompt-budget.ts), from
+ * the same numbers in `@nodaro/shared`: the trend prompt shares the engine's
+ * post prompt field (`CAST_SWAP_POST_PROMPT_MAX`) with the details (after a
+ * blank line), and the pre and trend prompts share Seedance 2.5's
+ * whole-prompt cap with the engine's own text and the details.
+ */
+export const TREND_DETAILS_MAX = TREND_PROMPT_LIMITS.detailsMax
+const SEP = 2
+
+export interface PromptBudget {
+  /** The longest trend prompt that leaves the details their room. */
+  readonly trendPromptMax: number
+  /** The longest pre + trend prompt that leave the engine's text and the details their room. */
+  readonly promptsMax: number
+  /** Characters still free under the tighter of the two; below 0 = over. */
+  readonly room: number
+}
+
+export function promptBudget(form: Pick<TrendForm, "prePrompt" | "trendPrompt">): PromptBudget {
+  const trendPromptMax = CAST_SWAP_POST_PROMPT_MAX - SEP - TREND_DETAILS_MAX
+  const promptsMax = getMaxVideoPromptChars("seedance-2-5") - TREND_PROMPT_LIMITS.engineTextReserve - SEP - TREND_DETAILS_MAX
+  const pre = form.prePrompt.length
+  const trend = form.trendPrompt.length
+  return { trendPromptMax, promptsMax, room: Math.min(trendPromptMax - trend, promptsMax - pre - trend) }
+}
+
+/**
+ * Face masking's engine defaults (shown as placeholders, never written into the
+ * draft) and bounds (`@nodaro/shared`'s, which the server's schema reads too:
+ * backend/src/lib/cast-swap-face-masking.ts).
+ */
+export const FACE_MASKING_DEFAULTS = CAST_SWAP_FACE_MASKING_DEFAULTS
+export const FACE_MASKING_BOUNDS = CAST_SWAP_FACE_MASKING_BOUNDS
+export const ZONE_SIDES = ["leftPct", "rightPct", "topPct", "bottomPct"] as const satisfies ReadonlyArray<keyof AdminTrendFaceMaskingZone>
 export const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
+/** The server's slug rule (migration 549's CHECK); `runs` and `tags` are taken by the run and tag lists. */
+const TREND_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
+const RESERVED_SLUGS: ReadonlySet<string> = new Set(["runs", "tags"])
+export const isTrendSlug = (slug: string): boolean => TREND_SLUG_RE.test(slug) && !RESERVED_SLUGS.has(slug)
 export const SLOT_KINDS: readonly TrendSlotKind[] = ["person", "location", "product", "pet"]
 export const SLOT_CAPS: Readonly<Record<TrendSlotKind, number>> = { person: 6, location: 1, product: 3, pet: 3 }
 
@@ -64,6 +115,9 @@ export interface TrendForm {
   slots: FormSlot[]
   references: FormReference[]
   trendPrompt: string
+  prePrompt: string
+  /** As stored: undefined = the draft has none (masking off). */
+  faceMasking: AdminTrendFaceMasking | undefined
 }
 
 let uidSeq = 0
@@ -78,6 +132,31 @@ export function toForm(draft: AdminTrendData): TrendForm {
     slots: draft.slots.map((s) => ({ ...s, uid: newUid(), isNew: false })),
     references: draft.references.map((r) => ({ ...r, images: [...r.images], uid: newUid() })),
     trendPrompt: draft.trendPrompt ?? "",
+    prePrompt: draft.prePrompt ?? "",
+    faceMasking: draft.faceMasking ? structuredClone(draft.faceMasking) : undefined,
+  }
+}
+
+/** Only the keys that hold a number; undefined when none do. */
+function cleanZone(z: AdminTrendFaceMaskingZone | undefined): AdminTrendFaceMaskingZone | undefined {
+  if (!z) return undefined
+  const out: AdminTrendFaceMaskingZone = {}
+  for (const side of ZONE_SIDES) if (typeof z[side] === "number") out[side] = z[side]
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** The setting as saved: the mode, then only the keys that are set (the engine fills the rest). */
+function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
+  const zone = cleanZone(m.zone)
+  const num = (v: number | undefined) => typeof v === "number" && Number.isFinite(v)
+  return {
+    mode: m.mode,
+    ...(m.fill ? { fill: m.fill } : {}),
+    ...(num(m.minFaceHeightPct) ? { minFaceHeightPct: m.minFaceHeightPct } : {}),
+    ...(num(m.maxFaceHeightPct) ? { maxFaceHeightPct: m.maxFaceHeightPct } : {}),
+    ...(zone ? { zone } : {}),
+    ...(num(m.blurStrengthPct) ? { blurStrengthPct: m.blurStrengthPct } : {}),
+    ...(num(m.threshold) ? { threshold: m.threshold } : {}),
   }
 }
 
@@ -131,6 +210,8 @@ export function fromForm(form: TrendForm): Omit<AdminTrendData, "examples"> {
     slots: form.slots.map(cleanSlot),
     references: form.references.map((r) => ({ images: [...r.images], line: r.line.trim() })),
     ...(form.trendPrompt.trim() ? { trendPrompt: form.trendPrompt } : {}),
+    ...(form.prePrompt.trim() ? { prePrompt: form.prePrompt } : {}),
+    ...(form.faceMasking ? { faceMasking: cleanMasking(form.faceMasking) } : {}),
   }
 }
 
@@ -198,12 +279,41 @@ export function formIssues(form: TrendForm): string[] {
     else if (line.length > 500) out.push(`${n}: the prompt line is at most 500 characters.`)
   })
 
+  const budget = promptBudget(form)
   if (form.trendPrompt.length > MAX_TREND_PROMPT) out.push(`Trend prompt: at most ${MAX_TREND_PROMPT} characters.`)
+  else if (form.trendPrompt.length > budget.trendPromptMax) {
+    out.push(`Trend prompt: at most ${budget.trendPromptMax} characters, to leave room for the user's details (up to ${TREND_DETAILS_MAX}).`)
+  }
+  if (form.prePrompt.length > MAX_PRE_PROMPT) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
+  else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
+    out.push(`Pre and trend prompts: at most ${budget.promptsMax} characters together, to leave room for the engine's text and the user's details.`)
+  }
+  if (form.faceMasking) out.push(...maskingIssues(form.faceMasking))
   if (form.source && form.previewStart !== null && form.previewStart + PREVIEW_SECONDS > form.source.durationSec) {
     out.push(`The ${PREVIEW_SECONDS} s preview must fit inside the ${form.source.durationSec.toFixed(1)} s clip.`)
   }
   const images = imageCount(form)
   if (images > MAX_TREND_IMAGES) out.push(`${images} images: at most ${MAX_TREND_IMAGES} (3 per slot plus the reference pictures).`)
+  return out
+}
+
+/** What the server would refuse in a face masking setting, as sentences. */
+function maskingIssues(m: AdminTrendFaceMasking): string[] {
+  const out: string[] = []
+  const outside = (v: number | undefined, [lo, hi]: readonly [number, number]) => v !== undefined && !(v >= lo && v <= hi)
+  const range = ([lo, hi]: readonly [number, number]) => `${lo}–${hi}`
+  const { faceHeightPct, zonePct, blurStrengthPct, threshold } = FACE_MASKING_BOUNDS
+  if (outside(m.minFaceHeightPct, faceHeightPct)) out.push(`Face masking: the smallest face height is ${range(faceHeightPct)} %.`)
+  if (outside(m.maxFaceHeightPct, faceHeightPct)) out.push(`Face masking: the largest face height is ${range(faceHeightPct)} %.`)
+  else if (m.maxFaceHeightPct !== undefined && m.maxFaceHeightPct > 0) {
+    const min = m.minFaceHeightPct ?? FACE_MASKING_DEFAULTS.minFaceHeightPct
+    if (!outside(m.minFaceHeightPct, faceHeightPct) && m.maxFaceHeightPct < min) {
+      out.push(`Face masking: the largest face height must be at least the smallest (${min} %), or 0 for no limit.`)
+    }
+  }
+  if (ZONE_SIDES.some((side) => outside(m.zone?.[side], zonePct))) out.push(`Face masking: each margin is ${range(zonePct)} %.`)
+  if (outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
+  if (outside(m.threshold, threshold)) out.push(`Face masking: the detection threshold is ${range(threshold)}.`)
   return out
 }
 
@@ -213,6 +323,8 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   product: "product slots",
   location: "location slots",
   fixedReferences: "fixed references",
+  faceMasking: "face masking",
+  trendPrePrompt: "pre prompts",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
   castSwap: "Cast Swap",

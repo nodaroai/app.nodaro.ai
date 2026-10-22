@@ -19,8 +19,8 @@
  */
 import type { FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
-import { hasScope } from "./scopes.js"
 import { GenerationSessionNotFoundError } from "./generation-session-error.js"
+import { callerGrantOf, grantMayWriteSessions, trustedProvenanceOf } from "./job-submission-context.js"
 
 export { GenerationSessionNotFoundError, isGenerationSessionNotFound } from "./generation-session-error.js"
 
@@ -36,17 +36,24 @@ export function rawSessionIdOf(body: unknown): unknown {
 const resolved = new WeakMap<FastifyRequest, Promise<string | null>>()
 
 async function lookup(req: FastifyRequest): Promise<string | null> {
-  // Internal callers (the orchestrator's own HTTP hops) never carry a session:
-  // a workflow run is not a session, whatever a node's data happens to hold.
-  if (req.authKind === "internal") return null
-  const raw = rawSessionIdOf(req.body)
-  if (raw === undefined) return null
+  // An internal request carries a session only when trusted server code
+  // attached it to that very request (`trustedProvenanceOf`): an MCP tool's
+  // (`mcpInject`), or the `provenance` option a plugin declares on
+  // `tk.http.internalRequest`. Its BODY is never read for one — not the
+  // orchestrator's (a workflow run is not a session, whatever a node's data
+  // holds), not an MCP relay's, and not a plugin's payload, which can carry
+  // records its caller controls.
+  const raw: unknown = req.authKind === "internal" ? trustedProvenanceOf(req)?.sessionId : rawSessionIdOf(req.body)
+  if (raw === undefined || raw === null || raw === "") return null
   if (typeof raw !== "string" || !UUID_RE.test(raw) || !req.userId) {
     throw new GenerationSessionNotFoundError()
   }
-  // Filing a job in a session is a session WRITE: an OAuth app needs the
-  // same `assets:write` the /v1/sessions write routes ask for.
-  if (req.appAuthorization && !hasScope(req.appAuthorization.scopes, "assets:write")) {
+  // Filing a job in a session is a session WRITE, under the caller's grant
+  // (`callerGrantOf`): an OAuth app's or an MCP session's needs the same
+  // `assets:write` the /v1/sessions write routes ask for, on an internal hop
+  // as on the public path; an internal hop whose grant no server-side scope
+  // vouches for may not.
+  if (!grantMayWriteSessions(callerGrantOf(req))) {
     throw new GenerationSessionNotFoundError()
   }
 

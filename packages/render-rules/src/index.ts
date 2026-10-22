@@ -262,13 +262,16 @@ export {
 } from "./speaker-view-on-screen"
 export { EXACT_LENGTH_VIDEO_TYPES, keptLengthOrigin, keptLengthWire, LENGTH_KEEPING_VIDEO_TYPES, type KeptLengthMode } from "./kept-length"
 export {
+  forwardedVideoFps,
   forwardedVideoLengthSec,
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
   maskCompositeLeadSec,
   runForwardedVideoLengthSec,
+  runWireFps,
   runWireLengthSec,
   utilityOutputLength,
+  videoMaskClipSec,
   videoSfxClipSec,
   type InputLength,
   type RunOutputLengths,

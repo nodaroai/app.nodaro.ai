@@ -1,6 +1,8 @@
 // Admin → Trends → one trend: build its draft (source clip and preview window,
-// slots, fixed references, trend prompt, texts), test it, promote admin runs
-// to examples, and publish it.
+// slots, fixed references, pre and trend prompts, face masking, texts), test
+// it, promote admin runs to examples, and publish it.
+//
+// Like the rest of the admin trend screens, its text is English only.
 //
 // Revisions. The draft carries a revision that changes on every write. The
 // screen holds its OWN copy: set when the trend loads, and from the reply of
@@ -13,7 +15,7 @@
 // write them. Test runs and Publish act on the SAVED draft, so both wait while
 // the form has unsaved edits.
 
-import { useRef, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
@@ -35,9 +37,11 @@ import {
   useUnpublishTrend,
 } from "@/ee/hooks/queries/use-admin-queries"
 import {
+  MAX_PRE_PROMPT,
   MAX_TREND_IMAGES,
-  MAX_TREND_PROMPT,
+  TREND_DETAILS_MAX,
   formIssues,
+  promptBudget,
   fromForm,
   imageCount,
   toForm,
@@ -47,6 +51,7 @@ import { SourceClipEditor } from "../components/SourceClipEditor"
 import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
+import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
 import { PublishBar } from "../components/PublishBar"
@@ -74,6 +79,7 @@ export default function AdminTrendEditorPage() {
   const [blockers, setBlockers] = useState<TrendPublishBlocker[] | null>(null)
   /** The form's state as of the latest render, for replies that land after more edits. */
   const latest = useRef({ baseline: "", dirty: false })
+  const promptRoomId = useId()
 
   const load = (d: AdminTrendDetail) => {
     const f = toForm(d.draft)
@@ -227,18 +233,28 @@ export default function AdminTrendEditorPage() {
               onChange={(fn) => setForm((f) => (f ? { ...f, references: fn(f.references) } : f))}
             />
           </Section>
-          <Section title="4. Trend prompt" description="Added to every run's prompt. Hidden from users.">
-            <Textarea
-              aria-label="Trend prompt"
-              rows={5}
-              value={form.trendPrompt}
-              onChange={(e) => set({ trendPrompt: e.target.value })}
+          <Section title="4. Prompts" description="Added to every run's prompt. Hidden from users.">
+            <PromptField
+              label="Pre prompt"
+              help="Placed at the start of the prompt, before the slots."
+              value={form.prePrompt}
+              max={MAX_PRE_PROMPT}
+              onChange={(prePrompt) => set({ prePrompt })}
             />
-            <p className={cn("text-right text-xs tabular-nums", form.trendPrompt.length > MAX_TREND_PROMPT ? "text-destructive" : "text-muted-foreground")}>
-              {form.trendPrompt.length} / {MAX_TREND_PROMPT}
-            </p>
+            <PromptField
+              label="Trend prompt"
+              help="Placed at the end of the prompt, before the user's own details."
+              value={form.trendPrompt}
+              max={promptBudget(form).trendPromptMax}
+              describedBy={promptRoomId}
+              onChange={(trendPrompt) => set({ trendPrompt })}
+            />
+            <PromptRoom id={promptRoomId} room={promptBudget(form).room} />
           </Section>
-          <Section title="5. Name, description, tags">
+          <Section title="5. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">
+            <FaceMaskingEditor value={form.faceMasking} onChange={(faceMasking) => set({ faceMasking })} />
+          </Section>
+          <Section title="6. Name, description, tags">
             <TextsEditor trend={server.trend} name={form.name} description={form.description} onChange={(p) => set(p)} />
           </Section>
         </div>
@@ -303,6 +319,61 @@ function BackLink() {
     <Link to="/admin/trends" className="inline-flex min-h-9 items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
       <ArrowLeft className="h-3.5 w-3.5 flip-rtl" /> Trends
     </Link>
+  )
+}
+
+function PromptField({
+  label,
+  help,
+  value,
+  max,
+  describedBy,
+  onChange,
+}: {
+  readonly label: string
+  readonly help: string
+  readonly value: string
+  readonly max: number
+  /** The id of more text describing the field, read after its help. */
+  readonly describedBy?: string
+  readonly onChange: (v: string) => void
+}) {
+  const id = useId()
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <span id={`${id}-help`} className="text-xs text-muted-foreground">
+        {help}
+      </span>
+      <Textarea
+        id={id}
+        aria-describedby={describedBy ? `${id}-help ${describedBy}` : `${id}-help`}
+        rows={4}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className={cn("text-right text-xs tabular-nums", value.length > max ? "text-destructive" : "text-muted-foreground")}>
+        {value.length} / {max}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * The room left for the trend prompt once the user's details at their longest
+ * have theirs (the server's publish check). It describes the Trend prompt
+ * field: the pre prompt counts too, but shortening the trend prompt is always
+ * enough.
+ */
+function PromptRoom({ id, room }: { readonly id: string; readonly room: number }) {
+  return (
+    <p id={id} className={cn("text-xs tabular-nums", room < 0 ? "text-destructive" : "text-muted-foreground")}>
+      {room >= 0
+        ? `${room} characters left for the trend prompt, keeping room for the user's details (up to ${TREND_DETAILS_MAX}).`
+        : `${-room} characters over: shorten the trend prompt to keep room for the user's details (up to ${TREND_DETAILS_MAX}).`}
+    </p>
   )
 }
 

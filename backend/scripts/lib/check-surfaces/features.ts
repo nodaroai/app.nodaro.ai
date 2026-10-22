@@ -71,8 +71,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "models", cli: ["models"], routePrefixes: ["/v1/models", "/v1/model-makers"], mcpFiles: ["models.ts"] },
   { id: "shots", cli: ["shots"], routePrefixes: ["/v1/shots"], mcpFiles: ["shot-shapes.ts"] },
   { id: "recast", cli: ["recast"], routePrefixes: ["/v1/recast"], mcpFiles: ["recast.ts"] },
-  // Cast Swap: both routes are the Cloud plugin's (no CLI group).
-  { id: "castSwap", cli: [], routePrefixes: ["/v1/cast-swap"], mcpFiles: ["cast-swap.ts"] },
+  // Cast Swap: the routes are the Cloud plugin's; the CLI group has Full Quality only.
+  { id: "castSwap", cli: ["cast-swap"], routePrefixes: ["/v1/cast-swap"], mcpFiles: ["cast-swap.ts", "cast-swap-full-quality.ts"] },
   // Trends: the catalog, trend runs and favorites (Cloud, ee/routes/trends.ts).
   { id: "trends", cli: ["trends"], routePrefixes: ["/v1/trends"], mcpFiles: ["trends.ts"] },
   { id: "studio", cli: [], routePrefixes: ["/v1/studio"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },

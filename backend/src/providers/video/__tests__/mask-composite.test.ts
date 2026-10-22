@@ -30,6 +30,20 @@ describe("buildMaskCompositeArgs", () => {
     // A picture starting at 0 adds no offset.
     expect(graphOf(build({}))).toContain("[2:v]setpts=PTS-STARTPTS,")
   })
+  it("puts the background on the foreground's clock too, so no bare background frame comes before a late foreground (23.976 fps, one frame late)", () => {
+    const probe = { ...PROBE, frameRate: "24000/1001", durationSec: 97 * 1001 / 24000, startSec: 1001 / 24000 }
+    const g = graphOf(build({ invertMask: true, backgroundFit: "stretch" }, probe))
+    expect(g).toContain("[1:v]setpts=PTS-STARTPTS+0.041708/TB,scale=640:360,setsar=1,fps=24000/1001,format=yuv420p[bg]")
+    expect(g).toContain("[2:v]setpts=PTS-STARTPTS+0.041708/TB,")
+    // A picture starting at 0 leaves the background where it was.
+    expect(graphOf(build({ backgroundFit: "stretch" }, { ...probe, startSec: 0 }))).toContain("[1:v]setpts=PTS-STARTPTS,scale=640:360,")
+  })
+  it("bounds the render to the foreground's frame count when the probe has one (the overlay follows the looped background)", () => {
+    const argv = build({}, { ...PROBE, frameCount: 60 })
+    expect(argv.slice(argv.indexOf("-frames:v"), argv.indexOf("-frames:v") + 2)).toEqual(["-frames:v", "60"])
+    expect(argv[argv.indexOf("-t") + 1]).toBe("2.000")
+    expect(build({})).not.toContain("-frames:v")
+  })
   it("squares a non-square-pixel foreground instead of stretching it", () => {
     expect(graphOf(build({}, { ...PROBE, width: 720, height: 480, sar: 32 / 27 }))).toContain("[0:v]scale=852:480")
   })
@@ -172,7 +186,48 @@ describe("buildMaskCompositeFillArgs (pixelate / blur)", () => {
   })
 })
 
+const frameCount = (file: string) =>
+  Number(execFileSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", file]).toString().trim())
+
 describe("mask composite (real ffmpeg)", () => {
+  // A 25-frame foreground at `rate` whose picture starts one frame late (as a re-timed upload can),
+  // a background and a mask at other rates. Every fill renders exactly the followed video's frames.
+  it.each([
+    ["24000/1001", "24/1"], ["30000/1001", "30/1"], ["60000/1001", "25/1"], ["24/1", "30000/1001"], ["30/1", "24/1"],
+  ] as const)("renders exactly the source's frame count at %s (background / mask at %s), picture one frame late or not", async (rate, otherRate) => {
+    const dir = await mkdtemp(join(tmpdir(), "mask-composite-frames-"))
+    try {
+      const [num, den = "1"] = rate.split("/")
+      const frameSec = Number(den) / Number(num)
+      const clip = (src: string, r: string, file: string, extra: string[] = []) =>
+        execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `${src}${src.includes("=") ? ":" : "="}s=160x90:r=${r}`, ...extra, "-c:v", "libx264", "-pix_fmt", "yuv420p", file])
+      const fgRaw = join(dir, "fg-raw.mp4"), fgLate = join(dir, "fg-late.mp4"), bg = join(dir, "bg.mp4"), mask = join(dir, "mask.mp4")
+      clip("testsrc", rate, fgRaw, ["-frames:v", "25"])
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-i", fgRaw, "-c", "copy", "-output_ts_offset", frameSec.toFixed(6), fgLate])
+      clip("color=c=gray", otherRate, bg, ["-t", "2"])
+      clip("color=c=black", otherRate, mask, ["-t", "2", "-vf", "drawbox=x=40:y=20:w=80:h=50:color=white:t=fill"])
+      const { probeVideoOverlayBase } = await import("../ffmpeg-utils.js")
+      for (const fg of [fgRaw, fgLate]) {
+        const p = await probeVideoOverlayBase(fg)
+        expect(p.frameCount).toBe(25)
+        const probe = { width: 160, height: 90, frameRate: rate, durationSec: p.streamDurationSec, startSec: p.startTimeSec, frameCount: p.frameCount, foregroundHasAudio: false, backgroundHasAudio: false }
+        const out = join(dir, "out.mp4")
+        await runFfmpeg(buildMaskCompositeArgs({
+          foregroundPath: fg, backgroundPath: bg, maskPath: mask, outputPath: out,
+          settings: resolveMaskCompositeSettings({ invertMask: true, backgroundFit: "stretch" }), probe,
+        }), 60_000)
+        expect(frameCount(out)).toBe(25)
+        for (const fill of ["blur", "pixelate"]) {
+          // Pixelate / blur follow the BACKGROUND: here the 25-frame clip is the background.
+          await runFfmpeg(buildMaskCompositeFillArgs({ backgroundPath: fg, maskPath: mask, outputPath: out, settings: resolveMaskCompositeSettings({ fill, invertMask: true }), probe }), 60_000)
+          expect(frameCount(out)).toBe(25)
+        }
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it("keeps the mask on the foreground's frames when the foreground's picture starts late", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mask-composite-offset-"))
     try {
@@ -194,16 +249,19 @@ describe("mask composite (real ffmpeg)", () => {
         probe: { width: 160, height: 90, frameRate: "10/1", durationSec: p.streamDurationSec, startSec: p.startTimeSec, foregroundHasAudio: false, backgroundHasAudio: false },
       })
       await runFfmpeg(argv, 60_000)
-      const at = (sec: number) => {
-        const rgb = execFileSync("ffmpeg", ["-v", "error", "-ss", String(sec), "-i", out, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+      // Exactly the foreground's 20 frames: no background-only frames before its picture starts.
+      expect(frameCount(out)).toBe(20)
+      // By frame index: the render starts on the foreground's clock (0.5 s), so output frame N is foreground frame N.
+      const at = (n: number) => {
+        const rgb = execFileSync("ffmpeg", ["-v", "error", "-i", out, "-vf", `select=eq(n\\,${n})`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
         const i = (45 * 160 + 80) * 3
         return [rgb[i]!, rgb[i + 1]!, rgb[i + 2]!]
       }
       // Foreground frame 7 (t = 0.5 + 0.7): its mask frame is black → background (blue), never the red foreground.
-      const [r1, , b1] = at(1.25)
+      const [r1, , b1] = at(7)
       expect(b1).toBeGreaterThan(200); expect(r1).toBeLessThan(60)
       // Foreground frame 15 (t = 0.5 + 1.5): mask white → the green foreground.
-      const [, g2, b2] = at(2.05)
+      const [, g2, b2] = at(15)
       expect(g2).toBeGreaterThan(100); expect(b2).toBeLessThan(60)
     } finally {
       await rm(dir, { recursive: true, force: true })

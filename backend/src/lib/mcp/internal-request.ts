@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { config } from "../config.js"
+import { withJobSubmissionContext } from "../job-submission-context.js"
 import type { McpSession } from "./session.js"
 
 /**
@@ -33,7 +34,8 @@ import type { McpSession } from "./session.js"
  * the instance (#1888).
  *
  * `headers` is spread FIRST on purpose: a caller adds what its route needs
- * and cannot override the three this function owns.
+ * and cannot override the ones this function owns (the secret, the user, the
+ * workspace, and an object body's JSON content type).
  */
 export interface McpInjectOptions {
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
@@ -42,6 +44,16 @@ export interface McpInjectOptions {
   query?: Record<string, string>
   /** Extra headers this route needs. Cannot override the secret, the user or the workspace. */
   headers?: Record<string, string>
+  /**
+   * A generation session the tool's caller asked to file the job in. It
+   * travels in the server-side submission scope (`withJobSubmissionContext`'s
+   * `provenance`), never in the body: an internal hop ignores a body
+   * `sessionId`. The job funnel checks it exactly as a public request's — the
+   * caller's own session, on the session's side of the workspace line, and
+   * `assets:write` in the MCP session's grant (which rides every call) — else
+   * the route's 404. Not with `query`: the scope matches the bare url.
+   */
+  sessionId?: string
 }
 
 /**
@@ -72,11 +84,36 @@ export function unsafeInjectPath(url: string): string | null {
   return null
 }
 
+function isObjectBody(payload: McpInjectOptions["payload"]): payload is object {
+  return typeof payload === "object" && payload !== null && !Buffer.isBuffer(payload)
+}
+
 export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: McpInjectOptions) {
   const unsafe = unsafeInjectPath(opts.url)
   if (unsafe) {
     return Promise.reject(new Error(`mcpInject refused the path ${JSON.stringify(opts.url)}: it has ${unsafe}`))
   }
+  if (opts.sessionId !== undefined && opts.query) {
+    return Promise.reject(new Error("mcpInject cannot carry a sessionId on a request with a query"))
+  }
+  // The session's grant rides every call, so a route reached over MCP holds
+  // the caller to it as it holds an OAuth app to its own (`callerGrantOf`):
+  // filing a job in a session needs `assets:write` there too, and a plugin
+  // route passes it on to the requests it makes. The scope matches the bare
+  // url, so a request with a query has none (an unknown grant: no session).
+  return withJobSubmissionContext(
+    {
+      userId: session.userId,
+      method: opts.method,
+      url: opts.url,
+      grant: session.scopes,
+      ...(opts.sessionId !== undefined ? { provenance: { sessionId: opts.sessionId } } : {}),
+    },
+    () => inject(fastify, session, opts),
+  )
+}
+
+function inject(fastify: FastifyInstance, session: McpSession, opts: McpInjectOptions) {
   return fastify.inject({
     method: opts.method,
     url: opts.url,
@@ -86,6 +123,8 @@ export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: M
       "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
       "x-internal-user-id": session.userId,
       ...(session.workspaceId ? { [WORKSPACE_HEADER_LOWER]: session.workspaceId } : {}),
+      // An object body is always read as JSON, whatever content type a caller passed.
+      ...(isObjectBody(opts.payload) ? { "content-type": "application/json" } : {}),
     },
     ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
   })

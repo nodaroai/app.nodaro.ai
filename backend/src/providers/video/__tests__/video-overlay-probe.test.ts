@@ -44,6 +44,11 @@ describe("parseVideoOverlayProbe", () => {
   it("keeps a VFR base's rationals verbatim (the builder picks the cadence)", () => {
     expect(parseVideoOverlayProbe(json([video({ r_frame_rate: "0/0", avg_frame_rate: "30000/1001" })]))).toMatchObject({ rFrameRate: "0/0", avgFrameRate: "30000/1001", audioCodec: null })
   })
+  it("reads the container's frame count when it states one, and leaves it out otherwise", () => {
+    expect(parseVideoOverlayProbe(json([video({ nb_frames: "744" })])).frameCount).toBe(744)
+    expect(parseVideoOverlayProbe(json([video({ nb_frames: "N/A" })]))).not.toHaveProperty("frameCount")
+    expect(parseVideoOverlayProbe(json([video({ nb_frames: "0" })]))).not.toHaveProperty("frameCount")
+  })
   it("falls back to the container duration when the stream reports none", () => {
     expect(parseVideoOverlayProbe(json([video({ duration: undefined })], { duration: "3.5" })).streamDurationSec).toBe(3.5)
   })
@@ -86,6 +91,7 @@ describe("probeVideoOverlayBase", () => {
     expect(args.at(-1)).toBe("/w/input.mp4")
     expect(args[args.indexOf("-show_entries") + 1]).toContain("stream_side_data=rotation")
     expect(args[args.indexOf("-show_entries") + 1]).toContain("stream_disposition=attached_pic")
+    expect(args[args.indexOf("-show_entries") + 1]).toContain("nb_frames")
     expect(args).not.toContain("-select_streams")
   })
   it("ffprobe failing on the file (HTML saved as .mp4) is 'not a video' — deterministic", async () => {

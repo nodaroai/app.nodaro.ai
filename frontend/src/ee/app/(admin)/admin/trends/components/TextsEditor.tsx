@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import type { AdminTrendRow, TrendLocalizedText } from "@/lib/api"
 import { usePatchTrend } from "@/ee/hooks/queries/use-admin-queries"
+import { isTrendSlug } from "../model"
 import { LocalizedField } from "./LocalizedField"
 
 interface Props {
@@ -15,8 +16,6 @@ interface Props {
   readonly description: TrendLocalizedText
   readonly onChange: (next: { name?: TrendLocalizedText; description?: TrendLocalizedText }) => void
 }
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 
 const parseTags = (s: string) => [...new Set(s.split(",").map((t) => t.trim()).filter(Boolean))]
 
@@ -50,7 +49,7 @@ function CatalogFields({ trend }: { readonly trend: AdminTrendRow }) {
     setSlug(trend.slug)
     setTags(trend.tags.join(", "))
   }
-  const slugOk = SLUG_RE.test(slug) && slug !== "runs"
+  const slugOk = isTrendSlug(slug)
   const onError = (err: Error) => toast.error(err.message)
 
   const commitSlug = () => {

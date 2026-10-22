@@ -24,9 +24,11 @@ interface InlineReconcileRow {
   provider_task_id: string
   reconcile_attempts: number
   job_type: string | null
-  /** The user-submitted request config. Only the fal path reads it (to recover
-   *  the fal endpoint from `input_data.provider`); other handlers ignore it.
-   *  Optional so legacy callers / narrow test rows keep working. */
+  /** The user-submitted request config. The fal path reads it (to recover
+   *  the fal endpoint from `input_data.provider`), and the KIE path (a refused
+   *  job's error hint: the model it ran — `jobModelIdOf` — and whether it sent
+   *  an input video); other handlers ignore it. Optional so legacy callers /
+   *  narrow test rows keep working. */
   input_data?: Record<string, unknown> | null
 }
 

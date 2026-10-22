@@ -4,8 +4,14 @@ import {
   safetyBlockOf,
   isFinalAttemptFor,
   errorHintFor,
+  inputRefusedHint,
+  inputVideoRefusedOf,
+  sentVideoInput,
+  refusalHintFor,
+  jobModelIdOf,
   safetyBlockMessage,
   fallbackLabelOf,
+  hasUserSafeMessage,
   type SafetyBlock,
 } from "../safety-block.js"
 
@@ -110,6 +116,82 @@ describe("errorHintFor", () => {
   })
 })
 
+describe("errorHintFor — input-video refusal", () => {
+  const copyright: SafetyBlock = { class: "copyright", maxAttempts: 1 }
+
+  it("marks the subject when the provider refused the input video", () => {
+    expect(errorHintFor(copyright, false, { inputVideoRefused: true })).toEqual({
+      kind: "safety-block",
+      class: "copyright",
+      retried: false,
+      subject: "input_video",
+    })
+  })
+
+  it("leaves today's hint untouched otherwise", () => {
+    expect(errorHintFor(copyright, false, { inputVideoRefused: false })).toEqual({
+      kind: "safety-block",
+      class: "copyright",
+      retried: false,
+    })
+    expect(errorHintFor(copyright, false, {})).not.toHaveProperty("subject")
+  })
+})
+
+describe("inputRefusedHint", () => {
+  it("is the input-refused arm for the input video", () => {
+    expect(inputRefusedHint()).toEqual({ kind: "input-refused", subject: "input_video" })
+  })
+})
+
+describe("inputVideoRefusedOf", () => {
+  it("reads the flag off a KieError", () => {
+    const err = new KieError("m", "d", "c", true, false, null, true)
+    expect(inputVideoRefusedOf(err)).toBe(true)
+    expect(inputVideoRefusedOf(new KieError("m", "d", "c", true))).toBe(false)
+  })
+
+  it("reads a duck-typed flag anywhere on the cause chain", () => {
+    const inner = Object.assign(new Error("refused"), { inputVideoRefused: true })
+    expect(inputVideoRefusedOf(new Error("outer", { cause: new Error("mid", { cause: inner }) }))).toBe(true)
+  })
+
+  it("accepts only `true`", () => {
+    expect(inputVideoRefusedOf(Object.assign(new Error("x"), { inputVideoRefused: "true" }))).toBe(false)
+    expect(inputVideoRefusedOf(Object.assign(new Error("x"), { inputVideoRefused: 1 }))).toBe(false)
+    expect(inputVideoRefusedOf(new Error("x"))).toBe(false)
+    expect(inputVideoRefusedOf(null)).toBe(false)
+    expect(inputVideoRefusedOf("File processing failed")).toBe(false)
+  })
+
+  it("never throws", () => {
+    const hostile = new Proxy(new Error("x"), {
+      get() {
+        throw new Error("boom")
+      },
+    })
+    expect(() => inputVideoRefusedOf(hostile)).not.toThrow()
+    expect(inputVideoRefusedOf(hostile)).toBe(false)
+  })
+})
+
+describe("sentVideoInput", () => {
+  it("is true when the job sent a source or reference video", () => {
+    expect(sentVideoInput({ videoUrl: "https://x/a.mp4" })).toBe(true)
+    expect(sentVideoInput({ referenceVideoUrl: "https://x/a.mp4" })).toBe(true)
+    expect(sentVideoInput({ referenceVideoUrls: ["https://x/a.mp4"] })).toBe(true)
+    expect(sentVideoInput({ referenceVideoUrls: ["", "https://x/b.mp4"] })).toBe(true)
+  })
+
+  it("is false without one", () => {
+    expect(sentVideoInput({ imageUrl: "https://x/a.png", prompt: "p" })).toBe(false)
+    expect(sentVideoInput({ videoUrl: "", referenceVideoUrls: [] })).toBe(false)
+    expect(sentVideoInput({ videoUrl: 3, referenceVideoUrls: [null, " "] })).toBe(false)
+    expect(sentVideoInput(null)).toBe(false)
+    expect(sentVideoInput(undefined)).toBe(false)
+  })
+})
+
 describe("safetyBlockMessage", () => {
   it("names the fallback label verbatim when one is given", () => {
     expect(safetyBlockMessage("Nano Banana Pro")).toBe(
@@ -140,5 +222,68 @@ describe("fallbackLabelOf", () => {
 
   it("returns undefined for an unknown model id", () => {
     expect(fallbackLabelOf("totally-not-a-real-model-id")).toBeUndefined()
+  })
+})
+
+describe("hasUserSafeMessage", () => {
+  it("is true only for a strict own `userSafeMessage: true` on the error itself", () => {
+    expect(hasUserSafeMessage(Object.assign(new Error("x"), { userSafeMessage: true }))).toBe(true)
+    expect(hasUserSafeMessage(Object.assign(new Error("x"), { userSafeMessage: "true" }))).toBe(false)
+    expect(hasUserSafeMessage(Object.assign(new Error("x"), { userSafeMessage: 1 }))).toBe(false)
+    expect(hasUserSafeMessage(new Error("x"))).toBe(false)
+    expect(hasUserSafeMessage({ message: "x", userSafeMessage: true })).toBe(false)
+    expect(hasUserSafeMessage(undefined)).toBe(false)
+  })
+
+  it("ignores a marker on the cause chain or the prototype", () => {
+    const cause = Object.assign(new Error("safe"), { userSafeMessage: true })
+    expect(hasUserSafeMessage(new Error("wrapper", { cause }))).toBe(false)
+    class Marked extends Error {}
+    ;(Marked.prototype as { userSafeMessage?: boolean }).userSafeMessage = true
+    expect(hasUserSafeMessage(new Marked("x"))).toBe(false)
+  })
+
+  it("never throws: a throwing getter reads as not marked", () => {
+    const err = new Error("x")
+    Object.defineProperty(err, "userSafeMessage", { get() { throw new Error("boom") } })
+    expect(hasUserSafeMessage(err)).toBe(false)
+  })
+})
+
+// The one mapping both failure writers use (the worker's catch and the
+// reconcile path) — a re-picked job must carry the same hint as a live one.
+describe("refusalHintFor", () => {
+  const copyright: SafetyBlock = { class: "copyright", maxAttempts: 1 }
+
+  it("a classified block → its safety-block hint, naming the input video when it was refused", () => {
+    expect(refusalHintFor(copyright, false, true)).toEqual({
+      kind: "safety-block", class: "copyright", retried: false, subject: "input_video",
+    })
+    expect(refusalHintFor(copyright, true, false)).toEqual({ kind: "safety-block", class: "copyright", retried: true })
+  })
+
+  it("a refused input video with no class → the input-refused hint", () => {
+    expect(refusalHintFor(null, false, true)).toEqual({ kind: "input-refused", subject: "input_video" })
+  })
+
+  it("neither → null", () => {
+    expect(refusalHintFor(null, false, false)).toBeNull()
+  })
+})
+
+describe("jobModelIdOf", () => {
+  it("prefers model over provider, as the worker always has", () => {
+    expect(jobModelIdOf({ model: "lora-x", provider: "flux" })).toBe("lora-x")
+    expect(jobModelIdOf({ provider: "seedance-2" })).toBe("seedance-2")
+    // An image job's input_data: the model the worker ran wins over the one asked for.
+    expect(jobModelIdOf({ resolvedModel: "gpt-image-2-i2i", provider: "gpt-image-2" })).toBe("gpt-image-2-i2i")
+    expect(jobModelIdOf({ model: "lora-x", resolvedModel: "lora-x", provider: "flux" })).toBe("lora-x")
+    expect(jobModelIdOf({ resolvedModel: 7, provider: "flux" })).toBe("flux")
+  })
+
+  it("null for a payload without a model, or no payload", () => {
+    expect(jobModelIdOf({})).toBeNull()
+    expect(jobModelIdOf(null)).toBeNull()
+    expect(jobModelIdOf({ provider: 42 })).toBeNull()
   })
 })

@@ -4,6 +4,8 @@
 import { describe, it, expect } from "vitest"
 import {
   CAST_SWAP_FULL_BUDGET_MS,
+  CAST_SWAP_MASK_ALWAYS_BUDGET_MS,
+  CAST_SWAP_MASK_AUTO_BUDGET_MS,
   CAST_SWAP_PREVIEW_BUDGET_MS,
   castSwapJobBudgetMs,
 } from "../cast-swap-budget.js"
@@ -27,6 +29,48 @@ describe("cast-swap job budget", () => {
     expect(castSwapJobBudgetMs(null)).toBe(120 * MINUTE)
     expect(castSwapJobBudgetMs(undefined)).toBe(120 * MINUTE)
     expect(castSwapJobBudgetMs("cast-swap")).toBe(120 * MINUTE)
+  })
+
+  it("face masking off or absent leaves the budget exactly as it was", () => {
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "off" } })).toBe(120 * MINUTE)
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "off" }, preview: true })).toBe(30 * MINUTE)
+    expect(castSwapJobBudgetMs({ videoUrl: "https://x.test/clip.mp4" })).toBe(120 * MINUTE)
+    expect(castSwapJobBudgetMs({ preview: true })).toBe(30 * MINUTE)
+  })
+
+  it("face masking \"always\" is 150 min, \"auto\" 240 min", () => {
+    expect(CAST_SWAP_MASK_ALWAYS_BUDGET_MS).toBe(150 * MINUTE)
+    expect(CAST_SWAP_MASK_AUTO_BUDGET_MS).toBe(240 * MINUTE)
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "always" } })).toBe(150 * MINUTE)
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "auto", padding: 0.2 } })).toBe(240 * MINUTE)
+  })
+
+  it("a masked preview takes the masking bound — its mask jobs and retry child run all the same", () => {
+    expect(castSwapJobBudgetMs({ preview: true, faceMasking: { mode: "always" } })).toBe(150 * MINUTE)
+    expect(castSwapJobBudgetMs({ preview: true, faceMasking: { mode: "auto" } })).toBe(240 * MINUTE)
+  })
+
+  it("an unreadable faceMasking reads as off", () => {
+    for (const faceMasking of [null, "always", "auto", 1, true, [], {}, { mode: "ALWAYS" }, { mode: 1 }, { mode: null }, { mode: "sometimes" }]) {
+      expect(castSwapJobBudgetMs({ faceMasking })).toBe(120 * MINUTE)
+      expect(castSwapJobBudgetMs({ faceMasking, preview: true })).toBe(30 * MINUTE)
+    }
+  })
+
+  it("a trend run's saved input_data (`__faceMasking`) is read when `faceMasking` is absent", () => {
+    expect(castSwapJobBudgetMs({ __faceMasking: { mode: "always" } })).toBe(150 * MINUTE)
+    expect(castSwapJobBudgetMs({ __faceMasking: { mode: "auto" }, preview: true })).toBe(240 * MINUTE)
+    expect(castSwapJobBudgetMs({ __faceMasking: { mode: "off" } })).toBe(120 * MINUTE)
+    expect(castSwapJobBudgetMs({ __faceMasking: "auto", preview: true })).toBe(30 * MINUTE)
+    // `faceMasking` present wins, even when it reads as off.
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "off" }, __faceMasking: { mode: "auto" } })).toBe(120 * MINUTE)
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "always" }, __faceMasking: { mode: "auto" } })).toBe(150 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap", { __faceMasking: { mode: "auto" } })).toBe(240 * MINUTE)
+  })
+
+  it("the Full Quality redo and the registry read face masking too", () => {
+    expect(declaredJobBudgetMs("cast-swap", { faceMasking: { mode: "always" } })).toBe(150 * MINUTE)
+    expect(declaredJobBudgetMs("cast-swap-full-quality", { faceMasking: { mode: "auto" } })).toBe(240 * MINUTE)
   })
 
   it("a full clip exceeds the 90-minute default — the reason it declares one at all", () => {

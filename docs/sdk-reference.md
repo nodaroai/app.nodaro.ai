@@ -376,10 +376,25 @@ Base class for every API error.
 class NodaroError extends Error {
   readonly code: string    // e.g. "internal_error", "validation_failed"
   readonly status: number  // HTTP status
+  readonly details: Readonly<Record<string, unknown>> // the envelope's other fields
 }
 ```
 
-**Constructor:** `new NodaroError(message: string, code: string, status: number)`
+`details` holds every field of the error envelope (`{ error: { code, message, … } }`)
+other than `code` and `message`, as the server sent it — for example a trend
+refusal's `slot`, a publish refusal's `reasons`, a validation error's `issues`.
+It is set on every class below, and is `{}` when the envelope had nothing else
+(or for an error the SDK made itself).
+
+```ts
+try {
+  await client.trends.run(slug, request)
+} catch (err) {
+  if (err instanceof NodaroError && err.code === "missing_slot") askFor(err.details.slot as string)
+}
+```
+
+**Constructor:** `new NodaroError(message: string, code: string, status: number, details?: Record<string, unknown>)`
 
 ### `class UnauthorizedError extends NodaroError`
 
@@ -417,10 +432,30 @@ HTTP 402. Caller doesn't have enough credits to start the operation. Both
 fields are present on production servers but optional in the type for
 forward-compat.
 
-- `code = "insufficient_credits"`, `status = 402`
+- `code` is the refusal's own code: `"insufficient_credits"` for the caller's
+  own balance (and when the server sent none), or another 402 code such as
+  `"free_video_limit"` or `"insufficient_app_credits"`. `status = 402`
 - `required?: number`
-- `available?: number`
-- **Constructor:** `new InsufficientCreditsError(message?: string, required?: number, available?: number)`
+- `available?: number` — the balance (or, for a cap, what the cap has left)
+- **Constructor:** `new InsufficientCreditsError(message?: string, required?: number, available?: number, code?: string)`
+
+### `class CreditCapExceededError extends InsufficientCreditsError`
+
+HTTP 402 from a spending cap someone else set, not from the caller's own
+balance — topping up does not help; whoever set the cap has to raise it:
+
+| `code` | Cap |
+|--------|-----|
+| `budget_exceeded` | the workspace's budget |
+| `member_cap_exceeded` | your credit cap in that workspace |
+| `user_allowance_exceeded` | this deployment's per-user allowance |
+
+It is an `InsufficientCreditsError`, so an existing
+`instanceof InsufficientCreditsError` catch still catches it; check
+`instanceof CreditCapExceededError` first to tell the two apart.
+`CREDIT_CAP_CODES` (a `ReadonlySet<CreditCapCode>`) lists the three codes.
+
+- **Constructor:** `new CreditCapExceededError(code: CreditCapCode, message?: string, required?: number, available?: number)`
 
 ### `class StorageExceededError extends NodaroError`
 
@@ -633,7 +668,8 @@ The typed classes are still chosen by status — a 404 is a `NotFoundError`
 whatever the body — and one whose body carries no human text keeps its own
 default ("Not found", "Authentication required"). An
 `InsufficientCreditsError` takes `required` / `available` from the envelope, or
-from the `required` / `balance` the credit guard sends beside it.
+from the `required` / `balance` (a per-user allowance: `remaining`) the credit
+guard sends beside it.
 
 ---
 
@@ -1249,7 +1285,10 @@ written by the deployment's policy, or by the platform when the policy supplies 
 or that ran out of credits partway (`kind: "credits"`, carrying the refusal's
 `code` — `insufficient_credits`, or a plan or workspace cap such as
 `free_video_limit` or `budget_exceeded`; the job was refunded, so ask the
-person to top up and run it again). Admin callers
+person to top up and run it again), or whose input video the provider refused
+without naming a content-policy class (`kind: "input-refused"`, `subject:
+"input_video"` — send a different clip; a `safety-block` carries the same
+`subject` when the refused input video also has a class). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
@@ -1903,11 +1942,13 @@ video with your own reference images, keeping its motion, framing, timing and
 sound (the clip's audio is kept, and the result is the clip's length). **Cloud
 edition only**: these routes 404 on self-hosted installs. Also importable as
 `@nodaro/sdk/cast-swap`. Routes: [Cast Swap](./api-integration.md#13f-cast-swap-cloud-edition);
-MCP: `cast_swap`.
+MCP: `cast_swap`, `estimate_full_quality`, `full_quality`.
 
 ```ts
 run(params: CastSwapParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/cast-swap → 202 (200 + deduped on a keyed repeat)
 estimate(params: CastSwapParams): Promise<CastSwapEstimate> // POST /v1/cast-swap/estimate, free
+fullQualityEstimate(jobId: string): Promise<CastSwapFullQualityEstimate> // POST /v1/cast-swap/:jobId/full-quality/estimate, free
+fullQuality(jobId: string, params?: { sessionId?: string }): Promise<CastSwapFullQualityResult> // POST /v1/cast-swap/:jobId/full-quality → 202 (200 + existing)
 ```
 
 ```ts
@@ -1924,6 +1965,7 @@ interface CastSwapParams {
   >                                // every role also takes previewName? / inPreview? (preview only, see below);
                                    // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
                                    // 0–3 images of ONE subject / place each, ≤ 30 images in all
+  references?: Array<{ images: string[]; line: string }> // ≤ 5 fixed references (see below)
   prePrompt?: string               // your own words at the start, before the role instructions; {role:N} as in postPrompt
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
@@ -1931,27 +1973,63 @@ interface CastSwapParams {
   resolution?: "480p" | "720p" | "1080p" // default "480p"
   draft?: boolean                  // default true at 480p, false above; true above 480p is a 400
   prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
+  faceMasking?: CastSwapFaceMasking // default off: mask the faces in the clip first (see below)
   quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
   sessionId?: string
   origin?: string
 }
 
+interface CastSwapFaceMasking {
+  mode: "off" | "always" | "auto" // off = as if left out; auto = only on a retry after the clip is refused
+  fill?: "blur" | "depth"         // what covers a masked face; default "blur"
+  minFaceHeightPct?: number       // 0..100, default 15: mask faces at least this % of the frame height
+  maxFaceHeightPct?: number       // 0..100, default 0 (no limit); when > 0, ≥ minFaceHeightPct
+  zone?: { leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number }
+                                  // frame margins, 0..49 % each, default 0: a face centred in one is not masked
+  blurStrengthPct?: number        // 0.1..5 % of the frame width, default 2 (fill "blur")
+  threshold?: number              // 0.05..0.95, default 0.5: lower finds more faces
+}
+
 interface CastSwapEstimate {
-  totalCredits: number // castSwap + seedance + references
+  totalCredits: number // castSwap + seedance + references (+ masking with faceMasking "always")
   breakdown: {
     castSwap: number     // the run itself
     seedance: number     // the video model it calls
     references: number   // preparing the reference pictures; 0 when off or nothing to prepare
+    masking?: number     // masking the faces; only when faceMasking is on ("auto": = maskingCredits, not in totalCredits)
   }
+  maskingCredits?: number // faceMasking "auto": charged only if the masked retry runs; not in totalCredits
   settlesLower: boolean // Auto length: the final charge is expected to be lower
+}
+
+interface CastSwapFullQualityEstimate {
+  totalCredits: number // castSwap + seedanceHd
+  breakdown: {
+    castSwap: number     // the Full Quality job's own steps
+    seedanceHd: number   // the 1080p render; 0 when an earlier try's render is reused
+  }
+  availableUntil: string // ISO time: 7 days after the draft completed
+}
+
+interface CastSwapFullQualityResult {
+  jobId: string
+  existing?: boolean // true: this draft's Full Quality was already running or done; nothing new started or charged
 }
 ```
 
 A role with no images (empty or `null`) is skipped: that subject or place
-stays as in the video. At least one role with images, or a `prePrompt` or
-`postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+stays as in the video. At least one role with images, a reference, or a
+`prePrompt` or `postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.
+
+**Fixed references** (`references`, `CastSwapReference[]`, at most 5): things
+the video should show that no role replaces, each 1–3 images of ONE thing and
+the `line` that says what it is (1–500 characters, e.g.
+`"the glass she drinks from"`). `{image}` in a line stands for that
+reference's first image; a line without it gets it appended. They are sent as
+given (never prepared) and their images count toward the 30. A `{role:N}` or
+a raw `{image:` / `{video:` / `{audio:` token in a line answers `400`.
 
 **Preview-only role settings** (any kind; a full run ignores both):
 `previewName` is the name used instead of `name` in a preview, and
@@ -1969,10 +2047,26 @@ video then fails; it adds about a minute, and falls back to your own images
 for a role whose picture could not be made. Locations are not prepared.
 Pass `prepareReferences: false` to use your images as they are.
 
+**Face masking** (`faceMasking`, off by default): the faces in the source clip
+are covered before the video model sees it, keeping their movement and lip
+timing. `"always"` masks them before the first attempt (its credits are
+`breakdown.masking`, in `totalCredits`); `"auto"` starts unmasked and, only if
+the video model refuses the source clip, retries once with the faces masked
+(any other failure is not retried; the extra credits, charged only then, are
+`maskingCredits`, not in `totalCredits`, and `run()` needs credits for both).
+`fill` is `"blur"` (default) or `"depth"` (a depth-color view of the face); the
+size, `zone` and `threshold` settings choose which faces are masked. A
+completed job's output carries `faceMasking: { applied, reason }`: `applied` is
+whether the video was made from the masked clip; `reason` is `"always"`,
+`"input_refused"` (`auto` retried after the refusal), `"no_faces"` (no face
+left to mask after the filters: `always` continues unmasked, `auto` fails with
+the original refusal) or `"off"`.
+
 Both routes answer `400` before charging for more roles of a kind than allowed
 or more than 30 images in all (`validation_error`), `draft: true` with
 `resolution` `"720p"` or `"1080p"` (`validation_error`, "Draft is 480p only."),
-a `prePrompt` or `postPrompt` over 4,000 characters, a `{role:N}` with N outside
+a `prePrompt` or `postPrompt` over 4,000 characters, a `faceMasking` setting
+out of range (`validation_error`), a `{role:N}` with N outside
 1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name`, the
 `prePrompt` or the `postPrompt`, a prompt that would build too long
 (`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
@@ -2005,6 +2099,34 @@ const quote = await client.castSwap.estimate(params)
 const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
 ```
 
+**Full Quality.** A finished draft run (a Cast Swap run made as a draft, or a
+trend run, whose default is a draft) can be finished at Full Quality within 7
+days: `fullQuality(jobId)` re-renders the same take at 1080p, with the clip's
+audio, as a new job linked to the draft. It spends credits; quote it first with
+`fullQualityEstimate(jobId)` (free), whose `totalCredits` is
+`breakdown.castSwap + breakdown.seedanceHd` (`seedanceHd` is 0 when an earlier
+failed try of this draft already finished the 1080p render, which is then
+reused). One Full Quality per draft: a repeat answers the same job with
+`existing: true` and charges nothing; the server keys it by the draft, so no
+idempotency key is taken. The new job keeps the draft's origin; `sessionId`
+files it in a session. Refusals carry a `CastSwapFullQualityRefusalCode`:
+`401 unauthorized`, `404 not_found`, `409 not_completed`, `409 not_a_draft`,
+`410 draft_expired`, `409 full_quality_pending`, `409 full_quality_unavailable`,
+`402 insufficient_credits` (or a workspace cap), `422 job_blocked`,
+`503 job_read_failed` (retryable), `503 estimate_unavailable`,
+`503 host_too_old` — the full table is in the
+[route reference](./api-integration.md#full-quality).
+`full_quality_pending` (`err.details.retryable === true`) is not final: while
+an earlier try's 1080p render of the draft is being reviewed, or has not
+started yet, both calls refuse with it; try again later.
+`full_quality_unavailable` is final (nothing kept to re-render, the finalize
+refuses the draft, every try failed). Tell them apart by `err.code`.
+
+```ts
+const quote = await client.castSwap.fullQualityEstimate(draftJobId) // free
+const { jobId, existing } = await client.castSwap.fullQuality(draftJobId)
+```
+
 ---
 
 ### `client.trends`
@@ -2022,13 +2144,16 @@ get(slug: string, params?: { locale?: string }): Promise<TrendDetail>           
 estimate(slug: string, request: TrendRunRequest): Promise<TrendEstimate>        // POST /v1/trends/:slug/estimate, free
 run(slug: string, request: TrendRunRequest, options?: { idempotencyKey?: string }): Promise<{ jobId: string }> // POST /v1/trends/:slug/runs → 202
 runs(params?: ListTrendRunsParams): Promise<TrendPage<TrendRun>>               // GET /v1/trends/runs
+getRun(jobId: string): Promise<TrendRun>                                        // GET /v1/trends/runs/:jobId
+tags(params?: { locale?: string }): Promise<TrendTag[]>                         // GET /v1/trends/tags
 favorite(slug: string): Promise<void>                                           // PUT /v1/trends/:slug/favorite → 204
 unfavorite(slug: string): Promise<void>                                         // DELETE /v1/trends/:slug/favorite → 204
 ```
 
 `list()` and `runs()` resolve to the page as it arrives (`{ data, next }`; pass
-`next` back as `cursor`, `null` on the last page). `get()`, `estimate()` and
-`run()` resolve to the payload, out of the route's `{ data }` envelope.
+`next` back as `cursor`, `null` on the last page). `get()`, `estimate()`,
+`run()`, `getRun()` and `tags()` resolve to the payload, out of the route's
+`{ data }` envelope.
 
 ```ts
 type TrendSlotKind = "person" | "location" | "product" | "pet"
@@ -2069,12 +2194,15 @@ interface TrendRunRequest {
   draft?: boolean       // only at 480p; default true there
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
+  previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
+  origin?: string       // run(): your app's slug (e.g. "tools"), as on any job: the run's job carries it as input_data.origin
 }
 
 interface TrendEstimate {
   expectedCredits: number            // what the run is expected to be charged
   holdCredits: number                // what is reserved when it starts
-  breakdown: Record<string, number>  // the parts of the quote
+  breakdown: Record<string, number>  // the parts of the quote (with maskingCredits, `masking` is listed but not in the totals)
+  maskingCredits?: number            // charged only if the clip is refused and the run retries with the faces masked
 }
 
 interface TrendRun {
@@ -2088,10 +2216,34 @@ interface TrendRun {
   preview: boolean; resolution: string; draft: boolean
   videoUrl: string | null; posterUrl: string | null  // once completed
   creditsCharged: number | null
-  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
+  fullQuality: { jobId: string; status: string } | null // a draft's newest Full Quality try: a pointer only
   fullQualityUntil: string | null    // until when a completed draft can be redone in Full Quality
 }
+
+interface TrendTag {
+  tag: string     // pass it as list({ tag })
+  label: string   // in the resolved locale; the tag itself when it has no label
+  count: number   // published trends that carry it
+}
 ```
+
+A Full Quality version of a draft is a run of its own in `runs()` and
+`getRun()`: its own `jobId`, status, result and `creditsCharged`, with
+`fullQualityOf` naming the draft. It stays listed after the draft is deleted.
+The newest Full Quality try per draft is the one listed (running, done, or its
+last failure): when a try failed or was cancelled and the draft was tried
+again, the older tries are left out of `runs()` (with or without `trend`), and
+`getRun()` still reads one by its id. The draft's `fullQuality` is only a
+pointer to that newest try (`{ jobId, status }`, or `null` when none was
+started), to tell that an upgrade exists; its video and charge are on its own
+run (`getRun(fullQuality.jobId)`), never on the draft.
+
+`getRun(jobId)` reads one of your trend runs in the same shape; a job that is
+not your own trend run (another user's, a step inside another job, any other
+kind of job) is a `NotFoundError`. `tags()` lists the tags in use on published
+trends, most used first, with their labels in the resolved locale (`locale`,
+else your profile's language, else English).
 
 A required slot left empty is refused with `400 missing_slot`; an optional one
 left out takes the chosen example's pictures (`fromExample: true` on the run),
@@ -2111,12 +2263,13 @@ trend routes' OWN codes with fixed messages, never the engine's text or
 `raw_reference_token`), `402 insufficient_credits` (or a workspace cap) as
 given, `413 storage_limit_exceeded`, `422 job_blocked`, `429 rate_limited`,
 `503 engine_unsupported` / `estimate_unavailable`, else `502 engine_error`.
-`"runs"` is never a slug: `get()`, `estimate()`, `run()`, `favorite()` and
-`unfavorite()` throw a `TypeError` for it before any request. The full table
+`"runs"` and `"tags"` are never slugs: `get()`, `estimate()`, `run()`,
+`favorite()` and `unfavorite()` throw a `TypeError` for them before any
+request. The full table
 is in the [route reference](./api-integration.md#13g-trends-cloud-edition).
 
 `run()` returns a job id; follow it with `client.jobs.get(jobId)`, or read it
-back with `runs()`. Pass `{ idempotencyKey }` (`TrendRunOptions`) to make a
+back with `getRun(jobId)` / `runs()`. Pass `{ idempotencyKey }` (`TrendRunOptions`) to make a
 retry safe: it is sent unchanged as the `Idempotency-Key` header (8–200
 characters, else `400`), and a repeat with the same key answers with the first
 run's `jobId`; nothing new is started or charged.
@@ -4750,7 +4903,7 @@ Refusals (nothing is written or billed) carry a code from
 | `continuation_subset_required` | `NodaroError` (409, or 400) | nothing is left to retry: every step completed (409), or the app runs no step (400) |
 | `locked_field` | `NodaroError` (400) | an input the run applied sets a field the app does not let a runner set |
 | `preview_review_required` | `NodaroError` (400) | the Retry would stop at a Preview with nobody to review it: retry it from the app page, where a person can review it |
-| `insufficient_app_credits` / `insufficient_credits` | `InsufficientCreditsError` (its `code` reads `insufficient_credits`; the message says which) | your app credits, or balance, cannot cover it |
+| `insufficient_app_credits` / `insufficient_credits` | `InsufficientCreditsError` (its `code` says which) | your app credits, or balance, cannot cover it |
 | `billing_unavailable` | `NodaroError` (503) | billing is briefly unavailable for a workspace run: try again shortly |
 
 To run with other inputs or on the app's current version, start the run over
@@ -5873,6 +6026,10 @@ videoMask(input: {
   holdLastMask?: boolean          // default false; keep the last mask where the subject is lost
   minSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions shorter than this % of the frame height
   maxSubjectHeightPct?: number    // 0..100, default 0 (off); drop regions taller than this % (min > max is a 400)
+  zone?: {                        // default null (off); keep regions whose centre is inside these margins
+    leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number  // 0..49 % each, left out = 0
+  } | null
+  perShot?: boolean               // default false; detect the subject again in every shot (scene cuts found first)
 }): Promise<{ jobId: string }>
 ```
 
@@ -5882,7 +6039,14 @@ black-and-white **mask video** back — white = the subject.
 Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer),
 priced by length (`sam-3.1-video:5s` … `:300s`, 55<!-- credits: sam-3.1-video:5s -->–3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3 about half). Poll
 `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
-`height`, `frames` and `coverage`. Full reference:
+`height`, `frames`, `shots`, `coverage` (rounded to 4 decimals) and `kept`
+(false only when the size / zone filters left nothing on any frame). `zone` drops, on every frame, the
+regions whose bounding-box centre lies outside the frame minus the margins
+(after the size cuts, before `holdLastMask`). `perShot` finds the clip's scene
+cuts first and segments each shot on its own — the subject is detected again
+after every cut, `holdLastMask` never crosses a cut, and each shot's mask is
+fitted to that shot's exact frame count; on a clip with no cut it gives the
+same mask, fitted to the clip's exact frame count. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
 
 #### `maskComposite(input)`

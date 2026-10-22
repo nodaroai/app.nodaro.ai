@@ -33,7 +33,13 @@
  * tier figures. `--allow-rollback` is the rollback path, and only it: it runs
  * only while `LLM_TIER_PRICING_ROLLBACK` is set (a database whose metered
  * schema is merely unconfirmed is refused either way), and the same recompute
- * then restores the tier figures.
+ * then restores the tier figures. It also refuses unless the private plugins
+ * (`@nodaroai/cloud-plugins`, installed at the deployment's
+ * `CLOUD_PLUGINS_VERSION`) load in its own process, as the server loads them at
+ * boot: they price parts of a graph — the UGC estimate, the ids only a plugin
+ * prices — and without them those parts price as 0, so every UGC listing would
+ * be rewritten far below what a republish stores. Once loaded they keep the
+ * event loop alive, so the script exits explicitly after its report.
  *
  * CANDIDATES. A graph with a node that makes a metered LLM call, or a UGC video
  * whose clip or creator part holds a reading. A template owned by the server's
@@ -63,6 +69,7 @@ import { isLlmUnpricedError } from "../../lib/llm-unpriced-refusal.js"
 import { SYSTEM_ACCOUNT_EMAIL_PATTERN } from "../../lib/system-account.js"
 import { ugcChains } from "@nodaro/render-rules"
 import { probeLlmMeteredSchemaNow } from "../../lib/llm-metered-schema-gate.js"
+import { loadPrivatePlugins } from "../../lib/private-plugins/load.js"
 import { resolveCanvasResultIds } from "../../lib/canvas-result-ids.js"
 import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../../lib/exposed-text-caps.js"
 import { appListingMaxColumns, appListingPrice, type AppListingSplit } from "../../lib/app-listing-price.js"
@@ -250,6 +257,14 @@ export async function runLlmListingBackfill(
     console.error("Refusing: this environment is not the Cloud edition (set EDITION=cloud). Outside it the estimate prices unmarked and without the admin price overrides.")
     return refused
   }
+  // The private plugins price parts of a graph (the UGC estimate, the ids only a plugin prices) — the
+  // server loads them at boot, so a listing priced without them is not the listing a republish writes.
+  const plugins = await loadPrivatePlugins()
+  if (plugins.loaded.length === 0) {
+    console.error("Refusing: no private plugin loaded in this process (install @nodaroai/cloud-plugins at the deployment's CLOUD_PLUGINS_VERSION). Without them the UGC estimate and the plugin-priced ids price as 0.")
+    return refused
+  }
+  console.log(`[llm-listing-backfill] private plugins: ${plugins.loaded.length} loaded`)
   // A fresh process has not asked the database yet: ask it, so "metered" below is this database's answer.
   await probeLlmMeteredSchemaNow()
   const metered = llmMeteredPricing()
@@ -331,11 +346,10 @@ export async function runLlmListingBackfill(
 const invokedDirectly = typeof process.argv[1] === "string" && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 if (invokedDirectly) {
   runLlmListingBackfill(parseLlmListingArgs(process.argv.slice(2)))
-    .then((r) => {
-      if (!r.ok) process.exitCode = 1
-    })
+    // Exit explicitly: the loaded private plugins hold handles that keep the event loop alive.
+    .then((r) => process.exit(r.ok ? 0 : 1))
     .catch((err) => {
       console.error(err)
-      process.exitCode = 1
+      process.exit(1)
     })
 }

@@ -53,6 +53,8 @@ export interface MaskCompositeProbe {
   readonly durationSec: number
   /** Where the foreground's picture starts on its own clock, seconds (0 for most files). */
   readonly startSec?: number
+  /** Foreground frame count, when the container states one: the render's exact length in frames. */
+  readonly frameCount?: number
   /** Foreground sample aspect ratio, display orientation (1 = square pixels). */
   readonly sar?: number
   readonly foregroundHasAudio: boolean
@@ -81,6 +83,9 @@ function backgroundFitFilter(fit: MaskCompositeBackgroundFit, w: number, h: numb
   }
 }
 
+/** Restart an input's timestamps at `startSec`: the clock of the video the render follows. */
+const onClockFrom = (startSec: number): string => `setpts=PTS-STARTPTS${startSec > 0 ? `+${startSec.toFixed(6)}/TB` : ""}`
+
 /**
  * The mask chain: put the mask on the foreground's clock, stretch it to the
  * frame, normalise its range, then invert / grow / feather. A mask's frame N
@@ -91,7 +96,7 @@ function backgroundFitFilter(fit: MaskCompositeBackgroundFit, w: number, h: numb
  */
 function maskChain(s: MaskCompositeSettings, w: number, h: number, rate: string | undefined, startSec: number): string {
   const parts = [
-    `setpts=PTS-STARTPTS${startSec > 0 ? `+${startSec.toFixed(6)}/TB` : ""}`,
+    onClockFrom(startSec),
     `scale=${w}:${h}`,
     "setsar=1",
     "format=gray",
@@ -150,7 +155,9 @@ export function buildMaskCompositeArgs(args: {
   const audio = audioArgs(s.audioSource, probe)
   const graph = [
     `[0:v]scale=${w}:${h},setsar=1,format=yuva420p[fg]`,
-    `[1:v]setpts=PTS-STARTPTS,${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=yuv420p[bg]`,
+    // The background goes on the foreground's clock too. Overlay emits one frame per background
+    // frame, so a background starting before a late foreground would add bare background frames.
+    `[1:v]${onClockFrom(startSec)},${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=yuv420p[bg]`,
     `[2:v]${maskChain(s, w, h, rate, startSec)}[m]`,
     "[fg][m]alphamerge[fga]",
     "[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout]",
@@ -164,7 +171,10 @@ export function buildMaskCompositeArgs(args: {
     "-filter_complex", graph,
     "-map", "[vout]",
     ...audio.map,
-    // The render runs to the foreground's last frame, whatever the other inputs do.
+    // The render runs to the foreground's last frame, whatever the other inputs do. The overlay
+    // follows the (looped) background, so it can emit one frame past the foreground's end, which
+    // `-t`'s rounding alone may keep: the frame count bounds it exactly.
+    ...(probe.frameCount ? ["-frames:v", String(probe.frameCount)] : []),
     "-t", (startSec + probe.durationSec).toFixed(3),
     "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
     ...(audio.map.length > 0 ? ["-c:a", "aac", "-b:a", "192k"] : ["-an"]),
@@ -302,6 +312,7 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
       frameRate: fg.avgFrameRate && fg.avgFrameRate !== "0/0" ? fg.avgFrameRate : fg.rFrameRate,
       durationSec: fg.streamDurationSec,
       startSec: fg.startTimeSec,
+      ...(fg.frameCount ? { frameCount: fg.frameCount } : {}),
       sar: fg.sar,
       foregroundHasAudio,
       backgroundHasAudio,

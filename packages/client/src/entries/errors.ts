@@ -12,6 +12,8 @@ export {
   NotFoundError,
   RateLimitedError,
   InsufficientCreditsError,
+  CreditCapExceededError,
+  CREDIT_CAP_CODES,
   StorageExceededError,
   WorkflowConflictError,
   JobBlockedError,
@@ -29,4 +31,4 @@ export {
   throwFromResponse,
 } from "../errors.js"
 
-export type { HeldFinalRun, WorkflowConflictCode } from "../errors.js"
+export type { CreditCapCode, HeldFinalRun, WorkflowConflictCode } from "../errors.js"

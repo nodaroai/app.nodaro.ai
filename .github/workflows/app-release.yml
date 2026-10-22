@@ -139,16 +139,19 @@ jobs:
           GH_TOKEN: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
         run: |
           set -euo pipefail
-          # The token rides in the remote URL for this one push; Actions
-          # masks registered secret values in logs, and the remote is removed
-          # right after so it never outlives the step (review 2026-08-19).
-          git remote add public "https://x-access-token:${TOK}@github.com/nodaroai/app.nodaro.ai.git"
+          # The token rides in a header scoped to the public repo's URL (see
+          # mirror-to-public.yml): git drops URL credentials on a redirect.
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOK" | base64 -w0)"
+          echo "::add-mask::${AUTH#AUTHORIZATION: basic }"
+          git remote add public "https://github.com/nodaroai/app.nodaro.ai.git"
           # actions/checkout installs a github.com extraheader that OVERRIDES
           # URL-embedded credentials — without clearing it for this one push,
           # git authenticates as github-actions[bot] and the public repo
           # answers 403 (first three live runs all died here). -c empties the
           # header for exactly this command.
-          git -c http.https://github.com/.extraheader= push public "${{ steps.ver.outputs.next }}"
+          git -c http.https://github.com/.extraheader= \
+            -c "http.https://github.com/nodaroai/app.nodaro.ai.git.extraheader=${AUTH}" \
+            push public "${{ steps.ver.outputs.next }}"
           git remote remove public
           # Re-runnable: a retry after a partial failure must not die on the
           # release that already exists.

@@ -1,7 +1,7 @@
 ---
 node_type: video-mask
-generated_at: 2026-10-21T01:49:16.034Z
-generated_from: 3ece3d99e
+generated_at: 2026-10-21T10:43:25.328Z
+generated_from: 6b9bc0eb9
 ---
 
 # Video Mask
@@ -24,6 +24,8 @@ generated_from: 3ece3d99e
 - `holdLastMask?: boolean`
 - `minSubjectHeightPct?: number`
 - `maxSubjectHeightPct?: number`
+- `zone?: VideoMaskZone | null`
+- `perShot?: boolean`
 - `videoUrl?: string`
 - `activeResultIndex?: number`
 - `generatedResults?: GeneratedResult[]`
@@ -45,6 +47,8 @@ generated_from: 3ece3d99e
   "holdLastMask": false,
   "minSubjectHeightPct": 0,
   "maxSubjectHeightPct": 0,
+  "zone": null,
+  "perShot": false,
   "fieldMappings": {},
   "executionStatus": "idle",
   "generatedResults": [],
@@ -83,6 +87,8 @@ generated_from: 3ece3d99e
     "holdLastMask": false,
     "minSubjectHeightPct": 0,
     "maxSubjectHeightPct": 0,
+    "zone": null,
+    "perShot": false,
     "fieldMappings": {},
     "executionStatus": "idle",
     "generatedResults": [],

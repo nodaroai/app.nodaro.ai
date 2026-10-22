@@ -99,6 +99,7 @@ const run: TrendRun = {
   videoUrl: "https://cdn.example.com/out.mp4",
   posterUrl: null,
   creditsCharged: 7,
+  fullQualityOf: null,
   fullQuality: null,
   fullQualityUntil: "2026-10-27T10:03:00.000Z",
 }
@@ -186,6 +187,24 @@ describe("trends resource", () => {
     expect(JSON.parse(init.body as string)).toEqual(request)
   })
 
+  it("estimate and run send previewJobId, and the quote carries maskingCredits", async () => {
+    const quote = { expectedCredits: 30, holdCredits: 45, breakdown: { castSwap: 20, seedance: 25, masking: 12 }, maskingCredits: 12 }
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: quote }))
+      .mockReturnValueOnce(mockOk({ data: { jobId: "job-2" } }, 202))
+    const client = make(fetchMock)
+    const withPreview: TrendRunRequest = { ...request, previewJobId: "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10" }
+
+    const got = await client.trends.estimate("dance-off", withPreview)
+    expect(got.maskingCredits).toBe(12)
+    await client.trends.run("dance-off", withPreview)
+
+    for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(JSON.parse(init.body as string).previewJobId).toBe("0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10")
+    }
+  })
+
   it("run POSTs the request to /v1/trends/:slug/runs and returns the job id", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { jobId: "job-1" } }, 202))
     const client = make(fetchMock)
@@ -197,6 +216,16 @@ describe("trends resource", () => {
     expect(url.pathname).toBe("/v1/trends/dance-off/runs")
     expect(JSON.parse(init.body as string)).toEqual(request)
     expect(Object.keys(init.headers).map((k) => k.toLowerCase())).not.toContain("idempotency-key")
+  })
+
+  it("run sends the client app's origin in the body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { jobId: "job-1" } }, 202))
+    const client = make(fetchMock)
+    const withOrigin: TrendRunRequest = { ...request, origin: "tools" }
+
+    await client.trends.run("dance-off", withOrigin)
+
+    expect(JSON.parse(call(fetchMock).init.body as string)).toEqual({ ...request, origin: "tools" })
   })
 
   it("run sends idempotencyKey as the Idempotency-Key header (an empty one sends none)", async () => {

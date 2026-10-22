@@ -51,6 +51,21 @@ async function videoFrom(
 const L = VIDEO_MASK_LIMITS
 const B = MASK_COMPOSITE_BOUNDS
 
+const zoneMargin = z.number().min(L.ZONE_MARGIN_PCT_MIN).max(L.ZONE_MARGIN_PCT_MAX).optional()
+
+/** The `zone` arg in the route's names, only the margins given (the route reads a missing one as 0);
+ *  undefined when none is given (`{}`): the zone is then left out, off, as the route reads an all-0 zone. */
+function zoneBody(zone: { left_pct?: number; right_pct?: number; top_pct?: number; bottom_pct?: number } | undefined): Record<string, number> | undefined {
+  if (!zone) return undefined
+  const body = {
+    ...(zone.left_pct !== undefined ? { leftPct: zone.left_pct } : {}),
+    ...(zone.right_pct !== undefined ? { rightPct: zone.right_pct } : {}),
+    ...(zone.top_pct !== undefined ? { topPct: zone.top_pct } : {}),
+    ...(zone.bottom_pct !== undefined ? { bottomPct: zone.bottom_pct } : {}),
+  }
+  return Object.keys(body).length > 0 ? body : undefined
+}
+
 export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpts): void {
   server.registerTool(
     "video_mask",
@@ -75,6 +90,11 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         hold_last_mask: z.boolean().optional().describe("Keep the last mask on frames where the subject is lost (default false)."),
         min_subject_height_pct: z.number().min(L.MIN_SUBJECT_HEIGHT_PCT_MIN).max(L.MIN_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions shorter than this % of the frame height (default 0 = off)."),
         max_subject_height_pct: z.number().min(L.MAX_SUBJECT_HEIGHT_PCT_MIN).max(L.MAX_SUBJECT_HEIGHT_PCT_MAX).optional().describe("Drop regions taller than this % of the frame height (default 0 = off)."),
+        zone: z
+          .object({ left_pct: zoneMargin, right_pct: zoneMargin, top_pct: zoneMargin, bottom_pct: zoneMargin })
+          .optional()
+          .describe("Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too)."),
+        per_shot: z.boolean().optional().describe("Detect the subject again in every shot after a scene cut (default false)."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -83,6 +103,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
     async (args) => {
       const video = await videoFrom("video", args.video_url, args.video_asset_id, session.userId)
       if ("refusal" in video) return video.refusal
+      const zone = zoneBody(args.zone)
       const payload: Record<string, unknown> = {
         videoUrl: video.url,
         prompt: args.prompt,
@@ -91,6 +112,8 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         ...(args.hold_last_mask !== undefined ? { holdLastMask: args.hold_last_mask } : {}),
         ...(args.min_subject_height_pct !== undefined ? { minSubjectHeightPct: args.min_subject_height_pct } : {}),
         ...(args.max_subject_height_pct !== undefined ? { maxSubjectHeightPct: args.max_subject_height_pct } : {}),
+        ...(zone ? { zone } : {}),
+        ...(args.per_shot !== undefined ? { perShot: args.per_shot } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

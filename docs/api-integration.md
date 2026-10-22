@@ -1494,13 +1494,17 @@ backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
 The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
-plus, for three classes of failure, a structured `error_hint`.
+plus, for four classes of failure, a structured `error_hint`.
 
 A provider content-policy block:
 
 ```json
-{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string }
+{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" }
 ```
+
+`subject: "input_video"` is present when the provider refused the job's input
+video itself — not the prompt, a reference image or the output; send a
+different clip.
 
 Or, on a deployment that registers a job policy, a rejection by that policy:
 
@@ -1523,6 +1527,16 @@ workspace cap such as `free_video_limit`, `instance_cap_reached`,
 unknown code like `insufficient_credits`. The job's credits are refunded; ask
 the person to top up (or raise the cap) and run it again — the same request
 fails the same way until then.
+
+Or, when the provider refused the job's input video without naming a
+content-policy class (its message is about the file, not a policy):
+
+```json
+{ "kind": "input-refused", "subject": "input_video" }
+```
+
+Treat it like any other failure — no fallback model is offered — except that
+the input to change is known: send a different clip.
 
 `reason` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is.
 `hookPoint` says whether the request was refused before the job ran or the
@@ -2124,6 +2138,14 @@ the total is shown `~N`: the estimates plus the fixed prices, never a hold): it 
 does. With the block count in hand, `speaker-frames:<N>u` is its exact price,
 and `GET /v1/nodes/speaker-frames` serves the per-block rate as `creditRate`
 ([§11](#11-node-discovery)).
+
+For an exact quote of a step priced by its clip's length, an `upload-video`
+node in the `estimate-workflow` body may carry the clip's `duration` (seconds)
+and `fps` in its `data`, beside its `url`: Video Mask is then quoted at its
+frame-rate-priced length, the rule its run is charged by
+([Video Mask](./nodes/ai-video/video-mask.md)) — also after a Trim Video or a
+Loop Video, which keep the rate, and after a Combine Videos whose clips all
+declare the same one.
 
 A Voice Changer Pro convert (`POST /v1/voice-changer-pro`) is priced the
 same way: each recast voice is priced in base units and the convert is
@@ -3737,14 +3759,19 @@ handed to a tool that takes a job id. Record it as one:
   keeps that link, so it lists with the entity and the main-image approvals
   accept it for that entity only. `GET /v1/jobs?type=image-edit` lists them.
 - **One upload, one job.** Sending the same `assetId` again answers the same
-  job, so a retry or a double click never makes two. To show it in a second
-  session, add it there with `POST /v1/sessions/:id/items`.
+  job, so a retry or a double click never makes two. A retry also finishes a
+  job an earlier attempt left unfinished, so a `2xx` always carries a
+  completed job. The job keeps the source, design state and session of the
+  request that created it: a retry's own are not applied. To show it in a
+  second session, add it there with `POST /v1/sessions/:id/items`.
 - **Refusals.** `404 not_found` when the asset, the source or the session is
   not yours. `400 validation_error` when the asset is not an image, is not a
   file you stored, the source job has no finished image, `sourceImageUrl` is
   not one of its images, both sources are sent, or `editStateUrl` is not a url
-  `POST /v1/upload-json` returned. `422 job_blocked` when a job policy of this
-  deployment refuses the image.
+  `POST /v1/upload-json` returned. `409 conflict` when you already used
+  `image-edit:<assetId>` as the `Idempotency-Key` of another request.
+  `422 job_blocked` when a job policy of this deployment refuses the image,
+  on every retry.
 - **Deleting.** Deleting the job leaves the uploaded file in your uploads.
   Deleting the upload from your library keeps the file while this job still
   shows it.
@@ -4016,7 +4043,7 @@ installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance, references }, settlesLower }`. |
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance, references, masking? }, maskingCredits?, settlesLower }`. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4029,15 +4056,24 @@ in the video; each trait is `"new"` — the default, from your images — or
 `"original"`, kept from the video; any role may also take `previewName`, the
 name used instead of `name` in a preview, and `inPreview: false`, which leaves
 it out of a preview — not sent, prepared or charged; a full run ignores both),
-and optionally `prePrompt` (your own
+and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `resolution` (`"480p"` — the default — `"720p"` or `"1080p"`),
 `draft` (on by default at 480p, off above it; `true` above 480p is refused),
-`prepareReferences` (default `true`, see below), `sessionId` and `origin`.
+`prepareReferences` (default `true`, see below), `faceMasking` (off by
+default, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
+
+**Fixed references.** `references` (at most 5) are things the video should
+show that no role replaces, each `{ images, line }`: 1–3 images of ONE thing
+and the line that says what it is (1–500 characters, e.g.
+`"the glass she drinks from"`). `{image}` in a line stands for that
+reference's first image (`"Use {image} for the sky"`); a line without it gets
+it appended. They are sent as given, never prepared, and their images count
+toward the 30. A reference alone is enough for a run: no role needs images.
 
 **Reference preparation.** Unless `prepareReferences` is `false`, each person,
 pet and product role's images are first turned into one clean reference
@@ -4046,9 +4082,45 @@ credits (`breakdown.references`), charged when it runs, even if the video then
 fails; it adds about a minute, and falls back to your own images for a role
 whose picture could not be made. Locations are not prepared.
 
+**Face masking.** `faceMasking` covers the faces in the source clip before the
+video model sees it; their movement and lip timing stay, and the rest of the
+clip is sent as it is. It is
+`{ mode, fill?, minFaceHeightPct?, maxFaceHeightPct?, zone?, blurStrengthPct?, threshold? }`:
+
+- `mode`: `"off"` (the same as leaving `faceMasking` out: the clip is sent as
+  it is), `"always"` (the faces are masked before the first attempt) or
+  `"auto"` (the run starts unmasked and, only if the video model refuses the
+  source clip, is retried once with the faces masked; any other failure is not
+  retried).
+- `fill`: what covers a masked face — `"blur"` (the default) or `"depth"` (a
+  depth-color view of it).
+- Which faces are masked: `minFaceHeightPct` (0–100, default 15) and
+  `maxFaceHeightPct` (0–100, default 0 = no limit; when above 0 it must be at
+  least `minFaceHeightPct`) keep faces by their height as a % of the frame's;
+  `zone` (`{ leftPct, rightPct, topPct, bottomPct }`, each 0–49 % of the frame,
+  default 0) leaves out a face whose centre lies in one of those margins;
+  `threshold` (0.05–0.95, default 0.5) is how sure the face finder must be —
+  lower finds more faces.
+- `blurStrengthPct` (0.1–5 % of the frame's width, default 2): how strong the
+  blur is, with `fill: "blur"`.
+
+A completed job's output carries `faceMasking: { applied, reason }`: `applied`
+is whether the video was made from the masked clip, and `reason` says why —
+`"always"` (masked before the first attempt), `"input_refused"` (`auto`
+retried with the faces masked after the source clip was refused), `"no_faces"`
+(no face was left to mask after the filters: an `always` run continues
+unmasked, while an `auto` run fails with the original refusal instead) or
+`"off"`.
+
 The quote is `totalCredits` = `breakdown.castSwap` (the run itself) +
 `breakdown.seedance` (the video model it calls) + `breakdown.references` (the
-reference preparation; 0 when it is off or there is nothing to prepare).
+reference preparation; 0 when it is off or there is nothing to prepare), plus
+`breakdown.masking` (masking the faces) with `faceMasking.mode` `"always"`.
+With `"auto"` the masking is not in `totalCredits`: `maskingCredits` is the
+extra charged only if the masked retry runs, and starting the run needs
+credits for both. `breakdown.masking` is present with `"auto"` too (equal to
+`maskingCredits`) but is not added to `totalCredits`, so under `"auto"` the
+breakdown sums to more than the total.
 `settlesLower: true` means the
 video's length is left to the model (Auto), so the final charge is expected to
 come out lower than the quote.
@@ -4064,21 +4136,69 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images and no `prePrompt` or `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), or a `prePrompt` or `postPrompt` over 4,000 characters. Also an invalid `origin`. |
-| `400` | `raw_reference_token` | A role's `name` or `previewName`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
-| `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
-| `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |
+| `400` | `validation_error` | The body does not validate: no role with images, no reference and no `prePrompt` or `postPrompt`, more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, or a `faceMasking` setting out of range (including a `maxFaceHeightPct` above 0 and below `minFaceHeightPct`). Also an invalid `origin`. |
+| `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
+| `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
+| `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
 | `400` | `video_unreadable` | The clip's length could not be read (not a playable video). |
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `no_roles_in_preview` | A preview with every role set to `inPreview: false` (always refused, even with a `prePrompt` or `postPrompt`), or with no role kept in it that has images and no `prePrompt` or `postPrompt`. |
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the model's limit. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with face masking `"auto"`, the quote plus `maskingCredits`). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
 | `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/cast-swap` only). |
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
 | `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
 | `503` | `estimate_unavailable` | The video model's price cannot be quoted right now (`/estimate` only); try again shortly. |
+
+### Full Quality
+
+A finished DRAFT run (a Cast Swap run made as a draft, or a trend run, whose
+default is a draft) can be finished at Full Quality: the same take re-rendered
+at 1080p, fitted to the clip and given its original audio back, as a new job
+linked to the draft. It is available for 7 days after the draft completed
+(SDK: [`client.castSwap.fullQuality`](./sdk-reference.md#clientcastswap),
+MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
+`nodaro cast-swap full-quality estimate|run`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedanceHd }, availableUntil }`. |
+| `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this draft's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
+
+`:jobId` is the draft run's job id. The quote is `totalCredits` =
+`breakdown.castSwap` (the Full Quality job's own steps) +
+`breakdown.seedanceHd` (the 1080p render). `seedanceHd` is 0 when an earlier
+failed try of this draft already finished that render: it is reused, and only
+the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
+the price depends on the draft. The quote does not look for a Full Quality
+already running; when one is, the start answers it (`existing: true`) free.
+
+One Full Quality per draft: the job is keyed by the draft, so a repeated or
+concurrent request answers the same job, and a client `Idempotency-Key` is
+not used. A failed or cancelled one may be asked again, a few times. The new
+job keeps the draft's `origin`; `sessionId` files it in a session of yours.
+
+Refusals, all before anything is charged (bodies are
+`{ error: { code, message } }`). Only `full_quality_pending` ends on its own
+(its body also carries `retryable: true`); tell it from the final
+`full_quality_unavailable` by its code:
+
+| Status | `code` | When |
+|---|---|---|
+| `401` | `unauthorized` | No authenticated user. |
+| `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `404` | `not_found` | Not your job, or not a Cast Swap run; also a `sessionId` you may not use (start only). |
+| `409` | `not_completed` | The run has not finished. |
+| `409` | `not_a_draft` | The run was not made as a draft. |
+| `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
+| `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
+| `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
+| `422` | `job_blocked` | The request was blocked by the job policy (start only). |
+| `503` | `job_read_failed` | The draft could not be read just now (`retryable: true`); try again. |
+| `503` | `estimate_unavailable` | The 1080p render cannot be quoted right now; try again shortly. |
+| `503` | `host_too_old` | This platform version cannot run Full Quality. |
 
 ## 13g. Trends (Cloud edition)
 
@@ -4096,9 +4216,11 @@ slug is a `404` on every route.
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
 | `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length and resolutions). Query: `locale`. |
-| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
+| `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
+| `GET` | `/v1/trends/tags` | The tags in use on published trends, most used first: `{ data: [{ tag, label, count }] }`. `label` is in `?locale=` (as below), else English, else the tag itself; pass `tag` to `GET /v1/trends?tag=`. |
 | `PUT` | `/v1/trends/:slug/favorite` | Add the trend to your favorites. `204`. |
 | `DELETE` | `/v1/trends/:slug/favorite` | Remove it from your favorites. `204`. |
 
@@ -4106,7 +4228,7 @@ Names, descriptions, slot labels and hints come in `?locale=` when it is a
 platform language, else your profile's language, else English.
 
 The estimate and run body is
-`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId? }`:
+`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId?, origin?, previewJobId? }`:
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
@@ -4123,6 +4245,16 @@ The estimate and run body is
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
 - `projectId`: accepted, but not used by the run today.
+- `origin`: your app's slug (lowercase letters, digits and dashes), as on
+  any job: the run's job carries it (`input_data.origin`, what
+  `GET /v1/jobs?origin=` filters on), and records the surface you called
+  from. Not a slug is a `400` `validation_error`. Without it the run has no
+  origin.
+- `previewJobId` (a uuid): on a full run, the `jobId` of your own completed
+  preview run of this trend. When the preview showed the clip needs its faces
+  masked, the full run masks them from the start (and the quote says so)
+  instead of first trying without. Any other job (not yours, another trend's,
+  not a preview, not finished) is ignored, without an error.
 
 An OAuth app needs `jobs:read` to read, `workflows:execute` to estimate or
 run (plus `assets:write` to pass a `sessionId`), and `assets:write` for
@@ -4134,7 +4266,7 @@ anything is charged:
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body or a query does not validate, or the `cursor` is not one this list gave. |
+| `400` | `validation_error` | The body or a query does not validate, the `cursor` is not one this list gave, or (`/runs`) `origin` is not a slug. |
 | `400` | `missing_slot` | A required slot has no images, or an optional slot is left empty and the chosen example has no pictures for it. |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
@@ -4148,7 +4280,7 @@ anything is charged:
 | `502` | `engine_error` | The video engine answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |
 | `503` | `trend_unavailable` | The trend cannot be run right now. |
-| `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs`). |
+| `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`). |
 
 When the video engine refuses an estimate or a run, the trend routes answer
 with their OWN codes and fixed messages; the engine's message and any
@@ -4176,6 +4308,23 @@ run ran out of credits partway (it was refunded: top up, then run it again),
 else `cancelled` or `failed`. The message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
+
+A Full Quality version of a draft run is a run of its own in
+`GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
+`status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
+`draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any
+other run). It stays listed after its draft is deleted. The newest Full Quality
+try per draft is the one listed (running, done, or its last failure): when a
+try failed or was cancelled and the draft was tried again, the older tries are
+left out of `GET /v1/trends/runs` (with or without `?trend=`), and
+`GET /v1/trends/runs/:jobId` still reads one by its id. The draft's
+`fullQuality` is only a pointer to that newest try (`{ jobId, status }`, or
+`null` when none was started): its video and charge are read from its own run,
+never from the draft.
+
+`runs` and `tags` are never trend slugs. A tag is a plain string on
+its trends; its label per language is set by an admin, and a tag with no label
+reads as itself.
 
 ## 14. Pipelines
 
@@ -4977,7 +5126,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-overlay` | 1–20 timed image layers over a video, local FFmpeg, **22 credits**<!-- credits: video-overlay --> (`{ videoUrl, layers[]: { imageUrl, start, end?, preset?: card\|corner-badge\|full-frame, corner?, anchor?, x?, y?, width?, height?, fit?: contain\|cover, opacity?, animate?, zIndex? }, outputAspect?: 16:9\|9:16\|1:1\|4:5, baseFit?: cover\|contain, backgroundColor? }`; an explicit box field overrides the preset, neither = a corner badge (bottom-right, or the `corner` it names); `end` omitted = to the end of the video; base audio untouched; 30 requests / minute per user) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec, warnings[] }`. Full reference: [Video Overlay](./nodes/processing-video/video-overlay.md). |
 | `POST` | `/v1/video-depth` | Turn a video into a depth video — near is bright, far is dark (`{ videoUrl, provider?: video-depth-anything\|depth-anything-frames, modelSize?: small\|base\|large, colormap?: grayscale\|turbo\|inferno\|magma\|viridis, resolution?: auto\|360p\|480p\|720p\|1080p, sideBySide? }`; `provider` defaults to `video-depth-anything` and `modelSize` to `large`). `video-depth-anything` honours every lever; `depth-anything-frames` (per frame, may flicker) honours `modelSize` and `colormap` `grayscale` or `inferno` only. A lever the provider does not take is ignored and a colormap it cannot render becomes `grayscale`, so switching providers never fails a request — but every value sent must still be valid (an unknown provider, model size, colormap or resolution is a `400 validation_error`). The clip is measured before anything is created and priced by its length tier: `400 video_too_long` over the provider's limit (2,400 frames and at most 300 s for `video-depth-anything`, a clip with no frame rate counted at 30 fps; 80 s for `depth-anything-frames`), `400 video_unreadable` when the clip cannot be read, `400 validation_error` on a malformed body, `403 model_not_available` when this deployment has turned the provider off (an omitted `provider` is checked as the default) — nothing is reserved on any of them. → `{ jobId }`; output `{ videoUrl, thumbnailUrl }`. Full reference: [Video Depth](./nodes/processing-video/video-depth.md). |
 | `POST` | `/v1/generate-mask` | Text-prompted image segmentation (Grounded SAM) → a black-and-white mask image, white = the subject (`{ imageUrl, prompt (1–500 chars, e.g. "the person"), threshold?: 0–1 (default 0.3; lower selects more) }`; a malformed body is a `400 validation_error`). → `{ jobId }`; output `{ maskUrl, imageUrl }` — `maskUrl` is the mask PNG, `imageUrl` the source image passed through unchanged. Price: `GET /v1/credits/model-cost?model=generate-mask`. Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md). |
-| `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, coverage }`. Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
+| `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`), zone?: { leftPct?, rightPct?, topPct?, bottomPct? } \| null (each 0–49 % of the frame cut off that side, a side left out is 0; default null = off — keeps only the regions whose bounding-box centre is inside the rectangle left, after the size cuts and before holdLastMask), perShot?: boolean (default false — the clip's scene cuts are found first and each shot is segmented on its own: the subject is detected again after every cut, holdLastMask never crosses a cut, each shot's mask is fitted to that shot's exact frame count; on a clip with no cut it is one shot: the same mask, fitted to the clip's exact frame count) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, shots, coverage, kept }` (`shots` is 1 unless perShot found cuts; `kept` is false only when the size / zone filters left nothing on any frame — read it rather than `coverage`, which is rounded to 4 decimals). Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
 | `POST` | `/v1/mask-composite` | A foreground video over a background video through a mask video (white = foreground), local FFmpeg, keyless, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s of the result** (the video it follows measured first; over 300 s → 400 `video_duration_exceeds_limit`) (`{ foregroundUrl?, backgroundUrl, maskUrl, invertMask?, feather?: 0–20, grow?: -10–10, opacity?: 0–1 (default 1; inside the mask, opacity × fill + (1 − opacity) × background), fill?: video\|pixelate\|blur (default video), pixelSizePct?: 0.2–10 (default 1.25; block = max(2, round(width × pct ÷ 100)) px), blurStrengthPct?: 0.1–5 (default 2; gaussian sigma = width × pct ÷ 100 px), backgroundFit?: cover\|contain\|stretch, audioSource?: foreground\|background\|mix\|none }`; the result follows the foreground's size, rate and length — the background loops, the mask holds its last frame. `foregroundUrl` is required for `fill: "video"` (400 `validation_error` without it); `pixelate` / `blur` fill the mask with the background itself, take no foreground (one sent is ignored), follow and are priced on the background, and the result always carries the background's sound (`audioSource` is ignored)) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec }`. Full reference: [Mask Composite](./nodes/processing-video/mask-composite.md). |
 | `POST` | `/v1/site-capture` | A web page captured at phone width: full page + up to 8 section stills and a section map, **11 credits**<!-- credits: site-capture --> (`{ url, maxStills?: 3–8 }`). Always answers `{ jobId, status: "pending" }` at once; poll `GET /v1/jobs/:id`. Blocked, empty, unreachable or failed captures are refunded; a site that answers 403 or 429, or shows only a bot challenge, counts as blocked. Each still is shot with its section scrolled into view, so sections that appear as you scroll are captured too. A still that renders as one flat colour, or as mostly one empty band, is shot once more and then skipped: the next section takes its place (`still_blank_skipped:<section order>` in `warnings`). A section whose heading still does not show once it is on screen (a carousel slide that is not showing, for one) is skipped (`still_hidden_skipped:<section order>`), and the stills stop after about 45 s with what they have (`stills_time_budget`). `facts[]` are whole figures on one line (a price with its period, a count with its noun, a percentage, a date). A robots.txt disallow, an unreadable robots.txt, an address that does not resolve, or missing media storage is a 422 before any charge. Output `{ pageUrl, finalUrl, title, lang, dir, fullPage, stills[], sections[], facts[], usableStills, warnings[] }`; a failed job carries `error.code`. Served only where capture is enabled on the install (`SITE_CAPTURE_ENABLED`, on by default); elsewhere the route answers 404. |
 | `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |

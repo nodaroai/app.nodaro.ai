@@ -139,6 +139,17 @@ describe("POST /v1/video-mask", () => {
     expect((await post({ videoUrl: "https://example.com/c.mp4", prompt: "the face", holdLastMask: "yes", userId: USER })).statusCode).toBe(400)
   })
 
+  it("perShot defaults to false, passes true through (onto the job's input too), and refuses a non-boolean", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
+    expect((await post(body)).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ perShot: false }))
+    expect((await post({ ...body, perShot: true })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ perShot: true }))
+    expect(inserted?.input_data).toMatchObject({ perShot: true })
+    for (const v of ["yes", 1, null]) expect((await post({ ...body, perShot: v })).statusCode).toBe(400)
+  })
+
   it("minSubjectHeightPct defaults to 0, passes 0–100 through, and refuses out of range", async () => {
     probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
     const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
@@ -164,6 +175,28 @@ describe("POST /v1/video-mask", () => {
     expect(bad.json().error.code).toBe("validation_error")
     expect(bad.json().error.message).toMatch(/minSubjectHeightPct \(30\) is above maxSubjectHeightPct \(20\)/)
     for (const v of [-1, 101, "20"]) expect((await post({ ...body, maxSubjectHeightPct: v })).statusCode).toBe(400)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("zone defaults to null, passes margins through, accepts null, and refuses a margin outside 0–49", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
+    const zone = { leftPct: 10, rightPct: 10, topPct: 5, bottomPct: 0 }
+    expect((await post(body)).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ zone: null }))
+    expect((await post({ ...body, zone })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ zone }))
+    expect(inserted?.input_data).toMatchObject({ zone })
+    expect((await post({ ...body, zone: null })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ zone: null }))
+    // A margin left out counts as 0.
+    expect((await post({ ...body, zone: { leftPct: 10, rightPct: 10 } })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } }))
+    vi.mocked(videoQueue.add).mockClear()
+    const bad = await post({ ...body, zone: { ...zone, leftPct: 50 } })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error.code).toBe("validation_error")
+    for (const z of [{ ...zone, topPct: -1 }, { ...zone, bottomPct: "5" }, "10", 10]) expect((await post({ ...body, zone: z })).statusCode).toBe(400)
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 

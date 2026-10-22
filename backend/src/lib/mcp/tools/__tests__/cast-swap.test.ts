@@ -13,13 +13,29 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
  *    without quoting again;
  *  - it is registered only on Nodaro Cloud (`hasCredits()`), and only for a
  *    session that may execute;
- *  - a router 404 (the plugin is not served here) reads `not_available`.
+ *  - a router 404 (the plugin is not served here) reads `not_available`;
+ *  - `session_id` reaches the job: the route files it in the caller's own
+ *    session, and refuses one that is not theirs as it would a public request.
  *
  * The numbers are neutral on purpose: this repo is publicly mirrored.
  */
 const h = vi.hoisted(() => ({ credits: true }))
+const db = vi.hoisted(() => ({ ownSession: "" }))
 
-vi.mock("../../../supabase.js", () => ({ supabase: { from: vi.fn() } }))
+vi.mock("../../../supabase.js", async () => {
+  const { makeFakeFrom, has } = await import("../../../__tests__/fake-supabase-query.js")
+  return {
+    supabase: {
+      // Only the caller's own session (user u1, personal side) is found.
+      from: makeFakeFrom([], (q) => ({
+        data: q.table === "generation_sessions" && has(q, "eq", "id", db.ownSession) && has(q, "eq", "user_id", "u1") && has(q, "is", "workspace_id", null)
+          ? { id: db.ownSession }
+          : null,
+        error: null,
+      })),
+    },
+  }
+})
 vi.mock("../../../config.js", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>
   return { ...orig, hasCredits: () => h.credits }
@@ -27,6 +43,9 @@ vi.mock("../../../config.js", async (importOriginal) => {
 
 const { registerCastSwapTools } = await import("../cast-swap.js")
 const { buildMcpServer } = await import("../../server.js")
+const { resolveRequestSession } = await import("../../../generation-session-scope.js")
+const { sendInternalError } = await import("../../../http-errors.js")
+const { config } = await import("../../../config.js")
 
 interface InjectCall {
   method?: string
@@ -147,6 +166,146 @@ describe("cast_swap", () => {
     })
   })
 
+  it("sends fixed references to the route as given", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const references = [
+      { images: ["https://cdn.example/glass.png"], line: "the glass she drinks from" },
+      { images: ["https://cdn.example/sky.png", "https://cdn.example/sky2.png"], line: "Use {image} for the sky" },
+    ]
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, references })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({ ...BODY, references })
+  })
+
+  it("trims a reference's line, as the route does", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const references = [{ images: ["https://cdn.example/glass.png"], line: "  the glass she drinks from \n" }]
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, references })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({
+      ...BODY,
+      references: [{ images: ["https://cdn.example/glass.png"], line: "the glass she drinks from" }],
+    })
+  })
+
+  it("refuses a reference the route would refuse, before any call", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const server = serverWith(fastify)
+    const cases: Array<[string, { images: string[]; line: string }]> = [
+      ["a whitespace-only line", { images: ["https://cdn.example/glass.png"], line: "   " }],
+      ["a non-http(s) image", { images: ["ftp://cdn.example/glass.png"], line: "the glass" }],
+      ["a data: image", { images: ["data:image/png;base64,AAAA"], line: "the glass" }],
+      ["an image URL over 4096 characters", { images: [`https://cdn.example/${"a".repeat(4096)}.png`], line: "the glass" }],
+    ]
+    for (const [what, reference] of cases) {
+      const res = await callTool(server, "cast_swap", { ...ARGS, references: [reference] })
+      expect(res.isError, what).toBe(true)
+    }
+    expect(calls).toHaveLength(0)
+  })
+
+  it("sends face_masking to the route as faceMasking, every key in camelCase", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", {
+      ...ARGS,
+      face_masking: {
+        mode: "auto",
+        fill: "depth",
+        min_face_height_pct: 10,
+        max_face_height_pct: 60,
+        zone: { left_pct: 5, right_pct: 6, top_pct: 0, bottom_pct: 20 },
+        blur_strength_pct: 3,
+        threshold: 0.4,
+      },
+    })
+
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({
+      ...BODY,
+      faceMasking: {
+        mode: "auto",
+        fill: "depth",
+        minFaceHeightPct: 10,
+        maxFaceHeightPct: 60,
+        zone: { leftPct: 5, rightPct: 6, topPct: 0, bottomPct: 20 },
+        blurStrengthPct: 3,
+        threshold: 0.4,
+      },
+    })
+  })
+
+  it("sends only the face_masking keys given, so the route's defaults apply", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", zone: { top_pct: 10 } } })
+    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", zone: { topPct: 10 } } })
+  })
+
+  it("sends no faceMasking key at all without face_masking", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect("faceMasking" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
+  })
+
+  it("refuses a face_masking value outside its range before calling the route", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    for (const face_masking of [
+      { mode: "sometimes" },
+      { mode: "auto", fill: "pixelate" },
+      { mode: "auto", zone: { left_pct: 50 } },
+      { mode: "auto", threshold: 1 },
+      { mode: "auto", blur_strength_pct: 0 },
+      { mode: "auto", min_face_height_pct: 101 },
+    ]) {
+      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking })
+      expect(res.isError, JSON.stringify(face_masking)).toBe(true)
+    }
+    expect(calls).toEqual([])
+  })
+
+  it("names the masking credits that auto charges only if masking runs", async () => {
+    const auto = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: auto } })
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto" } })
+    expect(res.content[0]!.text).toContain("12 credits")
+    expect(res.content[0]!.text).toMatch(/4 more credits?[^.]*only if/i)
+    expect(res.structuredContent).toEqual({ ...auto, confirmed: false })
+  })
+
+  it("names the masking included in the quote with always", async () => {
+    const always = { totalCredits: 16, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: always } })
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always" } })
+    expect(res.content[0]!.text).toContain("16 credits")
+    expect(res.content[0]!.text).toMatch(/includes 4 credits?[^.]*mask/i)
+    expect(res.content[0]!.text).not.toMatch(/only if/i)
+  })
+
+  it("words the masking by the mode asked for, not by which numbers the quote carries", async () => {
+    const both = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
+    const onlyBreakdown = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
+    const text = async (body: unknown, args: Record<string, unknown>) => {
+      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
+      return (await callTool(serverWith(fastify), "cast_swap", { ...ARGS, ...args })).content[0]!.text
+    }
+    // auto: the retry wording, even when only the breakdown names the masking.
+    const auto = await text(onlyBreakdown, { face_masking: { mode: "auto" } })
+    expect(auto).toMatch(/4 more credits?[^.]*only if/i)
+    expect(auto).not.toMatch(/includes 4/i)
+    // always: the "included" wording, even when the quote also carries maskingCredits.
+    const always = await text(both, { face_masking: { mode: "always" } })
+    expect(always).toMatch(/includes 4 credits?[^.]*mask/i)
+    expect(always).not.toMatch(/only if/i)
+    // off, or no face_masking: nothing about masking.
+    expect(await text(both, { face_masking: { mode: "off" } })).not.toMatch(/mask/i)
+    expect(await text(both, {})).not.toMatch(/mask/i)
+  })
+
+  it("says nothing of masking when the quote has none", async () => {
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect(res.content[0]!.text).not.toMatch(/mask/i)
+  })
+
   it("still passes the deprecated quality through", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, quality: "draft" })
@@ -192,6 +351,73 @@ describe("cast_swap", () => {
     const { fastify } = stubFastify({})
     const names = (await listTools(serverWith(fastify, ["workflows:read"]))).map((t) => t.name)
     expect(names).not.toContain("cast_swap")
+  })
+})
+
+describe("cast_swap's session_id reaches the job", () => {
+  const OWN = "00000000-0000-4000-8000-0000000005e1"
+  const FOREIGN = "00000000-0000-4000-8000-0000000005e2"
+  db.ownSession = OWN
+
+  /** A real app: the internal hop as the auth hook sets it, and a /v1/cast-swap that files its job through the funnel's session read. */
+  async function realApp(seen: { sessionId?: string | null }) {
+    const app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      if (req.headers["x-internal-orchestrator-secret"] === config.INTERNAL_ORCHESTRATOR_SECRET) {
+        req.authKind = "internal"
+        req.isInternalCall = true
+        req.userId = req.headers["x-internal-user-id"] as string
+      }
+    })
+    app.post("/v1/cast-swap", async (req, reply) => {
+      try {
+        seen.sessionId = await resolveRequestSession(req)
+      } catch (err) {
+        return sendInternalError(reply, req, err, "cast swap")
+      }
+      return reply.status(202).send({ jobId: "job-9" })
+    })
+    await app.ready()
+    return app
+  }
+
+  it("files the run in the caller's own session", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: OWN, confirm: true })
+    expect(res.isError).toBeFalsy()
+    expect(seen.sessionId).toBe(OWN)
+    await app.close()
+  })
+
+  it("a session that is not the caller's is the route's 404, as a tool error", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: FOREIGN, confirm: true })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("not_found")
+    expect(seen.sessionId).toBeUndefined()
+    await app.close()
+  })
+
+  it("a grant without assets:write may not file it, even in the caller's own session: the route's 404", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const res = await callTool(serverWith(app, ["workflows:execute"]), "cast_swap", { ...ARGS, session_id: OWN, confirm: true })
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("not_found")
+    expect(seen.sessionId).toBeUndefined()
+    await app.close()
+  })
+
+  it("without session_id the run is filed in none", async () => {
+    const seen: { sessionId?: string | null } = {}
+    const app = await realApp(seen)
+    const { session_id: _s, ...noSession } = ARGS
+    const res = await callTool(serverWith(app), "cast_swap", { ...noSession, confirm: true })
+    expect(res.isError).toBeFalsy()
+    expect(seen.sessionId).toBeNull()
+    await app.close()
   })
 })
 

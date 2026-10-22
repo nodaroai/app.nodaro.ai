@@ -26,6 +26,7 @@ import type {
   VideoDepthColormap,
   VideoDepthResolution,
   VideoMaskProvider,
+  VideoMaskZone,
   MaskCompositeBackgroundFit,
   MaskCompositeAudioSource,
   MaskCompositeFill,
@@ -6578,6 +6579,10 @@ export async function videoMaskApi(params: {
   minSubjectHeightPct?: number
   /** Ignore subjects larger than this % of the frame height (default 0 = off). */
   maxSubjectHeightPct?: number
+  /** Keep only subjects whose bounding-box centre is inside these margins (% of the frame, 0–49 each; null = off). */
+  zone?: VideoMaskZone | null
+  /** Detect the subjects again in every shot (scene cuts found first; default false). */
+  perShot?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   const { userId, ...rest } = params
@@ -11053,6 +11058,35 @@ export interface AdminTrendSource {
   height?: number
 }
 
+export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
+export type AdminTrendFaceMaskingFill = "blur" | "depth"
+
+/** Frame margins (0–49 % each); a face centred in one is not masked. */
+export interface AdminTrendFaceMaskingZone {
+  leftPct?: number
+  rightPct?: number
+  topPct?: number
+  bottomPct?: number
+}
+
+/**
+ * Cast Swap's face masking for every run of a trend (hidden from users). A key
+ * left out takes the engine's default.
+ */
+export interface AdminTrendFaceMasking {
+  mode: AdminTrendFaceMaskingMode
+  fill?: AdminTrendFaceMaskingFill
+  /** 0–100 % of the frame's height; default 15. */
+  minFaceHeightPct?: number
+  /** 0–100; 0 (default) = no limit; above 0 it must be at least the minimum. */
+  maxFaceHeightPct?: number
+  zone?: AdminTrendFaceMaskingZone
+  /** 0.1–5 % of the frame's width; default 2. */
+  blurStrengthPct?: number
+  /** 0.05–0.95; default 0.5. Lower finds more faces. */
+  threshold?: number
+}
+
 export interface AdminTrendData {
   name: TrendLocalizedText
   description?: TrendLocalizedText
@@ -11062,6 +11096,9 @@ export interface AdminTrendData {
   slots: AdminTrendSlot[]
   references: AdminTrendReference[]
   trendPrompt?: string
+  /** Placed at the start of every run's prompt (hidden from users). */
+  prePrompt?: string
+  faceMasking?: AdminTrendFaceMasking
   examples: AdminTrendExample[]
 }
 
@@ -11141,7 +11178,10 @@ export interface AdminTrendRun {
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
-  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  /** A Full Quality version: the draft run it was made from. Listed as its own run. */
+  fullQualityOf: string | null
+  /** A draft's Full Quality version: a pointer only; its result is on its own run. */
+  fullQuality: { jobId: string; status: string } | null
   fullQualityUntil: string | null
   ownerIsAdmin: boolean
 }
@@ -11201,6 +11241,31 @@ export async function fetchAdminTrends(): Promise<AdminTrendListItem[]> {
 
 export async function createAdminTrend(input: { slug: string; name: TrendLocalizedText }): Promise<{ id: string }> {
   return (await apiRequest<{ data: { id: string } }>(ADMIN_TRENDS, "apiErr.saveTrend", { method: "POST", body: input })).data
+}
+
+/** A tag in use on any trend (or one with labels): its labels by language and how many trends carry it. */
+export interface AdminTrendTag {
+  tag: string
+  labels: Partial<TrendLocalizedText>
+  trends: number
+  published: number
+}
+
+export async function fetchAdminTrendTags(): Promise<AdminTrendTag[]> {
+  return (await apiRequest<{ data: AdminTrendTag[] }>(`${ADMIN_TRENDS}/tags`, "apiErr.loadTrends")).data
+}
+
+/** Save one tag's labels; none (or only empty ones) clears them, and the tag reads as itself. */
+export async function saveAdminTrendTagLabels(
+  tag: string,
+  labels: Partial<TrendLocalizedText>,
+): Promise<{ tag: string; labels: Partial<TrendLocalizedText> }> {
+  return (
+    await apiRequest<{ data: { tag: string; labels: Partial<TrendLocalizedText> } }>(`${ADMIN_TRENDS}/tags`, "apiErr.saveTrend", {
+      method: "PUT",
+      body: { tag, labels },
+    })
+  ).data
 }
 
 export async function fetchAdminTrend(id: string): Promise<AdminTrendDetail> {

@@ -99,7 +99,40 @@ export interface PluginHandlerCtx {
   shouldWatermark: boolean
 }
 
-/** Structural mirror of `HandlerFn` (`backend/src/workers/shared.ts`). */
+/**
+ * Structural mirror of `HandlerFn` (`backend/src/workers/shared.ts`).
+ *
+ * HOW A HANDLER FAILS A JOB — the video worker reads these OWN PROPERTIES off
+ * the error a handler throws (duck-typed, because a class does not survive the
+ * plugin boundary):
+ *
+ * - `contentPolicyClass: "copyright" | "likeness" | "safety"` (top-level error
+ *   only) — a provider content-policy block: the attempt is final, the job is
+ *   refunded and `jobs.error_hint` becomes `{ kind: "safety-block", class, … }`.
+ *   A `safety` block's `error_message` is the host's generic safety sentence
+ *   ("…Try adjusting the prompt or the input image.") unless the error also
+ *   carries `userSafeMessage: true`.
+ * - `userSafeMessage: true` (strict `true`, an own property of the TOP-LEVEL
+ *   error; a marker on a `cause` does not count) — the handler vouches that
+ *   the error's `message` is a fixed sentence fit to show the user, so a
+ *   `safety` block keeps it as `error_message` (the hint is unchanged). For a
+ *   run whose prompt the user never wrote (a trend preset), where the generic
+ *   advice is wrong. Never put provider text, URLs or hidden inputs in a
+ *   marked message. Copyright/likeness blocks and plain failures already keep
+ *   the handler's message. Honoured only for a job type a plugin serves.
+ *   ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): an older host ignores it and
+ *   writes the generic sentence.
+ * - `failureHint: { kind: "credits", code }` (on the error or its `cause`
+ *   chain) — a child job's credit reservation was refused; written to
+ *   `error_hint` as a credits hint (`code` a lowercase snake_case token).
+ * - `deterministic: true` (error or `cause` chain) — the refusal is a pure
+ *   function of the job's inputs: final now, no queue retry.
+ * - `inputVideoRefused: true` (error or `cause` chain) — the provider refused
+ *   the job's INPUT VIDEO. Honoured only when the job's payload sent a video
+ *   (`videoUrl`, `referenceVideoUrl` or `referenceVideoUrls`): final now, and
+ *   `error_hint` names it — `subject: "input_video"` on a safety-block hint, or
+ *   `{ kind: "input-refused", subject: "input_video" }` with no content class.
+ */
 export type PluginHandlerFn = (job: PluginJob, ctx: PluginHandlerCtx) => Promise<void>
 
 // ============================================================================
@@ -583,8 +616,18 @@ export interface PluginFfmpegToolkit {
    * Mirrors `probeVideoSource` (`providers/video/ffmpeg-utils.ts`) — remote-
    * capable ffprobe (SSRF-asserted, protocol-whitelisted), field rename only
    * (`durationSeconds` → `durationSec`).
+   *
+   * `durationSec` — the CONTAINER's duration (`format=duration`), not the
+   * video stream's: it can be longer than the video (a clip whose audio runs
+   * past its last frame), so `durationSec × fps` is an estimate of the frame
+   * count, not an exact one.
+   *
+   * `fps` — the video stream's CONSTANT frame rate, when `probeVideoSource`
+   * reports one (absent for a variable rate or none usable). ADDITIVE-OPTIONAL
+   * (no CONTRACT_VERSION bump): a host predating it never sets it, so a caller
+   * treats absent as "unknown" and keeps its old behaviour.
    */
-  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }>
+  probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number; fps?: number }>
   /**
    * Mirrors `runFfprobe` (`providers/video/ffmpeg-utils.ts`) — runs ffprobe with
    * the given args and resolves its stdout (the video-analysis segmenter reads
@@ -1278,12 +1321,63 @@ export interface PluginStorageToolkit {
 // tk.jobs — backend/src/workers/shared.ts
 // ============================================================================
 
+/**
+ * Structural mirror of `ErrorHint` (`backend/src/lib/safety-block.ts`) — the
+ * `jobs.error_hint` column (migration 376): a user-safe, machine-readable
+ * verdict on a FAILED job, so a caller can act on a child's failure (say "the
+ * safety filter blocked it", offer the fallback model, say "top up") without
+ * parsing `error_message`. Switch on `kind`; treat a kind you do not know as
+ * an unclassified failure (the union may grow).
+ */
+export type PluginJobErrorHint =
+  | {
+      /** A provider's content-policy block. */
+      kind: "safety-block"
+      class: "copyright" | "likeness" | "safety"
+      /** The request was retried once inline before this verdict. */
+      retried: boolean
+      /** A catalog model id the same request may pass on. */
+      suggestedProvider?: string
+      /**
+       * What was blocked, when the provider named it: `"input_video"` = the
+       * job's input video (not its prompt). Absent ⇒ unknown. ADDITIVE-OPTIONAL.
+       */
+      subject?: "input_video"
+    }
+  | {
+      /**
+       * The provider could not take the job's INPUT VIDEO (refused or failed
+       * to process it) without naming a content class. ADDITIVE-OPTIONAL.
+       */
+      kind: "input-refused"
+      subject: "input_video"
+    }
+  | {
+      /** Nodaro's own job policy refused the request or withheld the result. */
+      kind: "policy-block"
+      policyId: string
+      /** User-safe by contract. */
+      reason: string
+      hookPoint: "request" | "result"
+    }
+  | {
+      /** A credit reservation was refused partway (`insufficient_credits`, …). */
+      kind: "credits"
+      code: string
+    }
+
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */
 export interface PluginOwnedJobRow {
   id: string
   status: string
   output_data: Record<string, unknown> | null
   error_message: string | null
+  /**
+   * The job's `error_hint`, null when it has none (any job that did not fail
+   * with a classified verdict). ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump):
+   * absent on an older host — read it as `row.error_hint ?? null`.
+   */
+  error_hint?: PluginJobErrorHint | null
 }
 
 /**
@@ -1297,6 +1391,11 @@ export interface PluginOwnedRawJob {
   output_data: Record<string, unknown> | null
   created_at: string
   completed_at: string | null
+  /**
+   * The job's `error_hint` (see `PluginJobErrorHint`), null when it has none.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): absent on an older host.
+   */
+  error_hint?: PluginJobErrorHint | null
 }
 
 /** Structural mirror of `_wait-for-job.ts`'s own (unexported) options. */
@@ -1320,6 +1419,14 @@ export interface PluginWaitForJobResult {
   outputData: Record<string, unknown> | null
   error: string | null
   jobType: string | null
+  /**
+   * A `failed` child's structured failure verdict, as stored on
+   * `jobs.error_hint` (see `PluginJobErrorHint`) — a child's failure class
+   * without parsing `error`; null on every other status, or when the job has
+   * none. ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — absent on an older
+   * host; treat `undefined` like null.
+   */
+  errorHint?: PluginJobErrorHint | null
 }
 
 export interface PluginJobSettlement {
@@ -2262,12 +2369,28 @@ export interface PluginHttpToolkit {
    * hook reads. The route handling the outer request has a `userId` but no
    * JWT it could replay, which is the same situation the MCP tools are in.
    *
-   * `headers` is spread FIRST on purpose — a caller adds what its route needs
-   * (an `idempotency-key`, say) and cannot override the ones this member owns.
-   * That is a HEADER guarantee only: the auth hook reads `body.userId` before
-   * it reads `x-internal-user-id` and the body wins, so a `payload` carrying a
-   * `userId` string decides the identity no matter what `opts.userId` says.
-   * A route forwarding a caller-supplied body must strip or pin that field.
+   * `headers` adds what the reached route needs (an `idempotency-key`, say);
+   * a header that decides identity, billing or how the body is read is
+   * dropped, so only this member's typed options set those (see
+   * `PluginInternalRequestOptions.headers`). The body cannot pick the
+   * identity either: a top-level `userId` in `payload` that is not
+   * `opts.userId` is replaced by it before the request is sent (one that
+   * already names the caller, or none at all, leaves the body untouched).
+   * `payload` must be a JSON-serializable object; a string, Buffer, typed
+   * array, stream, FormData, URLSearchParams or Blob is refused, because it
+   * could not be checked. A refused option (that payload, or a `request` of
+   * another user) rejects the call with a 400 `PluginHttpError`
+   * (`validation_error`) and nothing is sent.
+   *
+   * Provenance is opt-in per call: the payload's `origin` / `sessionId` are
+   * IGNORED (a payload can carry records the plugin's caller controls). The
+   * job the reached route creates carries only what `opts.provenance`
+   * declares — fields the plugin validated itself — checked as a public
+   * request's are: `origin` against the slug rule (else a 400), `sessionId`
+   * as the caller's own session on the request's side of the workspace line,
+   * under the outer caller's grant (else the route's 404). See
+   * `PluginInternalRequestOptions.provenance` / `.request`; gate on
+   * `tk.capabilities?.internalRequestProvenance`.
    *
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
@@ -2278,7 +2401,7 @@ export interface PluginHttpToolkit {
   /**
    * `internalRequest` for code that has no Fastify app in hand — a queue
    * handler in the video worker. Same contract: the same internal headers
-   * (caller headers spread first), the same `body.userId` caveat, the same
+   * (caller headers filtered), the same pinned `payload.userId`, the same
    * `jobSubmission` scope. The host supplies the app: the API app in the API
    * process; in the worker, an app built once at worker boot and reused
    * (`lib/private-plugins/worker-app.ts`). Absent where the process has no app
@@ -2286,7 +2409,9 @@ export interface PluginHttpToolkit {
    *
    * `parentJobId` is the id (a UUID) of the job the handler is running. It
    * travels only in the server-side submission scope, never on the wire, so
-   * the route's job insert can be tied to it.
+   * the route's job insert can be tied to it. A job with a parent is a step
+   * of that job, so it carries no `origin` and no session, whatever the
+   * payload or `provenance` says.
    *
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
@@ -2302,11 +2427,56 @@ export interface PluginInternalRequestOptions {
   url: string
   /** The caller — impersonated through the internal secret, exactly as MCP does. */
   userId: string
+  /** A JSON-serializable object; its top-level `userId`, if any, is pinned to `userId`. */
   payload?: object
   /** The caller's workspace, when the outer request carried one. */
   workspaceId?: string
-  /** Extra headers this route needs; cannot override the ones above. */
+  /**
+   * Extra headers this route needs (an `idempotency-key`, say). Headers that
+   * decide identity, billing or how the body is read (`x-internal-*`,
+   * `x-app-run`, `x-web-free-mode`, the workspace header, `authorization`,
+   * `cookie`, `content-type`, `content-length`, `host`) are dropped in any
+   * letter case: only the options above set them, and a body is sent as JSON.
+   */
   headers?: Record<string, string>
+  /**
+   * The client provenance the job the reached route creates should carry —
+   * opt-in, per call: without it the job carries none, whatever the payload
+   * holds. Fill it only from fields the plugin validated (never by spreading
+   * an open record); every other key is ignored.
+   *  - `origin`: the calling client's origin slug (`input_data.origin`); not a
+   *    slug is the route's 400.
+   *  - `sessionId`: a generation session to file the job in. Applied only
+   *    with `request` (the host reads the outer caller's grant from it): the
+   *    caller's own session, on the request's side of the workspace line, and
+   *    `assets:write` for an OAuth app or an MCP session, else the route's 404.
+   *    Without `request`, or when the outer request's grant cannot be told
+   *    (an internal hop no server-side scope vouches for), it is not applied.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): an older host ignores it,
+   * so gate on `tk.capabilities?.internalRequestProvenance`.
+   */
+  provenance?: { origin?: string; sessionId?: string }
+  /**
+   * The plugin route's OWN request this call serves (the `req` its handler
+   * got), so a declared `provenance.sessionId` is held to the outer caller's
+   * grant. What holds:
+   *  - no option states a grant: the host reads it off this object, by the
+   *    credential its auth hook recorded (`authKind`, and an OAuth app's
+   *    `appAuthorization`), or, for an internal request, from the scope server
+   *    code attached to it (an MCP session's grant);
+   *  - only an object the host itself received counts (registered when the
+   *    request arrived); one merely shaped like a request, or one with no or
+   *    an unrecognised `authKind`, names no grant, and the session is not
+   *    applied;
+   *  - it must be the same user as `userId`, else the call is refused (a 400
+   *    `PluginHttpError`) before anything is sent.
+   * Which received request is passed is still the plugin's choice: the host
+   * cannot tell that it is the one this call serves rather than another
+   * request of the same user, so pass the handler's own `req`.
+   * ADDITIVE-OPTIONAL, as `provenance`.
+   */
+  request?: FastifyRequest
 }
 
 /** What `fastify.inject()` answers with, narrowed to what a caller reads. */
@@ -3104,6 +3274,13 @@ export interface PluginCapabilities {
    * characters itself unless this is true.
    */
   readonly voiceChangerProRespeakSlotArgs?: boolean
+  /**
+   * `tk.http.internalRequest` honours `PluginInternalRequestOptions.provenance`
+   * and `.request` (the declared client origin and generation session of the
+   * job the reached route creates). An older host ignores both silently: the
+   * job carries no origin and no session.
+   */
+  readonly internalRequestProvenance?: boolean
 }
 
 /**
@@ -3163,6 +3340,12 @@ export interface PluginSupports {
    * - `fullQuality`: a completed draft run can be re-rendered at full quality.
    * - `resolutions`: the output resolutions a run accepts.
    * - `trendRun`: a run accepts a trend's hidden inputs (`trendRun`).
+   * - `faceMasking`: a run accepts `faceMasking` (masks the faces in the
+   *   source clip before the video model). Additive-optional: absent ⇒ an
+   *   engine that predates face masking, read as `false`.
+   * - `trendPrePrompt`: a trend run accepts a trend's own `prePrompt` (kept
+   *   hidden). Additive-optional: absent ⇒ an engine that predates it, read
+   *   as `false`.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3173,6 +3356,8 @@ export interface PluginSupports {
     readonly fullQuality: boolean
     readonly resolutions: readonly ("480p" | "720p" | "1080p")[]
     readonly trendRun: boolean
+    readonly faceMasking?: boolean
+    readonly trendPrePrompt?: boolean
   }
 }
 

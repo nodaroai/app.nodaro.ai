@@ -390,7 +390,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, or a pre_prompt or post_prompt. |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". At least 1 character. Required when `kind` is `person` or `pet` or `product`. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
@@ -402,6 +402,9 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
 | `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
 | `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
+| `references` | object[] |  | Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30. At most 5 items. |
+| `references[].images` | string (URL)[] | yes | From 1 to 3 items. |
+| `references[].line` | string | yes | From 1 to 500 characters. |
 | `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
@@ -409,6 +412,18 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Render as a draft, 480p only. Default true at 480p, false above. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
+| `face_masking` | object |  | Default off. |
+| `face_masking.mode` | string | yes | Mask the faces in the clip before the video model: "off", "always", or "auto" = only on a retry after the model refuses the clip. One of `off`, `always`, `auto`. |
+| `face_masking.fill` | string |  | Default "blur". One of `blur`, `depth`. |
+| `face_masking.min_face_height_pct` | number |  | Mask faces at least this % of frame height. Default 15. From 0 to 100. |
+| `face_masking.max_face_height_pct` | number |  | And at most this %; default 0 = no limit. From 0 to 100. |
+| `face_masking.zone` | object |  | Frame margins (%, default 0); a face centred in one is not masked. |
+| `face_masking.zone.left_pct` | number |  | From 0 to 49. |
+| `face_masking.zone.right_pct` | number |  | From 0 to 49. |
+| `face_masking.zone.top_pct` | number |  | From 0 to 49. |
+| `face_masking.zone.bottom_pct` | number |  | From 0 to 49. |
+| `face_masking.blur_strength_pct` | number |  | Blur strength, % of frame width. Default 2. From 0.1 to 5. |
+| `face_masking.threshold` | number |  | Face detection; lower finds more. Default 0.5. From 0.05 to 0.95. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
@@ -790,6 +805,14 @@ Needs `workflows:execute`.
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 
+## `estimate_full_quality`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The finished draft run's job id (a Cast Swap or trend run made as a draft). |
+
 ## `estimate_trend`
 
 Needs `workflows:execute` · Nodaro Cloud only.
@@ -803,6 +826,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Default true; only at 480p. |
+| `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
 ## `export_workflow`
 
@@ -883,6 +907,16 @@ Needs `workflows:execute`.
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  | Nodaro audio or video job id. |
 | `transcript` | string | yes | The exact words spoken in the audio. From 1 to 50000 characters. |
+
+## `full_quality`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The finished draft run's job id (a Cast Swap or trend run made as a draft). |
+| `session_id` | string |  | A generation session to file the result in. At least 1 character. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 
 ## `generate_3d_scene`
 
@@ -2577,6 +2611,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Default true; only at 480p. |
+| `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 | `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
@@ -3365,6 +3400,12 @@ Needs `workflows:execute`.
 | `hold_last_mask` | boolean |  | Keep the last mask on frames where the subject is lost (default false). |
 | `min_subject_height_pct` | number |  | Drop regions shorter than this % of the frame height (default 0 = off). From 0 to 100. |
 | `max_subject_height_pct` | number |  | Drop regions taller than this % of the frame height (default 0 = off). From 0 to 100. |
+| `zone` | object |  | Keep only regions whose centre is inside these margins (% of the frame; each 0 when left out; default off — an empty zone {} is off too). |
+| `zone.left_pct` | number |  | From 0 to 49. |
+| `zone.right_pct` | number |  | From 0 to 49. |
+| `zone.top_pct` | number |  | From 0 to 49. |
+| `zone.bottom_pct` | number |  | From 0 to 49. |
+| `per_shot` | boolean |  | Detect the subject again in every shot after a scene cut (default false). |
 
 ## `video_upscale`
 

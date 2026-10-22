@@ -145,7 +145,7 @@ import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
 import { redactPrivateJobOutput } from "../public-job-data.js"
-import { assertParentJobId, withJobSubmissionContext } from "../job-submission-context.js"
+import { assertParentJobId, hostRequestGrantOf, withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
@@ -153,7 +153,7 @@ import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
-import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
+import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -576,10 +576,19 @@ async function trimVideoToUrl(
   }
 }
 
-/** `tk.ffmpeg.probeVideoMeta` — mirrors `probeVideoSource`, field rename only. */
-async function probeVideoMeta(url: string): Promise<{ durationSec: number; width: number; height: number }> {
-  const { width, height, durationSeconds } = await probeVideoSource(url)
-  return { width, height, durationSec: durationSeconds }
+/** `tk.ffmpeg.probeVideoMeta` — mirrors `probeVideoSource`, field rename only.
+ *  `fps` rides along only when the probe reports a usable (positive, finite)
+ *  constant rate; otherwise it is absent, which a plugin reads as "unknown". */
+async function probeVideoMeta(
+  url: string,
+): Promise<{ durationSec: number; width: number; height: number; fps?: number }> {
+  const { width, height, durationSeconds, fps } = await probeVideoSource(url)
+  return {
+    width,
+    height,
+    durationSec: durationSeconds,
+    ...(typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? { fps } : {}),
+  }
 }
 
 /**
@@ -1278,7 +1287,7 @@ async function readJobsOwnedBy(
 
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, status, output_data, error_message")
+    .select("id, status, output_data, error_message, error_hint")
     .in("id", ids)
     .eq("user_id", userId)
   if (error) throw new Error(`Failed to read jobs: ${error.message}`)
@@ -1293,10 +1302,13 @@ async function readJobsOwnedBy(
       (raw.output_data as Record<string, unknown> | null) ?? null,
     ),
     error_message: (raw.error_message as string | null) ?? null,
+    // The user-safe failure verdict (migration 376) — a plugin reads a child's
+    // failure class here rather than guessing it from `error_message`.
+    error_hint: (raw.error_hint as PluginJobErrorHint | null | undefined) ?? null,
   }))
 }
 
-const OWNED_RAW_JOB_COLUMNS = "id,status,input_data,output_data,created_at,completed_at"
+const OWNED_RAW_JOB_COLUMNS = "id,status,input_data,output_data,created_at,completed_at,error_hint"
 
 /**
  * `tk.jobs.readOwnedJob` — one job, for its owner, with `input_data` and
@@ -1329,6 +1341,7 @@ async function readOwnedJob(jobId: string, userId: string): Promise<PluginOwnedR
     output_data: (row.output_data as Record<string, unknown> | null) ?? null,
     created_at: row.created_at as string,
     completed_at: (row.completed_at as string | null) ?? null,
+    error_hint: (row.error_hint as PluginJobErrorHint | null | undefined) ?? null,
   }
 }
 
@@ -1348,29 +1361,151 @@ async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<s
  *
  * The same shape and the same trust model as `lib/mcp/internal-request.ts`,
  * with the caller's id added: the outer route has a `userId` but no JWT it
- * could replay. Caller headers are spread FIRST, so the three this function
- * owns cannot be overridden by a HEADER — but the auth hook prefers
- * `body.userId` to `x-internal-user-id`, so a `payload` with a `userId`
- * string still picks the identity. Callers that forward a request body strip
- * or pin that field first.
+ * could replay. A caller's headers never carry identity, billing or transport
+ * ({@link callerHeaders}): those come only from the typed options, and a body
+ * always goes out as JSON. The payload's `userId` is pinned to `opts.userId`
+ * ({@link pinPayloadToCaller}), so the body cannot pick the identity either.
+ * The request acts as `opts.userId` and nobody else. (MCP's `mcpInject` and
+ * the trend routes' `engineRequest` do not pin the body: on those hops a body
+ * `userId` still decides the identity, so server code composes those bodies
+ * and never relays a caller's `userId`.)
+ *
+ * Provenance is opt-in ({@link pluginSubmissionScope}): the job the route
+ * creates carries only the `origin` / `sessionId` declared in
+ * `opts.provenance`, held to the outer caller's grant; a payload's are
+ * ignored, and a `workerRequest` child (a parent job) carries neither.
+ *
+ * A refusal of the options themselves (a payload that cannot be checked, a
+ * `request` of another user) is a 400 `PluginHttpError`, and nothing is sent.
  */
 
-function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
-  // `trustedPluginCaller`: plugin code is trusted, so a route it reaches may let
-  // it name its own child job as a source (mayUseChildJobAsSource). Set here
-  // and only here, after the plugin's options, so no option can unset it; MCP's
-  // `mcpInject` and the trend routes' `engineRequest` never set it.
-  return withJobSubmissionContext({ ...opts, trustedPluginCaller: true }, () => app.inject({
+/**
+ * The body an internal request sends, with its identity pinned to the caller.
+ *
+ * The auth hook reads an internal request's user from `body.userId` before
+ * the `x-internal-user-id` header, so a payload that carries a `userId` — a
+ * plugin forwarding a record its own caller supplied, say — would otherwise
+ * decide whom the request acts as. Here the payload is serialized exactly as
+ * light-my-request would put it on the wire (so a `toJSON`, a getter or a
+ * class instance is checked as the route will see it), and a top-level
+ * `userId` that is not the caller's is replaced by the caller's. A payload
+ * without one gets none added and one that already names the caller is left
+ * alone, so every legitimate body goes out byte-identical. The caller's
+ * object is never mutated.
+ *
+ * Only a JSON-serializable object can be checked. A string, a Buffer, a typed
+ * array or a stream is sent raw and parsed by whatever content type rides with
+ * it (JSON, form-encoded), so it is refused rather than sent unchecked; so is a
+ * FormData, URLSearchParams or Blob, which would otherwise go out as `{}`. The
+ * refusal is a 400 `PluginHttpError` (`validation_error`), shaped like the
+ * toolkit's other refusals of a bad option.
+ */
+export function pinPayloadToCaller(payload: object, userId: string): object {
+  const refuse = () => {
+    const message = "tk.http.internalRequest: payload must be a plain object (a string, Buffer, typed array or stream cannot be checked for the caller's identity)"
+    return new PluginHttpError(400, { error: { code: "validation_error", message } }, new Error(message))
+  }
+  if (
+    typeof payload !== "object" || payload === null || Buffer.isBuffer(payload) || ArrayBuffer.isView(payload)
+    || payload instanceof ArrayBuffer || typeof (payload as { pipe?: unknown }).pipe === "function"
+    || NON_JSON_BODY_TAGS.has(Object.prototype.toString.call(payload))
+  ) throw refuse()
+  const json = JSON.stringify(payload) as string | undefined
+  if (json === undefined) throw refuse()
+  const wire = JSON.parse(json) as unknown
+  if (typeof wire !== "object" || wire === null) throw refuse()
+  if (!Array.isArray(wire) && Object.hasOwn(wire, "userId") && (wire as Record<string, unknown>).userId !== userId) {
+    (wire as Record<string, unknown>).userId = userId
+  }
+  return wire
+}
+
+/** Bodies that are not JSON (they would serialize to `{}`), refused like a string. */
+const NON_JSON_BODY_TAGS: ReadonlySet<string> = new Set(["[object FormData]", "[object URLSearchParams]", "[object Blob]", "[object File]"])
+
+const HOST_OWNED_HEADER = new RegExp(
+  `^(x-internal-.*|x-app-run|x-web-free-mode|${WORKSPACE_HEADER_LOWER}|authorization|cookie|content-type|content-length|host)$`,
+  "i",
+)
+
+/**
+ * A caller's extra headers, without any the request's identity, billing or
+ * transport rests on. Who the request acts as, which workspace pays, whether
+ * it is an app run or a free-mode surface, and how its body is framed and
+ * parsed are decided by the typed options and this module alone; a header of
+ * the same name, in any letter case, is dropped rather than left to race the
+ * one set here. What remains (an `idempotency-key`, say) passes through.
+ */
+export function callerHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+  if (!headers) return {}
+  // Lower-cased the way the request is built (light-my-request lower-cases
+  // names with toLowerCase, which folds some non-ASCII letters to ASCII), so
+  // the check sees the name the route will.
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !HOST_OWNED_HEADER.test(name.toLowerCase())),
+  )
+}
+
+async function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions & { parentJobId?: string }) {
+  // Both checks run before anything is sent; a throw here is the call's rejection.
+  const payload = opts.payload !== undefined ? pinPayloadToCaller(opts.payload, opts.userId) : undefined
+  return withJobSubmissionContext(pluginSubmissionScope(opts), () => app.inject({
     method: opts.method,
     url: opts.url,
     headers: {
-      ...opts.headers,
+      ...callerHeaders(opts.headers),
       "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
       "x-internal-user-id": opts.userId,
       ...(opts.workspaceId ? { [WORKSPACE_HEADER_LOWER]: opts.workspaceId } : {}),
+      // A body is always read as JSON; a bodyless request carries no content
+      // type (the JSON parser refuses an empty body).
+      ...(payload !== undefined ? { "content-type": "application/json" } : {}),
     },
-    ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
+    ...(payload !== undefined ? { payload } : {}),
   }))
+}
+
+/**
+ * The submission scope of a plugin's internal request, built field by field
+ * from what the contract declares — never a spread of the plugin's options,
+ * so no undeclared key (a `source`, a `grant`, a trust flag) reaches it.
+ *
+ * `trustedPluginCaller` is pinned here and only here: plugin code is trusted,
+ * so a route it reaches may let it name its own child job as a source
+ * (`mayUseChildJobAsSource`). MCP's `mcpInject` and the trend routes'
+ * `engineRequest` never set it.
+ *
+ * The outer caller's grant is derived from the plugin route's own `request`
+ * (`hostRequestGrantOf`, read BEFORE the new scope replaces the outer one):
+ * only a request object the host itself received, by the credential its auth
+ * hook recorded, names one. It is carried on, so the reached route holds the
+ * caller to it. A declared `sessionId` rides only when that grant is known; a
+ * child job (a parent) carries no provenance at all.
+ */
+function pluginSubmissionScope(opts: PluginInternalRequestOptions & { parentJobId?: string }) {
+  const request = opts.request
+  if (request && request.userId !== opts.userId) {
+    // A bad option, refused as the toolkit refuses a request: shaped to be
+    // sent (a 400), never a 500 — and nothing is sent.
+    const message = "internalRequest: `request` belongs to another user than `userId`"
+    throw new PluginHttpError(400, { error: { code: "validation_error", message } }, new Error(message))
+  }
+  const grant = request ? hostRequestGrantOf(request) : undefined
+  const declared = opts.parentJobId === undefined ? opts.provenance : undefined
+  const origin = typeof declared?.origin === "string" ? declared.origin : undefined
+  const sessionId = grant !== undefined && typeof declared?.sessionId === "string" ? declared.sessionId : undefined
+  return {
+    userId: opts.userId,
+    method: opts.method,
+    url: opts.url,
+    ...(opts.jobSubmission ? { jobSubmission: opts.jobSubmission } : {}),
+    ...(opts.parentJobId !== undefined ? { parentJobId: opts.parentJobId } : {}),
+    trustedPluginCaller: true,
+    ...(origin !== undefined || sessionId !== undefined
+      ? { provenance: { ...(origin !== undefined ? { origin } : {}), ...(sessionId !== undefined ? { sessionId } : {}) } }
+      : {}),
+    ...(grant !== undefined ? { grant } : {}),
+  }
 }
 
 /**
@@ -1400,6 +1535,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   audioFxLossless: true,
   seedanceDraft: true,
   voiceChangerProRespeakSlotArgs: true,
+  internalRequestProvenance: true,
 })
 
 export interface BuildToolkitOptions {

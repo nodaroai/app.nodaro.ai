@@ -7,6 +7,8 @@
  */
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
+import { TREND_PROMPT_LIMITS } from "@nodaro/shared/models"
+import { faceMaskingSchema } from "../../../lib/cast-swap-face-masking.js"
 import type {
   Choice,
   LocalizedText,
@@ -31,6 +33,7 @@ export const CHIPS_BY_KIND = {
 export type ChipKey = (typeof CHIPS_BY_KIND)[Exclude<TrendSlotKind, "location">][number]
 
 const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * A slot key indexes plain objects (a run's `slots`, an example's images), so
@@ -142,7 +145,9 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     previewStart: z.number().min(0).nullable(),
     slots: z.array(trendSlotSchema),
     references: z.array(trendReferenceSchema).max(5),
-    trendPrompt: z.string().max(3000).optional(),
+    trendPrompt: z.string().max(TREND_PROMPT_LIMITS.trendPromptMax).optional(),
+    prePrompt: z.string().max(TREND_PROMPT_LIMITS.prePromptMax).optional(),
+    faceMasking: faceMaskingSchema.optional(),
     examples: z.array(trendExampleSchema),
   })
   .superRefine((d, ctx) => {
@@ -188,12 +193,13 @@ export const trendRunRequestSchema: z.ZodType<TrendRunRequest> = z
   .object({
     slots: slotRecord(z.record(runSlotKeySchema, trendRunSlotSchema)),
     example: z.int().min(1).optional(),
-    details: z.string().max(1000).optional(),
+    details: z.string().max(TREND_PROMPT_LIMITS.detailsMax).optional(),
     preview: z.boolean().optional(),
     resolution: z.enum(["480p", "720p", "1080p"]).optional(),
     draft: z.boolean().optional(),
     sessionId: z.string().min(1).max(200).optional(),
     projectId: z.string().min(1).max(200).optional(),
+    previewJobId: z.string().regex(UUID_RE, "previewJobId must be a job id (uuid).").optional(),
   })
   .refine((r) => !(r.draft === true && r.resolution !== undefined && r.resolution !== "480p"), {
     path: ["draft"],

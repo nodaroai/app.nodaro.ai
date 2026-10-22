@@ -243,16 +243,18 @@ describe("jobs resource — pending_review and the policy-block hint", () => {
       hookPoint: "result",
     }
     const credits: JobErrorHint = { kind: "credits", code: "insufficient_credits" }
-    const hints: JobErrorHint[] = [safety, policy, credits]
+    const input: JobErrorHint = { kind: "input-refused", subject: "input_video" }
+    const hints: JobErrorHint[] = [safety, policy, credits, input]
     const seen: string[] = []
     for (const hint of hints) {
       // `kind` is the discriminant in every reader; narrowing must reach the
       // arm-specific fields without a cast.
       if (hint.kind === "safety-block") seen.push(hint.class)
       else if (hint.kind === "policy-block") seen.push(`${hint.policyId}:${hint.hookPoint}`)
-      else seen.push(`credits:${hint.code}`)
+      else if (hint.kind === "credits") seen.push(`credits:${hint.code}`)
+      else seen.push(`input-refused:${hint.subject}`)
     }
-    expect(seen).toEqual(["copyright", "sai-moderation:result", "credits:insufficient_credits"])
+    expect(seen).toEqual(["copyright", "sai-moderation:result", "credits:insufficient_credits", "input-refused:input_video"])
   })
 
   it("CreditsHint is exported and get() carries a credits error_hint verbatim", async () => {

@@ -52,7 +52,8 @@ export interface MarkJobFailedInput {
    *  is how a caller says "leave whatever is there". */
   readonly error_detail?: string | null
   /** Migration 376's user-safe machine-readable hint (a discriminated union
-   *  since the job-policy seam: safety-block | policy-block). */
+   *  on `kind`: safety-block | policy-block | credits | input-refused — see
+   *  `ErrorHint` in lib/safety-block.ts). */
   readonly error_hint?: ErrorHint | null
   /** Extra columns to keep on the failed row. The RESULT gate passes the
    *  caller's completion fields MINUS `output_data`, so `provider`,

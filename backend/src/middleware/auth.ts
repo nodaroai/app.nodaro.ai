@@ -17,6 +17,7 @@ import {
 import { clientAddress } from "../lib/client-address.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
 import { SSO_APP_METADATA_KEY } from "../lib/sso-linking.js"
+import { markHostRequest } from "../lib/job-submission-context.js"
 
 /**
  * Extend Fastify request with auth data.
@@ -348,6 +349,13 @@ export function __isPublicRouteForTest(method: string, url: string): boolean {
 // ---------------------------------------------------------------------------
 
 export function registerAuthHook(app: FastifyInstance): void {
+  // Every request this app receives is registered, so a request object plugin
+  // code later hands back (`tk.http.internalRequest`'s `request`) can be told
+  // from one merely shaped like it (`hostRequestGrantOf`).
+  app.addHook("onRequest", (req, _reply, done) => {
+    markHostRequest(req)
+    done()
+  })
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const isPublic = isPublicRoute(req.method, req.url)
 

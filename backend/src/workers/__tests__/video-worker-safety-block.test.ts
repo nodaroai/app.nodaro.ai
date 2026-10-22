@@ -127,6 +127,7 @@ vi.mock("../handlers/video-ai.js", () => ({
   videoAIHandlers: {
     "image-to-video": mocks.mockHandler,
     "text-to-video": mocks.mockHandler,
+    "video-to-video": mocks.mockHandler,
   },
 }))
 vi.mock("../handlers/ffmpeg.js", () => ({
@@ -336,6 +337,126 @@ describe("video worker — safety-block handling", () => {
       expect.objectContaining({ status: "failed" }),
     )
     expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+  })
+})
+
+// The provider refused the INPUT VIDEO itself. The hint says so (a caller can
+// act on it by sending a different clip), beside the class when there is one;
+// the user-facing message is exactly what it was. Flag on the error or its
+// cause chain (the mocked KieError here does not carry it, so it is assigned).
+describe("video worker — input-video refusal hint", () => {
+  let processor: (job: unknown, token?: string) => Promise<void>
+
+  beforeEach(() => {
+    mocks.mockIsFinalJobAttempt.mockReturnValue(true) // the file default; some cases below override it
+    createVideoWorker()
+    processor = mocks.getCapturedProcessor()!
+  })
+
+  function failedUpdate(): Record<string, unknown> | undefined {
+    return mocks.mockUpdate.mock.calls.map((c) => c[0] as Record<string, unknown>).find((c) => c.status === "failed")
+  }
+
+  const withRefVideo = { provider: "seedance-2", referenceVideoUrls: ["https://cdn.example/src.mp4"] }
+  const withSourceVideo = { provider: "seedance-2", videoUrl: "https://cdn.example/src.mp4" }
+
+  function inputCopyright(): KieError {
+    return Object.assign(
+      new KieError("Declined: may resemble protected content.", "detail", "Generation", true, true, "copyright"),
+      { inputVideoRefused: true },
+    )
+  }
+
+  function fileProcessingFailed(): KieError {
+    return Object.assign(
+      new KieError("Generation failed. Please try again or contact support if the issue persists.", "task failed: [500] File processing failed", "Generation", true),
+      { inputVideoRefused: true },
+    )
+  }
+
+  it("a copyright refusal of the input video → safety-block hint with subject input_video, message unchanged", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(inputCopyright())
+
+    await processor(makeBullJob("text-to-video", withRefVideo)).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({
+      error_message: "Declined: may resemble protected content.",
+      error_hint: { kind: "safety-block", class: "copyright", retried: false, subject: "input_video" },
+    }))
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("an unclassified refusal of the input video → input-refused hint, message unchanged", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(fileProcessingFailed())
+
+    await processor(makeBullJob("video-to-video", withSourceVideo)).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({
+      error_message: "Generation failed. Please try again or contact support if the issue persists.",
+      error_hint: { kind: "input-refused", subject: "input_video" },
+    }))
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("reads the flag off the cause chain", async () => {
+    const inner = Object.assign(new Error("File processing failed"), { inputVideoRefused: true })
+    mocks.mockHandler.mockRejectedValueOnce(new Error("edit failed", { cause: inner }))
+
+    await processor(makeBullJob("text-to-video", withRefVideo)).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "input-refused", subject: "input_video" })
+  })
+
+  it("is final on attempt 1 of 3: hint written, refunded once, UnrecoverableError — never left for the retry", async () => {
+    mocks.mockIsFinalJobAttempt.mockReturnValue(false) // BullMQ alone would still retry
+    mocks.mockHandler.mockRejectedValueOnce(fileProcessingFailed())
+
+    const rejection = await processor(makeBullJob("video-to-video", withSourceVideo, 0)).catch((e) => e)
+
+    expect(rejection).toBeInstanceOf(UnrecoverableError)
+    expect(rejection.message).toBe("Generation failed. Please try again or contact support if the issue persists.")
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "input-refused", subject: "input_video" })
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    mocks.mockIsFinalJobAttempt.mockReturnValue(true) // restore the file default
+  })
+
+  it("without a video input, a copyright refusal keeps today's hint (no subject)", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(inputCopyright())
+
+    await processor(makeBullJob("image-to-video", { provider: "seedance-2", imageUrl: "https://cdn.example/a.png" })).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+  })
+
+  it("without a video input, \"File processing failed\" is today's plain failure: no hint, not final on attempt 1", async () => {
+    mocks.mockIsFinalJobAttempt.mockReturnValue(false)
+    const err = fileProcessingFailed()
+    mocks.mockHandler.mockRejectedValueOnce(err)
+
+    await expect(processor(makeBullJob("image-to-video", { provider: "seedance-2", imageUrl: "https://cdn.example/a.png" }, 0))).rejects.toBe(err)
+
+    expect(failedUpdate()).toBeUndefined()
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    mocks.mockIsFinalJobAttempt.mockReturnValue(true) // restore the file default
+  })
+
+  it("without a video input, on the final attempt: failed with no hint", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(fileProcessingFailed())
+
+    await processor(makeBullJob("image-to-video", { provider: "seedance-2", imageUrl: "https://cdn.example/a.png" })).catch(() => {})
+
+    const update = failedUpdate()
+    expect(update).toBeDefined()
+    expect(update).not.toHaveProperty("error_hint")
+  })
+
+  it("a plain copyright refusal keeps today's hint (no subject)", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(safetyKieError("copyright", "Blocked for copyright."))
+
+    await processor(makeBullJob("text-to-video", { provider: "seedance-2" })).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
   })
 })
 

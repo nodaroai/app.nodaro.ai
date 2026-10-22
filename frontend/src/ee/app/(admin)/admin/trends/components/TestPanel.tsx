@@ -247,6 +247,11 @@ function RunCard({
             {run.resolution}
             {run.draft ? " draft" : ""}
           </span>
+          {run.fullQualityOf && (
+            <Badge variant="secondary" title={`Full Quality version of run ${run.fullQualityOf}`}>
+              Full Quality
+            </Badge>
+          )}
           {run.creditsCharged !== null && <span>{run.creditsCharged} credits</span>}
           <span className="text-muted-foreground">{new Date(run.createdAt).toLocaleString()}</span>
         </div>

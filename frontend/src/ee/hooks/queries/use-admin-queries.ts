@@ -29,6 +29,8 @@ import {
   publishAdminTrend,
   unpublishAdminTrend,
   fetchTrendEngineEnvironments,
+  fetchAdminTrendTags,
+  saveAdminTrendTagLabels,
   type AdminTrendData,
   type AdminTrendRun,
   type TrendBadge,
@@ -1567,6 +1569,26 @@ export function usePatchTrend(id: string) {
     mutationFn: (patch: { slug?: string; tags?: string[]; badges?: TrendBadge[]; sortOrder?: number }) =>
       patchAdminTrend(id, patch),
     onSuccess: () => invalidate(id),
+  })
+}
+
+/** Every tag in use (or labelled), with its labels. */
+export function useAdminTrendTags(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.admin.trendTags(),
+    queryFn: fetchAdminTrendTags,
+    enabled: hasAdmin() && enabled,
+    staleTime: 30_000,
+  })
+}
+
+/** Save one tag's labels (none clears them). */
+export function useSaveTrendTagLabels() {
+  const qc = useQueryClient()
+  return useMutation({
+    onError: handledByScreen,
+    mutationFn: ({ tag, labels }: { tag: string; labels: Partial<TrendLocalizedText> }) => saveAdminTrendTagLabels(tag, labels),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.trendTags(), exact: true }),
   })
 }
 

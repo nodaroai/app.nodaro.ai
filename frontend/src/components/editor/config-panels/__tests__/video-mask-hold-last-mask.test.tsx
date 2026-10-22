@@ -75,3 +75,70 @@ describe("VideoMaskConfig — hold the last mask", () => {
     expect((screen.getByLabelText("Hold mask when the subject is lost") as HTMLInputElement).checked).toBe(true)
   })
 })
+
+describe("VideoMaskConfig — detect again after every cut (perShot)", () => {
+  it("says it finds the subject anew in each shot", () => {
+    render(<VideoMaskConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.getByText(/^Finds the subject anew in each shot, so a new face or object after a cut is masked too\. A held mask/)).toBeTruthy()
+  })
+
+  it("is off for a node that never set it", () => {
+    const d: Partial<VideoMaskNodeData> = data()
+    delete d.perShot
+    render(<VideoMaskConfig data={d as VideoMaskNodeData} onUpdate={vi.fn()} {...EXTRA} />)
+    expect((screen.getByLabelText("Detect again after every cut") as HTMLInputElement).checked).toBe(false)
+  })
+
+  it("toggles perShot as a boolean", () => {
+    const onUpdate = vi.fn()
+    const { unmount } = render(<VideoMaskConfig data={data()} onUpdate={onUpdate} {...EXTRA} />)
+    fireEvent.click(screen.getByLabelText("Detect again after every cut"))
+    expect(onUpdate).toHaveBeenCalledWith({ perShot: true })
+    unmount()
+    const onUpdateOn = vi.fn()
+    render(<VideoMaskConfig data={data({ perShot: true })} onUpdate={onUpdateOn} {...EXTRA} />)
+    const box = screen.getByLabelText("Detect again after every cut") as HTMLInputElement
+    expect(box.checked).toBe(true)
+    fireEvent.click(box)
+    expect(onUpdateOn).toHaveBeenCalledWith({ perShot: false })
+  })
+})
+
+describe("VideoMaskConfig — zone", () => {
+  const SIDES = ["Left", "Right", "Top", "Bottom"] as const
+  const field = (side: (typeof SIDES)[number]) => screen.getByLabelText(`${side} margin (%)`) as HTMLInputElement
+  const type = (input: HTMLInputElement, value: string) => {
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value } })
+    fireEvent.blur(input)
+  }
+
+  it("is off (every margin 0) for a node that never set it", () => {
+    const d: Partial<VideoMaskNodeData> = data()
+    delete d.zone
+    render(<VideoMaskConfig data={d as VideoMaskNodeData} onUpdate={vi.fn()} {...EXTRA} />)
+    for (const side of SIDES) expect(field(side).value).toBe("0")
+  })
+
+  it("stores the four margins, the others kept, each clamped to 0–49", () => {
+    const onUpdate = vi.fn()
+    const { unmount } = render(<VideoMaskConfig data={data()} onUpdate={onUpdate} {...EXTRA} />)
+    type(field("Left"), "60")
+    expect(onUpdate).toHaveBeenLastCalledWith({ zone: { leftPct: 49, rightPct: 0, topPct: 0, bottomPct: 0 } })
+    unmount()
+    const onUpdate2 = vi.fn()
+    render(<VideoMaskConfig data={data({ zone: { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 0 } })} onUpdate={onUpdate2} {...EXTRA} />)
+    expect(field("Right").value).toBe("12")
+    type(field("Bottom"), "-4")
+    expect(onUpdate2).not.toHaveBeenCalled() // -4 clamps to 0, the value it already had
+    type(field("Bottom"), "20")
+    expect(onUpdate2).toHaveBeenLastCalledWith({ zone: { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 20 } })
+  })
+
+  it("stores null (off) when every margin is back at 0", () => {
+    const onUpdate = vi.fn()
+    render(<VideoMaskConfig data={data({ zone: { leftPct: 10, rightPct: 0, topPct: 0, bottomPct: 0 } })} onUpdate={onUpdate} {...EXTRA} />)
+    type(field("Left"), "0")
+    expect(onUpdate).toHaveBeenLastCalledWith({ zone: null })
+  })
+})

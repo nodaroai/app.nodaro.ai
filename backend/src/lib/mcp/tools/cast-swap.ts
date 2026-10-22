@@ -11,7 +11,8 @@
  *
  * The route is the authority on every rule (role counts, the 30-image total,
  * draft only at 480p, the clip's length, the pre / post prompt's `{role:N}`
- * mentions, the preview-only role settings); this tool maps snake_case to the route's body and leaves the rest
+ * mentions, the preview-only role settings, face masking's ranges and its
+ * min ≤ max rule); this tool maps snake_case to the route's body and leaves the rest
  * to it. The user travels in `mcpInject`'s
  * header, never the body.
  *
@@ -45,12 +46,53 @@ export interface RegisterCastSwapToolsOpts {
 
 interface CastSwapQuote {
   totalCredits: number
-  breakdown: { castSwap: number; seedance: number; references: number }
+  breakdown: { castSwap: number; seedance: number; references: number; masking?: number }
+  /** Face masking "auto" only: charged only if the masked retry runs; not in totalCredits. */
+  maskingCredits?: number
   settlesLower: boolean
+}
+
+/** `face_masking` as the tool takes it (snake_case). */
+interface FaceMaskingArgs {
+  mode: "off" | "always" | "auto"
+  fill?: "blur" | "depth"
+  min_face_height_pct?: number
+  max_face_height_pct?: number
+  zone?: { left_pct?: number; right_pct?: number; top_pct?: number; bottom_pct?: number }
+  blur_strength_pct?: number
+  threshold?: number
+}
+
+/** `face_masking` → the route's `faceMasking`, only the keys given (the route fills the defaults). */
+function faceMaskingBody(fm: FaceMaskingArgs) {
+  const { mode, fill, min_face_height_pct, max_face_height_pct, zone, blur_strength_pct, threshold } = fm
+  return {
+    mode,
+    ...(fill !== undefined ? { fill } : {}),
+    ...(min_face_height_pct !== undefined ? { minFaceHeightPct: min_face_height_pct } : {}),
+    ...(max_face_height_pct !== undefined ? { maxFaceHeightPct: max_face_height_pct } : {}),
+    ...(zone !== undefined ? { zone: zoneBody(zone) } : {}),
+    ...(blur_strength_pct !== undefined ? { blurStrengthPct: blur_strength_pct } : {}),
+    ...(threshold !== undefined ? { threshold } : {}),
+  }
+}
+
+function zoneBody({ left_pct, right_pct, top_pct, bottom_pct }: NonNullable<FaceMaskingArgs["zone"]>) {
+  return {
+    ...(left_pct !== undefined ? { leftPct: left_pct } : {}),
+    ...(right_pct !== undefined ? { rightPct: right_pct } : {}),
+    ...(top_pct !== undefined ? { topPct: top_pct } : {}),
+    ...(bottom_pct !== undefined ? { bottomPct: bottom_pct } : {}),
+  }
 }
 
 const trait = z.enum(["new", "original"]).optional()
 const images = z.array(z.string().url()).max(3).nullable().optional()
+/** A fixed reference exactly as the route parses it: http(s) images of at most 4096 characters, a trimmed non-empty line. */
+const reference = z.object({
+  images: z.array(z.url({ protocol: /^https?$/ }).max(4096)).min(1).max(3),
+  line: z.string().trim().min(1).max(500),
+})
 /** Preview-only settings, on every role kind; a full run ignores them. Exported for the schema walk. */
 export const castSwapRolePreviewArgs = {
   preview_name: z.string().trim().min(1).max(200).optional().describe("Name used instead of name in a preview."),
@@ -116,7 +158,12 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, or a pre_prompt or post_prompt."),
+          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, or a pre_prompt or post_prompt."),
+        references: z
+          .array(reference)
+          .max(5)
+          .optional()
+          .describe('Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30.'),
         pre_prompt: z
           .string()
           .max(4000)
@@ -132,6 +179,28 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p".'),
         draft: z.boolean().optional().describe("Render as a draft, 480p only. Default true at 480p, false above."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
+        face_masking: z
+          .object({
+            mode: z
+              .enum(["off", "always", "auto"])
+              .describe('Mask the faces in the clip before the video model: "off", "always", or "auto" = only on a retry after the model refuses the clip.'),
+            fill: z.enum(["blur", "depth"]).optional().describe('Default "blur".'),
+            min_face_height_pct: z.number().min(0).max(100).optional().describe("Mask faces at least this % of frame height. Default 15."),
+            max_face_height_pct: z.number().min(0).max(100).optional().describe("And at most this %; default 0 = no limit."),
+            zone: z
+              .object({
+                left_pct: z.number().min(0).max(49).optional(),
+                right_pct: z.number().min(0).max(49).optional(),
+                top_pct: z.number().min(0).max(49).optional(),
+                bottom_pct: z.number().min(0).max(49).optional(),
+              })
+              .optional()
+              .describe("Frame margins (%, default 0); a face centred in one is not masked."),
+            blur_strength_pct: z.number().min(0.1).max(5).optional().describe("Blur strength, % of frame width. Default 2."),
+            threshold: z.number().min(0.05).max(0.95).optional().describe("Face detection; lower finds more. Default 0.5."),
+          })
+          .optional()
+          .describe("Default off."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
         confirm: z.boolean().optional().describe("true ONLY after the user accepted the quoted credits in this conversation."),
@@ -148,6 +217,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           ...(preview_name !== undefined ? { previewName: preview_name } : {}),
           ...(in_preview !== undefined ? { inPreview: in_preview } : {}),
         })),
+        ...(args.references !== undefined ? { references: args.references } : {}),
         ...(args.pre_prompt !== undefined ? { prePrompt: args.pre_prompt } : {}),
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
@@ -155,6 +225,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
         ...(args.draft !== undefined ? { draft: args.draft } : {}),
         ...(args.prepare_references !== undefined ? { prepareReferences: args.prepare_references } : {}),
+        ...(args.face_masking !== undefined ? { faceMasking: faceMaskingBody(args.face_masking) } : {}),
         ...(args.quality !== undefined ? { quality: args.quality } : {}),
         ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
       }
@@ -172,6 +243,16 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         const references = quote.breakdown?.references
           ? ` That includes ${quote.breakdown.references} credits to prepare the reference pictures first (prepare_references: false skips it).`
           : ""
+        // Worded by the mode asked for: "auto" charges masking only on a
+        // retry (not in the total), "always" has it in the total.
+        const maskMode = args.face_masking?.mode
+        const autoMasking = quote.maskingCredits ?? quote.breakdown?.masking
+        const masking =
+          maskMode === "auto" && autoMasking
+            ? ` Face masking adds ${autoMasking} more credits, charged only if the video model refuses the clip and the run is retried with the faces masked.`
+            : maskMode === "always" && quote.breakdown?.masking
+              ? ` That includes ${quote.breakdown.masking} credits to mask the faces first.`
+              : ""
         const lower = quote.settlesLower
           ? " The video's length is left to the model, so the final charge is expected to come out lower than this quote."
           : ""
@@ -180,7 +261,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
             {
               type: "text" as const,
               text:
-                `This Cast Swap ${args.preview ? "preview " : ""}costs about ${quote.totalCredits} credits.${references}${lower} ` +
+                `This Cast Swap ${args.preview ? "preview " : ""}costs about ${quote.totalCredits} credits.${references}${masking}${lower} ` +
                 "Present this to the user; call cast_swap again with the same arguments and confirm: true once they accept.",
             },
           ],
@@ -193,6 +274,9 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         url: "/v1/cast-swap",
         payload,
         headers: idempotencyHeaders(args.client_request_id),
+        // The session reaches the job through the server-side scope (the
+        // route ignores a relayed body's `sessionId`).
+        ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
       })
       if (res.statusCode >= 400) return refusal(res.statusCode, res.body)
       const jobId = parseJobId(res.body)

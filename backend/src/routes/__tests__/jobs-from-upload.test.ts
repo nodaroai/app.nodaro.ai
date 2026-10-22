@@ -11,6 +11,7 @@ const STATE = "55555555-5555-4555-8555-555555555555"
 const h = vi.hoisted(() => ({
   assets: new Map<string, Record<string, unknown>>(),
   jobs: new Map<string, Record<string, unknown>>(),
+  updates: [] as { fields: Record<string, unknown>; filters: Record<string, unknown>; applied: boolean }[],
   insert: vi.fn(),
   complete: vi.fn(),
   judge: vi.fn(),
@@ -27,10 +28,23 @@ vi.mock("@/lib/supabase.js", () => {
       if ("parent_job_id" in filters && filters.parent_job_id === null && row.parent_job_id != null) return null
       return row
     }
+    let update: Record<string, unknown> | null = null
+    // An update applies when awaited, to the one row its filters match.
+    const applyUpdate = () => {
+      const row = h.jobs.get(String(filters.id))
+      const statuses = filters.status as string[] | undefined
+      const matches = row && Object.entries(filters).every(([col, value]) => col === "status" ? statuses!.includes(String(row.status)) : row[col] === value)
+      if (matches) h.jobs.set(String(filters.id), { ...row, ...update })
+      h.updates.push({ fields: update!, filters: { ...filters }, applied: Boolean(matches) })
+      return { data: null, error: null }
+    }
     const b: Record<string, unknown> = {
       select: () => b,
+      update: (fields: Record<string, unknown>) => { update = fields; return b },
       eq: (col: string, value: unknown) => { filters[col] = value; return b },
+      in: (col: string, values: unknown[]) => { filters[col] = values; return b },
       is: (col: string, value: unknown) => { filters[col] = value; return b },
+      then: (resolve: (v: unknown) => unknown) => resolve(update ? applyUpdate() : { data: null, error: null }),
       maybeSingle: async () => ({ data: rowOf(), error: null }),
       single: async () => { const row = rowOf(); return row ? { data: row, error: null } : { data: null, error: { message: "0 rows" } } },
     }
@@ -59,6 +73,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   h.assets.clear()
   h.jobs.clear()
+  h.updates.length = 0
   h.assets.set(ASSET, {
     id: ASSET, user_id: USER, type: "image", mime_type: "image/png",
     r2_url: "https://cdn.test/uploads/images/edit.png", metadata: { thumbnail_url: "https://cdn.test/uploads/images/edit_thumb.png" },
@@ -72,7 +87,7 @@ beforeEach(async () => {
   h.judge.mockResolvedValue({ kind: "owned", key: "uploads/images/edit.png", url: "https://cdn.test/uploads/images/edit.png" })
   h.insert.mockImplementation(async (_req: unknown, row: Record<string, unknown>) => {
     h.jobs.set(NEW_JOB, { id: NEW_JOB, ...row })
-    return { row: { id: NEW_JOB, status: "pending" }, created: true }
+    return { row: { id: NEW_JOB, job_type: "image-edit", status: "pending" }, created: true }
   })
   h.complete.mockImplementation(async (id: string, fields: Record<string, unknown>) => {
     h.jobs.set(id, { ...h.jobs.get(id), ...fields, status: "completed" })
@@ -140,7 +155,7 @@ describe("POST /v1/jobs/from-upload", () => {
 
   it("answers the same job for the same upload without completing it again", async () => {
     h.jobs.set(NEW_JOB, { id: NEW_JOB, user_id: USER, status: "completed", output_data: { imageUrl: "x" } })
-    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, status: "completed" }, created: false })
+    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, job_type: "image-edit", status: "completed" }, created: false })
 
     const res = await post({ assetId: ASSET })
 
@@ -151,13 +166,52 @@ describe("POST /v1/jobs/from-upload", () => {
 
   it("finishes a job whose first attempt died before completing it", async () => {
     h.jobs.set(NEW_JOB, { id: NEW_JOB, user_id: USER, status: "pending" })
-    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, status: "pending" }, created: false })
+    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, job_type: "image-edit", status: "pending" }, created: false })
 
     const res = await post({ assetId: ASSET })
 
     expect(res.statusCode).toBe(200)
     expect(h.complete).toHaveBeenCalledOnce()
     expect(res.json().data.status).toBe("completed")
+  })
+
+  it("reopens and finishes a job a sweep failed after its first attempt died", async () => {
+    h.jobs.set(NEW_JOB, {
+      id: NEW_JOB, user_id: USER, job_type: "image-edit", credits: 0, status: "failed",
+      error_message: "Job never started", error_hint: null,
+    })
+    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, job_type: "image-edit", status: "failed" }, created: false })
+
+    const res = await post({ assetId: ASSET })
+
+    expect(res.statusCode).toBe(200)
+    expect(h.updates).toEqual([{
+      fields: { status: "pending", error_message: null, error_hint: null, completed_at: null },
+      filters: { id: NEW_JOB, user_id: USER, job_type: "image-edit", credits: 0, status: ["failed", "cancelled"] },
+      applied: true,
+    }])
+    expect(h.complete).toHaveBeenCalledOnce()
+    expect(res.json().data.status).toBe("completed")
+  })
+
+  it("never answers success when the completion did not land", async () => {
+    h.complete.mockResolvedValueOnce("lost_race")
+
+    const res = await post({ assetId: ASSET })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+  })
+
+  it("refuses a key that already names a job of another type", async () => {
+    h.jobs.set(NEW_JOB, { id: NEW_JOB, user_id: USER, job_type: "generate-image", status: "completed" })
+    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, job_type: "generate-image", status: "completed" }, created: false })
+
+    const res = await post({ assetId: ASSET })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("conflict")
+    expect(h.complete).not.toHaveBeenCalled()
   })
 
   it("stores the design state's canonical url", async () => {
@@ -254,7 +308,7 @@ describe("POST /v1/jobs/from-upload", () => {
       id: NEW_JOB, user_id: USER, status: "failed",
       error_hint: { kind: "policy-block", reason: "Not allowed here", policyId: "p", hookPoint: "result" },
     })
-    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, status: "failed" }, created: false })
+    h.insert.mockResolvedValueOnce({ row: { id: NEW_JOB, job_type: "image-edit", status: "failed" }, created: false })
 
     const res = await post({ assetId: ASSET })
 

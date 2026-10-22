@@ -23,6 +23,14 @@ vi.mock("@/lib/availability-override.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/availability-override.js")>()),
   loadAvailabilityOverridesForScript: async () => avail.loaded,
 }))
+// The private plugins the server loads at boot (the UGC estimate, the plugin-priced ids): one loads by default.
+const plugins = vi.hoisted(() => ({ loaded: ["@nodaroai/cloud-plugins"] as string[], calls: 0 }))
+vi.mock("@/lib/private-plugins/load.js", () => ({
+  loadPrivatePlugins: async () => {
+    plugins.calls++
+    return { handlers: {}, loaded: plugins.loaded, engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} }
+  },
+}))
 vi.mock("@/lib/canvas-result-ids.js", () => ({ resolveCanvasResultIds: async (nodes: unknown) => nodes }))
 // The listing the publish path stores: here a fixed figure per graph, so the columns are the arithmetic under test.
 const listing = vi.hoisted(() => ({ value: { preview: 120, final: 0, previewPerMinute: 0, finalPerMinute: 0 } as Record<string, number>, unpricedSlugs: new Set<string>() }))
@@ -101,6 +109,8 @@ beforeEach(() => {
   gate.ready = true
   gate.rollback = false
   gate.probes = 0
+  plugins.loaded = ["@nodaroai/cloud-plugins"]
+  plugins.calls = 0
   listing.value = { preview: 120, final: 0, previewPerMinute: 0, finalPerMinute: 0 }
   listing.unpricedSlugs.clear()
 })
@@ -250,6 +260,19 @@ describe("backfill-llm-listing-prices — the run", () => {
     const r = await runLlmListingBackfill({ apply: true, includeTemplates: false, allowRollback: false, report })
     expect(r).toMatchObject({ ok: true, skipped: 1 })
     expect(db.updates.map((u) => u.id)).toEqual(["app-1"])
+  })
+
+  it("refuses when no private plugin loads — the UGC estimate and the plugin-priced ids would price as 0", async () => {
+    plugins.loaded = []
+    tableReads({ published_apps: [LLM_APP] })
+    db.from.mockClear()
+    const r = await runLlmListingBackfill({ apply: true, includeTemplates: false, allowRollback: false, report })
+    expect(r).toEqual({ ok: false, rows: 0, changed: 0, written: 0 })
+    expect(plugins.calls).toBe(1)
+    // Refused before anything is read: no schema probe, no table read, no write.
+    expect(gate.probes).toBe(0)
+    expect(db.from).not.toHaveBeenCalled()
+    expect(db.updates).toEqual([])
   })
 
   it("refuses without the deployment's availability", async () => {

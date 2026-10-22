@@ -21,6 +21,7 @@ import { supabase } from "../../supabase.js"
 import { redactPrivateJobOutput } from "../../public-job-data.js"
 import { isParkedJobStatus, TERMINAL_JOB_STATUSES } from "../../job-status.js"
 import { resolveOutputUrl } from "./_job-view.js"
+import type { ErrorHint } from "../../safety-block.js"
 
 /**
  * The most one `wait_for_job` call waits, in seconds. Below the 60 s default
@@ -57,6 +58,10 @@ interface WaitForJobResult {
   outputData: Record<string, unknown> | null
   error: string | null
   jobType: string | null
+  /** A `failed` job's structured failure verdict (`jobs.error_hint`, e.g. an
+   *  input-video refusal) so a caller can decide a retry without parsing
+   *  `error`; null in every other case. */
+  errorHint: ErrorHint | null
   /** On `timeout`: what the last read saw — the job's own status
    *  (pending / processing) and its 0-100 progress — so a caller can say how
    *  far along a still-running job is instead of only "not yet". */
@@ -66,6 +71,16 @@ interface WaitForJobResult {
 /** Correctly terminal-ONLY: `pending_review` is handled by its own early
  *  return below, and must never be swept in here (it has no output to read). */
 const TERMINAL_STATUSES: ReadonlySet<string> = new Set<string>(TERMINAL_JOB_STATUSES)
+
+/** The jsonb column as written, else null. Shape-checked on `kind` only: a
+ *  non-array object with a string `kind` is passed on as an `ErrorHint` (the
+ *  platform is its only writer, `markJobFailed`), and the arm's other fields
+ *  are not checked; anything else (an array, a missing or non-string `kind`)
+ *  is null. */
+function errorHintOf(raw: unknown): ErrorHint | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  return typeof (raw as { kind?: unknown }).kind === "string" ? (raw as ErrorHint) : null
+}
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -87,14 +102,14 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
   let dbErrors = 0
   let lastSeen: WaitForJobResult["lastSeen"]
   let lastJobType: string | null = null
-  const nothing = { outputUrl: null, outputData: null } as const
+  const nothing = { outputUrl: null, outputData: null, errorHint: null } as const
 
   while (true) {
     if (opts.signal?.aborted) return { status: "aborted", ...nothing, error: `Wait for job ${opts.jobId} was aborted`, jobType: null }
 
     const { data, error } = await supabase
       .from("jobs")
-      .select("status, output_data, job_type, error_message, progress, created_at, started_at")
+      .select("status, output_data, job_type, error_message, error_hint, progress, created_at, started_at")
       .eq("id", opts.jobId)
       .maybeSingle()
 
@@ -142,6 +157,7 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
           outputData: out,
           error: (data.error_message as string | null) ?? null,
           jobType,
+          errorHint: status === "failed" ? errorHintOf(data.error_hint) : null,
         }
       }
     }

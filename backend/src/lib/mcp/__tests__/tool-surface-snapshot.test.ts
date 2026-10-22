@@ -1205,6 +1205,12 @@ const VIDEO_MASK_MIN_SUBJECT_BYTES = 157
 // with and without the change: 486_678 total − 486_522 = 156 B; the 103 B of headroom carry across.
 const VIDEO_MASK_MAX_SUBJECT_BYTES = 156
 
+// RAISED 2026-10-21 by `video_mask` taking `zone` (left / right / top / bottom margins, 0–49 % each: keep
+// regions whose centre is inside) and `per_shot` (detect the subject again after every scene cut) — two
+// args, nothing else; no tool added, so the fixture does NOT move. Measured by this suite with and without
+// the change: 488_293 total − 487_791 = 502 B; the 103 B of headroom carry across.
+const VIDEO_MASK_ZONE_PER_SHOT_BYTES = 502
+
 // RAISED 2026-10-21 by `cast_swap` taking `pre_prompt` (instructions placed before the role
 // instructions, mentioning roles as post_prompt does) — one arg, and its `roles` description
 // saying a pre_prompt alone is enough too — and nothing else. No tool was added, so the fixture
@@ -1218,6 +1224,37 @@ const CAST_SWAP_PRE_PROMPT_BYTES = 161
 // added, so the fixture does NOT move. Measured by this suite on the same tree with and without
 // the change: 486_898 total − 485_946 = 952 B; the 103 B of headroom carry across.
 const CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES = 952
+
+// RAISED 2026-10-21 by `cast_swap` taking `face_masking` (mode off / always / auto, fill, the
+// face-size and zone filters, blur strength and detection threshold), and nothing else. No tool
+// was added, so the fixture does NOT move. Measured by this suite on the same tree with and
+// without the change: 489_029 total − 487_791 = 1_238 B; the 103 B of headroom carry across.
+const CAST_SWAP_FACE_MASKING_BYTES = 1_238
+
+// RAISED 2026-10-21 by `estimate_trend` / `run_trend` taking `preview_job_id` (a full run follows
+// its own preview's settings), and nothing else. No tool was added, so the fixture does NOT move.
+// Measured by this suite on the same tree with and without the change: 489_501 total − 489_029 =
+// 472 B (with the route's own job-id regex; zod's `.uuid()` pattern had cost 712 B); the 103 B of
+// headroom carry across.
+const TRENDS_PREVIEW_JOB_ID_BYTES = 472
+
+// RAISED 2026-10-21 by `cast_swap` taking `references` (fixed references no role replaces: 1–3 images
+// of one thing and the line naming it, at most 5) and its `roles` description naming a reference as
+// enough on its own, and nothing else. No tool was added, so the fixture does NOT move. Measured by
+// this suite on the same tree with and without the change: cast_swap 5_798 → 6_275 B = 477 B, then
+// 6_275 → 6_292 B = 17 B more when the reference images took the route's 4096-character cap
+// (`maxLength`; the http(s)-only rule and the trimmed line add no bytes): 494 B in all; the
+// headroom the list had before carries across.
+const CAST_SWAP_REFERENCES_BYTES = 494
+
+// RAISED 2026-10-21 by two NEW tools and nothing else: `estimate_full_quality` and `full_quality`
+// (the MCP face of POST /v1/cast-swap/:jobId/full-quality(/estimate): a finished Cast Swap or trend
+// draft re-rendered as the same take at 1080p; the quote, then the run behind `confirm`), registered
+// together in cast-swap-full-quality.ts behind hasCredits() and workflows:execute, so the fixture
+// moves by exactly those two names in cloud/all alone. Measured by this suite: 490_035 total −
+// 488_268 before = 1_767 B (681 + 1_086), far under the per-tool budget; the headroom the list had
+// before carries across.
+const CAST_SWAP_FULL_QUALITY_TOOLS_BYTES = 1_767
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
@@ -1350,6 +1387,7 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_HOLD_BYTES +
     VIDEO_MASK_MIN_SUBJECT_BYTES +
     VIDEO_MASK_MAX_SUBJECT_BYTES +
+    VIDEO_MASK_ZONE_PER_SHOT_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
     TIGHTEN_RECORDINGS_BYTES +
@@ -1366,7 +1404,11 @@ export const TOOL_WIRE_BUDGET = {
     TRENDS_TOOL_BYTES +
     TRENDS_WORDING_BYTES +
     CAST_SWAP_PRE_PROMPT_BYTES +
-    CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES,
+    CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES +
+    CAST_SWAP_FACE_MASKING_BYTES +
+    TRENDS_PREVIEW_JOB_ID_BYTES +
+    CAST_SWAP_REFERENCES_BYTES +
+    CAST_SWAP_FULL_QUALITY_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

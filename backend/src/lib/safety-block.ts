@@ -73,6 +73,9 @@ export type SafetyBlockHint = {
   class: SafetyBlock["class"]
   retried: boolean
   suggestedProvider?: string
+  /** Present when the provider refused the INPUT VIDEO itself, not the prompt,
+   *  a reference image or the output — a caller can then send a different clip. */
+  subject?: "input_video"
 }
 
 /** A NODARO-side policy decision, not a provider's — written by the job-policy
@@ -109,15 +112,26 @@ export type CreditsHint = {
   code: string
 }
 
+/** A PROVIDER refused the job's input video without naming a content-policy
+ *  class (its message is about the file, not a policy). Like an unclassified
+ *  failure for the person — no fallback model is offered — but a caller that
+ *  can change the input (send a different clip) knows which input to change. */
+export type InputRefusedHint = {
+  kind: "input-refused"
+  subject: "input_video"
+}
+
 /** One jsonb column, several verdict sources. A DISCRIMINATED UNION on `kind` —
  *  which was already the discriminant every reader tested
  *  (`hint.kind === "safety-block"`), so widening it breaks none of them.
  *
  *  Hand-copied mirrors that must be updated in the same change (each says so in
  *  its own comment): `frontend/src/types/nodes.ts` `JobErrorHint`,
- *  `packages/client/src/resources/jobs.ts` `JobErrorHint` (minor + changeset).
+ *  `packages/client/src/resources/jobs.ts` `JobErrorHint` (minor + changeset),
+ *  `lib/private-plugins/types.ts` `PluginJobErrorHint` (and the plugin repo's
+ *  copy of that contract).
  *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
-export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint
+export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
 
 /** A credits refusal code as a route sends it; anything else is not passed on. */
 const CREDITS_CODE_RE = /^[a-z0-9_]{1,64}$/
@@ -161,10 +175,109 @@ export function policyBlockHint(
   return { kind: "policy-block", policyId, reason, hookPoint }
 }
 
-export function errorHintFor(block: SafetyBlock, retried: boolean): SafetyBlockHint {
-  return block.fallback
+/** Constructor for the input-refused arm (same reason as `policyBlockHint`). */
+export function inputRefusedHint(): InputRefusedHint {
+  return { kind: "input-refused", subject: "input_video" }
+}
+
+/** True when the thrown error (or anything on its `cause` chain) says the
+ *  provider refused the input video: a duck-typed `inputVideoRefused === true`
+ *  own property (`KieError.inputVideoRefused`, or a plugin's error carrying
+ *  the same flag across the plugin boundary). Never throws, for the same
+ *  reason as `creditsHintOf`. */
+export function inputVideoRefusedOf(err: unknown): boolean {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      if ((cur as { inputVideoRefused?: unknown }).inputVideoRefused === true) return true
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+const nonBlank = (v: unknown): boolean => typeof v === "string" && v.trim() !== ""
+
+/** True when the job's payload sent a video to the provider: a source video
+ *  (`videoUrl` — video-to-video, motion transfer, retake…) or a reference
+ *  video (`referenceVideoUrl` / `referenceVideoUrls` — the multi-reference
+ *  video models). The worker marks an input-video refusal only on such a
+ *  job: the provider's file-level wording is generic, and a job that sent no
+ *  video has no input video to blame. */
+export function sentVideoInput(data: unknown): boolean {
+  if (typeof data !== "object" || data === null) return false
+  const d = data as { videoUrl?: unknown; referenceVideoUrl?: unknown; referenceVideoUrls?: unknown }
+  return (
+    nonBlank(d.videoUrl) ||
+    nonBlank(d.referenceVideoUrl) ||
+    (Array.isArray(d.referenceVideoUrls) && d.referenceVideoUrls.some(nonBlank))
+  )
+}
+
+export function errorHintFor(
+  block: SafetyBlock,
+  retried: boolean,
+  opts?: { inputVideoRefused?: boolean },
+): SafetyBlockHint {
+  const hint: SafetyBlockHint = block.fallback
     ? { kind: "safety-block", class: block.class, retried, suggestedProvider: block.fallback }
     : { kind: "safety-block", class: block.class, retried }
+  return opts?.inputVideoRefused ? { ...hint, subject: "input_video" } : hint
+}
+
+/** The `jobs.error_hint` for a provider's refusal of a job, or null when it was
+ *  not one: a classified content-policy block (naming the input video when
+ *  the provider refused that), else a refused input video with no class. The
+ *  ONE mapping shared by every writer that fails a job on a provider's
+ *  verdict — the worker's catch path and the reconcile path (a job re-picked
+ *  after a worker restart is failed there, and must carry the same hint).
+ *  `inputVideoRefused` is already gated on the job having sent a video
+ *  (`inputVideoRefusedOf(err) && sentVideoInput(data)`). */
+export function refusalHintFor(
+  block: SafetyBlock | null,
+  retried: boolean,
+  inputVideoRefused: boolean,
+): SafetyBlockHint | InputRefusedHint | null {
+  if (block) return errorHintFor(block, retried, { inputVideoRefused })
+  return inputVideoRefused ? inputRefusedHint() : null
+}
+
+/** The model a job runs under, read off its payload (the BullMQ data or the
+ *  `jobs.input_data` request — same keys): `model` wins when set — the
+ *  synthetic LoRA model, or, on a workflow run, the image-to-image sibling a
+ *  reference swapped to (the workflow engine's payload-builder sends it there
+ *  and keeps `provider` as the model the user picked) — then `resolvedModel`,
+ *  the same fact as the single-node route records it (on `input_data` only:
+ *  the sibling or the LoRA model its queue payload sends), else `provider`
+ *  (the route enqueue shape). */
+export function jobModelIdOf(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) return null
+  const { model, resolvedModel, provider } = data as { model?: unknown; resolvedModel?: unknown; provider?: unknown }
+  if (typeof model === "string") return model
+  if (typeof resolvedModel === "string") return resolvedModel
+  return typeof provider === "string" ? provider : null
+}
+
+/** True iff the thrown error ITSELF vouches that its `message` is user-safe:
+ *  a strict `userSafeMessage === true` own property. A plugin handler that
+ *  fails a job with a fixed sentence of its own (and `contentPolicyClass` for
+ *  the hint) sets it so the worker keeps that sentence instead of the generic
+ *  `safetyBlockMessage` — whose "adjust the prompt" advice is wrong for a run
+ *  whose prompt the user never wrote.
+ *
+ *  Read on the TOP-LEVEL error only, never the `cause` chain: the text kept is
+ *  the top-level message, and a marker on a cause would vouch for a wrapper's
+ *  text nobody checked. Never throws (a throwing getter or Proxy reads as "not
+ *  marked"). The worker honours it for plugin-served job types only. */
+export function hasUserSafeMessage(err: unknown): boolean {
+  try {
+    return err instanceof Error && Object.hasOwn(err, "userSafeMessage")
+      && (err as { userSafeMessage?: unknown }).userSafeMessage === true
+  } catch {
+    return false
+  }
 }
 
 /** User-facing message for a FINAL `safety`-class block only — copyright and

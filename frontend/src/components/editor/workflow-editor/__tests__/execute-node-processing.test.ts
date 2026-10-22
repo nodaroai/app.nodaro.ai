@@ -997,6 +997,21 @@ describe("video-mask", () => {
     await mockPollJobWithNodeUpdate.mock.calls[0][1]()
     expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ maxSubjectHeightPct: expected }))
   })
+
+  it.each([
+    [{}, false, null],
+    [{ perShot: true, zone: { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 0 } }, true, { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 0 }],
+    [{ perShot: "yes", zone: { leftPct: 80 } }, false, { leftPct: 49, rightPct: 0, topPct: 0, bottomPct: 0 }],
+    [{ zone: { leftPct: "10" } }, false, null],
+    [{ zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }, false, null],
+  ] as const)("sends perShot and zone (%j → %s, %j), read as the orchestrator reads them", async (data, perShot, zone) => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoMaskApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-mask", { prompt: "the face", ...data }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoMaskApi).toHaveBeenCalledWith(expect.objectContaining({ perShot, zone }))
+  })
 })
 
 describe("mask-composite", () => {

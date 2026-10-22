@@ -852,6 +852,8 @@ export interface VideoOverlayBaseProbe {
   readonly avgFrameRate?: string
   readonly streamDurationSec: number
   readonly startTimeSec: number
+  /** The container's frame count (`nb_frames`), when it states one. */
+  readonly frameCount?: number
   /** codec_name of the FIRST audio stream; null when the base is silent. */
   readonly audioCodec: string | null
 }
@@ -864,7 +866,7 @@ export interface VideoOverlayBaseProbe {
  * MP3 with album art must fail as "not a video", not render one frame.
  */
 const VIDEO_OVERLAY_PROBE_ENTRIES =
-  "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time" +
+  "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time,nb_frames" +
   ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration"
 
 function parseSampleAspect(value: unknown): number {
@@ -907,6 +909,7 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
   const swap = rotation === 90 || rotation === 270
   const sar = parseSampleAspect(video.sample_aspect_ratio)
   const start = Number(video.start_time)
+  const frames = Number(video.nb_frames)
   return {
     width: swap ? storedH : storedW,
     height: swap ? storedW : storedH,
@@ -917,6 +920,7 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
     ...(typeof video.avg_frame_rate === "string" ? { avgFrameRate: video.avg_frame_rate } : {}),
     streamDurationSec,
     startTimeSec: Number.isFinite(start) ? start : 0,
+    ...(Number.isInteger(frames) && frames > 0 ? { frameCount: frames } : {}),
     audioCodec: audio && typeof audio.codec_name === "string" ? audio.codec_name : null,
   }
 }

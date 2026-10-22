@@ -33,6 +33,7 @@ import {
   overlayVariantIdFromHandle,
   VIDEO_MASK_LIMITS,
   resolveVideoMaskProvider,
+  resolveVideoMaskZone,
   resolveMaskCompositeSettings,
   maskCompositeUsesForeground
 } from "@nodaro/shared/media";
@@ -7098,6 +7099,9 @@ function executeNodeCore(
           maxSubjectHeightPct: typeof vmData.maxSubjectHeightPct === "number" && Number.isFinite(vmData.maxSubjectHeightPct)
             ? Math.min(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MAX, Math.max(VIDEO_MASK_LIMITS.MAX_SUBJECT_HEIGHT_PCT_MIN, vmData.maxSubjectHeightPct))
             : 0,
+          // The orchestrator's reading too: margins clamped to 0–49, all 0 = null (off).
+          zone: resolveVideoMaskZone(vmData.zone),
+          perShot: vmData.perShot === true,
           userId: ctx.userId,
         }),
       "generatedVideoUrl",

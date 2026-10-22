@@ -648,6 +648,19 @@ describe("payload-builder-video-mask.test.ts", () => {
       expect(pct(-5)).toBe(0)
       expect(pct("15")).toBe(0)
     })
+
+    it("carries perShot and zone from the node (perShot true only when set; zone clamped to 0–49, null when off)", () => {
+      const b = (d: Record<string, unknown>) => build(node("video-mask", { prompt: "x", ...d }), { videoUrl: "https://x/c.mp4" }).payload
+      expect(b({ perShot: true, zone: { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 0 } })).toMatchObject({
+        perShot: true,
+        zone: { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 0 },
+      })
+      expect(b({})).toMatchObject({ perShot: false, zone: null })
+      expect(b({ perShot: "yes" }).perShot).toBe(false)
+      expect(b({ zone: { leftPct: 80 } }).zone).toEqual({ leftPct: 49, rightPct: 0, topPct: 0, bottomPct: 0 })
+      expect(b({ zone: { leftPct: "10", rightPct: 0 } }).zone).toBeNull()
+      expect(b({ zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }).zone).toBeNull()
+    })
   })
 
   describe("mask-composite payload", () => {

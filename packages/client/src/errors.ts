@@ -1,13 +1,24 @@
 import type { StudioOpsResponse } from "./resources/studio-productions.js"
 
 export class NodaroError extends Error {
+  /**
+   * Every other field of the server's error envelope (`{ error: { code,
+   * message, … } }`), as it was sent: for example a trend refusal's `slot`, a
+   * publish refusal's `reasons`, a validation error's `issues`. Empty when the
+   * envelope had nothing else, or for an error the SDK made itself. A copy —
+   * changing it changes nothing else.
+   */
+  public readonly details: Readonly<Record<string, unknown>> = {}
+
   constructor(
     message: string,
     public readonly code: string,
     public readonly status: number,
+    details?: Readonly<Record<string, unknown>>,
   ) {
     super(message)
     this.name = "NodaroError"
+    if (details) this.details = { ...details }
   }
 }
 
@@ -39,14 +50,54 @@ export class RateLimitedError extends NodaroError {
   }
 }
 
+/**
+ * HTTP 402: the run costs more than the caller may spend. `code` is the
+ * refusal's own code — `insufficient_credits` for the caller's own balance, or
+ * another 402 code such as `free_video_limit`. A spending cap someone else set
+ * (a workspace budget, a member cap, a per-user allowance) is the subclass
+ * {@link CreditCapExceededError}, so `instanceof InsufficientCreditsError`
+ * still catches every 402.
+ */
 export class InsufficientCreditsError extends NodaroError {
   constructor(
     message = "Insufficient credits",
     public readonly required?: number,
     public readonly available?: number,
+    code = "insufficient_credits",
   ) {
-    super(message, "insufficient_credits", 402)
+    super(message, code, 402)
     this.name = "InsufficientCreditsError"
+  }
+}
+
+/** The 402 codes of a spending cap set by someone other than the caller. */
+export type CreditCapCode = "budget_exceeded" | "member_cap_exceeded" | "user_allowance_exceeded"
+
+/**
+ * The 402 codes {@link CreditCapExceededError} carries: the workspace's budget
+ * (`budget_exceeded`), the caller's cap in that workspace
+ * (`member_cap_exceeded`), the deployment's per-user allowance
+ * (`user_allowance_exceeded`).
+ */
+export const CREDIT_CAP_CODES: ReadonlySet<CreditCapCode> = new Set<CreditCapCode>([
+  "budget_exceeded",
+  "member_cap_exceeded",
+  "user_allowance_exceeded",
+])
+
+/**
+ * HTTP 402 from a spending cap, not from the caller's own balance: topping up
+ * does not help — whoever set the cap (the workspace's owner, the deployment's
+ * operator) has to raise it. An {@link InsufficientCreditsError}, so existing
+ * catches keep working; `code` says which cap. `available`, when sent, is what
+ * the cap has left.
+ */
+export class CreditCapExceededError extends InsufficientCreditsError {
+  declare readonly code: CreditCapCode
+
+  constructor(code: CreditCapCode, message = "A credit cap cannot cover this run", required?: number, available?: number) {
+    super(message, required, available, code)
+    this.name = "CreditCapExceededError"
   }
 }
 
@@ -437,6 +488,8 @@ interface ApiErrorBody {
   required?: unknown
   /** …and what the caller has (withheld on a deployment-paid instance). */
   balance?: unknown
+  /** A per-user allowance's 402: what the allowance has left. */
+  remaining?: unknown
   /** `app_run_version_changed`: the version the run ran, and the one the caller is on. */
   runVersion?: unknown
   appVersion?: unknown
@@ -494,7 +547,29 @@ function readErrorBody(status: number, body: ApiErrorBody): { code: string | und
   return { code, message, envelope }
 }
 
+/** The envelope's fields other than `code` and `message` (see {@link NodaroError.details}). */
+function envelopeDetails(envelope: ApiErrorEnvelope): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(envelope)) {
+    if (key !== "code" && key !== "message") out[key] = value
+  }
+  return out
+}
+
 export function throwFromResponse(status: number, body: ApiErrorBody): never {
+  try {
+    selectError(status, body)
+  } catch (err) {
+    // Every class carries the envelope's other fields, whichever was chosen.
+    if (err instanceof NodaroError) {
+      const raw = body && typeof body === "object" ? body.error : undefined
+      if (raw && typeof raw === "object") Object.defineProperty(err, "details", { value: envelopeDetails(raw), enumerable: true })
+    }
+    throw err
+  }
+}
+
+function selectError(status: number, body: ApiErrorBody): never {
   // A body that is not an object (an empty answer, `null`, a bare string) still
   // throws by its status.
   const parsed: ApiErrorBody = body && typeof body === "object" ? body : {}
@@ -548,13 +623,16 @@ export function throwFromResponse(status: number, body: ApiErrorBody): never {
   if (status === 404) throw new NotFoundError(read.message)
   if (status === 429) throw new RateLimitedError(read.message)
   if (status === 402) {
-    // The credit guard puts `required` / `balance` beside the envelope; an
-    // envelope that carries them (`required` / `available`) is read first.
-    throw new InsufficientCreditsError(
-      read.message,
-      finite(envelope.required) ?? finite(parsed.required),
-      finite(envelope.available) ?? finite(parsed.balance),
-    )
+    // The credit guard puts `required` / `balance` (an allowance: `remaining`)
+    // beside the envelope; an envelope that carries them (`required` /
+    // `available`) is read first.
+    const required = finite(envelope.required) ?? finite(parsed.required)
+    const available = finite(envelope.available) ?? finite(parsed.balance) ?? finite(parsed.remaining)
+    const capCode = read.code as CreditCapCode | undefined
+    if (capCode !== undefined && CREDIT_CAP_CODES.has(capCode)) {
+      throw new CreditCapExceededError(capCode, read.message, required, available)
+    }
+    throw new InsufficientCreditsError(read.message, required, available, read.code ?? "insufficient_credits")
   }
   if (status === 413) throw new StorageExceededError(read.message, envelope.limitBytes)
   throw new NodaroError(message, code, status)

@@ -222,8 +222,9 @@ const CHAIN_PINS: ReadonlyMap<string, readonly string[]> = new Map<string, reado
   ["lib/mcp/tools/pipelines.ts", ["lib/mcp/server.ts"]],
   ["lib/mcp/server.ts", ["routes/mcp.ts", "ee/copilot/turn-runner.ts"]],
   ["routes/mcp.ts", ["app.ts"]],
-  // plugins: the loader and the daemons
-  ["lib/private-plugins/load.ts", ["app.ts", "ee/workers/pipeline-worker.ts", "plugin-daemons.ts", "scripts/probe-script-critic.ts", "workers/video-worker.ts"]],
+  // plugins: the loader and the daemons. The listing backfill loads them only for the
+  // estimate seam and the plugin-priced ids; it starts no plugin and makes no LLM call.
+  ["lib/private-plugins/load.ts", ["app.ts", "ee/scripts/backfill-llm-listing-prices.ts", "ee/workers/pipeline-worker.ts", "plugin-daemons.ts", "scripts/probe-script-critic.ts", "workers/video-worker.ts"]],
   // D4 copilot: only its route enters it
   ["ee/copilot/", ["ee/routes/copilot.ts"]],
   ["ee/routes/copilot.ts", ["app.ts"]],

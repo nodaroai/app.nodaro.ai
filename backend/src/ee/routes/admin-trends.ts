@@ -6,6 +6,8 @@
  *   GET    /v1/admin/trends                          every trend (any status)
  *   POST   /v1/admin/trends                          create a draft → 201
  *   GET    /v1/admin/trends/engine-environments      what each environment's engine supports
+ *   GET    /v1/admin/trends/tags                     every tag in use or labelled, with its labels
+ *   PUT    /v1/admin/trends/tags                     save one tag's labels ({ tag, labels }; none = clear)
  *   GET    /v1/admin/trends/test-runs/:jobId/prompt  the engine prompt a run used
  *   GET    /v1/admin/trends/:id                      the trend, its draft and published data
  *   PATCH  /v1/admin/trends/:id                      slug, tags, badges, sort order
@@ -40,15 +42,18 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
+import { LANGUAGES } from "@nodaro/shared/i18n"
 import { supabase } from "../../lib/supabase.js"
 import { ADMIN_ROLES, checkIsAdmin } from "../../lib/admin-check.js"
 import { formatZodError } from "../../lib/zod-error.js"
-import { findOwnSession } from "../../lib/generation-sessions.js"
+import { afterKeyset, findOwnSession } from "../../lib/generation-sessions.js"
+import { deriveJobSource } from "../../lib/job-source.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
 import {
   DraftConflictError,
   TrendSlugTakenError,
+  TrendsUnavailableError,
   createTrend,
   getDraftState,
   getTrendById,
@@ -64,19 +69,23 @@ import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { TrendMediaError, copyToTrendStorage } from "../lib/trends/media.js"
 import { publishBlockers } from "../lib/trends/publish-check.js"
+import { allTagUsage, readTagLabels, saveTagLabels, type TagLabels } from "../lib/trends/tags.js"
 import {
   RUN_JOB_COLS,
   displaySlots,
   engineRequest,
   engineSupports,
+  followPreviewMasking,
   isRec,
   jobIdOf,
+  listedRunsPage,
   outputVideo,
   relay,
   unavailableOrInternal,
   str,
   toTrendRuns,
   type RunJobRow,
+  type RunKeyset,
   type TrendRun,
 } from "../lib/trends/run-helpers.js"
 import type { TrendExample, TrendRow, TrendVersionData } from "../lib/trends/types.js"
@@ -102,14 +111,23 @@ export interface AdminTrendListItem {
 
 export type AdminTrendRun = TrendRun & { ownerIsAdmin: boolean }
 
+/** A tag in use on any trend, or one with labels: its labels and how many trends (published ones) carry it. */
+export interface AdminTrendTag {
+  tag: string
+  labels: TagLabels
+  trends: number
+  published: number
+}
+
 // ── constants ───────────────────────────────────────────────────────────────
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-/** Same shape as migration 549's CHECK on `trends.slug`. */
+/** Same shape as migration 549's CHECK on `trends.slug` (and 555's: never `tags`). */
+const RESERVED_SLUGS: ReadonlySet<string> = new Set(["runs", "tags"])
 const slugSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "A slug is 1–64 of a–z, 0–9 and -, starting with a letter or digit.")
-  .refine((s) => s !== "runs", "\"runs\" cannot be a slug.")
+  .refine((s) => !RESERVED_SLUGS.has(s), "\"runs\" and \"tags\" cannot be slugs.")
 /** A trend's source clip: 4–30 s. */
 const SOURCE_SECONDS = { min: 4, max: 30 }
 /** How many of a trend's runs the test list shows. */
@@ -122,9 +140,20 @@ const PROMOTE_ATTEMPTS = 3
 const createBody = z.strictObject({ slug: slugSchema, name: z.unknown() })
 const revisionSchema = z.string().min(1).max(100)
 const draftBody = z.strictObject({ data: z.record(z.string(), z.unknown()), revision: revisionSchema })
+/**
+ * A tag: 1–100 letters, digits (any script, with their combining marks),
+ * spaces, - and _. No quotes, backslashes, commas or parentheses: a tag rides
+ * in catalog URLs and filters as it is.
+ */
+const tagSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .regex(/^[\p{L}\p{M}\p{N} _-]+$/u, "A tag is letters, digits, spaces, - and _ only.")
 const patchBody = z.strictObject({
   slug: slugSchema.optional(),
-  tags: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  tags: z.array(tagSchema).max(30).optional(),
   badges: z.array(z.enum(["trending", "new"])).max(2).optional(),
   sortOrder: z.int().min(-1_000_000).max(1_000_000).optional(),
 })
@@ -133,6 +162,11 @@ const exampleBody = z.strictObject({ jobId: z.string().regex(UUID_RE, "Not a job
 const orderBody = z.strictObject({ order: z.array(z.int().min(0)), revision: revisionSchema })
 const revisionQuery = z.object({ revision: revisionSchema })
 const publishBody = z.strictObject({ revision: revisionSchema.optional() }).optional()
+/** A tag as `patchBody` takes it, and its labels by platform language (≤ 100 characters; empty = none). */
+const tagLabelsBody = z.strictObject({
+  tag: tagSchema,
+  labels: z.strictObject(Object.fromEntries(LANGUAGES.map((l) => [l.id, z.string().max(100).optional()]))),
+})
 
 // ── replies ─────────────────────────────────────────────────────────────────
 
@@ -350,6 +384,40 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
     }
   })
 
+  app.get("/v1/admin/trends/tags", { preHandler: requireAdmin }, async (req, reply) => {
+    try {
+      const usage = await allTagUsage()
+      let labels = new Map<string, TagLabels>()
+      try {
+        labels = await readTagLabels()
+      } catch (e) {
+        // Before migration 555 the tags still list, without labels; a save says why.
+        if (!(e instanceof TrendsUnavailableError)) throw e
+      }
+      const tags = [...new Set([...usage.keys(), ...labels.keys()])].sort()
+      const data: AdminTrendTag[] = tags.map((tag) => ({
+        tag,
+        labels: labels.get(tag) ?? {},
+        trends: usage.get(tag)?.trends ?? 0,
+        published: usage.get(tag)?.published ?? 0,
+      }))
+      return { data }
+    } catch (e) {
+      return unavailableOrInternal(reply, req, e, "Failed to list the trend tags")
+    }
+  })
+
+  app.put("/v1/admin/trends/tags", { preHandler: requireAdmin }, async (req, reply) => {
+    const body = tagLabelsBody.safeParse(req.body)
+    if (!body.success) return badRequest(reply, body.error)
+    try {
+      const labels = await saveTagLabels(body.data.tag, body.data.labels as TagLabels)
+      return { data: { tag: body.data.tag, labels } }
+    } catch (e) {
+      return unavailableOrInternal(reply, req, e, "Failed to save the tag's labels")
+    }
+  })
+
   app.get("/v1/admin/trends/test-runs/:jobId/prompt", { preHandler: requireAdmin }, async (req, reply) => {
     const { jobId } = req.params as { jobId: string }
     try {
@@ -475,14 +543,24 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         if (own.error) throw own.error
         if (!own.data) return notFound(reply, "Session")
       }
+      // After the session check: a refused request reads no job.
+      await followPreviewMasking(composed, {
+        userId: req.userId!,
+        trendId: trend.id,
+        previewJobId: parsed.data.previewJobId,
+        log: req.log,
+      })
 
       const key = req.headers["idempotency-key"]
       const res = await engineRequest(
         app,
         req,
         "/v1/cast-swap",
-        { ...composed.body, ...(sessionId ? { sessionId } : {}), origin: "trends-admin" },
+        composed.body,
         typeof key === "string" && key ? { "idempotency-key": key } : {},
+        // A test run is labelled as one; like a public run it is filed in no
+        // session (the session above is checked, not applied).
+        { origin: "trends-admin", source: deriveJobSource(req) },
       )
       if (res.statusCode < 200 || res.statusCode >= 300) return relay(reply, res)
       const jobId = jobIdOf(res.body)
@@ -501,19 +579,25 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const admins = await adminUserIds()
       if (admins.length === 0) return { data: [] }
       // Runs read from their own stamp, so a run on an older version is listed
-      // too. Full Quality jobs are folded into their draft, never listed alone.
-      const { data, error } = await supabase
-        .from("jobs")
-        .select(`${RUN_JOB_COLS}, user_id`)
-        .in("user_id", admins)
-        .filter("input_data->>type", "eq", "cast-swap")
-        .filter("input_data->trend->>id", "eq", id)
-        .is("input_data->>fullQualityOf", null)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(TEST_RUNS_LIMIT)
-      if (error) throw new Error(`Could not list the trend's runs: ${error.message}`)
-      const rows = (data ?? []) as unknown as Array<RunJobRow & { user_id: string }>
+      // too. A Full Quality version is listed as its own run, only the newest
+      // try of each draft (`listedRunsPage`), so older tries never use up the
+      // list's TEST_RUNS_LIMIT.
+      const read = async (from: RunKeyset | null, n: number) => {
+        let query = supabase
+          .from("jobs")
+          .select(`${RUN_JOB_COLS}, user_id`)
+          .in("user_id", admins)
+          .filter("input_data->>type", "eq", "cast-swap")
+          .filter("input_data->trend->>id", "eq", id)
+        if (from) query = query.or(afterKeyset("created_at", "id", from))
+        const { data, error } = await query
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(n)
+        if (error) throw new Error(`Could not list the trend's runs: ${error.message}`)
+        return (data ?? []) as unknown as Array<RunJobRow & { user_id: string }>
+      }
+      const { rows } = await listedRunsPage(read, null, TEST_RUNS_LIMIT, admins)
       const adminSet = new Set(admins)
       const owners = new Map(rows.map((r) => [r.id, r.user_id]))
       const runs = await toTrendRuns(rows, admins, "admin")

@@ -523,6 +523,57 @@ describe("supports — what a plugin's own handlers can do (plugin → host)", (
     expect(getPluginSupports()).toEqual({ editPlanModes: ["trailer"] })
   })
 
+  // Cast Swap face masking is additive-optional: an engine that predates it
+  // declares no `faceMasking`, which reads as "not supported".
+  it("publishes the Cast Swap engine's faceMasking flag, and an older engine's absence of it", async () => {
+    const castSwap = {
+      roleKinds: ["person", "location", "product", "pet"] as const,
+      fixedReferences: true,
+      fullQuality: true,
+      resolutions: ["480p", "720p", "1080p"] as const,
+      trendRun: true,
+    }
+    await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [makePlugin({ name: "cast-swap", supports: () => ({ castSwap: { ...castSwap, faceMasking: true } }) })],
+      }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports().castSwap?.faceMasking).toBe(true)
+
+    await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, plugins: [makePlugin({ name: "cast-swap", supports: () => ({ castSwap }) })] }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports().castSwap?.faceMasking).toBeUndefined()
+  })
+
+  // A trend's own pre prompt is additive-optional the same way: absent = not supported.
+  it("publishes the Cast Swap engine's trendPrePrompt flag, and an older engine's absence of it", async () => {
+    const castSwap = {
+      roleKinds: ["person", "location", "product", "pet"] as const,
+      fixedReferences: true,
+      fullQuality: true,
+      resolutions: ["480p", "720p", "1080p"] as const,
+      trendRun: true,
+    }
+    await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [makePlugin({ name: "cast-swap", supports: () => ({ castSwap: { ...castSwap, trendPrePrompt: true } }) })],
+      }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports().castSwap?.trendPrePrompt).toBe(true)
+
+    await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, plugins: [makePlugin({ name: "cast-swap", supports: () => ({ castSwap }) })] }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports().castSwap?.trendPrePrompt).toBeUndefined()
+  })
+
   it("is cleared from getPluginSupports() when a later load fails or loads nothing", async () => {
     const declaring = async () => ({
       contractVersion: 1,

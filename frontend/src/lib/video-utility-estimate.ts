@@ -19,7 +19,7 @@ import {
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
 import { maskCompositeLeadHandle, maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireLengthSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
+import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -137,13 +137,16 @@ export function dubbingQuotedMinutesOf(
 }
 
 /**
- * The clip length, in seconds, a Video Mask is QUOTED at, or `null` when it is
- * unknown (the longest price row). The SAME reading as Video SFX
- * ({@link videoSfxQuotedSec}) — the server's run estimate prices Video Mask
- * through the same wire-length rule (`videoSfxClipSecOf` in the backend
- * estimator), so the node's Run button, the confirm dialog and the workflow
- * badge quote one row. Rows above 60 s collapse onto the last row inside
- * `videoMaskCreditId`.
+ * The PRICED clip length, in seconds, a Video Mask is QUOTED at, or `null`
+ * when it is unknown (the longest price row): the clip Video SFX reads
+ * ({@link estimateVideoSfxClipSec}) at the 30 fps basis when that wire's
+ * origin declares a frame rate (`videoMaskClipSec` / `runWireFps` in
+ * @nodaro/render-rules — an upload's `fps`, through teleports, Trim, Loop and
+ * a Combine Videos whose clips share one rate), the reading
+ * the server's run estimate prices Video Mask by, so the node's Run button,
+ * the confirm dialog, the workflow badge and the server quote one row. With
+ * no graph length, what the upstream node itself reports. Rows above the cap
+ * collapse onto the last row inside `videoMaskCreditId`.
  */
 export function videoMaskQuotedSec(
   node: Pick<WorkflowNode, "id">,
@@ -151,7 +154,10 @@ export function videoMaskQuotedSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
-  return videoSfxQuotedSec(node, nodes, edges, rerunIds)
+  const inputs = edges.filter((e) => e.target === node.id)
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const fromGraph = videoMaskClipSec(inputs, inputs.map((e) => lengthOf(e.source)), inputs.map((e) => runWireFps(e.source, nodes, edges)))
+  return fromGraph ?? upstreamVideoDurationSec(node.id, "video", nodes, edges)
 }
 
 export function estimateVideoUtilityBaseCredits(

@@ -76,6 +76,7 @@ describe("tk.http.workerRequest", () => {
         "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
         "x-internal-user-id": CALLER,
         "x-nodaro-workspace": "ws-1",
+        "content-type": "application/json",
       },
       payload: { prompt: "a lighthouse at dawn" },
     })
@@ -135,7 +136,10 @@ describe("tk.http.workerRequest", () => {
     built.make = () => {
       const app = Fastify()
       app.post("/v1/text-to-video", async (req) => {
-        req.userId = (req.body as { userId: string }).userId
+        // The payload can no longer name the user (the toolkit pins it to the
+        // caller), so the route stands in for any other way a request could
+        // end up authenticated as somebody else.
+        req.userId = "00000000-0000-4000-8000-0000000000c3"
         return { parentJobId: jobSubmissionParentJobId(req) }
       })
       return app
@@ -145,7 +149,7 @@ describe("tk.http.workerRequest", () => {
     try {
       const reply = await tk.http.workerRequest!({
         method: "POST", url: "/v1/text-to-video", userId: CALLER,
-        payload: { userId: "00000000-0000-4000-8000-0000000000c3" }, parentJobId: PARENT,
+        payload: {}, parentJobId: PARENT,
       })
       expect(reply.statusCode).toBe(500)
       expect(reply.body).not.toContain(PARENT)

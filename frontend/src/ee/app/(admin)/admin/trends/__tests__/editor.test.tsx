@@ -77,6 +77,74 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(body.data.source).toEqual(detail().draft.source)
   })
 
+  it("saves the pre prompt and the face masking setting as edited, and nothing more", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "auto", fill: "depth" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+
+    await user.type(await screen.findByLabelText("Pre prompt"), "Open on the stage.")
+    const threshold = screen.getByLabelText("Detection threshold")
+    expect(threshold).toHaveAttribute("placeholder", "0.5")
+    await user.type(threshold, "0.4")
+    await user.type(screen.getByLabelText("Top"), "5")
+    expect(screen.getByRole("combobox", { name: "Mode" })).toHaveTextContent("Auto")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.prePrompt).toBe("Open on the stage.")
+    expect(body.data.faceMasking).toEqual({ mode: "auto", fill: "depth", zone: { topPct: 5 }, threshold: 0.4 })
+  })
+
+  it("holds Save while a face masking value is out of range", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    renderEditor()
+    await user.type(await screen.findByLabelText("Detection threshold"), "2")
+    expect(await screen.findByText(/the detection threshold is 0.05–0.95/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+  })
+
+  it("shows masking off, with no settings, for a draft without one", async () => {
+    renderEditor()
+    expect(await screen.findByRole("combobox", { name: "Mode" })).toHaveTextContent("Off")
+    expect(screen.queryByLabelText("Detection threshold")).not.toBeInTheDocument()
+  })
+
+  it("labels each prompt with its visible label and describes it with its help line", async () => {
+    renderEditor()
+    const pre = await screen.findByRole("textbox", { name: "Pre prompt" })
+    expect(pre).toHaveAccessibleDescription("Placed at the start of the prompt, before the slots.")
+    // The trend prompt is described by its help line, then by the room left for it.
+    expect(screen.getByRole("textbox", { name: "Trend prompt" })).toHaveAccessibleDescription(
+      "Placed at the end of the prompt, before the user's own details. " +
+        "2976 characters left for the trend prompt, keeping room for the user's details (up to 1000).",
+    )
+  })
+
+  it("shows the room left for the trend prompt after the user's details, and updates it while typing", async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    // The harness draft's trend prompt is "Keep the camera moves." (22 characters): 2998 − 22.
+    expect(await screen.findByText("2976 characters left for the trend prompt, keeping room for the user's details (up to 1000).")).toBeInTheDocument()
+    const trend = screen.getByRole("textbox", { name: "Trend prompt" })
+    await user.type(trend, "abc")
+    expect(screen.getByText(/2973 characters left for the trend prompt/)).toBeInTheDocument()
+    expect(trend).toHaveAccessibleDescription(/2973 characters left for the trend prompt/)
+    // The trend prompt's counter counts to the limit that leaves the details their room.
+    expect(screen.getByText("25 / 2998")).toBeInTheDocument()
+  })
+
+  it("names the face masking selects by their visible labels", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    renderEditor()
+    const mode = await screen.findByRole("combobox", { name: "Mode" })
+    expect(screen.getByText("Mode", { selector: "label" })).toHaveAttribute("for", mode.id)
+    const fill = screen.getByRole("combobox", { name: "Fill" })
+    expect(screen.getByText("Fill", { selector: "label" })).toHaveAttribute("for", fill.id)
+  })
+
   it("reloads the trend and says so when the draft changed elsewhere", async () => {
     const user = userEvent.setup()
     routes[`PUT ${BASE}/draft`] = () => ({
@@ -145,6 +213,17 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Only a run made by an admin account can be an example."))
     // Once: the app-wide mutation toast does not repeat it.
     expect(toast.error).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks a Full Quality version as such, with the draft it came from", async () => {
+    routes[`GET ${BASE}/test-runs`] = () => ({
+      body: { data: [run({ jobId: "fq-1", resolution: "1080p", draft: false, fullQualityOf: RUN_ID }), run()] },
+    })
+    renderEditor()
+    const badge = await screen.findByTitle(`Full Quality version of run ${RUN_ID}`)
+    expect(badge).toHaveTextContent("Full Quality")
+    // Only the Full Quality run carries it, not its draft.
+    expect(screen.getAllByTitle(/^Full Quality version of run/)).toHaveLength(1)
   })
 
   it("shows a run's engine prompt", async () => {

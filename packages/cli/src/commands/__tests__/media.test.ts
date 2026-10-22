@@ -23,6 +23,7 @@ const mocks = {
   suggestOverlayPlacement: vi.fn(),
   videoOverlay: vi.fn(),
   addCaptions: vi.fn(),
+  videoMask: vi.fn(),
   nodesRun: vi.fn(),
   jobsGet: vi.fn(),
 }
@@ -44,6 +45,7 @@ vi.mock("../../client.js", () => ({
       suggestOverlayPlacement: mocks.suggestOverlayPlacement,
       videoOverlay: mocks.videoOverlay,
       addCaptions: mocks.addCaptions,
+      videoMask: mocks.videoMask,
     },
     nodes: { run: mocks.nodesRun },
     jobs: { get: mocks.jobsGet },
@@ -120,6 +122,41 @@ describe("media generate-mask command", () => {
     await runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--watch", "--poll-interval", "1")
     expect(mocks.jobsGet).toHaveBeenCalledWith("j-mask")
     expect(vi.mocked(success)).toHaveBeenCalledWith(expect.stringContaining("completed"))
+  })
+})
+
+describe("media video-mask command", () => {
+  it("sends --per-shot and --zone L,R,T,B as perShot and the zone margins", async () => {
+    mocks.videoMask.mockResolvedValue({ jobId: "j-vm" })
+    await runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--per-shot", "--zone", "10,12,5,0", "--json")
+    expect(mocks.videoMask).toHaveBeenCalledWith({
+      videoUrl: "https://x/clip.mp4",
+      prompt: "face",
+      perShot: true,
+      zone: { leftPct: 10, rightPct: 12, topPct: 5, bottomPct: 0 },
+    })
+  })
+
+  it("sends neither when the flags are not given (the server defaults apply)", async () => {
+    mocks.videoMask.mockResolvedValue({ jobId: "j-vm" })
+    await runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--json")
+    expect(mocks.videoMask).toHaveBeenCalledWith({ videoUrl: "https://x/clip.mp4", prompt: "face" })
+  })
+
+  it("reads a margin written .5 or 5. as the number, as the API does", async () => {
+    mocks.videoMask.mockResolvedValue({ jobId: "j-vm" })
+    await runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--zone", ".5,5.,0.25,49", "--json")
+    expect(mocks.videoMask).toHaveBeenCalledWith({
+      videoUrl: "https://x/clip.mp4",
+      prompt: "face",
+      zone: { leftPct: 0.5, rightPct: 5, topPct: 0.25, bottomPct: 49 },
+    })
+  })
+
+  it.each([["10,10,10"], ["10,10,10,50"], ["a,0,0,0"], ["10,-1,0,0"], ["10,,0,0"], [".,0,0,0"], ["1e1,0,0,0"], ["0x1,0,0,0"]])("refuses --zone %s before calling the API", async (zone) => {
+    await expect(runCmd("media", "video-mask", "https://x/clip.mp4", "face", "--zone", zone)).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--zone"))
+    expect(mocks.videoMask).not.toHaveBeenCalled()
   })
 })
 
@@ -822,6 +859,14 @@ describe("docs/cli.md covers the media command surface", () => {
     expect(line).toContain(`--preset ${VIDEO_OVERLAY_PRESET_IDS.join("|")}`)
     expect(line).toContain(`--corner ${VIDEO_OVERLAY_CORNERS.join("|")}`)
     expect(line).toContain(`--aspect ${VIDEO_OVERLAY_OUTPUT_ASPECTS.join("|")}`)
+  })
+
+  it("lists every video-mask flag in its synopsis", () => {
+    const line = synopsisOf("video-mask") ?? ""
+    const sub = mediaCommand().commands.find((c) => c.name() === "video-mask")
+    const flags = (sub?.options ?? []).map((o) => o.long).filter((f): f is string => !!f && f !== "--profile")
+    expect(flags).toEqual(expect.arrayContaining(["--per-shot", "--zone"]))
+    for (const flag of flags) expect(line).toContain(`[${flag}`)
   })
 
   it("names video overlay in the Media section header", () => {

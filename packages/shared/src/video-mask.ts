@@ -23,6 +23,19 @@ export const VIDEO_MASK_PROVIDERS = ["sam-3.1", "sam-3"] as const
 export type VideoMaskProvider = (typeof VIDEO_MASK_PROVIDERS)[number]
 export const DEFAULT_VIDEO_MASK_PROVIDER: VideoMaskProvider = "sam-3.1"
 
+/**
+ * `zone`: keep only the subjects whose bounding-box CENTRE lies inside an
+ * inner rectangle, given as margins in % of the frame (each
+ * `VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN`–`ZONE_MARGIN_PCT_MAX`). All zero, or
+ * no zone, = off.
+ */
+export interface VideoMaskZone {
+  readonly leftPct: number
+  readonly rightPct: number
+  readonly topPct: number
+  readonly bottomPct: number
+}
+
 /** A new Video Mask node's settings — spread into its node definition. */
 export const VIDEO_MASK_DEFAULTS = {
   threshold: 0.5,
@@ -33,6 +46,16 @@ export const VIDEO_MASK_DEFAULTS = {
   minSubjectHeightPct: 0,
   /** 0 = off: no ceiling on a region's height (see `MAX_SUBJECT_HEIGHT_PCT_*`). */
   maxSubjectHeightPct: 0,
+  /** Off: subjects anywhere in the frame are kept (see `ZONE_MARGIN_PCT_*`). */
+  zone: null as VideoMaskZone | null,
+  /**
+   * Off: one pass over the whole clip. On: the clip's scene cuts are found
+   * first and each shot is segmented on its own — the model starts afresh
+   * after every cut (finding the new shot's subjects), and `holdLastMask`
+   * never carries a mask across a cut. A clip with no cut (a flash is not
+   * one) is one shot: the same mask, fitted to the clip's exact frame count.
+   */
+  perShot: false,
 } as const
 
 export const VIDEO_MASK_LIMITS = {
@@ -73,6 +96,16 @@ export const VIDEO_MASK_LIMITS = {
    */
   MAX_SUBJECT_HEIGHT_PCT_MIN: 0,
   MAX_SUBJECT_HEIGHT_PCT_MAX: 100,
+  /**
+   * `zone` margins (left / right / top / bottom, % of the frame width or
+   * height): drop every connected region whose bounding-box centre lies
+   * outside `[w·left/100, w·(1−right/100)] × [h·top/100, h·(1−bottom/100)]`
+   * — the faces at the edges of the picture. At most 49 % a side, so the
+   * inner rectangle is never empty. Applied after the size cut and before
+   * `holdLastMask`, so a frame left with nothing inside counts as empty.
+   */
+  ZONE_MARGIN_PCT_MIN: 0,
+  ZONE_MARGIN_PCT_MAX: 49,
 } as const
 
 const VIDEO_MASK_BUCKETS_SEC = [5, 10, 15, 30, 60, 90, 120, 180, 240, 300] as const
@@ -115,6 +148,23 @@ export function resolveVideoMaskProvider(value: unknown): VideoMaskProvider {
     : DEFAULT_VIDEO_MASK_PROVIDER
 }
 
+/**
+ * A zone as the region filter reads it: each margin a finite number clamped
+ * to `ZONE_MARGIN_PCT_MIN`–`ZONE_MARGIN_PCT_MAX` (anything else is 0), and
+ * null when there is no zone or every margin is 0 (off). The one reading
+ * shared by the worker, a workflow run's payload and the node's own run.
+ */
+export function resolveVideoMaskZone(value: unknown): VideoMaskZone | null {
+  if (!value || typeof value !== "object") return null
+  const v = value as Record<string, unknown>
+  const margin = (x: unknown) =>
+    typeof x === "number" && Number.isFinite(x)
+      ? Math.min(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX, Math.max(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN, x))
+      : 0
+  const zone = { leftPct: margin(v.leftPct), rightPct: margin(v.rightPct), topPct: margin(v.topPct), bottomPct: margin(v.bottomPct) }
+  return zone.leftPct > 0 || zone.rightPct > 0 || zone.topPct > 0 || zone.bottomPct > 0 ? zone : null
+}
+
 /** `POST /v1/video-mask` request body. */
 export interface VideoMaskRequest {
   /** The clip to segment. */
@@ -133,4 +183,11 @@ export interface VideoMaskRequest {
   /** Ignore subjects larger than this % of the frame height, 0–100 (default 0 = off):
    *  connected regions whose bounding box is taller are dropped from every frame. */
   readonly maxSubjectHeightPct?: number
+  /** Keep only the subjects whose bounding-box centre is inside these margins, each
+   *  0–49 % of the frame (a margin left out is 0). null / omitted / all 0 = off. */
+  readonly zone?: Partial<VideoMaskZone> | null
+  /** Segment each shot on its own (default false): the clip's scene cuts are found
+   *  first and the subjects are detected again in every shot; `holdLastMask` never
+   *  carries a mask across a cut. The output then carries `shots`. */
+  readonly perShot?: boolean
 }

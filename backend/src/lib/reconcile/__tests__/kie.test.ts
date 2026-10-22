@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => {
   class FakeKieError extends Error {
     isUpstreamFailure: boolean
     internalDetails: string
+    /** Set by the real poll clients from the provider's bare failMsg. */
+    contentPolicyClass: "copyright" | "likeness" | "safety" | null = null
+    inputVideoRefused = false
     constructor(message: string, isUpstreamFailure = false, internalDetails = "task failed: [500] raw provider text") {
       super(message)
       this.name = "KieError"
@@ -452,6 +455,99 @@ describe("reconcileKieJob", () => {
     await reconcileKieJob(row)
     expect(mocks.refundMock).toHaveBeenCalledWith("j-veo-failed")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
+  })
+
+  // A job re-picked after a worker restart ends HERE, not in the worker's
+  // catch — so the reconcile failure must carry the same error_hint the worker
+  // would have written (a caller such as Cast Swap's auto mode acts on it).
+  describe("a terminal failure carries the worker's error_hint", () => {
+    /** The error pollKieTask throws for a KIE `state:"fail"` task: its flags
+     *  come from the REAL classifiers run on the provider's bare failMsg. */
+    async function kieTaskFailure(failMsg: string) {
+      const real = await vi.importActual<typeof import("../../../providers/kie/client.js")>(
+        "../../../providers/kie/client.js",
+      )
+      const err = new mocks.FakeKieError("The provider declined this generation.", true, `task failed: [501] ${failMsg}`)
+      err.contentPolicyClass = real.classifyContentPolicyClass(failMsg)
+      err.inputVideoRefused = real.isInputVideoRefusal(failMsg)
+      return err
+    }
+    const COPYRIGHT_VIDEO = "Input video may be related to copyright restrictions. Please try another video."
+    const FILE_FAILED = "File processing failed"
+
+    function failedUpdate(): Record<string, unknown> {
+      const call = mocks.jobsUpdateMock.mock.calls.find(
+        (c) => (c[0] as Record<string, unknown>).status === "failed",
+      )
+      expect(call).toBeTruthy()
+      return call![0] as Record<string, unknown>
+    }
+
+    function videoRow(input_data: Record<string, unknown>): KieJobRow {
+      return {
+        id: "j-refused",
+        provider_kind: "kie-standard",
+        provider_task_id: "t-refused",
+        reconcile_attempts: 0,
+        job_type: "image-to-video",
+        input_data,
+      }
+    }
+
+    it("a copyright refusal of the job's reference video → the copyright hint names the input video", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure(COPYRIGHT_VIDEO))
+      await reconcileKieJob(videoRow({ provider: "seedance-2", referenceVideoUrls: ["https://cdn.example/src.mp4"] }))
+      const update = failedUpdate()
+      expect(update.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false, subject: "input_video" })
+      // The user-facing message is the sanitized one, as before.
+      expect(update.error_message).toBe("The provider declined this generation.")
+      expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
+    })
+
+    it("'File processing failed' on a job that sent a source video → the input-refused hint", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure(FILE_FAILED))
+      await reconcileKieJob(videoRow({ provider: "kling-o1-edit", videoUrl: "https://cdn.example/src.mp4" }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "input-refused", subject: "input_video" })
+    })
+
+    it("the copyright message on a job that sent no video → the plain copyright hint (no input-video subject)", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure(COPYRIGHT_VIDEO))
+      await reconcileKieJob(videoRow({ provider: "seedance-2", imageUrl: "https://cdn.example/a.png" }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+    })
+
+    it("'File processing failed' on a job that sent no video → no hint", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure(FILE_FAILED))
+      await reconcileKieJob(videoRow({ provider: "seedance-2" }))
+      expect(failedUpdate()).not.toHaveProperty("error_hint")
+    })
+
+    it("a failure that is not a refusal → no hint, even on a job that sent a video", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure("internal error, please retry"))
+      await reconcileKieJob(videoRow({ provider: "seedance-2", referenceVideoUrls: ["https://cdn.example/src.mp4"] }))
+      expect(failedUpdate()).not.toHaveProperty("error_hint")
+    })
+
+    it("a row without input_data (legacy caller) still fails cleanly with the class hint only", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure(COPYRIGHT_VIDEO))
+      await reconcileKieJob({ ...videoRow({}), input_data: undefined })
+      expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+    })
+
+    it("a Suno content-policy failure carries its plain hint too", async () => {
+      mocks.pollSunoTaskMock.mockRejectedValueOnce(
+        await kieTaskFailure("The lyrics contain copyrighted material (copyright)."),
+      )
+      await reconcileKieJob({
+        id: "j-suno-refused",
+        provider_kind: "kie-suno",
+        provider_task_id: "t-suno-refused",
+        reconcile_attempts: 0,
+        job_type: "suno-generate",
+        input_data: { provider: "suno-v5" },
+      })
+      expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+    })
   })
 
   it("still-running (timeout error) → bumps reconcile_attempts, no finalize, no refund", async () => {

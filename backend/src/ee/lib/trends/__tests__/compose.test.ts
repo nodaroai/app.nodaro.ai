@@ -307,7 +307,7 @@ describe("composeTrendRun — display and needs", () => {
   })
 
   it("reports the kinds used and whether there are fixed references", () => {
-    expect(composeTrendRun(trend(), req()).needs).toEqual({ roleKinds: new Set(["person", "location"]), fixedReferences: true })
+    expect(composeTrendRun(trend(), req()).needs).toEqual({ roleKinds: new Set(["person", "location"]), fixedReferences: true, faceMasking: false, trendPrePrompt: false })
     expect(composeTrendRun(trend(version({ references: [] })), req()).needs.fixedReferences).toBe(false)
   })
 
@@ -327,5 +327,58 @@ describe("composeTrendRun — display and needs", () => {
     const total =
       (body.roles as Array<{ images: string[] }>).reduce((n, r) => n + r.images.length, 0) + body.references.reduce((n, r) => n + r.images.length, 0)
     expect(total).toBe(MAX_TREND_IMAGES)
+  })
+})
+
+describe("composeTrendRun — face masking and pre prompt", () => {
+  const AUTO = { mode: "auto" as const, fill: "depth" as const, minFaceHeightPct: 10, zone: { topPct: 5 }, threshold: 0.4 }
+
+  it("leaves the body exactly as today when the trend has neither, or masking is off", () => {
+    const today = composeTrendRun(trend(), req()).body
+    expect(Object.keys(today)).not.toContain("faceMasking")
+    expect(Object.keys(today)).not.toContain("prePrompt")
+    const off = composeTrendRun(trend(version({ faceMasking: { mode: "off", fill: "depth" } })), req())
+    expect(off.body).toEqual(today)
+    expect(off.needs.faceMasking).toBe(false)
+  })
+
+  it("passes the trend's masking and pre prompt at the top level of the body", () => {
+    const { body, needs } = composeTrendRun(trend(version({ faceMasking: AUTO, prePrompt: "HIDDEN pre words" })), req())
+    expect(body.faceMasking).toEqual(AUTO)
+    expect(body.faceMasking).not.toBe(AUTO)
+    expect(body.prePrompt).toBe("HIDDEN pre words")
+    expect(needs.faceMasking).toBe(true)
+    expect(needs.trendPrePrompt).toBe(true)
+    // The pre prompt is its own field, never folded into the post prompt.
+    expect(body.postPrompt).toBe("Keep the camera shake.")
+  })
+
+  it("sends a pre prompt without masking, and masking without a pre prompt", () => {
+    const a = composeTrendRun(trend(version({ prePrompt: "only words" })), req())
+    expect(a.body.prePrompt).toBe("only words")
+    expect(a.needs).toMatchObject({ trendPrePrompt: true, faceMasking: false })
+    expect(composeTrendRun(trend(version({ prePrompt: "" })), req()).needs.trendPrePrompt).toBe(false)
+    expect(a.body).not.toHaveProperty("faceMasking")
+    const b = composeTrendRun(trend(version({ faceMasking: { mode: "always" } })), req())
+    expect(b.body.faceMasking).toEqual({ mode: "always" })
+    expect(b.body).not.toHaveProperty("prePrompt")
+  })
+
+  it("keeps both out of the display", () => {
+    const { body, display } = composeTrendRun(trend(version({ faceMasking: AUTO, prePrompt: "HIDDEN pre words" })), req())
+    for (const d of [display, body.trendRun.display]) {
+      expect(d).not.toHaveProperty("faceMasking")
+      expect(d).not.toHaveProperty("prePrompt")
+      expect(JSON.stringify(d)).not.toContain("HIDDEN pre words")
+      expect(JSON.stringify(d)).not.toContain("depth")
+    }
+  })
+
+  it("never forwards the request's previewJobId", () => {
+    const { body } = composeTrendRun(
+      trend(version({ faceMasking: AUTO })),
+      req({ previewJobId: "00000000-0000-4000-8000-0000000000f1" }),
+    )
+    expect(JSON.stringify(body)).not.toContain("previewJobId")
   })
 })

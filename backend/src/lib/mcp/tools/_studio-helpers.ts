@@ -98,7 +98,7 @@ export function studioPayload(
   session: McpSession,
   extra: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  return { mcp_client: session.clientName, userId: session.userId, ...extra }
+  return { mcp_client: session.clientName, ...extra, userId: session.userId }
 }
 
 /** The `{ data: … }` envelope every studio production route replies with. */
