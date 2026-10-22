@@ -72,6 +72,10 @@ export function unsafeInjectPath(url: string): string | null {
   return null
 }
 
+function isObjectBody(payload: McpInjectOptions["payload"]): payload is object {
+  return typeof payload === "object" && payload !== null && !Buffer.isBuffer(payload)
+}
+
 export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: McpInjectOptions) {
   const unsafe = unsafeInjectPath(opts.url)
   if (unsafe) {
@@ -86,6 +90,8 @@ export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: M
       "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
       "x-internal-user-id": session.userId,
       ...(session.workspaceId ? { [WORKSPACE_HEADER_LOWER]: session.workspaceId } : {}),
+      // An object body is always read as JSON, whatever content type a caller passed.
+      ...(isObjectBody(opts.payload) ? { "content-type": "application/json" } : {}),
     },
     ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
   })

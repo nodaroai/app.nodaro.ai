@@ -1357,14 +1357,84 @@ async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<s
  *
  * The same shape and the same trust model as `lib/mcp/internal-request.ts`,
  * with the caller's id added: the outer route has a `userId` but no JWT it
- * could replay. Caller headers are spread FIRST, so the three this function
- * owns cannot be overridden by a HEADER — but the auth hook prefers
- * `body.userId` to `x-internal-user-id`, so a `payload` with a `userId`
- * string still picks the identity. Callers that forward a request body strip
- * or pin that field first.
+ * could replay. A caller's headers never carry identity, billing or transport
+ * ({@link callerHeaders}): those come only from the typed options, and a body
+ * always goes out as JSON. The payload's `userId` is pinned to `opts.userId`
+ * ({@link pinPayloadToCaller}), so the body cannot pick the identity either.
+ * The request acts as `opts.userId` and nobody else.
  */
 
+/**
+ * The body an internal request sends, with its identity pinned to the caller.
+ *
+ * The auth hook reads an internal request's user from `body.userId` before
+ * the `x-internal-user-id` header, so a payload that carries a `userId` — a
+ * plugin forwarding a record its own caller supplied, say — would otherwise
+ * decide whom the request acts as. Here the payload is serialized exactly as
+ * light-my-request would put it on the wire (so a `toJSON`, a getter or a
+ * class instance is checked as the route will see it), and a top-level
+ * `userId` that is not the caller's is replaced by the caller's. A payload
+ * without one gets none added and one that already names the caller is left
+ * alone, so every legitimate body goes out byte-identical. The caller's
+ * object is never mutated.
+ *
+ * Only a JSON-serializable object can be checked. A string, a Buffer, a typed
+ * array or a stream is sent raw and parsed by whatever content type rides with
+ * it (JSON, form-encoded), so it is refused rather than sent unchecked; so is a
+ * FormData, URLSearchParams or Blob, which would otherwise go out as `{}`.
+ */
+export function pinPayloadToCaller(payload: object, userId: string): object {
+  const refuse = () => new Error(
+    "tk.http.internalRequest: payload must be a plain object (a string, Buffer, typed array or stream cannot be checked for the caller's identity)",
+  )
+  if (
+    typeof payload !== "object" || payload === null || Buffer.isBuffer(payload) || ArrayBuffer.isView(payload)
+    || payload instanceof ArrayBuffer || typeof (payload as { pipe?: unknown }).pipe === "function"
+    || NON_JSON_BODY_TAGS.has(Object.prototype.toString.call(payload))
+  ) throw refuse()
+  const json = JSON.stringify(payload) as string | undefined
+  if (json === undefined) throw refuse()
+  const wire = JSON.parse(json) as unknown
+  if (typeof wire !== "object" || wire === null) throw refuse()
+  if (!Array.isArray(wire) && Object.hasOwn(wire, "userId") && (wire as Record<string, unknown>).userId !== userId) {
+    (wire as Record<string, unknown>).userId = userId
+  }
+  return wire
+}
+
+/** Bodies that are not JSON (they would serialize to `{}`), refused like a string. */
+const NON_JSON_BODY_TAGS: ReadonlySet<string> = new Set(["[object FormData]", "[object URLSearchParams]", "[object Blob]", "[object File]"])
+
+const HOST_OWNED_HEADER = new RegExp(
+  `^(x-internal-.*|x-app-run|x-web-free-mode|${WORKSPACE_HEADER_LOWER}|authorization|cookie|content-type|content-length|host)$`,
+  "i",
+)
+
+/**
+ * A caller's extra headers, without any the request's identity, billing or
+ * transport rests on. Who the request acts as, which workspace pays, whether
+ * it is an app run or a free-mode surface, and how its body is framed and
+ * parsed are decided by the typed options and this module alone; a header of
+ * the same name, in any letter case, is dropped rather than left to race the
+ * one set here. What remains (an `idempotency-key`, say) passes through.
+ */
+export function callerHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+  if (!headers) return {}
+  // Lower-cased the way the request is built (light-my-request lower-cases
+  // names with toLowerCase, which folds some non-ASCII letters to ASCII), so
+  // the check sees the name the route will.
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !HOST_OWNED_HEADER.test(name.toLowerCase())),
+  )
+}
+
 function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
+  let payload: object | undefined
+  try {
+    payload = opts.payload !== undefined ? pinPayloadToCaller(opts.payload, opts.userId) : undefined
+  } catch (err) {
+    return Promise.reject(err)
+  }
   // `trustedPluginCaller`: plugin code is trusted, so a route it reaches may let
   // it name its own child job as a source (mayUseChildJobAsSource). Set here
   // and only here, after the plugin's options, so no option can unset it; MCP's
@@ -1373,12 +1443,15 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
     method: opts.method,
     url: opts.url,
     headers: {
-      ...opts.headers,
+      ...callerHeaders(opts.headers),
       "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
       "x-internal-user-id": opts.userId,
       ...(opts.workspaceId ? { [WORKSPACE_HEADER_LOWER]: opts.workspaceId } : {}),
+      // A body is always read as JSON; a bodyless request carries no content
+      // type (the JSON parser refuses an empty body).
+      ...(payload !== undefined ? { "content-type": "application/json" } : {}),
     },
-    ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
+    ...(payload !== undefined ? { payload } : {}),
   }))
 }
 

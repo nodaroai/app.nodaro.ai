@@ -412,6 +412,7 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(call.headers["x-internal-orchestrator-secret"]).toBe(SECRET)
     expect(call.headers["x-internal-user-id"]).toBe(USER)
     expect(call.headers["idempotency-key"]).toBe("tools-run-42")
+    expect(call.headers["content-type"]).toBe("application/json")
     expect(call.body.origin).toBe("trends")
     expect(call.body.sessionId).toBe(SESSION)
     expect(call.body).not.toHaveProperty("userId")

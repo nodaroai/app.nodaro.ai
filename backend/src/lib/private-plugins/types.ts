@@ -2327,10 +2327,11 @@ export interface PluginHttpToolkit {
    *
    * `headers` is spread FIRST on purpose — a caller adds what its route needs
    * (an `idempotency-key`, say) and cannot override the ones this member owns.
-   * That is a HEADER guarantee only: the auth hook reads `body.userId` before
-   * it reads `x-internal-user-id` and the body wins, so a `payload` carrying a
-   * `userId` string decides the identity no matter what `opts.userId` says.
-   * A route forwarding a caller-supplied body must strip or pin that field.
+   * The body cannot pick the identity either: a top-level `userId` in
+   * `payload` that is not `opts.userId` is replaced by it before the request
+   * is sent (one that already names the caller, or none at all, leaves the
+   * body untouched). `payload` must be a JSON-serializable object; a string,
+   * Buffer, typed array or stream is refused, because it could not be checked.
    *
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
@@ -2341,7 +2342,7 @@ export interface PluginHttpToolkit {
   /**
    * `internalRequest` for code that has no Fastify app in hand — a queue
    * handler in the video worker. Same contract: the same internal headers
-   * (caller headers spread first), the same `body.userId` caveat, the same
+   * (caller headers filtered), the same pinned `payload.userId`, the same
    * `jobSubmission` scope. The host supplies the app: the API app in the API
    * process; in the worker, an app built once at worker boot and reused
    * (`lib/private-plugins/worker-app.ts`). Absent where the process has no app
@@ -2365,10 +2366,17 @@ export interface PluginInternalRequestOptions {
   url: string
   /** The caller — impersonated through the internal secret, exactly as MCP does. */
   userId: string
+  /** A JSON-serializable object; its top-level `userId`, if any, is pinned to `userId`. */
   payload?: object
   /** The caller's workspace, when the outer request carried one. */
   workspaceId?: string
-  /** Extra headers this route needs; cannot override the ones above. */
+  /**
+   * Extra headers this route needs (an `idempotency-key`, say). Headers that
+   * decide identity, billing or how the body is read (`x-internal-*`,
+   * `x-app-run`, `x-web-free-mode`, the workspace header, `authorization`,
+   * `cookie`, `content-type`, `content-length`, `host`) are dropped in any
+   * letter case: only the options above set them, and a body is sent as JSON.
+   */
   headers?: Record<string, string>
 }
 

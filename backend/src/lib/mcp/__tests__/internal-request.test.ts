@@ -169,3 +169,24 @@ describe("mcpInject refuses a path that would leave the route it names", () => {
     expect(r.calls[0].url).toBe(url)
   })
 })
+
+describe("mcpInject sends an object body as JSON", () => {
+  it("a caller-chosen content type cannot change how an object body is parsed", async () => {
+    const Fastify = (await import("fastify")).default
+    const formbody = (await import("@fastify/formbody")).default
+    const app = Fastify({ logger: false })
+    await app.register(formbody)
+    app.post("/v1/echo", async (req) => ({ contentType: req.headers["content-type"], body: req.body }))
+    await app.ready()
+    try {
+      const res = await mcpInject(app, session(), {
+        method: "POST", url: "/v1/echo",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        payload: { prompt: "p&userId=x" },
+      })
+      expect(JSON.parse(res.body)).toEqual({ contentType: "application/json", body: { prompt: "p&userId=x" } })
+    } finally {
+      await app.close()
+    }
+  })
+})

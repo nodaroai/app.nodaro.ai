@@ -339,6 +339,7 @@ export async function engineRequest(
         "x-internal-user-id": userId,
         ...(req.workspaceId ? { [WORKSPACE_HEADER_LOWER]: req.workspaceId } : {}),
         ...(webFreeMode ? { "x-web-free-mode": "true" } : {}),
+        "content-type": "application/json",
       },
       payload,
     }),

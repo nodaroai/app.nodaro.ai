@@ -93,7 +93,7 @@ async function postBuilder(fastify: FastifyInstance, session: McpSession, url: s
     method: "POST",
     url,
     headers: internalHeaders(session.userId),
-    payload: { userId: session.userId, ...payload },
+    payload: { ...payload, userId: session.userId },
   })
 }
 
