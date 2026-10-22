@@ -376,10 +376,25 @@ Base class for every API error.
 class NodaroError extends Error {
   readonly code: string    // e.g. "internal_error", "validation_failed"
   readonly status: number  // HTTP status
+  readonly details: Readonly<Record<string, unknown>> // the envelope's other fields
 }
 ```
 
-**Constructor:** `new NodaroError(message: string, code: string, status: number)`
+`details` holds every field of the error envelope (`{ error: { code, message, … } }`)
+other than `code` and `message`, as the server sent it — for example a trend
+refusal's `slot`, a publish refusal's `reasons`, a validation error's `issues`.
+It is set on every class below, and is `{}` when the envelope had nothing else
+(or for an error the SDK made itself).
+
+```ts
+try {
+  await client.trends.run(slug, request)
+} catch (err) {
+  if (err instanceof NodaroError && err.code === "missing_slot") askFor(err.details.slot as string)
+}
+```
+
+**Constructor:** `new NodaroError(message: string, code: string, status: number, details?: Record<string, unknown>)`
 
 ### `class UnauthorizedError extends NodaroError`
 
@@ -417,10 +432,30 @@ HTTP 402. Caller doesn't have enough credits to start the operation. Both
 fields are present on production servers but optional in the type for
 forward-compat.
 
-- `code = "insufficient_credits"`, `status = 402`
+- `code` is the refusal's own code: `"insufficient_credits"` for the caller's
+  own balance (and when the server sent none), or another 402 code such as
+  `"free_video_limit"` or `"insufficient_app_credits"`. `status = 402`
 - `required?: number`
-- `available?: number`
-- **Constructor:** `new InsufficientCreditsError(message?: string, required?: number, available?: number)`
+- `available?: number` — the balance (or, for a cap, what the cap has left)
+- **Constructor:** `new InsufficientCreditsError(message?: string, required?: number, available?: number, code?: string)`
+
+### `class CreditCapExceededError extends InsufficientCreditsError`
+
+HTTP 402 from a spending cap someone else set, not from the caller's own
+balance — topping up does not help; whoever set the cap has to raise it:
+
+| `code` | Cap |
+|--------|-----|
+| `budget_exceeded` | the workspace's budget |
+| `member_cap_exceeded` | your credit cap in that workspace |
+| `user_allowance_exceeded` | this deployment's per-user allowance |
+
+It is an `InsufficientCreditsError`, so an existing
+`instanceof InsufficientCreditsError` catch still catches it; check
+`instanceof CreditCapExceededError` first to tell the two apart.
+`CREDIT_CAP_CODES` (a `ReadonlySet<CreditCapCode>`) lists the three codes.
+
+- **Constructor:** `new CreditCapExceededError(code: CreditCapCode, message?: string, required?: number, available?: number)`
 
 ### `class StorageExceededError extends NodaroError`
 
@@ -633,7 +668,8 @@ The typed classes are still chosen by status — a 404 is a `NotFoundError`
 whatever the body — and one whose body carries no human text keeps its own
 default ("Not found", "Authentication required"). An
 `InsufficientCreditsError` takes `required` / `available` from the envelope, or
-from the `required` / `balance` the credit guard sends beside it.
+from the `required` / `balance` (a per-user allowance: `remaining`) the credit
+guard sends beside it.
 
 ---
 
@@ -2055,13 +2091,16 @@ get(slug: string, params?: { locale?: string }): Promise<TrendDetail>           
 estimate(slug: string, request: TrendRunRequest): Promise<TrendEstimate>        // POST /v1/trends/:slug/estimate, free
 run(slug: string, request: TrendRunRequest, options?: { idempotencyKey?: string }): Promise<{ jobId: string }> // POST /v1/trends/:slug/runs → 202
 runs(params?: ListTrendRunsParams): Promise<TrendPage<TrendRun>>               // GET /v1/trends/runs
+getRun(jobId: string): Promise<TrendRun>                                        // GET /v1/trends/runs/:jobId
+tags(params?: { locale?: string }): Promise<TrendTag[]>                         // GET /v1/trends/tags
 favorite(slug: string): Promise<void>                                           // PUT /v1/trends/:slug/favorite → 204
 unfavorite(slug: string): Promise<void>                                         // DELETE /v1/trends/:slug/favorite → 204
 ```
 
 `list()` and `runs()` resolve to the page as it arrives (`{ data, next }`; pass
-`next` back as `cursor`, `null` on the last page). `get()`, `estimate()` and
-`run()` resolve to the payload, out of the route's `{ data }` envelope.
+`next` back as `cursor`, `null` on the last page). `get()`, `estimate()`,
+`run()`, `getRun()` and `tags()` resolve to the payload, out of the route's
+`{ data }` envelope.
 
 ```ts
 type TrendSlotKind = "person" | "location" | "product" | "pet"
@@ -2123,10 +2162,34 @@ interface TrendRun {
   preview: boolean; resolution: string; draft: boolean
   videoUrl: string | null; posterUrl: string | null  // once completed
   creditsCharged: number | null
-  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
+  fullQuality: { jobId: string; status: string } | null // a draft's newest Full Quality try: a pointer only
   fullQualityUntil: string | null    // until when a completed draft can be redone in Full Quality
 }
+
+interface TrendTag {
+  tag: string     // pass it as list({ tag })
+  label: string   // in the resolved locale; the tag itself when it has no label
+  count: number   // published trends that carry it
+}
 ```
+
+A Full Quality version of a draft is a run of its own in `runs()` and
+`getRun()`: its own `jobId`, status, result and `creditsCharged`, with
+`fullQualityOf` naming the draft. It stays listed after the draft is deleted.
+The newest Full Quality try per draft is the one listed (running, done, or its
+last failure): when a try failed or was cancelled and the draft was tried
+again, the older tries are left out of `runs()` (with or without `trend`), and
+`getRun()` still reads one by its id. The draft's `fullQuality` is only a
+pointer to that newest try (`{ jobId, status }`, or `null` when none was
+started), to tell that an upgrade exists; its video and charge are on its own
+run (`getRun(fullQuality.jobId)`), never on the draft.
+
+`getRun(jobId)` reads one of your trend runs in the same shape; a job that is
+not your own trend run (another user's, a step inside another job, any other
+kind of job) is a `NotFoundError`. `tags()` lists the tags in use on published
+trends, most used first, with their labels in the resolved locale (`locale`,
+else your profile's language, else English).
 
 A required slot left empty is refused with `400 missing_slot`; an optional one
 left out takes the chosen example's pictures (`fromExample: true` on the run),
@@ -2146,12 +2209,13 @@ trend routes' OWN codes with fixed messages, never the engine's text or
 `raw_reference_token`), `402 insufficient_credits` (or a workspace cap) as
 given, `413 storage_limit_exceeded`, `422 job_blocked`, `429 rate_limited`,
 `503 engine_unsupported` / `estimate_unavailable`, else `502 engine_error`.
-`"runs"` is never a slug: `get()`, `estimate()`, `run()`, `favorite()` and
-`unfavorite()` throw a `TypeError` for it before any request. The full table
+`"runs"` and `"tags"` are never slugs: `get()`, `estimate()`, `run()`,
+`favorite()` and `unfavorite()` throw a `TypeError` for them before any
+request. The full table
 is in the [route reference](./api-integration.md#13g-trends-cloud-edition).
 
 `run()` returns a job id; follow it with `client.jobs.get(jobId)`, or read it
-back with `runs()`. Pass `{ idempotencyKey }` (`TrendRunOptions`) to make a
+back with `getRun(jobId)` / `runs()`. Pass `{ idempotencyKey }` (`TrendRunOptions`) to make a
 retry safe: it is sent unchanged as the `Idempotency-Key` header (8–200
 characters, else `400`), and a repeat with the same key answers with the first
 run's `jobId`; nothing new is started or charged.
@@ -4785,7 +4849,7 @@ Refusals (nothing is written or billed) carry a code from
 | `continuation_subset_required` | `NodaroError` (409, or 400) | nothing is left to retry: every step completed (409), or the app runs no step (400) |
 | `locked_field` | `NodaroError` (400) | an input the run applied sets a field the app does not let a runner set |
 | `preview_review_required` | `NodaroError` (400) | the Retry would stop at a Preview with nobody to review it: retry it from the app page, where a person can review it |
-| `insufficient_app_credits` / `insufficient_credits` | `InsufficientCreditsError` (its `code` reads `insufficient_credits`; the message says which) | your app credits, or balance, cannot cover it |
+| `insufficient_app_credits` / `insufficient_credits` | `InsufficientCreditsError` (its `code` says which) | your app credits, or balance, cannot cover it |
 | `billing_unavailable` | `NodaroError` (503) | billing is briefly unavailable for a workspace run: try again shortly |
 
 To run with other inputs or on the app's current version, start the run over

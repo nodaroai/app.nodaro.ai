@@ -194,17 +194,19 @@ describe("get_trend", () => {
   })
 })
 
-describe("the reserved slug \"runs\" (GET /v1/trends/runs is the run list)", () => {
-  it("is refused by get_trend, estimate_trend and run_trend before any call", async () => {
+describe("the reserved slugs \"runs\" and \"tags\" (GET /v1/trends/runs and /v1/trends/tags)", () => {
+  it("are refused by get_trend, estimate_trend and run_trend before any call", async () => {
     const { fastify, calls } = stubFastify({})
     const server = serverWith(fastify)
-    for (const [tool, args] of [
-      ["get_trend", { slug: "runs" }],
-      ["estimate_trend", { slug: "runs", slots: {} }],
-      ["run_trend", { slug: "runs", slots: {}, confirm: true }],
-    ] as const) {
-      const res = await callTool(server, tool, args)
-      expect(res.isError, tool).toBe(true)
+    for (const slug of ["runs", "tags"]) {
+      for (const [tool, args] of [
+        ["get_trend", { slug }],
+        ["estimate_trend", { slug, slots: {} }],
+        ["run_trend", { slug, slots: {}, confirm: true }],
+      ] as const) {
+        const res = await callTool(server, tool, args)
+        expect(res.isError, `${tool} ${slug}`).toBe(true)
+      }
     }
     expect(calls).toHaveLength(0)
   })

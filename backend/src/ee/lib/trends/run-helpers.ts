@@ -3,8 +3,13 @@
  * (`ee/routes/admin-trends.ts`) share about trend RUNS:
  *
  * - reading a run back: the `TrendRun` whitelist mapper over a Cast Swap job
- *   row (redacted first, then mapped field by field), and the Full Quality
- *   jobs folded into their drafts;
+ *   row (redacted first, then mapped field by field). A Full Quality version
+ *   of a draft is a run of its own (`fullQualityOf` names the draft); a draft
+ *   only points at it (`fullQuality`: its job id and status, never its
+ *   result);
+ * - listing runs: only the NEWEST Full Quality try of each draft is listed
+ *   (running, done, or its last failure); an older, superseded try is left out
+ *   of every list (`listedRunsPage`) and stays readable only by its id;
  * - dispatching one: the engine-support check against the loaded Cast Swap
  *   engine, and the INTERNAL request to the Cast Swap route as the caller
  *   (the only way a run can carry `trendRun`), with the web spend surface;
@@ -47,7 +52,18 @@ export interface TrendRun {
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
-  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  /**
+   * A Full Quality version: the draft run it was made from (which may be gone
+   * since). Null for any other run. Such a run is listed on its own, with its
+   * own status, output and charge.
+   */
+  fullQualityOf: string | null
+  /**
+   * A draft's newest Full Quality try, when one was started: a pointer only.
+   * Its result and charge are on that run, listed on its own; older tries of
+   * the draft are not listed.
+   */
+  fullQuality: { jobId: string; status: string } | null
   fullQualityUntil: string | null
 }
 
@@ -168,7 +184,7 @@ export function toTrendRun(
       ? new Date(Date.parse(completedAt) + FULL_QUALITY_WINDOW_MS).toISOString()
       : null
   const details = str(input.details)
-  const fqRow = fq ? redactPrivateJobData(fq) : null
+  const fqRow = fq && draft ? redactPrivateJobData(fq) : null
   return {
     jobId: row.id,
     status: row.status,
@@ -186,21 +202,17 @@ export function toTrendRun(
     videoUrl: row.status === "completed" ? videoUrl : null,
     posterUrl: row.status === "completed" ? posterUrl : null,
     creditsCharged: creditsChargedOf(row.usage_log_id, credits, row.id, sideCharges),
-    fullQuality: fqRow
-      ? {
-          jobId: fqRow.id,
-          status: fqRow.status,
-          videoUrl: fqRow.status === "completed" ? outputVideo(fqRow.output_data).videoUrl : null,
-        }
-      : null,
+    fullQualityOf: str(input.fullQualityOf),
+    fullQuality: fqRow ? { jobId: fqRow.id, status: fqRow.status } : null,
     fullQualityUntil,
   }
 }
 
 /**
- * The Full Quality job of each of `draftIds`, by draft id, owned by `owners`
- * (one user, or several). One Full Quality per draft; should there ever be
- * more, the newest wins. Throws on a database error.
+ * The newest Full Quality try of each of `draftIds` (by created_at, then id —
+ * the lists' own order), by draft id, owned by `owners` (one user, or
+ * several). A draft can have several tries (a failed or cancelled one can be
+ * tried again); only the newest counts. Throws on a database error.
  */
 export async function fullQualityByDraft(draftIds: string[], owners: string | string[]): Promise<Map<string, RunJobRow>> {
   const out = new Map<string, RunJobRow>()
@@ -211,6 +223,7 @@ export async function fullQualityByDraft(draftIds: string[], owners: string | st
     .filter("input_data->>type", "eq", "cast-swap")
     .in("input_data->>fullQualityOf", draftIds)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
   if (error) throw new Error(`Could not read Full Quality runs: ${error.message}`)
   for (const r of (data ?? []) as unknown as Array<RunJobRow & { fullQualityOf?: unknown }>) {
     const of = str(r.fullQualityOf) ?? (isRec(r.input_data) ? str(r.input_data.fullQualityOf) : null)
@@ -219,15 +232,76 @@ export async function fullQualityByDraft(draftIds: string[], owners: string | st
   return out
 }
 
-/** Map a page of run rows to `TrendRun`s, with their Full Quality jobs and credits. */
+/** The draft a Full Quality try was made from, or null for any other run. */
+function fullQualityOfRow(r: RunJobRow): string | null {
+  return isRec(r.input_data) ? str(r.input_data.fullQualityOf) : null
+}
+
+/**
+ * The Full Quality tries among `rows` that a newer try of the same draft
+ * supersedes, by job id. Read from the database, not from `rows`: the newest
+ * try can be on an earlier page.
+ */
+async function supersededTries(rows: RunJobRow[], owners: string | string[]): Promise<Set<string>> {
+  const tries = rows.flatMap((r) => {
+    const of = fullQualityOfRow(r)
+    return of ? [{ id: r.id, of }] : []
+  })
+  if (tries.length === 0) return new Set()
+  const newest = await fullQualityByDraft([...new Set(tries.map((t) => t.of))], owners)
+  return new Set(tries.filter((t) => { const n = newest.get(t.of); return !!n && n.id !== t.id }).map((t) => t.id))
+}
+
+/** A position in a newest-first run list (`created_at`, then `id`). */
+export interface RunKeyset {
+  at: string
+  id: string
+}
+
+/** How many reads one page may take when superseded tries are skipped. */
+const MAX_PAGE_READS = 5
+
+/**
+ * One page of a newest-first run list without superseded Full Quality tries.
+ * `read(after, n)` answers up to `n` rows after `after` (null = from the
+ * start), newest first. Rows are read until the page is full, the list ends,
+ * or `MAX_PAGE_READS` reads were made; in that last case the page can be
+ * short (even empty) and `next` resumes after the last row read, so a long
+ * run of hidden tries never stalls the cursor. Throws on a database error.
+ */
+export async function listedRunsPage<T extends RunJobRow>(
+  read: (after: RunKeyset | null, n: number) => Promise<T[]>,
+  after: RunKeyset | null,
+  limit: number,
+  owners: string | string[],
+): Promise<{ rows: T[]; next: RunKeyset | null }> {
+  const keyOf = (r: T): RunKeyset => ({ at: r.created_at, id: r.id })
+  const listed: T[] = []
+  let cursor = after
+  for (let reads = 0; reads < MAX_PAGE_READS; reads++) {
+    const batch = await read(cursor, limit + 1)
+    const hidden = await supersededTries(batch, owners)
+    for (const r of batch) if (!hidden.has(r.id)) listed.push(r)
+    if (listed.length > limit) {
+      const page = listed.slice(0, limit)
+      return { rows: page, next: keyOf(page[page.length - 1]!) }
+    }
+    if (batch.length <= limit) return { rows: listed, next: null }
+    cursor = keyOf(batch[batch.length - 1]!)
+  }
+  return { rows: listed, next: cursor }
+}
+
+/** Map a page of run rows to `TrendRun`s, with their credits and, for drafts, their newest Full Quality job. */
 export async function toTrendRuns(
   page: RunJobRow[],
   owners: string | string[],
   audience: RunAudience = "public",
 ): Promise<TrendRun[]> {
   if (page.length === 0) return []
+  const drafts = page.filter((r) => isRec(r.input_data) && r.input_data.draft === true).map((r) => r.id)
   const [fqByDraft, credits, sideCharges] = await Promise.all([
-    fullQualityByDraft(page.map((r) => r.id), owners),
+    fullQualityByDraft(drafts, owners),
     creditStatusMapFor(page.map((r) => r.usage_log_id)),
     sideHoldChargesFor(page.map((r) => r.id)),
   ])

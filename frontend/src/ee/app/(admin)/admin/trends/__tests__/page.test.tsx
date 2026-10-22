@@ -76,4 +76,52 @@ describe("the Trends list", () => {
     await waitFor(() => expect(sentTo("POST /v1/admin/trends")).toEqual([{ slug: "beach-walk", name: { en: "Beach walk" } }]))
     expect(await screen.findByTestId("elsewhere")).toBeInTheDocument()
   })
+
+  it("refuses the reserved slugs when creating", async () => {
+    const user = userEvent.setup()
+    renderWith(<AdminTrendsPage />)
+    await screen.findByText("Office dance")
+    await user.click(screen.getByRole("button", { name: /new trend/i }))
+    await user.type(screen.getByLabelText(/name \(english\)/i), "Tags")
+    for (const slug of ["tags", "runs"]) {
+      await user.clear(screen.getByLabelText(/^slug$/i))
+      await user.type(screen.getByLabelText(/^slug$/i), slug)
+      expect(screen.getByRole("button", { name: /^create$/i })).toBeDisabled()
+    }
+  })
+
+  it("edits a tag's labels per language, and clears them", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends/tags"] = () => ({
+      body: {
+        data: [
+          { tag: "dance", labels: { en: "Dance" }, trends: 2, published: 1 },
+          { tag: "pets", labels: {}, trends: 1, published: 0 },
+        ],
+      },
+    })
+    routes["PUT /v1/admin/trends/tags"] = () => ({ body: { data: { tag: "dance", labels: {} } } })
+    renderWith(<AdminTrendsPage />)
+    await screen.findByText("Office dance")
+    await user.click(screen.getByRole("button", { name: /tag labels/i }))
+
+    const dialog = await screen.findByRole("dialog")
+    await within(dialog).findByText(/2 trends · 1 published/i)
+    const row = (tag: string) => dialog.querySelector(`[data-tag-row="${tag}"]`) as HTMLElement
+    const dance = row("dance")
+    expect(within(dance).getByText(/2 trends · 1 published/i)).toBeInTheDocument()
+    await user.click(within(dance).getByRole("button", { name: "HE" }))
+    await user.type(within(dance).getByLabelText(/\(hebrew\)/i), "ריקוד")
+    await user.click(within(dance).getByRole("button", { name: /^save$/i }))
+    await waitFor(() =>
+      expect(sentTo("PUT /v1/admin/trends/tags")).toEqual([{ tag: "dance", labels: { en: "Dance", he: "ריקוד" } }]),
+    )
+
+    const pets = row("pets")
+    // A tag with no label shows as itself to users; nothing to save until one is typed.
+    expect(within(pets).getByRole("button", { name: /^save$/i })).toBeDisabled()
+    await user.click(within(dance).getByRole("button", { name: /^clear$/i }))
+    await waitFor(() => expect(sentTo("PUT /v1/admin/trends/tags")).toHaveLength(2))
+    expect(sentTo("PUT /v1/admin/trends/tags")[1]).toEqual({ tag: "dance", labels: {} })
+  })
 })

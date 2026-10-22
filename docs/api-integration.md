@@ -4163,6 +4163,8 @@ slug is a `404` on every route.
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
+| `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
+| `GET` | `/v1/trends/tags` | The tags in use on published trends, most used first: `{ data: [{ tag, label, count }] }`. `label` is in `?locale=` (as below), else English, else the tag itself; pass `tag` to `GET /v1/trends?tag=`. |
 | `PUT` | `/v1/trends/:slug/favorite` | Add the trend to your favorites. `204`. |
 | `DELETE` | `/v1/trends/:slug/favorite` | Remove it from your favorites. `204`. |
 
@@ -4222,7 +4224,7 @@ anything is charged:
 | `502` | `engine_error` | The video engine answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |
 | `503` | `trend_unavailable` | The trend cannot be run right now. |
-| `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs`). |
+| `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`). |
 
 When the video engine refuses an estimate or a run, the trend routes answer
 with their OWN codes and fixed messages; the engine's message and any
@@ -4250,6 +4252,23 @@ run ran out of credits partway (it was refunded: top up, then run it again),
 else `cancelled` or `failed`. The message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
+
+A Full Quality version of a draft run is a run of its own in
+`GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
+`status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
+`draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any
+other run). It stays listed after its draft is deleted. The newest Full Quality
+try per draft is the one listed (running, done, or its last failure): when a
+try failed or was cancelled and the draft was tried again, the older tries are
+left out of `GET /v1/trends/runs` (with or without `?trend=`), and
+`GET /v1/trends/runs/:jobId` still reads one by its id. The draft's
+`fullQuality` is only a pointer to that newest try (`{ jobId, status }`, or
+`null` when none was started): its video and charge are read from its own run,
+never from the draft.
+
+`runs` and `tags` are never trend slugs. A tag is a plain string on
+its trends; its label per language is set by an admin, and a tag with no label
+reads as itself.
 
 ## 14. Pipelines
 

@@ -99,6 +99,7 @@ const run: TrendRun = {
   videoUrl: "https://cdn.example.com/out.mp4",
   posterUrl: null,
   creditsCharged: 7,
+  fullQualityOf: null,
   fullQuality: null,
   fullQualityUntil: "2026-10-27T10:03:00.000Z",
 }

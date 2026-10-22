@@ -7,10 +7,11 @@ import type { NodaroClientCore } from "../core.js"
  *
  * Cloud edition only: `/v1/trends` 404s on self-hosted installs. Only
  * published trends exist here: a draft, unpublished or unknown slug is a 404
- * on every route. `"runs"` is never a slug (`/v1/trends/runs` is the run
- * list): the slug methods throw a `TypeError` for it before any request. `run()` answers 202 with a job id; follow it with
+ * on every route. `"runs"` and `"tags"` are never slugs (`/v1/trends/runs` is
+ * the run list, `/v1/trends/tags` the tag list): the slug methods throw a
+ * `TypeError` for them before any request. `run()` answers 202 with a job id; follow it with
  * `client.jobs.get(jobId)` / `client.jobs.getStatus(jobId)` like any other
- * job, or read it back as a trend run with `runs()`.
+ * job, or read it back as a trend run with `getRun(jobId)` / `runs()`.
  *
  * Repeats: pass `{ idempotencyKey }` to `run()` and it is sent as the
  * `Idempotency-Key` header. A repeat with the same key answers with the first
@@ -48,9 +49,16 @@ import type { NodaroClientCore } from "../core.js"
  *   8–200 characters.
  */
 
-/** `/v1/trends/runs` is the run list, so `"runs"` can never be a trend's slug. */
+/** `/v1/trends/runs` is the run list and `/v1/trends/tags` the tag list, so neither can be a trend's slug. */
+const RESERVED_SLUGS: Readonly<Record<string, string>> = {
+  runs: "the run list; use runs()",
+  tags: "the tag list; use tags()",
+}
+
 function trendPath(slug: string, rest = ""): string {
-  if (slug === "runs") throw new TypeError('"runs" is not a trend slug (it is reserved for the run list; use runs())')
+  if (Object.hasOwn(RESERVED_SLUGS, slug)) {
+    throw new TypeError(`"${slug}" is not a trend slug (it is reserved for ${RESERVED_SLUGS[slug]})`)
+  }
   return `/v1/trends/${encodeURIComponent(slug)}${rest}`
 }
 
@@ -205,7 +213,14 @@ export interface TrendRunDisplaySlot extends TrendChips {
   fromExample: boolean
 }
 
-/** One of your trend runs (`runs()`). Stays readable after the trend moves on or is unpublished. */
+/**
+ * One of your trend runs (`runs()`, `getRun()`). Stays readable after the
+ * trend moves on or is unpublished.
+ *
+ * A Full Quality version of a draft is a run of its own, with its own status,
+ * result and charge: `fullQualityOf` names the draft it was made from, and it
+ * stays listed after that draft is deleted.
+ */
 export interface TrendRun {
   jobId: string
   status: string
@@ -233,8 +248,17 @@ export interface TrendRun {
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
-  /** The Full Quality redo of this draft, if one was made. */
-  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  /** A Full Quality version: the job id of the draft run it was made from. `null` for any other run. */
+  fullQualityOf: string | null
+  /**
+   * A draft's newest Full Quality try, if one was started: a pointer only,
+   * to know an upgrade exists and how it is going. Its video and charge are on
+   * that run, listed on its own (its `fullQualityOf` is this run's `jobId`) —
+   * read it there (`getRun(fullQuality.jobId)`). Older tries of the draft (a
+   * failed or cancelled one tried again) are not listed by `runs()`;
+   * `getRun()` still reads one by its id.
+   */
+  fullQuality: { jobId: string; status: string } | null
   /** Until when a completed draft can be redone in Full Quality; `null` otherwise. */
   fullQualityUntil: string | null
 }
@@ -260,6 +284,16 @@ export interface ListTrendRunsParams {
   cursor?: string
   /** Page size, 1–60 (server default 30). */
   limit?: number
+}
+
+/** A tag in use on the published catalog (`tags()`). */
+export interface TrendTag {
+  /** The tag itself: pass it as `list({ tag })`. */
+  tag: string
+  /** The tag's label in the resolved locale; the tag itself when it has none. */
+  label: string
+  /** How many published trends carry it. */
+  count: number
 }
 
 export interface TrendPage<T> {
@@ -318,13 +352,37 @@ export class TrendsResource {
     return res.data
   }
 
-  /** Your trend runs, newest first (`GET /v1/trends/runs`). A Full Quality redo is folded into its draft. */
+  /**
+   * Your trend runs, newest first (`GET /v1/trends/runs`). A Full Quality
+   * version of a draft is listed as its own run (`fullQualityOf`).
+   */
   runs(params: ListTrendRunsParams = {}): Promise<TrendPage<TrendRun>> {
     const query: Record<string, string> = {}
     if (params.trend) query.trend = params.trend
     if (params.cursor) query.cursor = params.cursor
     if (params.limit !== undefined) query.limit = String(params.limit)
     return this.client.request("GET", "/v1/trends/runs", { query })
+  }
+
+  /**
+   * One of your trend runs by its job id (`GET /v1/trends/runs/:jobId`), in
+   * the same shape as `runs()`. A job that is not your own trend run is a
+   * `NotFoundError`.
+   */
+  async getRun(jobId: string): Promise<TrendRun> {
+    const res = await this.client.request<{ data: TrendRun }>("GET", `/v1/trends/runs/${encodeURIComponent(jobId)}`)
+    return res.data
+  }
+
+  /**
+   * The tags in use on the published catalog, each with its label in the
+   * resolved locale (`GET /v1/trends/tags`), most used first.
+   */
+  async tags(params: { locale?: string } = {}): Promise<TrendTag[]> {
+    const query: Record<string, string> = {}
+    if (params.locale) query.locale = params.locale
+    const res = await this.client.request<{ data: TrendTag[] }>("GET", "/v1/trends/tags", { query })
+    return res.data
   }
 
   /** Add a trend to your favorites (`PUT /v1/trends/:slug/favorite`). */

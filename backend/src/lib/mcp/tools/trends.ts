@@ -47,13 +47,15 @@ export interface RegisterTrendToolsOpts {
 
 /**
  * The route's own slug shape (migration 549), so a path can never be smuggled
- * in; `runs` is reserved (`GET /v1/trends/runs` is the run list), never a slug.
+ * in; `runs` and `tags` are reserved (`GET /v1/trends/runs` is the run list,
+ * `GET /v1/trends/tags` the tag list; migrations 549 and 555), never slugs.
  */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 /** The route's own job-id check (`trendRunRequestSchema`): hex 8-4-4-4-12, no version or variant rule (zod's `.uuid()` has one). */
 const JOB_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const notReserved = (s: string) => s !== "runs"
-const RESERVED = { message: '"runs" is reserved; it is not a trend slug.' }
+const RESERVED_SLUGS: ReadonlySet<string> = new Set(["runs", "tags"])
+const notReserved = (s: string) => !RESERVED_SLUGS.has(s)
+const RESERVED = { message: '"runs" and "tags" are reserved; they are not trend slugs.' }
 const slug = z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends).")
 
 const chip = z.enum(["new", "original"]).optional()

@@ -11178,7 +11178,10 @@ export interface AdminTrendRun {
   videoUrl: string | null
   posterUrl: string | null
   creditsCharged: number | null
-  fullQuality: { jobId: string; status: string; videoUrl: string | null } | null
+  /** A Full Quality version: the draft run it was made from. Listed as its own run. */
+  fullQualityOf: string | null
+  /** A draft's Full Quality version: a pointer only; its result is on its own run. */
+  fullQuality: { jobId: string; status: string } | null
   fullQualityUntil: string | null
   ownerIsAdmin: boolean
 }
@@ -11238,6 +11241,31 @@ export async function fetchAdminTrends(): Promise<AdminTrendListItem[]> {
 
 export async function createAdminTrend(input: { slug: string; name: TrendLocalizedText }): Promise<{ id: string }> {
   return (await apiRequest<{ data: { id: string } }>(ADMIN_TRENDS, "apiErr.saveTrend", { method: "POST", body: input })).data
+}
+
+/** A tag in use on any trend (or one with labels): its labels by language and how many trends carry it. */
+export interface AdminTrendTag {
+  tag: string
+  labels: Partial<TrendLocalizedText>
+  trends: number
+  published: number
+}
+
+export async function fetchAdminTrendTags(): Promise<AdminTrendTag[]> {
+  return (await apiRequest<{ data: AdminTrendTag[] }>(`${ADMIN_TRENDS}/tags`, "apiErr.loadTrends")).data
+}
+
+/** Save one tag's labels; none (or only empty ones) clears them, and the tag reads as itself. */
+export async function saveAdminTrendTagLabels(
+  tag: string,
+  labels: Partial<TrendLocalizedText>,
+): Promise<{ tag: string; labels: Partial<TrendLocalizedText> }> {
+  return (
+    await apiRequest<{ data: { tag: string; labels: Partial<TrendLocalizedText> } }>(`${ADMIN_TRENDS}/tags`, "apiErr.saveTrend", {
+      method: "PUT",
+      body: { tag, labels },
+    })
+  ).data
 }
 
 export async function fetchAdminTrend(id: string): Promise<AdminTrendDetail> {

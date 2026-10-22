@@ -130,6 +130,7 @@ export function run(over: Partial<AdminTrendRun> = {}): AdminTrendRun {
     videoUrl: "https://cdn.test/out.mp4",
     posterUrl: null,
     creditsCharged: 40,
+    fullQualityOf: null,
     fullQuality: null,
     fullQualityUntil: null,
     ownerIsAdmin: true,

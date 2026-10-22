@@ -422,6 +422,7 @@ export const queryKeys = {
     clientApps: () => ["admin", "client-apps"] as const,
     /** Admin → Trends. Everything under ["admin", "trends"], so one invalidation refreshes the list and the open trend. */
     trends: () => ["admin", "trends"] as const,
+    trendTags: () => ["admin", "trends", "tags"] as const,
     trend: (id: string) => ["admin", "trends", "one", id] as const,
     trendTestRuns: (id: string) => ["admin", "trends", "one", id, "test-runs"] as const,
     trendRunPrompt: (jobId: string) => ["admin", "trends", "run-prompt", jobId] as const,

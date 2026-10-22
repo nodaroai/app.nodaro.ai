@@ -4,6 +4,8 @@
  *
  *   GET    /v1/trends                    cards of the published catalog
  *   GET    /v1/trends/runs               the caller's trend runs (before /:slug)
+ *   GET    /v1/trends/runs/:jobId        one of the caller's trend runs
+ *   GET    /v1/trends/tags               the published catalog's tags, labelled (before /:slug)
  *   GET    /v1/trends/:slug              a published trend's page
  *   POST   /v1/trends/:slug/estimate     the quote for a run
  *   POST   /v1/trends/:slug/runs         start a run → 202 { data: { jobId } }
@@ -20,8 +22,8 @@
  * dispatched to the Cast Swap engine as an INTERNAL request as the caller (the
  * only way a run can carry `trendRun`); the engine keeps the hidden parts in
  * `__` keys of the job's `input_data`, which every job read drops. The run
- * list redacts those keys too and then maps each job to the `TrendRun`
- * whitelist.
+ * reads redact those keys too and then map each job to the `TrendRun`
+ * whitelist. A Full Quality version of a draft is a run of its own.
  *
  * Reads need `jobs:read` for an OAuth app; estimate and run `workflows:execute`
  * (as the Cast Swap MCP verb); favorites `assets:write` (as the gallery's).
@@ -33,12 +35,13 @@ import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
 import { formatZodError } from "../../lib/zod-error.js"
-import { afterKeyset, decodeCursor, encodeCursor, findOwnSession } from "../../lib/generation-sessions.js"
+import { afterKeyset, decodeCursor, encodeCursor, findOwnSession, type Keyset } from "../../lib/generation-sessions.js"
 import { resolveRequestOrigin } from "../../lib/client-origin-scope.js"
 import { callerGrantOf, grantMayWriteSessions } from "../../lib/job-submission-context.js"
 import { deriveJobSource } from "../../lib/job-source.js"
 import {
   InvalidTrendCursorError,
+  TrendsUnavailableError,
   favoriteIds,
   getTrendBySlug,
   getVersion,
@@ -47,6 +50,7 @@ import {
 } from "../lib/trends/store.js"
 import { CHIPS_BY_KIND, trendRunRequestSchema } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
+import { publishedTagUsage, readTagLabels, tagLabel, type TagLabels } from "../lib/trends/tags.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import {
   RUN_JOB_COLS,
@@ -56,6 +60,7 @@ import {
   followPreviewMasking,
   isRec,
   jobIdOf,
+  listedRunsPage,
   parseJson,
   publicRefusal,
   toTrendRuns,
@@ -88,6 +93,13 @@ export interface TrendCard {
   needs: Record<TrendSlotKind, number>
   durationSec: number
   isFavorite: boolean
+}
+
+/** A tag in use on the published catalog, labelled in the resolved locale (the tag itself when it has no label). */
+export interface TrendTag {
+  tag: string
+  label: string
+  count: number
 }
 
 export interface TrendDetail extends TrendCard {
@@ -384,32 +396,82 @@ export async function trendRoutes(app: FastifyInstance) {
 
     // A run is read from its own stamp (`input_data.trend`), never from the
     // catalog: it stays readable after its trend moves on or is unpublished.
-    // Full Quality jobs are folded into their draft below, never listed alone.
-    let query = supabase
-      .from("jobs")
-      .select(RUN_JOB_COLS)
-      .eq("user_id", userId)
-      .filter("input_data->>type", "eq", "cast-swap")
-      .not("input_data->trend", "is", null)
-      .is("input_data->>fullQualityOf", null)
-    if (trend) query = query.filter("input_data->trend->>slug", "eq", trend)
-    if (after) query = query.or(afterKeyset("created_at", "id", after))
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(limit + 1)
-    if (error) return unavailableOrInternal(reply, req, error, "Failed to list trend runs")
-
-    const all = (data ?? []) as unknown as RunJobRow[]
-    const page = all.slice(0, limit)
-    const last = page[page.length - 1]
-    const next = all.length > limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null
-    if (page.length === 0) return { data: [], next }
+    // A Full Quality version is listed as its own run (it carries the stamp),
+    // only the newest try of each draft (`listedRunsPage`).
+    const read = async (from: Keyset | null, n: number) => {
+      let query = supabase
+        .from("jobs")
+        .select(RUN_JOB_COLS)
+        .eq("user_id", userId)
+        .filter("input_data->>type", "eq", "cast-swap")
+        .not("input_data->trend", "is", null)
+      if (trend) query = query.filter("input_data->trend->>slug", "eq", trend)
+      if (from) query = query.or(afterKeyset("created_at", "id", from))
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(n)
+      if (error) throw error
+      return (data ?? []) as unknown as RunJobRow[]
+    }
 
     try {
-      return { data: await toTrendRuns(page, userId), next }
+      const page = await listedRunsPage(read, after, limit, userId)
+      const next = page.next ? encodeCursor(page.next) : null
+      if (page.rows.length === 0) return { data: [], next }
+      return { data: await toTrendRuns(page.rows, userId), next }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to list trend runs")
+    }
+  })
+
+  // One run, in the list's shape: the caller's own top-level trend run, else 404.
+  app.get("/v1/trends/runs/:jobId", async (req, reply) => {
+    const userId = reader(req, reply)
+    if (!userId) return
+    const { jobId } = req.params as { jobId: string }
+    if (!UUID_RE.test(jobId)) return err(reply, 404, "not_found", "Run not found")
+    try {
+      const { data, error } = await supabase
+        .from("jobs")
+        .select(RUN_JOB_COLS)
+        .eq("id", jobId)
+        .eq("user_id", userId)
+        .filter("input_data->>type", "eq", "cast-swap")
+        .not("input_data->trend", "is", null)
+        .is("parent_job_id", null)
+        .maybeSingle()
+      if (error) throw new Error(`Could not read job ${jobId}: ${error.message}`)
+      if (!data) return err(reply, 404, "not_found", "Run not found")
+      const [run] = await toTrendRuns([data as unknown as RunJobRow], userId)
+      if (!run) return err(reply, 404, "not_found", "Run not found")
+      return { data: run }
+    } catch (e) {
+      return unavailableOrInternal(reply, req, e, "Failed to read the trend run")
+    }
+  })
+
+  // Registered before /:slug (and `tags` can never be a slug: migration 555).
+  app.get("/v1/trends/tags", async (req, reply) => {
+    const userId = reader(req, reply)
+    if (!userId) return
+    const parsed = detailQuery.safeParse(req.query)
+    if (!parsed.success) return badRequest(reply, parsed.error)
+    try {
+      const [locale, usage] = await Promise.all([resolveLocale(req, userId, parsed.data.locale), publishedTagUsage()])
+      let labels = new Map<string, TagLabels>()
+      try {
+        labels = await readTagLabels(usage.map((u) => u.tag))
+      } catch (e) {
+        // Labels are a nicety: a database without migration 555 yet (staging
+        // runs ahead of main) lists every tag as itself.
+        if (!(e instanceof TrendsUnavailableError)) throw e
+        req.log.warn("trends: tag labels unavailable, listing tags as themselves")
+      }
+      const data: TrendTag[] = usage.map(({ tag, count }) => ({ tag, label: tagLabel(tag, labels.get(tag), locale), count }))
+      return { data }
+    } catch (e) {
+      return unavailableOrInternal(reply, req, e, "Failed to list the trend tags")
     }
   })
 

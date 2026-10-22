@@ -1,14 +1,14 @@
 // Admin → Trends: every trend (any status), filtered by status and tag, with
 // the catalog fields that live on the trend row (sort order, badges) written
 // in place through PATCH. "New trend" creates a draft and opens its editor
-// (`./detail/page.tsx`).
+// (`./detail/page.tsx`); "Tag labels" edits what users see for each tag.
 //
 // Dragging to set the sort order is a later nicety: the order is a
 // number, as on the other admin lists.
 
 import { useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Loader2, Plus, TrendingUp, Film } from "lucide-react"
+import { Loader2, Plus, Tags, TrendingUp, Film } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils"
 import type { AdminTrendListItem, TrendBadge, TrendStatus } from "@/lib/api"
 import { useAdminTrends, useCreateTrend, usePatchTrend } from "@/ee/hooks/queries/use-admin-queries"
 import { StatusBadge } from "./components/StatusBadge"
+import { TagLabelsDialog } from "./components/TagLabelsDialog"
+import { isTrendSlug } from "./model"
 
 const STATUS_FILTERS: ReadonlyArray<{ value: TrendStatus | "all"; label: string }> = [
   { value: "all", label: "All" },
@@ -41,14 +43,12 @@ const BADGES: ReadonlyArray<{ value: TrendBadge; label: string }> = [
   { value: "new", label: "New" },
 ]
 
-/** The server's own slug rule (migration 549's CHECK). */
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
-
 export default function AdminTrendsPage() {
   const { data, isLoading, error } = useAdminTrends()
   const [status, setStatus] = useState<TrendStatus | "all">("all")
   const [tag, setTag] = useState("")
   const [creating, setCreating] = useState(false)
+  const [labelling, setLabelling] = useState(false)
 
   const trends = useMemo(() => {
     const t = tag.trim().toLowerCase()
@@ -69,9 +69,14 @@ export default function AdminTrendsPage() {
             Ready-made Cast Swap recipes. Users only see a trend's published version.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" onClick={() => setCreating(true)}>
-          <Plus className="mr-1 h-4 w-4" /> New trend
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="min-h-9" onClick={() => setLabelling(true)}>
+            <Tags className="mr-1 h-4 w-4" /> Tag labels
+          </Button>
+          <Button size="sm" className="min-h-9" onClick={() => setCreating(true)}>
+            <Plus className="mr-1 h-4 w-4" /> New trend
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -117,6 +122,7 @@ export default function AdminTrendsPage() {
       )}
 
       <CreateTrendDialog open={creating} onOpenChange={setCreating} />
+      <TagLabelsDialog open={labelling} onOpenChange={setLabelling} />
     </div>
   )
 }
@@ -230,7 +236,7 @@ function CreateTrendDialog({ open, onOpenChange }: { readonly open: boolean; rea
   const create = useCreateTrend()
   const [slug, setSlug] = useState("")
   const [name, setName] = useState("")
-  const slugOk = SLUG_RE.test(slug) && slug !== "runs"
+  const slugOk = isTrendSlug(slug)
   const canCreate = slugOk && name.trim().length > 0 && name.trim().length <= 200 && !create.isPending
 
   const submit = () => {

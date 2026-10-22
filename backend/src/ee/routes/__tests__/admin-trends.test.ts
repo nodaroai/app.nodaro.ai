@@ -291,13 +291,33 @@ function jobRow(id: string, userId: string, over: Record<string, unknown> = {}) 
 const world = {
   jobs: new Map<string, Record<string, unknown>>(),
   envs: [] as unknown[],
+  /** trend_tags: tag → labels (null = the table is missing, as before migration 555). */
+  tagLabels: new Map<string, Record<string, string>>() as Map<string, Record<string, string>> | null,
 }
 
 const engine = {
   calls: [] as Array<{ url: string; headers: Record<string, unknown>; body: Record<string, unknown>; stamps?: { origin: string | null; sessionId: string | null } }>,
 }
 
+function respondTrendTags(q: RecordedQuery): QueryResult {
+  if (!world.tagLabels) return { data: null, error: { code: "PGRST205", message: "Could not find the table 'public.trend_tags'" } }
+  const upsert = q.ops.find((op) => op.m === "upsert")
+  if (upsert) {
+    const row = upsert.a[0] as { tag: string; labels: Record<string, string> }
+    world.tagLabels.set(row.tag, row.labels)
+    return { data: null, error: null }
+  }
+  if (q.ops.some((op) => op.m === "delete")) {
+    world.tagLabels.delete(q.ops.find((op) => op.m === "eq" && op.a[0] === "tag")!.a[1] as string)
+    return { data: null, error: null }
+  }
+  return { data: [...world.tagLabels].map(([tag, labels]) => ({ tag, labels })), error: null }
+}
+
 function respond(q: RecordedQuery): QueryResult {
+  if (q.table === "trend_tags") return respondTrendTags(q)
+  // The tag usage reads go to the trends table itself (the store is in memory).
+  if (q.table === "trends") return { data: mem.trends.map((t) => ({ status: t.status, tags: t.tags })), error: null }
   if (q.table === "engine_environments") {
     const hook = mem.onEnvRead
     mem.onEnvRead = null
@@ -312,13 +332,27 @@ function respond(q: RecordedQuery): QueryResult {
   if (q.table === "jobs") {
     const byId = q.ops.find((op) => op.m === "eq" && op.a[0] === "id")
     if (byId) return { data: world.jobs.get(byId.a[1] as string) ?? null, error: null }
-    if (q.ops.some((op) => op.m === "in" && op.a[0] === "input_data->>fullQualityOf")) return { data: [], error: null }
+    // Newest first (created_at, then id), as the routes order them.
+    const all = [...world.jobs.values()].sort((a, b) => {
+      const [x, y] = [String(a.created_at) + String(a.id), String(b.created_at) + String(b.id)]
+      return x < y ? 1 : x > y ? -1 : 0
+    })
     const owners = q.ops.find((op) => op.m === "in" && op.a[0] === "user_id")?.a[1] as string[] | undefined
+    const own = all.filter((r) => !owners || owners.includes(r.user_id as string))
+    const fq = q.ops.find((op) => op.m === "in" && op.a[0] === "input_data->>fullQualityOf")
+    if (fq) {
+      const drafts = fq.a[1] as string[]
+      return { data: own.filter((r) => drafts.includes((r.input_data as { fullQualityOf?: string })?.fullQualityOf ?? "")), error: null }
+    }
     const trend = q.ops.find((op) => op.m === "filter" && op.a[0] === "input_data->trend->>id")?.a[2]
-    const rows = [...world.jobs.values()].filter(
-      (r) => (!owners || owners.includes(r.user_id as string)) && (r.input_data as { trend?: { id?: string } })?.trend?.id === trend,
-    )
-    return { data: rows, error: null }
+    let rows = own.filter((r) => (r.input_data as { trend?: { id?: string } })?.trend?.id === trend)
+    const after = q.ops.find((op) => op.m === "or")?.a[0] as string | undefined
+    if (after) {
+      const m = /^created_at\.lt\."([^"]+)",and\(created_at\.eq\."[^"]+",id\.lt\."([^"]+)"\)$/.exec(after)!
+      rows = rows.filter((r) => String(r.created_at) < m[1]! || (r.created_at === m[1] && String(r.id) < m[2]!))
+    }
+    const limit = q.ops.find((op) => op.m === "limit")?.a[0] as number | undefined
+    return { data: limit === undefined ? rows : rows.slice(0, limit), error: null }
   }
   return { data: null, error: null }
 }
@@ -338,6 +372,7 @@ beforeEach(async () => {
   mem.durations = new Map()
   mem.missingTables = false
   world.jobs = new Map()
+  world.tagLabels = new Map()
   world.envs = [envRow("production"), envRow("staging")]
   engine.calls = []
   _resetPluginSupportsForTests()
@@ -412,6 +447,8 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     seed()
     expect((await call("POST", "/v1/admin/trends", { slug: "neon-dance", name: { en: "Again" } })).json().error.code).toBe("slug_taken")
     expect((await call("POST", "/v1/admin/trends", { slug: "runs", name: { en: "Runs" } })).statusCode).toBe(400)
+    expect((await call("POST", "/v1/admin/trends", { slug: "tags", name: { en: "Tags" } })).statusCode).toBe(400)
+    expect((await call("PATCH", `/v1/admin/trends/${T1}`, { slug: "tags" })).statusCode).toBe(400)
     expect((await call("POST", "/v1/admin/trends", { slug: "Bad Slug", name: { en: "x" } })).statusCode).toBe(400)
     expect((await call("POST", "/v1/admin/trends", { slug: "ok", name: { he: "רק עברית" } })).statusCode).toBe(400)
   })
@@ -495,6 +532,19 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(res.json().data).toMatchObject({ tags: ["dance", "neon"], badges: ["new"], sortOrder: 5 })
     expect((await call("PATCH", `/v1/admin/trends/${T1}`, {})).statusCode).toBe(400)
     expect((await call("PATCH", `/v1/admin/trends/${T1}`, { badges: ["hot"] })).statusCode).toBe(400)
+  })
+
+  it("PATCH takes tags of letters, digits, spaces, - and _ in any script, and refuses any other character with a 400", async () => {
+    seed()
+    const ok = await call("PATCH", `/v1/admin/trends/${T1}`, { tags: ["street dance", "k-pop", "pets_2", "ריקוד", "नृत्य", "ダンス"] })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json().data.tags).toEqual(["street dance", "k-pop", "pets_2", "ריקוד", "नृत्य", "ダンス"])
+    for (const bad of ['say "hi"', "it's", "a,b", "(x)", "back\\slash", "a.b", "a/b"]) {
+      const res = await call("PATCH", `/v1/admin/trends/${T1}`, { tags: ["dance", bad] })
+      expect(res.statusCode, bad).toBe(400)
+      expect(res.json().error).toMatchObject({ code: "validation_error", message: "tags.1: A tag is letters, digits, spaces, - and _ only." })
+    }
+    expect(mem.trends[0]!.tags).toEqual(["street dance", "k-pop", "pets_2", "ריקוד", "नृत्य", "ダンス"])
   })
 
   it("lists every trend with its draft's name, cover and slot count", async () => {
@@ -961,8 +1011,38 @@ describe("test runs", () => {
     expect(has(q, "in", "user_id", [ADMIN, ADMIN2])).toBe(true)
     expect(has(q, "filter", "input_data->>type", "eq", "cast-swap")).toBe(true)
     expect(has(q, "filter", "input_data->trend->>id", "eq", T1)).toBe(true)
-    expect(has(q, "is", "input_data->>fullQualityOf", null)).toBe(true)
+    // A Full Quality version is listed as its own run.
+    expect(q.ops.some((op) => op.a[0] === "input_data->>fullQualityOf")).toBe(false)
     expect(has(q, "order", "created_at", { ascending: false })).toBe(true)
+  })
+
+  it("a Full Quality version is its own test run, marked with its draft", async () => {
+    seed()
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    const fq = jobRow("fq-run", ADMIN, { created_at: "2026-10-21T10:00:00.000000+00:00" })
+    world.jobs.set("fq-run", { ...fq, input_data: { ...(fq.input_data as object), fullQualityOf: RUN, resolution: "1080p", draft: false } })
+    const res = await call("GET", `/v1/admin/trends/${T1}/test-runs`)
+    const data = res.json().data as Array<{ jobId: string; fullQualityOf: string | null }>
+    expect(data.map((r) => [r.jobId, r.fullQualityOf])).toEqual([["fq-run", RUN], [RUN, null]])
+  })
+
+  it("lists only a draft's newest Full Quality try; older tries do not use up the list's 50", async () => {
+    seed()
+    const at = (n: number) => `2026-10-21T${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}:00.000000+00:00`
+    const fqTry = (n: number, status: string) => {
+      const r = jobRow(`fq-${String(n).padStart(3, "0")}`, ADMIN, { status, created_at: at(n) })
+      return { ...r, input_data: { ...(r.input_data as object), fullQualityOf: RUN, resolution: "1080p", draft: false } }
+    }
+    world.jobs.set(RUN, jobRow(RUN, ADMIN))
+    // 60 superseded tries (failed, cancelled), then the newest one, still running.
+    for (let n = 1; n <= 60; n++) world.jobs.set(`fq-${String(n).padStart(3, "0")}`, fqTry(n, n % 2 ? "failed" : "cancelled"))
+    world.jobs.set("fq-061", fqTry(61, "processing"))
+    world.jobs.set("other", jobRow("other", ADMIN2, { created_at: "2026-10-19T10:00:00.000000+00:00" }))
+    const res = await call("GET", `/v1/admin/trends/${T1}/test-runs`)
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data as Array<{ jobId: string; status: string; fullQuality: unknown }>
+    expect(data.map((r) => [r.jobId, r.status])).toEqual([["fq-061", "processing"], [RUN, "completed"], ["other", "completed"]])
+    expect(data[1]!.fullQuality).toEqual({ jobId: "fq-061", status: "processing" })
   })
 
   it("an admin sees a failed test run's real failure text (the public run list does not)", async () => {
@@ -991,6 +1071,79 @@ describe("test runs", () => {
   })
 })
 
+// ── tag labels ─────────────────────────────────────────────────────────────
+
+describe("tag labels", () => {
+  it("lists every tag in use (any status) and every labelled one, with counts and labels, by tag", async () => {
+    seed({ status: "published", tags: ["dance", "duo"] })
+    mem.trends.push({ ...mem.trends[0]!, id: "00000000-0000-4000-8000-0000000000a2", slug: "wip", status: "draft", tags: ["dance", "wip"] })
+    world.tagLabels!.set("dance", { en: "Dance", he: "ריקוד" })
+    world.tagLabels!.set("retired", { en: "Retired" })
+    const res = await call("GET", "/v1/admin/trends/tags")
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([
+      { tag: "dance", labels: { en: "Dance", he: "ריקוד" }, trends: 2, published: 1 },
+      { tag: "duo", labels: {}, trends: 1, published: 1 },
+      { tag: "retired", labels: { en: "Retired" }, trends: 0, published: 0 },
+      { tag: "wip", labels: {}, trends: 1, published: 0 },
+    ])
+  })
+
+  it("saves a tag's labels (trimmed, empty ones dropped), and the public tag list shows them", async () => {
+    seed({ status: "published", publishedVersion: 1, tags: ["dance"] })
+    const saved = await call("PUT", "/v1/admin/trends/tags", { tag: " dance ", labels: { en: "Dance ", he: "ריקוד", ja: "" } })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json().data).toEqual({ tag: "dance", labels: { en: "Dance", he: "ריקוד" } })
+    expect(world.tagLabels!.get("dance")).toEqual({ en: "Dance", he: "ריקוד" })
+
+    const pub = await call("GET", "/v1/trends/tags?locale=he")
+    expect(pub.json().data).toEqual([{ tag: "dance", label: "ריקוד", count: 1 }])
+  })
+
+  it("no label left removes the tag's labels (it reads as itself again)", async () => {
+    world.tagLabels!.set("dance", { en: "Dance" })
+    const res = await call("PUT", "/v1/admin/trends/tags", { tag: "dance", labels: { en: " " } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ tag: "dance", labels: {} })
+    expect(world.tagLabels!.has("dance")).toBe(false)
+  })
+
+  it("refuses a tag outside 1–100 characters, an unknown language and a label over 100 characters", async () => {
+    for (const body of [
+      { tag: "", labels: { en: "x" } },
+      { tag: "x".repeat(101), labels: { en: "x" } },
+      { tag: "dance", labels: { xx: "x" } },
+      { tag: "dance", labels: { en: "x".repeat(101) } },
+      { tag: "dance" },
+    ]) {
+      const res = await call("PUT", "/v1/admin/trends/tags", body)
+      expect(res.statusCode, JSON.stringify(body)).toBe(400)
+    }
+    expect(world.tagLabels!.size).toBe(0)
+  })
+
+  it("refuses a tag with a character outside letters, digits, spaces, - and _ (a 400 that says so)", async () => {
+    for (const tag of ['say "hi"', "it's", "a,b", "(x)", "back\\slash"]) {
+      const res = await call("PUT", "/v1/admin/trends/tags", { tag, labels: { en: "x" } })
+      expect(res.statusCode, tag).toBe(400)
+      expect(res.json().error).toMatchObject({ code: "validation_error", message: "tag: A tag is letters, digits, spaces, - and _ only." })
+    }
+    expect(world.tagLabels!.size).toBe(0)
+    expect((await call("PUT", "/v1/admin/trends/tags", { tag: "ריקוד_2", labels: { en: "Dance 2" } })).statusCode).toBe(200)
+  })
+
+  it("a database without the labels table: the list shows no labels, a save is 503 not_available", async () => {
+    seed({ tags: ["dance"] })
+    world.tagLabels = null
+    const list = await call("GET", "/v1/admin/trends/tags")
+    expect(list.statusCode).toBe(200)
+    expect(list.json().data).toEqual([{ tag: "dance", labels: {}, trends: 1, published: 0 }])
+    const save = await call("PUT", "/v1/admin/trends/tags", { tag: "dance", labels: { en: "Dance" } })
+    expect(save.statusCode).toBe(503)
+    expect(save.json().error.code).toBe("not_available")
+  })
+})
+
 // ── access ─────────────────────────────────────────────────────────────────
 
 describe("access", () => {
@@ -998,6 +1151,8 @@ describe("access", () => {
     ["GET", "/v1/admin/trends"],
     ["POST", "/v1/admin/trends", { slug: "x", name: { en: "X" } }],
     ["GET", "/v1/admin/trends/engine-environments"],
+    ["GET", "/v1/admin/trends/tags"],
+    ["PUT", "/v1/admin/trends/tags", { tag: "dance", labels: { en: "Dance" } }],
     ["GET", `/v1/admin/trends/test-runs/${RUN}/prompt`],
     ["GET", `/v1/admin/trends/${T1}`],
     ["PATCH", `/v1/admin/trends/${T1}`, { sortOrder: 1 }],
@@ -1025,5 +1180,6 @@ describe("access", () => {
     expect(mem.uploads).toEqual([])
     expect(mem.trends).toHaveLength(1)
     expect(mem.trends[0]!.versions[1]!.data).toEqual(draftData())
+    expect(world.tagLabels!.size).toBe(0)
   })
 })

@@ -72,6 +72,10 @@ export const FACE_MASKING_DEFAULTS = CAST_SWAP_FACE_MASKING_DEFAULTS
 export const FACE_MASKING_BOUNDS = CAST_SWAP_FACE_MASKING_BOUNDS
 export const ZONE_SIDES = ["leftPct", "rightPct", "topPct", "bottomPct"] as const satisfies ReadonlyArray<keyof AdminTrendFaceMaskingZone>
 export const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
+/** The server's slug rule (migration 549's CHECK); `runs` and `tags` are taken by the run and tag lists. */
+const TREND_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
+const RESERVED_SLUGS: ReadonlySet<string> = new Set(["runs", "tags"])
+export const isTrendSlug = (slug: string): boolean => TREND_SLUG_RE.test(slug) && !RESERVED_SLUGS.has(slug)
 export const SLOT_KINDS: readonly TrendSlotKind[] = ["person", "location", "product", "pet"]
 export const SLOT_CAPS: Readonly<Record<TrendSlotKind, number>> = { person: 6, location: 1, product: 3, pet: 3 }
 

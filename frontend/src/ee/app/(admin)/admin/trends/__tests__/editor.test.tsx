@@ -215,6 +215,17 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
 
+  it("marks a Full Quality version as such, with the draft it came from", async () => {
+    routes[`GET ${BASE}/test-runs`] = () => ({
+      body: { data: [run({ jobId: "fq-1", resolution: "1080p", draft: false, fullQualityOf: RUN_ID }), run()] },
+    })
+    renderEditor()
+    const badge = await screen.findByTitle(`Full Quality version of run ${RUN_ID}`)
+    expect(badge).toHaveTextContent("Full Quality")
+    // Only the Full Quality run carries it, not its draft.
+    expect(screen.getAllByTitle(/^Full Quality version of run/)).toHaveLength(1)
+  })
+
   it("shows a run's engine prompt", async () => {
     const user = userEvent.setup()
     routes[`GET /v1/admin/trends/test-runs/${RUN_ID}/prompt`] = () => ({ body: { data: { prompt: "Replace {role:1} with…" } } })
