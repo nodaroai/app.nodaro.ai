@@ -100,8 +100,9 @@ export interface StudioOpsDryRunReceipt {
   readonly restorable?: true
   /**
    * The data a client words this receipt from, once the studio service sends it.
-   * Carried verbatim: `proposeEdit` maps nothing, so this layer neither builds
-   * nor reads it. Absent = `summary` is the whole wording.
+   * Absent = `summary` is the whole wording. Carried as sent when it is a
+   * well-formed {@link ReceiptDetail} and left off when it is not, so the card
+   * never has to guard its shape; the text the model reads back never has it.
    */
   readonly detail?: ReceiptDetail
 }
@@ -122,6 +123,13 @@ export interface EditPreview {
   readonly version: number
   readonly receipts: StudioOpsDryRunReceipt[]
   readonly warnings: string[]
+  /**
+   * The data behind each warning, by position: entry `i` words `warnings[i]`,
+   * and `null` means that warning is English only. Present only when the studio
+   * service sent a list exactly as long as `warnings` — an entry belongs to a
+   * warning by position alone, so a list of another length is dropped whole.
+   */
+  readonly warningDetails?: Array<ReceiptDetail | null>
 }
 
 /** What a generation would cost, taken without spending. `credits: null` = the model is unpriced. */

@@ -50,6 +50,7 @@ import type {
   EditPreview,
   ExportPreview,
   ImportPreview,
+  ReceiptDetail,
   RunPreview,
   StudioOpsDryRunReceipt,
   StudioTurnState,
@@ -180,11 +181,15 @@ async function proposeEdit(
     return refuse(PREVIEW_UNAVAILABLE_TEXT)
   }
 
-  const receipts = Array.isArray(envelope.receipts) ? (envelope.receipts as StudioOpsDryRunReceipt[]) : []
+  const receipts = Array.isArray(envelope.receipts) ? envelope.receipts.map(withCheckedDetail) : []
+  const sentWarnings = Array.isArray(envelope.warnings) ? envelope.warnings : []
+  const warnings = stringList(sentWarnings)
+  const warningDetails = alignedDetails(envelope.warningDetails, warnings, sentWarnings.length)
   const preview: EditPreview = {
     version: typeof envelope.version === "number" ? envelope.version : 0,
     receipts,
-    warnings: stringList(envelope.warnings),
+    warnings,
+    ...(warningDetails ? { warningDetails } : {}),
   }
   return propose(state, {
     kind: "edit",
@@ -197,6 +202,51 @@ async function proposeEdit(
     restorable: receipts.every((r) => r.class !== "D" || r.restorable === true),
     safe: receipts.every((r) => r.class === "S") && receipts.length <= STUDIO_SAFE_BATCH_MAX_OPS,
   })
+}
+
+/**
+ * A previewed receipt as the card gets it: exactly as the service sent it,
+ * except a `detail` that is not a sentence as data, which is left off so the
+ * card reads `summary` and never has to guard the shape it was promised.
+ */
+function withCheckedDetail(entry: unknown): StudioOpsDryRunReceipt {
+  if (!isRecord(entry) || !("detail" in entry)) return entry as unknown as StudioOpsDryRunReceipt
+  const { detail, ...rest } = entry
+  const checked = detailOrNull(detail)
+  return (checked ? { ...rest, detail: checked } : rest) as unknown as StudioOpsDryRunReceipt
+}
+
+/**
+ * The data behind a preview's warnings, as the studio service sent it: one
+ * entry per warning, in the warnings' order.
+ *
+ * An entry belongs to its warning by position alone, so a list of any other
+ * length is not used at all — it cannot say which sentence it words, and a
+ * wrong match would show the person a different warning than the one beside
+ * it. The same goes when a warning was not text: it is gone from `warnings`,
+ * every position after it has moved, and the lengths can still agree. A batch
+ * with no warnings has nothing to word, so it carries nothing.
+ *
+ * @param warnings the warnings that are text
+ * @param sent how many entries the service's own `warnings` list had
+ */
+function alignedDetails(value: unknown, warnings: string[], sent: number): Array<ReceiptDetail | null> | undefined {
+  if (!Array.isArray(value) || warnings.length === 0) return undefined
+  if (warnings.length !== sent || value.length !== warnings.length) return undefined
+  return value.map(detailOrNull)
+}
+
+/**
+ * A sentence as data, checked and kept whole — a field the service adds later
+ * reaches the card, as a receipt's `impact` does — or `null` for anything else,
+ * so the card shows the English line.
+ */
+function detailOrNull(value: unknown): ReceiptDetail | null {
+  if (!isRecord(value) || typeof value.template !== "string" || !isRecord(value.vars)) return null
+  const fills = Object.values(value.vars).every(
+    (entry) => typeof entry === "string" || (typeof entry === "number" && Number.isFinite(entry)),
+  )
+  return fills ? (value as unknown as ReceiptDetail) : null
 }
 
 /**
@@ -361,15 +411,37 @@ function propose(state: StudioTurnState, draft: ProposalDraft): StudioToolOutcom
     note: null,
   }
   state.proposed = true
+  const shown = proposal.preview ?? proposal.args
   return {
     text: `Offered to the person; they decide in the editor and the outcome arrives in their next message.\n${JSON.stringify(
-      { kind: proposal.kind, tool: proposal.tool, preview: proposal.preview ?? proposal.args },
+      { kind: proposal.kind, tool: proposal.tool, preview: proposal.kind === "edit" ? wordingOnly(shown) : shown },
       null,
       2,
     )}`,
     isError: false,
     proposal,
     summary: `proposed ${proposal.kind}`,
+  }
+}
+
+/**
+ * A previewed edit as the model reads it back: the English wording only.
+ *
+ * `detail` and `warningDetails` are data for the card to word in the person's
+ * language. To the model they are template ids it has no use for, and every
+ * receipt would carry one on every later turn. The card gets the whole preview
+ * untouched; only this text is trimmed.
+ */
+function wordingOnly(preview: unknown): unknown {
+  if (!isRecord(preview) || !Array.isArray(preview.receipts)) return preview
+  const { warningDetails: _warningDetails, ...rest } = preview
+  return {
+    ...rest,
+    receipts: preview.receipts.map((entry) => {
+      if (!isRecord(entry)) return entry
+      const { detail: _detail, ...wording } = entry
+      return wording
+    }),
   }
 }
 
