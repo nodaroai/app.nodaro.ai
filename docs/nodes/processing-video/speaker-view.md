@@ -10,7 +10,7 @@
 
 It decides **how** the speakers are shown, never **who** is on screen: [Camera Switch](./camera-switch.md) chooses the camera for each cut, Speaker View lays them out. A typical chain: **Audio Sync** → **Transcribe** with speaker detection → **Edit Plan** → **Camera Switch** → **Speaker View**.
 
-Instead of an edit it can also take a plain **Video**: the whole clip is cut at each speaker's turns, so a vertical clip that shows only whoever is talking needs no Edit Plan and no Camera Switch — see [A video instead of an edit](#a-video-instead-of-an-edit).
+Instead of an edit it can also take a plain **Video**: the whole clip is cut at each speaker's turns, so a vertical clip that shows only whoever is talking needs no Edit Plan and no Camera Switch — see [A video instead of an edit](#a-video-instead-of-an-edit). The **Vertical speaker clip** template in the marketplace is that chain, ready to fill — see [The Vertical speaker clip template](#the-vertical-speaker-clip-template).
 
 With [Speaker Frames](./speaker-frames.md) wired into **Face tracks**, each speaker's crop follows their face instead of a fixed box — see [Face tracking](#face-tracking).
 
@@ -108,6 +108,16 @@ Wire a **Video** into **Video** and a diarized **Transcript** into **Transcript*
 - **What it cannot judge before the run.** The editor never downloads the video to judge it, so the 180-minute limit is checked at the run, from the measured length. The size warnings need the producer to have saved a size (an upload does).
 - **No Edit Plan means no plan to review.** **Review cut** and the plan-based staleness checks have nothing to read; **Render final** renders Speaker View at Final and everything after it.
 - **A run is refused up front** — nothing upstream runs or is charged — when an edit and a video are both wired, when no transcript is wired, or when the video is too narrow (or, with `requireFaces`, has no face). The refusal names the Speaker View by its name on the canvas, and it applies to a Speaker View inside a Sub-workflow node as well.
+
+### The Vertical speaker clip template
+
+The **Vertical speaker clip** template in the template marketplace is [a video instead of an edit](#a-video-instead-of-an-edit), ready to fill: an Upload Video feeds [Transcribe](../ai-text/transcribe.md) (speaker detection on), [Speaker Frames](./speaker-frames.md) and Speaker View, the transcript goes to both of them, and Speaker Frames' tracks go to Speaker View. There is no Edit Plan, no Camera Switch and no Apply EDL; the one upload node feeds all three, so Speaker View and Speaker Frames always read the same file.
+
+- **Settings.** Speaker View is set to **9:16**, layout **Auto**, switch **Cut** and **Glide** (the crop follows the speaker's face between cuts). Drop a recording on **Video** and run down the chain. The recording must be wider than 9:16.
+- **Preview first, where the preview stop rule is on.** On a deployment with the preview stop rule (`PREVIEW_STOP_RULE_ENABLED`) on, Speaker View is saved at **Preview**: a run renders a 720p Preview to review, and [Render final](./apply-edl.md#render-final) renders the clip at 1080×1920. To skip the review, set its **Quality** to **Final**. Where the rule is off, the template is saved with Speaker View at **Final**, and the template's notes and description do not mention a Preview.
+- **A recording with no faces stops the run, free.** The template sets `requireFaces` on Speaker View, so the run samples a few frames of the recording before anything is charged and stops when none holds a face. Transcribe and Speaker Frames never run or charge for it. A recording whose faces could not be judged runs on. Speaker View on its own only warns; see *Refuse a clip with no face* above.
+- **Repairing the framing.** If the wrong face is followed, open **Edit framing…**. Click a face's label on the frame to say who it is (see *Correcting a track* under [Face tracking](#face-tracking)), or draw a box for each speaker; a drawn box wins over what Speaker Frames found. When Speaker Frames cannot tell who is who, the panel offers **Which face is …?** (see *Which face is who* above).
+- **Price.** Each node charges its own price when it runs, as it does anywhere else: see [Transcribe](../ai-text/transcribe.md), [Speaker Frames](./speaker-frames.md#credit-cost) and [Credit Cost](#credit-cost) below. The marketplace card lists **66 + 15/min** where the preview stop rule is on (a run to the Preview plus its Render final) and **66 + 12/min** where it is off (a run at Final). The per-minute part is Speaker View, per minute of the recording; the fixed part is Transcribe and Speaker Frames, and an empty template's video has no length before the run, so Speaker Frames is listed at [180 minutes on its one camera](./speaker-frames.md#what-the-estimate-shows-before-you-run) (a video is one camera). A run is charged for the recording you drop in.
 
 ### What the Input section says
 

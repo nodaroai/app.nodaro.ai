@@ -33,7 +33,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { parseUnitQuoteCreditId, videoSfxCreditId } from "@nodaro/shared/credits"
-import { rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
+import { PREVIEW_RENDER_NODE_TYPES, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -84,11 +84,14 @@ function pricesFrom(table: Record<string, number>) {
   return { cachedCost, missing }
 }
 
+/** A template's render: Apply EDL, or Speaker View in the vertical speaker clip. */
+const isRender = (n: WorkflowNode): boolean => PREVIEW_RENDER_NODE_TYPES.has(n.type)
+
 /** The editor's Render final of a template, through whichever step reviews:
- *  its Apply EDL (as handleRenderFinal prices it: the run set, the render at
+ *  its render (as handleRenderFinal prices it: the run set, the render at
  *  Final) or its Tighten Episode (the node's run-only override, the node alone). */
 function templateFinal({ nodes, edges }: Graph, cachedCost: (id: string) => number | undefined): number {
-  const render = nodes.find((n) => n.type === "apply-edl")
+  const render = nodes.find(isRender)
   if (!render) {
     const node = nodes.find((n) => n.type === "tighten-episode")!
     const overridden = withRunOverrides(nodes, { [node.id]: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } })
@@ -299,7 +302,7 @@ describe("with the preview stop rule off, the template the sync writes renders a
   })
   it.each(Object.entries(fixture.templatesSyncedWithoutStopRule))("%s", (slug, credits) => {
     const { nodes, edges } = atFinal(template(slug))
-    expect(nodes.filter((n) => n.type === "apply-edl").map((n) => (n.data as { quality?: string }).quality), slug).toEqual(["final"])
+    expect(nodes.filter(isRender).map((n) => (n.data as { quality?: string }).quality), slug).toEqual(["final"])
     const { cachedCost, missing } = pricesFrom(fixture.prices)
     expect(estimateRunCredits(nodes.filter(isExecutableNode), nodes, edges, cachedCost), `${slug}: editor run estimate`).toBe(credits)
     expect(computeLiveRunEstimate({ nodes, edges }, cachedCost).total, `${slug}: app runner's live estimate`).toBe(credits)

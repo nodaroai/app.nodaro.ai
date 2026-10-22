@@ -20,6 +20,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { TEMPLATE_CATEGORIES } from "@nodaro/shared/apps"
 import { isKineticCaptionStyle } from "@nodaro/shared/captions"
+import { videoFedSpeakerViews } from "@nodaro/render-rules"
 import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
@@ -30,7 +31,9 @@ const TEMPLATES_DIR = join(HERE, "..", "templates")
 const MULTI_NODE_SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
 /** The one-node twins: the same use case as one use-case node set to review first. */
 const ONE_NODE_SLUGS = ["podcast-tighten-episode-one-node"] as const
-const SLUGS = [...MULTI_NODE_SLUGS, ...ONE_NODE_SLUGS] as const
+/** The hand-built chains that render through Speaker View instead of Apply EDL. */
+const SPEAKER_VIEW_SLUGS = ["podcast-vertical-speaker-clip"] as const
+const SLUGS = [...MULTI_NODE_SLUGS, ...ONE_NODE_SLUGS, ...SPEAKER_VIEW_SLUGS] as const
 
 async function loadTemplate(slug: string): Promise<TutorialTemplateDoc> {
   return JSON.parse(await readFile(join(TEMPLATES_DIR, `${slug}.json`), "utf8")) as TutorialTemplateDoc
@@ -265,6 +268,12 @@ describe("podcast editing templates — structural validity", () => {
         const node = only(t.nodes as Node[], "tighten-episode")
         expect((node.data as { reviewBeforeRender?: boolean }).reviewBeforeRender, slug).toBe(true)
       }
+      for (const slug of SPEAKER_VIEW_SLUGS) {
+        const t = await loadTemplate(slug)
+        expect((t.nodes as Node[]).some((n) => n.type === "apply-edl"), slug).toBe(false)
+        const view = only(t.nodes as Node[], "speaker-view")
+        expect((view.data as { quality?: string }).quality, slug).toBe("proxy")
+      }
     })
 
     it("tells the user how the review works and how to skip it, on every podcast template", async () => {
@@ -384,6 +393,91 @@ describe("podcast editing templates — structural validity", () => {
       expect(new Set(orders).size, "no two podcast templates share a sort order").toBe(SLUGS.length)
       const multi = await Promise.all(MULTI_NODE_SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
       expect((await loadTemplate("podcast-trailer-formats")).tutorialSortOrder).toBe(Math.max(...multi))
+    })
+  })
+
+  describe("Vertical speaker clip", () => {
+    const SLUG = "podcast-vertical-speaker-clip"
+    function only(nodes: Node[], type: string): Node {
+      const found = nodes.filter((n) => n.type === type)
+      expect(found, `exactly one ${type} node`).toHaveLength(1)
+      return found[0]!
+    }
+    function into(edges: Edge[], target: Node, handle: string): Edge[] {
+      return edges.filter((e) => e.target === target.id && e.targetHandle === handle)
+    }
+
+    it("wires one Upload to Transcribe, Speaker Frames and Speaker View, with the tracks into Speaker View", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = t.nodes as Node[]
+      const edges = t.edges as Edge[]
+
+      const upload = only(nodes, "upload-video")
+      const transcribe = only(nodes, "transcribe")
+      const frames = only(nodes, "speaker-frames")
+      const view = only(nodes, "speaker-view")
+
+      // The same upload node feeds all three, so its emitted URL is byte-identical
+      // for each (Speaker View refuses tracks measured on another file).
+      expect(into(edges, transcribe, "audio").map((e) => [e.source, e.sourceHandle])).toEqual([[upload.id, "video"]])
+      expect(into(edges, frames, "video").map((e) => [e.source, e.sourceHandle])).toEqual([[upload.id, "video"]])
+      expect(into(edges, view, "video").map((e) => [e.source, e.sourceHandle])).toEqual([[upload.id, "video"]])
+      // Speaker names ride one transcript into both consumers; diarized.
+      expect((transcribe.data as { provider?: string }).provider).toBe("elevenlabs-stt")
+      expect((transcribe.data as { diarize?: boolean }).diarize).toBe(true)
+      expect(into(edges, frames, "transcript").map((e) => [e.source, e.sourceHandle])).toEqual([[transcribe.id, "json"]])
+      expect(into(edges, view, "transcript").map((e) => [e.source, e.sourceHandle])).toEqual([[transcribe.id, "json"]])
+      expect(into(edges, view, "tracks").map((e) => [e.source, e.sourceHandle])).toEqual([[frames.id, "tracks"]])
+      // A video instead of an edit: no edit is wired anywhere, and there is no
+      // Edit Plan, Camera Switch or Apply EDL.
+      expect(into(edges, view, "edl")).toEqual([])
+      expect(into(edges, frames, "edl")).toEqual([])
+      for (const type of ["edit-plan", "camera-switch", "apply-edl"]) expect(nodes.some((n) => n.type === type), type).toBe(false)
+      // Nothing renders after Speaker View in this template.
+      expect(edges.filter((e) => e.source === view.id)).toEqual([])
+    })
+
+    it("seeds Speaker View at 9:16, Auto layout, Cut, a gliding track, Preview first", async () => {
+      const t = await loadTemplate(SLUG)
+      const view = only(t.nodes as Node[], "speaker-view")
+      expect(view.data).toMatchObject({ targetAspect: "9:16", layout: "auto", switchType: "cut", motion: "glide", quality: "proxy" })
+    })
+
+    it("opts in to the face check: a recording with no faces in it is refused at run start, free", async () => {
+      const t = await loadTemplate(SLUG)
+      const view = only(t.nodes as Node[], "speaker-view")
+      expect(view.data?.requireFaces).toBe(true)
+      // The note says so.
+      const steps = (t.nodes as Node[]).find((n) => n.id === "vsc-note-steps")!
+      expect(String(steps.data?.text)).toContain("A recording with no faces in it is refused before anything is charged.")
+      // The run-start check finds it: the recording feeds Speaker View's video
+      // handle, and the opt-in is what the check reads off the node.
+      const fed = videoFedSpeakerViews(t.nodes as never, t.edges as never)
+      expect(fed.map((v) => ({ id: v.id, videoSourceId: v.videoSourceId, requireFaces: v.requireFaces }))).toEqual([
+        { id: view.id, videoSourceId: "vsc-src", requireFaces: true },
+      ])
+    })
+
+    it("names its attributes: a beginner template tagged for vertical podcast clips", async () => {
+      const t = await loadTemplate(SLUG)
+      expect(t.complexity).toBe("beginner")
+      expect(t.tags).toEqual(expect.arrayContaining(["podcast", "vertical", "shorts", "video"]))
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      const providers = new Set(nodes.flatMap((n) => {
+        const p = (n.data as { provider?: unknown } | undefined)?.provider
+        return typeof p === "string" ? [p] : []
+      }))
+      expect([...(t.providersUsed ?? [])].sort()).toEqual([...providers].sort())
+    })
+
+    it("sorts after every other podcast template", async () => {
+      const others = await Promise.all(SLUGS.filter((s) => s !== SLUG).map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
+      expect((await loadTemplate(SLUG)).tutorialSortOrder).toBeGreaterThan(Math.max(...others))
     })
   })
 

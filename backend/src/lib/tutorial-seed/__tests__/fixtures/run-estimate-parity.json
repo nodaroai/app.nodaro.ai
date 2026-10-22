@@ -23,6 +23,9 @@
     "replicate-mmaudio:8s": 10,
     "silence-detect": 10,
     "social-media-format": 20,
+    "speaker-frames": 2,
+    "speaker-view:complex": 12,
+    "speaker-view:complex:proxy": 3,
     "use-case-fee:tighten-episode": 10
   },
   "templates": {
@@ -30,27 +33,31 @@
     "podcast-multicam-cut": 962,
     "podcast-tighten-episode": 982,
     "podcast-tighten-episode-one-node": 942,
-    "podcast-trailer-formats": 923
+    "podcast-trailer-formats": 923,
+    "podcast-vertical-speaker-clip": 606
   },
   "templateFinals": {
     "podcast-clip-pack": 350,
     "podcast-multicam-cut": 1810,
     "podcast-tighten-episode": 1850,
     "podcast-tighten-episode-one-node": 1850,
-    "podcast-trailer-formats": 170
+    "podcast-trailer-formats": 170,
+    "podcast-vertical-speaker-clip": 2160
   },
   "templateRunsWithStopRule": {
     "podcast-clip-pack": 772,
     "podcast-multicam-cut": 962,
     "podcast-tighten-episode": 932,
     "podcast-tighten-episode-one-node": 942,
-    "podcast-trailer-formats": 763
+    "podcast-trailer-formats": 763,
+    "podcast-vertical-speaker-clip": 606
   },
   "templatesSyncedWithoutStopRule": {
     "podcast-clip-pack": 1112,
     "podcast-multicam-cut": 2582,
     "podcast-tighten-episode": 2602,
-    "podcast-trailer-formats": 932
+    "podcast-trailer-formats": 932,
+    "podcast-vertical-speaker-clip": 2226
   },
   "graphs": {
     "several providers, repeated": {
