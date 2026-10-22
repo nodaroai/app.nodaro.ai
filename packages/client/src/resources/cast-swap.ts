@@ -130,13 +130,15 @@ export interface CastSwapReference {
 }
 
 /**
- * Margins of the frame, each 0–49 % (default 0): a face whose centre lies in a
- * margin is not masked, so only faces inside the inner rectangle are.
+ * Margins of the frame, each 0–49 %: a face whose centre lies in a margin is
+ * not masked, so only faces inside the inner rectangle are. A margin left out
+ * of a zone that is given is 0. (A `zone` left out altogether is 10 % at the
+ * left and right: see `CastSwapFaceMasking.zone`.)
  */
 export interface CastSwapFaceMaskingZone {
-  /** % of the frame's width from the left edge. Default 0. */
+  /** % of the frame's width from the left edge. Default 0 in a zone that is given. */
   leftPct?: number
-  /** % of the frame's width from the right edge. Default 0. */
+  /** % of the frame's width from the right edge. Default 0 in a zone that is given. */
   rightPct?: number
   /** % of the frame's height from the top edge. Default 0. */
   topPct?: number
@@ -175,8 +177,13 @@ export interface CastSwapFaceMasking {
    * limit). When above 0 it must be at least `minFaceHeightPct` (else 400).
    */
   maxFaceHeightPct?: number
-  /** Leave out faces near the edges of the frame. Default: no margins. */
-  zone?: CastSwapFaceMaskingZone
+  /**
+   * Leave out faces near the edges of the frame. Default (left out):
+   * `{ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }`, so people at the
+   * left and right edges are not masked. `null`, or all four margins 0, means
+   * no margins.
+   */
+  zone?: CastSwapFaceMaskingZone | null
   /** The blur's strength, 0.1–5 % of the frame's width (`fill: "blur"`). Default 2. */
   blurStrengthPct?: number
   /** How sure the face finder must be, 0.05–0.95: lower finds more faces. Default 0.5. */

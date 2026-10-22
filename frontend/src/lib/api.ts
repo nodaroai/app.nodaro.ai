@@ -11080,7 +11080,11 @@ export interface AdminTrendFaceMasking {
   minFaceHeightPct?: number
   /** 0–100; 0 (default) = no limit; above 0 it must be at least the minimum. */
   maxFaceHeightPct?: number
-  zone?: AdminTrendFaceMaskingZone
+  /**
+   * Left out = 10 % at the left and right (the engine's default); a margin left
+   * out of a given zone = 0; null = no margins.
+   */
+  zone?: AdminTrendFaceMaskingZone | null
   /** 0.1–5 % of the frame's width; default 2. */
   blurStrengthPct?: number
   /** 0.05–0.95; default 0.5. Lower finds more faces. */

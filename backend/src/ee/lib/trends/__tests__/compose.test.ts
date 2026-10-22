@@ -360,8 +360,29 @@ describe("composeTrendRun — face masking and pre prompt", () => {
     expect(composeTrendRun(trend(version({ prePrompt: "" })), req()).needs.trendPrePrompt).toBe(false)
     expect(a.body).not.toHaveProperty("faceMasking")
     const b = composeTrendRun(trend(version({ faceMasking: { mode: "always" } })), req())
-    expect(b.body.faceMasking).toEqual({ mode: "always" })
+    expect(b.body.faceMasking).toEqual({ mode: "always", zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } })
     expect(b.body).not.toHaveProperty("prePrompt")
+  })
+
+  it("sends the default margins (10 % left and right) for a zone left out; null or all 0 stays no margins", () => {
+    const NONE = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
+    const zoneOf = (faceMasking: TrendVersionData["faceMasking"]) => composeTrendRun(trend(version({ faceMasking })), req()).body.faceMasking?.zone
+    expect(zoneOf({ mode: "auto" })).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
+    expect(zoneOf({ mode: "always", fill: "depth" })).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
+    // Off: null is sent as all four margins 0, which every engine reads as no margins.
+    expect(zoneOf({ mode: "auto", zone: null })).toEqual(NONE)
+    expect(zoneOf({ mode: "auto", zone: NONE })).toEqual(NONE)
+    // A zone given is sent as it is (a margin it leaves out is the engine's 0).
+    expect(zoneOf({ mode: "auto", zone: { topPct: 5 } })).toEqual({ topPct: 5 })
+    // The preview of the same trend sends the same margins as its full run.
+    const preview = composeTrendRun(trend(version({ faceMasking: { mode: "auto" } })), req({ preview: true })).body
+    expect(preview.faceMasking?.zone).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
+  })
+
+  it("never writes the default zone into the trend's own setting", () => {
+    const masking = { mode: "auto" as const }
+    composeTrendRun(trend(version({ faceMasking: masking })), req())
+    expect(masking).not.toHaveProperty("zone")
   })
 
   it("keeps both out of the display", () => {

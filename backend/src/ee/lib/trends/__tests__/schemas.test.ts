@@ -278,6 +278,15 @@ describe("trendVersionDataSchema — faceMasking and prePrompt", () => {
     expect(r.data?.faceMasking).toEqual(full)
   })
 
+  it("stores a zone as given: left out stays left out (the default is filled in at run time), null stays null", () => {
+    const omitted = trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "auto" } }))
+    expect(omitted.success).toBe(true)
+    expect(omitted.data?.faceMasking).toEqual({ mode: "auto" })
+    const off = trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "auto", zone: null } }))
+    expect(off.success).toBe(true)
+    expect(off.data?.faceMasking).toEqual({ mode: "auto", zone: null })
+  })
+
   it("refuses an unknown mode or fill, and an unknown key", () => {
     expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "sometimes" } })).success).toBe(false)
     expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", fill: "pixelate" } })).success).toBe(false)

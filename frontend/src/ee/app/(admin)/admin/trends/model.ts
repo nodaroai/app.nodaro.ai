@@ -137,12 +137,19 @@ export function toForm(draft: AdminTrendData): TrendForm {
   }
 }
 
-/** Only the keys that hold a number; undefined when none do. */
-function cleanZone(z: AdminTrendFaceMaskingZone | undefined): AdminTrendFaceMaskingZone | undefined {
+/** Only the keys that hold a number; undefined (the default margins) when none do; null (no margins) as it is. */
+function cleanZone(z: AdminTrendFaceMaskingZone | null | undefined): AdminTrendFaceMaskingZone | null | undefined {
+  if (z === null) return null
   if (!z) return undefined
   const out: AdminTrendFaceMaskingZone = {}
   for (const side of ZONE_SIDES) if (typeof z[side] === "number") out[side] = z[side]
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** Whether the setting's fill is blur (a fill left out is the engine's default). Only then does
+ *  the blur strength apply: the editor shows it, checks it and saves it only then. */
+export function maskingUsesBlur(m: Pick<AdminTrendFaceMasking, "fill">): boolean {
+  return (m.fill ?? FACE_MASKING_DEFAULTS.fill) === "blur"
 }
 
 /** The setting as saved: the mode, then only the keys that are set (the engine fills the rest). */
@@ -154,8 +161,8 @@ function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     ...(m.fill ? { fill: m.fill } : {}),
     ...(num(m.minFaceHeightPct) ? { minFaceHeightPct: m.minFaceHeightPct } : {}),
     ...(num(m.maxFaceHeightPct) ? { maxFaceHeightPct: m.maxFaceHeightPct } : {}),
-    ...(zone ? { zone } : {}),
-    ...(num(m.blurStrengthPct) ? { blurStrengthPct: m.blurStrengthPct } : {}),
+    ...(zone !== undefined ? { zone } : {}),
+    ...(maskingUsesBlur(m) && num(m.blurStrengthPct) ? { blurStrengthPct: m.blurStrengthPct } : {}),
     ...(num(m.threshold) ? { threshold: m.threshold } : {}),
   }
 }
@@ -312,7 +319,7 @@ function maskingIssues(m: AdminTrendFaceMasking): string[] {
     }
   }
   if (ZONE_SIDES.some((side) => outside(m.zone?.[side], zonePct))) out.push(`Face masking: each margin is ${range(zonePct)} %.`)
-  if (outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
+  if (maskingUsesBlur(m) && outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
   if (outside(m.threshold, threshold)) out.push(`Face masking: the detection threshold is ${range(threshold)}.`)
   return out
 }

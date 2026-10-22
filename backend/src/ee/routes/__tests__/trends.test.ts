@@ -787,6 +787,104 @@ describe("trend face masking and pre prompt", () => {
     expect(mem.trends[0]!.versions[2]!.faceMasking).toEqual(MASKING)
   })
 
+  it("a trend that leaves the zone out sends the default margins on the estimate and the run", async () => {
+    const DEFAULT_ZONE = { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }
+    const { zone: _zone, ...noZone } = MASKING
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: noZone })
+    for (const path of ["estimate", "runs"]) {
+      engine.calls = []
+      expect((await run(RUN_BODY, path)).statusCode, path).toBeLessThan(300)
+      expect(engine.calls[0]!.body.faceMasking, path).toEqual({ ...noZone, zone: DEFAULT_ZONE })
+    }
+    // The trend's own setting keeps its zone left out.
+    expect(mem.trends[0]!.versions[2]!.faceMasking).not.toHaveProperty("zone")
+  })
+
+  it("a trend that leaves the zone out follows the zone its masked preview ran with, estimate and run alike", async () => {
+    const DEFAULT_ZONE = { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }
+    const NONE = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
+    const OWN = { leftPct: 5, rightPct: 7, topPct: 0, bottomPct: 2 }
+    const { zone: _zone, ...noZone } = MASKING
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: noZone })
+    const stored = { mode: "auto", fill: "depth", minFaceHeightPct: 12, threshold: 0.4 }
+    const cases: Array<[string, unknown, unknown]> = [
+      ["a preview with its own margins", { ...stored, zone: OWN }, OWN],
+      ["a preview with the default margins", { ...stored, zone: DEFAULT_ZONE }, DEFAULT_ZONE],
+      ["a preview with no margins (null)", { ...stored, zone: null }, NONE],
+      ["a preview with no margins (all 0)", { ...stored, zone: NONE }, NONE],
+      ["a preview from before the default margins (no zone)", stored, NONE],
+      ["a preview with no stored masking", undefined, NONE],
+      ["a stored zone that is not one", { ...stored, zone: { leftPct: 80 } }, DEFAULT_ZONE],
+    ]
+    for (const [name, masking, zone] of cases) {
+      answerJobs(previewRow({ input: { __faceMasking: masking } }))
+      for (const path of ["estimate", "runs"]) {
+        engine.calls = []
+        expect((await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB }, path)).statusCode, `${name} ${path}`).toBeLessThan(300)
+        expect(engine.calls[0]!.body.faceMasking, `${name} ${path}`).toEqual({ ...noZone, zone, mode: "always" })
+      }
+    }
+    // The trend's own setting keeps its zone left out.
+    expect(mem.trends[0]!.versions[2]!.faceMasking).not.toHaveProperty("zone")
+  })
+
+  it("a trend with its own zone keeps it when it follows a preview that ran with other margins", async () => {
+    const NONE = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
+    const OWN = { leftPct: 5, rightPct: 7, topPct: 0, bottomPct: 2 }
+    const cases: Array<[unknown, unknown]> = [
+      [{ topPct: 4 }, { topPct: 4 }],
+      [null, NONE],
+      [NONE, NONE],
+    ]
+    for (const [zone, sent] of cases) {
+      mem.trends[0]!.versions[2] = versionData({ faceMasking: { ...MASKING, zone } as typeof MASKING })
+      answerJobs(previewRow({ input: { __faceMasking: { ...MASKING, zone: OWN } } }))
+      for (const path of ["estimate", "runs"]) {
+        engine.calls = []
+        expect((await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB }, path)).statusCode, path).toBeLessThan(300)
+        expect(engine.calls[0]!.body.faceMasking, `${JSON.stringify(zone)} ${path}`).toEqual({ ...MASKING, zone: sent, mode: "always" })
+      }
+    }
+  })
+
+  it("a trend whose zone is null or all 0 sends no margins, on its own and when it follows its preview", async () => {
+    const NONE = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
+    for (const zone of [null, NONE]) {
+      mem.trends[0]!.versions[2] = versionData({ faceMasking: { ...MASKING, zone } })
+      engine.calls = []
+      db.respond = () => ({ data: null, error: null })
+      await run(RUN_BODY)
+      expect(engine.calls[0]!.body.faceMasking, String(zone)).toEqual({ ...MASKING, zone: NONE })
+      engine.calls = []
+      answerJobs(previewRow())
+      await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })
+      expect(engine.calls[0]!.body.faceMasking, String(zone)).toEqual({ ...MASKING, zone: NONE, mode: "always" })
+    }
+  })
+
+  it("a trend that leaves the fill out follows the fill its masked preview was made with", async () => {
+    const { fill: _fill, ...noFill } = MASKING
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: noFill })
+    const cases: Array<[string, unknown, string | undefined]> = [
+      ["a blur preview", { ...MASKING, fill: "blur" }, "blur"],
+      ["a depth preview", { ...MASKING, fill: "depth" }, "depth"],
+      ["no stored masking", undefined, undefined],
+      ["a fill that is not one", { ...MASKING, fill: "mosaic" }, undefined],
+    ]
+    for (const [name, stored, fill] of cases) {
+      engine.calls = []
+      answerJobs(previewRow({ input: { __faceMasking: stored } }))
+      expect((await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })).statusCode, name).toBe(202)
+      expect(engine.calls[0]!.body.faceMasking, name).toEqual({ ...noFill, mode: "always", ...(fill ? { fill } : {}) })
+    }
+    // The trend's own fill wins over the preview's.
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: MASKING })
+    engine.calls = []
+    answerJobs(previewRow({ input: { __faceMasking: { ...MASKING, fill: "blur" } } }))
+    await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })
+    expect(engine.calls[0]!.body.faceMasking).toEqual({ ...MASKING, mode: "always" })
+  })
+
   it("ignores a preview job that does not qualify, with no error and the trend's own mode", async () => {
     const cases: Array<[string, unknown]> = [
       ["absent", null],

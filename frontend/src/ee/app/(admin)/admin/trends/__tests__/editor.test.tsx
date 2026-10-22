@@ -94,7 +94,13 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
     const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
     expect(body.data.prePrompt).toBe("Open on the stage.")
-    expect(body.data.faceMasking).toEqual({ mode: "auto", fill: "depth", zone: { topPct: 5 }, threshold: 0.4 })
+    // Typing a margin into the default zone keeps the default's other margins.
+    expect(body.data.faceMasking).toEqual({
+      mode: "auto",
+      fill: "depth",
+      zone: { leftPct: 10, rightPct: 10, topPct: 5, bottomPct: 0 },
+      threshold: 0.4,
+    })
   })
 
   it("holds Save while a face masking value is out of range", async () => {
@@ -143,6 +149,142 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(screen.getByText("Mode", { selector: "label" })).toHaveAttribute("for", mode.id)
     const fill = screen.getByRole("combobox", { name: "Fill" })
     expect(screen.getByText("Fill", { selector: "label" })).toHaveAttribute("for", fill.id)
+  })
+
+  it("a blur strength hidden by switching away from blur never holds Save, and is not saved", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always", fill: "blur" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    await user.type(await screen.findByLabelText("Blur strength (%)"), "9")
+    expect(await screen.findByText(/the blur strength is 0.1–5/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
+
+    await user.click(screen.getByRole("combobox", { name: "Fill" }))
+    await user.click(screen.getByRole("option", { name: "Depth colors" }))
+    expect(screen.queryByLabelText("Blur strength (%)")).not.toBeInTheDocument()
+    expect(screen.queryByText(/the blur strength is/)).not.toBeInTheDocument()
+    const save = screen.getByRole("button", { name: /save draft/i })
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.faceMasking).toEqual({ mode: "always", fill: "depth" })
+  })
+
+  it("shows blur as the fill when the setting leaves it out (the engine's default), with its strength, and saves no fill", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    expect(await screen.findByRole("combobox", { name: "Fill" })).toHaveTextContent("Blur (default)")
+    expect(screen.getByLabelText("Blur strength (%)")).toHaveAttribute("placeholder", "2")
+    await user.type(screen.getByLabelText("Pre prompt"), "x")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.faceMasking).toEqual({ mode: "always" })
+  })
+
+  it("shows the blur strength only for the blur fill", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always", fill: "depth" } }) } })
+    renderEditor()
+    expect(await screen.findByRole("combobox", { name: "Fill" })).toHaveTextContent("Depth colors")
+    // The blur strength belongs to the blur fill only.
+    expect(screen.queryByLabelText("Blur strength (%)")).not.toBeInTheDocument()
+  })
+
+  it("shows the default margins (10 % left and right) when the zone is left out, and saves no zone", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    expect(await screen.findByLabelText("Left")).toHaveAttribute("placeholder", "10")
+    expect(screen.getByLabelText("Right")).toHaveAttribute("placeholder", "10")
+    expect(screen.getByLabelText("Top")).toHaveAttribute("placeholder", "0")
+    expect(screen.getByLabelText("Bottom")).toHaveAttribute("placeholder", "0")
+    expect(screen.getByRole("checkbox", { name: /no margins/i })).not.toBeChecked()
+    await user.type(screen.getByLabelText("Pre prompt"), "x")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.faceMasking).toEqual({ mode: "always" })
+  })
+
+  it("the first margin typed keeps the default's other margins, so the saved zone is what the fields show", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    await user.type(await screen.findByLabelText("Top"), "5")
+    expect(screen.getByLabelText("Left")).toHaveValue(10)
+    expect(screen.getByLabelText("Right")).toHaveValue(10)
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.faceMasking).toEqual({ mode: "always", zone: { leftPct: 10, rightPct: 10, topPct: 5, bottomPct: 0 } })
+  })
+
+  it("lets the creator turn the margins off (zone: null), and back to the default", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    await user.click(await screen.findByRole("checkbox", { name: /no margins/i }))
+    expect(screen.getByRole("checkbox", { name: /no margins/i })).toBeChecked()
+    expect(screen.queryByLabelText("Left")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [off] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(off.data.faceMasking).toEqual({ mode: "always", zone: null })
+
+    await user.click(screen.getByRole("checkbox", { name: /no margins/i }))
+    expect(screen.getByLabelText("Left")).toHaveAttribute("placeholder", "10")
+  })
+
+  it("Off after ticking and unticking No margins saves no masking setting at all", async () => {
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    const noMargins = await screen.findByRole("checkbox", { name: /no margins/i })
+    await user.click(noMargins)
+    await user.click(screen.getByRole("checkbox", { name: /no margins/i }))
+    await user.click(screen.getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Off" }))
+    expect(screen.getByRole("combobox", { name: "Mode" })).toHaveTextContent("Off")
+    await user.type(screen.getByLabelText("Pre prompt"), "x")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data.prePrompt).toBe("x")
+    expect(body.data).not.toHaveProperty("faceMasking")
+  })
+
+  it("Off after typing a margin and emptying them all saves no masking setting at all", async () => {
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    const user = userEvent.setup()
+    renderEditor()
+    await user.click(await screen.findByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    await user.type(await screen.findByLabelText("Top"), "5")
+    for (const side of ["Left", "Right", "Top", "Bottom"]) await user.clear(screen.getByLabelText(side))
+    expect(screen.getByLabelText("Left")).toHaveAttribute("placeholder", "10")
+    await user.click(screen.getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Off" }))
+    await user.type(screen.getByLabelText("Pre prompt"), "x")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+    expect(body.data).not.toHaveProperty("faceMasking")
+  })
+
+  it("shows a stored null zone as no margins", async () => {
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always", zone: null } }) } })
+    renderEditor()
+    expect(await screen.findByRole("checkbox", { name: /no margins/i })).toBeChecked()
+    expect(screen.queryByLabelText("Left")).not.toBeInTheDocument()
   })
 
   it("reloads the trend and says so when the draft changed elsewhere", async () => {

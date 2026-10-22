@@ -141,13 +141,15 @@ describe("castSwap resource", () => {
   it("types faceMasking: mode is required, the rest optional, and only the documented values", () => {
     const minimal: CastSwapFaceMasking = { mode: "always" }
     const zoneOnly: CastSwapFaceMasking = { mode: "always", zone: { leftPct: 10 } }
+    // null = no margins (left out = the default margins).
+    const noMargins: CastSwapFaceMasking = { mode: "always", zone: null }
     // @ts-expect-error — mode is required
     const noMode: CastSwapFaceMasking = { fill: "blur" }
     // @ts-expect-error — not a mode
     const badMode: CastSwapFaceMasking = { mode: "sometimes" }
     // @ts-expect-error — not a fill
     const badFill: CastSwapFaceMasking = { mode: "auto", fill: "pixelate" }
-    expect([minimal, zoneOnly, noMode, badMode, badFill]).toHaveLength(5)
+    expect([minimal, zoneOnly, noMargins, noMode, badMode, badFill]).toHaveLength(6)
   })
 
   it("estimate passes the masking credits through", async () => {

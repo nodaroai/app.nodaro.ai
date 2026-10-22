@@ -29,6 +29,7 @@ import { sideHoldChargesFor } from "../../../lib/job-step-charge.js"
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
+import { faceMaskingZoneSchema, withResolvedZone, type FaceMaskingZone } from "../../../lib/cast-swap-face-masking.js"
 import { TrendsUnavailableError } from "./store.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import type { Choice, TrendSlotKind } from "./types.js"
@@ -338,6 +339,16 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
  * faces were masked (`output_data.faceMasking.applied === true`), the run is
  * sent with `mode: "always"` and the trend's other masking settings, so it
  * does not first try unmasked what the preview already showed is refused.
+ * When the trend leaves `fill` out, the run takes the fill the preview was
+ * masked with (its resolved `input_data.__faceMasking.fill`): the engine's
+ * default can change between the two, and the full run should look like the
+ * preview the user approved. The zone likewise: when the trend leaves it out
+ * (`composed.maskingZoneLeftOut`), the run takes the margins the preview ran
+ * with (`input_data.__faceMasking.zone`); a preview stored with no zone (made
+ * before the default margins) or `zone: null` ran with none, so the run is
+ * sent with none (all four 0). A stored zone that is not a valid one leaves
+ * the trend's (the default margins). A trend's own zone, null or 0 included,
+ * still wins.
  *
  * Anything else (no such job, another user's, another trend's, a full run, not
  * completed, not masked, a database error) leaves the body as it is: no
@@ -372,7 +383,28 @@ export async function followPreviewMasking(
   if (!isRec(input.trend) || input.trend.id !== opts.trendId) return
   const output = isRec(row.output_data) ? row.output_data : null
   if (!output || !isRec(output.faceMasking) || output.faceMasking.applied !== true) return
-  composed.body.faceMasking = { ...masking, mode: "always" }
+  const previewFill = isRec(input.__faceMasking) ? input.__faceMasking.fill : undefined
+  const fill = masking.fill ?? (previewFill === "blur" || previewFill === "depth" ? previewFill : undefined)
+  const zone = composed.maskingZoneLeftOut ? previewZone(input.__faceMasking) : undefined
+  composed.body.faceMasking = withResolvedZone({
+    ...masking,
+    mode: "always",
+    ...(fill ? { fill } : {}),
+    ...(zone !== undefined ? { zone } : {}),
+  })
+}
+
+/**
+ * The zone a preview was masked with, from its stored `__faceMasking`: the
+ * zone it carries, `null` (no margins) when it carries `null` or none at all
+ * (a preview from before the default margins), or undefined when the stored
+ * zone is not a valid one (the caller keeps its own).
+ */
+function previewZone(stored: unknown): FaceMaskingZone | null | undefined {
+  const zone = isRec(stored) ? stored.zone : undefined
+  if (zone === undefined || zone === null) return null
+  const parsed = faceMaskingZoneSchema.safeParse(zone)
+  return parsed.success ? parsed.data : undefined
 }
 
 /**

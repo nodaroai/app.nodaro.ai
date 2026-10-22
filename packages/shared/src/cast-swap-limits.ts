@@ -44,8 +44,17 @@ export const CAST_SWAP_FACE_MASKING_BOUNDS = {
 
 /** What Cast Swap uses for a `faceMasking` setting left out. */
 export const CAST_SWAP_FACE_MASKING_DEFAULTS = {
+  /** What covers a masked face: a blur (`"depth"`, a depth-color view of it, is the other fill). */
+  fill: "blur",
   minFaceHeightPct: 15,
   maxFaceHeightPct: 0,
+  /**
+   * The frame margins when `zone` is left out: a face centred in the outer 10 %
+   * at the left or right is not masked (people walking in at the edge). An
+   * explicit `zone: null`, or all four margins 0, means no margins.
+   */
+  zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 },
+  /** A margin left out of a `zone` that is given. */
   zonePct: 0,
   blurStrengthPct: 2,
   threshold: 0.5,

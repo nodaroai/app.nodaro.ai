@@ -967,8 +967,21 @@ describe("test runs", () => {
     expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
     expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, previewJobId: PREVIEW })).statusCode).toBe(202)
     const [plain, followed] = engine.calls
-    expect(plain!.body).toMatchObject({ prePrompt: "DRAFT-PRE", faceMasking: MASK })
-    expect(followed!.body.faceMasking).toEqual({ ...MASK, mode: "always" })
+    // The draft leaves the zone out: the plain run sends the default margins (10 % left and
+    // right); the run that follows a preview stored with no zone (from before the default
+    // margins) sends none, as the preview ran.
+    const ZONE = { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }
+    const NONE = { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 }
+    expect(plain!.body).toMatchObject({ prePrompt: "DRAFT-PRE", faceMasking: { ...MASK, zone: ZONE } })
+    expect(followed!.body.faceMasking).toEqual({ ...MASK, zone: NONE, mode: "always" })
+    // A preview that ran with its own margins: the full run keeps them.
+    const OWN = { leftPct: 5, rightPct: 7, topPct: 0, bottomPct: 2 }
+    world.jobs.set(PREVIEW, jobRow(PREVIEW, ADMIN, {
+      input_data: runInput({ preview: true, __faceMasking: { mode: "auto", fill: "blur", zone: OWN } }),
+      output_data: { videoUrl: "https://out.example/p.mp4", faceMasking: { applied: true, reason: "input_refused" } },
+    }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, previewJobId: PREVIEW })).statusCode).toBe(202)
+    expect(engine.calls[2]!.body.faceMasking).toEqual({ ...MASK, fill: "blur", zone: OWN, mode: "always" })
     for (const c of engine.calls) {
       expect((c.body.trendRun as { display: Record<string, unknown> }).display).not.toHaveProperty("faceMasking")
       expect(c.body).not.toHaveProperty("previewJobId")

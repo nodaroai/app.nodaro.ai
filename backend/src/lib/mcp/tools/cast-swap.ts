@@ -58,7 +58,7 @@ interface FaceMaskingArgs {
   fill?: "blur" | "depth"
   min_face_height_pct?: number
   max_face_height_pct?: number
-  zone?: { left_pct?: number; right_pct?: number; top_pct?: number; bottom_pct?: number }
+  zone?: { left_pct?: number; right_pct?: number; top_pct?: number; bottom_pct?: number } | null
   blur_strength_pct?: number
   threshold?: number
 }
@@ -71,7 +71,10 @@ function faceMaskingBody(fm: FaceMaskingArgs) {
     ...(fill !== undefined ? { fill } : {}),
     ...(min_face_height_pct !== undefined ? { minFaceHeightPct: min_face_height_pct } : {}),
     ...(max_face_height_pct !== undefined ? { maxFaceHeightPct: max_face_height_pct } : {}),
-    ...(zone !== undefined ? { zone: zoneBody(zone) } : {}),
+    // null = no margins, sent as all four margins 0 (as the trend routes' `withResolvedZone`
+    // does), so an engine that predates `zone: null` reads it the same; left out = the
+    // route's default margins.
+    ...(zone !== undefined ? { zone: zone === null ? { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } : zoneBody(zone) } : {}),
     ...(blur_strength_pct !== undefined ? { blurStrengthPct: blur_strength_pct } : {}),
     ...(threshold !== undefined ? { threshold } : {}),
   }
@@ -194,8 +197,11 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
                 top_pct: z.number().min(0).max(49).optional(),
                 bottom_pct: z.number().min(0).max(49).optional(),
               })
+              .nullable()
               .optional()
-              .describe("Frame margins (%, default 0); a face centred in one is not masked."),
+              .describe(
+                "Frame margins, % (a face centred in one is not masked). Left out = left_pct 10, right_pct 10, top_pct 0, bottom_pct 0. Given: a margin left out is 0. null or all 0 = no margins.",
+              ),
             blur_strength_pct: z.number().min(0.1).max(5).optional().describe("Blur strength, % of frame width. Default 2."),
             threshold: z.number().min(0.05).max(0.95).optional().describe("Face detection; lower finds more. Default 0.5."),
           })

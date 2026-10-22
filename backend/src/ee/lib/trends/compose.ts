@@ -21,7 +21,7 @@
  * the body is exactly what it was before trends had masking.
  */
 import { CAST_SWAP_POST_PROMPT_MAX } from "@nodaro/shared/models"
-import { faceMaskingOn, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+import { faceMaskingOn, withResolvedZone, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, misplacedChip } from "./schemas.js"
 import { pickText } from "./localize.js"
 import type {
@@ -95,6 +95,12 @@ export interface ComposedTrendRun {
   body: TrendRunBody
   display: TrendRunDisplay
   needs: { roleKinds: Set<TrendSlotKind>; fixedReferences: boolean; faceMasking: boolean; trendPrePrompt: boolean }
+  /**
+   * The trend's masking leaves `zone` out, so `body.faceMasking.zone` is the
+   * default margins. A full run that follows a masked preview then takes the
+   * zone the preview ran with instead (`followPreviewMasking`). Never sent.
+   */
+  maskingZoneLeftOut: boolean
 }
 
 /**
@@ -215,7 +221,10 @@ export function composeTrendRun(
     references: data.references.map((r) => ({ images: [...r.images], line: r.line })),
     ...(data.prePrompt ? { prePrompt: data.prePrompt } : {}),
     ...(postPrompt ? { postPrompt } : {}),
-    ...(masking ? { faceMasking: structuredClone(masking) } : {}),
+    // The zone resolved here (left out = the default margins), so the estimate and the run send
+    // the margins the trend means. A run that follows its masked preview takes the preview's
+    // zone instead when the trend leaves it out (`maskingZoneLeftOut`, followPreviewMasking).
+    ...(masking ? { faceMasking: withResolvedZone(structuredClone(masking)) } : {}),
     preview: req.preview ?? false,
     previewStart: data.previewStart ?? 0,
     resolution,
@@ -232,5 +241,6 @@ export function composeTrendRun(
       faceMasking: masking !== undefined,
       trendPrePrompt: !!data.prePrompt,
     },
+    maskingZoneLeftOut: masking !== undefined && masking.zone === undefined,
   }
 }
