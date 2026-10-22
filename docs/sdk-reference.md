@@ -1934,18 +1934,32 @@ interface CastSwapParams {
   resolution?: "480p" | "720p" | "1080p" // default "480p"
   draft?: boolean                  // default true at 480p, false above; true above 480p is a 400
   prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
+  faceMasking?: CastSwapFaceMasking // default off: mask the faces in the clip first (see below)
   quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
   sessionId?: string
   origin?: string
 }
 
+interface CastSwapFaceMasking {
+  mode: "off" | "always" | "auto" // off = as if left out; auto = only on a retry after the clip is refused
+  fill?: "blur" | "depth"         // what covers a masked face; default "blur"
+  minFaceHeightPct?: number       // 0..100, default 15: mask faces at least this % of the frame height
+  maxFaceHeightPct?: number       // 0..100, default 0 (no limit); when > 0, ≥ minFaceHeightPct
+  zone?: { leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number }
+                                  // frame margins, 0..49 % each, default 0: a face centred in one is not masked
+  blurStrengthPct?: number        // 0.1..5 % of the frame width, default 2 (fill "blur")
+  threshold?: number              // 0.05..0.95, default 0.5: lower finds more faces
+}
+
 interface CastSwapEstimate {
-  totalCredits: number // castSwap + seedance + references
+  totalCredits: number // castSwap + seedance + references (+ masking with faceMasking "always")
   breakdown: {
     castSwap: number     // the run itself
     seedance: number     // the video model it calls
     references: number   // preparing the reference pictures; 0 when off or nothing to prepare
+    masking?: number     // masking the faces; only when faceMasking is on ("auto": = maskingCredits, not in totalCredits)
   }
+  maskingCredits?: number // faceMasking "auto": charged only if the masked retry runs; not in totalCredits
   settlesLower: boolean // Auto length: the final charge is expected to be lower
 }
 ```
@@ -1972,10 +1986,26 @@ video then fails; it adds about a minute, and falls back to your own images
 for a role whose picture could not be made. Locations are not prepared.
 Pass `prepareReferences: false` to use your images as they are.
 
+**Face masking** (`faceMasking`, off by default): the faces in the source clip
+are covered before the video model sees it, keeping their movement and lip
+timing. `"always"` masks them before the first attempt (its credits are
+`breakdown.masking`, in `totalCredits`); `"auto"` starts unmasked and, only if
+the video model refuses the source clip, retries once with the faces masked
+(any other failure is not retried; the extra credits, charged only then, are
+`maskingCredits`, not in `totalCredits`, and `run()` needs credits for both).
+`fill` is `"blur"` (default) or `"depth"` (a depth-color view of the face); the
+size, `zone` and `threshold` settings choose which faces are masked. A
+completed job's output carries `faceMasking: { applied, reason }`: `applied` is
+whether the video was made from the masked clip; `reason` is `"always"`,
+`"input_refused"` (`auto` retried after the refusal), `"no_faces"` (no face
+left to mask after the filters: `always` continues unmasked, `auto` fails with
+the original refusal) or `"off"`.
+
 Both routes answer `400` before charging for more roles of a kind than allowed
 or more than 30 images in all (`validation_error`), `draft: true` with
 `resolution` `"720p"` or `"1080p"` (`validation_error`, "Draft is 480p only."),
-a `prePrompt` or `postPrompt` over 4,000 characters, a `{role:N}` with N outside
+a `prePrompt` or `postPrompt` over 4,000 characters, a `faceMasking` setting
+out of range (`validation_error`), a `{role:N}` with N outside
 1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name`, the
 `prePrompt` or the `postPrompt`, a prompt that would build too long
 (`prompt_too_long`: a `{role:N}` reads as the role's name when it sends no
@@ -2072,12 +2102,14 @@ interface TrendRunRequest {
   draft?: boolean       // only at 480p; default true there
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
+  previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
 }
 
 interface TrendEstimate {
   expectedCredits: number            // what the run is expected to be charged
   holdCredits: number                // what is reserved when it starts
-  breakdown: Record<string, number>  // the parts of the quote
+  breakdown: Record<string, number>  // the parts of the quote (with maskingCredits, `masking` is listed but not in the totals)
+  maskingCredits?: number            // charged only if the clip is refused and the run retries with the faces masked
 }
 
 interface TrendRun {

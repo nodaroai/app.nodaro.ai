@@ -26,7 +26,8 @@ import type { NodaroClientCore } from "../core.js"
  * anything is charged: 400 `validation_error` (the body: no role with images
  * and no `prePrompt` or `postPrompt`, more roles of a kind
  * than allowed, more than 30 images in all, `draft: true` above 480p, a
- * `prePrompt` or `postPrompt` over 4,000 characters), `raw_reference_token`, `invalid_role_mention`,
+ * `prePrompt` or `postPrompt` over 4,000 characters, a `faceMasking` setting
+ * out of range), `raw_reference_token`, `invalid_role_mention`,
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
  * `preview_out_of_range`, `no_roles_in_preview` (a preview with every role
  * `inPreview: false`, always refused even with a prompt, or with no role kept
@@ -110,6 +111,60 @@ export interface CastSwapProductRole extends CastSwapRolePreviewSettings {
 
 export type CastSwapRole = CastSwapPersonRole | CastSwapLocationRole | CastSwapPetRole | CastSwapProductRole
 
+/**
+ * Margins of the frame, each 0–49 % (default 0): a face whose centre lies in a
+ * margin is not masked, so only faces inside the inner rectangle are.
+ */
+export interface CastSwapFaceMaskingZone {
+  /** % of the frame's width from the left edge. Default 0. */
+  leftPct?: number
+  /** % of the frame's width from the right edge. Default 0. */
+  rightPct?: number
+  /** % of the frame's height from the top edge. Default 0. */
+  topPct?: number
+  /** % of the frame's height from the bottom edge. Default 0. */
+  bottomPct?: number
+}
+
+/**
+ * Face masking: the faces in the source clip are covered before the video
+ * model sees it, keeping their movement and lip timing while the rest of the
+ * clip is sent as it is.
+ *
+ * - `"off"` (the same as leaving `faceMasking` out): the clip is sent as it is.
+ * - `"always"`: the faces are masked before the first attempt. Its credits are
+ *   in the quote (`breakdown.masking`, counted in `totalCredits`).
+ * - `"auto"`: the run starts unmasked; only if the video model refuses the
+ *   source clip is it retried once with the faces masked. Any other failure is
+ *   not retried. The extra credits, charged only when that retry runs, are the
+ *   estimate's `maskingCredits` (not in `totalCredits`).
+ *
+ * A completed job's output carries `faceMasking: { applied, reason }`:
+ * `applied` is whether the video was made from the masked clip, and `reason`
+ * is `"always"` (masked before the first attempt), `"input_refused"` (`auto`
+ * retried after the source clip was refused), `"no_faces"` (no face was left
+ * to mask after the filters: an `always` run continues unmasked; an `auto`
+ * run fails with the original refusal instead) or `"off"`.
+ */
+export interface CastSwapFaceMasking {
+  mode: "off" | "always" | "auto"
+  /** What covers a masked face: `"blur"` (default) or `"depth"` (a depth-color view of it). */
+  fill?: "blur" | "depth"
+  /** Mask only faces at least this % of the frame's height, 0–100. Default 15. */
+  minFaceHeightPct?: number
+  /**
+   * Mask only faces at most this % of the frame's height, 0–100. Default 0 (no
+   * limit). When above 0 it must be at least `minFaceHeightPct` (else 400).
+   */
+  maxFaceHeightPct?: number
+  /** Leave out faces near the edges of the frame. Default: no margins. */
+  zone?: CastSwapFaceMaskingZone
+  /** The blur's strength, 0.1–5 % of the frame's width (`fill: "blur"`). Default 2. */
+  blurStrengthPct?: number
+  /** How sure the face finder must be, 0.05–0.95: lower finds more faces. Default 0.5. */
+  threshold?: number
+}
+
 /** The body of `POST /v1/cast-swap` and `POST /v1/cast-swap/estimate`. */
 export interface CastSwapParams {
   /** The source clip, 4–30 seconds. */
@@ -157,6 +212,8 @@ export interface CastSwapParams {
    * Default `true`.
    */
   prepareReferences?: boolean
+  /** Mask the faces in the source clip (see {@link CastSwapFaceMasking}). Default: off. */
+  faceMasking?: CastSwapFaceMasking
   /**
    * `"draft"` means 480p draft.
    * @deprecated use `resolution` + `draft`.
@@ -170,14 +227,26 @@ export interface CastSwapParams {
 
 /** What a run would cost, in credits. */
 export interface CastSwapEstimate {
-  /** The quote in credits: `breakdown.castSwap + breakdown.seedance + breakdown.references`. */
+  /**
+   * The quote in credits: `breakdown.castSwap + breakdown.seedance +
+   * breakdown.references`, plus `breakdown.masking` with face masking
+   * `"always"`.
+   */
   totalCredits: number
   /**
    * `castSwap`: the run itself; `seedance`: the video model it calls;
    * `references`: preparing the reference pictures (0 when `prepareReferences`
-   * is off or there is nothing to prepare).
+   * is off or there is nothing to prepare); `masking`: masking the faces,
+   * present only when `faceMasking` is on. With `"auto"` it equals
+   * `maskingCredits` and is not added to `totalCredits`.
    */
-  breakdown: { castSwap: number; seedance: number; references: number }
+  breakdown: { castSwap: number; seedance: number; references: number; masking?: number }
+  /**
+   * Face masking `"auto"` only: the extra credits charged if the source clip
+   * is refused and the run is retried with the faces masked. Not in
+   * `totalCredits`; `run()` needs credits for both (else 402).
+   */
+  maskingCredits?: number
   /** `true` when the video is made at Auto length: the final charge is expected to come out lower than this quote. */
   settlesLower: boolean
 }

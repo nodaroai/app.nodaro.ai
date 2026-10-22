@@ -156,6 +156,14 @@ export interface TrendRunRequest {
   sessionId?: string
   /** Accepted, but not used by the run today. */
   projectId?: string
+  /**
+   * A full run's own preview: the `jobId` of a completed preview run of this
+   * trend that you started. When the trend masks faces only as needed and that
+   * preview needed it, the full run masks them from the start (the quote
+   * includes it). Any other job is ignored, without an error. Must be a uuid
+   * (else 400 `validation_error`).
+   */
+  previewJobId?: string
 }
 
 /** What a run would cost, in credits (`estimate()`). */
@@ -164,8 +172,17 @@ export interface TrendEstimate {
   expectedCredits: number
   /** What is reserved when the run starts; the run is charged what it actually costs. */
   holdCredits: number
-  /** The parts of the quote, by name. */
+  /**
+   * The parts of the quote, by name. With `maskingCredits`, `masking` is
+   * listed here too but is not part of `holdCredits` or `expectedCredits`.
+   */
   breakdown: Record<string, number>
+  /**
+   * Only for a trend that masks faces only as needed: the extra credits
+   * charged if the video model refuses the clip and the run is retried with
+   * the faces masked. Not included in `expectedCredits` or `holdCredits`.
+   */
+  maskingCredits?: number
 }
 
 /** Per-call options for {@link TrendsResource.run}. */

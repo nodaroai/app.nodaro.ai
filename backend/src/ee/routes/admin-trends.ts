@@ -69,6 +69,7 @@ import {
   displaySlots,
   engineRequest,
   engineSupports,
+  followPreviewMasking,
   isRec,
   jobIdOf,
   outputVideo,
@@ -475,6 +476,13 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         if (own.error) throw own.error
         if (!own.data) return notFound(reply, "Session")
       }
+      // After the session check: a refused request reads no job.
+      await followPreviewMasking(composed, {
+        userId: req.userId!,
+        trendId: trend.id,
+        previewJobId: parsed.data.previewJobId,
+        log: req.log,
+      })
 
       const key = req.headers["idempotency-key"]
       const res = await engineRequest(

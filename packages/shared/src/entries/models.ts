@@ -1,5 +1,5 @@
 /**
- * `@nodaro/shared/models` — Model constants: provider lists, prompt limits, per-model capability tables and defaults.
+ * `@nodaro/shared/models` — Model constants: provider lists, prompt limits, per-model capability tables and defaults, Cast Swap's input limits.
  *
  * One of the package's subpath entries (see `src/index.ts`). The root
  * re-exports every entry, so each name here is also importable from
@@ -197,6 +197,12 @@ export {
   maxVideoDurationSec,
   PRICING_DEFAULT_RESOLUTION,
 } from "../model-constants.js"
+export {
+  CAST_SWAP_POST_PROMPT_MAX,
+  TREND_PROMPT_LIMITS,
+  CAST_SWAP_FACE_MASKING_BOUNDS,
+  CAST_SWAP_FACE_MASKING_DEFAULTS,
+} from "../cast-swap-limits.js"
 export type {
   ImageAspectRatio,
   ImageResolution,

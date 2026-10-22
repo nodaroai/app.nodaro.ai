@@ -1225,6 +1225,19 @@ const CAST_SWAP_PRE_PROMPT_BYTES = 161
 // the change: 486_898 total − 485_946 = 952 B; the 103 B of headroom carry across.
 const CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES = 952
 
+// RAISED 2026-10-21 by `cast_swap` taking `face_masking` (mode off / always / auto, fill, the
+// face-size and zone filters, blur strength and detection threshold), and nothing else. No tool
+// was added, so the fixture does NOT move. Measured by this suite on the same tree with and
+// without the change: 489_029 total − 487_791 = 1_238 B; the 103 B of headroom carry across.
+const CAST_SWAP_FACE_MASKING_BYTES = 1_238
+
+// RAISED 2026-10-21 by `estimate_trend` / `run_trend` taking `preview_job_id` (a full run follows
+// its own preview's settings), and nothing else. No tool was added, so the fixture does NOT move.
+// Measured by this suite on the same tree with and without the change: 489_501 total − 489_029 =
+// 472 B (with the route's own job-id regex; zod's `.uuid()` pattern had cost 712 B); the 103 B of
+// headroom carry across.
+const TRENDS_PREVIEW_JOB_ID_BYTES = 472
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1373,7 +1386,9 @@ export const TOOL_WIRE_BUDGET = {
     TRENDS_TOOL_BYTES +
     TRENDS_WORDING_BYTES +
     CAST_SWAP_PRE_PROMPT_BYTES +
-    CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES,
+    CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES +
+    CAST_SWAP_FACE_MASKING_BYTES +
+    TRENDS_PREVIEW_JOB_ID_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

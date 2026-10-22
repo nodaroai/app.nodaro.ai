@@ -6,15 +6,22 @@
  * validated request (`trendRunRequestSchema`). It returns:
  *
  * - `body`: what the engine reads — the hidden source clip, roles named by
- *   their hidden `roleName`, the fixed references and the trend prompt;
+ *   their hidden `roleName`, the fixed references, the trend prompt, and the
+ *   trend's pre prompt and face masking (top-level fields; the engine refuses
+ *   either inside `display`);
  * - `display`: the public record of the run (English labels, the user's own
  *   pictures, the example's pictures for empty optional slots, the chips and
  *   the user's raw details), also carried in `body.trendRun.display`;
  * - `needs`: what the engine must support for this run.
  *
- * HIDDEN data (source, roleName, references, trendPrompt) goes only into the
- * engine's own fields, never into `display`.
+ * HIDDEN data (source, roleName, references, trendPrompt, prePrompt,
+ * faceMasking) goes only into the engine's own fields, never into `display`.
+ *
+ * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
+ * the body is exactly what it was before trends had masking.
  */
+import { CAST_SWAP_POST_PROMPT_MAX } from "@nodaro/shared/models"
+import { faceMaskingOn, type FaceMasking } from "../../../lib/cast-swap-face-masking.js"
 import { CHIPS_BY_KIND, misplacedChip } from "./schemas.js"
 import { pickText } from "./localize.js"
 import type {
@@ -74,7 +81,9 @@ export interface TrendRunBody {
   videoUrl: string
   roles: unknown[]
   references: TrendReference[]
+  prePrompt?: string
   postPrompt?: string
+  faceMasking?: FaceMasking
   preview: boolean
   previewStart: number
   resolution: TrendResolution
@@ -85,15 +94,21 @@ export interface TrendRunBody {
 export interface ComposedTrendRun {
   body: TrendRunBody
   display: TrendRunDisplay
-  needs: { roleKinds: Set<TrendSlotKind>; fixedReferences: boolean }
+  needs: { roleKinds: Set<TrendSlotKind>; fixedReferences: boolean; faceMasking: boolean; trendPrePrompt: boolean }
 }
 
 /**
  * The Cast Swap engine's `postPrompt` cap (the cast-swap plugin's input
- * schema: `postPrompt: z.string().max(4000)`). A trend prompt (≤ 3000) plus
- * the user's details (≤ 1000) and the "\n\n" between them can pass it.
+ * schema: `postPrompt: z.string().max(4000)`; the number is
+ * `@nodaro/shared`'s). The trend prompt, a blank line and the user's details
+ * share it. New versions are held to a 2998-character trend prompt so the
+ * details (≤ 1000) always fit: prompt-budget.ts has the numbers, publishing
+ * refuses a longer one (publish-check.ts) and the admin screen holds Save.
+ * Versions published before that may still carry up to 3000, so a run can
+ * still pass the cap: composeTrendRun refuses it (`prompt_too_long`) before
+ * the engine would.
  */
-export const CAST_SWAP_POST_PROMPT_MAX = 4000
+export { CAST_SWAP_POST_PROMPT_MAX }
 
 const SLOT_MENTION_RE = /\{slot:([^}]*)\}/g
 
@@ -183,6 +198,7 @@ export function composeTrendRun(
     )
   }
 
+  const masking = faceMaskingOn(data.faceMasking) ? data.faceMasking : undefined
   const resolution: TrendResolution = req.resolution ?? "480p"
   const draft = resolution === "480p" && (req.draft ?? true)
 
@@ -197,7 +213,9 @@ export function composeTrendRun(
     videoUrl: data.source.videoUrl,
     roles,
     references: data.references.map((r) => ({ images: [...r.images], line: r.line })),
+    ...(data.prePrompt ? { prePrompt: data.prePrompt } : {}),
     ...(postPrompt ? { postPrompt } : {}),
+    ...(masking ? { faceMasking: structuredClone(masking) } : {}),
     preview: req.preview ?? false,
     previewStart: data.previewStart ?? 0,
     resolution,
@@ -208,6 +226,11 @@ export function composeTrendRun(
   return {
     body,
     display,
-    needs: { roleKinds: new Set(data.slots.map((s) => s.kind)), fixedReferences: data.references.length > 0 },
+    needs: {
+      roleKinds: new Set(data.slots.map((s) => s.kind)),
+      fixedReferences: data.references.length > 0,
+      faceMasking: masking !== undefined,
+      trendPrePrompt: !!data.prePrompt,
+    },
   }
 }

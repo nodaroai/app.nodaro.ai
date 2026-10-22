@@ -3226,6 +3226,12 @@ export interface PluginSupports {
    * - `fullQuality`: a completed draft run can be re-rendered at full quality.
    * - `resolutions`: the output resolutions a run accepts.
    * - `trendRun`: a run accepts a trend's hidden inputs (`trendRun`).
+   * - `faceMasking`: a run accepts `faceMasking` (masks the faces in the
+   *   source clip before the video model). Additive-optional: absent ⇒ an
+   *   engine that predates face masking, read as `false`.
+   * - `trendPrePrompt`: a trend run accepts a trend's own `prePrompt` (kept
+   *   hidden). Additive-optional: absent ⇒ an engine that predates it, read
+   *   as `false`.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3236,6 +3242,8 @@ export interface PluginSupports {
     readonly fullQuality: boolean
     readonly resolutions: readonly ("480p" | "720p" | "1080p")[]
     readonly trendRun: boolean
+    readonly faceMasking?: boolean
+    readonly trendPrePrompt?: boolean
   }
 }
 

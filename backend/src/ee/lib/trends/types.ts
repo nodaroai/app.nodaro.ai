@@ -7,10 +7,14 @@
  * (`trend_versions`) is a full `TrendVersionData` snapshot. Users only ever
  * see a trend's published version.
  *
- * HIDDEN: `source`, `TrendSlot.roleName`, `references` and `trendPrompt` never
- * leave the server — public responses are built from the other fields.
+ * HIDDEN: `source`, `TrendSlot.roleName`, `references`, `trendPrompt`,
+ * `prePrompt` and `faceMasking` never leave the server — public responses are
+ * built from the other fields.
  */
 import type { LocaleId } from "@nodaro/shared/i18n"
+import type { FaceMasking } from "../../../lib/cast-swap-face-masking.js"
+
+export type { FaceMasking }
 
 /** The platform's interface languages (the same set `/v1/user/settings` accepts). */
 export type Locale = LocaleId
@@ -71,6 +75,14 @@ export interface TrendVersionData {
   references: TrendReference[]
   /** HIDDEN. Prompt text added to every run (≤ 3000). */
   trendPrompt?: string
+  /** HIDDEN. Prompt text placed at the start of every run's prompt (≤ 3000): Cast Swap's `prePrompt`. */
+  prePrompt?: string
+  /**
+   * HIDDEN. Cast Swap's face masking for every run of this trend. Absent or
+   * `mode: "off"` = no masking. With `"auto"`, a full run whose preview was
+   * masked (`TrendRunRequest.previewJobId`) is sent as `"always"`.
+   */
+  faceMasking?: FaceMasking
   examples: TrendExample[]
 }
 
@@ -109,4 +121,10 @@ export interface TrendRunRequest {
   draft?: boolean
   sessionId?: string
   projectId?: string
+  /**
+   * A full run's own preview (a completed preview run of this trend, by the
+   * same caller). When the trend's masking is "auto" and that preview ran
+   * masked, the full run is masked from the start. Anything else: ignored.
+   */
+  previewJobId?: string
 }

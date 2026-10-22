@@ -50,6 +50,8 @@ export interface RegisterTrendToolsOpts {
  * in; `runs` is reserved (`GET /v1/trends/runs` is the run list), never a slug.
  */
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
+/** The route's own job-id check (`trendRunRequestSchema`): hex 8-4-4-4-12, no version or variant rule (zod's `.uuid()` has one). */
+const JOB_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const notReserved = (s: string) => s !== "runs"
 const RESERVED = { message: '"runs" is reserved; it is not a trend slug.' }
 const slug = z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends).")
@@ -80,6 +82,7 @@ export const trendRunShape = {
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p".'),
   draft: z.boolean().optional().describe("Default true; only at 480p."),
+  preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
 type RunArgs = z.infer<z.ZodObject<typeof trendRunShape>> & { session_id?: string }
@@ -97,6 +100,7 @@ function runBody(args: RunArgs): Record<string, unknown> {
     ...(args.preview !== undefined ? { preview: args.preview } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     ...(args.draft !== undefined ? { draft: args.draft } : {}),
+    ...(args.preview_job_id !== undefined ? { previewJobId: args.preview_job_id } : {}),
     ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
   }
 }
@@ -185,6 +189,8 @@ interface TrendQuote {
   expectedCredits: number
   holdCredits: number
   breakdown: Rec
+  /** Only if the clip is refused and the run is retried with the faces masked; not in the two above. */
+  maskingCredits?: number
 }
 
 function quoteOf(body: string): TrendQuote | null {
@@ -193,12 +199,15 @@ function quoteOf(body: string): TrendQuote | null {
   const breakdown = isRec(q.breakdown)
     ? Object.fromEntries(Object.entries(q.breakdown).filter(([, v]) => typeof v === "number" && Number.isFinite(v)))
     : {}
-  return { expectedCredits: q.expectedCredits, holdCredits: q.holdCredits, breakdown }
+  const masking = typeof q.maskingCredits === "number" && Number.isFinite(q.maskingCredits) ? { maskingCredits: q.maskingCredits } : {}
+  return { expectedCredits: q.expectedCredits, holdCredits: q.holdCredits, breakdown, ...masking }
 }
 
 function quoteSentence(q: TrendQuote, preview: boolean | undefined): string {
   const held = q.holdCredits !== q.expectedCredits ? ` (up to ${q.holdCredits} held while it runs)` : ""
-  return `This trend ${preview ? "preview " : ""}run costs about ${q.expectedCredits} credits${held}.`
+  const masking =
+    q.maskingCredits !== undefined ? ` Plus ${q.maskingCredits} only if the clip is refused and the run retries with faces masked.` : ""
+  return `This trend ${preview ? "preview " : ""}run costs about ${q.expectedCredits} credits${held}.${masking}`
 }
 
 // ── errors ──────────────────────────────────────────────────────────────────

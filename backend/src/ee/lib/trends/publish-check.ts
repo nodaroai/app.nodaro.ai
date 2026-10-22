@@ -3,15 +3,19 @@
  * (pure; the admin route reads the engine environments and calls this).
  *
  * The draft needs a source clip, at least one required slot, at least one
- * example, pictures for every slot in every example, and valid data
- * (`trendVersionDataSchema`). And the Cast Swap engine of EVERY
+ * example, pictures for every slot in every example, valid data
+ * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
+ * the user's details (`promptBudget`). And the Cast Swap engine of EVERY
  * environment in `TREND_PUBLISH_ENVIRONMENTS` must support it: the slot kinds
- * it uses, fixed references when it has some, all three resolutions, Full
- * Quality and trend runs. An environment with no recorded row is unknown,
- * which blocks like an unsupported one.
+ * it uses, fixed references when it has some, face masking when it masks
+ * (mode not "off"), a trend pre prompt when it has one, all three
+ * resolutions, Full Quality and trend runs. An environment with no recorded
+ * row is unknown, which blocks like an unsupported one.
  */
 import type { EngineEnvironment } from "../engine-environments.js"
+import { faceMaskingOn } from "../../../lib/cast-swap-face-masking.js"
 import { trendVersionDataSchema } from "./schemas.js"
+import { promptBudget, TREND_DETAILS_MAX } from "./prompt-budget.js"
 import type { TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
 export interface PublishBlocker {
@@ -21,16 +25,17 @@ export interface PublishBlocker {
     | "no_example"
     | "example_slots_incomplete"
     | "invalid_data"
+    | "prompt_budget"
     | "engine_unknown"
     | "engine_unsupported"
   env?: string
-  /** What the engine lacks: a slot kind, "fixedReferences", a resolution, "fullQuality", "trendRun" or "castSwap". */
+  /** What the engine lacks: a slot kind, "fixedReferences", "faceMasking", "trendPrePrompt", a resolution, "fullQuality", "trendRun" or "castSwap". */
   need?: string
   /** 1-based example, for `example_slots_incomplete`. */
   example?: number
   /** The slot keys an example has no pictures for, for `example_slots_incomplete`. */
   slots?: string[]
-  /** What is wrong, for `invalid_data`. */
+  /** What is wrong, for `invalid_data` and `prompt_budget`. */
   message?: string
 }
 
@@ -40,7 +45,15 @@ const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
 function needsOf(data: TrendVersionData): string[] {
   const kinds: TrendSlotKind[] = []
   for (const s of data.slots) if (!kinds.includes(s.kind)) kinds.push(s.kind)
-  return ["trendRun", ...kinds, ...(data.references.length > 0 ? ["fixedReferences"] : []), ...RESOLUTIONS, "fullQuality"]
+  return [
+    "trendRun",
+    ...kinds,
+    ...(data.references.length > 0 ? ["fixedReferences"] : []),
+    ...(faceMaskingOn(data.faceMasking) ? ["faceMasking"] : []),
+    ...(data.prePrompt ? ["trendPrePrompt"] : []),
+    ...RESOLUTIONS,
+    "fullQuality",
+  ]
 }
 
 function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
@@ -50,6 +63,8 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === "trendRun") return cs.trendRun !== true
     if (need === "fullQuality") return cs.fullQuality !== true
     if (need === "fixedReferences") return cs.fixedReferences !== true
+    if (need === "faceMasking") return cs.faceMasking !== true
+    if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)
     return !(cs.roleKinds ?? []).includes(need as TrendSlotKind)
   })
@@ -74,6 +89,19 @@ export function publishBlockers(
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
     out.push({ code: "invalid_data", message: issue ? `${issue.path.join(".") || "data"}: ${issue.message}` : "Invalid trend data." })
+  }
+  const budget = promptBudget(data)
+  const trendLen = data.trendPrompt?.length ?? 0
+  if (trendLen > budget.trendPromptMax) {
+    out.push({
+      code: "prompt_budget",
+      message: `The trend prompt is ${trendLen} characters; with the user's details (up to ${TREND_DETAILS_MAX}) the most is ${budget.trendPromptMax}.`,
+    })
+  } else if (budget.room < 0) {
+    out.push({
+      code: "prompt_budget",
+      message: `The pre and trend prompts are ${(data.prePrompt?.length ?? 0) + trendLen} characters together; with the engine's own text and the user's details the most is ${budget.promptsMax}.`,
+    })
   }
 
   const needs = needsOf(data)

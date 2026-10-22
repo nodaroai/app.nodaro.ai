@@ -1221,6 +1221,17 @@ jobs:
             echo "Failed: ${failed[*]}"
             exit 1
           fi
+      # The SDK's type-level tests: vitest does not typecheck, and
+      # packages/client as a whole is not type-checked here (its other tests
+      # carry type errors), so the `@ts-expect-error` lines would prove
+      # nothing. A narrow tsconfig compiles only the listed test files and what
+      # they import (under 1 s). Add a test file to its `include` once it
+      # typechecks cleanly. It runs on TypeScript 7, the type-checker, resolved
+      # from its package directory as tools/typecheck-all.mjs does: the root
+      # `.bin/tsc` is TypeScript 5.9, kept for emitting builds only.
+      - name: SDK type tests
+        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
+        run: node tools/typescript-native/node_modules/typescript/bin/tsc --incremental false --noEmit -p packages/client/tsconfig.type-tests.json
 
   tenant-scope-lint:
     name: Tenant Scope Lint

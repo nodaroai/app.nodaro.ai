@@ -14,6 +14,8 @@ export {
   type CastSwapPetRole,
   type CastSwapProductRole,
   type CastSwapRole,
+  type CastSwapFaceMasking,
+  type CastSwapFaceMaskingZone,
   type CastSwapParams,
   type CastSwapEstimate,
   type CastSwapRunOptions,

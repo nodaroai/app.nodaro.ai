@@ -50,6 +50,7 @@ import {
   SLOT_KINDS,
   engineRequest,
   engineSupports,
+  followPreviewMasking,
   isRec,
   jobIdOf,
   parseJson,
@@ -320,6 +321,13 @@ async function prepareRun(req: FastifyRequest, reply: FastifyReply): Promise<{ c
     err(reply, 503, "engine_unsupported", "Trends are not available on this platform version yet.")
     return null
   }
+  // Estimate and run alike, so the quote prices what the run sends.
+  await followPreviewMasking(composed, {
+    userId: req.userId!,
+    trendId: found.row.id,
+    previewJobId: parsed.data.previewJobId,
+    log: req.log,
+  })
   return { composed, ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}) }
 }
 
@@ -439,11 +447,14 @@ export async function trendRoutes(app: FastifyInstance) {
           return err(reply, 502, "engine_error", "Cast Swap answered unexpectedly.")
         }
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : quote.totalCredits
+        const masking = quote.maskingCredits
         return {
           data: {
             expectedCredits: expected,
             holdCredits: quote.totalCredits,
             breakdown: numericEntries(quote.breakdown),
+            // Face masking "auto": charged only if the masked retry runs (not in the hold).
+            ...(typeof masking === "number" && Number.isFinite(masking) ? { maskingCredits: masking } : {}),
           },
         }
       } catch (e) {

@@ -242,14 +242,63 @@ export async function toTrendRuns(
 /**
  * Whether the loaded Cast Swap engine can run this: it declares trend runs,
  * every slot kind the trend uses, fixed references when the trend has some,
- * and the requested resolution.
+ * face masking when the trend masks, a trend pre prompt when it has one, and
+ * the requested resolution.
  */
 export function engineSupports(composed: ComposedTrendRun): boolean {
   const cs = getPluginSupports().castSwap
   if (!cs || cs.trendRun !== true) return false
   for (const kind of composed.needs.roleKinds) if (!cs.roleKinds.includes(kind)) return false
   if (composed.needs.fixedReferences && cs.fixedReferences !== true) return false
+  if (composed.needs.faceMasking && cs.faceMasking !== true) return false
+  if (composed.needs.trendPrePrompt && cs.trendPrePrompt !== true) return false
   return cs.resolutions.includes(composed.body.resolution)
+}
+
+/**
+ * A full run follows its preview's face masking. Only when the trend's masking
+ * is "auto" and the body to send is not itself a preview (`composed.body.preview`,
+ * what the engine gets, not a separate flag): the request's `previewJobId`
+ * is read, and when it is the caller's own completed preview run of THIS
+ * trend (`input_data.trend.id`, not a Full Quality job) whose output says the
+ * faces were masked (`output_data.faceMasking.applied === true`), the run is
+ * sent with `mode: "always"` and the trend's other masking settings, so it
+ * does not first try unmasked what the preview already showed is refused.
+ *
+ * Anything else (no such job, another user's, another trend's, a full run, not
+ * completed, not masked, a database error) leaves the body as it is: no
+ * error, and nothing that tells whether the job exists. Mutates
+ * `composed.body.faceMasking` (its own copy, from `composeTrendRun`).
+ */
+export async function followPreviewMasking(
+  composed: ComposedTrendRun,
+  opts: {
+    userId: string
+    trendId: string
+    previewJobId: string | undefined
+    log?: { warn: (obj: object, msg: string) => void }
+  },
+): Promise<void> {
+  const masking = composed.body.faceMasking
+  if (!opts.previewJobId || composed.body.preview || masking?.mode !== "auto") return
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, user_id, status, input_data, output_data")
+    .eq("id", opts.previewJobId)
+    .eq("user_id", opts.userId)
+    .maybeSingle()
+  if (error) {
+    opts.log?.warn({ err: error.message }, "trend run: could not read the preview job; masking stays auto")
+    return
+  }
+  const row = isRec(data) ? data : null
+  if (!row || row.user_id !== opts.userId || row.status !== "completed") return
+  const input = isRec(row.input_data) ? row.input_data : null
+  if (!input || input.type !== "cast-swap" || input.preview !== true || input.fullQualityOf != null) return
+  if (!isRec(input.trend) || input.trend.id !== opts.trendId) return
+  const output = isRec(row.output_data) ? row.output_data : null
+  if (!output || !isRec(output.faceMasking) || output.faceMasking.applied !== true) return
+  composed.body.faceMasking = { ...masking, mode: "always" }
 }
 
 /**

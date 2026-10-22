@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClient, StaticTokenAuth, type CastSwapEstimate, type CastSwapParams } from "../../index.js"
+import {
+  createClient,
+  StaticTokenAuth,
+  type CastSwapEstimate,
+  type CastSwapFaceMasking,
+  type CastSwapParams,
+} from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
   return Promise.resolve({ ok: true, status, json: async () => body } as unknown as Response)
@@ -100,6 +106,55 @@ describe("castSwap resource", () => {
 
     const init = fetchMock.mock.calls[0][1] as { body: string }
     expect(JSON.parse(init.body)).toEqual(v1)
+  })
+
+  it("run posts faceMasking unchanged, every setting included", async () => {
+    const faceMasking: CastSwapFaceMasking = {
+      mode: "auto",
+      fill: "depth",
+      minFaceHeightPct: 10,
+      maxFaceHeightPct: 60,
+      zone: { leftPct: 5, rightPct: 5, topPct: 0, bottomPct: 20 },
+      blurStrengthPct: 3,
+      threshold: 0.4,
+    }
+    const withMasking: CastSwapParams = { ...params, faceMasking }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-3" }, 202))
+    const client = make(fetchMock)
+
+    await client.castSwap.run(withMasking)
+
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    expect(JSON.parse(init.body).faceMasking).toEqual(faceMasking)
+  })
+
+  // vitest does not typecheck: the `@ts-expect-error` lines below are held by
+  // CI's "SDK type tests" step (`tsc -p packages/client/tsconfig.type-tests.json`).
+  it("types faceMasking: mode is required, the rest optional, and only the documented values", () => {
+    const minimal: CastSwapFaceMasking = { mode: "always" }
+    const zoneOnly: CastSwapFaceMasking = { mode: "always", zone: { leftPct: 10 } }
+    // @ts-expect-error — mode is required
+    const noMode: CastSwapFaceMasking = { fill: "blur" }
+    // @ts-expect-error — not a mode
+    const badMode: CastSwapFaceMasking = { mode: "sometimes" }
+    // @ts-expect-error — not a fill
+    const badFill: CastSwapFaceMasking = { mode: "auto", fill: "pixelate" }
+    expect([minimal, zoneOnly, noMode, badMode, badFill]).toHaveLength(5)
+  })
+
+  it("estimate passes the masking credits through", async () => {
+    const estimate: CastSwapEstimate = {
+      totalCredits: 15,
+      breakdown: { castSwap: 5, seedance: 7, references: 3, masking: 2 },
+      maskingCredits: 2,
+      settlesLower: false,
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
+    const client = make(fetchMock)
+
+    const out = await client.castSwap.estimate({ ...params, faceMasking: { mode: "auto" } })
+    expect(out.maskingCredits).toBe(2)
+    expect(out.breakdown.masking).toBe(2)
   })
 
   it("estimate posts to /v1/cast-swap/estimate", async () => {

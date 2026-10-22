@@ -1,0 +1,5 @@
+---
+"@nodaro/sdk": minor
+---
+
+`CastSwapParams` takes `faceMasking?: CastSwapFaceMasking` (`POST /v1/cast-swap` and `/v1/cast-swap/estimate`): cover the faces in the source clip before the video model sees it, keeping their movement and lip timing. `mode` is `"off"` (as if left out), `"always"` (masked before the first attempt) or `"auto"` (retried once with the faces masked, only if the video model refuses the source clip); optional `fill` (`"blur"`, the default, or `"depth"`), `minFaceHeightPct` (default 15), `maxFaceHeightPct` (default 0 = no limit), `zone` (`CastSwapFaceMaskingZone`: frame margins, 0–49 % each, where a face is not masked), `blurStrengthPct` (default 2) and `threshold` (default 0.5). `CastSwapEstimate` gains `breakdown.masking?` (in `totalCredits` with `"always"`) and `maskingCredits?` (`"auto"`: charged only if the masked retry runs; not in `totalCredits`). With `"auto"`, `breakdown.masking` is also present (equal to `maskingCredits`) but not added to `totalCredits`. A completed job's output carries `faceMasking: { applied, reason }`.

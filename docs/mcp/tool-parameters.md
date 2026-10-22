@@ -409,6 +409,18 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Render as a draft, 480p only. Default true at 480p, false above. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
+| `face_masking` | object |  | Default off. |
+| `face_masking.mode` | string | yes | Mask the faces in the clip before the video model: "off", "always", or "auto" = only on a retry after the model refuses the clip. One of `off`, `always`, `auto`. |
+| `face_masking.fill` | string |  | Default "blur". One of `blur`, `depth`. |
+| `face_masking.min_face_height_pct` | number |  | Mask faces at least this % of frame height. Default 15. From 0 to 100. |
+| `face_masking.max_face_height_pct` | number |  | And at most this %; default 0 = no limit. From 0 to 100. |
+| `face_masking.zone` | object |  | Frame margins (%, default 0); a face centred in one is not masked. |
+| `face_masking.zone.left_pct` | number |  | From 0 to 49. |
+| `face_masking.zone.right_pct` | number |  | From 0 to 49. |
+| `face_masking.zone.top_pct` | number |  | From 0 to 49. |
+| `face_masking.zone.bottom_pct` | number |  | From 0 to 49. |
+| `face_masking.blur_strength_pct` | number |  | Blur strength, % of frame width. Default 2. From 0.1 to 5. |
+| `face_masking.threshold` | number |  | Face detection; lower finds more. Default 0.5. From 0.05 to 0.95. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
@@ -803,6 +815,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Default true; only at 480p. |
+| `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
 ## `export_workflow`
 
@@ -2577,6 +2590,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | Default "480p". One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Default true; only at 480p. |
+| `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 | `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |

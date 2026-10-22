@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "incremental": false
+  },
+  "include": ["src/resources/__tests__/cast-swap.test.ts"],
+  "exclude": []
+}

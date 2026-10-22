@@ -206,6 +206,8 @@ const CAST_SWAP_ALL = {
   fullQuality: true,
   resolutions: ["480p", "720p", "1080p"] as Array<"480p" | "720p" | "1080p">,
   trendRun: true,
+  faceMasking: true,
+  trendPrePrompt: true,
 }
 
 function draftData(over: Partial<TrendVersionData> = {}): TrendVersionData {
@@ -416,6 +418,21 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(saved.json().data).toEqual({ version: 1, revision: expect.any(String) })
     expect(mem.trends[0]!.versions[1]!.data.examples).toEqual([])
     expect(mem.trends[0]!.versions[1]!.data.trendPrompt).toBe("DRAFT-PROMPT neon lights")
+
+    // Pre prompt and face masking are saved and read back as written.
+    const MASK = { mode: "always" as const, fill: "depth" as const, maxFaceHeightPct: 0, zone: { leftPct: 10 } }
+    const masked = await call("PUT", `/v1/admin/trends/${id}/draft`, {
+      data: { ...draftData(), prePrompt: "PRE words", faceMasking: MASK },
+      revision: await revisionOf(id),
+    })
+    expect(masked.statusCode).toBe(200)
+    const maskedRead = (await call("GET", `/v1/admin/trends/${id}`)).json().data as { draft: TrendVersionData }
+    expect(maskedRead.draft).toMatchObject({ prePrompt: "PRE words", faceMasking: MASK })
+    const badMask = await call("PUT", `/v1/admin/trends/${id}/draft`, {
+      data: { ...draftData(), faceMasking: { mode: "always", threshold: 2 } },
+      revision: await revisionOf(id),
+    })
+    expect(badMask.statusCode).toBe(400)
 
     // Promote an admin run to Example 1, then publish v1.
     world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ trend: { id, slug: "neon-dance", version: 1, name: "Neon Dance" } }) }))
@@ -777,6 +794,66 @@ describe("POST /:id/publish — engine check", () => {
     ])
   })
 
+  it("needs face masking only where the trend masks", async () => {
+    const { faceMasking: _f, ...noMasking } = CAST_SWAP_ALL
+    world.envs = [envRow("production", noMasking), envRow("staging", { ...CAST_SWAP_ALL, faceMasking: false })]
+    seed({}, draftData({ examples: [EXAMPLE], faceMasking: { mode: "auto" } }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    expect(reasonsOf(res)).toEqual([
+      { code: "engine_unsupported", env: "staging", need: "faceMasking" },
+      { code: "engine_unsupported", env: "production", need: "faceMasking" },
+    ])
+    expect(mem.trends[0]!.status).toBe("draft")
+
+    // Masking off: nothing to support.
+    mem.trends = []
+    seed({}, draftData({ examples: [EXAMPLE], faceMasking: { mode: "off", fill: "depth" } }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+  })
+
+  it("blocks a trend prompt that leaves no room for the user's details, and names the limit", async () => {
+    const { TREND_DETAILS_MAX } = await import("../../lib/trends/prompt-budget.js")
+    const most = 4000 - 2 - TREND_DETAILS_MAX
+    seed({}, draftData({ examples: [EXAMPLE], trendPrompt: "t".repeat(most + 1) }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    const [reason, ...rest] = reasonsOf(res) as Array<{ code: string; message?: string }>
+    expect(rest).toEqual([])
+    expect(reason!.code).toBe("prompt_budget")
+    expect(reason!.message).toContain(String(most))
+    expect(mem.trends[0]!.status).toBe("draft")
+
+    mem.trends = []
+    seed({}, draftData({ examples: [EXAMPLE], trendPrompt: "t".repeat(most), prePrompt: "p".repeat(3000) }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+  })
+
+  it("needs trend pre prompts only where the trend has one", async () => {
+    const { trendPrePrompt: _p, ...noPre } = CAST_SWAP_ALL
+    world.envs = [envRow("production", noPre), envRow("staging", { ...CAST_SWAP_ALL, trendPrePrompt: false })]
+    seed({}, draftData({ examples: [EXAMPLE], prePrompt: "Open on the stage." }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(409)
+    expect(reasonsOf(res)).toEqual([
+      { code: "engine_unsupported", env: "staging", need: "trendPrePrompt" },
+      { code: "engine_unsupported", env: "production", need: "trendPrePrompt" },
+    ])
+    expect(mem.trends[0]!.status).toBe("draft")
+
+    // The same engines publish a trend without a pre prompt (it needs nothing new).
+    mem.trends = []
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    expect((await call("POST", `/v1/admin/trends/${T1}/publish`)).statusCode).toBe(200)
+  })
+
+  it("publishes a trend with a pre prompt where every engine declares trendPrePrompt", async () => {
+    seed({}, draftData({ examples: [EXAMPLE], prePrompt: "Open on the stage." }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
+  })
+
   it("an example without pictures for a slot blocks publishing", async () => {
     seed({}, draftData({ examples: [{ ...EXAMPLE, slots: { lead: EXAMPLE.slots.lead } }] }))
     const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
@@ -816,6 +893,39 @@ describe("test runs", () => {
     expect(body.postPrompt).toBe("DRAFT-PROMPT v2")
     expect(body.preview).toBe(true)
     expect((body.trendRun as { display: { trend: unknown } }).display.trend).toEqual({ id: T1, slug: "neon-dance", version: 2, name: "Neon Dance II" })
+  })
+
+  it("the draft's pre prompt and masking ride at the top level; a masked preview makes the full run always", async () => {
+    const MASK = { mode: "auto" as const, blurStrengthPct: 3 }
+    seed({}, draftData({ prePrompt: "DRAFT-PRE", faceMasking: MASK, examples: [EXAMPLE] }))
+    const PREVIEW = "00000000-0000-4000-8000-0000000000b2"
+    world.jobs.set(PREVIEW, jobRow(PREVIEW, ADMIN, {
+      input_data: runInput({ preview: true }),
+      output_data: { videoUrl: "https://out.example/p.mp4", faceMasking: { applied: true, reason: "input_refused" } },
+    }))
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
+    expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, previewJobId: PREVIEW })).statusCode).toBe(202)
+    const [plain, followed] = engine.calls
+    expect(plain!.body).toMatchObject({ prePrompt: "DRAFT-PRE", faceMasking: MASK })
+    expect(followed!.body.faceMasking).toEqual({ ...MASK, mode: "always" })
+    for (const c of engine.calls) {
+      expect((c.body.trendRun as { display: Record<string, unknown> }).display).not.toHaveProperty("faceMasking")
+      expect(c.body).not.toHaveProperty("previewJobId")
+    }
+  })
+
+  it("reads the preview job only after the session check passes", async () => {
+    seed({}, draftData({ faceMasking: { mode: "auto" }, examples: [EXAMPLE] }))
+    const PREVIEW = "00000000-0000-4000-8000-0000000000b2"
+    const slots = { lead: { images: ["https://u.example/me.png"] } }
+    for (const sessionId of ["not-a-session", "00000000-0000-4000-8000-0000000000c3"]) {
+      db.log.length = 0
+      const res = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots, previewJobId: PREVIEW, sessionId })
+      expect(res.statusCode, sessionId).toBe(404)
+      expect(db.log.filter((q) => q.table === "jobs"), sessionId).toEqual([])
+    }
+    expect(engine.calls).toEqual([])
   })
 
   it("an admin sees the real compose error", async () => {

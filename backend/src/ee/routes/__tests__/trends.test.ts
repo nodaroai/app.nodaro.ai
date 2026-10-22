@@ -88,7 +88,10 @@ const REF_IMAGE = "https://cdn.example/trends/t1/HIDDEN-REF.png"
 const REF_LINE = "HIDDEN-REF-LINE keep the neon sign"
 const PROMPT = "HIDDEN-PROMPT dance like nobody watches"
 const SOURCE_JOB = "HIDDEN-SOURCE-JOB-1"
-const HIDDEN = [SOURCE, ROLE, REF_IMAGE, REF_LINE, PROMPT, SOURCE_JOB, "roleName", "trendPrompt", "sourceJobId", "__"]
+const PRE = "HIDDEN-PRE-PROMPT open on the stage"
+const HIDDEN = [SOURCE, ROLE, REF_IMAGE, REF_LINE, PROMPT, SOURCE_JOB, PRE, "roleName", "trendPrompt", "sourceJobId", "prePrompt", "faceMasking", "__"]
+/** The published trend's masking (hidden like the rest). */
+const MASKING = { mode: "auto" as const, fill: "depth" as const, minFaceHeightPct: 12, zone: { topPct: 4 }, threshold: 0.4 }
 
 const T_PUB = "00000000-0000-4000-8000-0000000000a1"
 const T_DRAFT = "00000000-0000-4000-8000-0000000000a2"
@@ -107,6 +110,8 @@ function versionData(over: Partial<TrendVersionData> = {}): TrendVersionData {
     ],
     references: [{ images: [REF_IMAGE], line: REF_LINE }],
     trendPrompt: PROMPT,
+    prePrompt: PRE,
+    faceMasking: MASKING,
     examples: [
       {
         videoUrl: "https://cdn.example/ex1.mp4",
@@ -137,6 +142,8 @@ const CAST_SWAP_ALL = {
   fullQuality: true,
   resolutions: ["480p", "720p", "1080p"] as const,
   trendRun: true,
+  faceMasking: true,
+  trendPrePrompt: true,
 }
 
 const engine = {
@@ -602,6 +609,153 @@ describe("POST /v1/trends/:slug/estimate", () => {
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: { slots: {} } })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toMatchObject({ code: "missing_slot", slot: "lead" })
+  })
+})
+
+// ── face masking, pre prompt and the preview a full run follows ────────────
+
+describe("trend face masking and pre prompt", () => {
+  const PREVIEW_JOB = "00000000-0000-4000-8000-0000000000f1"
+  const OTHER_USER = "00000000-0000-4000-8000-000000000002"
+
+  /** A completed preview run of the published trend, by the caller, that ran masked. */
+  function previewRow(over: { user_id?: string; status?: string; input?: Record<string, unknown>; output?: Record<string, unknown> } = {}) {
+    return {
+      id: PREVIEW_JOB,
+      user_id: over.user_id ?? USER,
+      status: over.status ?? "completed",
+      input_data: { type: "cast-swap", preview: true, trend: { id: T_PUB, slug: "neon-dance", version: 2, name: "Neon Dance" }, ...over.input },
+      output_data: { videoUrl: "https://cdn.example/p.mp4", faceMasking: { applied: true, reason: "input_refused" }, ...over.output },
+    }
+  }
+  const answerJobs = (row: unknown, error: unknown = null) => {
+    db.respond = (q) => (q.table === "jobs" ? { data: row, error } : { data: null, error: null })
+  }
+  const run = (payload: Record<string, unknown>, path = "runs") =>
+    app.inject({ method: "POST", url: `/v1/trends/neon-dance/${path}`, headers: as(), payload })
+
+  it("sends the trend's pre prompt and masking at the top level, never in the display", async () => {
+    const res = await run(RUN_BODY)
+    expect(res.statusCode).toBe(202)
+    const body = engine.calls[0]!.body
+    expect(body.prePrompt).toBe(PRE)
+    expect(body.faceMasking).toEqual(MASKING)
+    const display = JSON.stringify((body.trendRun as { display: unknown }).display)
+    expect(display).not.toContain(PRE)
+    expect(display).not.toContain("faceMasking")
+    expectNoHidden(res.body)
+  })
+
+  it("masking off sends no faceMasking key, and needs no masking engine", async () => {
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: { mode: "off" } })
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], faceMasking: false } })
+    const res = await run(RUN_BODY)
+    expect(res.statusCode).toBe(202)
+    expect(engine.calls[0]!.body).not.toHaveProperty("faceMasking")
+  })
+
+  it("an engine without face masking is engine_unsupported for a masked trend, with no dispatch", async () => {
+    const { faceMasking: _f, ...noMasking } = CAST_SWAP_ALL
+    setPluginSupports({ castSwap: { ...noMasking, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+    for (const path of ["runs", "estimate"]) {
+      const res = await run(RUN_BODY, path)
+      expect(res.statusCode, path).toBe(503)
+      expect(res.json().error.code).toBe("engine_unsupported")
+    }
+    expect(engine.calls).toHaveLength(0)
+  })
+
+  it("an engine without trend pre prompts is engine_unsupported for a trend with one, and fine for one without", async () => {
+    const { trendPrePrompt: _p, ...noPre } = CAST_SWAP_ALL
+    setPluginSupports({ castSwap: { ...noPre, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } })
+    for (const path of ["runs", "estimate"]) {
+      const res = await run(RUN_BODY, path)
+      expect(res.statusCode, path).toBe(503)
+      expect(res.json().error.code).toBe("engine_unsupported")
+    }
+    expect(engine.calls).toHaveLength(0)
+
+    mem.trends[0]!.versions[2] = versionData({ prePrompt: undefined })
+    const res = await run(RUN_BODY)
+    expect(res.statusCode).toBe(202)
+    expect(engine.calls[0]!.body).not.toHaveProperty("prePrompt")
+  })
+
+  it("a full run whose own preview ran masked is sent as always, keeping the other settings", async () => {
+    answerJobs(previewRow())
+    for (const path of ["runs", "estimate"]) {
+      const res = await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB }, path)
+      expect(res.statusCode, path).toBeLessThan(300)
+    }
+    for (const call of engine.calls) {
+      expect(call.body.faceMasking).toEqual({ ...MASKING, mode: "always" })
+      expect(call.body).not.toHaveProperty("previewJobId")
+    }
+    const [read] = db.log.filter((q) => q.table === "jobs")
+    expect(has(read!, "eq", "id", PREVIEW_JOB)).toBe(true)
+    expect(has(read!, "eq", "user_id", USER)).toBe(true)
+    // The trend's own setting is not changed by a run.
+    expect(mem.trends[0]!.versions[2]!.faceMasking).toEqual(MASKING)
+  })
+
+  it("ignores a preview job that does not qualify, with no error and the trend's own mode", async () => {
+    const cases: Array<[string, unknown]> = [
+      ["absent", null],
+      ["another user's", previewRow({ user_id: OTHER_USER })],
+      ["not completed", previewRow({ status: "processing" })],
+      ["a full run", previewRow({ input: { preview: false } })],
+      ["another trend's", previewRow({ input: { trend: { id: T_UNPUB, slug: "old", version: 1, name: "Old" } } })],
+      ["not a Cast Swap job", previewRow({ input: { type: "image-to-video" } })],
+      ["a Full Quality job", previewRow({ input: { fullQualityOf: "00000000-0000-4000-8000-0000000000aa" } })],
+      ["not masked", previewRow({ output: { faceMasking: { applied: false, reason: "no_faces" } } })],
+      ["no masking record", previewRow({ output: { faceMasking: undefined } })],
+    ]
+    for (const [name, row] of cases) {
+      engine.calls = []
+      answerJobs(row)
+      const res = await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })
+      expect(res.statusCode, name).toBe(202)
+      expect(engine.calls[0]!.body.faceMasking, name).toEqual(MASKING)
+    }
+  })
+
+  it("a database error reading the preview leaves the run as it is", async () => {
+    answerJobs(null, { message: "boom", code: "XX000" })
+    const res = await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })
+    expect(res.statusCode).toBe(202)
+    expect(engine.calls[0]!.body.faceMasking).toEqual(MASKING)
+  })
+
+  it("reads no job for a preview run, a trend that is not auto, or no previewJobId", async () => {
+    answerJobs(previewRow())
+    await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB, preview: true })
+    await run(RUN_BODY)
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: { ...MASKING, mode: "always" } })
+    await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })
+    mem.trends[0]!.versions[2] = versionData({ faceMasking: undefined })
+    await run({ ...RUN_BODY, previewJobId: PREVIEW_JOB })
+    expect(db.log.filter((q) => q.table === "jobs")).toHaveLength(0)
+    expect(engine.calls.map((c) => (c.body.faceMasking as { mode?: string } | undefined)?.mode)).toEqual(["auto", "auto", "always", undefined])
+  })
+
+  it("a previewJobId that is not a uuid is a 400", async () => {
+    const res = await run({ ...RUN_BODY, previewJobId: "job-1" })
+    expect(res.statusCode).toBe(400)
+    expect(engine.calls).toHaveLength(0)
+  })
+
+  it("the estimate passes the engine's maskingCredits through", async () => {
+    engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80, masking: 30 }, maskingCredits: 30 }
+    const res = await run(RUN_BODY, "estimate")
+    expect(res.json().data).toEqual({
+      expectedCredits: 120,
+      holdCredits: 120,
+      breakdown: { castSwap: 40, seedance: 80, masking: 30 },
+      maskingCredits: 30,
+    })
+    engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80 }, maskingCredits: "30" }
+    const bad = await run(RUN_BODY, "estimate")
+    expect(bad.json().data).not.toHaveProperty("maskingCredits")
   })
 })
 

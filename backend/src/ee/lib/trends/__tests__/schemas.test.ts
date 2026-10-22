@@ -257,3 +257,79 @@ describe("misplacedChip", () => {
     expect(misplacedChip({ slots: { ghost: { coat: "new" } } }, d)).toBeNull()
   })
 })
+
+describe("trendVersionDataSchema — faceMasking and prePrompt", () => {
+  const full = {
+    mode: "auto",
+    fill: "depth",
+    minFaceHeightPct: 10,
+    maxFaceHeightPct: 60,
+    zone: { leftPct: 5, rightPct: 5, topPct: 0, bottomPct: 49 },
+    blurStrengthPct: 2.5,
+    threshold: 0.4,
+  }
+
+  it("accepts every mode, and the full setting", () => {
+    for (const mode of ["off", "always", "auto"]) {
+      expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode } })).success, mode).toBe(true)
+    }
+    const r = trendVersionDataSchema.safeParse(data({ faceMasking: full }))
+    expect(r.success).toBe(true)
+    expect(r.data?.faceMasking).toEqual(full)
+  })
+
+  it("refuses an unknown mode or fill, and an unknown key", () => {
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "sometimes" } })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", fill: "pixelate" } })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", holdLastMask: true } })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", zone: { middlePct: 1 } } })).success).toBe(false)
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: {} })).success).toBe(false)
+  })
+
+  it("holds every number to its bounds", () => {
+    const bad: Array<Record<string, unknown>> = [
+      { minFaceHeightPct: -1 },
+      { minFaceHeightPct: 101 },
+      { maxFaceHeightPct: 101 },
+      { zone: { leftPct: 50 } },
+      { zone: { bottomPct: -1 } },
+      { blurStrengthPct: 0.05 },
+      { blurStrengthPct: 5.1 },
+      { threshold: 0.01 },
+      { threshold: 0.96 },
+    ]
+    for (const b of bad) {
+      expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", ...b } })).success, JSON.stringify(b)).toBe(false)
+    }
+    const edges = { minFaceHeightPct: 0, maxFaceHeightPct: 100, zone: { leftPct: 49 }, blurStrengthPct: 0.1, threshold: 0.95 }
+    expect(trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", ...edges } })).success).toBe(true)
+  })
+
+  it("needs max ≥ min when max is above 0 (min defaults to 15)", () => {
+    const fm = (o: Record<string, unknown>) => trendVersionDataSchema.safeParse(data({ faceMasking: { mode: "always", ...o } })).success
+    expect(fm({ minFaceHeightPct: 30, maxFaceHeightPct: 20 })).toBe(false)
+    expect(fm({ maxFaceHeightPct: 10 })).toBe(false)
+    expect(fm({ minFaceHeightPct: 30, maxFaceHeightPct: 30 })).toBe(true)
+    expect(fm({ minFaceHeightPct: 30, maxFaceHeightPct: 0 })).toBe(true)
+    expect(fm({ maxFaceHeightPct: 15 })).toBe(true)
+  })
+
+  it("takes a pre prompt of at most 3000 characters", () => {
+    expect(trendVersionDataSchema.safeParse(data({ prePrompt: "a".repeat(3000) })).success).toBe(true)
+    expect(trendVersionDataSchema.safeParse(data({ prePrompt: "a".repeat(3001) })).success).toBe(false)
+  })
+})
+
+describe("trendRunRequestSchema — previewJobId", () => {
+  it("takes a uuid and keeps it", () => {
+    const id = "00000000-0000-4000-8000-0000000000f1"
+    const r = trendRunRequestSchema.safeParse({ slots: {}, previewJobId: id })
+    expect(r.success).toBe(true)
+    expect(r.data?.previewJobId).toBe(id)
+  })
+
+  it("refuses anything that is not a uuid", () => {
+    expect(trendRunRequestSchema.safeParse({ slots: {}, previewJobId: "job-1" }).success).toBe(false)
+    expect(trendRunRequestSchema.safeParse({ slots: {}, previewJobId: 7 }).success).toBe(false)
+  })
+})

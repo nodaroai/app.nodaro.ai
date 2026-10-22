@@ -147,6 +147,108 @@ describe("cast_swap", () => {
     })
   })
 
+  it("sends face_masking to the route as faceMasking, every key in camelCase", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", {
+      ...ARGS,
+      face_masking: {
+        mode: "auto",
+        fill: "depth",
+        min_face_height_pct: 10,
+        max_face_height_pct: 60,
+        zone: { left_pct: 5, right_pct: 6, top_pct: 0, bottom_pct: 20 },
+        blur_strength_pct: 3,
+        threshold: 0.4,
+      },
+    })
+
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({
+      ...BODY,
+      faceMasking: {
+        mode: "auto",
+        fill: "depth",
+        minFaceHeightPct: 10,
+        maxFaceHeightPct: 60,
+        zone: { leftPct: 5, rightPct: 6, topPct: 0, bottomPct: 20 },
+        blurStrengthPct: 3,
+        threshold: 0.4,
+      },
+    })
+  })
+
+  it("sends only the face_masking keys given, so the route's defaults apply", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always", zone: { top_pct: 10 } } })
+    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", zone: { topPct: 10 } } })
+  })
+
+  it("sends no faceMasking key at all without face_masking", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect("faceMasking" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
+  })
+
+  it("refuses a face_masking value outside its range before calling the route", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    for (const face_masking of [
+      { mode: "sometimes" },
+      { mode: "auto", fill: "pixelate" },
+      { mode: "auto", zone: { left_pct: 50 } },
+      { mode: "auto", threshold: 1 },
+      { mode: "auto", blur_strength_pct: 0 },
+      { mode: "auto", min_face_height_pct: 101 },
+    ]) {
+      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking })
+      expect(res.isError, JSON.stringify(face_masking)).toBe(true)
+    }
+    expect(calls).toEqual([])
+  })
+
+  it("names the masking credits that auto charges only if masking runs", async () => {
+    const auto = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: auto } })
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto" } })
+    expect(res.content[0]!.text).toContain("12 credits")
+    expect(res.content[0]!.text).toMatch(/4 more credits?[^.]*only if/i)
+    expect(res.structuredContent).toEqual({ ...auto, confirmed: false })
+  })
+
+  it("names the masking included in the quote with always", async () => {
+    const always = { totalCredits: 16, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: always } })
+    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "always" } })
+    expect(res.content[0]!.text).toContain("16 credits")
+    expect(res.content[0]!.text).toMatch(/includes 4 credits?[^.]*mask/i)
+    expect(res.content[0]!.text).not.toMatch(/only if/i)
+  })
+
+  it("words the masking by the mode asked for, not by which numbers the quote carries", async () => {
+    const both = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
+    const onlyBreakdown = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
+    const text = async (body: unknown, args: Record<string, unknown>) => {
+      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
+      return (await callTool(serverWith(fastify), "cast_swap", { ...ARGS, ...args })).content[0]!.text
+    }
+    // auto: the retry wording, even when only the breakdown names the masking.
+    const auto = await text(onlyBreakdown, { face_masking: { mode: "auto" } })
+    expect(auto).toMatch(/4 more credits?[^.]*only if/i)
+    expect(auto).not.toMatch(/includes 4/i)
+    // always: the "included" wording, even when the quote also carries maskingCredits.
+    const always = await text(both, { face_masking: { mode: "always" } })
+    expect(always).toMatch(/includes 4 credits?[^.]*mask/i)
+    expect(always).not.toMatch(/only if/i)
+    // off, or no face_masking: nothing about masking.
+    expect(await text(both, { face_masking: { mode: "off" } })).not.toMatch(/mask/i)
+    expect(await text(both, {})).not.toMatch(/mask/i)
+  })
+
+  it("says nothing of masking when the quote has none", async () => {
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect(res.content[0]!.text).not.toMatch(/mask/i)
+  })
+
   it("still passes the deprecated quality through", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, quality: "draft" })

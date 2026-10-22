@@ -235,6 +235,39 @@ describe("estimate_trend", () => {
     expect((res.structuredContent as { breakdown: unknown }).breakdown).toEqual({ castSwap: 4, seedance: 10 })
   })
 
+  it("names the masking credits, and sends preview_job_id as previewJobId", async () => {
+    const PREVIEW = "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10"
+    const { fastify, calls } = stubFastify({
+      "POST /v1/trends/dance-off/estimate": {
+        statusCode: 200,
+        body: { data: { ...QUOTE.data, breakdown: { ...QUOTE.data.breakdown, masking: 6 }, maskingCredits: 6 } },
+      },
+    })
+    const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {}, preview_job_id: PREVIEW })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({ slots: {}, previewJobId: PREVIEW })
+    expect(res.content[0]!.text).toContain("Plus 6 only if the clip is refused")
+    expect(res.structuredContent).toMatchObject({ maskingCredits: 6, breakdown: { masking: 6 } })
+
+    const run = await callTool(serverWith(fastify), "run_trend", { slug: "dance-off", slots: {}, preview_job_id: PREVIEW })
+    expect(run.structuredContent).toMatchObject({ maskingCredits: 6, confirmed: false })
+  })
+
+  it("takes any id the route takes as a uuid (no version or variant check)", async () => {
+    const LOOSE = "11111111-1111-1111-1111-111111111111"
+    const { fastify, calls } = stubFastify({ "POST /v1/trends/dance-off/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {}, preview_job_id: LOOSE })
+    expect(res.isError).toBeFalsy()
+    expect(calls[0]!.payload).toEqual({ slots: {}, previewJobId: LOOSE })
+  })
+
+  it("refuses a preview_job_id that is not a uuid", async () => {
+    const { fastify, calls } = stubFastify({ "POST /v1/trends/dance-off/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "estimate_trend", { slug: "dance-off", slots: {}, preview_job_id: "job-1" })
+    expect(res.isError).toBe(true)
+    expect(calls).toHaveLength(0)
+  })
+
   it("names no hold when it equals the expected credits", async () => {
     const { fastify } = stubFastify({
       "POST /v1/trends/dance-off/estimate": { statusCode: 200, body: { data: { ...QUOTE.data, holdCredits: 10 } } },

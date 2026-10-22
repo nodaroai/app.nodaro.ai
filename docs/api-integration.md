@@ -4038,7 +4038,7 @@ installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance, references }, settlesLower }`. |
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance, references, masking? }, maskingCredits?, settlesLower }`. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4056,7 +4056,8 @@ words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `resolution` (`"480p"` — the default — `"720p"` or `"1080p"`),
 `draft` (on by default at 480p, off above it; `true` above 480p is refused),
-`prepareReferences` (default `true`, see below), `sessionId` and `origin`.
+`prepareReferences` (default `true`, see below), `faceMasking` (off by
+default, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientcastswap).
@@ -4068,9 +4069,45 @@ credits (`breakdown.references`), charged when it runs, even if the video then
 fails; it adds about a minute, and falls back to your own images for a role
 whose picture could not be made. Locations are not prepared.
 
+**Face masking.** `faceMasking` covers the faces in the source clip before the
+video model sees it; their movement and lip timing stay, and the rest of the
+clip is sent as it is. It is
+`{ mode, fill?, minFaceHeightPct?, maxFaceHeightPct?, zone?, blurStrengthPct?, threshold? }`:
+
+- `mode`: `"off"` (the same as leaving `faceMasking` out: the clip is sent as
+  it is), `"always"` (the faces are masked before the first attempt) or
+  `"auto"` (the run starts unmasked and, only if the video model refuses the
+  source clip, is retried once with the faces masked; any other failure is not
+  retried).
+- `fill`: what covers a masked face — `"blur"` (the default) or `"depth"` (a
+  depth-color view of it).
+- Which faces are masked: `minFaceHeightPct` (0–100, default 15) and
+  `maxFaceHeightPct` (0–100, default 0 = no limit; when above 0 it must be at
+  least `minFaceHeightPct`) keep faces by their height as a % of the frame's;
+  `zone` (`{ leftPct, rightPct, topPct, bottomPct }`, each 0–49 % of the frame,
+  default 0) leaves out a face whose centre lies in one of those margins;
+  `threshold` (0.05–0.95, default 0.5) is how sure the face finder must be —
+  lower finds more faces.
+- `blurStrengthPct` (0.1–5 % of the frame's width, default 2): how strong the
+  blur is, with `fill: "blur"`.
+
+A completed job's output carries `faceMasking: { applied, reason }`: `applied`
+is whether the video was made from the masked clip, and `reason` says why —
+`"always"` (masked before the first attempt), `"input_refused"` (`auto`
+retried with the faces masked after the source clip was refused), `"no_faces"`
+(no face was left to mask after the filters: an `always` run continues
+unmasked, while an `auto` run fails with the original refusal instead) or
+`"off"`.
+
 The quote is `totalCredits` = `breakdown.castSwap` (the run itself) +
 `breakdown.seedance` (the video model it calls) + `breakdown.references` (the
-reference preparation; 0 when it is off or there is nothing to prepare).
+reference preparation; 0 when it is off or there is nothing to prepare), plus
+`breakdown.masking` (masking the faces) with `faceMasking.mode` `"always"`.
+With `"auto"` the masking is not in `totalCredits`: `maskingCredits` is the
+extra charged only if the masked retry runs, and starting the run needs
+credits for both. `breakdown.masking` is present with `"auto"` too (equal to
+`maskingCredits`) but is not added to `totalCredits`, so under `"auto"` the
+breakdown sums to more than the total.
 `settlesLower: true` means the
 video's length is left to the model (Auto), so the final charge is expected to
 come out lower than the quote.
@@ -4086,7 +4123,7 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images and no `prePrompt` or `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), or a `prePrompt` or `postPrompt` over 4,000 characters. Also an invalid `origin`. |
+| `400` | `validation_error` | The body does not validate: no role with images and no `prePrompt` or `postPrompt`, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, or a `faceMasking` setting out of range (including a `maxFaceHeightPct` above 0 and below `minFaceHeightPct`). Also an invalid `origin`. |
 | `400` | `raw_reference_token` | A role's `name` or `previewName`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). |
 | `400` | `unsafe_url` | `videoUrl` or a role image is not a public http(s) address. |
@@ -4096,7 +4133,7 @@ Refusals, all before anything is charged (bodies are
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the model's limit. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with face masking `"auto"`, the quote plus `maskingCredits`). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
 | `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/cast-swap` only). |
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
 | `503` | `host_too_old` | This platform version cannot run Cast Swap (both routes). |
@@ -4118,7 +4155,7 @@ slug is a `404` on every route.
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
 | `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its slots, examples, preview length and resolutions). Query: `locale`. |
-| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, breakdown, maskingCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `maskingCredits`, on a trend that masks faces only when needed, is what is charged on top if the video model refuses the clip and the run is retried with the faces masked; it is not in `expectedCredits` or `holdCredits`, and `breakdown.masking` (listed beside it) is not part of the totals either. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version or is unpublished. |
 | `PUT` | `/v1/trends/:slug/favorite` | Add the trend to your favorites. `204`. |
@@ -4128,7 +4165,7 @@ Names, descriptions, slot labels and hints come in `?locale=` when it is a
 platform language, else your profile's language, else English.
 
 The estimate and run body is
-`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId? }`:
+`{ slots, example?, details?, preview?, resolution?, draft?, sessionId?, projectId?, previewJobId? }`:
 
 - `slots`: slot key → `{ images?, …chips }`, 1–3 images per slot. Every
   required slot needs images; an optional slot left out takes the pictures of
@@ -4145,6 +4182,11 @@ The estimate and run body is
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
 - `projectId`: accepted, but not used by the run today.
+- `previewJobId` (a uuid): on a full run, the `jobId` of your own completed
+  preview run of this trend. When the preview showed the clip needs its faces
+  masked, the full run masks them from the start (and the quote says so)
+  instead of first trying without. Any other job (not yours, another trend's,
+  not a preview, not finished) is ignored, without an error.
 
 An OAuth app needs `jobs:read` to read, `workflows:execute` to estimate or
 run (plus `assets:write` to pass a `sessionId`), and `assets:write` for

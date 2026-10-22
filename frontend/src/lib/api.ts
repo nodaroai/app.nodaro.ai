@@ -11058,6 +11058,35 @@ export interface AdminTrendSource {
   height?: number
 }
 
+export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
+export type AdminTrendFaceMaskingFill = "blur" | "depth"
+
+/** Frame margins (0–49 % each); a face centred in one is not masked. */
+export interface AdminTrendFaceMaskingZone {
+  leftPct?: number
+  rightPct?: number
+  topPct?: number
+  bottomPct?: number
+}
+
+/**
+ * Cast Swap's face masking for every run of a trend (hidden from users). A key
+ * left out takes the engine's default.
+ */
+export interface AdminTrendFaceMasking {
+  mode: AdminTrendFaceMaskingMode
+  fill?: AdminTrendFaceMaskingFill
+  /** 0–100 % of the frame's height; default 15. */
+  minFaceHeightPct?: number
+  /** 0–100; 0 (default) = no limit; above 0 it must be at least the minimum. */
+  maxFaceHeightPct?: number
+  zone?: AdminTrendFaceMaskingZone
+  /** 0.1–5 % of the frame's width; default 2. */
+  blurStrengthPct?: number
+  /** 0.05–0.95; default 0.5. Lower finds more faces. */
+  threshold?: number
+}
+
 export interface AdminTrendData {
   name: TrendLocalizedText
   description?: TrendLocalizedText
@@ -11067,6 +11096,9 @@ export interface AdminTrendData {
   slots: AdminTrendSlot[]
   references: AdminTrendReference[]
   trendPrompt?: string
+  /** Placed at the start of every run's prompt (hidden from users). */
+  prePrompt?: string
+  faceMasking?: AdminTrendFaceMasking
   examples: AdminTrendExample[]
 }
 
