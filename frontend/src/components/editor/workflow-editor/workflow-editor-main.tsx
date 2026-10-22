@@ -68,6 +68,7 @@ import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useNodeDefaults } from "@/hooks/use-node-defaults";
 import { createClient } from "@/lib/supabase";
+import { imageEditSource, recordImageEdit } from "@/lib/record-image-edit";
 import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelJob, discardWorkflowExecution } from "@/lib/api";
 import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts";
@@ -495,9 +496,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         ]);
         const url = imageResult.url;
 
+        // A real job (history, gallery, a source to edit again), linked to the
+        // picture it was made from; a local id when it cannot be recorded.
+        const recordedJobId = await recordImageEdit({
+          assetId: imageResult.assetId,
+          source: imageEditSource(
+            useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined,
+            imageEditUrl,
+          ),
+          editStateUrl: designStateUrl,
+        });
+
         const newResult: GeneratedResult = {
           url,
-          jobId: `image-edit-${Date.now()}`,
+          jobId: recordedJobId ?? `image-edit-${Date.now()}`,
           timestamp: new Date().toISOString(),
           filerobotDesignStateUrl: designStateUrl,
           ...(mediaMeta?.width && mediaMeta?.height ? { width: mediaMeta.width, height: mediaMeta.height } : {}),
@@ -527,7 +539,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         closeImageEdit();
       }
     },
-    [imageEditNodeId, user?.id, updateNodeData, closeImageEdit],
+    [imageEditNodeId, imageEditUrl, user?.id, updateNodeData, closeImageEdit],
   );
 
   const handleImageEditClose = useCallback(() => {
