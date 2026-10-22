@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
+import { llmChargeId } from "../llm-metered.js"
+import { parseMeteredLlmId } from "../metered-llm-id.js"
 
 // backend/src/ee/billing/__tests__/ → up 5 → repo root
 const MIGRATION = join(
@@ -33,7 +35,15 @@ describe("llm-structured pricing", () => {
     expect(sql).toMatch(/ON\s+CONFLICT\s*\(\s*model_identifier\s*\)\s*DO\s+NOTHING/i)
   })
 
-  it("every model the route can run resolves onto one of the three rows", () => {
+  // D6: metered is the default — a run is charged under `llm-structured:<model>`
+  // at what it really cost, and the three tier rows below are what the
+  // rollback (`LLM_TIER_PRICING_ROLLBACK`) bills.
+  it("a metered run is charged under llm-structured:<model> — Studio Director's Fable 5 included", () => {
+    expect(llmChargeId("llm-structured", "claude-fable-5")).toBe("llm-structured:claude-fable-5")
+    expect(parseMeteredLlmId("llm-structured:claude-fable-5")).toEqual({ feature: "llm-structured", modelId: "claude-fable-5" })
+  })
+
+  it("under the rollback, every model the route can run resolves onto one of the three rows", () => {
     // economy default (LLM_FEATURE_DEFAULTS["llm-chat"]), a standard model,
     // and the two the studio dialog offers.
     expect(buildLlmCreditIdentifier("llm-structured", "gemini-3.6-flash")).toBe("llm-structured:economy")

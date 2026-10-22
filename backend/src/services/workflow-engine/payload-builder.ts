@@ -213,7 +213,7 @@ import {
   type ExtraRefInput,
   type ExtraRefCharacterContext,
 } from "@nodaro/shared/entities"
-import { resolveVideoAnalysisModel, buildLlmCreditIdentifier, motionGraphicsFeature } from "@nodaro/shared/llm-models"
+import { resolveVideoAnalysisModel, buildLlmCreditIdentifier, motionGraphicsFeature, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, resolveNodeRefs, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared/workflow"
 import { PARAMETER_NODE_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
 import { captionRoutesToRemotion, normalizeCaptionNumericLevers, styleCaptionPlan } from "@nodaro/shared/captions"
@@ -241,7 +241,8 @@ import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
-import { config } from "../../lib/config.js"
+import { config, llmMeteredPricing } from "../../lib/config.js"
+import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
 import { isNodeDenied, nodeNotAvailableError, isModelDenied, deniedModelRejectionMessage, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromNode } from "../../lib/scene3d-node.js"
@@ -2674,6 +2675,17 @@ function ranNodeIds(states: Readonly<Record<string, NodeExecutionState>>): Set<s
       .filter(([, state]) => !savedDataAllowed(state) && state.status === "completed")
       .map(([id]) => id),
   )
+}
+
+/**
+ * The credit id a metered LLM node is charged under: `<feature>:<model>` —
+ * the format of `llmChargeId` (`ee/billing/llm-metered.ts`, which core cannot
+ * import; a test holds the two to one string), on the model the call runs on.
+ * Metered nodes never reserve or price a tier row (A1); under the rollback
+ * (`!llmMeteredPricing()`) the tier id is returned exactly as before.
+ */
+function llmNodeCreditId(feature: string, modelId: string, tierId: () => string): string {
+  return llmMeteredPricing() ? `${feature}:${modelId}` : tierId()
 }
 
 /** The plan basis an Apply EDL iteration stamps (`renderPlanBasis`, the rule
@@ -7525,7 +7537,8 @@ export function buildPayload(
       return {
         jobName: "generate-script",
         queueName: "video-generation",
-        modelIdentifier: buildLlmCreditIdentifier("generate-script", scriptLlmModel, scriptEffort, data.advancedMode === true),
+        modelIdentifier: llmNodeCreditId("generate-script", resolveScriptModelId(data.provider as ScriptProvider | undefined, scriptLlmModel), () =>
+          buildLlmCreditIdentifier("generate-script", scriptLlmModel, scriptEffort, data.advancedMode === true)),
         payload: {
           jobId,
           prompt: topic,
@@ -7553,7 +7566,8 @@ export function buildPayload(
       return {
         jobName: "motion-graphics-lottie",
         queueName: "video-generation",
-        modelIdentifier: buildLlmCreditIdentifier(motionGraphicsFeature(data.engine as string | undefined), mgLlmModel, mgEffort, data.advancedMode === true),
+        modelIdentifier: llmNodeCreditId("motion-graphics-lottie", mgLlmModel ?? LLM_FEATURE_DEFAULTS["motion-graphics-lottie"], () =>
+          buildLlmCreditIdentifier(motionGraphicsFeature(data.engine as string | undefined), mgLlmModel, mgEffort, data.advancedMode === true)),
         payload: {
           jobId,
           prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.motionPrompt as string | undefined, refMap), readPromptAffixes(data), refMap),
@@ -7609,7 +7623,8 @@ export function buildPayload(
       return {
         jobName: "generate-3d-scene",
         queueName: "video-generation",
-        modelIdentifier: buildLlmCreditIdentifier("3d-scene", sceneLlmModel, sceneEffort),
+        modelIdentifier: llmNodeCreditId("3d-scene", sceneLlmModel ?? LLM_FEATURE_DEFAULTS["3d-scene"], () =>
+          buildLlmCreditIdentifier("3d-scene", sceneLlmModel, sceneEffort)),
         payload: {
           kind: "generate",
           jobId,
@@ -7674,7 +7689,8 @@ export function buildPayload(
         // instruction lane bills the feature's tier exactly like the route.
         modelIdentifier: editOperations
           ? "3d-scene-ops"
-          : buildLlmCreditIdentifier("3d-scene", editLlmModel, editEffort),
+          : llmNodeCreditId("3d-scene", editLlmModel ?? LLM_FEATURE_DEFAULTS["3d-scene"], () =>
+              buildLlmCreditIdentifier("3d-scene", editLlmModel, editEffort)),
         payload: {
           kind: "edit",
           jobId,

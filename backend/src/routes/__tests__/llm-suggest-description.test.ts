@@ -14,6 +14,9 @@ vi.mock("../../lib/llm-client.js", () => ({
 // logic runs. Mock the keys as truthy so the preflight passes; the dedicated
 // 503 test below overrides this with vi.doMock + dynamic re-import.
 vi.mock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: "test-key" },
   hasCredits: () => true,
   isCloud: () => true,
@@ -190,6 +193,9 @@ describe("POST /v1/llm-suggest-description", () => {
 
   it("returns 503 provider_unavailable when no LLM keys are configured", async () => {
     vi.doMock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
       config: { KIE_API_KEY: undefined, ANTHROPIC_API_KEY: undefined },
       hasCredits: () => true,
       isCloud: () => true,
@@ -223,6 +229,9 @@ describe("POST /v1/llm-suggest-description", () => {
 
   it("serves with only KIE configured (the Anthropic key undefined)", async () => {
     vi.doMock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
       config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: undefined },
       hasCredits: () => true,
       isCloud: () => true,

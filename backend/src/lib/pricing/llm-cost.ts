@@ -24,7 +24,9 @@
  * [2,3,7,11].
  * ────────────────────────────────────────────────────────────────────────────
  */
-import type { LlmModelDef } from "@nodaro/shared/llm-models"
+import { getLlmModel, llmServesDirect, type LlmModelDef } from "@nodaro/shared/llm-models"
+import { claudeMustServeDirect } from "../llm/claude-direct.js"
+import type { LlmRequest } from "../llm/types.js"
 
 /**
  * Which upstream actually served the call. The SAME model id bills at very
@@ -245,16 +247,109 @@ export interface LlmCostUsage {
 const CACHE_WRITE_INPUT_MULTIPLIER = 1.25
 const CACHE_READ_INPUT_MULTIPLIER = 0.1
 
+/**
+ * Thrown by {@link calculateLlmCost} for a model with no rate on the lane
+ * asked — an unpriced model is never costed at $0. Billing refuses such a
+ * call before it runs; callers that only LOG cost use {@link llmCostOrZero}.
+ */
+export class LlmRateMissingError extends Error {
+  readonly modelId: string
+  readonly lane: LlmServingLane
+
+  constructor(modelId: string, lane: LlmServingLane) {
+    super(`No ${lane}-lane rate for LLM model "${modelId}" — add it to backend/src/lib/pricing/llm-cost.ts`)
+    this.name = "LlmRateMissingError"
+    this.modelId = modelId
+    this.lane = lane
+  }
+}
+
+/**
+ * The rate row for `id` on `lane` as COST is computed: a missing direct row
+ * falls back to the KIE row rather than to nothing — for logging a spend that
+ * already happened, a stale-but-nonzero estimate beats an under-report. Pricing
+ * never relies on that fallback: {@link hasLlmRate} (the fail-closed guard, and
+ * what the metered hold checks before it prices) asks for the lane's OWN row.
+ */
+function rateFor(id: string, lane: LlmServingLane): LlmModelRateUsd | undefined {
+  return (lane === "direct" ? LLM_DIRECT_RATES_USD_PER_M[id] : undefined) ?? LLM_MODEL_RATES_USD_PER_M[id]
+}
+
+/**
+ * Does `modelId` carry its own rate on `lane`? A direct lane needs a DIRECT row
+ * — a model that can be served direct is never priced from its (cheaper) KIE
+ * row, which {@link calculateLlmCost} falls back to for cost logging only.
+ */
+export function hasLlmRate(modelId: string, lane: LlmServingLane): boolean {
+  return (lane === "direct" ? LLM_DIRECT_RATES_USD_PER_M : LLM_MODEL_RATES_USD_PER_M)[modelId] !== undefined
+}
+
+/** The router serves this model direct FIRST even with no effort or pin: a Claude without `preferKie`, a Gemini with `preferDirect`. */
+function servesDirectFirst(model: LlmModelDef): boolean {
+  return Boolean((model.directFallbackModel && !model.preferKie) || (model.directGeminiModel && model.preferDirect))
+}
+
+/**
+ * Every lane a call on `model` may be served — and so billed — on, PRIMARY
+ * lane first (`[0]` is {@link llmPrimaryLane} for an unpinned call — a test
+ * holds the two together):
+ *
+ * - `directOnly` → `["direct"]` — KIE is never called.
+ * - served direct first → `["direct", "kie"]`: by {@link llmServesDirect} (an
+ *   effort the aggregator ignores, or Advanced mode), or by the registry's own
+ *   preference (a Claude without `preferKie`, a Gemini with `preferDirect`). A
+ *   direct failure is retried on KIE serving the same model.
+ * - otherwise → `["kie"]`, plus `"direct"` when the model has a direct lane
+ *   (`directGeminiModel` or `directFallbackModel`) — the router's reliability
+ *   fallback when KIE fails.
+ */
+export function llmPossibleLanes(modelOrId: string | LlmModelDef, reasoningEffort?: string, advancedMode?: boolean): LlmServingLane[] {
+  const model = typeof modelOrId === "string" ? getLlmModel(modelOrId) : modelOrId
+  if (!model) return ["kie"]
+  if (model.directOnly) return ["direct"]
+  if (llmServesDirect(model.id, reasoningEffort, advancedMode) || servesDirectFirst(model)) return ["direct", "kie"]
+  return model.directGeminiModel || model.directFallbackModel ? ["kie", "direct"] : ["kie"]
+}
+
+/**
+ * The lane the router serves one built request on FIRST — what a metered hold
+ * prices (D1: the primary lane, one attempt; a fallback is collected at
+ * settle). Restates `llmComplete`'s choice with every provider key set (the
+ * production posture), in order:
+ *
+ * 1. a pin (`requireLane`, which is how Advanced mode reaches the router) wins;
+ * 2. `directOnly` → direct;
+ * 3. a Claude with a direct lane → direct unless it prefers KIE, or KIE cannot
+ *    honour the call ({@link claudeMustServeDirect});
+ * 4. a Gemini preferring its direct lane → direct;
+ * 5. an effort {@link llmServesDirect} bills direct → direct;
+ * 6. otherwise KIE.
+ *
+ * `cheapLanesOnly` is accepted and deliberately NOT read: it only removes the
+ * direct fallback (`lane-fallback.ts`, `structured.ts`) and never moves the
+ * primary lane — a call that runs direct by its own settings still does — so it
+ * cannot change what a primary-lane hold prices.
+ */
+export function llmPrimaryLane(
+  model: LlmModelDef,
+  req: Pick<LlmRequest, "requireLane" | "jsonSchema" | "reasoningEffort" | "cheapLanesOnly">,
+): LlmServingLane {
+  if (req.requireLane) return req.requireLane
+  if (model.directOnly) return "direct"
+  if (model.directFallbackModel && (!model.preferKie || claudeMustServeDirect(model, req))) return "direct"
+  if (model.directGeminiModel && model.preferDirect) return "direct"
+  if (llmServesDirect(model.id, req.reasoningEffort)) return "direct"
+  return "kie"
+}
+
 export function calculateLlmCost(
   modelOrId: string | LlmModelDef,
   usage: LlmCostUsage,
   lane: LlmServingLane = "kie",
 ): number {
   const id = typeof modelOrId === "string" ? modelOrId : modelOrId.id
-  // A missing direct row falls back to the KIE row rather than to $0 — an
-  // under-report of a real spend is worse than a stale-but-nonzero estimate.
-  const rate = (lane === "direct" ? LLM_DIRECT_RATES_USD_PER_M[id] : undefined) ?? LLM_MODEL_RATES_USD_PER_M[id]
-  if (!rate) return 0
+  const rate = rateFor(id, lane)
+  if (!rate) throw new LlmRateMissingError(id, lane)
   const cacheWrite = usage.cacheWriteTokens ?? 0
   const cacheRead = usage.cacheReadTokens ?? 0
   // The usage fields are disjoint; the long-context band keys off the WHOLE
@@ -271,6 +366,59 @@ export function calculateLlmCost(
       cacheRead * CACHE_READ_INPUT_MULTIPLIER) *
     band.inputPricePerM
   return (inputUsd + usage.outputTokens * band.outputPricePerM) / 1_000_000
+}
+
+/**
+ * {@link calculateLlmCost} for callers that only LOG or REPORT cost, after
+ * billing has already guarded the call: a missing rate is warned about and
+ * reported as 0 instead of failing a call that has already run. Only
+ * {@link LlmRateMissingError} is caught — any other error propagates.
+ */
+export function llmCostOrZero(
+  modelOrId: string | LlmModelDef,
+  usage: LlmCostUsage,
+  lane: LlmServingLane = "kie",
+): number {
+  try {
+    return calculateLlmCost(modelOrId, usage, lane)
+  } catch (err) {
+    if (!(err instanceof LlmRateMissingError)) throw err
+    console.warn(`[llm-rate-missing] model=${err.modelId} lane=${err.lane} — cost reported as 0`)
+    return 0
+  }
+}
+
+/** One lane's rate card for a model, USD per million tokens — see {@link llmRateCard}. */
+export interface LlmRateCardUsd {
+  inputPerM: number
+  outputPerM: number
+  /** The second band, applied to the whole call once the prompt exceeds `thresholdTokens`. */
+  longContext?: { thresholdTokens: number; inputPerM: number; outputPerM: number }
+}
+
+/**
+ * The lane's OWN rate card for `modelId` (never the KIE row a missing direct
+ * row falls back to for cost logging — the {@link hasLlmRate} rule), or
+ * undefined. Read by the generated per-model rate table in the public docs
+ * (`scripts/gen-llm-rate-table.ts`), which states every figure as charged
+ * credits, never as these USD rates.
+ */
+export function llmRateCard(modelId: string, lane: LlmServingLane): LlmRateCardUsd | undefined {
+  const rate = (lane === "direct" ? LLM_DIRECT_RATES_USD_PER_M : LLM_MODEL_RATES_USD_PER_M)[modelId]
+  if (!rate) return undefined
+  return {
+    inputPerM: rate.inputPricePerM,
+    outputPerM: rate.outputPricePerM,
+    ...(rate.longContext && rate.longContextThresholdTokens !== undefined
+      ? {
+          longContext: {
+            thresholdTokens: rate.longContextThresholdTokens,
+            inputPerM: rate.longContext.inputPricePerM,
+            outputPerM: rate.longContext.outputPricePerM,
+          },
+        }
+      : {}),
+  }
 }
 
 /** Test/introspection hook: model ids carrying a direct-lane rate row. */

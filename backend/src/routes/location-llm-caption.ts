@@ -2,11 +2,13 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { captionLocation } from "../lib/location-caption.js"
+import { captionLocationCall, locationCaptionRequest, LOCATION_CAPTION_MODEL } from "../lib/location-caption.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { creditGuard } from "../middleware/credit-guard.js"
-import { meterSyncLlm } from "../lib/meter-sync-llm.js"
+import { billedFailureMessage, llmGuardPrecheck } from "../lib/meter-sync-llm.js"
+import { meterSyncLlmMetered } from "../lib/llm-billing.js"
+import { llmMeteredPricing } from "../lib/config.js"
 
 /**
  * Location canonical-description LLM retry route.
@@ -50,7 +52,11 @@ export async function locationLlmCaptionRoutes(app: FastifyInstance) {
       // dedup:false — this route returns { canonicalDescription }, not the
       // { jobId, deduped:true } shape the idempotency short-circuit would send.
       // Scope first: an app without assets:write is refused before any credit check.
-      preHandler: [requireAppScope("assets:write"), creditGuard(() => CREDIT_IDENTIFIER, { dedup: false })],
+      preHandler: [requireAppScope("assets:write"), creditGuard(() => CREDIT_IDENTIFIER, {
+        dedup: false,
+        // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
+        computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: LOCATION_CAPTION_MODEL, maxTokens: 500 }),
+      })],
       config: {
         // 10 req/min/IP — `@fastify/rate-limit` must be registered globally.
         rateLimit: { max: 10, timeWindow: "1 minute" },
@@ -114,15 +120,25 @@ export async function locationLlmCaptionRoutes(app: FastifyInstance) {
       // Unlike approve-main-image, this route has no side-effect to preserve
       // when the LLM fails. Surface as 502 so the frontend can retry. Refund the
       // reservation on every failure (sync route — no worker refund net).
-      const meter = await meterSyncLlm(req, reply, "location-llm-caption", CREDIT_IDENTIFIER)
+      // Metered (D3): held and settled under prompt-helper:<model>; under the
+      // rollback this is today's meterSyncLlm at the flat prompt-helper rate.
+      const metered = llmMeteredPricing()
+      const request = locationCaptionRequest(row.source_image_url)
+      const meter = await meterSyncLlmMetered(req, reply, "location-llm-caption", {
+        feature: "prompt-helper",
+        calls: [{ modelId: LOCATION_CAPTION_MODEL, request }],
+      })
       if (!meter) return
 
-      const caption = await captionLocation(row.source_image_url)
+      const { caption, outcome } = await captionLocationCall(row.source_image_url)
+      // The call is billed even when the caption came back null (a billed refusal).
+      if (metered) meter.spend.add(LOCATION_CAPTION_MODEL, request, outcome)
       if (caption === null) {
-        await meter.refund()
+        const message = billedFailureMessage("Failed to caption location image", meter.spend)
+        await meter.settle("failed", message)
         return reply
           .status(502)
-          .send({ error: { code: "caption_failed", message: "Failed to caption location image" } })
+          .send({ error: { code: "caption_failed", message } })
       }
 
       // ----- Persist canonical_description (NOT source_image_url) -----
@@ -138,13 +154,14 @@ export async function locationLlmCaptionRoutes(app: FastifyInstance) {
         .eq("user_id", req.userId)
 
       if (updateErr) {
-        await meter.refund()
+        // The caption call was billed and answered: it is charged (never refunded, D10).
+        await meter.settle("failed", billedFailureMessage(updateErr.message ?? "Update failed", meter.spend))
         return reply
           .status(500)
           .send({ error: { code: "update_failed", message: updateErr.message ?? "Update failed" } })
       }
 
-      await meter.commit()
+      await meter.settle("completed")
       return reply.send({ canonicalDescription: caption })
     },
   )

@@ -9,6 +9,7 @@ import {
   setEnvProviderKeys,
   type ProviderKeyId,
 } from "./provider-keys-runtime.js"
+import { llmMeteredSchemaReady } from "./llm-metered-schema-gate.js"
 
 /**
  * An overridable service base URL: defaults to the vendor's own host, and
@@ -67,6 +68,9 @@ export const envSchema = z.object({
   REDIS_URL: z.string().default("redis://localhost:6379"),
   SCENE3D_ADVANCED_ENABLED: z.string().optional().transform((v) => v === "true" || v === "1"),
   SCENE3D_LOCAL_ENABLED: z.string().optional().transform((v) => v === "true" || v === "1"),
+  /** Rollback switch for metered LLM pricing (Cloud): `true`/`1` returns every LLM call to the earlier tier pricing.
+   *  Read only through `llmMeteredPricing()`. */
+  LLM_TIER_PRICING_ROLLBACK: z.string().optional().transform((v) => v === "true" || v === "1"),
   SCENE3D_STAGE_REDIS_URL: z.string().default(""),
   R2_ACCOUNT_ID: z.string().default(""),
   R2_ACCESS_KEY_ID: z.string().default(""),
@@ -543,6 +547,18 @@ export function hasAdmin(): boolean {
 /** only cloud edition has credit system */
 export function hasCredits(): boolean {
   return config.EDITION === "cloud"
+}
+
+/**
+ * LLM calls are priced per model on their real token cost (a hold first, the
+ * actual cost at settle) — the default wherever credits exist. The
+ * `LLM_TIER_PRICING_ROLLBACK` switch returns every LLM call to the earlier tier
+ * pricing, byte for byte. Read the switch only through this helper.
+ */
+export function llmMeteredPricing(): boolean {
+  // R33: also the metered schema (551 + 552 + 554) must be confirmed present — until
+  // it is, exactly the rollback's tier path (lib/llm-metered-schema-gate.ts).
+  return hasCredits() && !config.LLM_TIER_PRICING_ROLLBACK && llmMeteredSchemaReady()
 }
 
 /** business + cloud are multi-user (community is single-user → sharing is inert) */

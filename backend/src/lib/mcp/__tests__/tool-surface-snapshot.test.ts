@@ -28,6 +28,9 @@ vi.mock("../../config.js", async (importOriginal) => {
   return { ...orig, hasCredits: () => credits }
 })
 const { buildMcpServer } = await import("../server.js")
+import { setLlmMeteredSchemaReadyForTesting } from "../../llm-metered-schema-gate.js"
+// What is measured is the hosted deployment, where metered LLM pricing is on (R33: its schema is applied).
+setLlmMeteredSchemaReadyForTesting(true)
 
 const ALL_GRANTED: Scope[] = [
   "workflows:read", "workflows:write", "workflows:execute", "jobs:read",
@@ -1107,6 +1110,26 @@ const SPEAKER_LAYOUT_TOOL_BYTES = 6_217
 // 465_864 total − 462_730 = 3_134 B, far under the per-tool budget; the 103 B of headroom the list
 // had before is carried across. The route's rules live in docs/api-integration.md.
 const CAST_SWAP_TOOL_BYTES = 3_134
+// Metered LLM pricing: the tools fronting an LLM call (analyze/generate/enhance_prompt, image_to_text,
+// suggest_overlay_placement, generate_script, reduce, the four approvals and four recaptions) state
+// that the call is charged per token at the model's rate, with the typical estimate on the default
+// model (`estimateHint`, derived at registration) and where every model's rate is; the advanced-mode
+// and reasoning-effort copy drops its tier/rung wording. Measured by this suite:
+// 477_657 total − 474_485 before = 3_172 B. The 103 B of headroom carry across.
+const LLM_METERED_PRICING_COPY_BYTES = 3_172
+
+// RAISED 2026-10-20 by the UGC quote's estimate flags (metered LLM pricing Task 12): build_ugc_clips'
+// description names a quote line's `estimate: true` and the quote's `totalIsEstimate: true` (show ~N).
+// No tool added. Measured by this suite: 481_314 total − 481_290 budget before = 24 B over; the
+// sentence is 127 B (the rest rode the earlier headroom).
+const UGC_QUOTE_ESTIMATE_FLAGS_BYTES = 127
+
+// RAISED 2026-10-20 by list_models' price lookup (metered LLM pricing, final review): its optional
+// `priceIds` argument quotes credit ids, an LLM call on any model by `<feature>:<model id>` among them,
+// so an agent can price a non-default model as the REST model-cost lookup does. No tool added, so the
+// fixture does NOT move. Measured by this suite on the same tree with and without the change:
+// 481_715 total − 481_314 = 401 B; the 103 B of headroom the list had before is carried across.
+const LIST_MODELS_PRICE_IDS_BYTES = 401
 // RAISED 2026-10-20 by four NEW tools, the trend verbs (the MCP face of /v1/trends): list_trends
 // and get_trend (jobs:read, read-only) and estimate_trend / run_trend (workflows:execute; run_trend
 // quotes without `confirm`, as cast_swap), and nothing else. All four are registered inside
@@ -1337,6 +1360,9 @@ export const TOOL_WIRE_BUDGET = {
     CLIP_PACK_RECORDINGS_BYTES +
     SPEAKER_LAYOUT_TOOL_BYTES +
     CAST_SWAP_TOOL_BYTES +
+    LLM_METERED_PRICING_COPY_BYTES +
+    UGC_QUOTE_ESTIMATE_FLAGS_BYTES +
+    LIST_MODELS_PRICE_IDS_BYTES +
     TRENDS_TOOL_BYTES +
     TRENDS_WORDING_BYTES +
     CAST_SWAP_PRE_PROMPT_BYTES +

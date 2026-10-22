@@ -45,10 +45,13 @@ export type StreamEvent =
  */
 export class SseHttpError extends Error {
   readonly status: number
+  /** The response body as sent (a JSON `{ error }` from the API). */
+  readonly body: string
   constructor(status: number, body: string) {
     super(`SSE request failed (${status}): ${body}`)
     this.name = "SseHttpError"
     this.status = status
+    this.body = body
   }
 }
 

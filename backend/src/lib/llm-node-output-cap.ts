@@ -4,9 +4,10 @@
  * Three readers share this file so they cannot drift apart:
  *  - the orchestrator (`buildSyncHttpBody`) sends `data.maxTokens ?? <the node's
  *    default>` into the route (`llmNodeMaxTokens`);
- *  - the request layer (`llm-client.ts :: deriveParams`) raises that cap to the
- *    model's reasoning floor when thinking shares the budget
- *    (`raiseToReasoningFloor`);
+ *  - the request layer (`llm/params.ts :: deriveParams`) raises that cap to the
+ *    model's reasoning floor when thinking shares the budget — it returns
+ *    `llmEffectiveOutputCap`, which the metered LLM hold prices, so the cap a
+ *    call is sent and the cap it is held for cannot drift;
  *  - the listing (`llmNodeOutputTokenCap`), which bounds a generated voice's
  *    script by what the LLM node feeding it can write, reads both.
  *
@@ -22,6 +23,7 @@ import {
   type LlmModelDef,
   type LlmReasoningEffort
 } from "@nodaro/shared/llm-models"
+import type { LlmRequest } from "./llm/types.js"
 
 /**
  * What the orchestrator sends when the node has no `maxTokens` of its own.
@@ -71,4 +73,21 @@ export function llmNodeOutputTokenCap(type: string, data: Record<string, unknown
   if (!model) return asked
   const effort = typeof data.reasoningEffort === "string" ? data.reasoningEffort : undefined
   return raiseToReasoningFloor(model, effectiveReasoningEffort(model.id, effort, data.advancedMode === true), asked)
+}
+
+/**
+ * The output cap one built request is sent with — what `deriveParams` returns,
+ * and what a metered LLM hold prices: the request's `maxTokens` (else the
+ * model's own maximum), raised to the reasoning floor when the effort the lane
+ * will honour (a direct pin reads the wider direct ladder) shares the budget.
+ */
+export function llmEffectiveOutputCap(
+  model: LlmModelDef,
+  req: Pick<LlmRequest, "maxTokens" | "reasoningEffort" | "requireLane">,
+): number {
+  return raiseToReasoningFloor(
+    model,
+    effectiveReasoningEffort(model.id, req.reasoningEffort, req.requireLane === "direct"),
+    req.maxTokens ?? model.maxOutputTokens,
+  )
 }

@@ -17,6 +17,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { usecaseRenderFinalRefusalKey } from "@/lib/use-case-render-final-target"
 import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
+import type { RunUnpriced } from "@/components/editor/workflow-editor/run-unpriced"
 import { runPriceSuffix, runPriceTitle } from "./run-price"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -35,6 +36,14 @@ export interface RenderReviewBarViewProps {
   readonly previewCredits?: number
   /** Update preview's price is marked likewise. */
   readonly previewUnchecked?: UgcPriceState
+  /** Render final's price holds a metered LLM call's estimate (charged its actual usage): shown approximate. */
+  readonly finalApprox?: boolean
+  /** Update preview's, likewise. */
+  readonly previewApprox?: boolean
+  /** Render final's run holds a node the server refuses to price: no figure, "not priced yet", the server's sentence on hover. */
+  readonly finalUnpriced?: RunUnpriced
+  /** Update preview's, likewise. */
+  readonly previewUnpriced?: RunUnpriced
   /** A run is in progress: the buttons wait, and say why. */
   readonly busy: boolean
   /** Why they wait (default: a run is in progress). */
@@ -61,9 +70,13 @@ export function RenderReviewBarView({
   onRenderFinal,
   finalCredits,
   finalUnchecked,
+  finalApprox,
   onUpdatePreview,
   previewCredits = 0,
   previewUnchecked,
+  previewApprox,
+  finalUnpriced,
+  previewUnpriced,
   busy,
   busyReason,
   checkPending = false,
@@ -76,10 +89,12 @@ export function RenderReviewBarView({
   const t = useT()
   const reasonId = useId()
   const blocked = disabledReason !== undefined
-  const price = (credits: number, unchecked?: UgcPriceState) => (blocked ? "" : runPriceSuffix(t, credits, unchecked))
+  const price = (credits: number, unchecked?: UgcPriceState, approx?: boolean, unpriced?: RunUnpriced) =>
+    blocked ? "" : runPriceSuffix(t, credits, unchecked, { approx: approx === true, ...(unpriced ? { unpriced } : {}) })
   const waiting = blocked ? disabledReason : busy ? (busyReason ?? t("renderFinal.inProgress")) : undefined
   // Nothing in the way: a price marked as an estimate says why on its button.
-  const titleOf = (credits: number, unchecked?: UgcPriceState) => waiting ?? (price(credits, unchecked) ? runPriceTitle(t, unchecked) : undefined)
+  const titleOf = (credits: number, unchecked?: UgcPriceState, unpriced?: RunUnpriced) =>
+    waiting ?? (price(credits, unchecked, false, unpriced) ? runPriceTitle(t, unchecked, unpriced) : undefined)
   const off = blocked || busy || checkPending || checking !== null
   const described = blocked ? reasonId : undefined
 
@@ -92,11 +107,11 @@ export function RenderReviewBarView({
           disabled={off}
           aria-busy={checking === "final" || undefined}
           aria-describedby={described}
-          title={titleOf(finalCredits, finalUnchecked)}
+          title={titleOf(finalCredits, finalUnchecked, finalUnpriced)}
           onClick={onRenderFinal}
         >
           {checking === "final" ? <CheckSpinner /> : <Film className="h-3 w-3 shrink-0" aria-hidden />}
-          <span className="truncate">{finalLabel ?? t("renderFinal.action")}{price(finalCredits, finalUnchecked)}</span>
+          <span className="truncate">{finalLabel ?? t("renderFinal.action")}{price(finalCredits, finalUnchecked, finalApprox, finalUnpriced)}</span>
         </button>
         {onUpdatePreview && (
           <button
@@ -105,11 +120,11 @@ export function RenderReviewBarView({
             disabled={off}
             aria-busy={checking === "proxy" || undefined}
             aria-describedby={described}
-            title={titleOf(previewCredits, previewUnchecked)}
+            title={titleOf(previewCredits, previewUnchecked, previewUnpriced)}
             onClick={onUpdatePreview}
           >
             {checking === "proxy" ? <CheckSpinner /> : <RefreshCw className="h-3 w-3 shrink-0" aria-hidden />}
-            <span className="truncate">{t("renderFinal.updatePreview")}{price(previewCredits, previewUnchecked)}</span>
+            <span className="truncate">{t("renderFinal.updatePreview")}{price(previewCredits, previewUnchecked, previewApprox, previewUnpriced)}</span>
           </button>
         )}
       </div>
@@ -145,7 +160,7 @@ interface RenderReviewBarProps {
  *  clip set whose review keeps no clip), shows them disabled, with why. */
 export function RenderReviewBar({ renderId, busy, className }: RenderReviewBarProps) {
   const t = useT()
-  const { renderFinal, updatePreview, finalCredits, previewCredits, finalUnchecked, previewUnchecked, canUpdatePreview, checkPending, checking } = useRenderFinal(renderId)
+  const { renderFinal, updatePreview, finalCredits, previewCredits, finalUnchecked, previewUnchecked, finalApprox, previewApprox, finalUnpriced, previewUnpriced, canUpdatePreview, checkPending, checking } = useRenderFinal(renderId)
   const refusal = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === renderId)
     return renderRunRefusalKey(node) ?? usecaseRenderFinalRefusalKey(node)
@@ -155,7 +170,9 @@ export function RenderReviewBar({ renderId, busy, className }: RenderReviewBarPr
       onRenderFinal={renderFinal}
       finalCredits={finalCredits}
       finalUnchecked={finalUnchecked}
-      {...(canUpdatePreview ? { onUpdatePreview: updatePreview, previewCredits, previewUnchecked } : {})}
+      finalApprox={finalApprox === true}
+      {...(finalUnpriced ? { finalUnpriced } : {})}
+      {...(canUpdatePreview ? { onUpdatePreview: updatePreview, previewCredits, previewUnchecked, previewApprox: previewApprox === true, ...(previewUnpriced ? { previewUnpriced } : {}) } : {})}
       busy={busy}
       checkPending={checkPending}
       checking={checking}

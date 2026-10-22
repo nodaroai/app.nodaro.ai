@@ -1,6 +1,7 @@
 "use client"
 
 import { useT, type TFunction } from "@/lib/i18n"
+import { useLlmPrice } from "@/hooks/use-llm-price"
 import { memo, useMemo, useEffect, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Puzzle, ImageIcon, Video, AudioLines, FileText, Expand, Download, Link, Scissors, Copy, Loader2 } from "lucide-react"
@@ -83,6 +84,9 @@ function buildHandles(
 function ComponentNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as ComponentNodeData
+  // The stored listing flag counts only while the server prices LLM calls per model (its own gate).
+  const meteredMode = useLlmPrice("llm-chat", undefined).estimate
+  const creditsEstimate = nodeData.estimatedCreditsIsEstimate === true && meteredMode
   const metadata = nodeData.componentMetadata ?? { inputs: [], outputs: [], exposedSettings: [] }
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -153,6 +157,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
         icon={<Puzzle className="h-4 w-4" />}
         category="component"
         credits={nodeData.estimatedCredits}
+        creditsEstimate={creditsEstimate}
         selected={selected}
         isRunning={status === "running"}
         hideHeader
@@ -162,6 +167,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton
             nodeId={id}
             credits={nodeData.estimatedCredits ?? 0}
+            creditsEstimate={creditsEstimate}
             isRunning={status === "running"}
             onRun={(nid) => runSingleNode?.(nid)}
           />

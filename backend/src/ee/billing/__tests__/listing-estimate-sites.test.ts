@@ -39,7 +39,7 @@ const FILES = sourceFiles(SRC).map((path) => ({ rel: relative(SRC, path), text: 
 const WRITES_STORED_ESTIMATE = /\b(?:(?:base_)?estimated_credits|(?:base_|estimated_)?per_minute_credits|(?:base_)?max_(?:estimated|per_minute|per_item)_credits|max_estimated_per_minute_credits)\s*(:(?!\s*number\b)|=(?!=))/
 /** Any workflow estimator but the listing one — run, base, or one added later —
  *  defaults to the run scope, so a writer may call none of them. */
-const RUN_ESTIMATE_CALL = /\bestimateWorkflow(?!ListingCredits\b)[A-Za-z]*Credits\s*\(/
+const RUN_ESTIMATE_CALL = /\bestimateWorkflow(?!ListingCredits\b)[A-Za-z]*Credits(?:Detailed)?\s*\(/
 const LISTING_ESTIMATE_CALL = /\bestimateWorkflowListingCredits\s*\(/
 const ESTIMATOR_FILE = "ee/billing/credits.ts"
 
@@ -49,7 +49,7 @@ const writers = FILES.filter((f) => WRITES_STORED_ESTIMATE.test(f.text))
  *  `CreditsService` or an exported function — named `estimateWorkflow…Credits`. */
 const ESTIMATOR_NAMES = [
   ...new Set(
-    [...FILES.find((f) => f.rel === ESTIMATOR_FILE)!.text.matchAll(/\b(?:static\s+(?:async\s+)?|function\s+)(estimateWorkflow[A-Za-z]*Credits)\s*\(/g)].map(
+    [...FILES.find((f) => f.rel === ESTIMATOR_FILE)!.text.matchAll(/\b(?:static\s+(?:async\s+)?|function\s+)(estimateWorkflow[A-Za-z]*Credits(?:Detailed)?)\s*\(/g)].map(
       (m) => m[1],
     ),
   ),
@@ -57,7 +57,7 @@ const ESTIMATOR_NAMES = [
 
 describe("the forbidden call covers every run-scope estimator", () => {
   it("finds the estimators in the billing module", () => {
-    expect(ESTIMATOR_NAMES).toEqual(expect.arrayContaining(["estimateWorkflowCredits", "estimateWorkflowBaseCredits", "estimateWorkflowListingCredits"]))
+    expect(ESTIMATOR_NAMES).toEqual(expect.arrayContaining(["estimateWorkflowCredits", "estimateWorkflowCreditsDetailed", "estimateWorkflowBaseCredits", "estimateWorkflowListingCredits"]))
   })
 
   it.each(ESTIMATOR_NAMES.filter((name) => name !== "estimateWorkflowListingCredits"))("%s is forbidden in a writer", (name) => {
@@ -75,6 +75,10 @@ describe("every file that stores an estimate prices it over the whole graph", ()
       // Fills the "up to" columns (migration 517) of listings stored before
       // them, from each version's own snapshot, as a republish does.
       "ee/scripts/backfill-listing-range.ts",
+      // The stored-listing backfill for metered LLM pricing (Task 12): it
+      // rewrites every listing column of a graph with a metered LLM node as a
+      // republish does.
+      "ee/scripts/backfill-llm-listing-prices.ts",
       // The published-app price backfill for length-based speech pricing: it
       // rewrites the stored columns and MUST price them as a republish does.
       "ee/scripts/backfill-speech-app-prices.ts",
@@ -97,7 +101,7 @@ describe("every file that stores an estimate prices it over the whole graph", ()
     expect(FILES.find((f) => f.rel === rel)!.text).not.toMatch(RUN_ESTIMATE_CALL)
   })
 
-  it.each(["routes/published-apps.ts", "routes/workflow-templates.ts", "ee/scripts/backfill-speech-app-prices.ts"])("%s calls the listing estimate", (rel) => {
+  it.each(["routes/published-apps.ts", "routes/workflow-templates.ts", "ee/scripts/backfill-speech-app-prices.ts", "ee/scripts/backfill-llm-listing-prices.ts"])("%s calls the listing estimate", (rel) => {
     expect(FILES.find((f) => f.rel === rel)!.text).toMatch(LISTING_ESTIMATE_CALL)
   })
 
@@ -117,6 +121,7 @@ describe("every listing estimate names the media inputs the user replaces", () =
   it("finds the callers", () => {
     expect(callers.map((f) => f.rel).sort()).toEqual([
       "ee/scripts/backfill-listing-range.ts",
+      "ee/scripts/backfill-llm-listing-prices.ts",
       "ee/scripts/backfill-speech-app-prices.ts",
       "routes/published-apps.ts",
       "routes/workflow-templates.ts",

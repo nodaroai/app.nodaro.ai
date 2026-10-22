@@ -52,11 +52,13 @@ export type UgcQuoteLineKey =
   | "clip" | "join" | "alignment" | "speechCheck" | "cards" | "captions" | "script" | "creatorImage" | "creatorCheck"
   // A video whose clips are cut from one recorded speech: the speech, its split, the finish.
   | "speech" | "split" | "finish"
+  // A clip's frame check when the plugin meters it (`clipReadingMode`): its own line, with the clip's number.
+  | "clipReading"
 
 /** Every quote line id. */
 export const UGC_QUOTE_LINE_KEYS: readonly UgcQuoteLineKey[] = [
   "clip", "join", "alignment", "speechCheck", "cards", "captions", "script", "creatorImage", "creatorCheck",
-  "speech", "split", "finish",
+  "speech", "split", "finish", "clipReading",
 ]
 
 /** What the estimate reads: the target length, the screenshots wired in, the creator's source and the script's language. */

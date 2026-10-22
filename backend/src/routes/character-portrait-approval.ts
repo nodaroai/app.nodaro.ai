@@ -1,13 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { llmComplete } from "../lib/llm-client.js"
+import { llmComplete, type LlmRequest } from "../lib/llm-client.js"
+import { meterSyncLlmMetered, type LlmSpend } from "../lib/llm-billing.js"
+import { llmMeteredPricing } from "../lib/config.js"
 import { claudeLaneConfigured } from "../lib/llm/anthropic-availability.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { creditGuard } from "../middleware/credit-guard.js"
-import { meterSyncLlm } from "../lib/meter-sync-llm.js"
+import { billedFailureMessage, llmGuardPrecheck, meterOptionalSyncLlm, spendLlmCall, type MeteredSyncLlmMeter } from "../lib/meter-sync-llm.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { PORTRAIT_CAPTION_MODEL } from "../lib/portrait-caption-model.js"
 
 // Bill the paid Sonnet vision caption at the shared prompt-helper rate (same as
 // llm-suggest-description) — the dedicated /llm-caption retry route is otherwise
@@ -35,9 +38,10 @@ const CAPTION_CREDIT_IDENTIFIER = "prompt-helper"
  * Both routes scope by req.userId. Cross-user candidates / characters return
  * 404 (indistinguishable from "doesn't exist" — see spec error table).
  *
- * TODO (spec Open item #7): charge credits for each LLM call. PR 1 ships without it;
- * the existing studio doesn't hit these routes (PR 2 surface). Will be added
- * before the new studio UI ships.
+ * Billing (D3/D8): BOTH captions bill metered under prompt-helper:<model> — a
+ * billed failure charged, an unbilled one refunded. approve-portrait was free
+ * before metered pricing and stays free under the rollback; /llm-caption bills
+ * the flat prompt-helper rate under the rollback, as it always did.
  */
 
 const idParams = z.object({ id: z.string().uuid() })
@@ -64,9 +68,12 @@ const CAPTION_SYSTEM =
  * swallow (approve-portrait, where caption failure is non-fatal) or surface
  * as a 502 (llm-caption, the explicit re-caption surface).
  */
-async function captionPortrait(portraitUrl: string): Promise<string | null> {
-  const result = await llmComplete({
-    modelId: "claude-sonnet-4.6",
+const PORTRAIT_CAPTION_MAX_TOKENS = 600
+
+/** The caption request as it is sent — what a metered route sizes its hold from. */
+function portraitCaptionRequest(portraitUrl: string): LlmRequest {
+  return {
+    modelId: PORTRAIT_CAPTION_MODEL,
     system: CAPTION_SYSTEM,
     messages: [
       {
@@ -77,9 +84,15 @@ async function captionPortrait(portraitUrl: string): Promise<string | null> {
         ],
       },
     ],
-    maxTokens: 600,
+    maxTokens: PORTRAIT_CAPTION_MAX_TOKENS,
     temperature: 0.6,
-  })
+  }
+}
+
+/** `spend` (metered): the call is recorded as billed — its answer, or a failure's billed usage — before anything else. */
+async function captionPortrait(portraitUrl: string, spend?: LlmSpend): Promise<string | null> {
+  const request = portraitCaptionRequest(portraitUrl)
+  const result = await spendLlmCall(spend, PORTRAIT_CAPTION_MODEL, request, () => llmComplete(request))
   const text = (result.text ?? "").trim()
   return text.length > 0 ? text : null
 }
@@ -116,6 +129,13 @@ function requireAuthProviderAndId(req: FastifyRequest, reply: FastifyReply): str
 }
 
 export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
+  // The approve-portrait caption's payer-aware guard, run INLINE only when the
+  // caption bills metered (meterOptionalSyncLlm) — under the rollback the
+  // approval has none, exactly as before.
+  const captionGuard = creditGuard(() => CAPTION_CREDIT_IDENTIFIER, {
+    dedup: false,
+    computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: PORTRAIT_CAPTION_MODEL, maxTokens: PORTRAIT_CAPTION_MAX_TOKENS }),
+  })
   app.post(
     "/v1/characters/:id/approve-portrait",
     {
@@ -176,9 +196,30 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "Character not found" } })
     }
 
+    // Metered (D3/D8): the caption is BILLED — held under prompt-helper:<model>
+    // and settled at what it cost. Free before metered pricing, so under the
+    // rollback it stays free: no reservation, exactly as before. An approval
+    // is NEVER blocked by credits (owner decision D11): when the caption's hold is
+    // refused the portrait is still approved, the caption skipped
+    // (canonical_description null) and /llm-caption retries it later.
+    let meter: MeteredSyncLlmMeter | null | undefined
+    if (llmMeteredPricing()) {
+      // The caption guard runs inline (spend surface, instance cap, payer
+      // balance); a refusal or a billing error skips the caption, never the approval.
+      const optional = await meterOptionalSyncLlm(req, captionGuard, "character-portrait-approval", {
+        feature: "prompt-helper",
+        calls: [{ modelId: PORTRAIT_CAPTION_MODEL, request: portraitCaptionRequest(portraitUrl) }],
+      })
+      if ("meter" in optional) meter = optional.meter
+      else {
+        meter = null
+        req.log.info({ characterId, skipped: optional.skipped }, "[character-portrait-approval] caption skipped: its hold was refused")
+      }
+    }
+
     let canonicalDescription: string | null = null
-    try {
-      canonicalDescription = await captionPortrait(portraitUrl)
+    if (meter !== null) try {
+      canonicalDescription = await captionPortrait(portraitUrl, meter?.spend)
     } catch (err) {
       req.log.warn(
         { err, characterId, portraitUrl },
@@ -198,9 +239,14 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
 
     if (updateErr) {
+      if (meter) await meter.settle("failed", billedFailureMessage("Failed to update character", meter.spend))
       return sendInternalError(reply, req, updateErr, "Failed to update character")
     }
 
+    if (meter) {
+      if (canonicalDescription !== null) await meter.settle("completed")
+      else await meter.settle("failed", billedFailureMessage("The caption could not be written.", meter.spend))
+    }
     return { portraitUrl, canonicalDescription }
   })
 
@@ -210,7 +256,11 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       // dedup:false — this route returns { canonicalDescription }, not the
       // { jobId, deduped:true } shape the idempotency short-circuit would send.
       // Scope first: an app without assets:write is refused before any credit check.
-      preHandler: [requireAppScope("assets:write"), creditGuard(() => CAPTION_CREDIT_IDENTIFIER, { dedup: false })],
+      preHandler: [requireAppScope("assets:write"), creditGuard(() => CAPTION_CREDIT_IDENTIFIER, {
+        dedup: false,
+        // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
+        computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: PORTRAIT_CAPTION_MODEL, maxTokens: PORTRAIT_CAPTION_MAX_TOKENS }),
+      })],
       // 10 req/min/IP — gates the paid LLM caption. Mirrors location-llm-caption.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
@@ -232,24 +282,31 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "no_portrait", message: "Character has no approved portrait yet" } })
     }
 
-    // Reserve credits (sync route — refund on every failure, no worker net).
-    const meter = await meterSyncLlm(req, reply, "character-llm-caption", CAPTION_CREDIT_IDENTIFIER)
+    // Reserve credits (sync route — settle on every outcome, no worker net):
+    // metered under prompt-helper:<model>, else the flat prompt-helper rate as before.
+    const metered = llmMeteredPricing()
+    const meter = await meterSyncLlmMetered(req, reply, "character-llm-caption", {
+      feature: "prompt-helper",
+      calls: [{ modelId: PORTRAIT_CAPTION_MODEL, request: portraitCaptionRequest(portraitUrl) }],
+    })
     if (!meter) return
 
     let canonicalDescription: string | null
     try {
-      canonicalDescription = await captionPortrait(portraitUrl)
+      canonicalDescription = await captionPortrait(portraitUrl, metered ? meter.spend : undefined)
     } catch (err) {
       req.log.warn(
         { err, characterId, portraitUrl },
         "[character-portrait-approval] LLM caption failed (llm-caption)",
       )
-      await meter.refund()
-      return reply.status(502).send({ error: { code: "llm_failure", message: "LLM caption failed" } })
+      const message = billedFailureMessage("LLM caption failed", meter.spend)
+      await meter.settle("failed", message)
+      return reply.status(502).send({ error: { code: "llm_failure", message } })
     }
     if (canonicalDescription === null) {
-      await meter.refund()
-      return reply.status(502).send({ error: { code: "llm_failure", message: "LLM caption failed" } })
+      const message = billedFailureMessage("LLM caption failed", meter.spend)
+      await meter.settle("failed", message)
+      return reply.status(502).send({ error: { code: "llm_failure", message } })
     }
 
     const { error: updateErr } = await supabase
@@ -258,10 +315,11 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       .eq("id", characterId)
       .eq("user_id", req.userId)
     if (updateErr) {
-      await meter.refund()
+      // The caption call was billed and answered: it is charged (never refunded, D10).
+      await meter.settle("failed", billedFailureMessage("Failed to update character", meter.spend))
       return sendInternalError(reply, req, updateErr, "Failed to update character")
     }
-    await meter.commit()
+    await meter.settle("completed")
     return { canonicalDescription }
   })
 }

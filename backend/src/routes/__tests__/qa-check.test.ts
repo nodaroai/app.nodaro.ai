@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { EDITION: "cloud", KIE_API_KEY: "test-kie-key", ANTHROPIC_API_KEY: undefined, SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))

@@ -61,6 +61,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["lib/mcp/tools/gallery.ts::workflows", "get_app_run names a run's node states by the workflow's labels and types; what it hands out comes from the execution's node_states, never from saved node results"],
   ["lib/schedule-fire.ts::workflows", "reads whether the Schedule Trigger node is still on the graph (the orphan check) only"],
   ["lib/preview-fire-refusal.ts::workflows", "reads the graph only to decide whether a fire is refused at a Preview render; hands no node out"],
+  ["lib/llm-unpriced-fire-refusal.ts::workflows", "reads the graph only to decide whether a fire is refused for a metered LLM model with no price; hands no node out"],
   ["routes/api-tokens.ts::workflows", "the token API derives a workflow's inputs, outputs and sub-workflow names; run results come from executions, never from saved node results"],
   ["routes/sub-workflows.ts::workflows", "the callable interface (inputs and outputs) only"],
   ["routes/webhook-output.ts::workflows", "reads a Webhook Output's credential only"],

@@ -80,6 +80,18 @@ vi.mock("@/lib/object-auto-attach.js", () => ({
   autoAttachObjectAsset: mocks.mockAutoAttachObject,
   setObjectMainImage: mocks.mockSetObjectMainImage,
 }))
+// generate-script's metered billing (workers/shared.ts `workerLlmBilling`): a
+// TIER hold by default (today's path), a metered one in its "metered" cases.
+const billing = vi.hoisted(() => ({
+  metered: false,
+  outcome: "charged" as "charged" | "unsettled",
+  recorder: undefined as unknown,
+  attached: [] as unknown[],
+  settle: vi.fn(),
+  noteSpend: vi.fn(async () => {}),
+  /** R38: the call-start CAS — a cancelled row throws here. */
+  callStarting: vi.fn(async () => {}),
+}))
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
@@ -88,6 +100,25 @@ vi.mock("../../shared.js", () => ({
   uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
   setJobProgress: vi.fn().mockResolvedValue(undefined),
   startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
+  workerLlmBilling: vi.fn(async () => {
+    const spend = { attempts: [] as unknown[], add: vi.fn() }
+    billing.recorder = billing.metered ? spend : { add: () => {} }
+    return {
+      metered: billing.metered,
+      spend,
+      recorder: billing.recorder,
+      noteSpend: billing.noteSpend,
+      callStarting: billing.callStarting,
+      settle: async () => {
+        billing.settle()
+        return billing.metered ? { metered: true, outcome: billing.outcome } : { metered: false }
+      },
+    }
+  }),
+  attachLlmSpend: (err: unknown, spend: unknown) => {
+    billing.attached.push(spend)
+    return err
+  },
 }))
 
 import { entityHandlers } from "../entity.js"
@@ -476,7 +507,7 @@ describe("generate-script handler", () => {
     const job = makeJob("generate-script", { prompt: "a story about adventure" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined }, { cheapLanesOnly: undefined })
+    expect(mocks.mockGenerateScript).toHaveBeenCalledWith("a story about adventure", undefined, undefined, undefined, undefined, undefined, undefined, undefined, { styleGuide: undefined }, { cheapLanesOnly: undefined }, expect.anything())
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { script: { title: "My Script", scenes: [{ description: "Scene 1" }] } },
     }))
@@ -502,6 +533,7 @@ describe("generate-script handler", () => {
       undefined,
       { styleGuide: undefined },
       { cheapLanesOnly: undefined },
+      expect.anything(),
     )
   })
 
@@ -520,6 +552,7 @@ describe("generate-script handler", () => {
       undefined,
       { styleGuide: undefined },
       { cheapLanesOnly: true },
+      expect.anything(),
     )
   })
 
@@ -538,7 +571,73 @@ describe("generate-script handler", () => {
       undefined,
       { styleGuide: "noir, short lines" },
       { cheapLanesOnly: undefined },
+      expect.anything(),
     )
+  })
+})
+
+describe("generate-script handler — a metered hold (A5)", () => {
+  const handler = entityHandlers["generate-script"]
+  beforeEach(() => {
+    billing.metered = true
+    billing.outcome = "charged"
+    billing.attached.length = 0
+    billing.settle.mockClear()
+  })
+  afterEach(() => {
+    billing.metered = false
+  })
+
+  it("records the call on the job's spend and settles it BEFORE the completion; the ledger never rides output_data (R32), no tier commit", async () => {
+    await handler(makeJob("generate-script", { prompt: "a heist" }) as never, makeCtx())
+    // The recorder handed to generateScript is the metered spend itself.
+    expect(mocks.mockGenerateScript.mock.calls.at(-1)![10]).toBe(billing.recorder)
+    expect(billing.settle.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockMarkJobCompleted.mock.invocationCallOrder.at(-1)!)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenLastCalledWith("job-1", {
+      // R32: the ledger is the settle's, in its own server-only column — never on output_data.
+      output_data: { script: { title: "My Script", scenes: [{ description: "Scene 1" }] } },
+    })
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("R38: cancelled while the call ran (shouldSaveJobResult=false) — the script is discarded but the hold is STILL settled (row stays cancelled)", async () => {
+    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+    billing.settle.mockClear()
+    mocks.mockMarkJobCompleted.mockClear()
+    await handler(makeJob("generate-script", { prompt: "a heist" }) as never, makeCtx())
+    expect(billing.settle).toHaveBeenCalledTimes(1)
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("R38: the call-start CAS runs before the call; a row cancelled first is never sent it (the error carries the spend)", async () => {
+    billing.callStarting.mockClear()
+    await handler(makeJob("generate-script", { prompt: "a heist" }) as never, makeCtx())
+    expect(billing.callStarting.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockGenerateScript.mock.invocationCallOrder.at(-1)!)
+    mocks.mockGenerateScript.mockClear()
+    billing.attached = []
+    billing.callStarting.mockRejectedValueOnce(new Error("Job job-1 was cancelled"))
+    await expect(handler(makeJob("generate-script", { prompt: "a heist" }) as never, makeCtx())).rejects.toThrow(/cancelled/)
+    expect(mocks.mockGenerateScript).not.toHaveBeenCalled()
+    expect(billing.attached).toHaveLength(1)
+  })
+
+  it("an unconfirmed settle leaves the job for the reconcile sweep", async () => {
+    billing.outcome = "unsettled"
+    mocks.mockMarkJobCompleted.mockClear()
+    await handler(makeJob("generate-script", { prompt: "a heist" }) as never, makeCtx())
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("a failed call (an answer that would not parse included) carries the spend to the failure net", async () => {
+    mocks.mockGenerateScript.mockRejectedValueOnce(new Error("Failed to parse script output: bad JSON"))
+    billing.noteSpend.mockClear()
+    await expect(handler(makeJob("generate-script", { prompt: "a heist" }) as never, makeCtx())).rejects.toThrow(/parse/)
+    expect(billing.attached).toHaveLength(1)
+    expect(billing.settle).not.toHaveBeenCalled()
+    // Recorded on the row BEFORE the rethrow: a cancel during a retry's backoff sees it billed, the retry carries it (R31).
+    expect(billing.noteSpend).toHaveBeenCalledTimes(1)
   })
 })
 

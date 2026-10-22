@@ -1,7 +1,7 @@
 ---
 node_type: image-to-text
-generated_at: 2026-10-14T00:02:33.110Z
-generated_from: b83a9467d
+generated_at: 2026-10-20T21:12:34.036Z
+generated_from: 9ae3392be
 ---
 
 # Describe Image
@@ -9,7 +9,7 @@ generated_from: b83a9467d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-to-text`
 **Category:** ai
-**Credit cost:** `4` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `~6` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=image-to-text:<model id>` (MCP: `list_models` with `priceIds: ["image-to-text:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`, `video`, `text`
 **Outputs (source handles):** `text`
 

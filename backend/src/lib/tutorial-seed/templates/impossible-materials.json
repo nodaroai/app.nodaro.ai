@@ -19,7 +19,8 @@
     "poster"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 1348,
+  "estimatedCredits": 1355,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

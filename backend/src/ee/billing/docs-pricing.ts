@@ -119,3 +119,71 @@ export function docsPricing(
     },
   }
 }
+
+// ── Metered LLM figures ─────────────────────────────────────────────────────
+
+/** A lane a metered LLM call is served — and charged — on: the aggregator, or the model's provider's own API. */
+export type DocsLlmLane = "kie" | "direct"
+
+/**
+ * A metered LLM figure a page states (`credits-llm-rate:`):
+ *   - `per-million` — the credits charged per million input or output tokens on
+ *     one lane's own rate card (`band: "long"` = the second band a model steps
+ *     up to past its prompt threshold);
+ *   - `call` — what ONE call of that usage on that lane is charged, the way a
+ *     metered settle charges it.
+ */
+export type DocsLlmFigure =
+  | { kind: "per-million"; modelId: string; lane: DocsLlmLane; direction: "input" | "output"; band: "base" | "long" }
+  | { kind: "call"; modelId: string; lane: DocsLlmLane; inputTokens: number; outputTokens: number }
+
+/** The credits a {@link DocsLlmFigure} states, or undefined when the model has no rate of its own on that lane. */
+export type LlmFigureOf = (figure: DocsLlmFigure) => number | undefined
+
+/** One lane's own rate card, USD per million tokens (`llmRateCard` in `lib/pricing/llm-cost.ts`). */
+export interface DocsLlmRateCard {
+  inputPerM: number
+  outputPerM: number
+  longContext?: { thresholdTokens: number; inputPerM: number; outputPerM: number }
+}
+
+/**
+ * What a metered LLM figure is priced from — the server's own functions,
+ * injected so this module stays free of the billing module.
+ */
+export interface DocsLlmRateSource {
+  /** The lane's OWN rate card (never the KIE row a missing direct row falls back to). */
+  rateCard(modelId: string, lane: DocsLlmLane): DocsLlmRateCard | undefined
+  /** A call's provider cost on the lane (`calculateLlmCost`). */
+  callCostUsd(modelId: string, lane: DocsLlmLane, usage: { inputTokens: number; outputTokens: number }): number
+  /** `usdToCredits`. */
+  usdToCredits(usd: number): number
+  /** `applyMarkupPercent` — the platform's one markup-rounding formula. */
+  markUp(baseCredits: number, percent: number): number
+  /** The smallest cost a call that reached the vendor is charged (`CREDIT_BASE_USD`). */
+  minimumUsd: number
+}
+
+/**
+ * Metered LLM figures at `markupPercent` (the deployment's global setting —
+ * every metered feature is charged at it unless the admin gives the feature a
+ * margin of its own):
+ *   - per million tokens: the rate × 1M, in whole credits, charged — what a
+ *     million tokens alone would be charged;
+ *   - a call: its cost summed, floored at the minimum, then charged ONCE —
+ *     exactly the settle's `computeActualCredits(max(cost, CREDIT_BASE_USD))`.
+ */
+export function docsLlmPricing(source: DocsLlmRateSource, markupPercent: number): LlmFigureOf {
+  return (figure) => {
+    const card = source.rateCard(figure.modelId, figure.lane)
+    if (!card) return undefined
+    if (figure.kind === "per-million") {
+      const band = figure.band === "long" ? card.longContext : card
+      if (!band) return undefined
+      const usd = figure.direction === "input" ? band.inputPerM : band.outputPerM
+      return source.markUp(source.usdToCredits(usd), markupPercent)
+    }
+    const usd = source.callCostUsd(figure.modelId, figure.lane, { inputTokens: figure.inputTokens, outputTokens: figure.outputTokens })
+    return source.markUp(source.usdToCredits(Math.max(usd, source.minimumUsd)), markupPercent)
+  }
+}

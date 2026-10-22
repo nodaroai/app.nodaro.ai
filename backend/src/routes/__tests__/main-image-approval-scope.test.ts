@@ -17,6 +17,9 @@ import { creatureLlmCaptionRoutes } from "../creature-llm-caption.js"
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../lib/llm-client.js", () => ({ llmComplete: vi.fn() }))
 vi.mock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "test-key" },
 }))
 // The credit gate is not under test: a pass-through keeps the scope gate the

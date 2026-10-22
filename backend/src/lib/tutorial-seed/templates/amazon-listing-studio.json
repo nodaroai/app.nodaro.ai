@@ -16,7 +16,8 @@
     "ecommerce"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 87,
+  "estimatedCredits": 129,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

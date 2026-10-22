@@ -37,6 +37,10 @@ interface PresentationState {
 
   // Presentation config (from workflow settings)
   estimatedCost: number
+  /** The seeded `estimatedCost` holds a metered LLM estimate (charged its actual usage): shown `~` until the live figure is in. */
+  estimatedCostIsEstimate: boolean
+  /** The server could not price the run (a metered LLM model with no price, R51): no figure, and why. Null otherwise. */
+  estimatedCostUnpriced: { modelId: string; message: string } | null
   /**
    * A published app's listed price, fixed + per minute (with the creator's
    * fee): what its Run button shows until the user's recording and its
@@ -82,6 +86,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   shareToken: null,
   isOwner: false,
   estimatedCost: 0,
+  estimatedCostIsEstimate: false,
+  estimatedCostUnpriced: null,
   listedPrice: null,
   presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
   inputValues: {},
@@ -113,6 +119,10 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         edges,
         isOwner: data.isOwner,
         estimatedCost: data.estimatedCost ?? 0,
+        estimatedCostIsEstimate: data.estimatedCostIsEstimate === true,
+        estimatedCostUnpriced: data.estimatedCostUnpriced
+          ? { modelId: data.estimatedCostUnpriced.modelId, message: data.estimatedCostUnpriced.message }
+          : null,
         listedPrice: null,
         presentationSettings: data.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
         executionStatus: "idle",

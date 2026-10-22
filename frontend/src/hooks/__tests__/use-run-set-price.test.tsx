@@ -19,6 +19,8 @@ vi.mock("@/lib/api", async (importOriginal) => ({
 }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }) }))
 vi.mock("@/hooks/use-model-credit-cost", () => ({
+  // No metered key is refused here (the run estimate asks for a refused key).
+  isModelRefused: () => false,
   getCachedModelCredits: () => undefined,
   prefetchModelCreditCosts: async () => undefined,
 }))
@@ -79,10 +81,10 @@ describe("useRunSetPrice", () => {
     let land!: (v: unknown) => void
     h.estimate.mockReturnValue(new Promise((resolve) => { land = resolve }))
     const { result } = renderHook(() => useRunSetPrice(UP_TO_SV, NODES, EDGES), { wrapper })
-    expect(result.current).toEqual({ credits: CLIENT, hold: CLIENT, estimating: true, unchecked: "checking" })
+    expect(result.current).toEqual({ credits: CLIENT, hold: CLIENT, estimating: true, unchecked: "checking", approx: false })
     expect(CLIENT).not.toBe(SERVER)
     land(ANSWER)
-    await waitFor(() => expect(result.current).toEqual({ credits: SERVER, hold: SERVER_HOLD, estimating: false }))
+    await waitFor(() => expect(result.current).toEqual({ credits: SERVER, hold: SERVER_HOLD, estimating: false, approx: false }))
     expect(h.estimate).toHaveBeenCalledTimes(1)
     expect(h.estimate.mock.calls[0]![0]).toMatchObject({ rendersEveryCandidate: true })
   })
@@ -92,7 +94,7 @@ describe("useRunSetPrice", () => {
     const { result } = renderHook(() => useRunSetPrice(UP_TO_SV, NODES, EDGES), { wrapper })
     await waitFor(() => expect(h.estimate).toHaveBeenCalled())
     await waitFor(() => expect(queryClient.getQueryCache().getAll().some((q) => q.state.status === "error")).toBe(true))
-    await waitFor(() => expect(result.current).toEqual({ credits: CLIENT, hold: CLIENT, estimating: true, unchecked: "editor" }))
+    await waitFor(() => expect(result.current).toEqual({ credits: CLIENT, hold: CLIENT, estimating: true, unchecked: "editor", approx: false }))
   })
 
   it("an older answer whose re-check failed: still its figure, marked", async () => {
@@ -105,7 +107,7 @@ describe("useRunSetPrice", () => {
     h.estimate.mockRejectedValueOnce(new Error("503"))
     const priced = await runCreditsWithUgc(UP_TO_SV, NODES, EDGES, () => undefined)
     expect(priced).toMatchObject({ credits: SERVER, unchecked: "held" })
-    await waitFor(() => expect(result.current).toEqual({ credits: SERVER, hold: SERVER_HOLD, estimating: true, unchecked: "held" }))
+    await waitFor(() => expect(result.current).toEqual({ credits: SERVER, hold: SERVER_HOLD, estimating: true, unchecked: "held", approx: false }))
   })
 
   it("a List of three into UGC Script: three scripts, on the button and in the confirmation alike", async () => {
@@ -113,7 +115,7 @@ describe("useRunSetPrice", () => {
     const edges = [e("list", "script", "site")]
     h.estimate.mockResolvedValue(ANSWER)
     const { result } = renderHook(() => useRunSetPrice([nodes[1]!], nodes, edges), { wrapper })
-    await waitFor(() => expect(result.current).toEqual({ credits: 3 * PARTS.script, hold: 3 * PARTS.script, estimating: false }))
+    await waitFor(() => expect(result.current).toEqual({ credits: 3 * PARTS.script, hold: 3 * PARTS.script, estimating: false, approx: false }))
     expect((await runCreditsWithUgc([nodes[1]!], nodes, edges, () => undefined)).credits).toBe(3 * PARTS.script)
   })
 
@@ -128,7 +130,7 @@ describe("useRunSetPrice", () => {
     const nodes = [n("img", "generate-image", { provider: "p" })]
     const { result } = renderHook(() => useRunSetPrice(nodes, nodes, []), { wrapper })
     const own = estimateRunCredits(nodes, nodes, [], () => undefined)
-    expect(result.current).toEqual({ credits: own, hold: own, estimating: false })
+    expect(result.current).toEqual({ credits: own, hold: own, estimating: false, approx: false })
     expect(h.estimate).not.toHaveBeenCalled()
   })
 
@@ -152,7 +154,7 @@ describe("useRunSetPrice", () => {
     h.estimate.mockResolvedValue(ANSWER)
     const priced = await runCreditsWithUgc(UP_TO_SV, NODES, EDGES, () => undefined)
     const { result } = renderHook(() => useRunSetPrice(UP_TO_SV, NODES, EDGES), { wrapper })
-    expect(result.current).toEqual({ credits: priced.credits, hold: priced.hold, estimating: false })
+    expect(result.current).toEqual({ credits: priced.credits, hold: priced.hold, estimating: false, approx: false })
     expect(h.estimate).toHaveBeenCalledTimes(1)
   })
 })

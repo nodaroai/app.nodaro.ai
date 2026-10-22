@@ -52,9 +52,17 @@ describe("a UGC quote line in the person's language", () => {
     expect(ugcQuoteLineLabel({ label: "Join the clips", key: "join" })).toBe("Join the clips")
   })
 
+  it("a metered frame check is named with its clip's number; in English the server's own words", () => {
+    expect(ugcQuoteLineLabel({ label: "Clip 2 frame check", key: "clipReading", n: 2 })).toBe("Clip 2 frame check")
+    setLocale("he")
+    expect(ugcQuoteLineLabel({ label: "Clip 2 frame check", key: "clipReading", n: 2 })).toBe(translate("he", "ugc.quote.clipReading", { n: 2 }))
+    expect(ugcQuoteLineLabel({ label: "Clip 2 frame check", key: "clipReading" })).toBe("Clip 2 frame check")
+    setLocale("en")
+  })
+
   it("every line id the server sends has its sentence, and the English sentence is the server's own", () => {
     for (const key of UGC_QUOTE_LINE_KEYS) {
-      if (key === "clip") continue
+      if (key === "clip" || key === "clipReading") continue
       const messageKey = UGC_QUOTE_LINE_LABEL_KEYS[key]
       expect(translate("en", messageKey), key).toBe(SERVER_QUOTE_LABELS[key])
       expect(translate("he", messageKey), key).toMatch(/[֐-׿]/)

@@ -58,9 +58,20 @@ export async function pickNodeInteractively(client: ReturnType<typeof buildClien
     choices: result.data.map((n) => ({
       name: `${n.label} — ${n.type}`,
       value: n.type,
-      description: `${n.category} → ${n.outputType}${n.creditCost ? ` (${n.creditCost} cr)` : ""}`,
+      description: `${n.category} → ${n.outputType}${n.creditCost ? ` (${nodeCreditsLabel(n)})` : ""}`,
     })),
   })
+}
+
+/**
+ * A node's price for the picker: `~N cr` for a metered LLM node's estimate
+ * (charged its actual usage), `N cr` for a fixed price, and `unpriced` for a
+ * metered node whose default model has no price yet (a run on it is refused
+ * `llm_model_unpriced`) — never a unit after a word.
+ */
+export function nodeCreditsLabel(n: { creditCost?: number | string; estimate?: boolean }): string {
+  if (n.creditCost === "unpriced") return "unpriced"
+  return `${n.estimate ? "~" : ""}${n.creditCost} cr`
 }
 
 /**
@@ -110,7 +121,7 @@ export function nodesCommand(): Command {
             label: n.label,
             category: n.category,
             outputType: n.outputType,
-            credits: n.creditCost ?? "",
+            credits: n.creditCost === undefined ? "" : n.estimate ? `~${n.creditCost}` : n.creditCost,
             providers: n.providers ? n.providers.length : "",
           })),
           ["type", "label", "category", "outputType", "credits", "providers"],

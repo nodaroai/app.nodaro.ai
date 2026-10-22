@@ -9,13 +9,25 @@
 import { describe, it, expect, vi, beforeAll } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
+// While metered pricing is on, the live table answers a metered LLM price key
+// with its estimate (`chargedPriceTableFrom`); under the rollback it prices it
+// nowhere. Off here by default, so the band cases read the static rows.
+const metered = vi.hoisted(() => ({ on: false, unpriced: new Set<string>() }))
 vi.mock("@/lib/pricing/charged-prices.js", async () => {
-  const { STATIC_CREDIT_COSTS } = await import("@/ee/billing/credits.js")
+  const { STATIC_CREDIT_COSTS, meteredLlmEstimateIgnoringSwitch } = await import("@/ee/billing/credits.js")
   return {
     loadChargedPrices: async () => ({
       credits: (identifier: string, units = 1) => {
+        const estimate = metered.on && units === 1 ? meteredLlmEstimateIgnoringSwitch(identifier, { cost_markup_percent: 10, service_margin_percent: {} } as never) : undefined
+        if (estimate !== undefined) return estimate
         const base = STATIC_CREDIT_COSTS[identifier]
         return base === undefined ? undefined : Math.ceil((base * units * 110) / 100)
+      },
+      llmQuote: (identifier: string) => {
+        if (!metered.on) return null
+        if (metered.unpriced.has(identifier)) return { kind: "unpriced" }
+        const credits = meteredLlmEstimateIgnoringSwitch(identifier, { cost_markup_percent: 10, service_margin_percent: {} } as never)
+        return credits === undefined ? null : { kind: "estimate", credits }
       },
       rate: (identifier: string) => {
         const base = STATIC_CREDIT_COSTS[identifier]
@@ -28,7 +40,8 @@ vi.mock("@/lib/pricing/charged-prices.js", async () => {
 import { USE_CASE_NODE_TYPES, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { nodesRoutes } from "../nodes.js"
 import { CREDIT_BAND_SOURCES, NODE_REGISTRY, USE_CASE_FEE_SENTENCE, usecaseFeeSentence } from "../../lib/node-registry.js"
-import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
+import { STATIC_CREDIT_COSTS, meteredLlmEstimateIgnoringSwitch } from "../../ee/billing/credits.js"
+import { LLM_FEATURE_DEFAULTS, llmPriceKey } from "@nodaro/shared/llm-models"
 
 const charged = (identifier: string, units = 1) => Math.ceil((STATIC_CREDIT_COSTS[identifier]! * units * 110) / 100)
 
@@ -111,6 +124,55 @@ describe("GET /v1/nodes — the charged price", () => {
       expect(served, type).toBe(declared.slice(0, -USE_CASE_FEE_SENTENCE.length) + usecaseFeeSentence(charged(usecaseFeeCreditId(type))))
       expect(served, type).toMatch(/plus a per-run fee of 11 credits\.$/)
     }
+  })
+
+  it("/v1/nodes llm-chat creditCost is the default model's estimate, marked estimate", async () => {
+    metered.on = true
+    try {
+      const key = llmPriceKey("llm-chat", LLM_FEATURE_DEFAULTS["llm-chat"])
+      const estimate = meteredLlmEstimateIgnoringSwitch(key, { cost_markup_percent: 10, service_margin_percent: {} } as never)
+      expect(estimate).toBeGreaterThan(0)
+      const list = (await app.inject({ method: "GET", url: "/v1/nodes" })).json() as {
+        data: Array<{ type: string; creditCost?: number | string; estimate?: true }>
+      }
+      expect(list.data.find((n) => n.type === "llm-chat")).toMatchObject({ creditCost: estimate, estimate: true })
+      // Every metered LLM node lists its default model's estimate; a fixed node is never an estimate.
+      for (const [type, feature] of [["image-to-text", "image-to-text"], ["video-composer", "scene-graph-ai"], ["generate-3d-scene", "3d-scene"]] as const) {
+        const figure = meteredLlmEstimateIgnoringSwitch(llmPriceKey(feature, LLM_FEATURE_DEFAULTS[feature]), { cost_markup_percent: 10, service_margin_percent: {} } as never)
+        expect(list.data.find((n) => n.type === type), type).toMatchObject({ creditCost: figure, estimate: true })
+      }
+      expect(list.data.find((n) => n.type === "extract-audio")).toEqual(expect.not.objectContaining({ estimate: true }))
+      const detail = (await app.inject({ method: "GET", url: "/v1/nodes/llm-chat" })).json() as { data: { creditCost?: number; estimate?: true } }
+      expect(detail.data).toMatchObject({ creditCost: estimate, estimate: true })
+    } finally {
+      metered.on = false
+    }
+  })
+
+  it("R49: an LLM node whose default model has no price lists `unpriced`, never its tier band", async () => {
+    metered.on = true
+    const key = llmPriceKey("image-to-text", LLM_FEATURE_DEFAULTS["image-to-text"])
+    metered.unpriced.add(key)
+    try {
+      const list = (await app.inject({ method: "GET", url: "/v1/nodes" })).json() as {
+        data: Array<{ type: string; creditCost?: number | string; estimate?: true }>
+      }
+      const node = list.data.find((n) => n.type === "image-to-text")!
+      expect(node.creditCost).toBe("unpriced")
+      expect("estimate" in node).toBe(false)
+    } finally {
+      metered.on = false
+      metered.unpriced.clear()
+    }
+  })
+
+  it("rollback: an LLM node lists today's tier band, with no estimate flag", async () => {
+    const list = (await app.inject({ method: "GET", url: "/v1/nodes" })).json() as {
+      data: Array<{ type: string; creditCost?: number | string; estimate?: true }>
+    }
+    const chat = list.data.find((n) => n.type === "llm-chat")!
+    expect(chat.creditCost).toBe(chargedBand("llm-chat"))
+    expect("estimate" in chat).toBe(false)
   })
 
   it("/v1/nodes/:type quotes the same charged price as the list", async () => {

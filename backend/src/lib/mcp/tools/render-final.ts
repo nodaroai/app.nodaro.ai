@@ -42,6 +42,8 @@ interface Quote {
   renderNodeId: string
   nodeIds: string[]
   estimatedCredits: number | null
+  /** `estimatedCredits` includes an LLM node's estimate (charged its actual usage): about, `~N`. */
+  estimatedCreditsIsEstimate?: true
   /** Whether the payer can cover it; null without credits. */
   sufficient?: boolean | null
   /** The payer's spendable balance, when it is the caller's to see. */
@@ -98,7 +100,7 @@ export function registerRenderFinal({ server, session, fastify }: RegisterRender
       if (args.confirm !== true) {
         const billed = quote.estimatedCredits !== null && hasCredits()
         const price = billed
-          ? `costs about ${quote.estimatedCredits} credits`
+          ? `costs about ${quote.estimatedCreditsIsEstimate ? "~" : ""}${quote.estimatedCredits} credits${quote.estimatedCreditsIsEstimate ? " (an estimate: its LLM calls are charged their actual usage)" : ""}`
           : "is not billed in credits on this edition"
         const next =
           billed && quote.sufficient === false

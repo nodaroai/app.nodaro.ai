@@ -21,7 +21,7 @@ import {
   getDialogueCapabilities,
   getMaxTtsChars
 } from "@nodaro/shared/models"
-import { VIDEO_ANALYSIS_TIER_ORDER } from "@nodaro/shared/llm-models"
+import { VIDEO_ANALYSIS_TIER_ORDER, llmTierCreditIds } from "@nodaro/shared/llm-models"
 import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
 import {
   SPEECH_UNIT_CREDIT_SUFFIX,
@@ -39,10 +39,11 @@ import type { OutputType } from "@nodaro/shared/apps"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
 import { SPEAKER_FRAMES_CREDIT_ID, isUseCaseNodeType, usecaseFeeCreditId } from "@nodaro/render-rules"
-import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
+import { STATIC_CREDIT_COSTS, meteredLlmDefaultKeyOfType, meteredLlmOptionKeyOfType } from "../ee/billing/credits.js"
+import { parseMeteredLlmId } from "../ee/billing/metered-llm-id.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
-import type { ChargedPrices } from "./pricing/charged-prices.js"
+import type { ChargedPrices, LlmKeyQuote } from "./pricing/charged-prices.js"
 import type { UnitDescriptor } from "../nodes/kit.js"
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { placeAfter, registryCategoryOf } from "./unit-compose.js"
@@ -495,6 +496,13 @@ export interface NodeDescriptor {
   outputType: OutputType | "none"
   /** Credit cost; undefined if free. May be a range like "1-8" if model-dependent. */
   creditCost?: number | string
+  /**
+   * `creditCost` is an ESTIMATE — a metered LLM node's typical call on its
+   * default model (spec §8.5), charged its actual usage after the run (`~`).
+   * Never on the static registry: the served descriptor sets it
+   * (`chargedDescriptor`) while metered pricing is on. Absent otherwise.
+   */
+  estimate?: true
   /**
    * For a node charged per unit of its own measure (whose `creditCost` is a
    * word like `"per-1000-frames"`, not a number): the charged price of one
@@ -2223,12 +2231,72 @@ export function findNode(type: string): NodeDescriptor | undefined {
  * node nothing prices) is served as declared.
  */
 export function chargedDescriptor(desc: NodeDescriptor, prices: ChargedPrices): NodeDescriptor {
+  const llmQuote = chargedLlmQuote(desc, prices)
+  if (llmQuote?.kind === "estimate") {
+    return { ...desc, creditCost: llmQuote.credits, estimate: true, description: chargedDescription(desc, prices) }
+  }
+  // Its default model has no price on its lane (R49, fail closed): the node lists no figure — the
+  // word `"unpriced"`, never its tier band, as a run on it is refused (`llm_model_unpriced`).
+  if (llmQuote?.kind === "unpriced") return { ...desc, creditCost: UNPRICED_CREDIT_COST, description: chargedDescription(desc, prices) }
+  const option = chargedLlmOptionBand(desc, prices)
+  if (option) return { ...desc, ...option, description: chargedDescription(desc, prices) }
   const creditCost = chargedCreditCost(desc, prices)
   const creditRate = chargedCreditRate(desc, prices)
   const description = chargedDescription(desc, prices)
   if (creditCost === desc.creditCost && !creditRate && description === desc.description) return desc
   return { ...desc, creditCost, ...(creditRate ? { creditRate } : {}), description }
 }
+
+/**
+ * A metered LLM node's figure (Task 12, spec §8.5): its untouched run's price
+ * key — the default model, every lever at its default
+ * (`meteredLlmDefaultKeyOfType`) — as `prices` quote it: its estimate (its run
+ * is charged its actual usage, so the figure is an estimate, never the tier
+ * band), or `unpriced` when that model has no price on its lane. Null for every
+ * other node, and wherever `prices` price no metered key: the tier-pricing
+ * rollback, an edition without credits — then the band below, exactly as before.
+ */
+function chargedLlmQuote(desc: NodeDescriptor, prices: ChargedPrices): LlmKeyQuote | null {
+  if (desc.creditCost === undefined) return null
+  const key = meteredLlmDefaultKeyOfType(desc.type)
+  return key ? (prices.llmQuote?.(key) ?? null) : null
+}
+
+/**
+ * A node whose untouched run makes no metered call but which OFFERS one
+ * (Choose Best: free strategies, or its AI judge — `meteredLlmOptionKeyOfType`):
+ * its band from its free members up to the judge's default-model estimate,
+ * marked an estimate (the judge is charged its actual usage), never the
+ * judge's tier rows. `"unpriced"` when that model has no price on its lane
+ * (R49). Null for every other node, and wherever `prices` price no metered
+ * key (the rollback, an edition without credits): then the band, as before.
+ */
+function chargedLlmOptionBand(desc: NodeDescriptor, prices: ChargedPrices): Pick<NodeDescriptor, "creditCost" | "estimate"> | null {
+  if (desc.creditCost === undefined) return null
+  const key = meteredLlmOptionKeyOfType(desc.type)
+  const quote = key ? (prices.llmQuote?.(key) ?? null) : null
+  if (!quote) return null
+  if (quote.kind === "unpriced") return { creditCost: UNPRICED_CREDIT_COST }
+  // The option's own tier rows are what it billed before metered pricing: not a member of the band now.
+  const feature = parseMeteredLlmId(key!)?.feature
+  const optionRows = new Set(feature ? llmTierCreditIds(feature) : [])
+  const free = (CREDIT_BAND_SOURCES[desc.type]?.ids ?? [])
+    .filter((id) => !optionRows.has(id))
+    .flatMap((id) => {
+      const credits = prices.credits(id)
+      return credits === undefined ? [] : [credits]
+    })
+  const min = Math.min(quote.credits, ...free)
+  const max = Math.max(quote.credits, ...free)
+  return { creditCost: formatBand(min, max), estimate: true }
+}
+
+/**
+ * The `creditCost` of a metered LLM node whose DEFAULT model has no price on
+ * its lane (R49): a word, like `"per-minute"`, so every client that reads a
+ * string as "not a fixed number" keeps working — and never a tier band.
+ */
+export const UNPRICED_CREDIT_COST = "unpriced"
 
 /**
  * A use-case node's description with its fee at the charged price (the same

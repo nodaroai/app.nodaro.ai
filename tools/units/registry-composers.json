@@ -146,6 +146,8 @@
           "estimateRunSetCredits",
           "estimateRunSetCreditsWithoutUgc",
           "estimateWorkflowCredits",
+          "estimateWorkflowCreditsDetailed",
+          "getNodeModelIdentifier",
           "estimateWorkflowListingCredits",
           "estimateWorkflowListingRange",
           "CreditsService",

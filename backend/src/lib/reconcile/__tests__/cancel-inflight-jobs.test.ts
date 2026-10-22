@@ -32,8 +32,22 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
-const owned = vi.hoisted(() => ({ cancel: vi.fn(async (_id: string, _owner: string) => ({ kind: "cancelled" as string })) }))
-vi.mock("../../cancel-job.js", () => ({ cancelOwnedJob: owned.cancel }))
+const owned = vi.hoisted(() => ({
+  cancel: vi.fn(async (_id: string, _owner: string) => ({ kind: "cancelled" as string })),
+  // D10: the reconcile sweep's metered rule, applied before a stale row is
+  // cancelled. Default: no billed metered hold — today's cancel + refund.
+  meteredVerdict: vi.fn(async (_id: string, _known?: unknown) => "not-metered" as "not-metered" | "not-started" | "settled" | "retry"),
+  /** R38 / N1: the post-flip settle of a not-started verdict — kept (the call started meanwhile), settled (at the actual), or refund. */
+  keptAfterFlip: vi.fn(async (_id: string) => "refund" as "kept" | "settled" | "refund"),
+}))
+// 554: a cancelled job's metered SIDE holds settle on their own markers after the flip.
+const sideHolds = vi.hoisted(() => ({ settle: vi.fn(async (_ids: readonly string[]) => {}) }))
+vi.mock("../../llm-side-hold.js", () => ({ settleSideHoldsAfterFlip: sideHolds.settle }))
+vi.mock("../../cancel-job.js", () => ({
+  cancelOwnedJob: owned.cancel,
+  settleMeteredHoldsBeforeCancel: owned.meteredVerdict,
+  settleMeteredHoldAfterFlip: owned.keptAfterFlip,
+}))
 
 import { cancelInFlightChildJobs } from "../cancel-inflight-jobs.js"
 import { declaredJobBudgetMs } from "../../job-budget.js"
@@ -44,6 +58,7 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
     mocks.rows.length = 0
     mocks.updateCalls.length = 0
     mocks.refundMock.mockResolvedValue(1)
+    owned.meteredVerdict.mockResolvedValue("not-metered")
   })
 
   it("a use-case wrapper → the shared single-job cancel (fee refunded, hidden run stopped), never the bare flip", async () => {
@@ -198,5 +213,107 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
     expect(cancelled).toBe(0)
     expect(mocks.updateMock).not.toHaveBeenCalled()
     expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("cancelInFlightChildJobs — a billed metered hold is never refunded (D10)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.rows.length = 0
+    mocks.updateCalls.length = 0
+    mocks.refundMock.mockResolvedValue(1)
+    owned.meteredVerdict.mockResolvedValue("not-metered")
+  })
+
+  it("asks the sweep's metered rule before the flip, with the row's sweep counters", async () => {
+    mocks.rows.push({
+      id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null,
+      reconcile_attempts: 3, reconcile_last_error: "metered_settle_retry:billed: no receipt",
+    })
+    await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(owned.meteredVerdict).toHaveBeenCalledWith("j-llm", { reconcile_attempts: 3, reconcile_last_error: "metered_settle_retry:billed: no receipt" })
+    expect(owned.meteredVerdict.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateMock.mock.invocationCallOrder[0]!)
+  })
+
+  it("a billed hold the sweep could not commit yet → left for the sweep: not cancelled, not refunded (and, outside a resume, not adopted)", async () => {
+    owned.meteredVerdict.mockResolvedValue("retry")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null })
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(cancelled).toBe(0)
+    expect(adoptable.size).toBe(0)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("resume: a metered job whose call may be in flight (retry) is ADOPTED for its node — never re-run, never cancelled or refunded", async () => {
+    owned.meteredVerdict.mockResolvedValue("retry")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null, usage_log_id: "ul-llm", credits: 12 })
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })
+    expect(cancelled).toBe(0)
+    expect(adoptable.get("node-1")).toMatchObject({ jobId: "j-llm", usageLogId: "ul-llm", creditsReserved: 12 })
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("resume: a fan-out iteration (or an orphan with no node) left live by the metered rule is not adopted", async () => {
+    owned.meteredVerdict.mockResolvedValue("retry")
+    mocks.rows.push(
+      { id: "j-iter", input_data: { node_id: "node-1", type: "generate-script", iterationIndex: 2 }, provider_task_id: null },
+      { id: "j-orphan", input_data: { type: "generate-script" }, provider_task_id: null },
+    )
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })
+    expect(adoptable.size).toBe(0)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+  })
+
+  it("R38: a pre-call verdict is re-read after the flip — a worker that started its call meanwhile keeps its hold (no refund)", async () => {
+    owned.meteredVerdict.mockResolvedValue("not-started")
+    owned.keptAfterFlip.mockResolvedValueOnce("kept")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null })
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(cancelled).toBe(1)
+    expect(owned.keptAfterFlip).toHaveBeenCalledWith("j-llm")
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("N1: an earlier attempt billed, nothing in flight → settled at the actual after the flip; the refund then touches only what is still reserved", async () => {
+    owned.meteredVerdict.mockResolvedValue("not-started")
+    owned.keptAfterFlip.mockResolvedValueOnce("settled")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null })
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(cancelled).toBe(1)
+    expect(owned.keptAfterFlip.mock.invocationCallOrder[0]).toBeGreaterThan(mocks.updateMock.mock.invocationCallOrder[0]!)
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-llm")
+  })
+
+  it("554: the stale job's side holds settle after its flip; a job left live (retry) is not touched", async () => {
+    owned.meteredVerdict.mockResolvedValue("not-started")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null })
+    await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(sideHolds.settle).toHaveBeenCalledWith(["j-llm"])
+    expect(sideHolds.settle.mock.invocationCallOrder[0]).toBeGreaterThan(mocks.updateMock.mock.invocationCallOrder[0]!)
+  })
+
+  it("R38: a pre-call verdict still pre-call after the flip → refunded at once", async () => {
+    owned.meteredVerdict.mockResolvedValue("not-started")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null })
+    await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(owned.keptAfterFlip).toHaveBeenCalledWith("j-llm")
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-llm")
+  })
+
+  it("no re-read for any other verdict (a tier job's cancel is unchanged)", async () => {
+    mocks.rows.push({ id: "j-tier", input_data: { node_id: "node-1", type: "generate-image" }, provider_task_id: null })
+    await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(owned.keptAfterFlip).not.toHaveBeenCalled()
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-tier")
+  })
+
+  it("a committed (settled) billed hold → the stale row is cancelled; the refund touches only what is still reserved", async () => {
+    owned.meteredVerdict.mockResolvedValue("settled")
+    mocks.rows.push({ id: "j-llm", input_data: { node_id: "node-1", type: "generate-script" }, provider_task_id: null })
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(cancelled).toBe(1)
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-llm")
   })
 })

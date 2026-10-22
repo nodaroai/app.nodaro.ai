@@ -37,11 +37,17 @@ const previewRenders = (doc: TutorialTemplateDoc): Node[] =>
 const listing = (doc: TutorialTemplateDoc) =>
   CreditsService.estimateWorkflowBaseListing(doc.nodes as Node[], doc.edges as Edge[], "template")
 
-const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", "podcast-trailer-formats"]
+const PODCAST = [
+  "podcast-clip-pack",
+  "podcast-multicam-cut",
+  "podcast-tighten-episode",
+  "podcast-trailer-formats",
+  "podcast-vertical-speaker-clip",
+]
 const gated = files.filter((f) => previewRenders(load(f)).length > 0)
 
 describe("which built-in templates the gate flips", () => {
-  it("the four podcast templates, read off their renders", () => {
+  it("the podcast templates, read off their renders (Apply EDL's four, and the vertical clip's Speaker View)", () => {
     expect(gated.map((f) => load(f).slug).sort()).toEqual(PODCAST)
   })
 
@@ -116,7 +122,7 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
     })
   })
 
-  it("pins the four with the rule off: their listing at Final (the Trailer + Formats one on its 40-second trailer, decided 2026-10-18)", () => {
+  it("pins them with the rule off: their listing at Final (the Trailer + Formats one on its 40-second trailer, decided 2026-10-18)", () => {
     const off = (slug: string) => {
       const doc = templateForPreviewStopRule(load(`${slug}.json`), false)
       return [doc.estimatedCredits, doc.estimatedPerMinuteCredits ?? 0]
@@ -126,14 +132,18 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
       "podcast-multicam-cut": [62, 14],
       "podcast-tighten-episode": [82, 14],
       "podcast-trailer-formats": [212, 4],
+      "podcast-vertical-speaker-clip": [66, 12],
     })
   })
 
   // Rule off, a template is the graph it was before it rendered a Preview
   // first, byte for byte (decided 2026-10-08, round 4): every node, every note
   // (its text, height and position) and every edge. The fixtures are those
-  // templates as they stood on dev before the Preview flip, frozen.
-  it.each(gated)("%s: rule off, the graph is byte for byte the one before the Preview flip", (file) => {
+  // templates as they stood on dev before the Preview flip, frozen. The
+  // vertical speaker clip was born after the flip, so it has no pre-flip graph
+  // to freeze; its rule-off graph is pinned by the tests above instead.
+  const BORN_AFTER_THE_FLIP = ["podcast-vertical-speaker-clip.json"]
+  it.each(gated.filter((f) => !BORN_AFTER_THE_FLIP.includes(f)))("%s: rule off, the graph is byte for byte the one before the Preview flip", (file) => {
     const before = JSON.parse(readFileSync(join(here, "fixtures", "pre-g2-2", file), "utf8")) as TutorialTemplateDoc
     const off = templateForPreviewStopRule(load(file), false)
     expect(JSON.stringify(off.nodes, null, 2)).toBe(JSON.stringify(before.nodes, null, 2))

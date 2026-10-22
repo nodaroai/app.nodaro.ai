@@ -104,7 +104,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* Credits + runs */}
         <div className="flex items-center gap-3 text-xs text-white/70">
-          <CreditCost credits={app.estimatedCredits} perMinute={app.perMinuteCredits} perItem={app.perItemCredits} upTo={{ credits: app.maxEstimatedCredits, perMinute: app.maxPerMinuteCredits, perItem: app.maxPerItemCredits }} icon="sm" />
+          <CreditCost credits={app.estimatedCredits} approx={app.estimatedCreditsIsEstimate === true} perMinute={app.perMinuteCredits} perItem={app.perItemCredits} upTo={{ credits: app.maxEstimatedCredits, perMinute: app.maxPerMinuteCredits, perItem: app.maxPerItemCredits }} icon="sm" />
           <span className="flex items-center gap-1">
             <Play className="h-3 w-3" />
             {formatCount(app.totalRunCount)}

@@ -29,6 +29,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  llmMeteredPricing: () => false,
 }))
 
 vi.mock("@/lib/supabase.js", () => {

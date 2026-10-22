@@ -1,7 +1,9 @@
 import { resolveLlmParams, type LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import { cheapLanesParam, type LlmCheapLanesInput } from "../../lib/llm-cheap-lanes.js"
 import { llmComplete } from "../../lib/llm-client.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { getLlmModel, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import type { LlmRequest } from "../../lib/llm/types.js"
+import type { LlmSpend } from "../../lib/llm-billing.js"
 import { SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_DEFAULT } from "@nodaro/shared/nodes"
 
 export interface ScriptSceneCharacter {
@@ -122,27 +124,56 @@ RULES:
 - Each scene should flow naturally into the next
 - Respond with ONLY the JSON object, nothing else`
 
-export type ScriptProvider = "gemini" | "claude" | "gpt"
+// The model resolution lives in a leaf the billing estimator reads too.
+export { resolveScriptModelId, type ScriptProvider } from "./script-model-id.js"
+import { resolveScriptModelId, type ScriptProvider } from "./script-model-id.js"
 
-/** Legacy provider names → new LLM model IDs */
-const LEGACY_PROVIDER_MAP: Record<string, string> = {
-  gemini: "gemini-3.6-flash",
-  claude: "claude-sonnet-4.6",
-  gpt: "gpt-5.2",
+/** What `generateScript` is asked: the topic and the node's settings. */
+export interface ScriptRequestInput {
+  prompt: string
+  sceneCount?: number
+  tone?: string
+  targetDuration?: number
+  provider?: ScriptProvider
+  llmModel?: string
+  reasoningEffort?: string
+  /** Advanced-mode params. */
+  advanced?: LlmAdvancedInput
+  /** The node's style guide: how the script should read and look. */
+  brief?: { styleGuide?: string }
+  /** "Cheap lanes only" (lib/llm-cheap-lanes.ts): no direct-vendor fallback. */
+  lanes?: LlmCheapLanesInput
 }
 
 /**
- * Model resolution for this feature, in one place: explicit `llmModel`, else the
- * legacy `provider` alias, else the feature default.
- *
- * Exported because the ROUTE has to validate Advanced mode against the model the
- * worker will actually run. It used to check `llmModel ?? feature default` — so
- * a request carrying `provider: "claude"` and no `llmModel` validated against
- * Gemini (Advanced supported) and then reached this function, which resolved
- * `claude-sonnet-4.6` (no direct lane) and hard-failed at `assertLanePinnable`.
+ * The request `generateScript` sends, built in ONE place: the call itself and
+ * the metered hold reserved before it (the route's `reserveLlmCall` and the
+ * workflow engine's `computeLlmMeteredHold`) read the same request, so the
+ * hold is sized from what is really sent — model (the legacy `provider` alias
+ * included), output cap, Advanced pin and lanes.
  */
-export function resolveScriptModelId(provider?: ScriptProvider, llmModel?: string): string {
-  return llmModel || (provider ? LEGACY_PROVIDER_MAP[provider] : undefined) || LLM_FEATURE_DEFAULTS["generate-script"]
+export function buildScriptRequest(input: ScriptRequestInput): LlmRequest {
+  const resolvedModelId = resolveScriptModelId(input.provider, input.llmModel)
+  const sceneCount = input.sceneCount ?? SCRIPT_SCENE_COUNT_DEFAULT
+  const duration = input.targetDuration ?? SCRIPT_TARGET_DURATION_DEFAULT
+
+  let userPrompt = `Create a ${sceneCount}-scene cinematic script for the following concept:\n\n${input.prompt}\n\nTarget duration: ${duration} seconds.`
+  if (input.tone) {
+    userPrompt += `\nTone: ${input.tone}`
+  }
+  if (input.brief?.styleGuide) {
+    userPrompt += `\n\nStyle guide (follow it for the writing, the visuals and the pacing):\n${input.brief.styleGuide}`
+  }
+
+  const modelMaxTokens = getLlmModel(resolvedModelId)?.maxOutputTokens ?? 16384
+  return {
+    modelId: resolvedModelId,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
+    reasoningEffort: input.reasoningEffort as LlmReasoningEffort | undefined,
+    ...resolveLlmParams(input.advanced ?? {}, { maxTokens: Math.min(modelMaxTokens, 16384) }),
+    ...cheapLanesParam(input.lanes),
+  }
 }
 
 export async function generateScript(
@@ -161,32 +192,28 @@ export async function generateScript(
   brief?: { styleGuide?: string },
   /** "Cheap lanes only" (lib/llm-cheap-lanes.ts): no direct-vendor fallback. */
   lanes?: LlmCheapLanesInput,
+  /**
+   * The job's metered spend: the call is recorded on it — answered (even when
+   * the answer then fails to parse, which is still a billed call) or failed
+   * with billed usage — so the worker settles what the call really cost.
+   */
+  spend?: Pick<LlmSpend, "add">,
 ): Promise<GeneratedScript> {
-  const resolvedModelId = resolveScriptModelId(provider, llmModel)
-
-  const duration = targetDuration ?? SCRIPT_TARGET_DURATION_DEFAULT
-
-  let userPrompt = `Create a ${sceneCount}-scene cinematic script for the following concept:\n\n${prompt}\n\nTarget duration: ${duration} seconds.`
-  if (tone) {
-    userPrompt += `\nTone: ${tone}`
-  }
-  if (brief?.styleGuide) {
-    userPrompt += `\n\nStyle guide (follow it for the writing, the visuals and the pacing):\n${brief.styleGuide}`
-  }
+  const request = buildScriptRequest({ prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced, brief, lanes })
+  const resolvedModelId = request.modelId
 
   const modelDef = getLlmModel(resolvedModelId)
   console.log(`[generateScript] Model: ${resolvedModelId} (${modelDef?.displayName ?? "unknown"})`)
   console.log(`[generateScript] Prompt: "${prompt}", scenes: ${sceneCount}, tone: "${tone ?? "none"}"`)
 
-  const modelMaxTokens = modelDef?.maxOutputTokens ?? 16384
-  const response = await llmComplete({
-    modelId: resolvedModelId,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
-    reasoningEffort: reasoningEffort as LlmReasoningEffort | undefined,
-    ...resolveLlmParams(advanced ?? {}, { maxTokens: Math.min(modelMaxTokens, 16384) }),
-    ...cheapLanesParam(lanes),
-  })
+  let response: Awaited<ReturnType<typeof llmComplete>>
+  try {
+    response = await llmComplete(request)
+  } catch (err) {
+    spend?.add(resolvedModelId, request, { error: err })
+    throw err
+  }
+  spend?.add(resolvedModelId, request, { response })
 
   const raw = response.text
   console.log(`[generateScript] Raw output length: ${raw.length}`)

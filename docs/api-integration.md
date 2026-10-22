@@ -372,7 +372,14 @@ options, and a reference clip the user supplies at its longest. Up to 256
 combinations are priced one by one; past that, each other field is taken at its
 priciest value for each model. The `max*` fields appear on the browse, detail and
 app-page responses only when they differ from "from"; a version published before
-the range existed carries none until it is republished or backfilled. A preview picked automatically for an app or a
+the range existed carries none until it is republished or backfilled.
+`estimatedCreditsIsEstimate: true` (browse, detail, app page, your own apps
+`/v1/apps/mine`, template gallery and Tutorials) marks a listed price that holds a metered LLM call's estimate —
+its model's typical call, charged its actual usage per token — so show it
+`~N`; it is absent for a fixed price and on a deployment running the
+tier-pricing rollback. A publish whose graph names a metered model with no
+price yet is refused `400 validation_error` with `reason: "llm_model_unpriced"`,
+as its run would be ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). A preview picked automatically for an app or a
 template is read from what ships, so it is never one of those renders (a
 template that includes its run starts from that run's captioned video), nor
 the author's photo or anything on its path. A
@@ -504,7 +511,7 @@ The `202` answer of a continue-from-failed names the execution it continued from
 }
 ```
 
-Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits, priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
+Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits (with `"estimatedCreditsIsEstimate": true` when the run executes an LLM node, which is charged its actual usage after it runs: show the figure `~N`; absent for a fixed price), priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
 
 | Status | `error.code` | When |
 |---|---|---|
@@ -558,7 +565,7 @@ Run views carry the runner's own edits of the run's results as `nodeStateEdits`:
 | Method | Path | Purpose |
 |---|---|---|
 | `GET`  | `/v1/api/workflows` | List workflows your token can run. Supports `?limit=` and `?cursor=` pagination. |
-| `GET`  | `/v1/api/schema?workflowId=…` | Inspect a workflow's input fields and output handles before running it. Includes `estimatedCredits`. |
+| `GET`  | `/v1/api/schema?workflowId=…` | Inspect a workflow's input fields and output handles before running it. Includes `estimatedCredits` (and `estimatedCreditsIsEstimate: true` when a metered LLM node's estimate is in it). A workflow naming an LLM model with no price yet is still described, with `estimatedCredits` omitted and `estimatedCreditsUnpriced: { reason: "llm_model_unpriced", modelId, message }`; its run (`POST /v1/api/run`) is refused `400 validation_error` with `reason: "llm_model_unpriced"` ([A model with no price yet](#a-model-with-no-price-yet-llm_model_unpriced)). |
 | `POST` | `/v1/api/run` | Execute a workflow. Optionally pass `inputs` to override input-node values. Supports `?wait=true&timeout=…` for sync mode. |
 | `GET`  | `/v1/api/status/:execId` | Poll a running execution. Returns `status`, progress counts, credits used and, once completed, `outcome` (see [Runs that find nothing new](#runs-that-find-nothing-new)). |
 | `GET`  | `/v1/api/result/:execId` | Fetch the final outputs once `status` is `completed` or `failed`. |
@@ -1471,11 +1478,13 @@ All errors share the same shape:
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
 | 409 | `retained_image_in_use` | — | A delete would remove protected image bytes, or a production has active jobs using retained images. Finish or cancel active jobs before deleting the production. |
 | 409 | `workflow_conflict` | `currentVersion`, `currentUpdatedAt`, `currentRecord` | `PATCH /v1/workflows/:id`: the workflow changed since your `expectedVersion` / `expectedUpdatedAt` — merge onto `currentRecord` and save again (see [`workflows.update`](./sdk-reference.md#updateid-input)). An edges-only save (`edges` without `nodes`) that wires a [Video Overlay](./nodes/processing-video/video-overlay.md) layer rewrites that node and returns `409 workflow_conflict` (with `currentVersion` / `currentRecord`) if the workflow changed since it was read — even when you sent no `expectedVersion`; nothing is overwritten and the save is not retried. |
+| 409 | `job_cancelled` | — | A synchronous metered LLM request whose job was cancelled after its credits were held but before its call was sent. The call is never sent and nothing is charged (the hold is refunded). Do not retry it as-is: the job was cancelled on purpose. |
 | 409 | `idempotency_key_reused` | — | A use-case run or its continue (`POST /v1/tighten-episode`, `POST /v1/episode-chapters`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout`, and their `/continue`): the `Idempotency-Key` already belongs to one of your jobs that is not a run of that node — a run of another use-case node, or any other kind of job (an image generation, say). Refused; nothing is created or charged. Send a new key. A key that already belongs to a run of the same node answers that run (`202`, `deduped: true`). |
 | 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
+| 503 | `job_start_failed` | — | A synchronous metered LLM request could not record that its call is starting. The call was not sent and nothing was charged (the hold is refunded). Retry it. |
 | 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
 
 Treat anything in the 5xx range as transient — retry with exponential
@@ -1558,6 +1567,20 @@ server-only and no job read ever returns them; and cancelling a job
 (`POST /v1/jobs/:id/cancel`) also cancels its still-running child jobs — a
 finished child is left as it is, and one already at the provider finishes, as
 any in-flight job does.
+
+Cancelling a running **metered LLM job** (an LLM call priced per model — see
+[the model catalog](#model-catalog)) depends on whether its call has started:
+
+- `POST /v1/jobs/:id/cancel` on a job whose call has started answers
+  `{ success: true, cancelled: 0, inFlight: true }`. The job finishes and is
+  charged only the credits it used.
+- The canvas Stop, cancel-all (`POST /v1/jobs/cancel-all`) and a workflow
+  cancel (`POST /v1/workflow-executions/:id/cancel`) cancel it. It is charged
+  what the provider already billed for it, and the rest of its hold is
+  refunded.
+- A job stopped before its call starts is refunded, whichever way it was
+  cancelled. The exception is what an earlier attempt of the same job already
+  used (a retry after a billed attempt): that is charged.
 
 `GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and
 `GET /v1/jobs/status` also carry `credit_status: "reserved" | "committed" |
@@ -1782,6 +1805,16 @@ not in the route's own response body.
 `{ portraitUrl, canonicalDescription }` — `canonicalDescription` is `null` if
 the LLM caption sub-failed (portrait still set; retry via `llm-caption`).
 
+The caption is billed: a Claude Sonnet 4.6 vision call charged for the tokens
+it used, at that model's rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical, under
+`prompt-helper:claude-sonnet-4.6`; [LLM model rates](pricing/llm-models.md)) —
+on `approve-portrait`, on `llm-caption`, and on every location, object and
+creature `approve-main-image` / `llm-caption`. An approval is never refused for
+credits: with too little balance for the caption, the image is still approved,
+the caption is skipped (`canonicalDescription` `null`, or `""` for objects) and
+`llm-caption` writes it later. A caption the provider billed is charged even
+when it comes back empty; one it did not bill is refunded.
+
 Both routes change the character, so an OAuth app token needs `assets:write`
 (`403 insufficient_scope` without it), the same as creating or deleting one.
 The same holds for `approve-main-image` and `llm-caption` on locations,
@@ -1995,7 +2028,7 @@ node type the server has registered without hard-coding a list.
 | `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
 
 `NodeDescriptor` fields (subset): `type`, `label`, `category`,
-`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
+`outputType`, `creditCost` (the credits a run is charged, the same figure as the node's Run button: one number for a flat price, a `"min-max"` range for a node priced per model or setting — Cloud only; community and business installs have no credit system and omit the field), `estimate` (`true` when `creditCost` is a metered LLM node's typical call on its default model — charged its actual usage, shown `~N`; Choose Best states its free strategies up to its AI judge's typical call on the default judge, a `"0-N"` range marked `estimate`; absent for a fixed price; a metered LLM node whose default model has no price yet lists `creditCost: "unpriced"` — a run on it is refused `validation_error` with `reason: "llm_model_unpriced"`), `creditRate` (a node charged per unit of its own measure, whose `creditCost` is a word rather than a number — Speaker Frames, `"per-1000-frames"`: `{ identifier, unit, creditsPerUnit, minUnits, rounding, note }`. `creditsPerUnit` is the exact charged credits of one unit, not rounded — 2.2<!-- credits-rate: speaker-frames --> for a Speaker Frames block of 1,000 sampled frames — and `rounding: "ceil-run-total"` means a run of N units (at least `minUnits`) is charged `ceil(N × creditsPerUnit)`, rounded up once: 11 blocks are 25<!-- credits: speaker-frames@11 -->, not 11 × the one-block price. `identifier` is the price id, `unit` a token naming the unit. Cloud only, like `creditCost`), `inputSchema`
 (JSON Schema for the node's config fields), `providers` (supported
 provider slugs), `capabilities` (feature flags the node exposes). Nodes
 with per-model constraints carry additional discovery fields —
@@ -2084,7 +2117,9 @@ a run's price: a run of 11 blocks is charged 25<!-- credits: speaker-frames@11 -
 where 11 × 3<!-- credits: speaker-frames --> would say 33<!-- credits: 11*speaker-frames -->. A Speaker Frames run's blocks are counted by the
 server from the edit it samples, so to quote a run before it starts, send the
 workflow to `POST /v1/credits/estimate-workflow` (`{ nodes, edges? }` →
-`{ data: { totalCredits, … } }`): it counts the wired edit's frames the way the
+`{ data: { totalCredits, … } }`; `estimate: true` rides along when a metered LLM
+node is in the total — its model's typical call, charged its actual usage, so
+the total is shown `~N`: the estimates plus the fixed prices, never a hold): it counts the wired edit's frames the way the
 [editor's estimate](./nodes/processing-video/speaker-frames.md#what-the-estimate-shows-before-you-run)
 does. With the block count in hand, `speaker-frames:<N>u` is its exact price,
 and `GET /v1/nodes/speaker-frames` serves the per-block rate as `creditRate`
@@ -2103,6 +2138,44 @@ measure — for example `voice-changer-pro:sts-26.76,respeak-v4-1200`. Both endp
 the credits the convert reserves; more than 8 slots, a stem past an hour or
 a malformed slot lands in `missing`. See
 [Voice Changer Pro](./nodes/ai-audio/voice-changer-pro.md#credit-pricing).
+
+An LLM call is charged for the tokens it actually used, at the model's rate
+on the lane that served it ([LLM model rates](pricing/llm-models.md)), so it
+has no fixed price. Its identifier is the metered price key
+`<feature>:<model>`, plus `:direct` when the call runs on the provider's own
+API — `llmPriceKey(feature, model, reasoningEffort?, advancedMode?)` from
+`@nodaro/shared/llm-models` builds it (for example `llm-chat:gemini-3.6-flash`,
+`describe-to-picker:claude-opus-5.5:direct`). Both endpoints answer it with an
+**estimate**, a typical call of that feature on that model (Generate Text on
+Gemini 3.6 Flash: ~3 credits<!-- credits: llm-chat:gemini-3.6-flash -->), and say so:
+`POST /v1/credits/model-costs` lists such identifiers in `estimates: string[]`
+(omitted when a batch asks only fixed prices, so a fixed-price batch answers
+exactly as before) and `GET /v1/credits/model-cost` adds `estimate: true` to
+its `data` (that answer is never cached). Show an estimate as `~N`. A model
+with no rate on the lane it would be served on cannot be run: the batch lists
+its key in `errors`, with `errorCodes: { "<key>": { code: "llm_model_unpriced",
+message } }`, and the run itself is refused `400 validation_error` with
+`reason: "llm_model_unpriced"` before anything is reserved. A metered key that lands in `missing` means the
+server is not pricing LLM calls per model — show no price for it. A Meta Ads
+or Instagram scrape with AI analysis is held as its fixed scrape plus one
+analysis call per item. Ask for the whole analysis as one id,
+`<analysis key>:<items>u` (`scrapeAnalysisQuoteId` in `@nodaro/shared/social`).
+The answer is that run's figure: the estimate times the items, rounded up and
+marked up once. The served one-call estimate times the items can come to more.
+
+Cancelling a metered LLM job never charges its whole hold. A job whose call
+has started is charged what it used and the rest is refunded. A job cancelled
+before its call starts is refunded, except for what an earlier attempt of the
+same job already used. A single
+`POST /v1/jobs/:id/cancel` of a running one answers `inFlight: true` and lets
+it finish (see [credit status](#job-failure-hints-error_hint-and-credit-status)).
+
+A synchronous metered LLM request (Generate Text, AI Writer, Prompt Helper,
+`POST /v1/llm/structured` and the other per-model-priced helpers) that is
+cancelled after its credits are held but before its call is sent is never
+sent. It answers `409 job_cancelled`. If the server cannot record that the
+call is starting, it answers `503 job_start_failed`; retry that one. Neither
+charges anything: the hold is refunded.
 
 | Query param | Values | Purpose |
 |---|---|---|
@@ -2926,24 +2999,24 @@ Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, def
 `POST /v1/text-to-picker` fills pickers from a free-text scene/shot
 description — the "AI Fill" behind Nodaro Cine. Authenticated,
 credit-billed (one LLM call per family batch, one charge per run) under its
-own `text-to-picker` feature id. The rung follows the selected model's tier
-and the lane the call runs on, exactly as
-[Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost) decides
-it, but on this route's own rows — a default run reads every picker's catalog,
-several times the text of one image read:
+own `text-to-picker` feature: the run is charged for the tokens its batches
+actually used, at the selected model's rate on the lane that served each one
+([LLM model rates](pricing/llm-models.md)) — the same rule as
+[Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost), on this
+route's own key, `text-to-picker:<model>[:direct]`. A default run reads every
+picker's catalog, several times the text of one image read. Before the run a
+hold is reserved — each batch's first attempt at the model's output cap — and
+a balance below it is refused (`402`, "Needs up to N credits"). What the server
+quotes beforehand (`POST /v1/credits/model-costs`, listed under `estimates`):
 
-| Rung | When | Credits |
-|------|------|---------|
-| `text-to-picker:economy` | an economy model (Gemini 3.8 Flash — the default — and the other Flash, Haiku, Luna and DeepSeek models) | **18**<!-- credits: text-to-picker:economy --> |
-| `text-to-picker` | a standard model (Claude Sonnet, GPT-5.6 Terra, Grok) | **46**<!-- credits: text-to-picker --> |
-| `text-to-picker:premium` | a premium model (Claude Opus, Gemini 3.1 Pro, GPT-5.4/5.5/Sol/Astra, Kimi K3) on the aggregator, or a standard one at `xhigh`/`max` | **90**<!-- credits: text-to-picker:premium --> |
-| `text-to-picker:premium-direct` | a premium call on the provider's own API — Advanced mode, Claude Opus 5.5 at its default `"high"` (or any Claude effort on a premium Claude model), Gemini 4 Argon | **220**<!-- credits: text-to-picker:premium-direct --> |
+- no `llmModel` (Gemini 3.8 Flash at Auto) → `text-to-picker:gemini-3.8-flash`, ~16 credits<!-- credits: text-to-picker:gemini-3.8-flash -->;
+- `llmModel: "claude-sonnet-5.5"` → ~53 credits<!-- credits: text-to-picker:claude-sonnet-5.5 -->;
+- `llmModel: "claude-opus-5.5"` with no effort (it runs at `"high"` on
+  Anthropic's own API) → `text-to-picker:claude-opus-5.5:direct`, ~262 credits<!-- credits: text-to-picker:claude-opus-5.5:direct -->;
+- `llmModel: "claude-fable-5"` (offered on this route) → ~262 credits<!-- credits: text-to-picker:claude-fable-5 -->.
 
-Worked examples: no `llmModel` (Gemini 3.8 Flash at Auto) → 18 credits<!-- credits: text-to-picker:economy -->;
-`llmModel: "claude-sonnet-5.5"` → 46 credits<!-- credits: text-to-picker -->;
-`llmModel: "claude-opus-5.5"` with no effort (it runs at `"high"` on
-Anthropic's own API) → 220 credits<!-- credits: text-to-picker:premium-direct -->.
-Claude Fable 5 is not offered on this route (`400 validation_error`).
+Every batch the provider billed is charged, a failed one included; a run
+whose batches the provider did not bill is refunded.
 
 Body: `{ text, targetPickers?, instructions?, origin?, llmModel?,
 reasoningEffort? }` — omit `targetPickers` to analyze ALL analyzable
@@ -2962,16 +3035,19 @@ CLI: `nodaro pickers analyze "<text>"`.
 
 `POST /v1/llm/structured` runs one LLM call whose answer is forced to the
 JSON Schema you supply, validated against it, and handed back as an object.
-Authenticated and credit-billed under its own `llm-structured` feature id,
-priced per model tier and lane like [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost)
-(the same legend-sized read, on your own schema): `llm-structured:economy`
-11 credits<!-- credits: llm-structured:economy --> (an economy model — the default, Gemini 3.6 Flash, included),
-`llm-structured` 20 credits<!-- credits: llm-structured --> (a standard model),
-`llm-structured:premium` 40 credits<!-- credits: llm-structured:premium --> (a premium model on the
-aggregator, or a standard one at `xhigh`/`max`), and `llm-structured:premium-direct`
-150 credits<!-- credits: llm-structured:premium-direct --> (a premium call on the provider's own API —
-Advanced mode, any Claude effort on a premium Claude model, Gemini 4 Argon).
-Claude Fable 5 is not offered on this route (`400 validation_error`). It is
+Authenticated and credit-billed under its own `llm-structured` feature: the
+call is charged for the tokens it actually used — your system prompt, input
+and schema, every validation re-ask and lane fallback, and the answer — at the
+model's rate on the lane that served it ([LLM model rates](pricing/llm-models.md)),
+the same rule as [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost).
+The hold is the first attempt at the model's output cap; a balance below it is
+refused (`402`, "Needs up to N credits"). What the server quotes beforehand for
+a typical call: ~18 credits<!-- credits: llm-structured:gemini-3.6-flash --> on the default, Gemini 3.6 Flash;
+~31<!-- credits: llm-structured:claude-sonnet-5.5 --> on Claude Sonnet 5.5; ~62<!-- credits: llm-structured:claude-opus-5.5 --> on Claude Opus 5.5 with no effort;
+~154<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5, which this route offers. A failure the
+provider billed (an answer that never validated after its retries, a refusal,
+an answer cut off at the cap) is charged for that usage and the error says how
+much; one it did not bill is refunded. It is
 the generic primitive behind schema-authoring clients — Nodaro Studio composes
 a whole production plan with it.
 
@@ -3006,14 +3082,14 @@ symmetric**: `maxTokens` applies on every call — a deliberate departure from
 the LLM routes that put both levers behind the Advanced-mode gate —
 while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
-where those levers take effect, and therefore bills **one credit rung up** (a premium model moves to its premium-direct price);
+where those levers take effect, and charges the call at that lane's rate;
 asking for it on a model with no direct lane is a 400
 `advanced_mode_unsupported`.
 When the model's own provider cannot take requests at that moment, an
 Advanced-mode request is refused rather than run on the default lane, where
 its levers would not take effect: `400 advanced_mode_unavailable` before
 anything is charged, or `502 advanced_mode_unavailable` if the refusal arrives
-mid-call (the reserved credits are refunded). Turn Advanced mode off to run
+mid-call (refunded unless the provider billed the attempt). Turn Advanced mode off to run
 the model on its default lane. The call is
 **synchronous and a single call may run several minutes**: each attempt is
 allowed up to 240 seconds *per provider lane*, and a call that cannot reach its
@@ -3052,8 +3128,10 @@ its result on a job row too, but only tells you the id with the answer.)
 - `videoAnalysis` — `{ llmModel?, selectionMode? }`, handed to the analysis
   route unchanged (its tier names and vocabulary; only with `videoUrl`).
 
-Credits: the LLM step is reserved at creation under `llm-structured:<tier>`,
-exactly as the synchronous route; a movie run's analysis is reserved by the
+Credits: the LLM step's hold is reserved at creation under `llm-structured:<model>`
+(`:direct` on the provider's own API) and settled on what the draft used,
+exactly as the synchronous route; for a movie run the hold counts the
+analysis text a video of the longest accepted duration can add; a movie run's analysis is reserved by the
 analysis route under its own id. Errors at creation: the synchronous route's
 400 / 401 / 402 / 503, plus — when `videoUrl` is set — the analysis route's
 own answers, verbatim: `422 video_too_long` / `live_stream_not_supported` /
@@ -3274,6 +3352,48 @@ session — a personal token or OAuth token gets that code even when the
 billing account owns it. `POST /v1/deployment-billing/checkout` answers
 `503 stripe_not_configured` on a deployment that takes no card; the
 account is then topped up by the platform operator instead.
+
+### A model with no price yet (`llm_model_unpriced`)
+
+An LLM node is charged per model, at the rate of the lane that serves it. A
+model with no rate on that lane cannot be run, and every route that would
+price or run it says so with the same answer, `400` with
+`{ "error": { "code": "validation_error", "reason": "llm_model_unpriced", "modelId": "<model>", "message": "The model \"<model>\" has no price yet, so it cannot be run. Choose another model." } }`:
+
+- **Estimates.** `POST /v1/credits/estimate-workflow`, `GET /v1/credits/model-cost`
+  (for the model's price key), `POST /v1/component/estimate-credits`,
+  `POST /v1/workflows/:id/render-final/estimate`, and each use-case node's
+  `…/estimate` route. `POST /v1/credits/model-costs` answers per key instead,
+  listing it in `errors` with its `errorCodes` entry.
+- **Publishing.** `POST /v1/apps/publish` and `POST /v1/templates/publish`
+  refuse before anything is written: a republish leaves the current version
+  live under its slug, and a template that keeps its run copies nothing.
+- **Runs.** `POST /v1/workflows/:id/run`, `POST /v1/app/:slug/run`,
+  `POST /v1/app/:slug/runs/:runId/resume`, `POST /v1/component/execute`,
+  `POST /v1/api/run`, `POST /v1/present/:token/run`, and each use-case node's
+  run and continue routes. The check runs before the run is created, over the
+  nodes it executes, with your input overrides applied (an override that sets
+  a priced model runs). No node runs, so nothing is charged. MCP `run_app`,
+  `run_workflow` and `run_component` reach the same routes.
+- **Triggers.** A webhook fire answers the same `400`. Schedule, Telegram and
+  plugin-trigger fires are skipped. Each lane leaves one failed execution with
+  `error_message: "llm_model_unpriced"` in the workflow's history, and repeated
+  fires do not add more. Only the branch the trigger runs is checked.
+- **Inside the run.** The server checks again when a run starts, before any
+  node runs. This covers the graphs of the sub-workflows and components the run
+  executes, so an upstream node is never charged for a model one of them holds.
+  A run refused here ends `failed`, with the message above as its
+  `error_message`. A model inside a sub-workflow adds
+  `Found inside Sub-workflow node <id>.`, and one inside a component adds
+  `Found inside Component node <id>.`
+
+Two read-only routes describe the workflow anyway and leave the refusal to
+the run. `GET /v1/present/:token` returns the page with `estimatedCost`
+omitted and `estimatedCostUnpriced: { reason: "llm_model_unpriced", modelId, message }`.
+`GET /v1/api/schema` returns the schema with `estimatedCredits` omitted and
+`estimatedCreditsUnpriced` in the same shape. On a deployment running the
+tier-pricing rollback (`LLM_TIER_PRICING_ROLLBACK`), every model has a tier
+price and none of this applies.
 
 ## 12b. Billing surface
 
@@ -3846,11 +3966,15 @@ authenticated caller.
     Without it, one creator, as an app or API run draws it.
 
 Both forms answer `lines` (each with an English `label`, its `credits` and a stable `key`; a clip
-line also its number `n` and its `seconds`), `expected` (what the video is expected to cost),
+line also its number `n` and its `seconds`; a line that holds a metered LLM call — a creator check,
+a clip's frame check while the UGC plugin meters it — is marked `"estimate": true`: charged its
+actual usage, show it `~N`), `expected` (what the video is expected to cost),
 `ceiling` (what it holds while its clips render: each clip at twice its price), `parts` (the
 expected credits per part of the video: `script`, `creator`, `clip`, `cards`, `join`, `overlay`
 and `captions`, adding up to `expected`) and `holdParts` (what each part holds; they add up to
-the ticket form's `ceiling`). The estimate also answers `range` (what it is expected to cost at
+the ticket form's `ceiling`). `estimateParts` (present only when one is) lists the parts whose figure
+holds such an estimate, so a price that counts one of those parts is shown `~N`; the editor's Execute
+and Run from here buttons and the server's own workflow estimate read it. The estimate also answers `range` (what it is expected to cost at
 0.8× and 1.2× the length) and `worstCase` (what it holds at the longer length; its `holdParts`
 add up to it), and, when the server supplies all three, `limits`: the script's line limits in
 characters, `{ "hook": …, "beatLine": …, "closerLine": … }` (each a whole number), which the
@@ -4083,8 +4207,11 @@ pipeline starts with empty chat history per chat-enabled stage.
 ## 15. Prompt Wizard
 
 AI assistance for writing prompts for generation nodes. One endpoint, three
-actions — discriminated by the `action` field. Credit-guarded (reserves
-credits per call).
+actions — discriminated by the `action` field. Each call is charged for the
+tokens it used at the model's rate on the lane that served it (a hold first,
+then the real charge; ~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on the default Gemini 3.6 Flash —
+[LLM model rates](pricing/llm-models.md)); a refusal the provider billed is
+charged for that usage.
 
 ### `POST /v1/prompt-helper/wizard`
 
@@ -4829,16 +4956,16 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/speaker-map` | **Not yet enabled on nodaro.ai.** Which camera each speaker is on, from the cameras' own microphones — local FFmpeg, keyless, **11 credits**<!-- credits: speaker-map --> flat per run (`{ sources: [{ id, url, kind?: "video" | "audio" }] (2–6, unique ids; `kind: "audio"` = a sound-only recording, never anyone's camera), transcript (with speaker labels), offsets?: <an /v1/audio-sync result>, masterSourceId?, wideSourceId?, marginDb?: <0–30, default 3> }`; the master and the wide are no one's camera). While a speaker talks, the camera that hears them loudest by at least `marginDb` is theirs, else `""` (shown on the wide shot). `400 validation_error` (a repeated id, a master or wide id that is not a source, a wide sent as `kind: "audio"`, fewer than 2 sources) and `422 no_speakers` before anything is reserved; `output_data.json` = `{ version, speakerMap, confidence, notes, edl? }` (`edl`: the recordings as one edit, also on `output_data.edl`). Send its `speakerMap` to `/v1/camera-switch` as `speakerMap`. Full reference: [Speaker Map](./nodes/processing-audio/speaker-map.md). → job. |
 | `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters\|trailer, planTier: economy\|standard\|premium, transcript, sources: [{ id, url, kind, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`, an EDL for `trailer`). A mode the server does not plan ([Edit Plan modes](#edit-plan-modes)) or does not know answers `400 mode_not_available` before anything is charged. Priced per source-minute × tier on a length bucket, plus a flat term in `clips` and `trailer` modes: `per_minute(tier) × bucket_minutes + (clips or trailer ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
 | `POST` | `/v1/episode-chapters` | [Chapters](./nodes/processing-video/episode-chapters.md): a recording's chapters in one run — Transcribe, then Edit Plan in Chapters mode, each its own job; nothing is rendered (`{ mediaUrls: [<recording URL>] (one, up to 3 hours, with sound), planTier?: economy\|standard\|premium (default economy), instructions?, styleGuide? }`; `output_data.text` = the show notes, one `M:SS Title` line per chapter (once a chapter starts at 1:00:00 or later, every line is `H:MM:SS`; the first at 0:00, the times strictly increasing — two chapters in the same second keep the first), `output_data.json` = `[{ startMs, title }]`, the same rows; the first starts at 0). A run that finds no chapters fails and its fee is refunded. Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:episode-chapters -->. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). **Not yet enabled on nodaro.ai.** → `202 { jobId, executionId }`. |
-| `POST` | `/v1/episode-chapters/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` and starts nothing (the credit figures are 0 on an edition without credits). |
+| `POST` | `/v1/episode-chapters/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` (plus `estimate: true` when a step is a metered LLM call's estimate) and starts nothing (the credit figures are 0 on an edition without credits). |
 | `POST` | `/v1/episode-chapters/continue` | `{ jobId, "mode": "from-failed" }`: run what a failed Chapters run did not complete, as a new job (finished steps are kept and not charged again; the fee is held again, the failed run's was refunded). Refusals: the [continuation codes](#continuing-a-run); `"mode": "render-final"` is refused `409 render_final_not_preview` (nothing renders). |
 | `POST` | `/v1/episode-trailer` | [Trailer](./nodes/processing-video/episode-trailer.md): a 20–40 second trailer of a recording in each chosen social format, in one run — Transcribe, Edit Plan in Trailer mode, Apply EDL, Combine Videos when an intro card is given, and one Social Media Format per format (padded, never cropped), each its own job (`{ mediaUrls: [<recording URL>] (one video, up to 3 hours, with sound; an audio-only recording is refused `400 media_needs_video`), introCardUrl? (a video, 15 s at most: `400 intro_card_unreadable` / `intro_card_too_long`), formats?: ("9:16"\|"1:1"\|"4:5"\|"16:9")[] (at least one; default 9:16, 1:1, 4:5; an empty list is `400 validation_error`), reviewBeforeRender?, planTier?: economy\|standard\|premium (default standard), instructions?, styleGuide? }`; `output_data.formats` = `[{ format, url }]` in format order, `output_data.videoUrl` = the trailer of the first chosen format that rendered, `formats[0]` (on a review run, the preview, with `formats: []`), `output_data.failedFormats` = the formats that could not be rendered (the run completes with the others and keeps its fee; with none rendered it fails and its fee is refunded), `output_data.json` = the trailer's EDL). Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:episode-trailer -->. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). A Trailer fed by a List in a workflow is refused (`use_case_list_driven`). On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). **Not yet enabled on nodaro.ai.** → `202 { jobId, executionId }`. |
-| `POST` | `/v1/episode-trailer/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` and starts nothing (the credit figures are 0 on an edition without credits). |
+| `POST` | `/v1/episode-trailer/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` (plus `estimate: true` when a step is a metered LLM call's estimate) and starts nothing (the credit figures are 0 on an edition without credits). |
 | `POST` | `/v1/episode-trailer/continue` | `{ jobId, mode, editedEdl? }`: `"mode": "from-failed"` runs what a failed Trailer run did not complete, as a new job (finished steps are kept and not charged again; the fee is held again, the failed run's was refunded); `"mode": "render-final"` renders a review run's final — the trailer at Final with the reviewer's `editedEdl` (optional), the intro card and every format, with no fee. Refusals: the [continuation codes](#continuing-a-run); a Render final of a run that was not a preview is `409 render_final_not_preview`, of an edit already rendered `409 render_final_already_rendered`. |
 | `POST` | `/v1/clip-pack` | [Clip Pack](./nodes/processing-video/clip-pack.md): a recording cut into a pack of short clips in one run — Transcribe, Edit Plan in Clips mode, then once per clip a render (Speaker View with framing, Apply EDL without) and Add Captions when captions are on, each its own job (`{ mediaUrls: [<recording URL>, …] (one video or audio recording, up to 3 hours, with sound — or up to six of one conversation, see [Several cameras](./nodes/processing-video/clip-pack.md#several-cameras)), masterAudioUrl?, cameras?, count?: 1–50 (default 8), targetDurationSec?: 5–180 (default 60), framing?: { aspect: "16:9"\|"9:16"\|"1:1"\|"4:5", layout? (default stacked), switchType?, emphasisStyle? } \| null (default 9:16, stacked, pan, scale; `null` = the recording's shape), framingSource?: auto\|static\|tracking (absent = static; see [Following faces](./nodes/processing-video/clip-pack.md#following-faces)), captions? (default true), captionStyle? (default karaoke), reviewBeforeRender?, planTier?: economy\|standard\|premium (default standard), instructions?, styleGuide? }`; an audio recording makes audio clips, with no framing or captions; `output_data.clips` = `[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]` in the plan's order, `output_data.videoUrl` = the first clip (`audioUrl` for audio clips), `output_data.failedClips` = how many clips could not be rendered (the run completes with the others and keeps its fee; a clip that failed is not charged; with none rendered it fails and its fee is refunded), `output_data.failedCaptions` = how many clips came uncaptioned (those captions are not charged), `output_data.json` = the plan's clip set). Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:clip-pack -->. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). A Clip Pack fed by a List in a workflow is refused (`use_case_list_driven`). On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). **Not yet enabled on nodaro.ai.** → `202 { jobId, executionId }`. |
-| `POST` | `/v1/clip-pack/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` and starts nothing (the credit figures are 0 on an edition without credits). |
+| `POST` | `/v1/clip-pack/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` (plus `estimate: true` when a step is a metered LLM call's estimate) and starts nothing (the credit figures are 0 on an edition without credits). |
 | `POST` | `/v1/clip-pack/continue` | `{ jobId, mode, editedEdl? }`: `"mode": "from-failed"` runs what a failed Clip Pack run did not complete, as a new job (finished steps are kept and not charged again — a run that stopped before its captions captions the clips it already rendered; the fee is held again, the failed run's was refunded); `"mode": "render-final"` renders a review run's final — the clips the reviewer's `editedEdl` (optional: `{ v: 1, kind: "clips", basis, clips: [{ keep, hook? }] }`) keeps, at Final, each captioned, with no fee. Refusals: the [continuation codes](#continuing-a-run); a review that drops every clip is `409 use_case_nothing_kept`, a Render final of a run that was not a preview `409 render_final_not_preview`, of an edit already rendered `409 render_final_already_rendered`. |
 | `POST` | `/v1/speaker-layout` | [Speaker Layout](./nodes/processing-video/speaker-layout.md): a whole recording framed by speaker, the same length, nothing cut, in one run — Transcribe, then Speaker View over the whole recording (Speaker Frames when following faces; Audio Sync, Speaker Map and Camera Switch on several recordings), each its own job (`{ mediaUrls: [<recording URL>, …] (one video recording, up to 3 hours, or up to six of one conversation), masterAudioUrl?, cameras?, targetAspect?: "16:9"\|"9:16"\|"1:1"\|"4:5" (default 9:16), layout? (default stacked), switchType? (default cut), emphasisStyle? (default scale), framingSource?: "auto"\|"static"\|"tracking" (default auto), reviewBeforeRender? }`; `output_data.videoUrl` = the framed video, `durationSec` its length, `json` = the edit Speaker View drew, `transcript`, `quality`, and `cameras` on several recordings). Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:speaker-layout -->. Refused before anything is created: a run with no picture `400 media_needs_video`, one recording already as narrow as `targetAspect` `400 media_shape`, a recording that cannot be read `400 media_unreadable`, an unknown `switchType` or `emphasisStyle` `400 validation_error`, several recordings or a Master audio where Speaker Map is not available to you `403 node_not_available` (not yet enabled on nodaro.ai), `framingSource: "tracking"` where Speaker Frames is not available to you `403 node_not_available`, and — on one recording, whose size is read before the run starts — too many such runs started in a minute `429 rate_limit_exceeded`. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). A review-on Speaker Layout fed by a List in a workflow is refused (`use_case_review_list_driven`). On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). **Not yet enabled on nodaro.ai.** → `202 { jobId, executionId }`. |
-| `POST` | `/v1/speaker-layout/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` and starts nothing (the credit figures are 0 on an edition without credits). It never downloads the recording. |
+| `POST` | `/v1/speaker-layout/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` (plus `estimate: true` when a step is a metered LLM call's estimate) and starts nothing (the credit figures are 0 on an edition without credits). It never downloads the recording. |
 | `POST` | `/v1/speaker-layout/continue` | `{ jobId, mode }`: `"mode": "from-failed"` runs what a failed Speaker Layout run did not complete, as a new job (finished steps are kept and not charged again; the fee is held again, the failed run's was refunded); `"mode": "render-final"` renders a review run's final — the render alone, at Final, with no fee. It takes no `editedEdl`: one sent is refused `400 use_case_no_plan`. Refusals: the [continuation codes](#continuing-a-run); a Render final of a run that was not a preview `409 render_final_not_preview`, a second Render final of the same preview `409 render_final_already_rendered`. |
 | `POST` | `/v1/camera-switch` | Put each cut of an edit on the camera of whoever is speaking — the sound never changes (`{ edl, transcript (with speaker labels), speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }`; `output_data.json` = the switched EDL for `/v1/apply-edl`, `output_data.transcript` = the transcript with `speakerNames` applied). **11 credits**<!-- credits: camera-switch --> flat per run. Refused before anything is created: `400 invalid_edl` when `edl` is not one master-clock edit (a clip set, a chapters plan), `422 no_speakers` when the transcript has no speaker labels. Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Full reference: [Camera Switch](./nodes/processing-video/camera-switch.md). → job. |
 | `POST` | `/v1/speaker-view` | Render an edit with the speakers laid out on screen, from the original cameras with the master audio (`{ edl | videoUrl, transcript?, quality?: final\|proxy, targetAspect?: 16:9\|9:16\|1:1\|4:5, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, speakerRegions?: [{ source, speaker, region }], tracks?, motion?: static\|glide, clipKey? }` — `tracks` is Speaker Frames' output descriptor, never the boxes, its labels overriding the stored file's by track id; a camera the render follows (a slot without its own crop in the EDL) whose file or offset changed since Speaker Frames ran, or tracks no Speaker Frames run of the account made, are refused `400 invalid_tracks` before anything is created — a check made by the editor's Run, by a workflow run and by the route itself, on nodaro.ai and on a self-hosted install alike (a self-hosted install makes it against its own Speaker Frames run before it relays the render, and nodaro.ai leaves the relayed render to it); `output_data` = `videoUrl` + `thumbnailUrl`, `json` = the edit as rendered, `transcript` = the wired transcript remapped through it, absent when none was wired). Send exactly one of `edl` and `videoUrl` (a public http(s) link to a video, cut whole at the speakers' turns, `targetAspect` defaulting to 9:16): with `videoUrl` the `transcript` is required and must name its speakers, the server measures the picture's real length once and builds the one-clip edit itself, and a clip whose length cannot be measured (`422 video_unreadable`), both or neither input (`400 invalid_input`), a missing transcript (`400 transcript_required`, `422 no_speakers`) or a video already as narrow as the target aspect (`400 source_not_wider`) is refused before anything is created. Priced per minute of output in two tiers by how many speakers are on screen at once (see the [Speaker View node page](./nodes/processing-video/speaker-view.md#credit-cost)): reserved on the edit as given, charged on the rendered cut's own minutes. Runs on nodaro.ai; a self-hosted install relays it once connected (otherwise `503 nodaro_connection_required`), and first refuses `422 source_too_large`, naming the source and its size, when a source stored on the install is over the 500 MB a relay can send — use a public URL for a large camera file. A `quality: proxy` render is private. → job. |

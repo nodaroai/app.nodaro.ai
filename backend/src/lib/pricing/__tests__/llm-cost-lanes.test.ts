@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { LLM_MODELS } from "@nodaro/shared/llm-models"
-import { calculateLlmCost, directRatedModelIds } from "../llm-cost.js"
+import { LlmRateMissingError, calculateLlmCost, directRatedModelIds, hasLlmRate } from "../llm-cost.js"
 
 describe("serving lane selects the rate band", () => {
   it("defaults to the KIE band so every pre-existing call site is unchanged", () => {
@@ -52,6 +52,8 @@ describe("serving lane selects the rate band", () => {
     // Equality is legitimate: KIE resells claude-sonnet-4.6 at exactly
     // Anthropic list, with no markdown.
     for (const id of directRatedModelIds()) {
+      // A directOnly model (gemini-4-argon) has no KIE row to undercut.
+      if (!hasLlmRate(id, "kie")) continue
       const usage = { inputTokens: 10_000, outputTokens: 2_000 }
       expect(
         calculateLlmCost(id, usage, "direct"),
@@ -132,8 +134,8 @@ describe("rate-table / registry invariants", () => {
     expect(calculateLlmCost("gpt-5.2", usage, "direct")).toBe(calculateLlmCost("gpt-5.2", usage, "kie"))
   })
 
-  it("still returns 0 for a model that is in no table at all", () => {
-    expect(calculateLlmCost("not-a-real-model", { inputTokens: 1_000, outputTokens: 1 }, "direct")).toBe(0)
+  it("throws for a model that is in no table at all", () => {
+    expect(() => calculateLlmCost("not-a-real-model", { inputTokens: 1_000, outputTokens: 1 }, "direct")).toThrow(LlmRateMissingError)
   })
 })
 

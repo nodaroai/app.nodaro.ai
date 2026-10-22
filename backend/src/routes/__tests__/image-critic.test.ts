@@ -7,6 +7,12 @@ import { randomBytes } from "node:crypto"
 vi.mock("@/lib/llm-client.js", () => ({
   llmComplete: vi.fn(),
 }))
+// The tier path (the rollback, D6): these cases pin today's tier billing;
+// the metered paths are llm-metered-creative-routes.test.ts.
+vi.mock("@/lib/config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/config.js")>()),
+  llmMeteredPricing: () => false,
+}))
 vi.mock("@/lib/reconcile/persistence.js", () => ({
   markProviderCallStart: vi.fn().mockResolvedValue(undefined),
 }))

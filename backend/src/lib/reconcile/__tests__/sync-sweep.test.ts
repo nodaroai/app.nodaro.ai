@@ -14,6 +14,11 @@ vi.mock("../../supabase.js", () => ({
   supabase: { from: fromMock },
 }))
 
+// The metered-LLM half of the sweep (R20 / D10) is pinned in
+// sync-sweep-metered.test.ts; these cases are the non-metered sweep, which it
+// answers "not-metered" — the refund path, exactly as before.
+vi.mock("../../llm-billing.js", () => ({ settleSweptMeteredLlmJob: vi.fn(async () => "not-metered") }))
+
 vi.mock("../../credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: vi.fn().mockResolvedValue(undefined),
 }))
@@ -29,7 +34,7 @@ describe("sweepStaleSyncJob", () => {
   })
 
   it("marks the job failed with human-readable error_message + machine reconcile_last_error tag", async () => {
-    await sweepStaleSyncJob({ id: "j1", provider_kind: "anthropic-sync", reconcile_attempts: 0 })
+    await sweepStaleSyncJob({ id: "j1", provider_kind: "anthropic-sync", reconcile_attempts: 0, reconcile_last_error: null })
     expect(updateMock).toHaveBeenCalledTimes(1)
     const updateArg = updateMock.mock.calls[0]![0]
     expect(updateArg.status).toBe("failed")
@@ -40,7 +45,7 @@ describe("sweepStaleSyncJob", () => {
   })
 
   it("uses the shared CAS guard: .eq(\"id\", jobId).in(\"status\", FAILABLE_STATUSES) — preserves ANY terminal state, and can never take a pending_review row", async () => {
-    await sweepStaleSyncJob({ id: "j-cas", provider_kind: "kie-llm", reconcile_attempts: 2 })
+    await sweepStaleSyncJob({ id: "j-cas", provider_kind: "kie-llm", reconcile_attempts: 2, reconcile_last_error: null })
     expect(eqMock).toHaveBeenCalledWith("id", "j-cas")
     // Widened by the markJobFailed consolidation (spec D11): "queued" rows (the
     // MCP pipeline/app creation paths write it) could not be failed by this
@@ -51,18 +56,18 @@ describe("sweepStaleSyncJob", () => {
   })
 
   it("calls refundReservedCreditsForJob with the job id when CAS UPDATE found the row", async () => {
-    await sweepStaleSyncJob({ id: "j-refund", provider_kind: "kie-llm", reconcile_attempts: 0 })
+    await sweepStaleSyncJob({ id: "j-refund", provider_kind: "kie-llm", reconcile_attempts: 0, reconcile_last_error: null })
     expect(refundReservedCreditsForJob).toHaveBeenCalledWith("j-refund")
   })
 
   it("skips refund when CAS UPDATE returns 0 rows (another writer won)", async () => {
     selectMock.mockResolvedValueOnce({ data: [], error: null })
-    await sweepStaleSyncJob({ id: "j-skip", provider_kind: "anthropic-sync", reconcile_attempts: 0 })
+    await sweepStaleSyncJob({ id: "j-skip", provider_kind: "anthropic-sync", reconcile_attempts: 0, reconcile_last_error: null })
     expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
   })
 
   it("handles null provider_kind (legacy rows) without throwing", async () => {
-    await sweepStaleSyncJob({ id: "j-legacy", provider_kind: null, reconcile_attempts: 0 })
+    await sweepStaleSyncJob({ id: "j-legacy", provider_kind: null, reconcile_attempts: 0, reconcile_last_error: null })
     const updateArg = updateMock.mock.calls[0]![0]
     expect(updateArg.status).toBe("failed")
     expect(updateArg.reconcile_last_error).toBe("reconcile_no_recovery")
@@ -70,7 +75,7 @@ describe("sweepStaleSyncJob", () => {
 
   it("does not throw or refund on a Supabase error during UPDATE", async () => {
     selectMock.mockResolvedValueOnce({ data: null, error: { message: "transient" } })
-    await sweepStaleSyncJob({ id: "j-error", provider_kind: "anthropic-sync", reconcile_attempts: 0 })
+    await sweepStaleSyncJob({ id: "j-error", provider_kind: "anthropic-sync", reconcile_attempts: 0, reconcile_last_error: null })
     expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
   })
 })

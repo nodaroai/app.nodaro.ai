@@ -7,6 +7,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { estimateFlagColumn, listingEstimateFlag, selectWithEstimateFlag, writeWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import { usecaseViewerForEveryone } from "../lib/use-case/inner-availability.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared/apps"
@@ -108,6 +110,8 @@ function toCamelCase(row: Record<string, unknown>) {
     finalPerItemCredits: storedListingFinalPerItem(row as StoredAppListing),
     // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
     ...storedListingRange(row as StoredAppListingMax),
+    // The listed price holds a metered LLM estimate (`~N`, only while metered pricing is on).
+    ...listingEstimateFlag(row),
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -142,6 +146,8 @@ function toBrowseCard(row: Record<string, unknown>) {
     perItemCredits: perMinuteOf(row, "per_item_credits"),
     // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
     ...storedListingRange(row as StoredAppListingMax),
+    // The listed price holds a metered LLM estimate: the card shows it `~N` (only while metered pricing is on).
+    ...listingEstimateFlag(row),
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -360,8 +366,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return query
     }
 
-    const { data: rows, error } = await selectWithMax<Record<string, unknown>[]>("published_apps", selectCols, (columns) =>
-      selectWithPerMinute<Record<string, unknown>[]>("published_apps", columns, buildQuery, "listed"), "listed")
+    // With the estimate flag (migration 553), unless it has not reached this database yet.
+    const { data: rows, error } = await selectWithEstimateFlag<Record<string, unknown>[]>("published_apps", selectCols, (flagCols) =>
+      selectWithMax<Record<string, unknown>[]>("published_apps", flagCols, (columns) =>
+        selectWithPerMinute<Record<string, unknown>[]>("published_apps", columns, buildQuery, "listed"), "listed"))
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to browse apps")
@@ -661,6 +669,34 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const shippedComponentMetadata = componentMetadata
       ? { ...componentMetadata, exposedSettings: componentMetadata.exposedSettings.map((s) => ({ ...s, defaultValue: published.shippedValue(s.nodeId, s.field, s.defaultValue) })) }
       : componentMetadata
+    // Priced BEFORE anything is written (the version step below retires the live version and renames
+    // its slug): a publish the listing refuses — a metered LLM model with no price (R49) — writes nothing.
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
+    const replaceableMediaNodeIds = exposedMediaNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
+    // A List the app user fills is listed per further item (decided 2026-10-07).
+    const exposedLists = exposedListNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
+    // A range (decided 2026-10-14): "from" the saved settings, "up to" the most a
+    // run can cost over the choices the app's user has (its exposed fields).
+    let listingSplit: Awaited<ReturnType<typeof estimateWorkflowListingCredits>>
+    try {
+      listingSplit = await estimateWorkflowListingCredits(snapshotNodes as EstimateNode[], edges as EstimateEdge[], {
+        publishType,
+        speechTextCaps,
+        replaceableMediaNodeIds,
+        exposedListNodeIds: exposedLists,
+        snapshotSettings: published.settings as Record<string, unknown> | null,
+        // Shown to everyone: a general user's run — several recordings only while Speaker Map is every
+        // user's, an `auto` framing source as the even split while Speaker Frames is not (decided 2026-10-20).
+        ...usecaseViewerForEveryone(snapshotNodes as EstimateNode[]),
+      })
+    } catch (err) {
+      // A metered LLM model with no price (R49): nothing is listed at a price its run would refuse.
+      if (await replyIfLlmUnpriced(reply, err)) return reply
+      throw err
+    }
+    // No ceiling computed (none to compute): "up to" is the "from".
+    const listingCeiling = listingSplit.ceiling ?? listingSplit
+
     // Compute version + deactivate old versions. Filter deleted rows so a
     // republish after deletion gets a fresh v1 and the deleted row's slug
     // stays intact (restore must yield the original slug).
@@ -710,25 +746,6 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Carry forward listing status from previous version if not explicitly set
     const prevWasListed = prevVersion?.is_listed ?? false
     const effectiveIsListed = isListed ?? prevWasListed
-
-    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
-    const replaceableMediaNodeIds = exposedMediaNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
-    // A List the app user fills is listed per further item (decided 2026-10-07).
-    const exposedLists = exposedListNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
-    // A range (decided 2026-10-14): "from" the saved settings, "up to" the most a
-    // run can cost over the choices the app's user has (its exposed fields).
-    const listingSplit = await estimateWorkflowListingCredits(snapshotNodes as EstimateNode[], edges as EstimateEdge[], {
-      publishType,
-      speechTextCaps,
-      replaceableMediaNodeIds,
-      exposedListNodeIds: exposedLists,
-      snapshotSettings: published.settings as Record<string, unknown> | null,
-      // Shown to everyone: a general user's run — several recordings only while Speaker Map is every
-      // user's, an `auto` framing source as the even split while Speaker Frames is not (decided 2026-10-20).
-      ...usecaseViewerForEveryone(snapshotNodes as EstimateNode[]),
-    })
-    // No ceiling computed (none to compute): "up to" is the "from".
-    const listingCeiling = listingSplit.ceiling ?? listingSplit
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false
@@ -812,7 +829,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
 
       // The per-minute columns drop out until migration 483 reaches this database.
       // The "up to" columns drop out until migration 517 reaches this database.
-      const result = await writeWithMax("published_apps", {
+      // The estimate flag drops out until migration 553 reaches this database.
+      const result = await writeWithEstimateFlag("published_apps", {
           workflow_id: workflowId,
           creator_id: userId,
           name,
@@ -826,6 +844,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           snapshot_settings: published.settings || {},
           base_estimated_credits: baseEstimatedCredits,
           estimated_credits: estimatedCredits,
+          // The listed price holds a metered LLM estimate (shown `~N`, Task 12 / R47).
+          ...estimateFlagColumn(listingSplit),
           base_per_minute_credits: basePerMinuteCredits,
           per_minute_credits: perMinuteCredits,
           base_per_item_credits: basePerItemCredits,
@@ -849,7 +869,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           creator_display_name: creatorDisplayName,
           publish_type: publishType,
           component_metadata: publishType === "component" ? shippedComponentMetadata : null,
-        }, (withMax) => writeWithPerMinute("published_apps", withMax, (row) => supabase.from("published_apps").insert(row).select().single()))
+        }, (flagged) => writeWithMax("published_apps", flagged, (withMax) => writeWithPerMinute("published_apps", withMax, (row) => supabase.from("published_apps").insert(row).select().single())))
 
       if (!result.error) {
         publishedApp = result.data
@@ -896,13 +916,14 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const mineCols =
       "id, workflow_id, creator_id, version, slug, name, description, icon_url, is_active, is_listed, is_embeddable, allowed_origins, estimated_credits, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, thumbnail_node_id, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_display_name, total_run_count, favorite_count, created_at, publish_type, component_metadata, deleted_at"
 
-    const { data: apps, error } = await selectWithMax<any[]>("published_apps", mineCols, (maxCols) => selectWithPerMinute<any[]>("published_apps", maxCols, (columns) =>
+    // With the estimate flag (migration 553), unless it has not reached this database yet.
+    const { data: apps, error } = await selectWithEstimateFlag<any[]>("published_apps", mineCols, (flagCols) => selectWithMax<any[]>("published_apps", flagCols, (maxCols) => selectWithPerMinute<any[]>("published_apps", maxCols, (columns) =>
       supabase
         .from("published_apps")
         .select(`${columns}, app_runs(count), workflows!workflow_id(project_id)`)
         .eq("creator_id", userId)
         .order("created_at", { ascending: false }),
-    ))
+    )))
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch apps")
@@ -924,6 +945,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       isEmbeddable: app.is_embeddable,
       allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
+      // `true` when the listed price holds a metered LLM estimate (shown `~N`), while metered pricing is on.
+      ...listingEstimateFlag(app),
       baseEstimatedCredits: app.base_estimated_credits ?? 0,
       // The Render finals' part of the listed price, which the creator's fee never marks up.
       finalEstimatedCredits: storedListingFinalCredits(app),

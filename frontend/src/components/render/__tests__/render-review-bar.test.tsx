@@ -61,10 +61,24 @@ describe("RenderReviewBar", () => {
     controls.finalUnchecked = "checking"
     controls.previewUnchecked = "editor"
     render(<RenderReviewBar renderId="r" busy={false} />)
-    const final = screen.getByText(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`).closest("button")!
+    const final = screen.getByText(`Render final · ~530`).closest("button")!
     expect(final.title).toBe(translate("en", "ugc.price.checking"))
-    const preview = screen.getByText(`Update preview · ${translate("en", "renderFinal.priceEstimate", { n: "144" })}`).closest("button")!
+    const preview = screen.getByText(`Update preview · ~144`).closest("button")!
     expect(preview.title).toBe(translate("en", "ugc.price.unchecked"))
+  })
+
+  it("a run that executes a metered LLM node is shown approximate, as the server's quote flags it (no reason: nothing is unchecked)", () => {
+    render(<RenderReviewBarView onRenderFinal={vi.fn()} onUpdatePreview={vi.fn()} finalCredits={530} finalApprox previewCredits={144} busy={false} />)
+    expect(screen.getByText("Render final · ~530").closest("button")!.title).toBe("")
+    expect(screen.getByText("Update preview · 144")).toBeInTheDocument()
+  })
+
+  it("a run holding a node the server refuses to price: no figure — not priced yet, the server's sentence on the button", () => {
+    const message = 'The model "x" has no price yet, so it cannot be run. Choose another model.'
+    render(<RenderReviewBarView onRenderFinal={vi.fn()} onUpdatePreview={vi.fn()} finalCredits={530} finalApprox finalUnpriced={{ message }} previewCredits={144} previewUnpriced={{ message }} busy={false} />)
+    expect(screen.getByText("Render final · not priced yet").closest("button")!.title).toBe(message)
+    expect(screen.getByText("Update preview · not priced yet").closest("button")!.title).toBe(message)
+    expect(screen.queryByText(/530/)).toBeNull()
   })
 
   it("with the flag off Update preview is hidden and Render final stays", () => {

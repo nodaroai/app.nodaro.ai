@@ -72,6 +72,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  llmMeteredPricing: () => true,
 }))
 
 import { CreditsService, invalidateModelPricingCache } from "../credits.js"
@@ -139,6 +140,34 @@ describe("reserveCredits links the job it reserves for", () => {
     await CreditsService.reserveCredits("user-1", JOB, "gpt-image-2", 0, 0, { oncePerJob: true })
     expect(mockRpc.mock.calls[0]![0]).toBe("reserve_job_credits")
     expect(jobLinks()).toEqual([])
+  })
+
+  it("554: a metered SIDE hold reserves through its own RPC, names the job only there, and never links or writes the job", async () => {
+    mockRpc.mockResolvedValue({ data: { usageLogId: LOG, creditsReserved: 4, replayed: false, ledger: null }, error: null })
+    const result = await CreditsService.reserveCredits("user-1", JOB, "image-to-text:claude-sonnet-5.5", 0, 0, {
+      creditOverride: 4,
+      isAppRun: true,
+      sideHold: { key: "take:1" },
+    })
+    expect(result).toEqual({ usageLogId: LOG, creditsReserved: 4, watermark: false, replayed: false })
+    const [fn, args] = mockRpc.mock.calls[0]! as [string, Record<string, unknown>]
+    expect(fn).toBe("reserve_llm_side_hold")
+    expect(args).toMatchObject({ p_user_id: "user-1", p_credits: 4, p_job_id: JOB, p_charge_id: "image-to-text:claude-sonnet-5.5", p_hold_key: "take:1", p_is_app_run: true })
+    expect(writes.filter((w) => w.table === "jobs")).toEqual([])
+    // Its ledger line is written by the RPC, in its transaction — never a second one here.
+    expect(mockFrom.mock.calls.map(([t]) => t)).not.toContain("credit_transactions")
+  })
+
+  it("554: a replayed side hold returns what it recorded so far", async () => {
+    const ledger = { calls: 1, attempts: [{ lane: "kie" }] }
+    mockRpc.mockResolvedValue({ data: { usageLogId: LOG, creditsReserved: 4, replayed: true, ledger }, error: null })
+    const result = await CreditsService.reserveCredits("user-1", JOB, "image-to-text:claude-sonnet-5.5", 0, 0, { creditOverride: 4, sideHold: { key: "take:1" } })
+    expect(result).toMatchObject({ replayed: true, sideLedger: ledger })
+  })
+
+  it("554: a side-hold response that cannot be verified is an error, never a hold", async () => {
+    mockRpc.mockResolvedValue({ data: { usageLogId: LOG, creditsReserved: 99, replayed: false }, error: null })
+    await expect(CreditsService.reserveCredits("user-1", JOB, "image-to-text:claude-sonnet-5.5", 0, 0, { creditOverride: 4, sideHold: {} })).rejects.toThrow(/could not be verified/)
   })
 
   it("a link that cannot be written never fails the reservation", async () => {

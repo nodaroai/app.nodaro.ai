@@ -1657,13 +1657,13 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const withName = await supabase
       .from("model_pricing")
       .select("model_identifier, display_name, category, is_enabled, updated_at")
-      .in("model_identifier", resolved.identifiers)
+      .in("model_identifier", resolved.rowIdentifiers)
     const pricingRows =
       withName.error?.code === "42703"
         ? await supabase
             .from("model_pricing")
             .select("model_identifier, category, is_enabled, updated_at")
-            .in("model_identifier", resolved.identifiers)
+            .in("model_identifier", resolved.rowIdentifiers)
         : withName
     if (pricingRows.error) {
       console.error("[deployment-billing] pricing read failed:", pricingRows.error.message)
@@ -1684,7 +1684,8 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const rows = ids.map((id) => {
       const entry = MODEL_CATALOG[id]
       const definition = resolved.definitions.get(id)!
-      const row = byId.get(definition.baseIdentifier)
+      // A metered text model's switches live on its feature's row (`rowIdentifier`), never its per-model key.
+      const row = byId.get(("rowIdentifier" in definition && definition.rowIdentifier) || definition.baseIdentifier)
       const settledOne = resolved.prices.get(definition.baseIdentifier)!
       let creditCost: number | null = null
       if (settledOne.status === "fulfilled") {
@@ -1698,7 +1699,8 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         errors.push(id)
         console.error(`[deployment-billing] pricing lookup failed for "${id}":`, settledOne.reason)
       }
-      const timestamps = [definition.baseIdentifier, ...definition.variants.map(v => v.identifier)]
+      const rowId = ("rowIdentifier" in definition && definition.rowIdentifier) || undefined
+      const timestamps = [definition.baseIdentifier, ...(rowId ? [rowId] : []), ...definition.variants.map(v => v.identifier)]
         .map(key => byId.get(key)?.updated_at).filter((value): value is string => Boolean(value)).sort()
       const rowUpdatedAt = timestamps.at(-1) ?? null
       if (rowUpdatedAt !== null && (updatedAt === null || rowUpdatedAt > updatedAt)) updatedAt = rowUpdatedAt
@@ -1712,6 +1714,8 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         // the deployment's markup is included and a quoted price is the price.
         creditCost,
         creditIdentifier: definition.baseIdentifier,
+        // A metered text model's price is an estimate of a typical call (charged its actual usage); absent otherwise.
+        ...("estimate" in definition && definition.estimate ? { estimate: true } : {}),
         pricingBasis: definition.basis,
         units: inUnits(creditCost, u),
         // The catalog's own shape, so a metered model's per-second or

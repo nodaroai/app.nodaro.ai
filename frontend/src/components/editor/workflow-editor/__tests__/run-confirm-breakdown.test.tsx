@@ -52,6 +52,19 @@ describe("RunConfirmBreakdown", () => {
     expect(screen.getByText("Kept as is: Transcribe, Silence, Tighten Plan")).toBeTruthy()
   })
 
+  it("a node the server refuses to price (llm_model_unpriced): its row and the total say not priced yet, the server's sentence on hover; the title states no figure", () => {
+    const message = 'The model "x" has no price yet, so it cannot be run. Choose another model.'
+    const chat = line("chat", "Generate Text", 0, { unpriced: true, unpricedMessage: message })
+    const unpriced = info({ lines: [CUT, CAP, chat], nodeCount: 3 })
+    render(<RunConfirmBreakdown info={unpriced} />)
+    const cells = screen.getAllByText("not priced yet")
+    expect(cells).toHaveLength(2)
+    for (const cell of cells) expect(cell.getAttribute("title")).toBe(message)
+    expect(screen.queryByText("≈530 credits")).toBeNull()
+    expect(runConfirmText(unpriced, tx).title).toBe("Render final · not priced yet")
+    expect(runConfirmText(info({ trigger: "update-preview", lines: [chat] }), tx).title).toBe("Update preview · not priced yet")
+  })
+
   it("M13: a node that runs before the render says so", () => {
     const cam = line("cam", "Camera Switch", 10, { rerunsFirst: true })
     render(<RunConfirmBreakdown info={info({ lines: [cam, CUT, CAP], estimatedCredits: 540 })} />)
@@ -364,5 +377,16 @@ describe("runConfirmText — a continuation", () => {
       expect(text.title.startsWith(text.action)).toBe(true)
       expect(text.title).toContain("12")
     }
+  })
+})
+
+// Task 13 (spec §8.5): a metered LLM node's line is its server estimate — `~N`;
+// every other line stays a plain figure.
+describe("RunConfirmBreakdown — a metered LLM line", () => {
+  it("writes the estimate ~N and leaves fixed lines as they are", () => {
+    const chat = line("chat", "Generate Text", 6, { estimate: true })
+    render(<RunConfirmBreakdown info={info({ lines: [CAP, chat], estimatedCredits: 56 })} />)
+    expect(screen.getByText("~6")).toBeTruthy()
+    expect(screen.getByText("50")).toBeTruthy()
   })
 })

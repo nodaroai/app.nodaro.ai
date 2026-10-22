@@ -757,3 +757,5 @@ export {
   cameraSwitchSpeakerMapProblemText,
   type CameraSwitchSpeakerMapProblem,
 } from "./camera-switch-speaker-map"
+// The LLM features still billed at their tier row while metered pricing is on (server price resolvers + editor pickers).
+export { TIER_BILLED_LLM_FEATURES, isTierBilledLlmFeature, type TierBilledLlmFeature } from "./llm-tier-billed"

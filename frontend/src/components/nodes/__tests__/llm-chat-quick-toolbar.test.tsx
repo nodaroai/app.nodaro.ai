@@ -85,7 +85,30 @@ describe("LlmChatQuickToolbar", () => {
         isRunning={false}
       />,
     )
-    expect(screen.getByText("Very high (may bill one tier up)")).toBeInTheDocument()
+    // No price answer yet: the bare level, true in either pricing mode.
+    expect(screen.getByText("Very high")).toBeInTheDocument()
+  })
+
+  it("the effort label follows the pricing mode the server's answers show, without a remount (metered, then a rollback)", async () => {
+    const { notePricingAnswer, forgetLlmPricingMode } = await import("@/hooks/use-llm-pricing-mode")
+    const { act } = await import("@testing-library/react")
+    render(
+      <LlmChatQuickToolbar
+        nodeId="n1"
+        data={{ llmModel: "claude-opus-4.7", reasoningEffort: "xhigh" } as never}
+        credits={15}
+        isRunning={false}
+      />,
+    )
+    try {
+      act(() => notePricingAnswer({ estimates: ["llm-chat:claude-opus-4.7:direct"] }))
+      expect(screen.getAllByText("Very high (more reasoning tokens, charged per token)").length).toBeGreaterThan(0)
+      expect(screen.queryByText("Very high (may bill one tier up)")).not.toBeInTheDocument()
+      act(() => notePricingAnswer({ missing: ["llm-chat:claude-opus-4.7:direct"] }))
+      expect(screen.getAllByText("Very high (may bill one tier up)").length).toBeGreaterThan(0)
+    } finally {
+      act(() => forgetLlmPricingMode())
+    }
   })
 
   it("hides the reasoning-effort dropdown for a model with no declared levels", () => {

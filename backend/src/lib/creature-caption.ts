@@ -1,4 +1,4 @@
-import { llmComplete } from "./llm-client.js"
+import { llmComplete, type LlmRequest, type LlmResponse } from "./llm-client.js"
 
 /**
  * Creature canonical-description caption (Claude Sonnet vision).
@@ -45,38 +45,63 @@ export const CREATURE_CAPTION_SYSTEM =
 const MAX_CAPTION_CHARS = 4000
 const HARD_CUT = 3990
 
-export async function captionCreature(imageUrl: string): Promise<string | null> {
+/** The caption model — fixed in code, so the helper's metered price follows it (`prompt-helper:<model>`). */
+export const CREATURE_CAPTION_MODEL = "claude-sonnet-4.6"
+
+/** The caption request as it is sent — what a metered route sizes its hold from. */
+export function creatureCaptionRequest(imageUrl: string): LlmRequest {
+  return {
+    modelId: CREATURE_CAPTION_MODEL,
+    system: CREATURE_CAPTION_SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Write a deep visual description of this creature:" },
+          { type: "image", url: imageUrl },
+        ],
+      },
+    ],
+    maxTokens: 500,
+    temperature: 0.6,
+  }
+}
+
+function fitCaption(raw: string | undefined): string | null {
+  const text = (raw ?? "").trim()
+  if (text.length === 0) return null
+  if (text.length > MAX_CAPTION_CHARS) {
+    const truncated = text.slice(0, HARD_CUT)
+    const lastDot = Math.max(
+      truncated.lastIndexOf("."),
+      truncated.lastIndexOf("!"),
+      truncated.lastIndexOf("?"),
+    )
+    console.warn(`[caption_truncated] creature len=${text.length}`)
+    return lastDot > 100 ? truncated.slice(0, lastDot + 1) : truncated
+  }
+  return text
+}
+
+/**
+ * The caption AND the call behind it: the request as sent and its outcome
+ * (the answer, or the error) — so a metered route can record the spend even
+ * when the caption came back null (a billed refusal is still a billed call).
+ * The caption keeps the swallow-to-null contract.
+ */
+export async function captionCreatureCall(
+  imageUrl: string,
+): Promise<{ caption: string | null; request: LlmRequest; outcome: { response: LlmResponse } | { error: unknown } }> {
+  const request = creatureCaptionRequest(imageUrl)
   try {
-    const result = await llmComplete({
-      modelId: "claude-sonnet-4.6",
-      system: CREATURE_CAPTION_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Write a deep visual description of this creature:" },
-            { type: "image", url: imageUrl },
-          ],
-        },
-      ],
-      maxTokens: 500,
-      temperature: 0.6,
-    })
-    const text = (result.text ?? "").trim()
-    if (text.length === 0) return null
-    if (text.length > MAX_CAPTION_CHARS) {
-      const truncated = text.slice(0, HARD_CUT)
-      const lastDot = Math.max(
-        truncated.lastIndexOf("."),
-        truncated.lastIndexOf("!"),
-        truncated.lastIndexOf("?"),
-      )
-      console.warn(`[caption_truncated] creature len=${text.length}`)
-      return lastDot > 100 ? truncated.slice(0, lastDot + 1) : truncated
-    }
-    return text
+    const response = await llmComplete(request)
+    return { caption: fitCaption(response.text), request, outcome: { response } }
   } catch (err) {
     console.warn("[caption_failed]", err)
-    return null
+    return { caption: null, request, outcome: { error: err } }
   }
+}
+
+export async function captionCreature(imageUrl: string): Promise<string | null> {
+  return (await captionCreatureCall(imageUrl)).caption
 }

@@ -74,6 +74,11 @@ import {
 import { loadDocsPriceSettings } from "../src/ee/billing/docs-pricing.js"
 import { statedPrices } from "../src/ee/billing/stated-prices.js"
 import { applyServiceMarkup } from "../src/ee/billing/service-margin.js"
+import { assumeLlmMeteredSchemaReadyForDocs } from "../src/lib/llm-metered-schema-gate.js"
+
+// The generated docs describe the hosted deployment, whose metered LLM schema (551 + 552 + 554) is applied:
+// the R33 gate is not asked of a database this process cannot reach (see the helper).
+assumeLlmMeteredSchemaReadyForDocs()
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(HERE, "..", "..")

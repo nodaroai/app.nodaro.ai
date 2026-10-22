@@ -33,10 +33,17 @@ vi.mock("@/lib/use-case/inner-availability.js", () => ({
 
 // The batch route prices from the price table; the rest of the billing module
 // stays real (chargedCredits is the formula under test with it).
-const { mockGetChargedPriceTable } = vi.hoisted(() => ({ mockGetChargedPriceTable: vi.fn() }))
+const { mockGetChargedPriceTable, estimateFlag } = vi.hoisted(() => ({ mockGetChargedPriceTable: vi.fn(), estimateFlag: { value: false } }))
 vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/ee/billing/credits.js")>()),
   getChargedPriceTable: mockGetChargedPriceTable,
+  // The route reads the detailed estimate (Task 12): its total is the
+  // estimator under test here, its `estimate` flag set per case.
+  estimateWorkflowCreditsDetailed: async (...args: unknown[]) => ({
+    credits: await mockEstimateWorkflowCredits(...args),
+    estimate: estimateFlag.value,
+    perNode: {},
+  }),
 }))
 
 /** A price table: `base` per identifier, and a flat +10% charge like an admin setting. */
@@ -647,6 +654,29 @@ describe("POST /v1/credits/estimate-workflow", () => {
       stampBillingContext = undefined
       pluginBillingHolder.value = undefined
     }
+  })
+
+  it("estimate-workflow response carries estimate: true when any node is metered; a fixed-only answer is byte-identical", async () => {
+    mockEstimateWorkflowCredits.mockReturnValue(17)
+    const nodes = [{ type: "llm-chat", data: { llmModel: "claude-opus-5.5" } }, { type: "extract-audio" }]
+    estimateFlag.value = true
+    try {
+      const metered = await app.inject({ method: "POST", url: "/v1/credits/estimate-workflow", payload: { nodes } })
+      expect(metered.statusCode).toBe(200)
+      expect(metered.json().data).toEqual({ totalCredits: 17, estimate: true, nodeCount: 2, payer: "user" })
+    } finally {
+      estimateFlag.value = false
+    }
+    // No metered line (and every answer under the rollback): no `estimate` key at all.
+    const fixed = await app.inject({ method: "POST", url: "/v1/credits/estimate-workflow", payload: { nodes } })
+    expect(fixed.body).toBe('{"data":{"totalCredits":17,"nodeCount":2,"payer":"user"}}')
+  })
+
+  it("R49: a metered LLM model with no price is refused 400 llm_model_unpriced, never priced", async () => {
+    mockEstimateWorkflowCredits.mockRejectedValueOnce(Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" }))
+    const res = await app.inject({ method: "POST", url: "/v1/credits/estimate-workflow", payload: { nodes: [{ type: "llm-chat", data: { llmModel: "claude-opus-5.5" } }] } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "claude-opus-5.5" })
   })
 
   it("returns estimated total credits", async () => {

@@ -58,6 +58,7 @@ import { fromFailedCover } from "../lib/use-case/continue-credits.js"
 import { usecaseInnerDenial } from "../lib/use-case/inner-availability.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 
 const STAMP_ATTEMPTS = 3
 
@@ -144,6 +145,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
           })
           if (cover && !cover.ok) return reply.status(402).send({ error: { code: "insufficient_credits", message: cover.message } })
         } catch (err) {
+          // A metered LLM model with no price (R49): refused before anything runs.
+          if (await replyIfLlmUnpriced(reply, err)) return reply
           return sendInternalError(reply, req, err, "Failed to continue the run")
         }
       }
@@ -172,6 +175,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
             return reply.status(402).send({ error: { code: "insufficient_credits", message } })
           }
         } catch (err) {
+          // A metered LLM model with no price (R49): refused before anything runs.
+          if (await replyIfLlmUnpriced(reply, err)) return reply
           return sendInternalError(reply, req, err, "Failed to continue the run")
         }
       }

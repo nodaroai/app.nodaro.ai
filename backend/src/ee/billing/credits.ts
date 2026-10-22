@@ -42,6 +42,7 @@ import {
   pitchTempoBaseCredits,
   pitchTempoQuoteCreditId,
   videoGenerationCreditId,
+  parseUnitQuoteCreditId,
 } from "@nodaro/shared/credits"
 import {
   videoMaskCreditId,
@@ -86,7 +87,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -106,7 +107,11 @@ import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideo
 import { hasPurchaseOnRecord } from "./purchase-on-record.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
-import { hasCredits } from "../../lib/config.js"
+import { hasCredits, llmMeteredPricing } from "../../lib/config.js"
+import { parseMeteredLlmId } from "./metered-llm-id.js"
+import { LlmUnpricedModelError, llmChargeId, llmEstimateBaseCredits } from "./llm-metered.js"
+// The model a Generate Script run resolves (a legacy script provider maps to one) — the DAG step's own rule.
+import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-model-id.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-plan.js"
@@ -115,10 +120,10 @@ import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-m
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
 import { captionRoutesToRemotion } from "@nodaro/shared/captions"
-import { getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL } from "@nodaro/shared/llm-models"
+import { getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
 import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
-import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
+import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
 import { countRefModalityEdges } from "@nodaro/shared/workflow"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
@@ -132,6 +137,7 @@ import { seedanceRefVideoEstimateCredits, withRefVideoClipLengths } from "./seed
 import { listingCeiling, listingFieldDomains } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
+import { UNIT_QUOTE_MAX_UNITS } from "../../lib/unit-quote-rates.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
 import { usecaseFeesTotal } from "./use-case-fees.js"
@@ -483,6 +489,12 @@ export interface ReserveResult {
   usageLogId: string
   creditsReserved: number
   watermark: boolean
+  /**
+   * A SIDE hold only (`options.sideHold`, migration 554): the reserve was a
+   * replay of the hold its key already names, and what that hold recorded so far.
+   */
+  replayed?: boolean
+  sideLedger?: unknown
 }
 
 export interface StorageLimitResult {
@@ -2338,6 +2350,269 @@ export function registerStaticCreditCosts(costs: Record<string, number>): void {
 // provider+quality shape — anything where the node's *strategy* or *mode*
 // drives the price.
 
+/**
+ * The id a metered LLM node is PRICED under for a run estimate (A5/§8.5): the
+ * price key `<feature>:<model>[:direct]` (`llmPriceKey`), which the charged
+ * price table answers with the model's typical-usage estimate — never a tier
+ * row. An unset model is the feature's default (`llmDefaultsFeature`). Under
+ * the rollback (`!llmMeteredPricing()`) the tier id, exactly as before. The
+ * DAG's own reservation of a metered node is its hold (`computeLlmMeteredHold`,
+ * node-executor), not this id.
+ */
+function meteredLlmNodeId(
+  feature: string,
+  model: string | undefined,
+  reasoningEffort: string | undefined,
+  advancedMode: boolean,
+  tierId: () => string,
+): string {
+  if (!llmMeteredPricing()) return tierId()
+  const modelId = model || LLM_FEATURE_DEFAULTS[llmDefaultsFeature(feature) as LlmFeature]
+  return modelId ? llmPriceKey(feature, modelId, reasoningEffort, advancedMode) : tierId()
+}
+
+/** The one metered LLM call a node's run makes, as its route or DAG step resolves it. */
+interface MeteredNodeCall {
+  readonly feature: string
+  /** As stored; unset = the feature's default (`meteredLlmPriceKeyOf`). */
+  readonly modelId: string | undefined
+  readonly reasoningEffort: string | undefined
+  readonly advancedMode: boolean
+}
+
+/** Node types whose run makes ONE metered call under their own feature, reading `llmModel`. */
+const METERED_LLM_NODE_FEATURES: Readonly<Record<string, string>> = {
+  "llm-chat": "llm-chat",
+  // Video Composer reserves through the scene-graph-ai route.
+  "video-composer": "scene-graph-ai",
+  "describe-to-picker": "describe-to-picker",
+  "after-effects": "after-effects",
+  "lottie-overlay": "lottie-overlay",
+  "3d-title": "3d-title",
+  "qa-check": "qa-check",
+  "image-to-text": "image-to-text",
+  "image-critic": "image-critic",
+  // The 3D scene nodes author through the 3d-scene feature (payload-builder).
+  "generate-3d-scene": "3d-scene",
+  "edit-3d-scene": "3d-scene",
+}
+
+/** Choose Best's AI judge strategy — the only Choose Best strategy that makes a call. */
+const CHOOSE_BEST_JUDGE_STRATEGY = "pick-best-llm"
+
+/**
+ * The metered LLM call a node's run makes, or null when it makes none (a
+ * logic strategy, a deterministic 3D edit) or is not metered (Content Recipe
+ * and Ideas stay on their tiers until their plugin meters; Workflow Copilot is
+ * D4). PURE — it never reads the rollback switch: what bills metered is the
+ * node's shape; WHETHER metered pricing is on is the caller's question.
+ * Mirrors the run: the route / payload-builder's model resolution per type.
+ */
+function meteredNodeCall(node: { type: string; data?: Record<string, unknown> }): MeteredNodeCall | null {
+  const data = node.data ?? {}
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+  const own = (feature: string, modelId = str(data.llmModel)): MeteredNodeCall => ({
+    feature,
+    modelId,
+    reasoningEffort: str(data.reasoningEffort),
+    advancedMode: data.advancedMode === true,
+  })
+  switch (node.type) {
+    // Generate Script: the model the DAG step resolves — a legacy script
+    // provider maps to its model (`resolveScriptModelId`).
+    case "generate-script":
+      return own("generate-script", resolveScriptModelId(str(data.provider) as ScriptProvider | undefined, str(data.llmModel)))
+    // Motion Graphics: the engine decides the feature (lottie is the worker's
+    // motion-graphics-lottie call, elements the motion-graphics route's).
+    case "motion-graphics":
+      return own(motionGraphicsFeature(str(data.engine)))
+    // A deterministic Edit 3D Scene reaches no model (the free `3d-scene-ops` row).
+    case "edit-3d-scene":
+      return Array.isArray(data.operations) ? null : own("3d-scene")
+    // Choose Best: only the AI judge calls a model, the one in its strategy
+    // config — and with no effort or Advanced lever (CREDIT_COSTS["reduce"]).
+    case "reduce": {
+      if (data.strategyId !== CHOOSE_BEST_JUDGE_STRATEGY) return null
+      const config = data.strategyConfig as { llmModel?: unknown } | undefined
+      return { feature: "reduce:pick-best-llm", modelId: str(config?.llmModel), reasoningEffort: undefined, advancedMode: false }
+    }
+    default: {
+      const feature = METERED_LLM_NODE_FEATURES[node.type]
+      return feature ? own(feature) : null
+    }
+  }
+}
+
+/** The price key of a call: the model as stored, else its feature's default (`meteredLlmNodeId`'s rule). */
+function meteredLlmPriceKeyOf(call: MeteredNodeCall): string | null {
+  const modelId = call.modelId || LLM_FEATURE_DEFAULTS[llmDefaultsFeature(call.feature) as LlmFeature]
+  return modelId ? llmPriceKey(call.feature, modelId, call.reasoningEffort, call.advancedMode) : null
+}
+
+/**
+ * A scrape's per-item AI analysis, billed metered (B5, `reserveFixedPlusLlmCalls`
+ * in the Meta Ads and Instagram routes): the scrape's own fixed id (no
+ * analysis suffix), plus `items` calls under the analysis feature's price key.
+ * Null for a scrape without analysis, and for every other node. PURE.
+ */
+function meteredScrapeAnalysis(node: { type: string; data?: Record<string, unknown> }): { fixedId: string; key: string; items: number } | null {
+  // The one rule the server and the editor price a scrape's analysis by (`@nodaro/shared/social`).
+  const parts = scrapeAnalysisPriceParts(node)
+  return parts ? { fixedId: parts.fixedId, key: llmPriceKey(SCRAPE_ANALYSIS_FEATURE, parts.analysisModel), items: parts.items } : null
+}
+
+/** {@link meteredScrapeAnalysis} while metered pricing is on; null under the rollback. */
+function meteredScrapeAnalysisOf(node: { type: string; data?: Record<string, unknown> }): ReturnType<typeof meteredScrapeAnalysis> {
+  // The shape first: the switch is read only for a node that IS metered (as `meteredLlmIdOf`).
+  const analysis = meteredScrapeAnalysis(node)
+  return analysis && llmMeteredPricing() ? analysis : null
+}
+
+/**
+ * THE predicate every estimate surface reads (Task 12): the metered LLM price
+ * key a node's run is priced under — its call's key, or a scrape's analysis
+ * key — or null when the node bills no metered call. Always null under the
+ * rollback (`!llmMeteredPricing()`), when nothing is metered. A node with a
+ * key is an ESTIMATE (`~`): charged its actual usage after the run.
+ */
+export function meteredLlmKeyOfNode(node: { type: string; data?: Record<string, unknown> }): string | null {
+  // The shape first: the switch is read only for a node that IS metered (as `meteredLlmIdOf`).
+  const call = meteredNodeCall(node)
+  const key = call ? meteredLlmPriceKeyOf(call) : (meteredScrapeAnalysis(node)?.key ?? null)
+  return key && llmMeteredPricing() ? key : null
+}
+
+/**
+ * The refusal a run of `nodes` would meet at a metered LLM call whose model has
+ * no price on its lane (R51): the first such call — on the graph as the run
+ * executes it (a use-case node's built chain; a wired Settings input may set a
+ * model) and, given `runNodeIds`, among the nodes the run executes — else
+ * null. The same predicate and price rule as every estimate
+ * (`meteredLlmKeyOfNode`, the price table's estimate). A run entry point asks
+ * it BEFORE it enqueues anything, so no fixed node runs and is charged ahead of
+ * the call the run would then refuse mid-graph. Null under the rollback; the
+ * switch is read only for a node that is metered.
+ */
+export function unpricedMeteredLlmOfRun(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges?: ReadonlyArray<EstimateEdge>,
+  runNodeIds?: ReadonlySet<string>,
+): LlmUnpricedModelError | null {
+  const uc = expandUseCaseNodes(nodes, edges ?? [], undefined)
+  const graph = uc.expanded ? uc.nodes : nodes
+  const wires = uc.expanded ? uc.edges : edges
+  const runs = runNodeIds && uc.expanded ? withUseCaseMembers(runNodeIds, uc.members) : runNodeIds
+  for (const node of graph) {
+    if (runs && !(node.id && runs.has(node.id))) continue
+    // A frozen node does not run: it hands on what it holds and makes no call.
+    if ((node.data as { skipped?: unknown } | undefined)?.skipped === true) continue
+    const key = meteredLlmKeyOfNode(withWiredSettings(node, graph, wires))
+    const metered = key ? parseMeteredLlmId(key) : null
+    if (!metered) continue
+    try {
+      meteredLlmEstimateBase(metered)
+    } catch (err) {
+      if (err instanceof LlmUnpricedModelError) return err
+      throw err
+    }
+  }
+  return null
+}
+
+/**
+ * Does a run of `nodes` hold a metered LLM call's ESTIMATE — a node it
+ * executes (given `runNodeIds`: among those; a use-case node's built chain
+ * included, a wired Settings input read) that makes a metered call, so its
+ * figure is charged the call's actual usage and shown `~N`? The same
+ * predicate every estimate reads (`meteredLlmKeyOfNode`) on the graph walk
+ * `unpricedMeteredLlmOfRun` makes. Always false under the rollback.
+ *
+ * `pricedLines`: the run estimate's own lines (`estimateRunSetCredits`' tally),
+ * when the caller priced the run. A part priced elsewhere is read through its
+ * line's flag, never re-derived: a UGC video's creator check, and its clips'
+ * reading when the plugin meters it, are the parts its quote flags
+ * (`estimateUgcPart`, R58) — the same answer the figure was summed from.
+ */
+export function runHoldsMeteredLlmEstimate(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges?: ReadonlyArray<EstimateEdge>,
+  runNodeIds?: ReadonlySet<string>,
+  pricedLines?: Iterable<NodeEstimate>,
+): boolean {
+  for (const line of pricedLines ?? []) if (line.estimate) return true
+  const uc = expandUseCaseNodes(nodes, edges ?? [], undefined)
+  const graph = uc.expanded ? uc.nodes : nodes
+  const wires = uc.expanded ? uc.edges : edges
+  const runs = runNodeIds && uc.expanded ? withUseCaseMembers(runNodeIds, uc.members) : runNodeIds
+  return graph.some((node) => {
+    if (runs && !(node.id && runs.has(node.id))) return false
+    // A frozen node does not run: it makes no call.
+    if ((node.data as { skipped?: unknown } | undefined)?.skipped === true) return false
+    return meteredLlmKeyOfNode(withWiredSettings(node, graph, wires)) !== null || componentHoldsMeteredEstimate(node)
+  })
+}
+
+/**
+ * Does this node's run make a metered LLM call (its own, or a scrape's
+ * analysis) — the shape {@link meteredLlmKeyOfNode} keys, whatever the rollback
+ * switch says. For a tool that must find such nodes in either state (the
+ * stored-listing backfill, which also restores tier figures under the rollback).
+ */
+export function nodeMakesMeteredLlmCall(node: { type: string; data?: Record<string, unknown> }): boolean {
+  return meteredNodeCall(node) !== null || meteredScrapeAnalysis(node) !== null
+}
+
+/**
+ * The price key an untouched node of `type` (no data: every model and lever at
+ * its default) runs under, whether or not metered pricing is on — null for a
+ * type with no metered call by default. For a surface that states the HOSTED
+ * figure whatever this process's switch says (the generated skills); a request
+ * surface asks {@link meteredLlmKeyOfNode}.
+ */
+export function meteredLlmDefaultKeyOfType(type: string): string | null {
+  const call = meteredNodeCall({ type, data: {} })
+  return call ? meteredLlmPriceKeyOf(call) : null
+}
+
+/**
+ * Node types whose UNTOUCHED run makes no metered call but which offer one as
+ * an option — Choose Best, whose AI judge strategy is a metered call while
+ * every other strategy is free — with the data that picks it. What a price
+ * surface states for such a type (`GET /v1/nodes`, the generated skills):
+ * free up to the option's estimate. Never read by a run or an estimate of a
+ * real node, which price the node as it is set (`meteredLlmKeyOfNode`).
+ */
+const METERED_LLM_OPTION_DATA: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  reduce: { strategyId: CHOOSE_BEST_JUDGE_STRATEGY },
+}
+
+/**
+ * The price key of the metered call a node of `type` OFFERS (its option at
+ * every default — Choose Best's judge on its default model), whatever the
+ * rollback switch says; null for a type with no such option. Its feature is
+ * the key's (`parseMeteredLlmId`).
+ */
+export function meteredLlmOptionKeyOfType(type: string): string | null {
+  const data = METERED_LLM_OPTION_DATA[type]
+  const call = data ? meteredNodeCall({ type, data: { ...data } }) : null
+  return call ? meteredLlmPriceKeyOf(call) : null
+}
+
+/**
+ * A metered price key's estimate charged at `settings`, WHATEVER the rollback
+ * switch says (a parsed key, its typical call on the lane it names, marked up
+ * once at its charge id — the figure `chargedPriceTableFrom` lists for it
+ * while metered pricing is on). Undefined for any other id and for a model
+ * with no price on its lane. For text that states the hosted deployment's
+ * price (`statedPrices`); a request surface reads the price table, which
+ * follows the switch.
+ */
+export function meteredLlmEstimateIgnoringSwitch(identifier: string, settings: Parameters<typeof applyServiceMarkup>[1]): number | undefined {
+  const parsed = parseMeteredLlmId(identifier)
+  const base = parsed ? meteredLlmListedBase(parsed) : undefined
+  return parsed && base !== undefined ? applyServiceMarkup(quoteBaseCredits(base, 1), settings, llmChargeId(parsed.feature, parsed.modelId)) : undefined
+}
+
 export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = composeRecord<(data: Record<string, unknown>) => string>("CREDIT_COSTS", {
   // Choose Best (reduce): composite key = `reduce:<strategyId>`; the AI judge
   // additionally tiers by its model (strategyConfig.llmModel). Default to
@@ -2349,7 +2624,7 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
     const strategyId = d.strategyId ?? "concat"
     if (strategyId !== "pick-best-llm") return `reduce:${strategyId}`
     const model = typeof d.strategyConfig?.llmModel === "string" ? d.strategyConfig.llmModel : undefined
-    return buildLlmCreditIdentifier("reduce:pick-best-llm", model)
+    return meteredLlmNodeId("reduce:pick-best-llm", model, undefined, false, () => buildLlmCreditIdentifier("reduce:pick-best-llm", model))
   },
 
   // AI Avatar (HeyGen): delegates to resolveAiAvatarCreditId — same body-reading
@@ -2493,7 +2768,60 @@ export interface ModelPricing {
   tierRestriction: string | null
 }
 
+/**
+ * The metered LLM id `identifier` names, or null — always null under the
+ * rollback (`!llmMeteredPricing()`), so every metered id is then unresolved
+ * (`PriceNotConfiguredError`, absent from the price table).
+ */
+function meteredLlmIdOf(identifier: string): ReturnType<typeof parseMeteredLlmId> {
+  // Parsed first: the switch is read only for an id that IS metered, so every
+  // other lookup is untouched by it.
+  const parsed = parseMeteredLlmId(identifier)
+  return parsed && llmMeteredPricing() ? parsed : null
+}
+
+/**
+ * A metered price id with the calls it prices: a metered key (one call), or a
+ * scrape's whole analysis — `<meta-ads-analysis:<model>>:<N>u`
+ * (`scrapeAnalysisQuoteId`, `@nodaro/shared/social`), N calls, the one metered
+ * charge held per item (`reserveFixedPlusLlmCalls`). Priced as that run is
+ * held: the key's estimate × N rounded up ONCE, marked up ONCE at the call's
+ * charge id, so a client's quote equals the server's estimate exactly. N is a
+ * whole count of calls. Null for every other id, and under the rollback.
+ */
+function meteredLlmCallsOf(identifier: string): { metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>; calls: number } | null {
+  const metered = meteredLlmIdOf(identifier)
+  if (metered) return { metered, calls: 1 }
+  const quote = parseUnitQuoteCreditId(identifier)
+  if (!quote || !Number.isInteger(quote.units) || quote.units > UNIT_QUOTE_MAX_UNITS) return null
+  const rate = meteredLlmIdOf(quote.rateId)
+  return rate && rate.feature === SCRAPE_ANALYSIS_FEATURE ? { metered: rate, calls: quote.units } : null
+}
+
 const modelPricingCache = new TtlCache<ModelPricing>(60_000)
+
+/**
+ * The price a credit check or a reservation uses: `creditOverride` when given
+ * (with the identifier's own switches), else its charged row.
+ *
+ * A metered LLM id resolves ONLY here, and only with a positive override (its
+ * hold): the switches are its feature's bare row's (an admin disabling the
+ * feature or restricting its tier still wins), the price the hold. With no
+ * override, or one ≤ 0, it is refused (`PriceNotConfiguredError`, A1) — never a
+ * free reservation.
+ */
+async function pricingWithOverride(modelIdentifier: string, creditOverride: number | undefined): Promise<ModelPricing> {
+  const metered = meteredLlmIdOf(modelIdentifier)
+  if (metered) {
+    if (creditOverride === undefined || !Number.isFinite(creditOverride) || creditOverride <= 0) {
+      throw new PriceNotConfiguredError(modelIdentifier)
+    }
+    const bare = await getModelCreditBaseCost(metered.feature)
+    return { isEnabled: bare.isEnabled, tierRestriction: bare.tierRestriction, creditCost: creditOverride }
+  }
+  const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
+  return creditOverride !== undefined ? { ...dbPricing, creditCost: creditOverride } : dbPricing
+}
 
 /**
  * Invalidate the model pricing cache (e.g. after admin updates model_pricing table)
@@ -2519,6 +2847,15 @@ export function invalidateModelPricingCache(): void {
  * entries like `seedance-2:8s:1080p-ref`).
  */
 export async function getModelCreditBaseCost(modelIdentifier: string): Promise<ModelPricing> {
+  // A metered LLM id (A1) has NO price of its own — its hold is the
+  // reservation's override and its usage the charge — so every price lookup
+  // FAILS CLOSED on it: a caller that would read a price here (a settle at a
+  // charged price, a quote, `GET /v1/credits/model-cost`) must never see 0.
+  // Only a reservation or credit check carrying a positive hold resolves one
+  // (`pricingWithOverride`). Asked before the cache, so the rollback switch is
+  // read every time (under the rollback the id is simply unknown, as before).
+  if (meteredLlmIdOf(modelIdentifier)) throw new PriceNotConfiguredError(modelIdentifier)
+
   const cached = modelPricingCache.get(modelIdentifier)
   if (cached) return cached
 
@@ -2726,13 +3063,88 @@ export function chargedPriceTableFrom(
     // A speech `:per-100-chars` row is served only while length pricing is on
     // (lib/speech-credits.ts): its absence is how a client learns the flag.
     base: (identifier) => {
+      // A metered LLM id is the feature's typical call on the model's primary
+      // lane (`:direct` = Advanced mode) — an estimate, never a row. A model
+      // with no price there is simply not listed.
+      const metered = meteredLlmCallsOf(identifier)
+      if (metered) {
+        const one = meteredLlmListedBase(metered.metered)
+        return one === undefined ? undefined : quoteBaseCredits(one, metered.calls)
+      }
       if (!speechUnitRowServed(identifier)) return undefined
       const rowOf = (id: string) => rows.get(id) ?? STATIC_CREDIT_COSTS[id]
       return rateCompositeBase(identifier, rowOf) ?? rowOf(identifier)
     },
-    // A speech length price is marked up at its model, as its reservation is.
-    charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, priceMarginKey(identifier)),
+    // A speech length price is marked up at its model, as its reservation is;
+    // a metered LLM id at its charge id (`:direct` is the same charge).
+    charge: (identifier, baseCredits) => {
+      const metered = meteredLlmCallsOf(identifier)?.metered
+      const key = metered ? llmChargeId(metered.feature, metered.modelId) : priceMarginKey(identifier)
+      return applyServiceMarkup(baseCredits, settings, key)
+    },
   }
+}
+
+/** A metered price key's estimate in base credits: the feature's typical call
+ *  on the lane it runs on — `:direct` pinned direct; a bare key at the default
+ *  effort of the feature it borrows its defaults from (`llmDefaultsFeature`),
+ *  as `llmPriceKey` and the run read it. Throws `LlmUnpricedModelError`. */
+function meteredLlmEstimateBase(metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>): number {
+  const direct = metered.lane === "direct"
+  const effort = direct ? undefined : defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
+  return llmEstimateBaseCredits(metered.feature, metered.modelId, effort, direct)
+}
+
+/** {@link meteredLlmEstimateBase}, or undefined for a model with no price on its lane: a price
+ *  table lists such a key nowhere (never at 0). */
+function meteredLlmListedBase(metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>): number | undefined {
+  try {
+    return meteredLlmEstimateBase(metered)
+  } catch (err) {
+    if (err instanceof LlmUnpricedModelError) return undefined
+    throw err
+  }
+}
+
+/**
+ * The metered LLM price key `identifier` names (`<feature>:<model>[:direct]`,
+ * `llmPriceKey` in `@nodaro/shared/llm-models`), or null — for every other id,
+ * and for every id under the rollback (`!llmMeteredPricing()`), when metered
+ * keys are priced nowhere. The switch is read only for an id that parses.
+ */
+export function meteredLlmPriceKey(identifier: string): ReturnType<typeof parseMeteredLlmId> {
+  return meteredLlmIdOf(identifier)
+}
+
+/** What a metered price key is quoted: its estimate, charged — or why it has none. */
+export type MeteredLlmQuote =
+  | { kind: "estimate"; credits: number }
+  | { kind: "unpriced"; error: LlmUnpricedModelError }
+
+/**
+ * The quote for a metered LLM price key, or null when `identifier` is not one
+ * (see {@link meteredLlmPriceKey}). The estimate is the figure the price table
+ * lists for it (`chargedPriceTableFrom`), marked up by `prices` at its charge
+ * id; a model with no rate on the lane it would be served on is `unpriced`
+ * (never 0). The single resolver `GET /v1/credits/model-cost` and
+ * `POST /v1/credits/model-costs` answer metered keys from.
+ */
+export function meteredLlmQuote(prices: ChargedPriceTable, identifier: string): MeteredLlmQuote | null {
+  const quoted = meteredLlmCallsOf(identifier)
+  if (!quoted) return null
+  let base: number
+  try {
+    base = meteredLlmEstimateBase(quoted.metered)
+  } catch (err) {
+    if (err instanceof LlmUnpricedModelError) return { kind: "unpriced", error: err }
+    throw err
+  }
+  return { kind: "estimate", credits: prices.charge(identifier, quoteBaseCredits(base, quoted.calls)) }
+}
+
+/** Is `identifier` an id {@link meteredLlmQuote} answers (a metered key, or a scrape's whole analysis)? */
+export function isMeteredLlmQuoteId(identifier: string): boolean {
+  return meteredLlmCallsOf(identifier) !== null
 }
 
 // ── Tier config cache (60s TTL) ──
@@ -2879,6 +3291,18 @@ async function invalidateRequesterBalance(requester: string | null): Promise<voi
 // ============================================================
 // Credits Service
 // ============================================================
+
+/**
+ * What a metered settle did (`commitCredits(…, { collectOverHold: true })`).
+ * `charged` is the `usage_logs.credits_charged` the settle wrote: the hold
+ * plus what was collected over it (on a workspace row, the actual — the
+ * workspace's 351 clamp records it and absorbs `shortfall` as variance).
+ */
+export interface CommitOutcome {
+  charged: number
+  collectedOverHold: number
+  shortfall: number
+}
 
 export class CreditsService {
   /**
@@ -3066,10 +3490,8 @@ export class CreditsService {
     // When a route supplies a dynamic credit override, use it for the
     // creditCost while still respecting the DB row's isEnabled +
     // tierRestriction (admins disabling a model still wins).
-    const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
-    const pricing = creditOverride !== undefined
-      ? { ...dbPricing, creditCost: creditOverride }
-      : dbPricing
+    // A metered LLM id resolves only with its hold as the override (A1).
+    const pricing = await pricingWithOverride(modelIdentifier, creditOverride)
 
     const userTier = effectiveTierOf(profile)
     // Pool-aware web spending (D1 v2): on consumer surfaces a payg account
@@ -3279,6 +3701,16 @@ export class CreditsService {
        *  an extension-origin request (`consentBlockExempt`). Every other
        *  reservation for an account that still owes its consent is refused. */
       consentPendingAllowed?: boolean
+      /**
+       * A metered LLM SIDE hold for `jobId` (migration 554,
+       * `ee/billing/llm-side-hold-impl.ts`): reserved through
+       * `reserve_llm_side_hold`, which checks the job is live and owned by
+       * the payer's requester, writes a usage log with NO job (so nothing
+       * keyed on the job's holds can reach it), its `llm_side_holds` row and
+       * its ledger line in one transaction. `jobs` is never written. `key`
+       * makes it idempotent per job (a replay returns the same hold).
+       */
+      sideHold?: { key?: string }
     },
   ): Promise<ReserveResult> {
     // A blocked account reserves nothing, on any lane — FIRST, ahead of the
@@ -3303,10 +3735,9 @@ export class CreditsService {
     const debitUserId = dep ? dep.payerId : userId
 
     // Get credit cost: route-supplied override or DB lookup.
-    const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
-    const pricing = creditOverride !== undefined
-      ? { ...dbPricing, creditCost: creditOverride }
-      : dbPricing
+    // A metered LLM id reserves its hold (a positive override) or nothing —
+    // never a free 0-credit row through the zero-cost branch below (A1).
+    const pricing = await pricingWithOverride(modelIdentifier, creditOverride)
     // Fetch tier once — needed for the atomic daily cap below, and (unless
     // overridden) for the watermark decision. Under a deployment payer this
     // is the PAYER's row: its grade is what the entitlement gates ran on at
@@ -3386,7 +3817,7 @@ export class CreditsService {
     // workspace budget with no reserve-side authorization. The ENTITLEMENTS
     // stay personal-derived too (`personalWatermark`) — no override without
     // payment.
-    if (options?.oncePerJob && pricing.creditCost <= 0) throw new Error("Job reservations require positive configured credits")
+    if ((options?.oncePerJob || options?.sideHold) && pricing.creditCost <= 0) throw new Error("Job reservations require positive configured credits")
     if (pricing.creditCost === 0) {
       const { data: usageLog } = await supabase
         .from("usage_logs")
@@ -3432,6 +3863,52 @@ export class CreditsService {
         // whose absence would make the override unearned, and a white-label
         // instance must not watermark a free-tier requester's zero-cost job.
         watermark: dep ? watermark : personalWatermark,
+      }
+    }
+
+    if (options?.sideHold) {
+      // The side-hold lane (554): reserve_credits' own payer arguments, so
+      // every gate the RPC runs applies; plus the job it is for and the key.
+      const { data: sideData, error: sideError } = await supabase.rpc("reserve_llm_side_hold", {
+        p_user_id: debitUserId,
+        p_credits: pricing.creditCost,
+        p_job_id: jobId,
+        p_charge_id: modelIdentifier,
+        p_hold_key: options.sideHold.key ?? null,
+        p_is_app_run: isAppRun ?? false,
+        p_daily_limit: dailyLimit,
+        p_web_free_mode: webFree,
+        ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
+        ...(dep && userId !== dep.payerId
+          ? { p_on_behalf_of: userId, p_enforce_allowance: allowanceEnforcementActive() }
+          : {}),
+      })
+      if (sideError) {
+        console.error("[credits] reserve_llm_side_hold RPC failed:", sideError.message)
+        const refusalPrefix = reservePrefixOf(sideError.message)
+        if (refusalPrefix) throw new ReserveRpcError(refusalPrefix, sideError.message)
+        throw new Error(`Credit reservation failed: ${sideError.message}`)
+      }
+      const side = sideData as { usageLogId?: unknown; creditsReserved?: unknown; replayed?: unknown; ledger?: unknown } | null
+      // A replay answers the hold its key already names, whatever it was reserved at (a reprice between
+      // the attempts must not turn a retry into a second hold); a new hold, exactly the amount asked.
+      if (!side || typeof side.usageLogId !== "string" || typeof side.replayed !== "boolean"
+        || typeof side.creditsReserved !== "number" || !Number.isInteger(side.creditsReserved) || side.creditsReserved <= 0
+        || (!side.replayed && side.creditsReserved !== pricing.creditCost)) {
+        throw new Error("Side hold reservation response could not be verified")
+      }
+      // The debit and its ledger line are already written by the RPC; the
+      // job's `usage_log_id` is never linked (no linkJobToReservation).
+      if (!side.replayed) await authorizeExternalReservation(side.usageLogId, userId)
+      if (dep) await invalidateRequesterBalance(userId)
+      if (!side.replayed && !options.skipAutoRecharge && !ws && !dep) void attemptAutoRecharge(userId)
+      return {
+        usageLogId: side.usageLogId,
+        creditsReserved: side.creditsReserved,
+        // A side hold never decides a watermark: the job's own reservation does.
+        watermark: false,
+        replayed: side.replayed,
+        ...(side.ledger != null ? { sideLedger: side.ledger } : {}),
       }
     }
 
@@ -3611,19 +4088,77 @@ export class CreditsService {
   /**
    * Settle managed jobs from their saved decision; legacy rows retain the
    * existing commit RPC. Deployment-payer allowance invalidation wraps both.
+   *
+   * `collectOverHold: true` (metered LLM settles only) settles through
+   * `commit_credits_metered` and returns its {@link CommitOutcome}; without it
+   * the RPC and its payload are exactly the pre-metered `commit_credits` call.
    */
   static async commitCredits(
     usageLogId: string,
-    actualCredits?: number
-  ): Promise<void> {
+    actualCredits?: number,
+    opts?: { collectOverHold?: boolean },
+  ): Promise<CommitOutcome | void> {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
     const requester = await settlementRequester(usageLogId)
     try {
       if (await trySettleManagedJob(usageLogId)) return
+      if (opts?.collectOverHold) return await CreditsService.settleCommitMetered(usageLogId, actualCredits)
       await CreditsService.settleCommit(usageLogId, actualCredits)
     } finally {
       await invalidateRequesterBalance(requester)
       void deliverExternalWalletSettlements(usageLogId)
+    }
+  }
+
+  /**
+   * The metered settle (migration 551): charges the ACTUAL, collecting any
+   * overrun beyond the hold from the payer's available balance; what cannot
+   * be collected is logged as an `uncollected_overrun` anomaly by the RPC.
+   *
+   * There is deliberately NO TS fallback. Flipping the row to committed, or
+   * retrying through plain `commit_credits` (which records an actual above the
+   * hold and moves no pool), would silently under-collect. A failed RPC leaves
+   * the row `reserved` and loud — billing-04/H22's trade — and returns
+   * undefined. Who settles it then: a sync metered job is left non-terminal by
+   * its caller, and the reconcile sync sweep (`sweepStaleSyncJob`, after the
+   * kind's threshold) retries the settle every tick — at the actual the
+   * row's ledger records (R59), the hold whole only when that cannot be
+   * priced — bumping `reconcile_attempts`; at `METERED_SWEEP_MAX_ATTEMPTS` (5) it
+   * charges the hold through plain `commit_credits` (actual = hold), confirms
+   * it by re-reading the log, and files an app report (D10). A billed metered
+   * hold is never refunded by the sweep; an unbilled one is.
+   */
+  private static async settleCommitMetered(
+    usageLogId: string,
+    actualCredits?: number,
+  ): Promise<CommitOutcome | undefined> {
+    // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 551 → 351/382/434 branches) — this wrapper relays the log id; there is no TS fallback
+    const { data, error } = await supabase.rpc("commit_credits_metered", {
+      p_usage_log_id: usageLogId,
+      p_actual_credits: actualCredits,
+    })
+    if (error) {
+      console.error(
+        `[credits] commit_credits_metered RPC failed for usage log ${usageLogId} — row left reserved for RPC retry:`,
+        error.message,
+      )
+      return undefined
+    }
+    const receipt = data as Record<string, unknown> | null
+    const charged = receipt?.charged
+    const collected = receipt?.collected_over_hold
+    const shortfall = receipt?.shortfall
+    if (!Number.isInteger(charged) || !Number.isInteger(collected) || !Number.isInteger(shortfall)) {
+      console.error(
+        `[credits] commit_credits_metered returned no settle receipt for usage log ${usageLogId}:`,
+        JSON.stringify(data),
+      )
+      return undefined
+    }
+    return {
+      charged: charged as number,
+      collectedOverHold: collected as number,
+      shortfall: shortfall as number,
     }
   }
 
@@ -3651,11 +4186,22 @@ export class CreditsService {
     // reserved → spent would strand the class's headroom with nothing able
     // to reconcile it (refund refuses non-reserved rows). Leave it reserved
     // and loud; a later retry of the RPC is the only correct settlement.
-    const { data: payerRow } = await supabase
+    const { data: payerRow, error: payerError } = await supabase
       .from("usage_logs")
-      .select("workspace_id, metadata, on_behalf_of")
+      .select("workspace_id, metadata, on_behalf_of, credits_used")
       .eq("id", usageLogId)
       .maybeSingle()
+    // An unread payer is not a personal payer: the row may be workspace-paid,
+    // external-wallet or allowance-enforced, where this flip would mark it
+    // committed without moving the budget behind it — the strand the checks
+    // below refuse (billing-04/H22). Unreadable or missing: left reserved and
+    // loud for a later RPC retry, exactly as those refusals.
+    if (payerError || !payerRow) {
+      console.error(
+        `[credits] commit fallback REFUSED for usage log ${usageLogId}: its payer could not be read (${payerError?.message ?? "no row"}) — row left reserved for RPC retry`,
+      )
+      return
+    }
     if (payerRow?.workspace_id || payerRow?.metadata?.external_wallet === true) {
       console.error(
         `[credits] commit fallback REFUSED for workspace-paid usage log ${usageLogId} — row left reserved for RPC retry`,
@@ -3682,9 +4228,13 @@ export class CreditsService {
       return
     }
 
+    // The fallback refunds no surplus, so what the payer was charged is the
+    // whole hold: `credits_charged` says so (the RPC writes it; a fallback
+    // that left it NULL made the row read as never charged).
+    const hold = (payerRow as { credits_used?: unknown } | null)?.credits_used
     const { error } = await supabase
       .from("usage_logs")
-      .update({ status: "committed" })
+      .update({ status: "committed", ...(typeof hold === "number" ? { credits_charged: hold } : {}) })
       .eq("id", usageLogId)
       .eq("status", "reserved")
 
@@ -3840,13 +4390,21 @@ export class CreditsService {
     const refundCreditType: "subscription" | "topup" =
       fromSub > 0 && fromTopup === 0 ? "subscription" : "topup"
 
+    // The refund line names the job — a metered SIDE hold's log carries none
+    // (554: it is no reservation OF the job), so its row in llm_side_holds does.
+    let refundJobId: string | undefined = usageLog.job_id ?? undefined
+    if (!refundJobId && (usageLog.metadata as Record<string, unknown> | null)?.reservation_mode === "side") {
+      const { data: side } = await supabase.from("llm_side_holds" as "assets").select("job_id").eq("usage_log_id", usageLogId).maybeSingle()
+      const sideJob = (side as { job_id?: unknown } | null)?.job_id
+      if (typeof sideJob === "string") refundJobId = sideJob
+    }
     await CreditsService.logTransaction({
       userId: usageLog.user_id,
       amount: usageLog.credits_used,
       creditType: refundCreditType,
       source: "refund",
       description: "Refund for failed job",
-      jobId: usageLog.job_id ?? undefined,
+      jobId: refundJobId,
       balanceAfter: 0,
     })
   }
@@ -4189,7 +4747,9 @@ export class CreditsService {
       readonly speechTextCaps?: ExposedTextCaps
     },
   ): AppListingEstimate {
-    return listingEstimate(asSavedGraph(nodes), edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
+    const graph = asSavedGraph(nodes)
+    const split = listingEstimate(graph, edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
+    return listingHoldsMeteredEstimate(graph, edges, undefined, undefined) ? { ...split, estimate: true } : split
   }
 }
 
@@ -4287,6 +4847,30 @@ export interface AppListingEstimate {
   readonly previewPerItem?: number
   /** The final part's credits per further item (absent when none). */
   readonly finalPerItem?: number
+  /** The listing holds a metered LLM call's ESTIMATE (Task 12, R47): charged its
+   *  actual usage, so it is shown `~N`. Absent for a fixed price, and always
+   *  under the tier-pricing rollback. Stored as `estimated_credits_is_estimate`. */
+  readonly estimate?: true
+}
+
+/**
+ * Does a listing hold a metered LLM call's estimate (Task 12, R47)? A node of
+ * the graph — of a use-case node's built chain, as the listing prices it — that
+ * makes a metered call (`meteredLlmKeyOfNode`, as it runs: a wired Settings
+ * input may set its model), or a UGC part flagged one. Never under the
+ * rollback. A node the UGC part prices is read through that part's flag.
+ */
+function listingHoldsMeteredEstimate(
+  graph: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  flags: UseCaseViewerFlags | undefined,
+  ugc: { skip: (node: EstimateNode) => boolean; perNode: ReadonlyMap<string, NodeEstimate> } | undefined,
+): boolean {
+  if ([...(ugc?.perNode.values() ?? [])].some((line) => line.estimate)) return true
+  const uc = expandUseCaseNodes(graph, edges ?? [], flags)
+  const nodes = uc.expanded ? uc.nodes : graph
+  const wires = uc.expanded ? uc.edges : edges
+  return nodes.some((n) => !ugc?.skip(n) && (meteredLlmKeyOfNode(withWiredSettings(n, nodes, wires)) !== null || componentHoldsMeteredEstimate(n)))
 }
 
 /** What is being listed: an app, a component (never stops at a Preview), or a template. */
@@ -4294,7 +4878,13 @@ export type ListingPublishType = "app" | "component" | "template"
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
-  base: (identifier) => rateCompositeBase(identifier, (id) => STATIC_CREDIT_COSTS[id]) ?? STATIC_CREDIT_COSTS[identifier],
+  base: (identifier) => {
+    // A metered LLM key (while metered pricing is on): its typical-usage
+    // estimate, unmarked — what the charged table lists before the markup.
+    const metered = meteredLlmIdOf(identifier)
+    if (metered) return meteredLlmListedBase(metered)
+    return rateCompositeBase(identifier, (id) => STATIC_CREDIT_COSTS[id]) ?? STATIC_CREDIT_COSTS[identifier]
+  },
   charge: (_identifier, baseCredits) => baseCredits,
 }
 
@@ -4319,6 +4909,8 @@ async function estimateRunGraphCredits(
   nodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge> | undefined,
   options: WorkflowEstimateOptions | undefined,
+  /** Told each priced node's figure (the detailed estimate's tally). */
+  onNode?: NodeTally,
 ): Promise<number> {
   // Priced on the graph the run executes: a Teleport pair passes on exactly
   // what entered it (@nodaro/render-rules teleport-bypass.ts).
@@ -4333,7 +4925,45 @@ async function estimateRunGraphCredits(
   // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
   // preview stop rule still sees every wire.
   const ugc = await ugcPartOf(nodes, edges)
-  return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip) + (ugc?.credits ?? 0)
+  if (onNode) for (const [id, figure] of ugc?.perNode ?? []) onNode(id, figure.credits, figure.estimate)
+  return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip, onNode) + (ugc?.credits ?? 0)
+}
+
+/** A detailed estimate's tally: one priced node's credits, and whether they are a metered estimate. */
+export type NodeTally = (nodeId: string, credits: number, estimate: boolean) => void
+
+/** One node's line in a detailed estimate. */
+export interface NodeEstimate {
+  readonly credits: number
+  /** A metered LLM call's estimate (charged its actual usage after the run): shown `~`. */
+  readonly estimate: boolean
+}
+
+/**
+ * A workflow estimate with its lines (Task 12, spec §8.5): the total
+ * (`credits`, always `estimateWorkflowCredits`' figure — the same sum, told
+ * each line as it adds it), whether ANY line is a metered LLM estimate
+ * (`estimate`, the `~` every surface shows), and each priced node's figure by
+ * id (`perNode`; a use-case node's chain by its steps' ids, its fee under its
+ * own id). The total is the metered estimates plus the fixed prices — never a
+ * hold or a ceiling. Under the rollback nothing is an estimate.
+ */
+export interface DetailedWorkflowEstimate {
+  readonly credits: number
+  readonly estimate: boolean
+  readonly perNode: Record<string, NodeEstimate>
+}
+
+/** A tally that adds each line to `perNode` (a node priced twice — two runs, two providers — adds up). */
+function detailedTally(): { onNode: NodeTally; perNode: Record<string, NodeEstimate> } {
+  const perNode: Record<string, NodeEstimate> = {}
+  return {
+    perNode,
+    onNode: (id, credits, estimate) => {
+      const prev = perNode[id]
+      perNode[id] = { credits: (prev?.credits ?? 0) + credits, estimate: (prev?.estimate ?? false) || estimate }
+    },
+  }
 }
 
 function sumWorkflowEstimate(
@@ -4343,6 +4973,8 @@ function sumWorkflowEstimate(
   options: WorkflowEstimateOptions | undefined,
   /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
   skip?: (node: EstimateNode) => boolean,
+  /** Told each priced node's figure, when a detailed estimate is asked for. */
+  onNode?: NodeTally,
 ): number {
   // A use-case node is priced as the chain it builds, wired to its real
   // source, plus its fee (decided 2026-10-13): the one expansion every
@@ -4361,12 +4993,15 @@ function sumWorkflowEstimate(
     // each chain is priced on its own wires.
     const inner = new Set([...uc.members.values()].flat())
     const steps = edges
-      ? sumWorkflowEstimate(uc.nodes, uc.edges, prices, opts, innerSkip)
-      : sumWorkflowEstimate(uc.nodes.filter((n) => !(n.id && inner.has(n.id))), undefined, prices, opts, innerSkip) +
-        sumWorkflowEstimate(uc.nodes.filter((n) => !!n.id && inner.has(n.id)), uc.edges, prices, opts, innerSkip)
+      ? sumWorkflowEstimate(uc.nodes, uc.edges, prices, opts, innerSkip, onNode)
+      : sumWorkflowEstimate(uc.nodes.filter((n) => !(n.id && inner.has(n.id))), undefined, prices, opts, innerSkip, onNode) +
+        sumWorkflowEstimate(uc.nodes.filter((n) => !!n.id && inner.has(n.id)), uc.edges, prices, opts, innerSkip, onNode)
     const reruns = runSet ?? new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
     const fees = uc.fees.filter((f) => (!runSet || runSet.has(f.nodeId)) && !elsewhere?.has(f.nodeId))
-    return steps + usecaseFeesTotal(fees, (id) => usecaseFeeCredits(prices, id), nodes, edges, reruns)
+    const feeOf = (id: string) => usecaseFeeCredits(prices, id)
+    // A fee is a fixed price, each one the node's own line (the total adds them one by one).
+    if (onNode) for (const f of fees) onNode(f.nodeId, usecaseFeesTotal([f], feeOf, nodes, edges, reruns), false)
+    return steps + usecaseFeesTotal(fees, feeOf, nodes, edges, reruns)
   }
   // A run stops at a Preview render: what it gates runs only after Render
   // final, so the estimate of this run leaves it out (the stop rule, through
@@ -4397,7 +5032,7 @@ function sumWorkflowEstimate(
     if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return false
     if (node.id && previewGated.has(node.id)) return false
     return !skip?.(node)
-  }, rerunIds, options?.speechTextCaps)
+  }, rerunIds, options?.speechTextCaps, onNode)
 }
 
 /** One run's fee of a use-case node, at its pricing row (the static figure when it is priced nowhere): the one lookup every quote reads. */
@@ -4428,6 +5063,8 @@ function sumEstimatedNodes(
   rerunIds: ReadonlySet<string>,
   /** The app's exposed text inputs, when the caller has them (see `WorkflowEstimateOptions.speechTextCaps`). */
   speechTextCaps?: ExposedTextCaps,
+  /** Told each priced node's figure (`estimateWorkflowCreditsDetailed`). */
+  onNode?: NodeTally,
 ): number {
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges ?? [])
@@ -4436,8 +5073,26 @@ function sumEstimatedNodes(
   return nodes.reduce((sum, node) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
-    return runs === 0 ? sum : sum + runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds)
+    if (runs === 0) return sum
+    const credits = runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds)
+    // Its line is an estimate when the node is priced at a metered call — as
+    // it runs: a wired Settings input may set the model, never the type — or
+    // is a Component whose published price holds one (`componentHoldsMeteredEstimate`).
+    onNode?.(node.id ?? node.type, credits, meteredLlmKeyOfNode(withWiredSettings(node, nodes, edges)) !== null || componentHoldsMeteredEstimate(node))
+    return sum + credits
   }, 0)
+}
+
+/**
+ * A Component node whose published price holds a metered LLM call's estimate:
+ * the flag the editor stores beside the price it read from the component's
+ * listing (`estimatedCreditsIsEstimate`, the listing's R47 flag) — its inner
+ * LLM call is charged its actual usage, so the line is `~`. Only while metered
+ * pricing is on (the gate the listing's flag is served under,
+ * `listingEstimateFlag`).
+ */
+function componentHoldsMeteredEstimate(node: EstimateNode): boolean {
+  return node.type === "component" && (node.data as { estimatedCreditsIsEstimate?: unknown } | undefined)?.estimatedCreditsIsEstimate === true && llmMeteredPricing()
 }
 
 /**
@@ -4588,6 +5243,17 @@ function estimateNodeCredits(
     if (credits !== undefined) return credits
   }
   const priced = withWiredSettings(node, nodes, edges)
+  // A scrape with AI analysis while metered pricing is on (B5): its fixed
+  // scrape plus each requested item's analysis at the analysis model's
+  // estimate, marked up once as a whole — what the route holds and then
+  // charges at the actual (`reserveFixedPlusLlmCalls`).
+  const scrape = meteredScrapeAnalysisOf(priced)
+  if (scrape) {
+    // An unpriced analysis model throws (R49): never the tier composite below.
+    const calls = meteredChargedOrThrow(prices, scrape.key, scrape.items)
+    const fixed = chargedCredits(prices, scrape.fixedId)
+    if (fixed !== undefined && calls !== undefined) return fixed + calls
+  }
   // Text to Speech / Text to Dialogue by length (decided 2026-10-06): the
   // model's :per-100-chars row × started hundreds of the text the run will
   // send, at least 8 units — the id and the units from ONE call, so they can
@@ -4612,7 +5278,23 @@ function estimateNodeCredits(
     videoMaskSec: node.type === "video-mask" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
     videoRefWired: videoRefWired(node, edges),
   })
-  return (chargedCredits(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
+  return (meteredChargedOrThrow(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
+}
+
+/**
+ * `chargedCredits`, failing CLOSED for a metered LLM key (R49): a model with no
+ * price on the lane it runs on THROWS `LlmUnpricedModelError` — never the bare
+ * node-type row, never 0, so every estimate surface refuses it
+ * (`llm_model_unpriced`) as its run would be refused. Every other id: as
+ * `chargedCredits` (undefined when priced nowhere).
+ */
+function meteredChargedOrThrow(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
+  const credits = chargedCredits(prices, identifier, units)
+  if (credits !== undefined) return credits
+  const metered = meteredLlmIdOf(identifier)
+  if (!metered) return undefined
+  meteredLlmEstimateBase(metered) // throws LlmUnpricedModelError for the unpriced lane
+  throw new PriceNotConfiguredError(identifier)
 }
 
 /**
@@ -5169,12 +5851,13 @@ export function graphPricingUnits(
 async function ugcPartOf(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-): Promise<{ credits: number; skip: (node: EstimateNode) => boolean } | null> {
+): Promise<{ credits: number; skip: (node: EstimateNode) => boolean; perNode: ReadonlyMap<string, NodeEstimate> } | null> {
   if (!hasCredits() || !nodes.some((n) => n.type === "ugc-clip")) return null
   const ugc = await estimateUgcPart(nodes, edges)
   return {
     credits: ugc.credits,
     skip: (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.covered.has(n.id)),
+    perNode: ugc.perNode,
   }
 }
 
@@ -5191,7 +5874,7 @@ async function ugcPartOf(
 async function estimateUgcPart(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-): Promise<{ credits: number; covered: ReadonlySet<string> }> {
+): Promise<{ credits: number; covered: ReadonlySet<string>; perNode: ReadonlyMap<string, NodeEstimate> }> {
   // The same reading the editor's run price uses.
   const chains = ugcChains(nodes, edges)
   const covered = new Set(chains.flatMap((c) => c.members.map((m) => m.id)))
@@ -5202,18 +5885,26 @@ async function estimateUgcPart(
     const { estimateUgcRun } = await import("../lib/ugc-estimate.js")
     const { ESTIMATE_CALLER } = await import("../lib/ugc-quote.js")
     const figures: Array<{ id: string; credits: number }> = []
+    // The nodes whose part the answer marks an estimate (`estimateParts`, the quote's own rule — R58:
+    // a clip's reading only when the plugin meters it; the creator check whenever it is metered).
+    const estimated = new Set<string>()
     for (const chain of chains) {
       const members = chain.members.filter(
         (m) => m.part !== null && !(m.part === "script" && keeps(m.id, "ugc-script")) && !(m.part === "creator" && keeps(m.id, "ugc-creator")),
       )
       if (members.length === 0) continue
       const r = await estimateUgcRun(ESTIMATE_CALLER, ugcChainInput(chain, nodes, edges).input)
-      for (const m of members) figures.push({ id: m.id, credits: r.parts[m.part!] })
+      for (const m of members) {
+        figures.push({ id: m.id, credits: r.parts[m.part!] })
+        // Never under the rollback (no metered key is priced then; the answer says so too).
+        if (r.estimateParts?.includes(m.part!) && llmMeteredPricing()) estimated.add(m.id)
+      }
     }
-    return { credits: ugcSumPerNode(figures), covered }
+    const perNode = new Map([...ugcFiguresPerNode(figures)].map(([id, credits]) => [id, { credits, estimate: estimated.has(id) }] as const))
+    return { credits: ugcSumPerNode(figures), covered, perNode }
   } catch (err) {
     console.warn("[estimate] UGC estimate unavailable; UGC nodes counted as 0", err instanceof Error ? err.message : err)
-    return { credits: 0, covered }
+    return { credits: 0, covered, perNode: new Map() }
   }
 }
 
@@ -5481,7 +6172,7 @@ function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>):
   return countRefModalityEdges(edges, node.id, "video") > 0
 }
 
-function getNodeModelIdentifier(
+export function getNodeModelIdentifier(
   node: EstimateNode,
   graph: {
     timedCaptionSourceWired?: boolean
@@ -5505,6 +6196,16 @@ function getNodeModelIdentifier(
 ): string {
   const nodeType = node.type
   const data = node.data ?? {}
+
+  // A metered LLM node (A5/§8.5, Task 12): its price key, which the charged
+  // price table answers with the model's typical-usage estimate — the same
+  // key the editor quotes (`llmNodePriceIds`). The rollback never reaches
+  // this: every branch below is today's id, byte for byte.
+  // (A scrape's metered analysis is priced on top of its fixed scrape by the
+  // estimate itself: `estimateNodeCredits`.)
+  const meteredCall = meteredNodeCall(node)
+  const meteredKey = meteredCall && llmMeteredPricing() ? meteredLlmPriceKeyOf(meteredCall) : null
+  if (meteredKey) return meteredKey
 
   // Audio Sync: priced per source aligned to the reference — a GRAPH fact (how
   // many recordings are wired into `sources`), counted by the caller from the
@@ -5537,7 +6238,9 @@ function getNodeModelIdentifier(
   // Video Composer reserves on the scene-graph-ai rows (its route builds the
   // id from the same three levers), not on the video-composer ones.
   if (nodeType === "video-composer") {
-    return buildLlmCreditIdentifier("scene-graph-ai", data.llmModel as string | undefined, data.reasoningEffort as string | undefined, data.advancedMode === true)
+    const llmModel = data.llmModel as string | undefined
+    const reasoningEffort = data.reasoningEffort as string | undefined
+    return buildLlmCreditIdentifier("scene-graph-ai", llmModel, reasoningEffort, data.advancedMode === true)
   }
 
   // LLM Chat uses tiered credit identifier based on selected model. Reasoning
@@ -5563,6 +6266,11 @@ function getNodeModelIdentifier(
     const reasoningEffort = (data.reasoningEffort as string | undefined) ?? defaultReasoningEffort("describe-to-picker", llmModel)
     return buildLlmCreditIdentifier("describe-to-picker", llmModel || LLM_FEATURE_DEFAULTS["describe-to-picker"], reasoningEffort, data.advancedMode === true)
   }
+
+  // Choose Best: the id its route reserves (`CREDIT_COSTS["reduce"]`, the
+  // strategy's; the AI judge its model's tier). The bare node type is priced
+  // nowhere, so a judge used to be estimated at 0 while its run billed the tier.
+  if (nodeType === "reduce") return CREDIT_COSTS["reduce"]!(data)
 
   // Content Recipe / Content Ideas: the same ids the plugin route and the
   // orchestrator reserve — the EFFECTIVE model's tier (an unset model is the
@@ -5846,6 +6554,23 @@ function getNodeModelIdentifier(
   )
 }
 
+/**
+ * `estimateWorkflowCredits` with its lines (`DetailedWorkflowEstimate`): the
+ * same total — the same sum, told each line as it adds it — whether any line
+ * is a metered LLM estimate, and each priced node's figure. For a surface that
+ * shows the figure `~` (`POST /v1/credits/estimate-workflow`); every other
+ * caller keeps the number.
+ */
+export async function estimateWorkflowCreditsDetailed(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges?: ReadonlyArray<EstimateEdge>,
+  options?: WorkflowEstimateOptions,
+): Promise<DetailedWorkflowEstimate> {
+  const { onNode, perNode } = detailedTally()
+  const credits = await estimateRunGraphCredits(asSavedGraph(nodes), edges, options, onNode)
+  return { credits, estimate: Object.values(perNode).some((line) => line.estimate), perNode }
+}
+
 /** What a run of this workflow will be charged — see `CreditsService.estimateWorkflowCredits`. */
 export function estimateWorkflowCredits(
   nodes: ReadonlyArray<EstimateNode>,
@@ -5871,13 +6596,15 @@ export function estimateRunSetCredits(
   pricedElsewhereNodeIds?: ReadonlySet<string>,
   /** What the run's viewer may use (`WorkflowEstimateOptions.multicam` / `.framesWithheld`, `usecaseViewerEstimateFor`). */
   viewer?: UseCaseViewerFlags,
+  /** Told each priced node's figure and whether it is a metered estimate (its UGC parts' flags included). */
+  onNode?: NodeTally,
 ): Promise<number> {
   // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
   return estimateRunGraphCredits(nodes, edges, {
     runNodeIds,
     ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
     ...usecaseExpandFlags(viewer),
-  })
+  }, onNode)
 }
 
 /**
@@ -6068,7 +6795,8 @@ async function listingPricer(
   const ugc = await ugcPartOf(nodes, edges)
   return (graph: ReadonlyArray<EstimateNode>): AppListingEstimate => {
     const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, usecaseExpandFlags(options))
-    return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
+    const estimate = listingHoldsMeteredEstimate(graph, edges, usecaseExpandFlags(options), ugc ?? undefined)
+    return { ...split, preview: split.preview + (ugc?.credits ?? 0), ...(estimate ? { estimate: true as const } : {}) }
   }
 }
 

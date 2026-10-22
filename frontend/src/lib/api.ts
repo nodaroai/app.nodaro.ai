@@ -272,7 +272,10 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
   const serverMessage = errObj?.message as string | undefined
   // The message every typed error below carries: the server's words in
   // English, the headline plus a translated reason elsewhere.
-  const message = apiErrorMessage({ code, serverMessage, fallbackKey: fallback, ...(fallbackVars ? { fallbackVars } : {}) })
+  // A balance refusal names the most the run can hold (`required`, beside
+  // `error`): "Needs up to N credits", in the display unit.
+  const required = typeof errJson?.required === "number" ? errJson.required : undefined
+  const message = apiErrorMessage({ code, serverMessage, fallbackKey: fallback, ...(fallbackVars ? { fallbackVars } : {}), ...(required !== undefined ? { required } : {}) })
   // The server refused the workspace this browser had selected — the caller
   // was removed, suspended, or the organization stopped being active. The
   // selection is a preference, so the remedy is to drop it: the next call
@@ -733,6 +736,8 @@ export interface UgcTicketQuoteRequest {
 export interface UgcTicketQuote extends UgcClipsQuote {
   readonly parts: Readonly<Record<UgcEstimatePart, number>>
   readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
+  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `~`. Absent: none. */
+  readonly estimateParts?: readonly UgcEstimatePart[]
 }
 
 /** POST /v1/ugc/quote, the ticket form for a run's saved clips: what rendering the ones it does not hand back costs. */
@@ -768,6 +773,8 @@ export interface UgcRunEstimate {
   readonly parts: Readonly<Record<UgcEstimatePart, number>>
   /** What each part holds while the clips render (each clip at the server's multiple of its price, at the longest length); they add up to `worstCase`. */
   readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
+  /** The parts whose figure holds a metered LLM call's estimate (charged its actual usage): a figure counting one is `~`. Absent: none. */
+  readonly estimateParts?: readonly UgcEstimatePart[]
   /**
    * The plan's line limits, in characters — the opening line's, a beat line's, the closing
    * line's — from the plugin's own schema. Absent where the server has none to give (an older
@@ -6988,6 +6995,17 @@ async function llmStreamGeneric(
     if (err instanceof DOMException && err.name === "AbortError") {
       return { jobId, generatedText: collectedText }
     }
+    // A refusal before the stream opened (a 402 balance refusal: "Needs up to
+    // N credits") is the API's own error body: worded like every other call's.
+    if (err instanceof Error && err.name === "SseHttpError" && (err as { status?: number }).status === 402) {
+      let json: Record<string, unknown> | null = null
+      try {
+        json = JSON.parse((err as { body?: string }).body ?? "") as Record<string, unknown>
+      } catch {
+        json = null
+      }
+      if (json && typeof json.error === "object") throwApiError(json, "apiErr.generateText")
+    }
     throw err
   }
 
@@ -7377,7 +7395,7 @@ export async function checkCredits(userId: string, model: string): Promise<{ dat
   return res.json()
 }
 
-export async function getModelCreditCost(model: string): Promise<{ data: { model: string; creditCost: number } }> {
+export async function getModelCreditCost(model: string): Promise<{ data: { model: string; creditCost: number; estimate?: true } }> {
   const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/credits/model-cost?model=${encodeURIComponent(model)}`, {
     headers: authHeaders,
@@ -7396,6 +7414,14 @@ export interface BatchModelCreditCosts {
    *  length pricing is off, an unseeded admin row. A client that sees an id
    *  here quotes without it (the flat row) and need not ask again. */
   missing: string[]
+  /** The ids whose figure is an ESTIMATE — a metered LLM call's price key
+   *  (`llmPriceKey`), charged its actual usage after the run. Shown with a
+   *  leading `~`. Absent when the server sent none (no metered key asked, or
+   *  metered pricing rolled back — then those keys are in `missing`). */
+  estimates?: string[]
+  /** Why a metered key cannot be priced (`llm_model_unpriced`): the run would
+   *  be refused, so no price is shown for it. */
+  errorCodes?: Record<string, { code: string; message: string }>
 }
 
 export async function getBatchModelCreditCosts(models: string[]): Promise<Record<string, number>> {
@@ -7421,6 +7447,8 @@ export async function fetchBatchModelCreditCosts(models: string[]): Promise<Batc
     // at Run time. Surface to devtools so it's not silent.
     missing?: string[]
     errors?: string[]
+    estimates?: string[]
+    errorCodes?: Record<string, { code: string; message: string }>
   }
   if (body.missing?.length) {
     console.warn(
@@ -7432,7 +7460,12 @@ export async function fetchBatchModelCreditCosts(models: string[]): Promise<Batc
       `[credits] model-costs: lookup failed for ${body.errors.length} identifier(s): ${body.errors.join(", ")}`,
     )
   }
-  return { data: body.data, missing: body.missing ?? [] }
+  return {
+    data: body.data,
+    missing: body.missing ?? [],
+    ...(body.estimates?.length ? { estimates: body.estimates } : {}),
+    ...(body.errorCodes && Object.keys(body.errorCodes).length > 0 ? { errorCodes: body.errorCodes } : {}),
+  }
 }
 
 // ============================================================
@@ -8625,6 +8658,13 @@ export async function getSharedWorkflow(token: string): Promise<{
   edges: unknown[]
   isOwner: boolean
   estimatedCost?: number
+  /** `estimatedCost` holds a metered LLM estimate (show it `~`); absent for a fixed figure. */
+  estimatedCostIsEstimate?: boolean
+  /**
+   * The workflow holds a metered LLM model with no price (R51): the page renders with `estimatedCost`
+   * absent, and a run is refused `400 llm_model_unpriced` with this same message.
+   */
+  estimatedCostUnpriced?: { reason: "llm_model_unpriced"; modelId: string; message: string }
   presentationSettings?: PresentationSettings
 }> {
   return apiRequest(
@@ -9212,6 +9252,8 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the app is given (decided 2026-10-07):
    *  the price is `estimatedCredits` plus this per minute. 0 or absent: none. */
   perMinuteCredits?: number
@@ -9274,6 +9316,10 @@ export interface AppBrowseCard {
   description: string
   iconUrl: string | null
   estimatedCredits: number
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual
+   *  usage after the run): the card shows it `~N` (spec §8.5). Supplied by the
+   *  listing's price (Task 12); absent: a fixed price, shown as before. */
+  estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the app is given; 0 or absent: none. */
   perMinuteCredits?: number
   /** Credits per item beyond the saved count of a List the app user fills; 0 or absent: none. */
@@ -9688,7 +9734,7 @@ export async function estimateComponentCredits(params: {
   appSlug: string
   pinnedVersion?: number
   exposedSettings?: Record<string, unknown>
-}): Promise<{ estimatedCredits: number }> {
+}): Promise<{ estimatedCredits: number; estimatedCreditsIsEstimate?: boolean }> {
   return apiRequest(
     "/v1/component/estimate-credits",
     "apiErr.estimateCredits",
@@ -10045,6 +10091,8 @@ export interface WorkflowTemplate {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
   /** "Up to" (decided 2026-10-14): the most a run can cost over the template's exposed fields; present only when above the "from" figures. */
@@ -10075,6 +10123,8 @@ export interface TemplateBrowseCard {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
   /** "Up to" (decided 2026-10-14): the most a run can cost over the template's exposed fields; present only when above the "from" figures. */
@@ -10366,6 +10416,8 @@ export interface FlowTutorialItem {
   previewMediaType: "image" | "video" | null
   complexity: "simple" | "intermediate" | "advanced"
   estimatedCredits: number
+  /** `estimatedCredits` holds a metered LLM call's ESTIMATE (charged its actual usage): shown `~N`. Absent: a fixed price. */
+  estimatedCreditsIsEstimate?: boolean
   /** Credits per minute of the recording the template is given; 0 or absent: none. */
   estimatedPerMinuteCredits?: number
   nodeTypesUsed: string[]

@@ -20,11 +20,14 @@ import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
+import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import type { LlmRequest } from "../lib/llm/types.js"
+import { buildLottieRequest } from "../lib/lottie-request.js"
+import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -53,6 +56,22 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
           const body = req.body as Record<string, unknown> | undefined
           const feature = motionGraphicsFeature(body?.engine as string | undefined)
           return resolveLlmCreditId(feature, req.body)
+        }, {
+          // Metered pre-check (a UX check — the reserve holds the real request);
+          // undefined under the rollback, so the tier row prices it as before.
+          computeCredits: (raw) => {
+            const body = (raw ?? {}) as Record<string, unknown>
+            return llmPrecheckBaseCredits(
+              body.engine === "lottie" ? "motion-graphics-lottie" : "motion-graphics",
+              {
+                llmModel: typeof body.llmModel === "string" ? body.llmModel : undefined,
+                reasoningEffort: typeof body.reasoningEffort === "string" ? body.reasoningEffort : undefined,
+                advancedMode: body.advancedMode === true,
+                maxTokens: typeof body.maxTokens === "number" ? body.maxTokens : undefined,
+              },
+              typeof body.prompt === "string" ? body.prompt.length : 0,
+            )
+          },
         }),
       ],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
@@ -129,12 +148,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
           return sendInternalError(reply, req, lottieJobError, "Failed to create job")
         }
 
-        const modelIdentifier = buildLlmCreditIdentifier("motion-graphics-lottie", lottieLlmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
-        const reservation = await reserveCreditsForJob(req, reply, lottieJob.id, modelIdentifier)
-        if (reply.sent) return
-        const usageLogId = reservation?.usageLogId
-
-        await videoQueue.add("motion-graphics-lottie", {
+        const lottiePayload = {
           jobId: lottieJob.id,
           prompt,
           fps,
@@ -147,8 +161,27 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
           // Rides the queue payload — the LLM call is in the worker.
           advanced: { advancedMode: parsed.data.advancedMode, temperature: parsed.data.temperature, maxTokens: parsed.data.maxTokens },
           previousSids: parsed.data.previousSids,
-          usageLogId,
+        }
+        // Metered (D1): the hold of the worker's FIRST attempt (the repair
+        // re-ask is collected at settle), under `motion-graphics-lottie:<model>`.
+        // Under the rollback: the tier id, exactly as before.
+        const lottieRequest = buildLottieRequest(lottiePayload)
+        const meteredLottie = await reserveLlmCall(req, reply, lottieJob.id, {
+          feature: "motion-graphics-lottie",
+          calls: [{ modelId: lottieRequest.modelId, request: lottieRequest }],
         })
+        if (!meteredLottie || reply.sent) return
+        let usageLogId: string | undefined
+        if (meteredLottie.metered) {
+          usageLogId = meteredLottie.reservation.usageLogId
+        } else {
+          const modelIdentifier = buildLlmCreditIdentifier("motion-graphics-lottie", lottieLlmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
+          const reservation = await reserveCreditsForJob(req, reply, lottieJob.id, modelIdentifier)
+          if (reply.sent) return
+          usageLogId = reservation?.usageLogId
+        }
+
+        await videoQueue.add("motion-graphics-lottie", { ...lottiePayload, usageLogId })
 
         return { jobId: lottieJob.id }
       }
@@ -171,35 +204,54 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Reserve credits
-      const modelIdentifier = buildLlmCreditIdentifier("motion-graphics", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
-
-      // Reconciliation: mark this job inflight before invoking the LLM. The
-      // sync-sweep cron uses this to detect stuck rows that the route
-      // handler never completed. Best-effort — never throws.
-      await markProviderCallStart(job.id, "anthropic-sync")
-
-      try {
-        const userMessage = `Create motion graphics:
+      const userMessage = `Create motion graphics:
 - FPS: ${fps}
 - Resolution: ${width}x${height}
 - Duration: ${durationSeconds} seconds (${durationInFrames} frames)
 - Background color: ${backgroundColor}
 
 Prompt: ${prompt}`
+      const request: LlmRequest = {
+        modelId: llmModel,
+        system: MOTION_GRAPHICS_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+        ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["motion-graphics"]),
+        reasoningEffort: parsed.data.reasoningEffort,
+      }
 
+      // Reserve credits. Metered (D1): the hold of this request under
+      // `motion-graphics:<model>`, settled at the actual below — BEFORE the
+      // terminal write (C3). Under the rollback: the tier id, as before.
+      const metered = await reserveLlmCall(req, reply, job.id, {
+        feature: "motion-graphics",
+        calls: [{ modelId: llmModel, request }],
+      })
+      if (!metered || reply.sent) return
+      let usageLogId: string | undefined
+      if (!metered.metered) {
+        const modelIdentifier = buildLlmCreditIdentifier("motion-graphics", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        usageLogId = reservation?.usageLogId
+      }
+      const spend = new LlmSpend()
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      if (!(await stampSyncLlmCallStart(job.id, metered, reply))) return
+
+      try {
         console.log(`[motion-graphics-ai] Generating for job ${job.id}, ${durationSeconds}s`)
 
-        const response = await llmComplete({
-          modelId: llmModel,
-          system: MOTION_GRAPHICS_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }],
-          ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["motion-graphics"]),
-          reasoningEffort: parsed.data.reasoningEffort,
-        })
+        let response: Awaited<ReturnType<typeof llmComplete>>
+        try {
+          response = await llmComplete(request)
+        } catch (err) {
+          spend.add(llmModel, request, { error: err })
+          throw err
+        }
+        spend.add(llmModel, request, { response })
 
         const rawText = response.text
 
@@ -221,24 +273,34 @@ Prompt: ${prompt}`
 
         const motionPlan = validation.plan ?? rawJson
 
-        // Finalize job
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({
-            status: "completed",
-            ...completedJobColumns(),
-            output_data: {
-              motionPlan,
-              validationErrors: validation.errors,
-              autoFixes: validation.autoFixed,
-              usage: response.usage,
-            },
-            provider_cost: response.providerCost ?? null,
-          })
-          .eq("id", job.id)
+        const outputData = {
+          motionPlan,
+          validationErrors: validation.errors,
+          autoFixes: validation.autoFixed,
+          usage: response.usage,
+        }
+        if (metered.metered) {
+          // The output first (non-terminal), so the settle's billing ledger is
+          // merged into it; then the settle; then the terminal flip — none on
+          // `unsettled`, which leaves the row for the reconcile sweep (C3).
+          await supabase.from("jobs").update({ output_data: outputData }).eq("id", job.id) // tenant-scope-ignore: job.id is server-generated in this request
+          const settled = await settleLlmJob(job.id, metered, spend)
+          if (settled.outcome !== "unsettled") await completeSettledSyncJob(job.id)
+        } else {
+          // Finalize job
+          await supabase
+            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
+            .update({
+              status: "completed",
+              ...completedJobColumns(),
+              output_data: outputData,
+              provider_cost: response.providerCost ?? null,
+            })
+            .eq("id", job.id)
 
-        if (usageLogId) {
-          await CreditsService.commitCredits(usageLogId)
+          if (usageLogId) {
+            await CreditsService.commitCredits(usageLogId)
+          }
         }
 
         console.log(`[motion-graphics-ai] Job ${job.id} completed, tokens: ${response.usage?.outputTokens}`)
@@ -253,10 +315,24 @@ Prompt: ${prompt}`
         const message = userFacingMessage(err, "Motion graphics plan generation failed")
         console.error(`[motion-graphics-ai] Error for job ${job.id}:`, message)
 
-        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
+        if (metered.metered) {
+          // A billed failure (an answer that would not parse included) is
+          // charged its usage; one that billed nothing is refunded. The error
+          // goes on output_data FIRST (non-terminal), so the settle's billing
+          // ledger is merged beside it; settled BEFORE the terminal write.
+          await supabase.from("jobs").update({ output_data: { error: message } }).eq("id", job.id) // tenant-scope-ignore: job.id is server-generated in this request
+          const settled = await settleLlmJob(job.id, metered, spend)
+          if (settled.outcome !== "unsettled") {
+            await markJobFailed(job.id, {
+              error_message: settled.outcome === "charged" ? `${message} The model had already answered, so the call was charged.` : message,
+            })
+          }
+        } else {
+          await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
-        if (usageLogId) {
-          await CreditsService.refundCredits(usageLogId)
+          if (usageLogId) {
+            await CreditsService.refundCredits(usageLogId)
+          }
         }
 
         return reply.status(502).send({

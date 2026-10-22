@@ -16,6 +16,9 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { speakerViewQuickConfigs } from "./speaker-view-quick-configs"
 import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { llmPickerPriceLabel, useLlmModelPrices } from "@/hooks/use-llm-price"
+import { llmPricingMode, useLlmPricingMode } from "@/hooks/use-llm-pricing-mode"
+import { llmModelFor, llmNodeFeature } from "@/lib/llm-price-ids"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import {
   MODIFY_IMAGE_MODELS,
@@ -210,6 +213,10 @@ export interface QuickConfigControl {
    *   - a `needsGraph` control (the app card has no graph to read).
    *  A guard test holds the last two. */
   readonly exposable?: false
+  /** An LLM model control: each model's estimated price beside it, while
+   *  metered pricing is on (D7) — none under the tier-pricing rollback. The
+   *  node's metered feature is read from its type (`llmNodeFeature`). */
+  readonly llmModelPrices?: true
 }
 
 /** The strip's current value for a control — the projection when it has one,
@@ -421,6 +428,7 @@ const llmModelControl = (): QuickConfigControl => ({
   icon: Sparkles,
   options: orderedLlmModels().map((m) => ({ value: m.id, label: m.displayName })),
   retainedOptions: retiredLlmOptions(LLM_MODELS),
+  llmModelPrices: true,
   // Clearing `advancedMode` on ANY model switch is deliberately blunt: the
   // registry's additionalClear is unconditional, so a Gemini→Gemini switch also
   // turns Advanced off and the user has to re-enable it. That is a visible,
@@ -470,7 +478,7 @@ const reasoningEffortControl = (feature?: LlmFeature): QuickConfigControl => {
       if (levels.length === 0) return []
       return [
         ...(defaultFor(data) === undefined ? [{ value: "auto", label: tx("common.auto") }] : []),
-        ...levels.map((level) => ({ value: level, label: EFFORT_LABELS()[level] })),
+        ...levels.map((level) => ({ value: level, label: EFFORT_LABELS(llmPricingMode())[level] })),
       ]
     },
     ...(feature && {
@@ -494,6 +502,7 @@ const visionModelControl = (): QuickConfigControl => ({
   icon: Sparkles,
   options: orderedLlmModels(DESCRIBE_TO_PICKER_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
   retainedOptions: retiredLlmOptions(DESCRIBE_TO_PICKER_MODELS),
+  llmModelPrices: true,
   // A node with no stored model runs on the analyzer's default model — show
   // that, not whichever vision model happens to be listed first.
   defaultValue: LLM_FEATURE_DEFAULTS["describe-to-picker"],
@@ -1376,7 +1385,27 @@ export function QuickConfigSelect({
     () => (control.needsGraph ? { nodeId, nodes: graphNodes, edges: graphEdges } : undefined),
     [control.needsGraph, nodeId, graphNodes, graphEdges],
   )
-  const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx])
+  // An option builder may word its labels by the server's LLM pricing mode (the
+  // effort levels): re-resolved when an answer changes it.
+  const pricingMode = useLlmPricingMode()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx, pricingMode])
+  // An LLM model control: each model's estimate beside it (metered pricing
+  // only, D7), ONE batch for the list. A model switch here clears Advanced
+  // (`additionalClear`), so only the current model is quoted with it.
+  const llmNodeType = useWorkflowStore((s) => (control.llmModelPrices ? s.nodes?.find((n) => n.id === nodeId)?.type : undefined))
+  const llmFeature = llmNodeType ? llmNodeFeature({ type: llmNodeType, data }) : undefined
+  const llmOptionIds = useMemo(() => (llmFeature ? options.map((o) => o.value) : []), [llmFeature, options])
+  const llmPrices = useLlmModelPrices(
+    llmFeature ?? "",
+    llmOptionIds,
+    typeof data.reasoningEffort === "string" ? data.reasoningEffort : undefined,
+    data.advancedMode === true,
+    // The model the node runs now: the stored one, else its feature's default.
+    llmFeature ? llmModelFor(llmFeature, typeof data.llmModel === "string" ? data.llmModel : undefined) : undefined,
+  )
+  const unitShort = t("credits.unitShort")
+  const llmPriceOf = (value: string) => llmPickerPriceLabel(llmPrices.get(value), unitShort)
   const range = control.customRange
   const inRange = (v: string): boolean => isInQuickConfigRange(control, v)
   // Unset field → the control's declared default (e.g. gvp aspect "adaptive"),
@@ -1445,6 +1474,9 @@ export function QuickConfigSelect({
             </SelectTrigger>
             <SelectContent className="node-menu-surface">
               {options.map((o) => {
+                const price = llmPriceOf(o.value)
+                const priceTag =
+                  price ? <span className="ms-2 text-[10px] text-muted-foreground" data-testid={`quick-llm-price-${o.value}`}>{price}</span> : null
                 // A greyed row explains itself in place of its description.
                 const note = o.disabled ? o.reason : o.description
                 return (
@@ -1456,11 +1488,11 @@ export function QuickConfigSelect({
                   >
                     {note ? (
                       <span className="flex flex-col gap-0.5">
-                        <span>{localizeOption(o.label)}</span>
+                        <span>{localizeOption(o.label)}{priceTag}</span>
                         <span className="text-[10px] leading-tight text-muted-foreground/70">{note}</span>
                       </span>
                     ) : (
-                      localizeOption(o.label)
+                      <>{localizeOption(o.label)}{priceTag}</>
                     )}
                   </SelectItem>
                 )

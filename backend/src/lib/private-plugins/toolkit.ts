@@ -65,7 +65,7 @@ import {
 } from "../storage.js"
 import { reserveStorageIfWithinLimit, refundStorage } from "../../utils/file-validation.js"
 import { storeImportedImageBuffer } from "../media-import.js"
-import { markProviderCallStart } from "../reconcile/persistence.js"
+import { markProviderCallStart, markProviderCallStartIfLive } from "../reconcile/persistence.js"
 import { sendInternalError } from "../http-errors.js"
 import { runPostProcessing } from "../post-processing-error.js"
 import { uploadJobScratchFile } from "../job-scratch.js"
@@ -117,7 +117,9 @@ import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
 import { getJobId, throwIfJobCancelled } from "../job-cancellation.js"
 import { jobFileObjectId } from "../job-output-keys.js"
-import { hasCredits, hasOrganizations } from "../config.js"
+import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
+import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
+import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideHoldsAvailable } from "../llm-side-hold.js"
 import { appBaseUrl } from "../deployment-urls.js"
 import { getAppSettings } from "../app-settings.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -152,7 +154,7 @@ import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
 import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
-import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
+import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
 /**
@@ -1642,6 +1644,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // importing the union type here.
       markProviderCallStart: (jobId, kind) =>
         markProviderCallStart(jobId, kind as Parameters<typeof markProviderCallStart>[1]),
+      markProviderCallStartIfLive: (jobId, kind) =>
+        markProviderCallStartIfLive(jobId, kind as Parameters<typeof markProviderCallStartIfLive>[1]),
       readJob,
       readJobStrict,
       requestJobStop,
@@ -1853,7 +1857,42 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
           schema as ZodType<T>,
           opts,
         )
-        return { output: result.output, providerCost: result.providerCost }
+        // `lane` + `attempts` let a metered plugin record the call (`tk.llmBilling`).
+        return {
+          output: result.output,
+          providerCost: result.providerCost,
+          ...(result.lane !== undefined ? { lane: result.lane } : {}),
+          ...(result.attempts ? { attempts: result.attempts } : {}),
+        }
+      },
+    },
+    llmBilling: {
+      meteredPricing: () => llmMeteredPricing(),
+      // The contract types are structural mirrors of the host's (feature is a
+      // loose string across repos; the reserve refuses one that is not metered).
+      reserve: (req, reply, jobId, args) =>
+        reserveLlmCall(req, reply, jobId, args as Parameters<typeof reserveLlmCall>[3]),
+      // The contract's request is the LlmRequest shape with a loose `reasoningEffort`
+      // string (no cross-repo type identity); the registry clamps an unknown one.
+      newSpend: () => new LlmSpend() as unknown as PluginLlmSpend,
+      settle: (jobId, reserve, spend) => {
+        if (!(spend instanceof LlmSpend)) throw new Error("toolkit.llmBilling.settle: the spend must come from newSpend()")
+        return settleLlmJob(jobId, reserve as LlmReserveResult, spend)
+      },
+      // Metered SIDE holds (lib/llm-side-hold.ts, migration 554): reserved,
+      // started and settled from a worker; never touch the job's billing.
+      side: {
+        available: () => sideHoldsAvailable(),
+        payerOf: (req) => sideHoldPayerOf(req) as PluginLlmSideHoldPayer,
+        holdFor: (args) => sideHoldFor(args as Parameters<typeof sideHoldFor>[0]),
+        creditsFor: (chargeId, spend) => {
+          if (!(spend instanceof LlmSpend)) throw new Error("toolkit.llmBilling.side.creditsFor: the spend must come from newSpend()")
+          return sideCreditsFor(chargeId, spend)
+        },
+        // The payer's context is opaque to the plugin and checked by the host
+        // (another user's or a malformed one is refused).
+        reserve: async (args) =>
+          (await reserveLlmSideHold(args as Parameters<typeof reserveLlmSideHold>[0])) as unknown as Awaited<ReturnType<PluginLlmSideHoldToolkit["reserve"]>>,
       },
     },
     pipelines: {

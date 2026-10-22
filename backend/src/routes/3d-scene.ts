@@ -75,6 +75,8 @@ import { insertJob } from "../lib/insert-job.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { discardUnstartedJob, stampAnalysisChild } from "../lib/llm-structured-job-row.js"
 import { videoQueue } from "../lib/queue.js"
+import { llmPrecheckBaseCredits, reserveLlmCall } from "../lib/llm-billing.js"
+import { scene3DEditHoldRequest, scene3DGenerateHoldRequest } from "../services/scene3d/scene3d-authoring.js"
 import { extractForcePrivate, extractNodeId, extractWorkflowId } from "../lib/request-helpers.js"
 import {
   applyScene3DEditWithReferences,
@@ -191,6 +193,25 @@ export type Scene3DEditBody = z.infer<typeof scene3DEditBody>
 
 /** The credit identifier the guard reserves under — computed from the RAW
  *  body (before Zod), so the deterministic lane never reserves an LLM tier. */
+/**
+ * The basic lanes' metered guard pre-check (a UX check — the reserve holds the
+ * real first planner call): the brief's TEXT on the body's model. Undefined
+ * for the deterministic edit lane (no model, a fixed price) and under the
+ * rollback, so the tier row prices the check exactly as before.
+ */
+export function scene3DPrecheck(body: unknown): Promise<number | undefined> | undefined {
+  const b = (body ?? {}) as Record<string, unknown>
+  if (b.operations !== undefined) return undefined
+  return llmPrecheckBaseCredits(
+    SCENE3D_LLM_FEATURE,
+    {
+      llmModel: typeof b.llmModel === "string" ? b.llmModel : undefined,
+      reasoningEffort: typeof b.reasoningEffort === "string" ? b.reasoningEffort : undefined,
+    },
+    typeof b.prompt === "string" ? b.prompt.length : 0,
+  )
+}
+
 export function scene3DEditCreditId(body: unknown): string {
   const raw = body as { operations?: unknown } | undefined
   if (raw?.operations !== undefined) return SCENE3D_OPS_CREDIT_ID
@@ -371,7 +392,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
     catch (error) { return sendInternalError(reply, req, error, "Failed to read 3D capabilities") }
   })
 
-  const basicGenerateGuard = creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body))
+  const basicGenerateGuard = creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body), { computeCredits: scene3DPrecheck })
   const generateOptions = { preHandler: async (req: FastifyRequest, reply: FastifyReply) => {
     const engine = requestedScene3DEngine(req.body)
     if (engine !== undefined && engine !== "basic") return dispatchAdvancedScene3D("generate", req, reply)
@@ -425,12 +446,29 @@ export async function scene3DRoutes(app: FastifyInstance) {
       })
       if (jobError) return sendInternalError(reply, req, jobError, "Failed to create job")
 
-      const modelIdentifier = buildLlmCreditIdentifier(
-        SCENE3D_LLM_FEATURE,
-        model.id,
-        parsed.data.reasoningEffort,
-      )
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      // Metered (D1): the hold of the FIRST planner call as it will be sent
+      // (each image counted, never fetched here) under `3d-scene:<model>`;
+      // revisions and a video analysis's text are collected at settle. Under
+      // the rollback: the tier id, exactly as before.
+      const holdRequest = scene3DGenerateHoldRequest({
+        prompt: parsed.data.prompt,
+        ...frame,
+        llmModel: model.id,
+        reasoningEffort: parsed.data.reasoningEffort,
+        references,
+      })
+      const metered = await reserveLlmCall(req, reply, job.id, {
+        feature: SCENE3D_LLM_FEATURE,
+        calls: [{ modelId: model.id, request: holdRequest }],
+      })
+      if (!metered || reply.sent) return
+      const reservation = metered.metered
+        ? metered.reservation
+        : await reserveCreditsForJob(req, reply, job.id, buildLlmCreditIdentifier(
+            SCENE3D_LLM_FEATURE,
+            model.id,
+            parsed.data.reasoningEffort,
+          ))
       if (reply.sent) return
 
       // From here on the parent holds reserved credits, so EVERY failure has
@@ -475,7 +513,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
   app.post("/v1/3d-scene/generate", generateOptions, generateHandler)
   app.post("/v1/generate-3d-scene", generateOptions, generateHandler)
 
-  const basicEditGuard = creditGuard((req) => scene3DEditCreditId(req.body))
+  const basicEditGuard = creditGuard((req) => scene3DEditCreditId(req.body), { computeCredits: scene3DPrecheck })
   const editOptions = { preHandler: async (req: FastifyRequest, reply: FastifyReply) => {
     const engine = requestedScene3DEngine(req.body)
     if (engine !== undefined && engine !== "basic") return dispatchAdvancedScene3D("edit", req, reply)
@@ -631,7 +669,32 @@ export async function scene3DRoutes(app: FastifyInstance) {
       const modelIdentifier = deterministic
         ? SCENE3D_OPS_CREDIT_ID
         : buildLlmCreditIdentifier(SCENE3D_LLM_FEATURE, model.ok ? model.id : undefined, parsed.data.reasoningEffort)
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      // The instruction lane is metered (D1): the hold of the first planner
+      // call over the MERGED references the edit shows. The deterministic lane
+      // calls no model and keeps its fixed price. Under the rollback: the
+      // tier id, exactly as before.
+      const metered = !deterministic && model.ok
+        ? await reserveLlmCall(req, reply, job.id, {
+            feature: SCENE3D_LLM_FEATURE,
+            calls: [{
+              modelId: model.id,
+              request: scene3DEditHoldRequest({
+                plan,
+                instruction: parsed.data.prompt ?? "",
+                lockedObjectIds,
+                selectedObjectIds,
+                llmModel: model.id,
+                reasoningEffort: parsed.data.reasoningEffort,
+                references,
+                replaceReferences: parsed.data.replaceReferences,
+              }),
+            }],
+          })
+        : ({ metered: false } as const)
+      if (!metered || reply.sent) return
+      const reservation = metered.metered
+        ? metered.reservation
+        : await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
 
       let analysisJobId: string | undefined

@@ -25,35 +25,73 @@
  * would make the generated markdown depend on the EDITION env var and hand
  * `gen:skills:check` a drift nobody could explain.
  */
-import { STATIC_CREDIT_COSTS } from "../../../src/ee/billing/credits.js"
-import { statedPrices } from "../../../src/ee/billing/stated-prices.js"
-import { NODE_REGISTRY, chargedDescriptor } from "../../../src/lib/node-registry.js"
+import { STATIC_CREDIT_COSTS, meteredLlmDefaultKeyOfType, meteredLlmOptionKeyOfType } from "../../../src/ee/billing/credits.js"
+import { parseMeteredLlmId } from "../../../src/ee/billing/metered-llm-id.js"
+import { hostedStatedPrices } from "../../../src/ee/billing/stated-prices.js"
+import { NODE_REGISTRY, UNPRICED_CREDIT_COST, chargedDescriptor } from "../../../src/lib/node-registry.js"
 
-/** node type → the charged figure `/v1/nodes` advertises for it on Nodaro Cloud, where there is one. */
-function nodeCreditCosts(): ReadonlyMap<string, number | string> {
-  const prices = statedPrices()
+/** A node's advertised figure, whether it is a metered LLM estimate (`~`), and the feature its LLM call is priced under. */
+interface NodeCreditFigure {
+  readonly cost: number | string
+  readonly estimate: boolean
+  /** The metered LLM feature of the node's call (its default one, or the one it offers — Choose Best's judge). */
+  readonly llmFeature?: string
+}
+
+/** The metered feature a node of `type` prices its LLM call under, whatever the switch says. */
+function llmFeatureOf(type: string): string | undefined {
+  const key = meteredLlmDefaultKeyOfType(type) ?? meteredLlmOptionKeyOfType(type)
+  return key ? parseMeteredLlmId(key)?.feature : undefined
+}
+
+/**
+ * node type → the charged figure `/v1/nodes` advertises for it on Nodaro Cloud, where there is one.
+ * Priced as the hosted deployment prices (`hostedStatedPrices`): a metered LLM node at its
+ * default model's estimate, whatever the edition or rollback switch of the process generating.
+ */
+function nodeCreditCosts(): ReadonlyMap<string, NodeCreditFigure> {
+  const prices = hostedStatedPrices()
   return new Map(
     NODE_REGISTRY.flatMap((d) => {
       const row = STATIC_CREDIT_COSTS[d.type]
       const declared = d.creditCost ?? (typeof row === "number" ? row : undefined)
       if (declared === undefined) return []
-      const cost = chargedDescriptor({ ...d, creditCost: declared }, prices).creditCost
-      return cost === undefined ? [] : [[d.type, cost] as [string, number | string]]
+      const charged = chargedDescriptor({ ...d, creditCost: declared }, prices)
+      if (charged.creditCost === undefined) return []
+      const llmFeature = llmFeatureOf(d.type)
+      return [[d.type, { cost: charged.creditCost, estimate: charged.estimate === true, ...(llmFeature ? { llmFeature } : {}) }] as [string, NodeCreditFigure]]
     }),
   )
 }
 
-let costs: ReadonlyMap<string, number | string> | null = null
+let costs: ReadonlyMap<string, NodeCreditFigure> | null = null
 
 const LIVE_PRICE =
   "the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`)"
 
+/**
+ * Where an LLM call's price on ANY model is quoted: its metered price key
+ * `<feature>:<model id>` (`llmPriceKey`, `@nodaro/shared/llm-models`), which
+ * the model-cost lookup and MCP `list_models`' `priceIds` answer as an estimate.
+ */
+const llmLivePrice = (feature: string): string =>
+  `a call on any model is quoted by \`GET /v1/credits/model-cost?model=${feature}:<model id>\` (MCP: \`list_models\` with \`priceIds: ["${feature}:<model id>"]\`)`
+
 export function renderCreditCostLine(nodeType: string): string {
-  const cost = (costs ??= nodeCreditCosts()).get(nodeType)
-  if (cost === undefined) {
+  const figure = (costs ??= nodeCreditCosts()).get(nodeType)
+  if (figure === undefined) {
     // Input, parameter, trigger and layout nodes run no job at all; anything
     // else that lands here is priced by whatever registers it at runtime.
     return `**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise ${LIVE_PRICE}.`
   }
-  return `**Credit cost:** \`${cost}\` charged on Nodaro Cloud — ${LIVE_PRICE}; \`GET /v1/nodes\` gives this node's figure live.`
+  if (figure.cost === UNPRICED_CREDIT_COST) {
+    // A metered LLM node whose default model has no price yet: a run on it is refused, so no figure.
+    return `**Credit cost:** unpriced on Nodaro Cloud — its default model has no price yet, so a run on it is refused (\`llm_model_unpriced\`); ${figure.llmFeature ? llmLivePrice(figure.llmFeature) : LIVE_PRICE}.`
+  }
+  if (figure.estimate) {
+    // A metered LLM node: charged per token at its model's rate, so the figure is its default
+    // model's typical call — an estimate, never a fixed price.
+    return `**Credit cost:** \`~${figure.cost}\` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — ${figure.llmFeature ? llmLivePrice(figure.llmFeature) : LIVE_PRICE}; \`GET /v1/nodes\` gives this node's figure live.`
+  }
+  return `**Credit cost:** \`${figure.cost}\` charged on Nodaro Cloud — ${LIVE_PRICE}; \`GET /v1/nodes\` gives this node's figure live.`
 }

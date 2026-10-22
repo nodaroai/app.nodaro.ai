@@ -20,12 +20,14 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
+const metered = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/config.js", () => ({
   config: {
     EDITION: "cloud",
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test",
   },
+  llmMeteredPricing: () => metered.on,
   isCloud: () => true,
   hasCredits: () => true,
   isCommunity: () => false,
@@ -254,6 +256,31 @@ describe("GET /v1/app/:slug", () => {
     expect(body.runPerMinuteCredits).toBe(8)
     expect(body.perItemCredits).toBe(0)
     expect(body.runPerItemCredits).toBe(0)
+  })
+
+  it("R47: the listing's estimate flag is served while metered pricing is on, and hidden under the rollback", async () => {
+    const row = { ...DB_APP_ROW, estimated_credits: 78, estimated_credits_is_estimate: true }
+    const serveRow = () => {
+      let callCount = 0
+      vi.mocked(supabase.from).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+        return createChainMock({ data: [row], error: null }) as never
+      })
+    }
+    serveRow()
+    metered.on = true
+    const on = (await app.inject({ method: "GET", url: "/v1/app/estimate-app" })).json()
+    expect(on).toMatchObject({ estimatedCredits: 78, estimatedCreditsIsEstimate: true })
+    // The same (cached) answer under the rollback: the flag is gated at send time.
+    metered.on = false
+    try {
+      const off = (await app.inject({ method: "GET", url: "/v1/app/estimate-app" })).json()
+      expect(off.estimatedCredits).toBe(78)
+      expect(off).not.toHaveProperty("estimatedCreditsIsEstimate")
+    } finally {
+      metered.on = true
+    }
   })
 
   it("carries the per-item pair of a List the app user fills (decided 2026-10-07)", async () => {

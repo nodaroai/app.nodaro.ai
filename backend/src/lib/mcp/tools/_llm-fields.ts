@@ -9,12 +9,18 @@
  * vision model or the direct lane) while three near-identical copies of the
  * advanced fields lived in `prompt-helper.ts`.
  *
- * Spread `LLM_MCP_FIELDS` into a tool's `inputSchema` and map the args with
- * `llmPayloadFields(args)`. Adding a knob to the routes now means editing one
- * place instead of hunting every tool that should have carried it.
+ * Spread `llmMcpFields(<feature>)` into a tool's `inputSchema` and map the args
+ * with `llmPayloadFields(args)`. Adding a knob to the routes now means editing
+ * one place instead of hunting every tool that should have carried it.
+ *
+ * PRICING: an LLM call is charged per token at the model's rate on the lane
+ * that serves it (metered pricing) — never a tier price, so the copy names no
+ * rung. `llmMcpFields` adds the feature's typical figure on its default model
+ * (`estimateHint`), derived at registration.
  */
 import { z } from "zod"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, PICKABLE_LLM_MODELS } from "@nodaro/shared/llm-models"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, PICKABLE_LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
+import { estimateHint, llmFeatureDefaultModel, type MeteredLlmFeature } from "./_credit-hint.js"
 
 /** MCP-facing schema fragment. Snake_case for the advanced trio matches the
  *  surrounding MCP convention; `llmModel` keeps its existing camelCase spelling
@@ -31,12 +37,14 @@ export const LLM_MCP_FIELDS = {
   reasoning_effort: z
     .enum(LLM_REASONING_EFFORTS)
     .optional()
-    .describe("Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well)."),
+    .describe(
+      "Reasoning effort (model-dependent). A higher effort usually spends more output tokens, and the call is charged per token. On a Claude model any effort runs on Anthropic's own API, charged at that lane's rate (docs/pricing/llm-models.md).",
+    ),
   advanced_mode: z
     .boolean()
     .optional()
     .describe(
-      "Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way.",
+      "Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply, charged per token at that lane's rate (docs/pricing/llm-models.md); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way.",
     ),
   temperature: z
     .number()
@@ -53,29 +61,20 @@ export const LLM_MCP_FIELDS = {
     .describe("Output token cap. Only honoured when advanced_mode is true."),
 }
 
-/** Args as MCP delivers them — a structural mirror of `LLM_MCP_FIELDS` so a
- *  tool can accept a wider args object and still pass it here. */
-export interface LlmMcpArgs {
-  llmModel?: string
-  reasoning_effort?: string
-  advanced_mode?: boolean
-  temperature?: number
-  max_tokens?: number
-}
-
 /**
- * Snake_case MCP args → the camelCase body the routes parse.
- *
- * Absent keys are OMITTED rather than sent as `undefined`: these payloads are
- * JSON-serialised on the way to the route, and an explicit `advancedMode: null`
- * reads differently from a field that was never sent.
+ * {@link LLM_MCP_FIELDS} for a tool fronting a metered LLM `feature`: its
+ * `llmModel` names the feature's default model and what a typical call on it
+ * is charged (`~N`, an estimate — the call is charged per token).
  */
-export function llmPayloadFields(args: LlmMcpArgs): Record<string, unknown> {
+export function llmMcpFields(feature: MeteredLlmFeature): typeof LLM_MCP_FIELDS {
+  const defaultModel = llmFeatureDefaultModel(feature)
+  const name = getLlmModel(defaultModel)?.displayName ?? defaultModel
   return {
-    ...(args.llmModel ? { llmModel: args.llmModel } : {}),
-    ...(args.reasoning_effort ? { reasoningEffort: args.reasoning_effort } : {}),
-    ...(args.advanced_mode ? { advancedMode: true } : {}),
-    ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
-    ...(args.max_tokens !== undefined ? { maxTokens: args.max_tokens } : {}),
+    ...LLM_MCP_FIELDS,
+    llmModel: LLM_MCP_FIELDS.llmModel.describe(
+      `LLM model id. Defaults to ${name} (\`${defaultModel}\`). Charged per token at the model's rate: ${estimateHint(feature, defaultModel)} (every model: docs/pricing/llm-models.md).`,
+    ),
   }
 }
+
+export { llmPayloadFields, type LlmMcpArgs } from "./_llm-payload.js"

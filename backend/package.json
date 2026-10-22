@@ -27,6 +27,7 @@
     "refund:topaz-overcharge": "tsx src/ee/scripts/topaz-overcharge-refund.ts",
     "backfill:speech-app-prices": "tsx src/ee/scripts/backfill-speech-app-prices.ts",
     "backfill:listing-range": "tsx src/ee/scripts/backfill-listing-range.ts",
+    "backfill:llm-listing-prices": "tsx src/ee/scripts/backfill-llm-listing-prices.ts",
     "gen:skills": "tsx scripts/gen-skills.ts",
     "docs:prices": "tsx scripts/docs-prices.ts",
     "gen:vd-fallback": "tsx scripts/gen-video-director-fallback.ts",

@@ -16,7 +16,8 @@
     "e-commerce"
   ],
   "complexity": "beginner",
-  "estimatedCredits": 102,
+  "estimatedCredits": 109,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

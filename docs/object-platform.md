@@ -721,9 +721,14 @@ generation routes:
   cinematic kling default used by locations). See
   `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
-- `POST /v1/objects/:id/approve-main-image` — currently free; the LLM
-  caption is uncharged.
-- `POST /v1/objects/:id/llm-caption` — 8 credits<!-- credits: prompt-helper --> per call (the `prompt-helper` price).
+- `POST /v1/objects/:id/approve-main-image` — the approval itself is free; its vision
+  caption (Claude Sonnet 4.6) is charged for the tokens it used, at that model's
+  rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](./pricing/llm-models.md)). An
+  approval is never refused for credits: with too little balance for the
+  caption, the image is still approved, the caption is skipped
+  (`canonical_description` stays empty) and `llm-caption` writes it later.
+- `POST /v1/objects/:id/llm-caption` — the same caption, charged the same way
+  (a caption the provider billed is charged even when it comes back empty).
 
 Pricing is fetched from the `model_pricing` table at runtime; the static
 fallback in `STATIC_CREDIT_COSTS` has a `object` row as the default

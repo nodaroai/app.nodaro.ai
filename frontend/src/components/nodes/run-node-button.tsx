@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow"
 import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { formatCreditsSuffix } from "@/hooks/use-llm-price"
 import { cancelJob, stopGenerateVideoPro } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { abortNodeRun } from "@/lib/node-run-abort"
@@ -39,6 +40,9 @@ interface RunNodeButtonProps {
   /** `credits` is a minimum, not the price — the real price is known only
    *  later (Seedance 2.5 HD before a draft is wired). Shown as "from N". */
   creditsFrom?: boolean
+  /** `credits` is an ESTIMATE — a metered LLM call, charged its actual usage
+   *  after the run (`useLlmPrice`). Shown with a leading `~`. */
+  creditsEstimate?: boolean
   isRunning: boolean
   onRun: (nodeId: string) => void
   /** When true, shows "Run from here" label with FastForward icon. */
@@ -58,7 +62,7 @@ interface RunNodeButtonProps {
  *  Stop menu shows an extra "Stop & keep" item for these. */
 const GRACEFUL_STOP_NODE_TYPES = new Set(["generate-video-pro"])
 
-export function RunNodeButton({ nodeId, credits, creditsFrom, isRunning, onRun, runFromHere, disabled, disabledReason }: RunNodeButtonProps) {
+export function RunNodeButton({ nodeId, credits, creditsFrom, creditsEstimate, isRunning, onRun, runFromHere, disabled, disabledReason }: RunNodeButtonProps) {
   const t = useT()
   // Narrow subscription: only PRIMITIVES this button renders/derives from — the
   // current job id, a primitive fingerprint of the edges feeding fan-out
@@ -237,7 +241,7 @@ export function RunNodeButton({ nodeId, credits, creditsFrom, isRunning, onRun, 
               <Loader2 className="w-3 h-3 animate-spin" />
               {t("node.stop")}
               {hasCredits() && credits !== undefined && credits > 0 && (
-                <span className="ml-1 opacity-80">{t(creditsFrom ? "node.creditsFromSuffix" : "node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}</span>
+                <span className="ml-1 opacity-80">{creditsFrom ? t("node.creditsFromSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) }) : formatCreditsSuffix(t, totalCredits, creditsEstimate === true)}</span>
               )}
             </button>
           </DropdownMenuTrigger>
@@ -281,7 +285,7 @@ export function RunNodeButton({ nodeId, credits, creditsFrom, isRunning, onRun, 
       {label}
       {hasCredits() && credits !== undefined && credits > 0 && (
         <span className="ml-1 opacity-80">
-          {t(creditsFrom ? "node.creditsFromSuffix" : "node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}
+          {creditsFrom ? t("node.creditsFromSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) }) : formatCreditsSuffix(t, totalCredits, creditsEstimate === true)}
         </span>
       )}
     </button>

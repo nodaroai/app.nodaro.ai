@@ -13,8 +13,8 @@ The Image Critic node uses a vision-language model to evaluate an image against 
 | Mode | select | `realism` | One of: `character-consistency`, `realism`, `prompt-adherence`, `anatomy`, `aesthetic`, `style-match`, `all` |
 | Threshold | number 0-1 | `0.7` | `approved = score >= threshold`. Below the threshold, the `rejected` handle fires instead. |
 | Prompt | text | `""` | Required for `prompt-adherence` and `all` modes. Can be wired via the `prompt` input edge -- the edge wins when present. |
-| LLM model | select | Claude Sonnet 5.5 | Any vision-capable model. Pricing varies by tier (11<!-- credits: image-critic:economy -->/ 22<!-- credits: image-critic -->/ 44 credits<!-- credits: image-critic:premium --> for economy / standard / premium). |
-| Advanced mode | boolean | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. Bills one credit rung up (a premium model moves to premium-direct); disabled with an inline reason on other models |
+| LLM model | select | Claude Sonnet 5.5 | Any vision-capable model. Charged for the tokens the call used at the model's rate — see [Supported Providers](#supported-providers). |
+| Advanced mode | boolean | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. The call is charged at that lane's per-token rate ([LLM model rates](../../pricing/llm-models.md)); disabled with an inline reason on other models |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
@@ -42,13 +42,15 @@ The Image Critic node uses a vision-language model to evaluate an image against 
 
 ## Supported Providers
 
-Any vision-capable LLM configured in the editor. The default is Claude Sonnet 5.5. Pricing tiers:
+Any vision-capable LLM configured in the editor. The default is Claude Sonnet 5.5. A call is charged for the tokens it actually used — the image(s), your prompt and the critique — at the model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical call:
 
-| LLM tier | Credits per call |
-|----------|-----------------|
-| Economy (Gemini Flash, Claude Haiku) | 11<!-- credits: image-critic:economy -->|
-| Standard (Claude Sonnet 5.5 -- default, Claude Sonnet 4.6, GPT-5.2) | 22<!-- credits: image-critic -->|
-| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 44<!-- credits: image-critic:premium -->|
+| Model | Typical call |
+|-------|-------------|
+| Gemini 3.6 Flash | ~4<!-- credits: image-critic:gemini-3.6-flash --> |
+| Claude Sonnet 5.5 (default) | ~6<!-- credits: image-critic:claude-sonnet-5.5 --> |
+| Claude Opus 5.5 | ~11<!-- credits: image-critic:claude-opus-5.5 --> |
+
+A critique the provider billed but that came back unusable (an answer that is not valid JSON) is charged for that usage, and the error says how much; a failure it did not bill is refunded.
 
 The `all` mode does NOT multiply the cost -- every dimension is scored in a single VLM call.
 

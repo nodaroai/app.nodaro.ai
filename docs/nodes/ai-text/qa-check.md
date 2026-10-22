@@ -29,7 +29,7 @@ The QA Check node sends upstream text to an LLM (default Gemini 3.6 Flash) and a
 | Check Type | Select | `content` | Evaluation dimension (content / quality / consistency / safety) |
 | Threshold | Number | `0.7` | Score at or above which `approved` is `true` |
 | Model | Select | Gemini 3.6 Flash | LLM used for the evaluation |
-| Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit rung up (a premium model moves to premium-direct); the node's cost badge updates immediately. Disabled with an inline reason on other models |
+| Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. The call is charged at that lane's per-token rate ([LLM model rates](../../pricing/llm-models.md)); the node's cost badge updates immediately. Disabled with an inline reason on other models |
 
 ## Inputs & Outputs
 
@@ -39,4 +39,4 @@ The QA Check node sends upstream text to an LLM (default Gemini 3.6 Flash) and a
 
 ## Pricing
 
-Costs **11 credits<!-- credits: qa-check:economy -->** per check on the default (economy) tier, **22 credits<!-- credits: qa-check -->** on the standard tier and **44 credits<!-- credits: qa-check:premium -->** on the premium tier.
+A check is charged for the tokens its call actually used — the content, your criteria and the verdict — at the selected model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical check: **~4 credits<!-- credits: qa-check:gemini-3.6-flash -->** on the default, Gemini 3.6 Flash, and ~6<!-- credits: qa-check:claude-sonnet-5.5 --> on Claude Sonnet 5.5. A failure the provider billed is charged for that usage; one it did not bill is refunded.

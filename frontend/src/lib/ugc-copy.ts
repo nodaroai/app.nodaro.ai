@@ -30,7 +30,7 @@ export const UGC_CATEGORY_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
 }
 
 /** Every quote line by its id; a clip line is named with its number and length (`ugc.clips.clipLength`). */
-export const UGC_QUOTE_LINE_LABEL_KEYS: Readonly<Record<Exclude<UgcQuoteLineKey, "clip">, MessageKey>> = {
+export const UGC_QUOTE_LINE_LABEL_KEYS: Readonly<Record<Exclude<UgcQuoteLineKey, "clip" | "clipReading">, MessageKey>> = {
   join: "ugc.quote.join",
   alignment: "ugc.quote.alignment",
   speechCheck: "ugc.quote.speechCheck",
@@ -119,6 +119,10 @@ export function ugcQuoteLineLabel(line: { readonly label: string; readonly key?:
     return typeof line.n === "number" && typeof line.seconds === "number"
       ? inOwnLanguage(line.label, "ugc.clips.clipLength", { n: line.n, seconds: ugcSeconds(line.seconds) })
       : line.label
+  }
+  // A metered frame check (`clipReadingMode`): named with its clip's number.
+  if (line.key === "clipReading") {
+    return typeof line.n === "number" ? inOwnLanguage(line.label, "ugc.quote.clipReading", { n: line.n }) : line.label
   }
   return typeof line.key === "string" && Object.hasOwn(UGC_QUOTE_LINE_LABEL_KEYS, line.key)
     ? inOwnLanguage(line.label, UGC_QUOTE_LINE_LABEL_KEYS[line.key as keyof typeof UGC_QUOTE_LINE_LABEL_KEYS])

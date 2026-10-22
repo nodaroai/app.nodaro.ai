@@ -38,8 +38,13 @@ vi.mock("@/lib/config.js", () => ({
     NODE_ENV: "test",
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test",
+    LLM_TIER_PRICING_ROLLBACK: true,
   },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  // D6: metered pricing is the default; this suite pins the TIER behaviour under
+  // the rollback (`LLM_TIER_PRICING_ROLLBACK`). The metered path is covered by
+  // llm-metered-structured-routes.test.ts.
+  llmMeteredPricing: () => false,
 }))
 vi.mock("@/lib/anthropic.js", () => ({ getAnthropicClient: () => ({}) }))
 vi.mock("@google/genai", () => ({
@@ -187,6 +192,13 @@ describe("POST /v1/describe-to-picker — Gemini on KIE gets every image inline"
     expect(completedRow().provider).toBe("kie")
     expect((completedRow().output_data as { usage: unknown }).usage).toEqual({ inputTokens: 1200, outputTokens: 40 })
     expect(JSON.stringify(res.json())).not.toContain("kie")
+  })
+
+  it("rollback is byte-identical: the tier id, reserved with today's four arguments", async () => {
+    expect((await post(IMAGE_URL)).statusCode).toBe(200)
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mocks.reserveCreditsForJob.mock.calls[0]).toHaveLength(4)
+    expect(mocks.reserveCreditsForJob.mock.calls[0][3]).toMatch(/^describe-to-picker(:|$)/)
   })
 
   it("sends a 2 MB PNG on our own CDN as a resized JPEG data URL within the limit — never its URL", async () => {

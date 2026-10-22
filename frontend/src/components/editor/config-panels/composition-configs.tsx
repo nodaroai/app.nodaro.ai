@@ -68,6 +68,8 @@ export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, on
         feature="scene-graph-ai"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="scene-graph-ai"
@@ -132,6 +134,8 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
         feature="after-effects"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="after-effects"
@@ -231,6 +235,8 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
         feature="lottie-overlay"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="lottie-overlay"
@@ -332,6 +338,8 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
         feature="3d-title"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature="3d-title"
@@ -491,6 +499,8 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
         feature={motionGraphicsFeature(data.engine)}
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature={motionGraphicsFeature(data.engine)}

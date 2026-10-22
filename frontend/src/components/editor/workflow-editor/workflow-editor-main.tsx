@@ -73,7 +73,7 @@ import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
-import { creditUnits, creditUnitLabel } from "@/lib/credit-units";
+import { formatCreditsSuffix } from "@/hooks/use-llm-price";
 import { useBillingSurface } from "@/hooks/use-billing-surface";
 import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits";
 import { useStats } from "@/hooks/queries/use-stats-queries";
@@ -87,6 +87,7 @@ import { continuableFailedRun } from "./continuable-failed-run";
 import { executionsPageQuery } from "../executions-query";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { estimateRunCredits, estimateWholeRun, wholeRunExecutable } from "./estimate-run-credits";
+import type { RunUnpriced } from "./run-unpriced";
 import { ugcPriceNoteKey, ugcRunCredits, ugcRunFigureNow, ugcRunParts, type UgcPriceState } from "./ugc-run-estimate";
 import { runSetPriceState, useUgcRunAnswers } from "@/hooks/use-run-from-here-credits";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
@@ -227,6 +228,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [workflowCreditEstimate, setWorkflowCreditEstimate] =
     useState<number>(0);
   const [workflowCreditEstimateVersion, setWorkflowCreditEstimateVersion] = useState<number | null>(null);
+  // The figure holds a metered LLM call's ESTIMATE (any metered node in the
+  // run): the Execute button reads `~N` (spec §8.5).
+  const [workflowCreditEstimateIsApprox, setWorkflowCreditEstimateIsApprox] = useState(false);
+  // A node of the run is a metered LLM call the server refuses to price: the
+  // figure leaves it out (and the run would be refused), so the badge says
+  // "not priced yet" with the server's sentence instead of quoting it.
+  const [workflowCreditUnpriced, setWorkflowCreditUnpriced] = useState<RunUnpriced | undefined>(undefined);
   const [estimateLoading, setEstimateLoading] = useState(false);
   // What a whole run can hold while its clips render: the balance check's figure, and the Copilot's auto limit's.
   const [workflowCreditHold, setWorkflowCreditHold] = useState<number>(0);
@@ -541,11 +549,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const ugcAnswers = useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges);
   useEffect(() => {
     if (!hasCredits()) return;
-    const publish = (total: number) => {
+    const publish = ({ total, estimate, unpriced }: { total: number; estimate: boolean; unpriced?: RunUnpriced }) => {
       const figure = ugcRunParts(wholeRunNodes, storeNodes, storeEdges)
         ? ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf, ugcAnswers.ticketAnswerOf)
         : null;
       setWorkflowCreditEstimate(figure ? figure.credits : total);
+      // `~` exactly when the server's figure is an estimate: with a UGC part, the server's own part
+      // flags (`estimateParts`) folded with every other node's line; otherwise the lines alone.
+      setWorkflowCreditEstimateIsApprox(figure ? figure.approx : estimate);
+      setWorkflowCreditUnpriced(figure ? figure.unpriced : unpriced);
       setWorkflowCreditHold(figure ? figure.hold : total);
       setUgcPriceState(figure ? runSetPriceState(figure, ugcAnswers) : undefined);
       // Stamp it with the graph it describes. A consumer that must not spend
@@ -563,7 +575,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       let cancelled = false;
       prefetchModelCredits(first.uncachedModelIds).then(() => {
         if (!cancelled) {
-          publish(estimateWholeRun(storeNodes, storeEdges, getCachedCredits).total);
+          publish(estimateWholeRun(storeNodes, storeEdges, getCachedCredits));
           setEstimateLoading(false);
         }
       });
@@ -572,7 +584,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
     // All costs cached — publish immediately
     setEstimateLoading(false);
-    publish(first.total);
+    publish(first);
   }, [storeNodes, storeEdges, wholeRunNodes, ugcAnswers]);
 
   // Only poll /v1/stats while there is local activity worth watching: a
@@ -1570,11 +1582,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     <Play className="w-4 h-4 me-2" />
                   )}
                   {t("run.executeWorkflow")}
-                  {hasCredits() && !estimateLoading && workflowCreditEstimate > 0 && (
+                  {hasCredits() && !estimateLoading && workflowCreditUnpriced && (
+                    // The figure would leave out a node the server refuses to price: no figure, the server's sentence on hover.
+                    <span className="ms-2 opacity-80" title={workflowCreditUnpriced.message}>
+                      {t("node.creditsSuffixUnpriced")}
+                    </span>
+                  )}
+                  {hasCredits() && !estimateLoading && !workflowCreditUnpriced && workflowCreditEstimate > 0 && (
                     <span className="ms-2 opacity-80" title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}>
-                      {ugcPriceState
-                        ? t("node.creditsSuffixEstimate", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })
-                        : t("node.creditsSuffix", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })}
+                      {/* `~` before every estimate, the one convention of every run price
+                          (Run from here, Run up to here): a UGC figure the server has not
+                          checked (the hover says why), or a run holding a metered LLM node. */}
+                      {formatCreditsSuffix(t, workflowCreditEstimate, ugcPriceState !== undefined || workflowCreditEstimateIsApprox)}
                     </span>
                   )}
                 </Button>

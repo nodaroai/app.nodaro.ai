@@ -41,8 +41,8 @@ name: Cloud Image
 #  • GHCR package read access for the tenant repo's Actions (nodaro-sai) and for
 #    Railway's registry credentials, so both can pull nodaro-cloud.
 #  • Runner minutes: a full cut is ~30–60 min of PRIVATE-repo (billed) time.
-#    Dispatch-only cadence (plus release tags) keeps that fine — the base does
-#    NOT rebuild on every dev commit; the tenant rebuilds only its thin layer.
+#    Dispatch-only cadence keeps that fine — the base does NOT rebuild on every
+#    dev commit; the tenant rebuilds only its thin layer.
 #
 # NOTE: the droplet's own base image (business flavor,
 # ghcr.io/nodaroai/app.nodaro.ai-internal:dev referenced by nodaro-sai's
@@ -50,23 +50,26 @@ name: Cloud Image
 # deliberately not addressed here.
 
 on:
+  # Dispatch-only ON PURPOSE. app-release.yml pushes vX.Y.Z tags with the default
+  # GITHUB_TOKEN, and GitHub does NOT start a workflow from a GITHUB_TOKEN-pushed
+  # ref (its recursion guard) — so a `push: tags:["v*"]` lane here would be dead
+  # code (verified: it never fired on v1.50.0). The base is cut on demand below;
+  # a dispatch FROM a release commit still stamps :vX.Y.Z + :latest (see the tag
+  # logic). To auto-cut on release instead, copy community-image.yml's pattern
+  # (trigger on push:branches:[main] + POLL for the tag).
   workflow_dispatch:
     inputs:
       cloud_plugins_version:
         description: "Override CLOUD_PLUGINS_VERSION (default: repo var CLOUD_PLUGINS_VERSION)"
         required: false
         type: string
-  push:
-    # A cloud base per platform release. app-release.yml pushes vX.Y.Z tags to
-    # THIS (internal) repo, so the tag lane is live, not dead code.
-    tags: ["v*"]
 
 permissions:
   contents: read
   packages: write
 
-# Per-ref: a re-dispatch on the same ref supersedes the older build; distinct
-# release tags (different ref) never collide on :latest.
+# Per-ref: a re-dispatch on the same ref supersedes the older build; a dispatch
+# from a different ref runs independently.
 concurrency:
   group: cloud-image-${{ github.ref }}
   cancel-in-progress: true
@@ -121,9 +124,10 @@ jobs:
 
           # Tags: an immutable :{sha} ALWAYS (prod pins this); a moving :dev ONLY
           # when the ref IS dev (so a dispatch from main to cut a prod pin never
-          # moves staging's pointer); the release tag + :latest on a v* push.
-          # $'\n' keeps the list free of the indentation a bare multiline would
-          # bake into each tag.
+          # moves staging's pointer); the release tag + :latest when the
+          # dispatched commit itself carries a vX.Y.Z tag (e.g. dispatch from main
+          # at a release). $'\n' keeps the list free of the indentation a bare
+          # multiline would bake into each tag.
           tags="${IMAGE}:${SHA}"
           if [ "$REF" = "refs/heads/dev" ]; then
             tags="${tags}"$'\n'"${IMAGE}:dev"

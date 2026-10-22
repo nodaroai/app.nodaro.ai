@@ -19,6 +19,10 @@ const NodeDescriptorSchema = z.object({
   description: z.string(),
   outputType: z.string(),
   creditCost: z.union([z.number(), z.string()]).optional(),
+  // A metered LLM node whose default model has no price lists `creditCost: "unpriced"` (never its tier band).
+  estimate: z.literal(true).optional().openapi({
+    description: "creditCost is an estimate: a metered LLM node's typical call on its default model, charged its actual usage after the run. Absent for a fixed price.",
+  }),
   creditRate: z.object({
     identifier: z.string(),
     unit: z.string(),

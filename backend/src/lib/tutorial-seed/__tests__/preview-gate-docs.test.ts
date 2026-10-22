@@ -23,18 +23,26 @@ const docsDir = join(repoRoot, "docs")
 
 const read = (...p: string[]) => readFileSync(join(docsDir, ...p), "utf8")
 const applyEdl = read("nodes", "processing-video", "apply-edl.md")
+const speakerView = read("nodes", "processing-video", "speaker-view.md")
 const sdkReference = read("sdk-reference.md")
 
-type Gated = { slug: string; on: [number, number]; off: [number, number] }
-const gated: Gated[] = readdirSync(templatesDir)
+type Gated = { slug: string; name: string; on: [number, number]; off: [number, number]; rendersThroughApplyEdl: boolean }
+const allGated: Gated[] = readdirSync(templatesDir)
   .filter((f) => f.endsWith(".json"))
   .map((f) => JSON.parse(readFileSync(join(templatesDir, f), "utf8")) as TutorialTemplateDoc & { slug: string })
   .filter((d) => d.withoutPreviewStopRule)
   .map((d) => ({
     slug: d.slug,
+    name: d.name,
     on: [d.estimatedCredits ?? 0, d.estimatedPerMinuteCredits ?? 0],
     off: [d.withoutPreviewStopRule!.estimatedCredits, d.withoutPreviewStopRule!.estimatedPerMinuteCredits ?? 0],
+    rendersThroughApplyEdl: (d.nodes as Array<{ type?: string }>).some((n) => n.type === "apply-edl"),
   }))
+// apply-edl.md#podcast-templates lists the templates that end in an Apply EDL
+// render; the vertical speaker clip ends in Speaker View and is documented on
+// that node's page (below).
+const gated = allGated.filter((g) => g.rendersThroughApplyEdl)
+const verticalClip = allGated.find((g) => g.slug === "podcast-vertical-speaker-clip")!
 
 const tighten = gated.find((g) => g.slug === "podcast-tighten-episode")!
 
@@ -85,6 +93,34 @@ describe("podcast template docs give both states of the preview stop rule", () =
       expect(passage).toContain(`\`${fixed + 60 * perMin}\``)
     }
     expect(passage).toContain("preview stop rule")
+  })
+
+  it("speaker-view.md documents the Vertical speaker clip template in both states of the stop rule, at both listings", () => {
+    expect(allGated.filter((g) => !g.rendersThroughApplyEdl).map((g) => g.slug)).toEqual(["podcast-vertical-speaker-clip"])
+    const at = speakerView.indexOf("### The Vertical speaker clip template")
+    expect(at, "the template has a section").toBeGreaterThan(-1)
+    const section = speakerView.slice(at, speakerView.indexOf("\n### ", at + 5))
+    expect(section).toContain("PREVIEW_STOP_RULE_ENABLED")
+    expect(section).toMatch(/Where the rule is off/)
+    expect(section).toContain(`**${verticalClip.on[0]} + ${verticalClip.on[1]}/min**`)
+    expect(section).toContain(`**${verticalClip.off[0]} + ${verticalClip.off[1]}/min**`)
+    // Both ways to repair the framing, in the docs and on the template's own note.
+    expect(section).toContain("Correcting a track")
+    const doc = JSON.parse(readFileSync(join(templatesDir, "podcast-vertical-speaker-clip.json"), "utf8")) as {
+      nodes: Array<{ id: string; data?: { text?: string } }>
+    }
+    const note = doc.nodes.find((n) => n.id === "vsc-note-fix")?.data?.text ?? ""
+    expect(note).toMatch(/which face/i)
+    expect(note).toMatch(/draw a box/i)
+  })
+
+  it("deployment.md names every built-in template the stop rule writes", () => {
+    const deployment = read("deployment.md")
+    const row = deployment.split("\n").find((l) => l.startsWith("| `PREVIEW_STOP_RULE_ENABLED`"))
+    expect(row, "the PREVIEW_STOP_RULE_ENABLED row").toBeDefined()
+    for (const { name } of allGated) expect(row, name).toContain(name)
+    // The stop is not only at an Apply EDL render: Speaker View's render stops the same way.
+    expect(row).toMatch(/Speaker View/)
   })
 
   it("every docs line that says a template renders a Preview first names the stop rule", () => {

@@ -48,6 +48,7 @@ export function CreditCost({
   perMinute,
   perItem,
   upTo,
+  approx,
 }: {
   credits: number | null | undefined
   /**
@@ -73,6 +74,9 @@ export function CreditCost({
   /** A listing's "up to" (raw Nodaro credits): the most a run can cost over the
    *  choices its user has. Shown as a range only when it differs from the figure. */
   upTo?: { readonly credits?: number | null; readonly perMinute?: number | null; readonly perItem?: number | null }
+  /** The figure is an ESTIMATE (a metered LLM call, charged its actual usage):
+   *  written `~N`, right before the number (spec §8.5). */
+  approx?: boolean
 }) {
   const t = useT()
   if (!hasCredits()) return null
@@ -87,8 +91,9 @@ export function CreditCost({
   ].filter(Boolean)
   const title = titleParts.length > 0 ? titleParts.join(" · ") : undefined
   const convert = (n: number | null | undefined) => (unit === undefined ? creditUnits(n) : (n ?? 0))
+  const tilde = approx ? "~" : ""
   const describe = (fixed: number, perMin: number, item: number) =>
-    `${fixed}${label ? ` ${label}` : ""}${perMin ? ` ${t("credits.plusPerMinute", { n: perMin })}` : ""}${item ? ` ${t("credits.plusPerItem", { n: item })}` : ""}`
+    `${tilde}${fixed}${label ? ` ${label}` : ""}${perMin ? ` ${t("credits.plusPerMinute", { n: perMin })}` : ""}${item ? ` ${t("credits.plusPerItem", { n: item })}` : ""}`
   const topFigure = upTo?.credits != null ? convert(Math.max(upTo.credits, credits ?? 0)) : undefined
   const topPerMinute = upTo ? convert(Math.max(upTo.perMinute ?? 0, perMinute ?? 0)) : 0
   const topPerItem = upTo ? convert(Math.max(upTo.perItem ?? 0, perItem ?? 0)) : 0
@@ -105,7 +110,7 @@ export function CreditCost({
     <span className={cn(icon ? "flex items-center gap-1" : undefined, className)} title={title}>
       {prefix}
       {icon && <Coins className={icon === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />}
-      {figure}{label ? ` ${label}` : ""}
+      {tilde}{figure}{label ? ` ${label}` : ""}
       {perMinuteFigure ? ` ${t("credits.plusPerMinute", { n: perMinuteFigure })}` : ""}
       {perItemFigure ? ` ${t("credits.plusPerItem", { n: perItemFigure })}` : ""}
     </span>

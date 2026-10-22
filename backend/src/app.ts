@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled } from "./lib/config.js"
+import { warmLlmMeteredSchemaGate } from "./lib/llm-metered-schema-gate.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
@@ -218,6 +219,7 @@ import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminGalleryModerationRoutes } from "./ee/routes/admin-gallery-moderation.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
+import { adminCreditAuditLlmRoutes } from "./ee/routes/admin-credit-audit-llm.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
 import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
 import { adminCopilotGapsRoutes } from "./ee/routes/admin-copilot-gaps.js"
@@ -686,6 +688,10 @@ export async function buildApp() {
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
+  // R33: ask the database for the metered LLM schema once at boot, so metered
+  // pricing turns on as soon as it is confirmed (tier pricing until then).
+  // Under the rollback metered pricing is off whatever the schema: no probe.
+  if (hasCredits() && !config.LLM_TIER_PRICING_ROLLBACK) warmLlmMeteredSchemaGate()
   if (hasCredits()) await app.register(creditsRoutes)
   if (hasCredits()) await app.register(ugcQuoteRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
@@ -746,6 +752,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
   if (hasAdmin()) await app.register(adminGalleryModerationRoutes)
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
+  if (hasAdmin()) await app.register(adminCreditAuditLlmRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
   if (hasAdmin()) await app.register(adminPickerGapsRoutes)
   if (hasAdmin()) await app.register(adminCopilotGapsRoutes)

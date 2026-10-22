@@ -7,13 +7,14 @@ import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/
 import { insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
+import { llmComplete, type LlmContentBlock, type LlmRequest } from "../lib/llm-client.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { chargedFailureMessage, finishMeteredSyncLlmJob, llmGuardPrecheck, spendLlmCall } from "../lib/meter-sync-llm.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { prefetchAsBase64 } from "../lib/anthropic-image.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
@@ -109,7 +110,10 @@ export async function imageCriticRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-critic",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("image-critic", req.body)),
+      preHandler: creditGuard((req) => resolveLlmCreditId("image-critic", req.body), {
+        // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
+        computeCredits: (body) => llmGuardPrecheck("image-critic", body),
+      }),
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -161,24 +165,8 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
-      // Capture for downstream commit/refund paths even if not currently
-      // referenced — every other route in the codebase preserves this
-      // value, and dropping it here makes future credit-flow changes
-      // silently fail on the sync path.
-      void reservation
-
-      await markProviderCallStart(job.id, "anthropic-sync")
-
-      try {
-        const [imageBlock, referenceBlock] = await Promise.all([
-          prefetchAsBase64(imageUrl),
-          usesReference && referenceImageUrl
-            ? prefetchAsBase64(referenceImageUrl)
-            : Promise.resolve(null as LlmContentBlock | null),
-        ])
-
+      /** The request for these image blocks — the URL form sizes the hold (an image is priced as an image either way). */
+      const criticRequest = (imageBlock: LlmContentBlock, referenceBlock: LlmContentBlock | null): LlmRequest => {
         const content: LlmContentBlock[] = []
         content.push({ type: "text", text: "Evaluate this image:" })
         content.push(imageBlock)
@@ -199,13 +187,45 @@ export async function imageCriticRoutes(app: FastifyInstance) {
 
         const system = `${COMMON_PREAMBLE}\n\n${MODE_TAILS[mode]}`
 
-        const response = await llmComplete({
+        return {
           modelId: llmModel,
           system,
           messages: [{ role: "user", content }],
           ...resolveLlmParams(parsed.data, LLM_ROUTE_DEFAULTS["image-critic"]),
           reasoningEffort: parsed.data.reasoningEffort,
-        })
+        }
+      }
+
+      // Reserve credits: metered (the call's 1-attempt hold), else the tier id as before.
+      const holdRequest = criticRequest(
+        { type: "image", url: imageUrl },
+        usesReference && referenceImageUrl ? { type: "image", url: referenceImageUrl } : null,
+      )
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "image-critic", calls: [{ modelId: llmModel, request: holdRequest }] })
+      if (!reserve) return
+      const spend = new LlmSpend()
+      if (!reserve.metered) {
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        // Capture for downstream commit/refund paths even if not currently
+        // referenced — every other route in the codebase preserves this
+        // value, and dropping it here makes future credit-flow changes
+        // silently fail on the sync path.
+        void reservation
+      }
+
+      if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+
+      try {
+        const [imageBlock, referenceBlock] = await Promise.all([
+          prefetchAsBase64(imageUrl),
+          usesReference && referenceImageUrl
+            ? prefetchAsBase64(referenceImageUrl)
+            : Promise.resolve(null as LlmContentBlock | null),
+        ])
+
+        const request = criticRequest(imageBlock, referenceBlock)
+        const response = await spendLlmCall(reserve.metered ? spend : undefined, llmModel, request, () => llmComplete(request))
 
         let parsedResult: ImageCriticResult
         try {
@@ -230,17 +250,23 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         const approved = finalScore >= threshold
         const details = { perMode: parsedResult.perMode, issues: parsedResult.issues }
 
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({
-            status: "completed",
-            ...completedJobColumns(),
-            output_data: { score: finalScore, approved, feedback: finalFeedback, mode, details, usage: response.usage },
-            provider_cost: response.providerCost ?? null,
-          })
-          .eq("id", job.id)
+        const outputData = { score: finalScore, approved, feedback: finalFeedback, mode, details, usage: response.usage }
+        if (reserve.metered) {
+          // Result first, then the settle (what the call cost), then the terminal write.
+          await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "completed", outputData })
+        } else {
+          await supabase
+            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
+            .update({
+              status: "completed",
+              ...completedJobColumns(),
+              output_data: outputData,
+              provider_cost: response.providerCost ?? null,
+            })
+            .eq("id", job.id)
 
-        await commitReservedCreditsForJob(job.id)
+          await commitReservedCreditsForJob(job.id)
+        }
 
         return reply.send({
           jobId: job.id,
@@ -257,7 +283,24 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-critic] failed")
         const isParseFail = message.startsWith("invalid_llm_output")
         const rawLlmText = isParseFail ? message.slice("invalid_llm_output: ".length) : undefined
-        await markJobFailed(job.id, { error_message: isParseFail ? "invalid_llm_output" : message, extra: { output_data: isParseFail ? { error: "invalid_llm_output", rawLlmText } : { error: message } } })
+        const failedOutput = isParseFail ? { error: "invalid_llm_output", rawLlmText } : { error: message }
+        if (reserve.metered) {
+          // An unparseable answer was still billed: charged its usage (and says so); an unbilled failure is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, {
+            status: "failed",
+            errorMessage: isParseFail ? "invalid_llm_output" : message,
+            outputData: failedOutput,
+          })
+          return reply.status(502).send({
+            error: {
+              code: isParseFail ? "invalid_llm_output" : llmErrorCode(err),
+              message: isParseFail
+                ? chargedFailureMessage("LLM returned invalid JSON; see job.output_data.rawLlmText.", finished.settled)
+                : finished.errorMessage ?? message,
+            },
+          })
+        }
+        await markJobFailed(job.id, { error_message: isParseFail ? "invalid_llm_output" : message, extra: { output_data: failedOutput } })
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({
           error: {

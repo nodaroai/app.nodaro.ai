@@ -19,6 +19,7 @@
   ],
   "complexity": "advanced",
   "estimatedCredits": 1980,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "text-prompt",
     "web-scrape",

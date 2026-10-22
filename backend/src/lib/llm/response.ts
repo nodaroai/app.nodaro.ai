@@ -3,7 +3,7 @@
  */
 
 import type { LlmModelDef } from "@nodaro/shared/llm-models"
-import { calculateLlmCost, type LlmServingLane } from "../pricing/llm-cost.js"
+import { llmCostOrZero, type LlmServingLane } from "../pricing/llm-cost.js"
 import { LlmLaneError, assertNotContentRefusal, assertNotOutputCapped, type ReplyEnd } from "../llm-errors.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
@@ -65,7 +65,7 @@ export function buildResponse(
   req?: LlmRequest,
 ): LlmResponse {
   if (req) assertMediaIngested(model, req, usage)
-  const tableEstimate = usage ? calculateLlmCost(model, usage, lane) : undefined
+  const tableEstimate = usage ? llmCostOrZero(model, usage, lane) : undefined
   if (actualUsd !== undefined && tableEstimate !== undefined && tableEstimate > 0) {
     const drift = Math.abs(actualUsd - tableEstimate) / tableEstimate
     if (drift > 0.25) {
@@ -83,12 +83,13 @@ export function buildResponse(
   if (end.refusalFails) {
     assertNotContentRefusal({
       modelId: model.id, lane: lane === "direct" ? "direct-anthropic" : "kie", stopReason: end.stopReason, usage, providerCost,
-      creditsUsd: actualUsd,
+      creditsUsd: actualUsd, servedLane: lane === "direct" ? "direct-anthropic" : "kie",
     })
   }
   assertNotOutputCapped({
     modelId: model.id, lane: lane === "direct" ? "direct-anthropic" : "kie",
     stopReason: end.stopReason, cap: end.cap, usage, providerCost, creditsUsd: actualUsd,
+    servedLane: lane === "direct" ? "direct-anthropic" : "kie",
   })
   return {
     text,

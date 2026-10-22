@@ -32,6 +32,7 @@ import {
   continuationRefusal,
   loadContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
+import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 
 const params = z.object({ id: z.string().uuid() })
 const body = z.object({
@@ -45,6 +46,8 @@ const quoteSchema = z.object({
     nodeIds: z.array(z.string()),
     inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())),
     estimatedCredits: z.number().nullable(),
+    /** Present (true) when `estimatedCredits` includes a metered LLM call's estimate: charged its actual usage, shown `~N`. */
+    estimatedCreditsIsEstimate: z.literal(true).optional(),
     sufficient: z.boolean().nullable(),
     available: z.number().nullable(),
   }),
@@ -55,7 +58,7 @@ openApiRegistry.registerPath({
   path: "/v1/workflows/{id}/render-final/estimate",
   description:
     "Quote a Render final: the nodes it will execute (the Apply EDL render and every node after it; Camera Switch first in multicam), " +
-    "the one-shot override it runs with, its estimated credits, and whether the payer can cover them (`sufficient`; `available` is the payer's " +
+    "the one-shot override it runs with, its estimated credits (`estimatedCreditsIsEstimate: true` when an LLM node in it is charged its actual usage — show `~N`), and whether the payer can cover them (`sufficient`; `available` is the payer's " +
     "spendable balance, null when it is not the caller's to see or a workspace budget pays). The figures are null in an edition without credits. " +
     "Nothing is created or charged; a run the payer cannot cover is refused with 402 insufficient_credits.",
   security: [{ bearerAuth: [] }],
@@ -162,11 +165,15 @@ export async function workflowRenderFinalRoutes(app: FastifyInstance) {
           nodeIds: derived.nodeIds,
           inputOverrides: derived.inputOverrides,
           estimatedCredits: credits?.estimatedCredits ?? null,
+          // An LLM node in the run is charged its actual usage after it: the figure is an estimate (`~N`).
+          ...(credits?.estimate ? { estimatedCreditsIsEstimate: true as const } : {}),
           sufficient: credits?.sufficient ?? null,
           available: credits?.available ?? null,
         },
       })
     } catch (err) {
+      // A metered LLM model with no price (R49): refused, as its run would be.
+      if (await replyIfLlmUnpriced(reply, err)) return reply
       return sendInternalError(reply, req, err, "Failed to quote the Render final")
     }
   })

@@ -120,6 +120,15 @@ vi.mock("../job-policy-audit.js", () => audit)
 
 const reports = vi.hoisted(() => ({ insertAppReport: vi.fn(async (_r: Record<string, unknown>) => true) }))
 vi.mock("../app-reports.js", () => reports)
+// 554 / R57: a withdrawn job's metered side holds — the open ones settled after the flip, the charged
+// ones refunded (a deliberate platform refund).
+const sideHolds = vi.hoisted(() => ({ settleSideHoldsAfterFlip: vi.fn(async (_ids: readonly string[]) => {}), refundSettledSideHolds: vi.fn(async (_id: string) => {}) }))
+vi.mock("../llm-side-hold.js", () => sideHolds)
+// R61: a metered LLM job's charge settled before the gate spoke — the platform reverses it (and its
+// settled side holds) whenever it refuses the job after the fact. Its own behaviour:
+// llm-platform-refund.test.ts.
+const platformRefund = vi.hoisted(() => ({ refundSettledLlmCharges: vi.fn(async (_id: string) => 0) }))
+vi.mock("../llm-platform-refund.js", () => platformRefund)
 
 import { applyResultGate, rejectHeldJobRow, withdrawHeldJob } from "../job-policy-gate.js"
 import {
@@ -183,6 +192,7 @@ beforeEach(() => {
   audit.findReusableDecision.mockResolvedValue(null)
   failure.markJobFailed.mockResolvedValue(true)
   failure.markJobFailedDetailed.mockResolvedValue("flipped")
+  platformRefund.refundSettledLlmCharges.mockResolvedValue(0)
 })
 afterEach(() => clearJobPolicies())
 
@@ -254,10 +264,35 @@ describe("verdict → action", () => {
     expect(storage.batchDeleteFromR2).toHaveBeenCalledWith(["images/job-1.png"])
   })
 
+  it("R61: a registered policy's block of a METERED job also reverses its settled charge (after the reservation refund, behind the CAS)", async () => {
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "block", reason: "explicit", userMessage: "Blocked" }) })
+    expect(await applyResultGate("job-1", { output_data: OUT, credits_actual: 24 }, "finalize")).toBe("blocked")
+    expect(platformRefund.refundSettledLlmCharges).toHaveBeenCalledTimes(1)
+    expect(platformRefund.refundSettledLlmCharges).toHaveBeenCalledWith("job-1")
+    expect(platformRefund.refundSettledLlmCharges.mock.invocationCallOrder[0]).toBeGreaterThan(failure.markJobFailedDetailed.mock.invocationCallOrder[0]!)
+    expect(platformRefund.refundSettledLlmCharges.mock.invocationCallOrder[0]).toBeGreaterThan(credits.refundReservedCreditsForJob.mock.invocationCallOrder[0]!)
+  })
+
+  it("R61: a platform refund that THROWS never stops the block — the output is still deleted and the decision marked applied", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    platformRefund.refundSettledLlmCharges.mockRejectedValueOnce(new Error("rpc down"))
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "block", reason: "explicit", userMessage: "Blocked" }) })
+    expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("blocked")
+    expect(storage.batchDeleteFromR2).toHaveBeenCalledWith(["images/job-1.png"])
+    expect(audit.setDecisionApplied).toHaveBeenCalledWith("decision-1", true)
+  })
+
+  it("R61: an allow (or a flag) never reverses anything", async () => {
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "allow" }) })
+    await applyResultGate("job-1", { output_data: OUT }, "finalize")
+    expect(platformRefund.refundSettledLlmCharges).not.toHaveBeenCalled()
+  })
+
   it("block that flipped no row moves no money, deletes nothing, and files exactly one report", async () => {
     failure.markJobFailedDetailed.mockResolvedValue("missed")
     registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "block", reason: "explicit" }) })
     expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("blocked")
+    expect(platformRefund.refundSettledLlmCharges).not.toHaveBeenCalled()
     expect(credits.refundReservedCreditsForJob).not.toHaveBeenCalled()
     expect(storage.batchDeleteFromR2).not.toHaveBeenCalled()
     expect(audit.setDecisionApplied).toHaveBeenCalledWith("decision-1", false)
@@ -939,9 +974,25 @@ describe("rejectHeldJobRow", () => {
     })
   })
 
+  it("R61: `refunded` counts the platform's reversal of a metered job's settled charge (a reservation already committed refunds 0 itself)", async () => {
+    credits.refundReservedCreditsForJob.mockResolvedValueOnce(0)
+    platformRefund.refundSettledLlmCharges.mockResolvedValueOnce(1)
+    expect(await rejectHeldJobRow("job-1", INPUT)).toEqual({ ok: true, refunded: 1 })
+  })
+
+  it("R61: a platform refund that THROWS never stops the reject — the object is deleted and the decision recorded", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    platformRefund.refundSettledLlmCharges.mockRejectedValueOnce(new Error("rpc down"))
+    expect(await rejectHeldJobRow("job-1", INPUT)).toEqual({ ok: true, refunded: 1 })
+    expect(storage.batchDeleteFromR2).toHaveBeenCalledWith(["videos/job-1.mp4"])
+    expect(audit.recordJobPolicyDecision).toHaveBeenCalled()
+  })
+
   it("refunds, deletes the owned object and records the resolver — only after the CAS won", async () => {
     await rejectHeldJobRow("job-1", INPUT)
     expect(credits.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    // R61: a metered job's charge settled before it was parked is reversed with it.
+    expect(platformRefund.refundSettledLlmCharges).toHaveBeenCalledWith("job-1")
     expect(storage.batchDeleteFromR2).toHaveBeenCalledWith(["videos/job-1.mp4"])
     expect(audit.recordJobPolicyDecision.mock.calls[0]![0]).toMatchObject({
       jobId: "job-1", hookPoint: "review", verdict: "reject", policyId: "review",
@@ -953,6 +1004,7 @@ describe("rejectHeldJobRow", () => {
     failure.markJobFailed.mockResolvedValueOnce(false)
     expect(await rejectHeldJobRow("job-1", INPUT)).toEqual({ ok: false, reason: "lost_race" })
     expect(credits.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(platformRefund.refundSettledLlmCharges).not.toHaveBeenCalled()
     expect(storage.batchDeleteFromR2).not.toHaveBeenCalled()
     expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
   })
@@ -989,12 +1041,33 @@ describe("withdrawHeldJob — the owner's own cancel wins (D17)", () => {
     })
     // A cancel is not a failure: markJobFailed must not be involved at all.
     expect(failure.markJobFailed).not.toHaveBeenCalled()
+    // R57: its side holds go with it — the open ones settled, the charged ones refunded (as when the
+    // reading sat inside the reservation refunded above).
+    expect(sideHolds.settleSideHoldsAfterFlip).toHaveBeenCalledWith(["job-1"])
+    // R57 / R61: and what was already charged — the job's own settled metered charge and its side
+    // holds — is reversed by the platform refund (after the open ones settled).
+    expect(platformRefund.refundSettledLlmCharges).toHaveBeenCalledWith("job-1")
+    expect(platformRefund.refundSettledLlmCharges.mock.invocationCallOrder[0]).toBeGreaterThan(sideHolds.settleSideHoldsAfterFlip.mock.invocationCallOrder[0]!)
+  })
+
+  it("R61: `refunded` counts the reversal; a reversal that THROWS never stops the withdraw", async () => {
+    credits.refundReservedCreditsForJob.mockResolvedValueOnce(0)
+    platformRefund.refundSettledLlmCharges.mockResolvedValueOnce(2)
+    expect(await withdrawHeldJob("job-1")).toEqual({ ok: true, refunded: 2 })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    db.jobRow.value = { ...HELD }
+    db.heldUpdateRows.value = [{ id: "job-1" }]
+    platformRefund.refundSettledLlmCharges.mockRejectedValueOnce(new Error("rpc down"))
+    sideHolds.settleSideHoldsAfterFlip.mockRejectedValueOnce(new Error("boom"))
+    expect(await withdrawHeldJob("job-1")).toEqual({ ok: true, refunded: 1 })
+    expect(audit.recordJobPolicyDecision).toHaveBeenCalledTimes(2)
   })
 
   it("a lost CAS moves no money and deletes nothing", async () => {
     db.heldUpdateRows.value = []
     expect(await withdrawHeldJob("job-1")).toEqual({ ok: false, reason: "lost_race" })
     expect(credits.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(platformRefund.refundSettledLlmCharges).not.toHaveBeenCalled()
     expect(storage.batchDeleteFromR2).not.toHaveBeenCalled()
   })
 

@@ -26,7 +26,7 @@ import {
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { isPreviewRender } from "../lib/preview-render.js"
 import { isPromptBlocked } from "../config/content-filter.js"
-import { refundJobCredits, LLM_PRODUCT_JOB_TYPES, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
+import { refundJobCredits, settleCancelledMeteredJob, settleDiscardedCancelledMeteredHold, LLM_PRODUCT_JOB_TYPES, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
 import { videoSfxHandlers } from "./handlers/video-sfx.js"
@@ -350,6 +350,9 @@ export function createVideoWorker() {
           console.log(
             `[worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
           )
+          // R38 (m5): a cancelled metered LLM job requeued for a retry or by a
+          // drain still holds its hold — settled here, not left to the sweep.
+          await settleDiscardedCancelledMeteredHold(usageLogId, jobId)
           return
         }
 
@@ -457,6 +460,11 @@ export function createVideoWorker() {
         // discard quietly — do NOT mark "failed" or re-refund, and don't rethrow
         // (a throw would make BullMQ retry the cancelled job).
         if (err instanceof JobCancelledError) {
+          // R38: a metered LLM job still settles its hold — the cancel kept it
+          // when the job's call had started (billed-unknown, R36): charged what
+          // it billed, refunded when nothing was. A no-op (no read) for every
+          // other job, whose refund the cancel route owns.
+          await settleCancelledMeteredJob(usageLogId, jobId, err)
           console.log(`[worker] Job ${jobId} cancelled by user — discarding result, leaving status='cancelled'`)
           return
         }
@@ -505,6 +513,17 @@ export function createVideoWorker() {
             `[worker] Job ${jobId} interrupted by worker drain — moved back to the queue (attempt not spent; row left for stall-retry recovery)`,
           )
           throw new DelayedError()
+        }
+
+        // R38: a metered LLM job that failed on a row the user cancelled
+        // meanwhile — markJobFailed's CAS would lose to `cancelled` and skip the
+        // failure net, and a non-final attempt's retry would be discarded at
+        // pickup, both leaving the hold reserved. Settled here instead (what it
+        // billed charged, the rest refunded); the row stays cancelled and is not
+        // retried. A no-op (no read) for every job that is not metered.
+        if (await settleCancelledMeteredJob(usageLogId, jobId, err)) {
+          console.log(`[worker] Job ${jobId} failed after it was cancelled — its metered hold settled, leaving status='cancelled'`)
+          return
         }
 
         const message = err instanceof Error ? err.message : "Unknown error"

@@ -90,7 +90,7 @@ describe("an app run that stopped at a Preview", () => {
   it("a final whose UGC part's price is not the server's checked figure is marked as an estimate, the reason on the button", () => {
     price.unchecked = "editor"
     show({ cut: preview, cap: { status: "skipped" } })
-    const button = screen.getByText(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`).closest("button")!
+    const button = screen.getByText(`Render final · ~530`).closest("button")!
     expect(button.title).toBe(translate("en", "ugc.price.unchecked"))
     price.unchecked = undefined
   })
@@ -99,12 +99,12 @@ describe("an app run that stopped at a Preview", () => {
     price.unchecked = state
     try {
       show({ cut: preview, cap: { status: "skipped" } })
-      fireEvent.click(screen.getByText(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`))
+      fireEvent.click(screen.getByText(`Render final · ~530`))
       const ask = screen.getByRole("alertdialog")
       const reason = { editor: "ugc.price.unchecked", checking: "ugc.price.checking", held: "ugc.price.uncheckedHeld", length: "ugc.price.uncheckedLength" } as const
-      expect(ask.textContent).toContain(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`)
+      expect(ask.textContent).toContain(`Render final · ~530`)
       expect(ask.textContent).toContain(translate("en", reason[state]))
-      expect(ask.getAttribute("aria-label")).toBe(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`)
+      expect(ask.getAttribute("aria-label")).toBe(`Render final · ~530`)
     } finally {
       price.unchecked = undefined
     }

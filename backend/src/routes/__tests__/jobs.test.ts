@@ -33,6 +33,12 @@ vi.mock("@/lib/workflow-delete.js", () => ({
 }))
 
 // The owner's favorite/rating reads have their own tests (jobs-favorites-ratings).
+// R53: each job's settled metered side holds (554) — none unless a test says so.
+const sideCharges = vi.hoisted(() => ({ map: new Map<string, number>() }))
+vi.mock("@/lib/job-step-charge.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/job-step-charge.js")>()),
+  sideHoldChargesFor: async () => sideCharges.map,
+}))
 vi.mock("@/lib/job-owner-state.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/job-owner-state.js")>()),
   jobOwnerStateFor: async () => new Map(),
@@ -1214,6 +1220,31 @@ describe("credits_charged — the settled charge beside the hold", () => {
     // The public figure comes from the usage log; credits_actual stays admin-only.
     expect(data).not.toHaveProperty("credits_actual")
     expect(data).not.toHaveProperty("usage_log_id")
+  })
+
+  it("R53: GET /v1/jobs/:id adds the job's settled metered side holds (a clip's readings) to its charge — as when they were inside it", async () => {
+    const row = { ...sampleJob, id: "job-1", user_id: TEST_USER_ID, credits: 888, credits_actual: 444, usage_log_id: "ul-partial" }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") return usageLogsAnswer([PARTIAL])
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+      return chain as never
+    })
+    sideCharges.map = new Map([["job-1", 9]])
+    try {
+      const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+      expect(res.json().data.credits_charged).toBe(453)
+      // An open hold stays null (not settled yet), whatever its readings settled.
+      row.usage_log_id = "ul-open"
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === "usage_logs") return usageLogsAnswer([{ id: "ul-open", status: "reserved", credits_used: 120, credits_charged: null }])
+        const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), is: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+        return chain as never
+      })
+      const open = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+      expect(open.json().data.credits_charged).toBeNull()
+    } finally {
+      sideCharges.map = new Map()
+    }
   })
 
   it("GET /v1/jobs/:id: null while the hold is open, 0 once refunded, null with no usage log", async () => {

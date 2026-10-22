@@ -27,23 +27,34 @@ import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { INK, NODE_COLORS, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
-import { creditUnitLabel, creditUnits, formatCreditUnits } from "@/lib/credit-units"
+import { formatCreditUnits } from "@/lib/credit-units"
+import { formatCreditsSuffix } from "@/hooks/use-llm-price"
 import { useRunFromHerePrice } from "@/hooks/use-run-from-here-credits"
 import { ugcPriceNoteKey } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { getPickerOutputMeta, PICKER_FAMILY_COLORS } from "@/lib/picker-handles"
 import type { TextPromptData } from "@/types/nodes"
 
 /** The "Run from here" price: the run's own estimate of everything downstream
- *  (useRunFromHerePrice), mounted only while the button shows. A UGC part
- *  whose server figure is not in, or not checked, marks it as an estimate and
- *  says why on hover, as every run price does. */
+ *  (useRunFromHerePrice), mounted only while the button shows. A figure that
+ *  is an estimate reads `~N`, as the Execute button's does: a UGC part whose
+ *  server figure is not in, or not checked (the hover says why), or a metered
+ *  LLM call charged its actual usage. A node the server refuses to price
+ *  (`llm_model_unpriced`) leaves the figure out: it says "not priced yet" instead,
+ *  with the server's sentence on hover. */
 function RunFromHereCredits({ nodeId }: { readonly nodeId: string }) {
   const t = useT()
-  const { credits, unchecked } = useRunFromHerePrice(nodeId)
+  const { credits, unchecked, approx, unpriced } = useRunFromHerePrice(nodeId)
+  if (unpriced) {
+    return (
+      <span className="ml-1 opacity-80" title={unpriced.message}>
+        {t("node.creditsSuffixUnpriced")}
+      </span>
+    )
+  }
   if (credits <= 0) return null
   return (
     <span className="ml-1 opacity-80" title={unchecked ? t(ugcPriceNoteKey(unchecked)) : undefined}>
-      {unchecked ? t("node.creditsSuffixEstimate", { n: creditUnits(credits), u: creditUnitLabel() }) : `(${formatCreditUnits(credits)})`}
+      {unchecked || approx ? formatCreditsSuffix(t, credits, true) : `(${formatCreditUnits(credits)})`}
     </span>
   )
 }

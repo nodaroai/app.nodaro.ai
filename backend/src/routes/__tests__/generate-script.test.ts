@@ -47,6 +47,8 @@ vi.mock("@/lib/request-helpers.js", () => ({
   extractForcePrivate: vi.fn().mockReturnValue(false),
 }))
 
+// D6: metered is the default; the rollback switch restores the tier id.
+const pricing = vi.hoisted(() => ({ rollback: false }))
 vi.mock("@/lib/config.js", () => ({
   config: {
     EDITION: "cloud",
@@ -55,10 +57,13 @@ vi.mock("@/lib/config.js", () => ({
   },
   isCloud: () => true,
   hasCredits: () => true,
+  llmMeteredPricing: () => !pricing.rollback,
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
 }))
+// The metered hold is marked up at the global 10%.
+vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({ cost_markup_percent: 10 })) }))
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
@@ -68,6 +73,8 @@ import { generateScriptRoutes } from "../generate-script.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { buildScriptRequest } from "../../providers/script/script-generator.js"
+import { llmHoldForCalls } from "../../ee/billing/llm-billing-impl.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -95,6 +102,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  pricing.rollback = false
   app = Fastify({ logger: false })
   // Simulate auth middleware: set req.userId from X-User-Id header or userId in body
   app.addHook("preHandler", async (req) => {
@@ -228,7 +236,24 @@ describe("POST /v1/generate-script", () => {
     )
   })
 
-  it("calls reserveCreditsForJob with correct model identifier", async () => {
+  it("reserves the metered hold of the request the worker sends, under generate-script:<model> (the legacy alias resolved)", async () => {
+    mockJobInsertSuccess()
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-script",
+      payload: { prompt: "Write a story", userId: TEST_USER_ID, provider: "claude", sceneCount: 4 },
+    })
+
+    const request = buildScriptRequest({ prompt: "Write a story", provider: "claude", sceneCount: 4, advanced: {}, brief: {}, lanes: {} })
+    const { chargeId, holdCredits } = await llmHoldForCalls("generate-script", [{ modelId: request.modelId, request }])
+    expect(chargeId).toBe("generate-script:claude-sonnet-4.6")
+    expect(reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), TEST_JOB_ID, chargeId, { holdCredits })
+  })
+
+  it("rollback: reserves the tier id exactly as before", async () => {
+    pricing.rollback = true
     mockJobInsertSuccess()
 
     await app.inject({
@@ -243,5 +268,6 @@ describe("POST /v1/generate-script", () => {
       TEST_JOB_ID,
       "generate-script",
     )
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]).toHaveLength(4)
   })
 })

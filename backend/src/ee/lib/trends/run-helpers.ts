@@ -20,6 +20,7 @@ import { withJobSubmissionContext } from "../../../lib/job-submission-context.js
 import { resolveWebSurfaceFlag } from "../../../middleware/credit-guard.js"
 import { redactPrivateJobData } from "../../../lib/public-job-data.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../../lib/job-credit-status.js"
+import { sideHoldChargesFor } from "../../../lib/job-step-charge.js"
 import { getPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import { sendInternalError } from "../../../lib/http-errors.js"
 import { isMissingTableError } from "../../../lib/postgrest-errors.js"
@@ -151,6 +152,7 @@ export function toTrendRun(
   raw: RunJobRow,
   fq: RunJobRow | undefined,
   credits: CreditStatusMap,
+  sideCharges: ReadonlyMap<string, number>,
   audience: RunAudience = "public",
 ): TrendRun | null {
   // Redaction first (drops every `__` key), then the whitelist below.
@@ -183,7 +185,7 @@ export function toTrendRun(
     draft,
     videoUrl: row.status === "completed" ? videoUrl : null,
     posterUrl: row.status === "completed" ? posterUrl : null,
-    creditsCharged: creditsChargedOf(row.usage_log_id, credits),
+    creditsCharged: creditsChargedOf(row.usage_log_id, credits, row.id, sideCharges),
     fullQuality: fqRow
       ? {
           jobId: fqRow.id,
@@ -224,12 +226,13 @@ export async function toTrendRuns(
   audience: RunAudience = "public",
 ): Promise<TrendRun[]> {
   if (page.length === 0) return []
-  const [fqByDraft, credits] = await Promise.all([
+  const [fqByDraft, credits, sideCharges] = await Promise.all([
     fullQualityByDraft(page.map((r) => r.id), owners),
     creditStatusMapFor(page.map((r) => r.usage_log_id)),
+    sideHoldChargesFor(page.map((r) => r.id)),
   ])
   return page.flatMap((r) => {
-    const run = toTrendRun(r, fqByDraft.get(r.id), credits, audience)
+    const run = toTrendRun(r, fqByDraft.get(r.id), credits, sideCharges, audience)
     return run ? [run] : []
   })
 }

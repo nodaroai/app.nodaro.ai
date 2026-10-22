@@ -10,7 +10,7 @@
  *    again." (TA15 a: a repeat re-bills every kept clip);
  *  - the gate's reason (nothing kept, the rule's issues, a newer run) or, while
  *    a run holds the review, "Rendering final… clip 3 of 6 · edits locked";
- *  - Close and Render final · {n} clips · ≈{credits}, behind the gate
+ *  - Close and Render final · {n} clips · ~{credits}, behind the gate
  *    (`reviewGate`) as the cut review's are, and only where Render final can
  *    go ahead (`canRenderFinal`: a use-case node's only on a Preview its own
  *    run made). A clip set's review offers no
@@ -72,11 +72,11 @@ export function ClipFooter({ cards, runs, chain, compact, onClose }: ClipFooterP
             className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
             disabled={disabled}
             aria-busy={runs.checking === "final" || undefined}
-            title={runs.finalCredits > 0 ? runPriceTitle(t, runs.finalUnchecked) : undefined}
+            title={runs.finalUnpriced || runs.finalCredits > 0 ? runPriceTitle(t, runs.finalUnchecked, runs.finalUnpriced) : undefined}
             onClick={runs.renderFinal}
           >
             {runs.checking === "final" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Film className="h-3 w-3" aria-hidden />}
-            {label}{runPriceSuffix(t, runs.finalCredits, runs.finalUnchecked, { approx: true })}
+            {label}{runPriceSuffix(t, runs.finalCredits, runs.finalUnchecked, { approx: true, unpriced: runs.finalUnpriced })}
           </button>
         )}
       </div>

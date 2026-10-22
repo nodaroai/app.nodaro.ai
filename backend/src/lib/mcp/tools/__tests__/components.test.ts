@@ -7,6 +7,12 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))
+// The listing's estimate flag is served only while metered LLM pricing is on.
+const metered = vi.hoisted(() => ({ on: true }))
+vi.mock("../../../config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../config.js")>()),
+  llmMeteredPricing: () => metered.on,
+}))
 
 const { registerComponents } = await import("../components.js")
 const { supabase } = await import("../../../supabase.js")
@@ -62,6 +68,26 @@ describe("list_components tool", () => {
     expect(result.isError).toBeUndefined()
     expect(result.content[0]?.text).toContain('"thumbnail-maker"')
     expect(result.content[0]?.text).toContain('"scope": "public"')
+  })
+
+  it("carries estimated_credits_is_estimate while metered (a `~N` listing), and drops it under the rollback", async () => {
+    const run = async () => {
+      chainResolves([{ id: "c1", slug: "writer", name: "Writer", estimated_credits: 6, estimated_credits_is_estimate: true, created_at: "2026-04-01T00:00:00Z" }])
+      const server = buildServer()
+      registerComponents({ server, session: newSession({ userId: "u1", scopes: ["workflows:read"] as Scope[], clientName: "Claude" }), fastify: Fastify() })
+      const result = await callTool(server, "list_components", { limit: 5 })
+      return (JSON.parse(result.content[0]!.text as string) as { data: Array<Record<string, unknown>> }).data[0]!
+    }
+    metered.on = true
+    expect(await run()).toMatchObject({ estimated_credits: 6, estimated_credits_is_estimate: true })
+    metered.on = false
+    try {
+      const off = await run()
+      expect(off.estimated_credits).toBe(6)
+      expect(off).not.toHaveProperty("estimated_credits_is_estimate")
+    } finally {
+      metered.on = true
+    }
   })
 
   it("does NOT register without workflows:read scope", async () => {

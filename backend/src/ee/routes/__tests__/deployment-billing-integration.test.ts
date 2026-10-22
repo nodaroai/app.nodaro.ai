@@ -135,7 +135,10 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false,
   hasCredits: () => true,
   hasAdmin: () => true,
+  // Tier pricing by default; one case below turns metered pricing on (Task 12).
+  llmMeteredPricing: () => meteredPricing.on,
 }))
+const meteredPricing = vi.hoisted(() => ({ on: false }))
 
 vi.mock("@/ee/billing/stripe-client.js", () => ({ getStripe: () => ({}) }))
 vi.mock("@/ee/billing/provision-credits.js", () => ({ ensureStripeCustomer: vi.fn() }))
@@ -146,6 +149,10 @@ vi.mock("@/ee/billing/credits.js", () => ({
     getModelCreditCost: (...a: unknown[]) => h.getModelCreditCost(...a),
   },
   PriceNotConfiguredError: h.PriceNotConfiguredError,
+  // A metered key is a text model's per-model key (`<feature>:<model>`), priced at its estimate.
+  meteredLlmPriceKey: (id: string) => (meteredPricing.on && /^llm-chat:|^ai-writer:/.test(id) ? { feature: id.split(":")[0], modelId: id.split(":")[1] } : null),
+  meteredLlmQuote: () => ({ kind: "estimate", credits: 5 }),
+  getChargedPriceTable: async () => ({ base: () => undefined, charge: (_id: string, credits: number) => credits }),
 }))
 
 vi.mock("@/ee/routes/credits.js", () => ({
@@ -1506,8 +1513,31 @@ describe("GET /pricing", () => {
     expect(body.missing).toEqual([])
     expect(body.data[0]).toMatchObject({ creditCost: 7, units: 14000, pricingBasis: "llm-chat-default-settings" })
     expect(body.data[0].pricing).toContainEqual(expect.objectContaining({ operation: "ai-writer", credits: 7, units: 14000 }))
+    // Rollback (tier pricing): nothing is an estimate.
+    expect(body.data[0]).not.toHaveProperty("estimate")
+    for (const p of body.data[0].pricing) expect(p).not.toHaveProperty("estimate")
     expect(body.denomination).toMatchObject({ credit: "nodaro_credit", displayUnitsPerCredit: 2000 })
     expect(body.purchaseOptions[0]).toMatchObject({ amount: 10, currency: "USD", credits: 3300 })
+  })
+
+  it("metered: a text model is priced at its per-model estimate, and its switches come from the feature row the reservation checks", async () => {
+    meteredPricing.on = true
+    try {
+      payerDeployment({}, { allow: ["claude-haiku-4.5"] })
+      tableResults.set("model_pricing:list", {
+        data: [{ model_identifier: "llm-chat", display_name: "LLM Chat", category: "text", is_enabled: false, updated_at: "2026-09-01T00:00:00.000Z" }],
+        error: null,
+      })
+      const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_KEY })
+      expect(res.statusCode).toBe(200)
+      const row = res.json().data[0]
+      expect(row).toMatchObject({ creditCost: 5, creditIdentifier: "llm-chat:claude-haiku-4.5", category: "text", isEnabled: false, estimate: true, updatedAt: "2026-09-01T00:00:00.000Z" })
+      expect(row.pricing).toContainEqual(expect.objectContaining({ operation: "ai-writer", identifier: "ai-writer:claude-haiku-4.5", credits: 5, estimate: true }))
+      // A tier-billed operation (Workflow Copilot, D4) is not an estimate.
+      expect(row.pricing.find((p: { operation: string }) => p.operation === "workflow-copilot")).not.toHaveProperty("estimate")
+    } finally {
+      meteredPricing.on = false
+    }
   })
 
   it("?since= returns only the rows changed after it — an empty list means nothing changed", async () => {

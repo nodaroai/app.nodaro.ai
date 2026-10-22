@@ -11,9 +11,17 @@ vi.mock("../../lib/location-caption.js", async () => {
   const actual = await vi.importActual<typeof import("../../lib/location-caption.js")>(
     "../../lib/location-caption.js",
   )
+  // The routes call captionLocationCall (the caption + the call behind it);
+  // it answers through the captionLocation mock so each case still sets the caption.
+  const captionLocation = vi.fn()
   return {
     ...actual,
-    captionLocation: vi.fn(),
+    captionLocation,
+    captionLocationCall: vi.fn(async (imageUrl: string) => ({
+      caption: await captionLocation(imageUrl),
+      request: actual.locationCaptionRequest(imageUrl),
+      outcome: { error: undefined },
+    })),
   }
 })
 vi.mock("../../lib/llm-client.js", () => ({ llmComplete: vi.fn() }))
@@ -23,10 +31,16 @@ vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock("../../lib/meter-sync-llm.js", () => ({ meterSyncLlm: vi.fn() }))
+vi.mock("../../lib/sync-llm-meter.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/sync-llm-meter.js")>()),
+  meterSyncLlm: vi.fn(),
+}))
 // CI has no .env so config.ANTHROPIC_API_KEY / KIE_API_KEY would be empty,
 // tripping the 503 provider_unavailable preflight. Mock as truthy.
 vi.mock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "test-key" },
 }))
 

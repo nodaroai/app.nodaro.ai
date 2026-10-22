@@ -7,16 +7,15 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import type { VideoComposerData } from "@/types/nodes"
 
 function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as VideoComposerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("scene-graph-ai", nodeData.llmModel || LLM_FEATURE_DEFAULTS["scene-graph-ai"], nodeData.reasoningEffort, nodeData.advancedMode === true), 10)
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("scene-graph-ai", nodeData, 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
@@ -39,13 +38,13 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Sparkles className="h-4 w-4" />}
       category="processing"
-      credits={credits}
+      credits={credits} creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={isRunning}
       hideHeader
       minWidth={220}
       topToolbarContent={
-        <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
         { id: "in",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

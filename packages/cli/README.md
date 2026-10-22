@@ -124,6 +124,7 @@ nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
+nodaro models cost <id…>                                # credits charged per id; a metered LLM key (llm-chat:<model>) prints ~N, an estimate
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
 nodaro pickers list                                     # all picker node types + option counts + pictures

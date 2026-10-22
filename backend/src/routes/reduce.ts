@@ -13,6 +13,9 @@ import {
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
 import { dispatchStrategy, EmptyInputError } from "../services/reduce-strategies/index.js"
+import { pickBestLlmModel, pickBestLlmRequest, type PickBestLlmContext } from "../services/reduce-strategies/pick-best-llm.js"
+import { LlmSpend, reserveLlmCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { finishMeteredSyncLlmJob, llmGuardPrecheck } from "../lib/meter-sync-llm.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -89,6 +92,12 @@ export function reduceProxyHooks(rawBody: unknown): CloudProxyHooks | undefined 
   }
 }
 
+/** The AI judge's model a raw body names, when it is a registry id (else the default prices it; Zod answers the rest). */
+function judgeModelOf(body: unknown): string | undefined {
+  const model = (body as { strategyConfig?: { llmModel?: unknown } } | undefined)?.strategyConfig?.llmModel
+  return typeof model === "string" && (LLM_MODEL_IDS as readonly string[]).includes(model) ? model : undefined
+}
+
 function reduceCreditIdentifier(body: unknown): string {
   const b = body as { strategyId?: unknown; strategyConfig?: { llmModel?: unknown } } | undefined
   const strategyId = String(b?.strategyId ?? "concat")
@@ -104,7 +113,15 @@ export async function reduceRoutes(app: FastifyInstance) {
       // dedup: false — the same upstream fan-in run may legitimately be invoked
       // multiple times in quick succession (loop iterations, retries) and we
       // never want two distinct runs to silently collapse into one.
-      preHandler: creditGuard((req) => reduceCreditIdentifier(req.body), { dedup: false }),
+      preHandler: creditGuard((req) => reduceCreditIdentifier(req.body), {
+        dedup: false,
+        // The AI judge bills metered (D1): its pre-check is the judge call's
+        // 1-attempt hold; every other strategy (and the rollback) prices its row.
+        computeCredits: (body) =>
+          requestedStrategy(body) === "pick-best-llm"
+            ? llmGuardPrecheck("reduce:pick-best-llm", body, { llmModel: judgeModelOf(body) })
+            : undefined,
+      }),
     },
     async (req, reply) => {
       // The AI judge is an LLM call: on a keyless install with a live
@@ -151,17 +168,53 @@ export async function reduceRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
-      if (reply.sent) return
+      // The AI judge bills metered: ONE call over every surviving candidate
+      // (the judge sees them all in one request), held at its 1-attempt hold.
+      // Every other strategy — and the judge under the rollback — reserves
+      // its row exactly as before.
+      const spend = new LlmSpend()
+      let reserve: Awaited<ReturnType<typeof reserveLlmCall>> = { metered: false }
+      if (strategyId === "pick-best-llm") {
+        const judge = {
+          criteria: typeof strategyConfig.criteria === "string" ? strategyConfig.criteria : "",
+          inputKind: strategyConfig.inputKind === "image-url" ? ("image-url" as const) : ("text" as const),
+          llmModel: typeof strategyConfig.llmModel === "string" ? strategyConfig.llmModel : undefined,
+        }
+        reserve = await reserveLlmCall(req, reply, job.id, {
+          feature: "reduce:pick-best-llm",
+          calls: [{ modelId: pickBestLlmModel(judge), request: pickBestLlmRequest(inputs, judge) }],
+        })
+        if (!reserve) return
+      }
+      let reservation: Awaited<ReturnType<typeof reserveCreditsForJob>>
+      if (reserve.metered) {
+        // The reconcile sweep's anchor (C3): an unsettled metered hold is found by it.
+        if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+      } else {
+        reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+      }
+      const strategyCtx: PickBestLlmContext = {
+        userId,
+        jobId: job.id,
+        logger: req.log,
+        ...(reserve.metered ? { onLlmCall: (modelId, request, outcome) => spend.add(modelId, request, outcome) } : {}),
+      }
 
       try {
         const { result, meta } = await dispatchStrategy(
           strategyId as ReduceStrategyId,
           inputs,
           strategyConfig,
-          { userId, jobId: job.id, logger: req.log },
+          strategyCtx,
         )
         const output = typeof result === "number" ? String(result) : result
+
+        if (reserve.metered) {
+          // Result first, then the settle (what the judge cost), then the terminal write.
+          await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "completed", outputData: { output, meta } })
+          return reply.send({ jobId: job.id, output, meta })
+        }
 
         await supabase
           .from("jobs")
@@ -182,13 +235,20 @@ export async function reduceRoutes(app: FastifyInstance) {
         const logged = { err: describeErrorChain(err), jobId: job.id }
         if (err instanceof EmptyInputError || isLlmProviderUnavailable(err)) req.log.warn(logged, "[reduce] not served")
         else req.log.error(logged, "[reduce] failed")
-        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
+        let replyMessage = message
+        if (reserve.metered) {
+          // A billed judge failure is charged its usage (and says so); an unbilled one is refunded.
+          const finished = await finishMeteredSyncLlmJob(job.id, reserve, spend, { status: "failed", errorMessage: message, outputData: { error: message } })
+          replyMessage = finished.errorMessage ?? message
+        } else {
+          await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
-        if (reservation?.usageLogId) await refundReservedCreditsForJob(job.id)
+          if (reservation?.usageLogId) await refundReservedCreditsForJob(job.id)
+        }
 
         if (err instanceof EmptyInputError) {
           return reply.status(400).send({
-            error: { code: "no_valid_inputs", message },
+            error: { code: "no_valid_inputs", message: replyMessage },
           })
         }
         // No LLM to judge with is configuration, not a crash — the same 503
@@ -196,11 +256,11 @@ export async function reduceRoutes(app: FastifyInstance) {
         // one shape.
         if (isLlmProviderUnavailable(err)) {
           return reply.status(503).send({
-            error: { code: "provider_unavailable", message },
+            error: { code: "provider_unavailable", message: replyMessage },
           })
         }
         return reply.status(500).send({
-          error: { code: "strategy_failed", message },
+          error: { code: "strategy_failed", message: replyMessage },
         })
       }
     },

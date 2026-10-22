@@ -117,12 +117,22 @@ describe("the Execute-workflow badge is the run's own estimate", () => {
     expect(src).toContain("useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges)")
     expect(src).toContain("ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf, ugcAnswers.ticketAnswerOf)")
     expect(src).toContain("setUgcPriceState(figure ? runSetPriceState(figure, ugcAnswers) : undefined)")
-    expect(src).toMatch(/ugcPriceState\s*\?\s*t\("node\.creditsSuffixEstimate"/)
+    // `~` before every estimate: an unchecked UGC figure reads `(~N CR)` like a metered one, the hover saying why.
+    expect(src).toContain("formatCreditsSuffix(t, workflowCreditEstimate, ugcPriceState !== undefined || workflowCreditEstimateIsApprox)")
+    expect(src).not.toContain("node.creditsSuffixEstimate")
     expect(src).toContain("title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}")
     expect(src).toContain("creditEstimate={workflowCreditEstimate}")
     // The Copilot's auto limit reads the whole run's hold, and why its UGC price is unchecked.
     expect(src).toContain("setWorkflowCreditHold(figure ? figure.hold : total)")
     expect(src).toContain("creditHold={workflowCreditHold}")
     expect(src).toContain("estimateUnchecked={ugcPriceState ?? null}")
+  })
+
+  it("a run with a node the server refuses to price: the badge says unpriced (the server's sentence on hover), never the figure that leaves it out", () => {
+    const src = readFileSync(join(__dirname, "../workflow-editor-main.tsx"), "utf8")
+    expect(src).toContain("setWorkflowCreditUnpriced(figure ? figure.unpriced : unpriced)")
+    expect(src).toMatch(/workflowCreditUnpriced && \(\s*\/\/[^\n]*\n\s*<span className="ms-2 opacity-80" title=\{workflowCreditUnpriced\.message\}>\s*\{t\("node\.creditsSuffixUnpriced"\)\}/)
+    // The figure shows only while nothing is unpriced.
+    expect(src).toContain("!workflowCreditUnpriced && workflowCreditEstimate > 0 && (")
   })
 })

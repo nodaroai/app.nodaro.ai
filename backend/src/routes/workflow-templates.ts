@@ -5,6 +5,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { estimateFlagColumn, listingEstimateFlag, selectWithEstimateFlag, writeWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import { usecaseViewerForEveryone } from "../lib/use-case/inner-availability.js"
 import { selectWithMax, writeWithMax } from "../lib/listing-max-columns.js"
 import { storedTemplateRange } from "../lib/app-listing-price.js"
@@ -253,6 +255,8 @@ function toCamelCase(row: Record<string, unknown>) {
     estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
     // "Up to" (decided 2026-10-14): present only when a choice the template's user has can cost more.
     ...storedTemplateRange(row as Record<string, number | null>),
+    // The listed price holds a metered LLM estimate (`~N`, only while metered pricing is on).
+    ...listingEstimateFlag(row),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -280,6 +284,8 @@ function toBrowseCard(row: Record<string, unknown>) {
     estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
     // "Up to" (decided 2026-10-14): present only when a choice the template's user has can cost more.
     ...storedTemplateRange(row as Record<string, number | null>),
+    // The listed price holds a metered LLM estimate: the card shows it `~N` (only while metered pricing is on).
+    ...listingEstimateFlag(row),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -456,8 +462,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
 
       return query
     }
-    const { data: rows, error } = await selectWithMax<Record<string, unknown>[]>("workflow_templates", selectCols, (columns) =>
-      selectWithPerMinute<Record<string, unknown>[]>("workflow_templates", columns, buildQuery, "listed"), "listed")
+    // With the estimate flag (migration 553), unless it has not reached this database yet.
+    const { data: rows, error } = await selectWithEstimateFlag<Record<string, unknown>[]>("workflow_templates", selectCols, (flagCols) =>
+      selectWithMax<Record<string, unknown>[]>("workflow_templates", flagCols, (columns) =>
+        selectWithPerMinute<Record<string, unknown>[]>("workflow_templates", columns, buildQuery, "listed"), "listed"))
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to browse templates")
@@ -591,33 +599,52 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // never does); any other publish reads and writes exactly what it did before.
     const holdsUgcVideo = nodes.some((n) => typeof n.type === "string" && UGC_NODE_TYPES.has(n.type))
     const keepRun = holdsUgcVideo && (includeRunResults ?? (existingTemplate ? await snapshotKeepsRun(existingTemplate.id as string) : false))
+    // Priced BEFORE anything is copied (R49/R51): the listing reads the graph WITHOUT the kept run
+    // (`pricedNodes`), so a pass that copies nothing prices exactly what the keeping pass would, and a
+    // publish refused for a metered LLM model with no price has written and billed no storage. Only a
+    // publish that keeps a run makes the second, copying pass.
+    type PublishEdges = Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>
+    const funnelOptions = { failOnError: true, settings: workflow.settings as Record<string, unknown> | null }
     let published: UgcPublishedGraph<(typeof nodes)[number]>
     try {
-      published = await ugcPublishedGraph(nodes, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, workflow.user_id, {
-        failOnError: true,
-        settings: workflow.settings as Record<string, unknown> | null,
-        ...(keepRun ? { keepRunResults: { copy: (address: string) => copyToTemplateKept(address, templateId, userId) } } : {}),
-      })
+      published = await ugcPublishedGraph(nodes, edges as PublishEdges, workflow.user_id, funnelOptions)
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to publish template")
     }
-    const snapshotNodes = published.nodes
-    const keptResults = published.kept ?? { included: false, reason: includeRunResults && !holdsUgcVideo ? ("no_ugc_video" as const) : ("not_requested" as const) }
     const pricedNodes = published.pricedNodes
     const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, pricedNodes as unknown as EstimateNode[])
     // A range (decided 2026-10-14): "from" the saved settings, "up to" the most a
     // run can cost over the template's exposed fields.
-    const listing = await estimateWorkflowListingCredits(pricedNodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
-      publishType: "template",
-      speechTextCaps,
-      // A template's cloner replaces every upload node, whatever this says: its
-      // sample recording's length is not theirs (decided 2026-10-07).
-      replaceableMediaNodeIds: exposedMediaNodeIds(null, pricedNodes as unknown as EstimateNode[]),
-      snapshotSettings: published.settings as Record<string, unknown> | null,
-      // Shown to everyone: a general user's run — several recordings only while Speaker Map is every
-      // user's, an `auto` framing source as the even split while Speaker Frames is not (decided 2026-10-20).
-      ...usecaseViewerForEveryone(pricedNodes as unknown as EstimateNode[]),
-    })
+    let listing: Awaited<ReturnType<typeof estimateWorkflowListingCredits>>
+    try {
+      listing = await estimateWorkflowListingCredits(pricedNodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
+        publishType: "template",
+        speechTextCaps,
+        // A template's cloner replaces every upload node, whatever this says: its
+        // sample recording's length is not theirs (decided 2026-10-07).
+        replaceableMediaNodeIds: exposedMediaNodeIds(null, pricedNodes as unknown as EstimateNode[]),
+        snapshotSettings: published.settings as Record<string, unknown> | null,
+        // Shown to everyone: a general user's run — several recordings only while Speaker Map is every
+        // user's, an `auto` framing source as the even split while Speaker Frames is not (decided 2026-10-20).
+        ...usecaseViewerForEveryone(pricedNodes as unknown as EstimateNode[]),
+      })
+    } catch (err) {
+      // A metered LLM model with no price (R49): nothing is listed at a price its run would refuse.
+      if (await replyIfLlmUnpriced(reply, err)) return reply
+      throw err
+    }
+    if (keepRun) {
+      try {
+        published = await ugcPublishedGraph(nodes, edges as PublishEdges, workflow.user_id, {
+          ...funnelOptions,
+          keepRunResults: { copy: (address: string) => copyToTemplateKept(address, templateId, userId) },
+        })
+      } catch (err) {
+        return sendInternalError(reply, req, err, "Failed to publish template")
+      }
+    }
+    const snapshotNodes = published.nodes
+    const keptResults = published.kept ?? { included: false, reason: includeRunResults && !holdsUgcVideo ? ("no_ugc_video" as const) : ("not_requested" as const) }
     const estimatedCredits = listing.preview + listing.final
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
     const estimatedPerMinuteCredits = listing.previewPerMinute + listing.finalPerMinute
@@ -689,6 +716,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         node_count: nodeCount,
         complexity,
         estimated_credits: estimatedCredits,
+        // The listed price holds a metered LLM estimate (shown `~N`, Task 12 / R47).
+        ...estimateFlagColumn(listing),
         estimated_per_minute_credits: estimatedPerMinuteCredits,
         ...maxColumns,
         category: category ?? DEFAULT_TEMPLATE_CATEGORY,
@@ -724,9 +753,12 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       // different `slug`: a published template's link stays stable. (`slug` only matters to a NEW
       // template; see templateSlugCandidate.)
 
-      const { data: updated, error: updateError } = await writeWithMax("workflow_templates", updates, (withMax) =>
-        writeWithPerMinute("workflow_templates", withMax, (row) =>
-          supabase.from("workflow_templates").update(row).eq("id", existingTemplate.id).select().single(),
+      // The estimate flag drops out until migration 553 reaches this database.
+      const { data: updated, error: updateError } = await writeWithEstimateFlag("workflow_templates", updates, (flagged) =>
+        writeWithMax("workflow_templates", flagged, (withMax) =>
+          writeWithPerMinute("workflow_templates", withMax, (row) =>
+            supabase.from("workflow_templates").update(row).eq("id", existingTemplate.id).select().single(),
+          ),
         ),
       )
 
@@ -766,7 +798,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       // unique violation) falls back to its suffixed form on the next pass.
       const slug = templateSlugCandidate(providedSlug, name, attempt)
 
-      const result = await writeWithMax("workflow_templates", {
+      const result = await writeWithEstimateFlag("workflow_templates", {
           id: newTemplateId,
           workflow_id: workflowId,
           creator_id: userId,
@@ -782,6 +814,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           node_count: nodeCount,
           complexity,
           estimated_credits: estimatedCredits,
+          // The listed price holds a metered LLM estimate (shown `~N`, Task 12 / R47).
+          ...estimateFlagColumn(listing),
           estimated_per_minute_credits: estimatedPerMinuteCredits,
           ...maxColumns,
           category: category ?? DEFAULT_TEMPLATE_CATEGORY,
@@ -791,7 +825,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           preview_media_type: durablePreviewType,
           listed_in: initialListed,
           creator_display_name: creatorDisplayName,
-        }, (withMax) => writeWithPerMinute("workflow_templates", withMax, (row) => supabase.from("workflow_templates").insert(row).select().single()))
+        }, (flagged) => writeWithMax("workflow_templates", flagged, (withMax) => writeWithPerMinute("workflow_templates", withMax, (row) => supabase.from("workflow_templates").insert(row).select().single())))
 
       if (!result.error) {
         publishedTemplate = result.data

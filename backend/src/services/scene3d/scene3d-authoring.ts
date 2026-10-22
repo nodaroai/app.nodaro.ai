@@ -33,6 +33,9 @@ import type {
   VideoAnalysisResult,
 } from "@nodaro/shared/video"
 import { llmCompleteStructured, type LlmMessage } from "../../lib/llm-client.js"
+import { structuredJsonSchema, type StructuredLlmOutput } from "../../lib/llm/structured.js"
+import type { LlmContentBlock, LlmRequest } from "../../lib/llm/types.js"
+import type { LlmSpend } from "../../lib/llm-billing.js"
 import {
   draftToScene3DPlan,
   scene3DDraftEditSchema,
@@ -42,7 +45,10 @@ import {
 import { scene3DEditSystemPrompt, scene3DGenerateSystemPrompt } from "./scene3d-prompts.js"
 import {
   buildScene3DUserContent,
+  describeScene3DReferences,
   mergeScene3DReferences,
+  scene3DPresentedReferences,
+  scene3DReferenceLabel,
   scene3DImageModalityError,
   scene3DReferenceBindingError,
   withScene3DReferences,
@@ -79,6 +85,14 @@ interface CommonInput {
   analysis?: VideoAnalysisResult
   /** Which video reference `analysis` describes. Absent = the first one. */
   analyzedReferenceId?: string
+  /**
+   * The job's metered spend: EVERY planner call is recorded on it — each
+   * revision's answer, and a failure's billed attempts — so the worker
+   * settles the summed cost, not the first call alone.
+   */
+  spend?: Pick<LlmSpend, "add">
+  /** Called after each answered call (the worker records the spend so far on the row). */
+  afterCall?: () => Promise<void>
 }
 
 export interface GenerateScenePlanInput extends CommonInput {
@@ -103,6 +117,105 @@ export interface EditScenePlanInput extends CommonInput {
 function routeParams() {
   const defaults = LLM_ROUTE_DEFAULTS["3d-scene"] ?? {}
   return { temperature: defaults.temperature, maxTokens: defaults.maxTokens }
+}
+
+/** The generate brief — one text for the call and its hold. */
+function generateBrief(input: Pick<GenerateScenePlanInput, "prompt" | "width" | "height" | "fps" | "durationInFrames">): string {
+  return [
+    `BRIEF\n${input.prompt}`,
+    `FRAME\n${input.width}x${input.height} at ${input.fps} fps, ${input.durationInFrames} frames (${(
+      input.durationInFrames / input.fps
+    ).toFixed(2)}s). Every keyframe must be an integer in 0..${input.durationInFrames - 1}.`,
+  ].join("\n\n")
+}
+
+/** The edit context — one text for the call and its hold. */
+function editContext(
+  input: Pick<EditScenePlanInput, "instruction" | "plan" | "lockedObjectIds" | "selectedObjectIds">,
+  references: readonly Scene3DReference[],
+): string {
+  return [
+    `INSTRUCTION\n${input.instruction}`,
+    `CURRENT SCENE (JSON)\n${planForModel(withScene3DReferences(input.plan, references))}`,
+    `FRAME\n${input.plan.width}x${input.plan.height} at ${input.plan.fps} fps, ${input.plan.durationInFrames} frames. Every keyframe must be an integer in 0..${input.plan.durationInFrames - 1}.`,
+    input.lockedObjectIds.length > 0
+      ? `LOCKED (must not change in any way): ${input.lockedObjectIds.join(", ")}`
+      : "LOCKED: nothing",
+    input.selectedObjectIds.length > 0
+      ? `SELECTED (what the user is looking at — this is what "it"/"this" refers to, not permission to change anything else): ${input.selectedObjectIds.join(", ")}`
+      : "SELECTED: nothing",
+  ].join("\n\n")
+}
+
+/**
+ * The first planner call as the metered hold sizes it (D1): the same system
+ * prompt, brief, reference list, labels, schema and output cap the call is
+ * sent with — each image as a URL block (counted as one image, never
+ * fetched or encoded at reserve time). The video analysis is not known when
+ * the hold is reserved (its child job has not run yet), so it is not held:
+ * the settle collects it, with any revision.
+ */
+function holdRequest(
+  args: { llmModel: string; reasoningEffort?: LlmReasoningEffort; references: readonly Scene3DReference[] },
+  system: string,
+  text: string,
+  schemaName: string,
+  schema: Parameters<typeof structuredJsonSchema>[0],
+): LlmRequest {
+  const { images } = scene3DPresentedReferences({ references: args.references })
+  const description = describeScene3DReferences(images)
+  const blocks: LlmContentBlock[] = [{ type: "text", text: description ? `${text}\n\n${description}` : text }]
+  for (const image of images) {
+    blocks.push({ type: "text", text: scene3DReferenceLabel(image) })
+    blocks.push({ type: "image", url: image.url })
+  }
+  return {
+    modelId: args.llmModel,
+    system,
+    messages: [{ role: "user", content: blocks }],
+    reasoningEffort: args.reasoningEffort,
+    timeoutMs: SCENE3D_LLM_TIMEOUT_MS,
+    ...routeParams(),
+    jsonSchema: { name: schemaName, schema: structuredJsonSchema(schema) },
+  }
+}
+
+/** The metered hold request of a Generate 3D Scene (see {@link holdRequest}). */
+export function scene3DGenerateHoldRequest(
+  input: Pick<GenerateScenePlanInput, "prompt" | "width" | "height" | "fps" | "durationInFrames" | "llmModel" | "reasoningEffort" | "references">,
+): LlmRequest {
+  return holdRequest(input, scene3DGenerateSystemPrompt(), generateBrief(input), "scene3d_plan", scene3DDraftPlanSchema)
+}
+
+/** The metered hold request of an instruction Edit 3D Scene (see {@link holdRequest}), over the MERGED reference set the edit shows. */
+export function scene3DEditHoldRequest(
+  input: Pick<EditScenePlanInput, "plan" | "instruction" | "lockedObjectIds" | "selectedObjectIds" | "llmModel" | "reasoningEffort" | "references" | "replaceReferences">,
+): LlmRequest {
+  const references = mergeScene3DReferences(input.plan.references, input.references, input.replaceReferences)
+  return holdRequest({ ...input, references }, scene3DEditSystemPrompt(), editContext(input, references), "scene3d_edit", scene3DDraftEditSchema)
+}
+
+/**
+ * One planner call, recorded on the job's spend: the answer (every attempt
+ * `llmCompleteStructured` made for it), or a failure's billed attempts before
+ * the error propagates.
+ */
+async function plannerCall<T>(
+  input: CommonInput,
+  request: Parameters<typeof llmCompleteStructured>[0],
+  schema: Parameters<typeof llmCompleteStructured<T>>[1],
+  schemaName: string,
+): Promise<StructuredLlmOutput<T>> {
+  let completion: StructuredLlmOutput<T>
+  try {
+    completion = await llmCompleteStructured(request, schema, { schemaName })
+  } catch (err) {
+    input.spend?.add(input.llmModel, request, { error: err })
+    throw err
+  }
+  input.spend?.add(input.llmModel, request, { output: completion as StructuredLlmOutput<unknown> })
+  await input.afterCall?.()
+  return completion
 }
 
 /** The scene as the model sees it on an edit: everything except our identity
@@ -144,12 +257,7 @@ export async function generateScenePlan(input: GenerateScenePlanInput): Promise<
   // a thing that can happen quietly.
   const modalityError = scene3DImageModalityError(input.llmModel, input.references)
   if (modalityError) throw new Error(modalityError)
-  const brief = [
-    `BRIEF\n${input.prompt}`,
-    `FRAME\n${input.width}x${input.height} at ${input.fps} fps, ${input.durationInFrames} frames (${(
-      input.durationInFrames / input.fps
-    ).toFixed(2)}s). Every keyframe must be an integer in 0..${input.durationInFrames - 1}.`,
-  ].join("\n\n")
+  const brief = generateBrief(input)
 
   let messages: LlmMessage[] = [
     {
@@ -168,7 +276,8 @@ export async function generateScenePlan(input: GenerateScenePlanInput): Promise<
   let lastRefusal = ""
 
   for (let attempt = 0; attempt <= SCENE3D_MAX_REVISIONS; attempt++) {
-    const completion = await llmCompleteStructured(
+    const completion = await plannerCall(
+      input,
       {
         modelId: input.llmModel,
         system: scene3DGenerateSystemPrompt(),
@@ -178,7 +287,7 @@ export async function generateScenePlan(input: GenerateScenePlanInput): Promise<
         ...routeParams(),
       },
       scene3DDraftPlanSchema,
-      { schemaName: "scene3d_plan" },
+      "scene3d_plan",
     )
     usage.inputTokens += completion.inputTokens
     usage.outputTokens += completion.outputTokens
@@ -219,17 +328,7 @@ export async function editScenePlan(input: EditScenePlanInput): Promise<Scene3DA
   const references = mergeScene3DReferences(input.plan.references, input.references, input.replaceReferences)
   const modalityError = scene3DImageModalityError(input.llmModel, references)
   if (modalityError) throw new Error(modalityError)
-  const context = [
-    `INSTRUCTION\n${input.instruction}`,
-    `CURRENT SCENE (JSON)\n${planForModel(withScene3DReferences(input.plan, references))}`,
-    `FRAME\n${input.plan.width}x${input.plan.height} at ${input.plan.fps} fps, ${input.plan.durationInFrames} frames. Every keyframe must be an integer in 0..${input.plan.durationInFrames - 1}.`,
-    input.lockedObjectIds.length > 0
-      ? `LOCKED (must not change in any way): ${input.lockedObjectIds.join(", ")}`
-      : "LOCKED: nothing",
-    input.selectedObjectIds.length > 0
-      ? `SELECTED (what the user is looking at — this is what "it"/"this" refers to, not permission to change anything else): ${input.selectedObjectIds.join(", ")}`
-      : "SELECTED: nothing",
-  ].join("\n\n")
+  const context = editContext(input, references)
 
   let messages: LlmMessage[] = [
     {
@@ -248,7 +347,8 @@ export async function editScenePlan(input: EditScenePlanInput): Promise<Scene3DA
   let lastRefusal = ""
 
   for (let attempt = 0; attempt <= SCENE3D_MAX_REVISIONS; attempt++) {
-    const completion = await llmCompleteStructured(
+    const completion = await plannerCall(
+      input,
       {
         modelId: input.llmModel,
         system: scene3DEditSystemPrompt(),
@@ -258,7 +358,7 @@ export async function editScenePlan(input: EditScenePlanInput): Promise<Scene3DA
         ...routeParams(),
       },
       scene3DDraftEditSchema,
-      { schemaName: "scene3d_edit" },
+      "scene3d_edit",
     )
     usage.inputTokens += completion.inputTokens
     usage.outputTokens += completion.outputTokens

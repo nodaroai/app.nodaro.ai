@@ -12,7 +12,7 @@
  * (`nodeFanOut`) and the providers it runs (`nodeProviders`, each at its own
  * price).
  *
- * A graph whose render is set to Preview — the four podcast templates (decided
+ * A graph whose render is set to Preview — the podcast templates (decided
  * 2026-10-08) — is listed in two parts, and each part is one of those quotes:
  * its preview part is the run estimate of a whole run (the whole graph at its
  * saved settings), its final part the run estimate of its Render final (the
@@ -30,7 +30,7 @@
  * render and quotes less than the preview part; a describe pins that figure
  * for each template.
  *
- * The sync writes the four with their render at Preview only where the rule
+ * The sync writes the hand-built ones with their render at Preview only where the rule
  * is on (decided 2026-10-08, `templateForPreviewStopRule`); where it is off it
  * writes the render at Final, and the graph it writes, listing included,
  * quotes one figure again: the last describe pins it.
@@ -48,7 +48,7 @@ import { fileURLToPath } from "node:url"
 import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
 import { EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanMinutesBaseCredits, editPlanRateCreditId, parseEditPlanMinutesCreditId } from "@nodaro/shared/edl"
 import { videoSfxCreditId } from "@nodaro/shared/credits"
-import { withRunOverrides } from "@nodaro/shared/nodes"
+import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -85,7 +85,7 @@ const fixture = JSON.parse(readFileSync(join(here, "fixtures", "run-estimate-par
  *  it is listed in two parts like the others, but its review is the node's own
  *  setting, which the preview stop rule's sync never changes. */
 const ONE_NODE = "podcast-tighten-episode-one-node"
-const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", ONE_NODE, "podcast-trailer-formats"]
+const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", ONE_NODE, "podcast-trailer-formats", "podcast-vertical-speaker-clip"]
 /** The templates the sync writes at Final where the preview stop rule is off. */
 const FLIPPED = PODCAST.filter((slug) => slug !== ONE_NODE)
 const docs = new Map(
@@ -122,18 +122,27 @@ function useCaseFinalEstimate({ nodes, edges }: Graph, nodeId: string): number {
   return CreditsService.estimateWorkflowBaseCredits(overridden, edges, { runNodeIds: new Set([nodeId]) })
 }
 
-/** A template's one review step: its Apply EDL at Preview, or its Tighten
+/** A template's render: Apply EDL, or Speaker View in the vertical speaker
+ *  clip — a render node of the registry either way. */
+const isRender = (n: Node): boolean => PREVIEW_RENDER_NODE_TYPES.has(n.type)
+
+/** The review step the fixture expects of a template: its render at Preview,
+ *  or its Tighten Episode set to review first. */
+const expectedReviewStep = (slug: string): string =>
+  slug === ONE_NODE ? "tighten-episode:review on" : `${templates.get(slug)!.nodes.find(isRender)!.type}:proxy`
+
+/** A template's one review step: its render at Preview, or its Tighten
  *  Episode set to review first. */
 function reviewStep({ nodes }: Graph): string[] {
   return [
-    ...nodes.filter((n) => n.type === "apply-edl").map((n) => `apply-edl:${String(n.data?.quality)}`),
+    ...nodes.filter(isRender).map((n) => `${n.type}:${String(n.data?.quality)}`),
     ...nodes.filter((n) => n.type === "tighten-episode").map((n) => `tighten-episode:review ${n.data?.reviewBeforeRender === true ? "on" : "off"}`),
   ]
 }
 
 /** The run estimate of a template's Render final, through whichever step reviews. */
 function templateFinalEstimate(graph: Graph): number {
-  const render = graph.nodes.find((n) => n.type === "apply-edl")
+  const render = graph.nodes.find(isRender)
   if (render) return renderFinalEstimate(graph, render.id)
   return useCaseFinalEstimate(graph, graph.nodes.find((n) => n.type === "tighten-episode")!.id)
 }
@@ -187,7 +196,7 @@ describe("a template's Render final quotes the listing's final part", () => {
     const graph = templates.get(slug)!
     // One render, set to Preview (decided 2026-10-08), or one Tighten Episode
     // set to review first: the run stops at it.
-    expect(reviewStep(graph), slug).toEqual([slug === ONE_NODE ? "tighten-episode:review on" : "apply-edl:proxy"])
+    expect(reviewStep(graph), slug).toEqual([expectedReviewStep(slug)])
     expect(templateFinalEstimate(graph), `${slug}: Render final run estimate`).toBe(fixture.templateFinals[slug])
   })
 })
@@ -364,7 +373,7 @@ describe("the template the sync writes, in each state of the preview stop rule",
     stopRule.on = true
     const doc = templateForPreviewStopRule(docs.get(slug)!, true)
     const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
-    expect(reviewStep({ nodes, edges }), slug).toEqual([slug === ONE_NODE ? "tighten-episode:review on" : "apply-edl:proxy"])
+    expect(reviewStep({ nodes, edges }), slug).toEqual([expectedReviewStep(slug)])
     expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
     expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(fixture.templates[slug]! + fixture.templateFinals[slug]!)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(fixture.templateRunsWithStopRule[slug])
@@ -374,7 +383,7 @@ describe("the template the sync writes, in each state of the preview stop rule",
     const doc = templateForPreviewStopRule(docs.get(slug)!, false)
     const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
     const credits = fixture.templatesSyncedWithoutStopRule[slug]!
-    expect(nodes.filter((n) => n.type === "apply-edl").map((n) => n.data?.quality), slug).toEqual(["final"])
+    expect(nodes.filter(isRender).map((n) => n.data?.quality), slug).toEqual(["final"])
     expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: credits, final: 0 })
     expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(credits)

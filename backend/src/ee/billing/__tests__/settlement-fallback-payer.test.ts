@@ -14,21 +14,32 @@ const h = vi.hoisted(() => {
     rpcCalls: [] as Array<{ fn: string; args: Record<string, unknown> }>,
     updates: [] as Array<Record<string, unknown>>,
     usageLogRow: {} as Record<string, unknown>,
+    /** The commit fallback's payer read answers this error (Imp3). */
+    payerReadError: null as { message: string } | null,
+    /** Every insert, by table. */
+    inserts: [] as Array<{ table: string; row: Record<string, unknown> }>,
+    /** A side hold's own row (554), read for its job. */
+    sideHoldRow: null as Record<string, unknown> | null,
   }
-  const chain = (result: () => unknown) => {
+  const PAYER_COLUMNS = "workspace_id, metadata, on_behalf_of, credits_used"
+  const chain = (result: () => unknown, table = "") => {
     const obj: Record<string, unknown> = {}
-    for (const m of ["select", "eq", "insert"]) obj[m] = vi.fn(() => obj)
+    let columns = ""
+    obj.eq = vi.fn(() => obj)
+    obj.insert = vi.fn((row: Record<string, unknown>) => (state.inserts.push({ table, row }), obj))
+    obj.select = vi.fn((c: string) => ((columns = c), obj))
     obj.update = vi.fn((patch: Record<string, unknown>) => {
       state.updates.push(patch)
       return obj
     })
     obj.single = vi.fn(async () => ({ data: result(), error: null }))
-    obj.maybeSingle = vi.fn(async () => ({ data: result(), error: null }))
+    obj.maybeSingle = vi.fn(async () =>
+      columns === PAYER_COLUMNS && state.payerReadError ? { data: null, error: state.payerReadError } : { data: result(), error: null })
     return obj
   }
   return {
     state,
-    from: vi.fn(() => chain(() => state.usageLogRow)),
+    from: vi.fn((table: string) => chain(() => (table === "llm_side_holds" ? state.sideHoldRow : state.usageLogRow), table)),
     rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ fn, args })
       // The settlement RPCs fail; everything else (add_*_credits) succeeds.
@@ -48,6 +59,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.state.rpcCalls.length = 0
   h.state.updates.length = 0
+  h.state.payerReadError = null
+  h.state.inserts.length = 0
+  h.state.sideHoldRow = null
 })
 
 describe("workspace-paid rows are NEVER settled by the TS fallbacks", () => {
@@ -72,6 +86,21 @@ describe("workspace-paid rows are NEVER settled by the TS fallbacks", () => {
     expect(h.state.updates).toHaveLength(0)
   })
 
+  it("commit fallback: a payer read that ERRORS is never read as a personal payer — no flip, the row stays reserved", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    h.state.usageLogRow = { workspace_id: "ws-1", credits_used: 40 }
+    h.state.payerReadError = { message: "statement timeout" }
+    await CreditsService.commitCredits("log-unread", 12)
+    expect(h.state.updates).toHaveLength(0)
+  })
+
+  it("commit fallback: a payer row that is missing is refused too", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    h.state.usageLogRow = null as unknown as Record<string, unknown>
+    await CreditsService.commitCredits("log-gone", 12)
+    expect(h.state.updates).toHaveLength(0)
+  })
+
   it("personal rows keep the old fallback behavior — the zero-split branch restores to topup", async () => {
     h.state.usageLogRow = {
       user_id: "u-1",
@@ -84,6 +113,28 @@ describe("workspace-paid rows are NEVER settled by the TS fallbacks", () => {
     await CreditsService.refundCredits("log-personal")
     const topup = h.state.rpcCalls.find((c) => c.fn === "add_topup_credits")
     expect(topup?.args).toMatchObject({ p_user_id: "u-1", p_credits: 40 })
+  })
+
+  it("refund link: a SIDE hold's refund line names the job its side-hold row records (its log carries none)", async () => {
+    h.state.usageLogRow = { user_id: "u-1", job_id: null, credits_used: 4, status: "reserved", metadata: { from_sub: 4, reservation_mode: "side" }, workspace_id: null }
+    h.state.sideHoldRow = { job_id: "j-clip" }
+    await CreditsService.refundCredits("log-side")
+    const line = h.state.inserts.find((i) => i.table === "credit_transactions")?.row
+    expect(line).toMatchObject({ source: "refund", amount: 4, job_id: "j-clip" })
+  })
+
+  it("refund link: a job's own log keeps its own job id (no side-hold read)", async () => {
+    h.state.usageLogRow = { user_id: "u-1", job_id: "j-1", credits_used: 4, status: "reserved", metadata: { from_sub: 4 }, workspace_id: null }
+    h.state.sideHoldRow = { job_id: "j-other" }
+    await CreditsService.refundCredits("log-own")
+    expect(h.state.inserts.find((i) => i.table === "credit_transactions")?.row).toMatchObject({ job_id: "j-1" })
+  })
+
+  it("personal commit fallback flips the row AND records credits_charged = the whole hold it kept", async () => {
+    h.state.usageLogRow = { user_id: "u-1", job_id: "j-1", credits_used: 40, status: "reserved", metadata: {}, workspace_id: null }
+    await CreditsService.commitCredits("log-personal", 12)
+    // the fallback refunds no surplus, so the payer was charged the whole hold
+    expect(h.state.updates).toEqual([{ status: "committed", credits_charged: 40 }])
   })
 })
 

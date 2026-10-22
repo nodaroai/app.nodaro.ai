@@ -19,6 +19,11 @@ export interface TutorialTemplateDoc {
    *  the input recording's length (decided 2026-10-07): `estimatedCredits` is
    *  then the fixed part. Absent → 0, no per-minute part. */
   estimatedPerMinuteCredits?: number
+  /** The listing holds a metered LLM call's estimate (Task 12 / R47): the
+   *  template card shows `estimatedCredits` as `~N` while metered pricing is
+   *  on. Held to the listing estimator's own flag by
+   *  `template-listing-prices.test.ts`. Absent → a fixed price. */
+  estimatedCreditsIsEstimate?: boolean
   /** What the sync writes where the preview stop rule
    *  (`PREVIEW_STOP_RULE_ENABLED`) is off (decided 2026-10-08): each render
    *  set to Preview written at Final (see preview-gate.ts), with the listing

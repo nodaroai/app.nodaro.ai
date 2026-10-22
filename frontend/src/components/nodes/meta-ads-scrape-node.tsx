@@ -9,7 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useScrapeNodeCredits } from "./use-scrape-node-credits"
+import { useScrapeAnalysisCredits, useScrapeNodeCredits } from "./use-scrape-node-credits"
 import { getVideoProxyUrl } from "@/lib/api"
 import { META_ADS_PLATFORMS, META_ADS_SCRAPE_DEFAULT_COUNT, metaAdsAdvertisersFrom, metaAdsNodeMode, splitMetaAdsPageUrls, type MetaAdsNodeMode } from "@nodaro/shared/social"
 import type { MetaAdsScrapeNodeData } from "@/types/nodes"
@@ -368,7 +368,10 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
 
   const mode = metaAdsNodeMode(nodeData.mode)
-  const credits = useScrapeNodeCredits(id, "meta-ads-scrape", nodeData)
+  const scrapeCredits = useScrapeNodeCredits(id, "meta-ads-scrape", nodeData)
+  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `~`.
+  const analysisCredits = useScrapeAnalysisCredits("meta-ads-scrape", nodeData)
+  const credits = analysisCredits?.credits ?? scrapeCredits
   const state = deriveMetaAdsScrapeCardState(nodeData)
   const running = state.kind === "running"
   const hasAge = state.kind !== "never-ran" && !running && "at" in state && state.at !== undefined
@@ -474,7 +477,7 @@ function MetaAdsScrapeNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         className={state.kind === "never-ran" ? "border-dashed" : undefined}
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={credits} isRunning={running} onRun={(nid) => runSingleNode?.(nid)} />
+          <RunNodeButton nodeId={id} credits={credits} creditsEstimate={analysisCredits?.estimate === true} isRunning={running} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={HANDLES}
       >

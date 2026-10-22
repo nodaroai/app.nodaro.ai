@@ -16,6 +16,8 @@ import {
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { registerEntityReadTools, CREATURE_READ_CONFIG } from "./_entity-reads.js"
+import { meteredLlmPriceSentence } from "./_credit-hint.js"
+import { CREATURE_CAPTION_MODEL } from "../../creature-caption.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -122,7 +124,9 @@ function registerWriteTools(opts: RegisterCreatureToolsOpts): void {
         "— mismatch returns a `candidate_creature_mismatch` error. Pass " +
         "`expected_updated_at` from the studio snapshot to enable " +
         "optimistic-concurrency control: a stale token surfaces as a " +
-        "`concurrent_modification` error so the caller can re-fetch + retry.",
+        "`concurrent_modification` error so the caller can re-fetch + retry. " +
+        `The caption is billed. ${meteredLlmPriceSentence("prompt-helper", CREATURE_CAPTION_MODEL)} ` +
+        "An approval is never refused for credits: with too little balance for the caption, the caption is skipped (the main image is still set) and `recaption_creature` writes it later.",
       inputSchema: {
         creature_id: z.string().uuid().describe("The creature id (uuid)."),
         candidate_job_id: z
@@ -201,7 +205,8 @@ function registerWriteTools(opts: RegisterCreatureToolsOpts): void {
         "`caption_failed` on LLM failure (frontend keeps a retry button " +
         "visible). Differs from `approve_creature_main_image` in that LLM " +
         "failure is FATAL here — this route has no side-effect to preserve, " +
-        "the only purpose IS the caption.",
+        "the only purpose IS the caption. " +
+        meteredLlmPriceSentence("prompt-helper", CREATURE_CAPTION_MODEL),
       inputSchema: { creature_id: z.string().uuid().describe("The creature id (uuid).") },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },

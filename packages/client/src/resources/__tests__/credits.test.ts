@@ -6,7 +6,7 @@ import {
   InsufficientCreditsError,
   StorageExceededError,
 } from "../../index.js"
-import type { UserBalance, WelcomeOfferClaimResult } from "../../index.js"
+import type { ModelCostResult, ModelCostsResult, UserBalance, WelcomeOfferClaimResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -189,6 +189,26 @@ describe("credits resource", () => {
     expect(result.data).toEqual({ a: 12, b: 30 })
     expect(result.missing).toEqual(["c"])
     expect(result.errors).toEqual(["d"])
+  })
+
+  it("modelCosts() carries the metered LLM estimates and error codes", async () => {
+    const answer: ModelCostsResult = {
+      data: { "llm-chat:claude-opus-5.5": 6, "nano-banana": 44 },
+      missing: [],
+      errors: ["llm-chat:claude-fable-5"],
+      errorCodes: { "llm-chat:claude-fable-5": { code: "llm_model_unpriced", message: "no price" } },
+      estimates: ["llm-chat:claude-opus-5.5"],
+    }
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: vi.fn().mockReturnValueOnce(mockOk(answer)),
+    })
+    const result = await c.credits.modelCosts(["llm-chat:claude-opus-5.5", "nano-banana", "llm-chat:claude-fable-5"])
+    expect(result.estimates).toEqual(["llm-chat:claude-opus-5.5"])
+    expect(result.errorCodes?.["llm-chat:claude-fable-5"]?.code).toBe("llm_model_unpriced")
+    const single: ModelCostResult = { model: "llm-chat:claude-opus-5.5", creditCost: 6, estimate: true }
+    expect(single.estimate).toBe(true)
   })
 
   it("modelCosts() caps the request at 50 identifiers", async () => {

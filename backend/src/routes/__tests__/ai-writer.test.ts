@@ -6,9 +6,13 @@ vi.mock("@/lib/supabase.js", () => {
   return { supabase: { from: mockFrom } }
 })
 
+// D6: metered is the default. This suite pins the route's tier behaviour, so
+// it runs under LLM_TIER_PRICING_ROLLBACK; the metered paths (and the
+// rollback's byte-identical reservation) are in llm-metered-text-routes.test.ts.
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test", LLM_TIER_PRICING_ROLLBACK: true },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  llmMeteredPricing: () => false,
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({

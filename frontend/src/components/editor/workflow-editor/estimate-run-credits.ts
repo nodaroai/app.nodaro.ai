@@ -22,6 +22,8 @@ import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
 import { usecaseFramesWithheld } from "@/lib/use-case-frames-viewer"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { componentStoredEstimate, llmNodePriceIds, meteredModeProbeId, scrapeAnalysisPriceIds, scrapeAnalysisRunCredits } from "@/lib/llm-price-ids"
+import { isModelEstimate, isModelRefused, refusedModelMessage } from "@/hooks/use-model-credit-cost"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
@@ -31,6 +33,7 @@ import { USE_CASE_FEE_STATIC_CREDITS, expandUseCaseNodes, isUseCaseNodeType, use
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
 import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
+import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
 // @registry-lookup prices each node of a run by its own type (NODE_CREDIT_COSTS / estimateNodeCredits)
 
@@ -87,9 +90,48 @@ export function estimateRunCreditLines(
     // the one-unit price × the units, which rounds up per unit.
     const quantity = getCostFactors(node, allNodes, edges, rerunIds)
     const cost = variants.reduce((sum, v) => sum + oneRunCost(v, allNodes, edges, rerunIds, cachedCost, exactUnitsOf(quantity)), 0)
+    // A metered LLM node priced at its server estimate (the key it resolves
+    // to is one the server marked `estimates`): the line, and every total it
+    // is part of, is an estimate — shown `~` (spec §8.5).
+    const estimate = isMeteredEstimate(node, edges, allNodes, rerunIds, cachedCost)
+    // A metered call on a model the server refuses to price (R49): no figure — never the tier's —
+    // and the server's sentence for the refusal, which every total this line is in shows.
+    const unpricedId = variants.map((v) => getModelIdentifier(v, edges, allNodes, rerunIds)).find((id) => isModelRefused(id))
+    const unpricedMessage = unpricedId === undefined ? undefined : refusedModelMessage(unpricedId)
     // Both factors are shown by the confirm; the units are already in `cost`.
-    return { nodeId: node.id, label: runNodeLabel(node), quantity, credits: cost * quantity.fanOut }
+    return {
+      nodeId: node.id,
+      label: runNodeLabel(node),
+      quantity,
+      credits: cost * quantity.fanOut,
+      ...(estimate ? { estimate: true as const } : {}),
+      ...(unpricedId !== undefined ? { unpriced: true as const, ...(unpricedMessage ? { unpricedMessage } : {}) } : {}),
+    }
   })
+}
+
+/** Is `node` priced at a metered LLM estimate the server returned (and is it cached)? */
+function isMeteredEstimate(
+  node: WorkflowNode,
+  edges: WorkflowEdge[],
+  allNodes: WorkflowNode[],
+  rerunIds: ReadonlySet<string>,
+  cachedCost: (modelId: string) => number | undefined,
+): boolean {
+  // A scrape whose analysis is priced per call: an estimate while that price is (the server's rule).
+  if (scrapeAnalysisRunCredits(node, cachedCost) !== undefined) return true
+  // A Component priced at its published listing, whose listing holds a metered LLM estimate (the flag
+  // the server served beside the price, stored on the node): the server marks its line `~` too — only
+  // while it prices LLM calls per model (the mode probe answered as an estimate), as the server gates it.
+  if (node.type === "component") return componentStoredEstimate(node) && isModelEstimate(meteredModeProbeId())
+  if (!llmNodePriceIds(node)) return false
+  const id = getModelIdentifier(node, edges, allNodes, rerunIds)
+  return isModelEstimate(id) && cachedCost(id) !== undefined
+}
+
+/** Whether any of a run's lines is an estimate — the run's total then is one too. */
+export function runLinesAreEstimate(lines: readonly RunCreditLine[]): boolean {
+  return lines.some((line) => line.estimate === true)
 }
 
 /** The node once per provider it runs (`nodeProviders`), else the node itself. */
@@ -126,10 +168,19 @@ export function runModelIds(
       const units = exactUnitsOf(getCostFactors(n, allNodes, edges, rerunIds))
       return providerVariants(n).flatMap((v) => {
         const id = getModelIdentifier(v, edges, allNodes, rerunIds)
+        // A metered LLM node: BOTH its price ids in the one batch — the server
+        // answers the metered key as an estimate, or (rollback) `missing`, and
+        // that answer decides which the node is priced at (`llm-price-ids.ts`).
+        const llm = llmNodePriceIds(v)
+        // A scrape with analysis: its fixed scrape and its whole analysis's quote — the server answers the
+        // quote as an estimate (metered) or `missing` (rollback), which decides how the run is priced.
+        const scrape = scrapeAnalysisPriceIds(v)
         // A per-unit run: also the whole run's price — the figure it is charged.
         // A Seedance reference-video run: its quote, which the server prices
         // from the probed clips (`lib/seedance-ref-quote.ts`).
-        return [id, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds)]
+        // A Component holding a stored estimate flag: the mode probe, so the flag is read only while metered.
+        const probe = componentStoredEstimate(v) ? [meteredModeProbeId()] : []
+        return [id, ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds)]
       })
     }),
     ...speechPriceIdsFor(runs, allNodes, edges),
@@ -165,10 +216,16 @@ export function estimateWholeRun(
   cachedCost: (modelId: string) => number | undefined,
   /** The server has reported this id priced nowhere: not asked again. */
   isModelUnpriced: (modelId: string) => boolean = () => false,
-): { total: number; uncachedModelIds: string[] } {
+): { total: number; estimate: boolean; unpriced?: RunUnpriced; uncachedModelIds: string[] } {
   const executable = wholeRunExecutable(nodes)
+  const lines = estimateRunCreditLines(executable, nodes, edges, cachedCost)
+  const unpriced = runLinesUnpriced(lines)
   return {
-    total: estimateRunCredits(executable, nodes, edges, cachedCost),
+    total: sumRunCreditLines(lines),
+    // Any metered node in the run makes its total an estimate (`~`).
+    estimate: runLinesAreEstimate(lines),
+    // A node the server refuses to price: the total leaves it out, and says so.
+    ...(unpriced ? { unpriced } : {}),
     uncachedModelIds: runModelIds(executable, nodes, edges).filter((m) => cachedCost(m) === undefined && !isModelUnpriced(m)),
   }
 }
@@ -193,6 +250,9 @@ function oneRunCost(
   const refQuoteKey = seedanceRefQuoteKeyFor(node, allNodes, edges, rerunIds)
   const refQuote = refQuoteKey === undefined ? undefined : cachedCost(refQuoteKey)
   if (refQuote !== undefined) return refQuote * upperUnits(units)
+  // A scrape whose analysis is priced per call (metered): fixed + the whole analysis's quote (the server's figure).
+  const scrape = scrapeAnalysisRunCredits(node, cachedCost)
+  if (scrape !== undefined) return scrape
   const modelId = getModelIdentifier(node, edges, allNodes, rerunIds)
   const quoteId = unitQuoteIdFor(modelId, units)
   const whole = quoteId === undefined ? undefined : cachedCost(quoteId)
@@ -211,6 +271,9 @@ function oneUnitCost(
 ): number {
   const cached = cachedCost(modelId)
   if (cached !== undefined) return cached
+  // A metered key the server refuses to price (a model with no rate, R49): the run would be refused,
+  // so it is priced nowhere here — never at a NODE_CREDIT_COSTS row or the node's tier estimate.
+  if (isModelRefused(modelId)) return 0
   // Cold cache: prefer the row for the identifier this run will actually
   // reserve on. `getModelIdentifier` is already renderer- and graph-aware
   // (add-captions:kinetic vs add-captions), so skipping straight to the node
@@ -318,11 +381,22 @@ function usecaseRunLines(
       const line = inner.get(node.id)
       return line ? [line] : []
     }
-    const steps = (expanded.expansion.members.get(node.id) ?? []).reduce((sum, id) => sum + (inner.get(id)?.credits ?? 0), 0)
+    const members = expanded.expansion.members.get(node.id) ?? []
+    const steps = members.reduce((sum, id) => sum + (inner.get(id)?.credits ?? 0), 0)
+    const estimate = members.some((id) => inner.get(id)?.estimate === true)
+    // An inner step the server refuses to price: the node's line leaves it out, and says so.
+    const unpriced = runLinesUnpriced(members.flatMap((id) => inner.get(id) ?? []))
     const quantity = { ...getCostFactors(node, allNodes, edges, rerunIds), units: 1, unitKind: null }
     const feeId = usecaseFeeCreditId(type)
     const fee = !paysFee(expanded, node.id) ? 0 : cachedCost(feeId) ?? NODE_CREDIT_COSTS[feeId] ?? USE_CASE_FEE_STATIC_CREDITS
-    return [{ nodeId: node.id, label: runNodeLabel(node), quantity, credits: steps + fee * quantity.fanOut }]
+    return [{
+      nodeId: node.id,
+      label: runNodeLabel(node),
+      quantity,
+      credits: steps + fee * quantity.fanOut,
+      ...(estimate ? { estimate: true as const } : {}),
+      ...(unpriced ? { unpriced: true as const, ...(unpriced.message ? { unpricedMessage: unpriced.message } : {}) } : {}),
+    }]
   })
 }
 

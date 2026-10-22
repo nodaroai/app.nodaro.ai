@@ -1,10 +1,18 @@
 import { markJobFailed } from "../job-failure.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { settleSweptMeteredLlmJob } from "../llm-billing.js"
 
 export interface StuckJobRow {
   id: string
   provider_kind: string | null
   reconcile_attempts: number
+  /**
+   * The row's `reconcile_last_error`: carries the metered sweep's billed marker
+   * across ticks. REQUIRED — every scan that sweeps a row reads the column, so
+   * a lane that forgot it cannot quietly drop the marker (and refund a job an
+   * earlier tick confirmed billed). `null` only when the row has none.
+   */
+  reconcile_last_error: string | null
 }
 
 /**
@@ -24,6 +32,18 @@ export interface StuckJobRow {
  * needless DB roundtrip).
  */
 export async function sweepStaleSyncJob(job: StuckJobRow): Promise<void> {
+  // R59 / R60 / D10: a billed METERED LLM hold is settled — at its actual,
+  // from the row's ledger — BEFORE the terminal flip, so a failed commit
+  // leaves the job sweepable (attempts bumped) rather than a failed job whose
+  // hold nothing ever revisits; a call that started with nothing billed
+  // recorded keeps its hold to the D10 cap. Every other job (and every job
+  // without credits) goes on exactly as before.
+  const metered = await settleSweptMeteredLlmJob(job)
+  if (metered === "retry") {
+    console.log(`[reconcile/sync-sweep] job ${job.id}: metered settle pending — kept sweepable (attempt ${job.reconcile_attempts + 1})`)
+    return
+  }
+
   const flipped = await markJobFailed(job.id, {
     error_message: "Reconciliation could not recover this job. Please re-run.",
     reconcile_attempts: job.reconcile_attempts + 1,
@@ -35,6 +55,8 @@ export async function sweepStaleSyncJob(job: StuckJobRow): Promise<void> {
     return
   }
 
+  // A settled job's metered holds are committed already, so this refunds only
+  // what is still reserved — for every non-metered job, exactly as before.
   await refundReservedCreditsForJob(job.id)
   console.log(
     `[reconcile/sync-sweep] swept job ${job.id} (kind=${job.provider_kind ?? "null"}, attempts=${job.reconcile_attempts + 1})`,

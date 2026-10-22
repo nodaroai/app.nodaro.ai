@@ -26,8 +26,11 @@ import {
   applyScene3DEditWithReferences,
   editScenePlan,
   generateScenePlan,
+  scene3DEditHoldRequest,
+  scene3DGenerateHoldRequest,
   SCENE3D_MAX_REVISIONS,
 } from "../scene3d-authoring.js"
+import { LlmSpend } from "../../../lib/llm-billing.js"
 
 const REV = "11111111-2222-4333-8444-555555555555"
 const NEXT_REV = "66666666-7777-4888-8999-aaaaaaaaaaaa"
@@ -419,5 +422,87 @@ describe("applyScene3DEditWithReferences", () => {
       revisionId: "22222222-2222-4333-8444-555555555555",
     }
     expect(applyDeterministicScene3DEdit(args)).toEqual(applyScene3DEditWithReferences(args))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Metered billing (A5/A6): the planner is a multi-call feature. Every call it
+// makes is recorded on the job's spend — the worker settles the SUM — and the
+// hold is sized from the first call exactly as it is sent.
+// ---------------------------------------------------------------------------
+describe("scene3d authoring — metered spend and hold", () => {
+  /** One billed structured answer per attempt, each carrying its own attempt ledger. */
+  function billedAnswers(...outputs: unknown[]) {
+    outputs.forEach((output, i) => {
+      mocks.llmCompleteStructured.mockResolvedValueOnce({
+        output, inputTokens: 100, outputTokens: 200, providerCost: 0.01, lane: "kie",
+        attempts: [{ lane: "kie", modelId: "claude-sonnet-4.6", requestChars: 4000 + i * 900, inputTokens: 100, outputTokens: 200, creditsUsd: 0.01 }],
+      })
+    })
+  }
+
+  it("scene3d authoring settles the planner's summed spend: every revision is on the spend", async () => {
+    const cyclic = { ...DRAFT_PLAN, objects: [{ ...DRAFT_OBJECT, id: "a", parentId: "b" }, { ...DRAFT_OBJECT, id: "b", parentId: "a" }] }
+    billedAnswers(cyclic, DRAFT_PLAN)
+    const spend = new LlmSpend()
+    const afterCall = vi.fn(async () => {})
+    await generateScenePlan({ ...generateArgs, spend, afterCall })
+    expect(spend.attempts).toHaveLength(2)
+    expect(spend.costUsd).toBeCloseTo(0.02, 10)
+    // Recorded on the row after EACH answered call (a cancel mid-revision sees it billed).
+    expect(afterCall).toHaveBeenCalledTimes(2)
+  })
+
+  it("a run that exhausts its revisions still carries every billed call (the failure net charges them)", async () => {
+    const past = { ...DRAFT_PLAN, objects: [{ ...DRAFT_OBJECT, keyframes: [{ frame: 9999 }] }] }
+    billedAnswers(...Array.from({ length: SCENE3D_MAX_REVISIONS + 1 }, () => past))
+    const spend = new LlmSpend()
+    await expect(generateScenePlan({ ...generateArgs, spend })).rejects.toThrow(/past the scene's last frame/)
+    expect(spend.attempts).toHaveLength(SCENE3D_MAX_REVISIONS + 1)
+  })
+
+  it("a failed call's billed attempts are recorded before the error propagates", async () => {
+    const { StructuredLlmError } = await import("../../../lib/llm/structured.js")
+    mocks.llmCompleteStructured.mockRejectedValueOnce(new StructuredLlmError("bad shape twice", {
+      inputTokens: 300, outputTokens: 50, complete: true,
+      attempts: [
+        { lane: "kie", modelId: "claude-sonnet-4.6", requestChars: 4000, inputTokens: 150, outputTokens: 25, creditsUsd: 0.004 },
+        { lane: "kie", modelId: "claude-sonnet-4.6", requestChars: 4200, inputTokens: 150, outputTokens: 25, creditsUsd: 0.004 },
+      ],
+    }))
+    const spend = new LlmSpend()
+    await expect(editScenePlan({ ...editArgs, spend })).rejects.toThrow(/bad shape/)
+    expect(spend.attempts).toHaveLength(2)
+  })
+
+  it("the hold request is the first call as sent — system, text, schema, cap — with each image as a URL block, never fetched", async () => {
+    const references = [{ id: "r1", url: "https://r2.example/ref.png", kind: "image" as const, role: "appearance" as const }]
+    billedAnswers(DRAFT_PLAN)
+    await generateScenePlan({ ...generateArgs, references })
+    const sent = mocks.llmCompleteStructured.mock.calls[0]![0] as { system: string; messages: { content: { type: string; text?: string }[] }[]; maxTokens?: number }
+    mocks.prefetchAsBase64.mockClear()
+    const hold = scene3DGenerateHoldRequest({ ...generateArgs, references })
+    expect(mocks.prefetchAsBase64).not.toHaveBeenCalled()
+    expect(hold.system).toBe(sent.system)
+    expect(hold.maxTokens).toBe(sent.maxTokens)
+    const texts = (m: { content: unknown }) => (m.content as { type: string; text?: string }[]).filter((b) => b.type === "text").map((b) => b.text)
+    expect(texts(hold.messages[0]!)).toEqual(texts(sent.messages[0]!))
+    expect(hold.messages[0]!.content).toContainEqual({ type: "image", url: "https://r2.example/ref.png" })
+    expect(hold.jsonSchema?.name).toBe("scene3d_plan")
+  })
+
+  it("the edit hold shows the MERGED references the edit call shows", async () => {
+    const references = [{ id: "r2", url: "https://r2.example/new.png", kind: "image" as const, role: "appearance" as const }]
+    mocks.llmCompleteStructured.mockResolvedValueOnce({
+      output: { operations: [{ op: "set-object", objectId: "hero", changes: { position: [-1, 0.85, 0] } }], changeSummary: "moved" },
+      inputTokens: 1, outputTokens: 1, providerCost: 0.001, lane: "kie",
+    })
+    await editScenePlan({ ...editArgs, references })
+    const sent = mocks.llmCompleteStructured.mock.calls[0]![0] as { system: string; messages: { content: { type: string; text?: string }[] }[] }
+    const hold = scene3DEditHoldRequest({ ...editArgs, references })
+    const texts = (m: { content: unknown }) => (m.content as { type: string; text?: string }[]).filter((b) => b.type === "text").map((b) => b.text)
+    expect(hold.system).toBe(sent.system)
+    expect(texts(hold.messages[0]!)).toEqual(texts(sent.messages[0]!))
+    expect(hold.jsonSchema?.name).toBe("scene3d_edit")
   })
 })

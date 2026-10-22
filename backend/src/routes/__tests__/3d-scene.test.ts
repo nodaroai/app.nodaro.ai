@@ -27,10 +27,15 @@ const mocks = vi.hoisted(() => ({
   creditIds: [] as string[],
 }))
 
+// D6: metered is the default; the rollback switch restores the tier id.
+const pricing = vi.hoisted(() => ({ rollback: false }))
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", GEMINI_API_KEY: "", INTERNAL_ORCHESTRATOR_SECRET: "s".repeat(64), SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  llmMeteredPricing: () => !pricing.rollback,
 }))
+// The metered hold is marked up at the global 10%.
+vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({ cost_markup_percent: 10 })) }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ shouldProxyLlmToCloud: mocks.shouldProxyLlmToCloud }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
@@ -60,6 +65,8 @@ vi.mock("@/lib/supabase.js", () => {
 
 import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared/scene3d"
 import { scene3DRoutes, scene3DEditCreditId, scene3DRenderFrame } from "../3d-scene.js"
+import { scene3DGenerateHoldRequest } from "../../services/scene3d/scene3d-authoring.js"
+import { llmHoldForCalls } from "../../ee/billing/llm-billing-impl.js"
 import { setPluginEngines } from "../../lib/private-plugins/engine-registry.js"
 import { config } from "../../lib/config.js"
 
@@ -107,6 +114,7 @@ const enqueued = () => mocks.queueAdd.mock.calls.at(-1)?.[1] as Record<string, u
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  pricing.rollback = false
   setPluginEngines({})
   config.SCENE3D_ADVANCED_ENABLED = false
   config.SCENE3D_LOCAL_ENABLED = false
@@ -265,9 +273,31 @@ describe("POST /v1/3d-scene/generate", () => {
     expect(row.input_data.references).toEqual([{ id: "r1", url: IMAGE, kind: "image", role: "appearance" }])
   })
 
-  it("reserves the LLM tier the model implies", async () => {
+  it("reserves the metered hold of the first planner call under 3d-scene:<model> (D1) — images counted, never fetched", async () => {
+    const references = [{ id: "r1", url: IMAGE, kind: "image" as const, role: "appearance" as const }]
+    await generate({ llmModel: "claude-opus-4.7", references })
+    const request = scene3DGenerateHoldRequest({
+      prompt: "A lone figure in an empty warehouse", ...scene3DRenderFrame({}), llmModel: "claude-opus-4.7", references,
+    })
+    const { chargeId, holdCredits } = await llmHoldForCalls("3d-scene", [{ modelId: "claude-opus-4.7", request }])
+    expect(chargeId).toBe("3d-scene:claude-opus-4.7")
+    // The image is one URL block in the hold (1,600 tokens), never a download.
+    expect(JSON.stringify(request.messages)).toContain(IMAGE)
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", chargeId, { holdCredits })
+  })
+
+  it("the instruction edit reserves the metered hold over the MERGED references", async () => {
+    await edit({ prompt: "move the hero left", llmModel: "claude-opus-4.7" })
+    const call = mocks.reserveCreditsForJob.mock.calls.at(-1)!
+    expect(call[3]).toBe("3d-scene:claude-opus-4.7")
+    expect(call[4]).toEqual({ holdCredits: expect.any(Number) })
+  })
+
+  it("rollback: reserves the LLM tier the model implies, byte-identical", async () => {
+    pricing.rollback = true
     await generate({ llmModel: "claude-opus-4.7" })
     expect(mocks.reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "3d-scene:premium")
+    expect(mocks.reserveCreditsForJob.mock.calls[0]).toHaveLength(4)
   })
 
   it("refuses an unknown model before any row", async () => {

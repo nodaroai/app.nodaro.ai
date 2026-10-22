@@ -50,6 +50,9 @@ export {
   resolveLlmCreditId,
   supportsAdvancedMode,
   llmServesDirect,
+  llmPriceKey,
+  LLM_FEATURE_DEFAULTS_FROM,
+  llmDefaultsFeature,
   LLM_CREDIT_RUNGS,
   type LlmCreditRung,
   llmCreditIdForRung,
@@ -69,3 +72,4 @@ export {
   type LlmModelDef,
   type LlmReasoningEffort,
 } from "../llm-models.js"
+export { SCRIPT_LEGACY_PROVIDER_MODELS, resolveScriptModelId } from "../script-model.js"

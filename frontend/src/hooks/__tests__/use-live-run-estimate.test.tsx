@@ -151,7 +151,8 @@ describe("every runner surface prices the live estimate", () => {
   for (const rel of ["components/presentation/presentation-view.tsx", "components/app-runner/mobile-app-shell.tsx"]) {
     it(`${rel} assigns useLiveRunEstimate's result and consumes it`, () => {
       const text = stripComments(readFileSync(resolve(SRC, rel), "utf8"))
-      const m = text.match(/const\s+(\w+)\s*=\s*useLiveRunEstimate\(/)
+      // `useLiveRunFigure` is the same hook with the figure's estimate flag (`~`).
+      const m = text.match(/const\s+(\w+)\s*=\s*useLiveRun(?:Estimate|Figure)\(/)
       expect(m, "the hook's result must be assigned").not.toBeNull()
       const uses = text.match(new RegExp(`\\b${m![1]}\\b`, "g")) ?? []
       expect(uses.length, `${m![1]} is assigned but never read`).toBeGreaterThanOrEqual(2)

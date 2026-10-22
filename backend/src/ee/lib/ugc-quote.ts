@@ -8,6 +8,8 @@ import {
   captionRoutesToRemotion,
 } from "@nodaro/shared/captions"
 import {
+  LLM_FEATURE_DEFAULTS,
+  llmPriceKey,
   resolveLlmCreditId,
 } from "@nodaro/shared/llm-models"
 import {
@@ -17,21 +19,24 @@ import type { FastifyRequest } from "fastify"
 import { z } from "zod"
 import { getAppSettings } from "../../lib/app-settings.js"
 import type { BillingContext } from "../../lib/billing-context.js"
-import { speechLengthPricingEnabled } from "../../lib/config.js"
+import { llmMeteredPricing, speechLengthPricingEnabled } from "../../lib/config.js"
 import { speechBaseCredits } from "../../lib/speech-credits.js"
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
 import { combineVideosUnits } from "../../lib/video-utility-credits.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { normalizeVideoInput } from "../../lib/mcp/normalize.js"
+import { sideHoldChargesFor, withSideCharge } from "../../lib/job-step-charge.js"
 import { isUuid } from "../../lib/mcp/tools/_id-guard.js"
-import { llmPayloadFields, type LlmMcpArgs } from "../../lib/mcp/tools/_llm-fields.js"
+import { llmPayloadFields, type LlmMcpArgs } from "../../lib/mcp/tools/_llm-payload.js"
 import { UGC_SPENT_JOB_IDS_MAX } from "../../lib/mcp/tools/_ugc-limits.js"
 import { MCP_TRANSCRIBE_PROVIDER } from "../../lib/mcp/tools/_transcribe-provider.js"
 import { supabase } from "../../lib/supabase.js"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { resolveImageCreditIdentifier } from "../../routes/generate-image-credit-id.js"
 import { resolveImageToImageCreditIdentifier } from "../../routes/image-to-image-credit-id.js"
-import { getModelCreditCostFromDB, type ModelPricing } from "../billing/credits.js"
+import { getChargedPriceTable, getModelCreditCostFromDB, meteredLlmQuote, type ModelPricing } from "../billing/credits.js"
+import { LlmUnpricedModelError } from "../billing/llm-metered.js"
+import { llmModelUnpricedMessage } from "../billing/llm-unpriced-reply.js"
 import {
   modelAvailabilityNeedsGates,
   modelAvailabilityRefusal,
@@ -40,6 +45,8 @@ import {
 } from "../billing/model-availability.js"
 import { effectiveTierOf, payerProfileId, spendGates } from "../billing/org-entitlements.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
+import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
+import { sideHoldsAvailable } from "../../lib/llm-side-hold-availability.js"
 
 /**
  * The credit quote `build_ugc_clips` returns (Nodaro Cloud only).
@@ -78,6 +85,8 @@ export interface UgcQuoteItem {
 export interface UgcQuoteLine {
   readonly label: string
   readonly credits: number
+  /** A metered LLM call's ESTIMATE (R26): charged its actual usage, so shown `~`. Absent for a fixed price. */
+  readonly estimate?: true
 }
 export interface UgcQuote {
   /** Jobs this video already ran (creator images, screenshot readings, the photo check). */
@@ -88,6 +97,8 @@ export interface UgcQuote {
   readonly total: number
   /** `spent_job_ids` entries that are not this user's jobs (or not job ids at all). */
   readonly skipped: string[]
+  /** Some line still to come is a metered LLM estimate, so the total is one (`~`). Absent otherwise. */
+  readonly totalIsEstimate?: true
 }
 
 export class UgcQuoteError extends Error {
@@ -97,10 +108,64 @@ export class UgcQuoteError extends Error {
   }
 }
 
-/** How a route decides what it reserves: the pricing row for `id`, or a computed base marked up under `id`. */
+/**
+ * A quoted call on a metered LLM model with no price on its lane (R49, fail
+ * closed): the call's own route refuses it (`llm_model_unpriced`), so the
+ * quote does — with that code and sentence, never a figure.
+ */
+export class UgcQuoteUnpricedError extends UgcQuoteError {
+  readonly code = "llm_model_unpriced"
+  readonly modelId: string
+  constructor(label: string, err: LlmUnpricedModelError) {
+    super(label)
+    this.name = "UgcQuoteUnpricedError"
+    this.modelId = err.modelId
+    this.message = `could not price ${label} (llm_model_unpriced): ${llmModelUnpricedMessage(err)}`
+  }
+}
+
+/**
+ * How the UGC plugin charges a clip's per-take reading (the frame check) — R58: the ONE source for
+ * how that reading is quoted, held and flagged (`~`), declared by the plugin (`ugc.clipReadingMode`)
+ * and read by its admission too:
+ *  - `"metered"` (the plugin says so AND metered side holds are available now): the reading is its
+ *    own metered side hold — quoted as a separate `clipReading` line at its `:direct` estimate,
+ *    never inside the clip (`ugc-estimate.ts`), and an estimate (`~`);
+ *  - `"fixed"` (every plugin that predates it, anything else, the rollback): the reading inside the
+ *    clip at its TIER row — exactly what the plugin charges (`priceUgcCalls`' default) — no `~`.
+ */
+export function ugcClipReadingMode(): "metered" | "fixed" {
+  try {
+    const raw: unknown = getPluginServices().ugc?.clipReadingMode?.()
+    return raw === "metered" && sideHoldsAvailable() ? "metered" : "fixed"
+  } catch {
+    return "fixed"
+  }
+}
+
+/** How a CLIP reading is priced where it is quoted (R58): its estimate when metered, else the tier row the plugin charges. */
+export function ugcClipReadingPricedAt(): "estimate" | "tier" {
+  return ugcClipReadingMode() === "metered" ? "estimate" : "tier"
+}
+
+/**
+ * How a call the UGC nodes make through the HOST's own routes is priced (the creator check: an Image
+ * to Text call through `/v1/image-to-text/describe`, which bills it metered whenever metered pricing is
+ * on): as that route bills it — its estimate while metered, else its tier row (a call with no metered
+ * key is its tier row either way). Not the plugin's clip reading: that one follows `ugcClipReadingMode`.
+ */
+export const UGC_ROUTE_CALL_PRICED_AT = "estimate" as const
+
+/**
+ * How a route decides what it reserves: the pricing row for `id`, or a computed base marked up under `id`.
+ * A metered LLM call (`meteredKey`, while metered pricing is on — R26) keeps the guard's `id` (whose row
+ * carries the switches the guard checks) and is quoted at its price key's ESTIMATE: what it is charged
+ * is its actual usage, and the route holds more (its 1-attempt hold) — the estimate is never above it.
+ */
 export interface UgcPricing {
   readonly id: string
   readonly base?: number
+  readonly meteredKey?: string
 }
 
 export interface QuoteContext {
@@ -150,8 +215,16 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   extract_frame: () => ({ id: "extract-frame" }),
   // image_collage → POST /v1/image-collage: priced by output resolution.
   image_collage: (args) => ({ id: imageCollageCreditModelIdentifier(args.resolution) }),
-  // image_to_text → POST /v1/image-to-text/describe: the LLM tier from the verb's own LLM fields.
-  image_to_text: (args) => ({ id: resolveLlmCreditId("image-to-text", llmPayloadFields(args as LlmMcpArgs)) }),
+  // image_to_text → POST /v1/image-to-text/describe: the guard's id from the verb's own LLM fields
+  // (the LLM tier) — and, while metered pricing is on, the call's price key: the route's model (its
+  // default when the verb sends none), effort and Advanced flag (R26).
+  image_to_text: (args) => {
+    const fields = llmPayloadFields(args as LlmMcpArgs)
+    const id = resolveLlmCreditId("image-to-text", fields)
+    if (!llmMeteredPricing()) return { id }
+    const model = str(fields.llmModel) ?? LLM_FEATURE_DEFAULTS["image-to-text"]
+    return { id, meteredKey: llmPriceKey("image-to-text", model, str(fields.reasoningEffort), fields.advancedMode === true) }
+  },
   // generate_image → POST /v1/generate-image: the route's own id function over the body the mapper builds.
   generate_image: (args) => {
     const mapped = ugcCallToRouteBody({ tool: "generate_image", args })
@@ -213,8 +286,18 @@ export async function pricingFor(tool: string, args: Readonly<Record<string, unk
   return rule ? rule(args, ctx) : null
 }
 
-/** What the reservation charges: the row's marked-up price, or the computed base marked up under the row's id. */
+/**
+ * What the call is charged: the row's marked-up price, or the computed base marked up under the
+ * row's id — or, for a metered LLM call, its price key's estimate as the charged price table quotes
+ * it (already marked up at its charge id). A model with no price on its lane throws: never 0.
+ */
 async function creditsFor(pricing: UgcPricing, row: ModelPricing): Promise<number> {
+  if (pricing.meteredKey !== undefined) {
+    const quote = meteredLlmQuote(await getChargedPriceTable(), pricing.meteredKey)
+    if (quote?.kind === "unpriced") throw quote.error
+    if (quote?.kind !== "estimate") throw new Error(`unpriced ${pricing.meteredKey}`)
+    return quote.credits
+  }
   if (pricing.base !== undefined) return applyServiceMarkup(pricing.base, await getAppSettings(), pricing.id)
   return row.creditCost
 }
@@ -266,10 +349,18 @@ function parseItem(raw: unknown): UgcQuoteItem {
   throw new UgcQuoteError(typeof label === "string" && label.length > 0 ? label : "a quote item")
 }
 
-async function priceItem(raw: unknown, ctx: QuoteContext, callerGates: CallerGates): Promise<UgcQuoteLine> {
+async function priceItem(
+  raw: unknown,
+  ctx: QuoteContext,
+  callerGates: CallerGates,
+  /** Quote a metered LLM call at its estimate (the MCP quote), or at its tier row (the figure handed to the plugin). */
+  llmAt: "estimate" | "tier",
+): Promise<UgcQuoteLine> {
   const item = parseItem(raw)
-  const pricing = await pricingFor(item.tool, item.args, ctx)
-  if (!pricing) throw new UgcQuoteError(item.label)
+  const quoted = await pricingFor(item.tool, item.args, ctx)
+  if (!quoted) throw new UgcQuoteError(item.label)
+  // At its tier row: the guard's id, priced as before metered pricing.
+  const pricing: UgcPricing = llmAt === "tier" && quoted.meteredKey !== undefined ? { id: quoted.id } : quoted
   // The row the guard checks, even for a computed amount: an admin disabling a model still wins.
   let row: ModelPricing
   try {
@@ -283,8 +374,10 @@ async function priceItem(raw: unknown, ctx: QuoteContext, callerGates: CallerGat
   const gates = modelAvailabilityNeedsGates(pricing.id, row) ? await callerGates() : NO_GATES
   if (modelAvailabilityRefusal(pricing.id, row, gates)) throw new UgcQuoteError(item.label)
   try {
-    return { label: item.label, credits: (await creditsFor(pricing, row)) * item.count }
-  } catch {
+    const credits = (await creditsFor(pricing, row)) * item.count
+    return pricing.meteredKey !== undefined ? { label: item.label, credits, estimate: true } : { label: item.label, credits }
+  } catch (err) {
+    if (err instanceof LlmUnpricedModelError) throw new UgcQuoteUnpricedError(item.label, err)
     throw new UgcQuoteError(item.label)
   }
 }
@@ -325,13 +418,15 @@ async function spentLines(ids: readonly string[], userId: string): Promise<{ spe
     if (error) throw new UgcQuoteError("the calls already made")
     for (const row of (data ?? []) as SpentJobRow[]) rows.set(row.id, row)
   }
+  // R53: what a job spent includes its settled metered side holds (a clip's readings, 554).
+  const side = await sideHoldChargesFor([...rows.keys()])
   const spent: UgcQuoteLine[] = []
   const skipped: string[] = []
   for (const id of unique) {
     const row = rows.get(id)
     if (!row) { skipped.push(id); continue }
     const type = typeof row.input_data?.type === "string" ? row.input_data.type : row.job_type ?? "job"
-    spent.push({ label: `${type} (already spent)`, credits: spentCredits(row) })
+    spent.push({ label: `${type} (already spent)`, credits: withSideCharge(spentCredits(row), row.id, side) })
   }
   return { spent, skipped }
 }
@@ -351,10 +446,16 @@ export async function buildUgcQuote(input: {
   const ctx: QuoteContext = { clipCount: input.clipCount }
   const callerGates = callerGatesOf(input.userId, input.billingContext)
   const lines: UgcQuoteLine[] = []
-  for (const item of input.items) lines.push(await priceItem(item, ctx, callerGates))
+  // The items the AGENT runs through public tools (`build_ugc_clips`' quoteItems — its frame check
+  // included): each is a call through a host route, an Image to Text one read by
+  // /v1/image-to-text/describe, which bills it metered whenever metered pricing is on. So it is priced
+  // as that route reserves it (its estimate, `~`) in every plugin mode — never by `ugcClipReadingMode`,
+  // which governs only the reading inside the plugin's own clip job (`quoteTickets`, the `~` flag).
+  for (const item of input.items) lines.push(await priceItem(item, ctx, callerGates, UGC_ROUTE_CALL_PRICED_AT))
   const { spent, skipped } = await spentLines(input.spentJobIds.slice(0, UGC_SPENT_JOB_IDS_MAX), input.userId)
   const total = [...spent, ...lines].reduce((sum, l) => sum + l.credits, 0)
-  return { spent, lines, total, skipped }
+  // Present only when a line is an estimate: a quote with none is byte-identical to before.
+  return { spent, lines, total, skipped, ...(lines.some((l) => l.estimate) ? { totalIsEstimate: true as const } : {}) }
 }
 
 /** No payer: a planning figure (publish, editor, API-token and template estimates), never a reservation. */
@@ -378,12 +479,33 @@ const ESTIMATE_GATES: ModelAvailabilityGates = { tierForGates: TIER_ORDER[TIER_O
 export async function priceUgcCalls(
   caller: UgcPriceCaller,
   calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
+  /**
+   * How a metered LLM call (a reading) is priced. The default is what the plugin is HANDED: its tier
+   * row (a fixed-mode plugin charges it; a metered one holds and settles the call itself). A quote
+   * passes `ugcClipReadingPricedAt()` for a clip reading (R58), `UGC_ROUTE_CALL_PRICED_AT` for a call
+   * through the host's own metered route.
+   */
+  llmAt: "estimate" | "tier" = "tier",
 ): Promise<number[]> {
+  return (await priceUgcCallLines(caller, calls, llmAt)).map((line) => line.credits)
+}
+
+/**
+ * {@link priceUgcCalls} with each call's line: its credits, and `estimate`
+ * when it is a metered LLM call priced at its estimate (charged its actual
+ * usage, `~`). The canvas quote reads these flags; the plugin's
+ * `tk.http.priceUgcCalls` keeps its plain `number[]`.
+ */
+export async function priceUgcCallLines(
+  caller: UgcPriceCaller,
+  calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
+  llmAt: "estimate" | "tier" = "tier",
+): Promise<UgcQuoteLine[]> {
   const callerGates: CallerGates = isEstimate(caller) ? async () => ESTIMATE_GATES : callerGatesOf(caller.userId, caller.billingContext)
   // Every call asked at once (each a price-row read when the cache is cold), read back in order.
-  const lines = calls.map((c, i) => started(priceItem({ label: `${c.tool} #${i + 1}`, tool: c.tool, args: c.args, count: 1 }, { clipCount: 1 }, callerGates)))
-  const out: number[] = []
-  for (const line of lines) out.push((await line).credits)
+  const lines = calls.map((c, i) => started(priceItem({ label: `${c.tool} #${i + 1}`, tool: c.tool, args: c.args, count: 1 }, { clipCount: 1 }, callerGates, llmAt)))
+  const out: UgcQuoteLine[] = []
+  for (const line of lines) out.push(await line)
   return out
 }
 

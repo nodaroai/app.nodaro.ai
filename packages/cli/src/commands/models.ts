@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, table, type OutputOpts } from "../output.js"
+import type { ModelCostsResult } from "@nodaro/sdk/credits"
+import { emit, table, terminalSafe, type OutputOpts } from "../output.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -66,5 +67,60 @@ Examples:
       },
     )
 
+  cmd
+    .command("cost <ids...>")
+    .description(
+      "credits each identifier is charged — a model id, a credit id, or a metered LLM price key (<feature>:<model>[:direct]); an estimate prints as ~N",
+    )
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText(
+      "after",
+      `
+A metered LLM price key (llmPriceKey from @nodaro/shared/llm-models) is
+charged for the tokens the call actually uses, so its figure is an estimate of
+a typical call and prints as ~N. Every model's per-token rate:
+docs/pricing/llm-models.md.
+
+Examples:
+  $ nodaro models cost nano-banana-pro seedance-2-fast
+  $ nodaro models cost llm-chat:gemini-3.6-flash llm-chat:claude-opus-5.5:direct
+  $ nodaro models cost llm-chat:claude-fable-5 --json`,
+    )
+    .action(async (ids: string[], opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.credits.modelCosts(ids)
+        if (opts.json) {
+          emit(result, opts)
+          return
+        }
+        table(costRows(ids, result), ["id", "credits", "note"])
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   return cmd
+}
+
+/**
+ * One row per asked identifier, in the order asked: `~N` for an estimate (a
+ * metered LLM price key), `N` for a fixed price, `-` with the reason when the
+ * server priced nothing for it.
+ */
+export function costRows(ids: string[], result: ModelCostsResult): Array<Record<string, string>> {
+  const estimates = new Set(result.estimates ?? [])
+  const missing = new Set(result.missing)
+  const errors = new Set(result.errors)
+  return [...new Set(ids)].map((id) => {
+    const credits = result.data[id]
+    if (typeof credits === "number") {
+      const estimate = estimates.has(id)
+      return { id, credits: estimate ? `~${credits}` : String(credits), note: estimate ? "estimate: charged per token used" : "" }
+    }
+    if (errors.has(id)) return { id, credits: "-", note: terminalSafe(result.errorCodes?.[id]?.message ?? "could not be priced") }
+    if (missing.has(id)) return { id, credits: "-", note: "no price on this server" }
+    return { id, credits: "-", note: "not asked (over the batch limit)" }
+  })
 }

@@ -30,8 +30,20 @@
  * what one unit — or that many units — adds to a charge before its total is
  * rounded up: a per-unit rate, or an add-on folded into another price.
  * `credits: n/a` marks a number that is not a price at all (a balance, a grant,
- * a cap the user sets). A figure written as approximate (`~`, `≈`) is not
- * checked and needs no annotation.
+ * a cap the user sets). A figure written as approximate (`~`, `≈`) needs no
+ * annotation — but one that carries an annotation is still checked, so an
+ * estimate (`~6 credits<!-- credits: llm-chat:gemini-3.6-flash -->`, a
+ * metered LLM price key) stays the estimate the server quotes.
+ *
+ * `credits-llm-rate:` states a metered LLM figure, priced from the per-model
+ * rate cards (`lib/pricing/llm-cost.ts`) at the deployment's global setting:
+ *   - `<model>:<kie|direct>:<input|output>[:long]` — the credits charged per
+ *     million tokens on that lane (`:long` = the band past the model's prompt
+ *     threshold);
+ *   - `<model>:<kie|direct>@<input tokens>/<output tokens>` — what ONE call of
+ *     that usage on that lane is charged (the cost summed, floored at the
+ *     minimum, charged once — as the metered settle charges it). This is how a
+ *     worked example is held to the rule rather than to arithmetic by hand.
  *
  * `backend/src/ee/billing/__tests__/docs-charged-prices.test.ts` evaluates
  * every annotation with the server's own price-table rule
@@ -43,7 +55,19 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { ChargeOf, ChargePart, RateOf } from "../../src/ee/billing/docs-pricing.js"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
+import { usdToCredits } from "@nodaro/shared/credits"
+import {
+  docsLlmPricing,
+  type ChargeOf,
+  type ChargePart,
+  type DocsLlmFigure,
+  type DocsLlmLane,
+  type LlmFigureOf,
+  type RateOf,
+} from "../../src/ee/billing/docs-pricing.js"
+import { applyMarkupPercent } from "../../src/ee/billing/service-margin.js"
+import { calculateLlmCost, llmRateCard } from "../../src/lib/pricing/llm-cost.js"
 
 // The pricing half lives with the billing module, because the MCP tool hints read it at runtime too.
 export {
@@ -54,6 +78,9 @@ export {
   type ChargePart,
   type DocsPriceSettings,
   type DocsPriceTable,
+  type DocsLlmFigure,
+  type DocsLlmLane,
+  type LlmFigureOf,
   type RateOf,
 } from "../../src/ee/billing/docs-pricing.js"
 
@@ -69,7 +96,11 @@ export interface Charge {
 export type Annotation =
   | { kind: "charge"; charges: Charge[] }
   | { kind: "rate"; id: string; units: number }
+  | { kind: "llm"; figure: DocsLlmFigure }
   | { kind: "none" }
+
+/** Which comment an annotation is written in: `credits:`, `credits-rate:` or `credits-llm-rate:`. */
+export type AnnotationComment = "charge" | "rate" | "llm-rate"
 
 export interface DocFigure {
   file: string
@@ -81,7 +112,13 @@ export interface DocFigure {
   annotation: Annotation
 }
 
-const ANNOTATION = /<!--\s*credits(-rate)?:\s*(.*?)\s*-->/g
+const ANNOTATION = /<!--\s*credits(-rate|-llm-rate)?:\s*(.*?)\s*-->/g
+const LLM_FIGURE = /^([a-z0-9][a-z0-9.-]*):(kie|direct)(?::(input|output)(:long)?|@(\d+)\/(\d+))$/
+
+/** The comment kind of an `ANNOTATION` match's first group. */
+function commentOf(group: string | undefined): AnnotationComment {
+  return group === "-rate" ? "rate" : group === "-llm-rate" ? "llm-rate" : "charge"
+}
 const PART = /^([a-z0-9][a-z0-9.:_-]*?)(?:@(\d+(?:\.\d+)?))?$/i
 const LITERAL = /^\d+(?:\.\d+)?$/
 
@@ -109,10 +146,24 @@ function parsePart(text: string): ChargePart {
   return { id: m[1]!, units: m[2] ? Number(m[2]) : 1 }
 }
 
-/** Parses an annotation's expression; throws on one it cannot read. */
-export function parseAnnotation(rate: boolean, expr: string): Annotation {
+/**
+ * Parses an annotation's expression; throws on one it cannot read. `comment`
+ * is the comment it is written in (`true` = `credits-rate:`, `false` = `credits:`).
+ */
+export function parseAnnotation(comment: AnnotationComment | boolean, expr: string): Annotation {
+  const kind = comment === true ? "rate" : comment === false ? "charge" : comment
+  if (kind === "llm-rate") {
+    const m = expr.match(LLM_FIGURE)
+    if (!m) throw new Error(`credits-llm-rate takes <model>:<kie|direct>:<input|output>[:long] or <model>:<kie|direct>@<in>/<out>, got "${expr}"`)
+    const [, modelId, lane, direction, long, inTokens, outTokens] = m
+    const figure: DocsLlmFigure =
+      direction !== undefined
+        ? { kind: "per-million", modelId: modelId!, lane: lane as DocsLlmLane, direction: direction as "input" | "output", band: long ? "long" : "base" }
+        : { kind: "call", modelId: modelId!, lane: lane as DocsLlmLane, inputTokens: Number(inTokens), outputTokens: Number(outTokens) }
+    return { kind: "llm", figure }
+  }
   if (expr === "n/a") return { kind: "none" }
-  if (rate) {
+  if (kind === "rate") {
     const m = expr.match(PART)
     if (!m || /\*/.test(expr) || LITERAL.test(expr)) throw new Error(`credits-rate takes one price id[@units], got "${expr}"`)
     return { kind: "rate", id: m[1]!, units: m[2] ? Number(m[2]) : 1 }
@@ -149,7 +200,7 @@ export function readDocFigures(file: string, text: string): DocFigure[] {
       const figure = found.value
       let annotation: Annotation
       try {
-        annotation = parseAnnotation(m[1] !== undefined, m[2]!)
+        annotation = parseAnnotation(commentOf(m[1]), m[2]!)
       } catch (err) {
         throw new Error(`${where}: ${(err as Error).message}`)
       }
@@ -245,9 +296,14 @@ export function listDocPages(root = DOCS_ROOT): string[] {
   return walk(root).sort()
 }
 
-/** The price an annotation states, or undefined when one of its ids is priced nowhere (or it is `n/a`). */
-export function priceOf(annotation: Annotation, chargeOf: ChargeOf, rateOf: RateOf): number | undefined {
+/**
+ * The price an annotation states, or undefined when one of its ids is priced
+ * nowhere (or it is `n/a`). A `credits-llm-rate:` figure needs `llmOf`
+ * (`llmFigurePricing`); without it, it is priced nowhere.
+ */
+export function priceOf(annotation: Annotation, chargeOf: ChargeOf, rateOf: RateOf, llmOf?: LlmFigureOf): number | undefined {
   if (annotation.kind === "none") return undefined
+  if (annotation.kind === "llm") return llmOf?.(annotation.figure)
   if (annotation.kind === "rate") {
     const one = rateOf(annotation.id)
     return one === undefined ? undefined : Math.round(one * annotation.units * 1e6) / 1e6
@@ -265,6 +321,7 @@ export function priceOf(annotation: Annotation, chargeOf: ChargeOf, rateOf: Rate
 export function annotationIds(annotation: Annotation): string[] {
   if (annotation.kind === "none") return []
   if (annotation.kind === "rate") return [annotation.id]
+  if (annotation.kind === "llm") return [annotation.figure.modelId]
   return annotation.charges.flatMap((c) => c.parts.flatMap((p) => (p.id ? [p.id] : [])))
 }
 
@@ -289,11 +346,33 @@ export function rewriteDocFigures(text: string, valueOf: (annotation: Annotation
       for (const m of found) {
         const figure = figureBefore(out, m.index!)
         if (!figure) continue
-        const value = valueOf(parseAnnotation(m[1] !== undefined, m[2]!))
+        const value = valueOf(parseAnnotation(commentOf(m[1]), m[2]!))
         if (value === undefined || value === figure.value) continue
         out = out.slice(0, figure.start) + formatFigure(value, figure.text) + out.slice(figure.end)
       }
       return out
     })
     .join("\n")
+}
+
+/**
+ * Metered LLM figures (`credits-llm-rate:`) at the settings' GLOBAL markup,
+ * priced through the server's own functions: the per-model rate cards and
+ * cost formula (`lib/pricing/llm-cost.ts`), `usdToCredits` and the one
+ * markup-rounding formula (`applyMarkupPercent`). Every metered feature is
+ * charged at the global setting unless the admin gives it a margin of its own;
+ * the docs test fails a settings file that does (the rate table would then not
+ * be every feature's rate).
+ */
+export function llmFigurePricing(settings: { cost_markup_percent: number }): LlmFigureOf {
+  return docsLlmPricing(
+    {
+      rateCard: (modelId, lane) => llmRateCard(modelId, lane),
+      callCostUsd: (modelId, lane, usage) => calculateLlmCost(modelId, usage, lane),
+      usdToCredits,
+      markUp: applyMarkupPercent,
+      minimumUsd: CREDIT_BASE_USD,
+    },
+    settings.cost_markup_percent,
+  )
 }

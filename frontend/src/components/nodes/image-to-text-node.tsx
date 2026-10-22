@@ -11,9 +11,8 @@ import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToTextData } from "@/types/nodes"
@@ -86,7 +85,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToTextData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const credits = useModelCredits(buildLlmCreditIdentifier("image-to-text", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-to-text"], nodeData.reasoningEffort, nodeData.advancedMode === true), 1)
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("image-to-text", nodeData, 1)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -111,14 +110,14 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Eye className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={credits} creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={status === "running"}
       minWidth={300}
       minHeight={350}
       hideHeader
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
       }
       handles={[
         { id: "image", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

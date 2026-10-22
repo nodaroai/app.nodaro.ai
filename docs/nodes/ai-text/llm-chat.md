@@ -29,15 +29,15 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | User Input | `string` | `""` | The main prompt. Can include references to upstream nodes via field mappings |
 | Model | `string` | `gemini-3.6-flash` | LLM model picked via the model selector — drives both capability and credit cost (see [Credit pricing](#credit-pricing)) |
 | Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative). Ignored by models that reject the parameter (Claude Opus 4.7, GPT-5.5, the GPT-5.6 and GPT-6 families, Grok 4.6 and 4.7, Claude Sonnet 5 and 5.5, Claude Opus 4.8, 5 and 5.5, Claude Fable 5, Kimi K3, and DeepSeek V4.1 Flash) |
-| Max Tokens | `number` | `8192` | Maximum output length in tokens. A model's reasoning counts toward it, so the cap has a floor: at `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default — it is raised to 32768 (Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash, Gemini 4 Argon), 16384 (Gemini 3.8 Flash, Gemini 3.1 Pro) or 8192 (Gemini 3 Flash, Gemini 3.6 Flash). If the model still reaches the cap before it finishes, the run **fails** with a *cut off* error and its credits are refunded — a partial answer is never saved or passed to the next node. DeepSeek V4.1 Flash does not accept an output cap at all, so Max Tokens does not limit its answer |
-| # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
+| Max Tokens | `number` | `8192` | Maximum output length in tokens. A model's reasoning counts toward it, so the cap has a floor: at `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default — it is raised to 32768 (Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Claude Fable 5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash, Gemini 4 Argon), 16384 (Gemini 3.8 Flash, Gemini 3.1 Pro) or 8192 (Gemini 3 Flash, Gemini 3.6 Flash). If the model still reaches the cap before it finishes, the run **fails** with a *cut off* error and is charged for the text the model wrote before it was cut off (the provider billed it) — a partial answer is never saved or passed to the next node. DeepSeek V4.1 Flash does not accept an output cap at all, so Max Tokens does not limit its answer |
+| # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied estimate |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
-| Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** (above the model's reasoning floor — see Max Tokens) and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit rung up (a premium model moves to premium-direct); the node's cost badge updates immediately. Disabled with an inline reason on other models |
+| Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** (above the model's reasoning floor — see Max Tokens) and the full reasoning-depth range actually apply — those controls appear once it is on. The call is charged at that lane's per-token rate (see [Credit pricing](#credit-pricing)); the node's cost badge updates immediately. Disabled with an inline reason on other models |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the **User Input** (never the Instructions / system prompt) at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Model selector
 
-The model is chosen from the shared LLM model selector — a searchable picker grouped by provider (Anthropic / DeepSeek / Google / Moonshot AI / OpenAI / xAI), with each group ordered economy → premium. The selected model determines the credit cost by tier. Every model accepts an image reference; the table below shows which **Gemini** models additionally accept video and audio references.
+The model is chosen from the shared LLM model selector — a searchable picker grouped by provider (Anthropic / DeepSeek / Google / Moonshot AI / OpenAI / xAI), with each group ordered economy → premium (the tier is a quality and budget hint). The selected model's per-token rate determines what a run is charged — see [Credit pricing](#credit-pricing). Every model accepts an image reference; the table below shows which **Gemini** models additionally accept video and audio references.
 
 | Model | Tier | Multimodal (references) |
 |-------|------|--------------------------|
@@ -144,61 +144,58 @@ The composable `items` output is the recommended path for automated workflows; t
 
 ## Credit pricing
 
-Cost depends on the selected model's tier.
+A run is charged for the tokens it actually used — its prompt (instructions, user input and references) and its answer — at the selected model's rate, on the lane that served it. Every model's rate, in credits per million input and output tokens, is in [LLM model rates](../../pricing/llm-models.md).
 
-| Tier | Example models | Credits |
-|------|----------------|---------|
-| Economy | Gemini Flash, Claude Haiku, GPT-6 Luna, DeepSeek V4.1 Flash | **2**<!-- credits: llm-chat:economy --> |
-| Standard | Claude Sonnet, GPT-5.2, Grok 4.6 / 4.7 | **3**<!-- credits: llm-chat --> |
-| Premium | Claude Opus, Claude Fable 5, GPT-5.4, GPT-6 Astra / Sol / 6.1 Sol, Kimi K3, Gemini Pro | **7**<!-- credits: llm-chat:premium --> |
-| Premium-direct | a premium model running on the provider's own API (Advanced mode, a Claude model with an effort, or Gemini 4 Argon, which always runs there) | **17**<!-- credits: llm-chat:premium-direct --> |
+**Before the run** the Run button shows `~N`, an estimate of a typical call on the selected model, for example:
 
-The credit identifier is `llm-chat` (standard), `llm-chat:economy`, `llm-chat:premium`, or `llm-chat:premium-direct`, built from the selected model, effort and Advanced mode at request time. The figures above are what each of those ids is charged (`GET /v1/credits/model-cost?model=llm-chat:premium` returns the live one).
+| Model | Typical run |
+|-------|-------------|
+| GPT-6 Luna | ~2 credits<!-- credits: llm-chat:gpt-6-luna --> |
+| Gemini 3.6 Flash (default) | ~3 credits<!-- credits: llm-chat:gemini-3.6-flash --> |
+| Claude Sonnet 5.5 | ~4 credits<!-- credits: llm-chat:claude-sonnet-5.5 --> |
+| Claude Opus 5.5 | ~6 credits<!-- credits: llm-chat:claude-opus-5.5 --> |
+| Claude Fable 5 | ~14 credits<!-- credits: llm-chat:claude-fable-5 --> |
 
-**Where the call runs, and what it costs.** A call is priced on the route it actually takes. By default every model runs through our aggregator at its tier price; if the aggregator fails, the call is retried on the provider's own API at no extra charge. It runs on the provider's own API — and bills **one rung up** (economy → standard → premium → premium-direct) — when:
+`POST /v1/credits/model-costs` answers the same estimate for `llm-chat:<model>` (`llm-chat:<model>:direct` when the call runs on the provider's own API — `llmPriceKey` in `@nodaro/shared/llm-models` builds the key), and lists it under `estimates`.
+
+**The hold.** When the run starts, a hold is reserved: the call's first attempt at the model's output cap (Max Tokens, or the model's floor). A balance below the hold is refused before anything runs (`402`, "Needs up to N credits"). The hold is not the charge: after the call, the run is charged what it used — usually far less, and sometimes more (a retry on the provider's own API, a long answer). Anything above the hold is taken from your balance, and whatever the balance cannot cover is written off, never billed later.
+
+- Claude Fable 5, 2,000 tokens in and 2,000 out on the aggregator → 27 credits<!-- credits-llm-rate: claude-fable-5:kie@2000/2000 -->.
+- Claude Fable 5 with a 2,667-token prompt holds 368 credits<!-- credits-llm-rate: claude-fable-5:kie@2667/32768 --> (its 32,768-token cap). If the aggregator fails and the provider's own API answers using the whole cap, the run is charged 917 credits<!-- credits-llm-rate: claude-fable-5:direct@2667/32768 -->; with only 100 credits<!-- credits: n/a --> left after the hold, it is charged 468<!-- credits: n/a --> and the rest is written off.
+
+**Where the call runs.** By default every model runs through our aggregator; if the aggregator fails, the call is retried on the provider's own API and charged at that lane's rate. It runs on the provider's own API from the start when:
 
 - **Advanced mode** is on (Gemini and Claude models), or
-- you pick any **Effort** on a **Claude** model: Claude's reasoning effort only takes effect on Anthropic's own API, so choosing one sends the call there. Leave Effort on **Auto** to keep a Claude model on its tier price.
+- you pick any **Effort** on a **Claude** model: Claude's reasoning effort only takes effect on Anthropic's own API, so choosing one sends the call there. Leave Effort on **Auto** to keep a Claude model on the aggregator.
 
-**Gemini 4 Argon** runs on Google's own API on every call — it has no aggregator route and no fallback — so it always bills premium-direct, 17 credits<!-- credits: llm-chat:premium-direct -->, at every effort, with or without Advanced mode. On a self-hosted install it needs `GEMINI_API_KEY`; without it the run fails with a *provider unavailable* error rather than going elsewhere.
+**Gemini 4 Argon** runs on Google's own API on every call — it has no aggregator route and no fallback — so it is always charged at that lane's rate, at every effort, with or without Advanced mode. On a self-hosted install it needs `GEMINI_API_KEY`; without it the run fails with a *provider unavailable* error rather than going elsewhere.
+
+**Failures and stopping.** A failed call the provider still billed — a refusal, an answer cut off at the cap, an answer that could not be used — is charged for that usage, and the error says how much. A failure the provider did not bill is refunded. If you **stop** a streaming run, it is charged for its prompt and the text produced before you stopped it: a run on Claude Sonnet 5.5 with a 4,000-character prompt (about 1,000 tokens), stopped after 3,200 characters of answer (about 800 tokens), is charged 3 credits<!-- credits-llm-rate: claude-sonnet-5.5:kie@1000/800 -->. A run stopped before the request reached the provider is refunded.
 
 ## Reasoning effort
 
 Reasoning-capable models expose an **Effort** selector (Auto/low/…/max — the levels vary
-per model). **Auto** applies the vendor default. `xhigh` and `max` bill **one tier up**:
-economy models bill the standard price, standard models bill the premium price, premium
-models are unchanged.
+per model). **Auto** applies the vendor default. Effort has no price of its own: a higher
+effort usually spends more output tokens reasoning, and those tokens are charged at the
+model's rate. On a **Claude** model any effort other than Auto runs the call on Anthropic's
+own API, at that lane's rate (see [Credit pricing](#credit-pricing)).
 
-Examples (LLM Chat: 2 cr<!-- credits: llm-chat:economy --> economy / 3 cr<!-- credits: llm-chat --> standard / 7 cr<!-- credits: llm-chat:premium --> premium):
-- GPT-5.6 Luna at `max` → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
-- GPT-5.6 Terra at `xhigh` → 7 credits<!-- credits: llm-chat:premium --> (standard billed as premium)
-- Grok 4.6 at `xhigh` → 7 credits<!-- credits: llm-chat:premium --> (standard billed as premium; its ladder is low/medium/high/xhigh)
-- GPT-5.6 Sol at `max` → 7 credits<!-- credits: llm-chat:premium --> (premium, unchanged)
-- GPT-6 Astra at `xhigh` → 7 credits<!-- credits: llm-chat:premium --> (premium, unchanged; its ladder is low/medium/high/xhigh)
-- Claude Sonnet 5 at `high` → 7 credits<!-- credits: llm-chat:premium --> (a Claude effort runs on Anthropic's own API: standard billed as premium; `high` adds no effort bump of its own)
-- Claude Sonnet 5 at `Auto` → 3 credits<!-- credits: llm-chat --> (standard)
-- Claude Opus 5.5 at `medium` → 17 credits<!-- credits: llm-chat:premium-direct --> (premium billed as premium-direct)
-- Claude Sonnet 5.5 at `max` → 17 credits<!-- credits: llm-chat:premium-direct --> (the effort bump and the direct bump stack: standard → premium → premium-direct)
-- Claude Haiku 5.5 at `Auto` → 2 credits<!-- credits: llm-chat:economy --> (economy)
-- Claude Haiku 5.5 at `low`, `medium` or `high` → 3 credits<!-- credits: llm-chat --> (a Claude effort runs on Anthropic's own API: economy billed as standard)
-- Claude Haiku 5.5 at `xhigh` or `max` → 7 credits<!-- credits: llm-chat:premium --> (the effort bump and the direct bump stack: economy → standard → premium)
-- Gemini 3.6 Flash with Advanced mode → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
-- DeepSeek V4.1 Flash at `xhigh` → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
 - GPT-6.1 Sol has no `none` level (its ladder is low…max): a `none` request runs at the vendor default
-- Kimi K3 exposes `low`/`medium`/`high` only — requests above `high` clamp down to it, so it always bills premium (7 credits<!-- credits: llm-chat:premium -->)
-- Gemini 3.6 Flash and Gemini 3.8 Flash expose `low`/`high` only — none of them changes the price (requests above `high` clamp down to it)
-- Gemini 4 Argon exposes `low`/`medium`/`high` (no `none`: its provider has no minimal level for it, so a `none` request runs at Auto). Every level bills 17 credits<!-- credits: llm-chat:premium-direct --> — see above
+- Kimi K3 exposes `low`/`medium`/`high` only — requests above `high` clamp down to it
+- Gemini 3.6 Flash and Gemini 3.8 Flash expose `low`/`high` only (requests above `high` clamp down to it)
+- Gemini 4 Argon exposes `low`/`medium`/`high` (no `none`: its provider has no minimal level for it, so a `none` request runs at Auto)
+- Grok 4.6 and GPT-6 Astra expose low/medium/high/xhigh
 
 ## Best Practices
 
 - Use the Instructions (System Prompt) to define output format, tone, and constraints — good instructions dramatically improve consistency.
 - Reference upstream nodes in the User Input via field mappings for dynamic, context-aware prompts.
 - Keep Temperature at 0.7 for a balance of creativity and coherence. Lower it for factual or structured output; raise it for brainstorming.
-- For long-form content, raise Max Tokens. The default (8192) handles most cases, but an answer that reaches the cap fails the run (credits refunded) rather than being saved cut off. At `xhigh`/`max` effort the cap is automatically floored — and so it is at **every** effort, including `Auto`, on the models that reason by default, whose reasoning tokens share the output budget on every call: 32768 for Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash and Gemini 4 Argon; 16384 for Gemini 3.8 Flash and Gemini 3.1 Pro; 8192 for Gemini 3 Flash and Gemini 3.6 Flash. A small Max Tokens on those models is raised to the floor, so it cannot starve the answer.
+- For long-form content, raise Max Tokens. The default (8192) handles most cases, but an answer that reaches the cap fails the run (charged for what the model wrote) rather than being saved cut off. At `xhigh`/`max` effort the cap is automatically floored — and so it is at **every** effort, including `Auto`, on the models that reason by default, whose reasoning tokens share the output budget on every call: 32768 for Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Claude Fable 5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3, DeepSeek V4.1 Flash and Gemini 4 Argon; 16384 for Gemini 3.8 Flash and Gemini 3.1 Pro; 8192 for Gemini 3 Flash and Gemini 3.6 Flash. A small Max Tokens on those models is raised to the floor, so it cannot starve the answer.
 - If a run fails with *The answer was cut off*, ask for a shorter answer in the instructions, lower **Effort**, or raise Max Tokens.
-- If a run fails with *Content policy violation*, the provider's safety or recitation filter withheld the answer (on a Gemini model running on Google's own API this includes a reply stopped for reciting existing text). Nothing is saved, the credits are refunded, and the run is not retried on another model — rephrase the request, or ask for an original answer rather than reproduced text.
+- If a run fails with *Content policy violation*, the provider's safety or recitation filter withheld the answer (on a Gemini model running on Google's own API this includes a reply stopped for reciting existing text). Nothing is saved, the run is charged only for what the provider billed for the refused request (nothing when it billed nothing), and it is not retried on another model — rephrase the request, or ask for an original answer rather than reproduced text.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
-- Pick the cheapest model that meets your quality bar — economy (2 cr<!-- credits: llm-chat:economy -->) is plenty for rewriting and captioning; reserve premium (7 cr<!-- credits: llm-chat:premium -->) for complex reasoning.
+- Pick the cheapest model that meets your quality bar — an economy model (Gemini 3.6 Flash, ~3 cr<!-- credits: llm-chat:gemini-3.6-flash -->) is plenty for rewriting and captioning; reserve a premium one (Claude Opus 5.5, ~6 cr<!-- credits: llm-chat:claude-opus-5.5 -->) for complex reasoning. A long prompt or a long answer costs more on any model.
 - To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.8 Flash and Gemini 4 Argon are image-only for now).
 
 ## Common Use Cases

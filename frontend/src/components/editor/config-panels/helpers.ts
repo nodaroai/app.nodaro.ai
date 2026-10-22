@@ -52,6 +52,7 @@ import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
 import { getCachedModelCredits } from "@/hooks/use-model-credit-cost"
+import { LLM_NODE_FEATURE_MAP, llmNodePriceIds, resolveLlmPriceId } from "@/lib/llm-price-ids"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { TEXT_SOURCE_TYPES } from "./text-source-types"
 
@@ -287,24 +288,9 @@ export function extractDisplayValue(data: Record<string, unknown>, nodeType: str
   }
 }
 
-/** Map node types that use LLM models to their credit feature names */
-const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
-  "llm-chat": "llm-chat",
-  "video-composer": "scene-graph-ai",
-  "after-effects": "after-effects",
-  "lottie-overlay": "lottie-overlay",
-  "3d-title": "3d-title",
-  // motion-graphics is handled by an engine-aware special-case in getModelIdentifier
-  "generate-script": "generate-script",
-  "qa-check": "qa-check",
-  "image-to-text": "image-to-text",
-  "image-critic": "image-critic",
-  // Was missing: its per-node badge priced correctly via its own
-  // buildLlmCreditIdentifier call, but the workflow TOTAL fell through to the
-  // flat 1-credit NODE_CREDIT_COSTS entry, so a premium model on this node was
-  // invisible in the pre-run estimate.
-  "describe-to-picker": "describe-to-picker",
-}
+// The LLM node → feature map, and each LLM node's two price ids, live in
+// `@/lib/llm-price-ids` (the quick strip's model picker reads them too).
+export { llmNodeFeature, llmNodePriceIds } from "@/lib/llm-price-ids"
 
 /**
  * Does an edge feed this Add Captions node a TIMED caption source — a Transcript
@@ -422,6 +408,26 @@ export function getModelIdentifier(
   // model's tier; ideas add the per-five-ideas bucket).
   if (node.type === "content-recipe") return contentRecipeCreditId(data.llmModel, data.reasoningEffort as string | undefined)
   if (node.type === "content-ideas") return contentIdeasCreditId(data.count, data.llmModel, data.reasoningEffort as string | undefined)
+
+  // A metered LLM node: its per-model estimate once the server has priced its
+  // key as one (`llmNodePriceIds`), else today's id below — the tier id, for
+  // the 3D scene nodes their own row, and for a Choose Best AI judge the node
+  // type's. A cold cache and the tier-pricing rollback therefore quote exactly
+  // what they always did.
+  const llmIds = llmNodePriceIds(node)
+  if (llmIds) {
+    const resolved = resolveLlmPriceId(llmIds)
+    if (resolved === llmIds.key) return resolved
+  }
+
+  // Choose Best's AI judge, not (yet) an estimate: the id its route reserves
+  // and the server's estimate prices it at (`reduceCreditIdentifier` /
+  // `CREDIT_COSTS["reduce"]`) — the judge model's tier, from the model alone.
+  // The node type's own id is priced nowhere, so a judge used to quote 0.
+  if (node.type === "reduce" && llmIds) {
+    const judgeModel = (data.strategyConfig as { llmModel?: unknown } | undefined)?.llmModel
+    return buildLlmCreditIdentifier("reduce:pick-best-llm", typeof judgeModel === "string" ? judgeModel : undefined)
+  }
 
   // motion-graphics: feature is engine-dependent (design §8 — every credit-id site branches on engine)
   if (node.type === "motion-graphics") {

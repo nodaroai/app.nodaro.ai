@@ -22,6 +22,10 @@ import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 import { billedContentRefusal } from "../lib/llm-errors.js"
+import type { LlmSettleOutcome, LlmSpend } from "../lib/llm-billing.js"
+import type { LlmBillingLedgerWrite } from "../lib/llm-billing-ledger.js"
+import { ledgerLane, meteredSpendFromRow, rowBilling } from "../lib/llm-row-spend.js"
+export { meteredSpendFromRow }
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { withOutputImageDimensions } from "../lib/job-output-dimensions.js"
@@ -755,6 +759,654 @@ export async function commitJobCreditsAtChargedPrice(
  */
 export const LLM_PRODUCT_JOB_TYPES: ReadonlySet<string> = new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"])
 
+// ── Metered LLM worker jobs (D1/D10) ──
+//
+// A worker job reserved under a metered LLM charge id (`<feature>:<model>`,
+// `lib/llm-billing.ts`) is settled from what its calls really cost — success
+// AND failure — never by committing or refunding the hold whole. Whether a
+// job is metered is decided by its RESERVATION (the usage log's `action`),
+// never by the rollback switch, so a job reserved metered before a rollback
+// flip still settles metered, and a tier reservation keeps today's path.
+
+/** Where a handler's spend rides a thrown error to the failure net. Annotated, never wrapped. */
+const LLM_SPEND_KEY = Symbol.for("nodaro.worker.llmSpend")
+
+/**
+ * Annotate a thrown error with the job's metered spend, so the worker's
+ * final-attempt failure net ({@link refundJobCredits}) charges every billed
+ * call — a lottie's first answer plus its failed repair, each Scene3D
+ * revision, a script whose answer failed to parse. The error object itself is
+ * returned (never wrapped): the failure funnel's `instanceof` checks
+ * (post-processing, safety, deterministic) run on it.
+ */
+export function attachLlmSpend<E>(err: E, spend: LlmSpend): E {
+  if (err !== null && typeof err === "object") {
+    try {
+      Object.defineProperty(err, LLM_SPEND_KEY, { value: spend, enumerable: false, configurable: true })
+    } catch {
+      // A frozen error: the failure net falls back to what the error itself carries.
+    }
+  }
+  return err
+}
+
+/** The spend {@link attachLlmSpend} put on an error (or on one in its `cause` chain). */
+export function llmSpendOf(err: unknown): LlmSpend | undefined {
+  let cur: unknown = err
+  for (let depth = 0; cur !== null && typeof cur === "object" && depth < 8; depth++) {
+    const spend = (cur as Record<symbol, unknown>)[LLM_SPEND_KEY]
+    if (spend) return spend as LlmSpend
+    cur = (cur as { cause?: unknown }).cause
+  }
+  return undefined
+}
+
+/**
+ * The metered charge id a job's hold was reserved under, read off its usage
+ * log: `{ kind: "metered", chargeId }`, `{ kind: "not-metered" }` (a tier or
+ * fixed reservation, no log, or no credits), or `{ kind: "unknown" }` when the
+ * log could not be read.
+ */
+export async function meteredReservationOf(
+  usageLogId: string | null | undefined,
+): Promise<{ kind: "metered"; chargeId: string } | { kind: "not-metered" } | { kind: "unknown" }> {
+  if (!hasCredits() || !usageLogId) return { kind: "not-metered" }
+  try {
+    const { data, error } = await supabase.from("usage_logs").select("action").eq("id", usageLogId).maybeSingle()
+    if (error) return { kind: "unknown" }
+    const action = (data as { action?: unknown } | null)?.action
+    if (typeof action !== "string") return { kind: "not-metered" }
+    const { parseMeteredLlmId } = await import("../ee/billing/metered-llm-id.js")
+    return parseMeteredLlmId(action) ? { kind: "metered", chargeId: action } : { kind: "not-metered" }
+  } catch (err) {
+    console.warn(`[worker] could not read the reservation of usage log ${usageLogId}:`, err)
+    return { kind: "unknown" }
+  }
+}
+
+/** What {@link WorkerLlmBilling.settle} did. `metered: false` = a tier reservation: the caller commits as before. */
+export type WorkerLlmSettle =
+  | { metered: false }
+  | {
+      metered: true
+      outcome: LlmSettleOutcome["outcome"]
+      /**
+       * The commit receipt's `charged` — the job's `credits_actual` — when the
+       * settle charged. (The billing ledger itself is the settle's to write, in
+       * the server-only ledger column — never on the completion's `output_data`, R32.)
+       */
+      charged?: number
+    }
+
+/** A worker handler's metered billing: the spend its calls are recorded on, and the settle. */
+export interface WorkerLlmBilling {
+  /** Whether the hold was reserved metered (read off its usage log once, at the start). */
+  readonly metered: boolean
+  /**
+   * The job's spend — what {@link attachLlmSpend} carries to the failure net.
+   * On a metered hold it starts from the attempts an EARLIER BullMQ attempt of
+   * this job billed (R31: carried on the row by {@link WorkerLlmBilling.noteSpend}),
+   * so every billed attempt is charged, not only the last.
+   */
+  readonly spend: LlmSpend
+  /**
+   * Where every call the job makes is recorded — answered, repaired, revised,
+   * or failed with billed usage. The spend itself on a metered hold, and on a
+   * hold whose reservation could not be read (the failure net re-reads it and
+   * must not be left without the real requests); a no-op on a hold known not
+   * to be metered (a tier hold under the rollback runs exactly as before).
+   */
+  readonly recorder: Pick<LlmSpend, "add">
+  /**
+   * Record what the job has billed so far on the row: `provider_cost` and a
+   * running ledger in the server-only ledger column (with its `attempts`,
+   * R32 — never `output_data`) — after each
+   * answered call AND before a billed failure is rethrown. A cancel or the
+   * reconcile sweep that looks at the job then sees it billed and charges its
+   * hold instead of refunding it (D10), and a BullMQ retry of the job seeds its
+   * spend from it (R31). Metered jobs only; a spend that billed nothing writes
+   * nothing; never throws.
+   */
+  noteSpend(): Promise<void>
+  /**
+   * Seed an unseeded spend (D13: the start read failed on a final attempt)
+   * from the row BEFORE the job's first call: an earlier attempt's billed
+   * calls are carried in, floored to the row's `provider_cost` like the start
+   * carry while this attempt has billed nothing yet. `false` when the row
+   * still cannot be read (a later read — noteSpend, the settle, the failure
+   * net — seeds it then); `true` without a read for a seeded spend or a hold
+   * that is not metered. The ledger lives in its own column, so a handler
+   * write that replaces `output_data` can no longer drop it.
+   */
+  seedFromRow(): Promise<boolean>
+  /**
+   * R38: call immediately before the job's FIRST LLM call (idempotent after
+   * it). A metered job's row carries a pre-call marker from the moment its
+   * billing opened, so a cancel before the call refunds the hold at once; this
+   * clears it and stamps `provider_call_started_at`, CAS on a live status.
+   * Throws `JobCancelledError` when the row was cancelled first (the call must
+   * not be sent), and a plain error when the start could not be recorded
+   * (nothing is sent: the failure net refunds). A no-op on a hold that is not
+   * metered (the rollback runs exactly as before).
+   */
+  callStarting(): Promise<void>
+  /**
+   * Settle the hold from the spend — BEFORE the job's terminal write. On
+   * `unsettled` the caller returns WITHOUT completing: the row stays
+   * non-terminal and the reconcile sweep charges the hold (C3).
+   */
+  settle(): Promise<WorkerLlmSettle>
+}
+
+/**
+ * The running ledger a spend makes — its record, or the uncomputable ledger
+ * the settle writes when its cost cannot be computed — with its charge id and
+ * every attempt (R31: what a retry seeds from).
+ */
+function spendLedger(spend: LlmSpend, chargeId: string): LlmBillingLedgerWrite {
+  let ledger: LlmBillingLedgerWrite
+  try {
+    const record = spend.record
+    if (!Number.isFinite(record.costUsd) || record.costUsd < 0) throw new Error("non-finite cost")
+    ledger = { ...record, chargeId }
+  } catch {
+    ledger = { costUsd: null, source: "uncomputable", calls: spend.attempts.length, lanes: spend.attempts.map((a) => a.lane), chargeId }
+  }
+  return { ...ledger, attempts: [...spend.attempts] }
+}
+
+
+/**
+ * Spends opened on a FINAL attempt whose start read of the row failed (D13):
+ * not yet seeded with what an earlier BullMQ attempt billed. The first read
+ * that succeeds later — {@link WorkerLlmBilling.noteSpend}, the settle, or the
+ * failure net — carries the row's attempts in once, then removes the spend.
+ */
+const unseededSpends = new WeakSet<LlmSpend>()
+
+/**
+ * Spends {@link workerLlmBilling} opened on a hold that is metered — or whose
+ * reservation could not be read. Only an error carrying one of these reaches
+ * {@link settleCancelledMeteredJob}: a tier job's error (its spend is attached
+ * too) never costs a read there, so the rollback stays byte-identical.
+ */
+const meteredOpenSpends = new WeakSet<LlmSpend>()
+
+/** Carry the attempts a row's running ledger recorded (an earlier BullMQ attempt's billed calls, R31) into a spend. */
+function carryRowAttempts(spend: LlmSpend, chargeId: string, ledger: Record<string, unknown> | undefined, jobId: string): void {
+  const carried = Array.isArray(ledger?.attempts) ? (ledger.attempts as unknown[]) : []
+  if (carried.length === 0) return
+  try {
+    spend.add(chargeId, { modelId: chargeId, system: "", messages: [] }, { output: { attempts: carried } as never })
+    console.log(`[worker] Job ${jobId}: carried ${carried.length} billed call(s) from an earlier attempt`)
+  } catch (err) {
+    console.error(`[worker] Job ${jobId}: an earlier attempt's spend could not be read — not carried:`, err)
+  }
+}
+
+/**
+ * The start carry's floor: a row whose cumulative `provider_cost` exceeds
+ * what its carried attempts sum to (an earlier attempt's last `noteSpend`
+ * read failed, so it wrote the cost alone and its attempts are stale) carries
+ * the difference as one stated attempt, on the lane the ledger names. Only
+ * at the start of an attempt — before it has written anything. Unpriceable
+ * carried attempts (a missing rate) are kept as recorded: the settle owns it.
+ */
+function floorToRowProviderCost(spend: LlmSpend, modelId: string, ledger: Record<string, unknown> | undefined, providerCost: number | undefined, jobId: string): void {
+  if (typeof providerCost !== "number" || !Number.isFinite(providerCost) || providerCost <= 0) return
+  let carriedUsd: number
+  try {
+    carriedUsd = spend.costUsd
+  } catch {
+    return
+  }
+  const gap = providerCost - carriedUsd
+  // A rounding-level tolerance: the row's cost IS the attempts' sum when both were written together.
+  if (!(gap > 1e-9)) return
+  try {
+    spend.add(modelId, { modelId, system: "", messages: [] }, {
+      output: { attempts: [{ lane: ledgerLane(ledger), modelId, requestChars: 0, inputTokens: 0, outputTokens: 0, creditsUsd: gap }] } as never,
+    })
+    console.log(`[worker] Job ${jobId}: carried $${gap} an earlier attempt billed beyond its recorded attempts (provider_cost ${providerCost})`)
+  } catch (err) {
+    console.error(`[worker] Job ${jobId}: the row's provider_cost could not be carried:`, err)
+  }
+}
+
+/**
+ * Open a worker job's metered billing (see {@link WorkerLlmBilling}). A
+ * reservation that is not metered — a tier id under the rollback, a fixed
+ * price, no credits — answers `metered: false`, and `settle` hands the
+ * caller back to its existing commit, byte-identical. A log that cannot be
+ * read is treated the same way on success (the existing commit charges the
+ * hold whole — never free); its calls are still recorded, for the failure net.
+ *
+ * `job` is the BullMQ attempt (D13): a row that cannot be read at the start
+ * fails the attempt only while a retry remains.
+ */
+export async function workerLlmBilling(
+  ctx: Pick<JobContext, "jobId" | "usageLogId">,
+  job: Pick<Job, "attemptsMade" | "opts">,
+): Promise<WorkerLlmBilling> {
+  const { LlmSpend: Spend } = await import("../lib/llm-billing.js")
+  const spend = new Spend()
+  const reservation = await meteredReservationOf(ctx.usageLogId)
+  if (reservation.kind === "unknown" && ctx.usageLogId) {
+    // The reservation could not be read: it may be metered. Its calls are
+    // recorded (the failure net re-reads it), a cancel finds the row billed
+    // (m1: `noteSpend` raises the cumulative `provider_cost` — monotone, never
+    // the ledger, which needs the charge id), and a row already cancelled is
+    // not sent its call (the cancel kept the hold: no pre-call marker here).
+    meteredOpenSpends.add(spend)
+    return {
+      metered: false,
+      spend,
+      recorder: spend,
+      noteSpend: async () => {
+        if (!spend.billedAnything) return
+        try {
+          const cost = spend.costUsd
+          if (!Number.isFinite(cost) || cost <= 0) return
+          const { error } = await supabase
+            .from("jobs")
+            .update({ provider_cost: cost })
+            .eq("id", ctx.jobId)
+            .or(`provider_cost.is.null,provider_cost.lt.${cost}`)
+          if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far: ${error.message}`)
+        } catch (err) {
+          console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far:`, err)
+        }
+      },
+      seedFromRow: async () => true,
+      callStarting: async () => {
+        await throwIfRowCancelled(ctx.jobId)
+      },
+      settle: async () => ({ metered: false }),
+    }
+  }
+  if (reservation.kind !== "metered" || !ctx.usageLogId) {
+    return {
+      metered: false,
+      spend,
+      recorder: { add: () => {} },
+      noteSpend: async () => {},
+      seedFromRow: async () => true,
+      callStarting: async () => {},
+      settle: async () => ({ metered: false }),
+    }
+  }
+  meteredOpenSpends.add(spend)
+  const usageLogId = ctx.usageLogId
+  const { chargeId } = reservation
+  const { parseMeteredLlmId } = await import("../ee/billing/metered-llm-id.js")
+  const modelId = parseMeteredLlmId(chargeId)?.modelId ?? chargeId
+  // R31: an earlier BullMQ attempt's billed calls are this job's too, carried
+  // from the row. D13 (owner decision) for a row that cannot be read:
+  //  - a retry remains → fail the attempt BEFORE any call (nothing is spent
+  //    yet); the retry gets a clean read. Starting empty would settle without
+  //    the earlier billed calls (a silent refund, D10).
+  //  - the final / only attempt → proceed (a first attempt has nothing earlier
+  //    to lose). The spend starts empty and is seeded from the row by the first
+  //    read that succeeds later (noteSpend, settle, or the failure net).
+  const row = await rowBilling(ctx.jobId)
+  if (row.readFailed) {
+    if (!isFinalJobAttempt(job)) {
+      throw new Error(`Job ${ctx.jobId}: its billing ledger could not be read — not started, so an earlier attempt's billed calls are not lost (a retry remains)`)
+    }
+    unseededSpends.add(spend)
+    console.warn(`[worker] Job ${ctx.jobId}: its billing ledger could not be read on the final attempt — proceeding; seeded from the row once it reads`)
+  } else {
+    carryRowAttempts(spend, chargeId, row.ledger, ctx.jobId)
+    // Only at the START: nothing of this attempt is on the row yet, so its
+    // provider_cost is an earlier attempt's alone. A late seed floors only
+    // where its read is equivalent to this one (seedFromRow before any call) —
+    // never once this attempt's monotone write may be in that figure.
+    floorToRowProviderCost(spend, modelId, row.ledger, row.providerCost, ctx.jobId)
+  }
+  // R38: the row is marked pre-call until the first call is about to be sent,
+  // so a cancel in the meantime (an analysis wait, preprocessing) refunds the
+  // hold at once instead of keeping it as "billed-unknown". Only an empty
+  // ledger column (or a crashed earlier attempt's marker) is marked: a billed
+  // earlier attempt's ledger is never replaced. Unmarked (a failed write, a
+  // billed ledger) → a cancel keeps the hold, R36's conservative answer.
+  const { writeLlmPreCallMarker, clearLlmPreCallMarker } = await import("../lib/llm-billing-ledger.js")
+  const markerOwned = await writeLlmPreCallMarker(ctx.jobId, chargeId)
+  let callStarted = false
+  const lateSeed = (ledger: Record<string, unknown> | undefined): void => {
+    if (!unseededSpends.has(spend)) return
+    unseededSpends.delete(spend)
+    carryRowAttempts(spend, chargeId, ledger, ctx.jobId)
+  }
+  return {
+    metered: true,
+    spend,
+    recorder: spend,
+    noteSpend: async () => {
+      if (!spend.billedAnything) return
+      try {
+        // D13: an unseeded spend is seeded by this read (this attempt has not
+        // written the ledger yet — only a seeded spend writes it — so the
+        // row's attempts are all an earlier attempt's: never counted twice).
+        if (unseededSpends.has(spend)) {
+          const late = await rowBilling(ctx.jobId)
+          if (!late.readFailed) lateSeed(late.ledger)
+        }
+        const ledger = spendLedger(spend, chargeId)
+        const cost = typeof ledger.costUsd === "number" && ledger.costUsd > 0 ? ledger.costUsd : undefined
+        if (unseededSpends.has(spend)) {
+          // Still unseeded: this spend may lack an earlier attempt's calls, so
+          // it never writes the ledger (the late seed would read this
+          // attempt's calls back as an earlier one's), and its cost only
+          // RAISES the row's cumulative provider_cost (it marks the job
+          // billed), never lowers it.
+          if (cost === undefined) return
+          const { error } = await supabase
+            .from("jobs")
+            .update({ provider_cost: cost })
+            .eq("id", ctx.jobId)
+            .or(`provider_cost.is.null,provider_cost.lt.${cost}`)
+          if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far: ${error.message}`)
+          return
+        }
+        // Seeded: the spend holds every billed attempt of the job, so the
+        // running ledger REPLACES the column, with its cost in the same update.
+        const { writeLlmBillingLedger } = await import("../lib/llm-billing-ledger.js")
+        if (!(await writeLlmBillingLedger(ctx.jobId, ledger, cost !== undefined ? { providerCost: cost } : {}))) {
+          console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far`)
+        }
+      } catch (err) {
+        console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far:`, err)
+      }
+    },
+    seedFromRow: async () => {
+      if (!unseededSpends.has(spend)) return true
+      // Nothing of this attempt is in the ledger yet (only a seeded spend
+      // writes it), so its attempts are all an earlier attempt's.
+      // Before this attempt billed anything, its noteSpend has written nothing
+      // either (it returns early on an empty spend), so the row's
+      // provider_cost is an earlier attempt's alone: this read is a start
+      // read, and floors like one. Once it billed, its monotone write may be
+      // in that figure — never floored then.
+      const beforeAnyCall = !spend.billedAnything
+      const late = await rowBilling(ctx.jobId)
+      if (late.readFailed) return false
+      lateSeed(late.ledger)
+      if (beforeAnyCall) floorToRowProviderCost(spend, modelId, late.ledger, late.providerCost, ctx.jobId)
+      return true
+    },
+    callStarting: async () => {
+      if (callStarted) return
+      const cancelled = async (): Promise<never> => {
+        const { JobCancelledError } = await import("../lib/job-cancellation.js")
+        throw new JobCancelledError(ctx.jobId)
+      }
+      if (markerOwned) {
+        const started = await clearLlmPreCallMarker(ctx.jobId)
+        // Cancelled before its first call: nothing is sent, nothing billed by
+        // this attempt — the cancel refunded the hold (it saw the marker).
+        if (started === "not-live") await cancelled()
+        if (started === "error") {
+          // Sending the call with the marker still on the row would let a
+          // cancel refund a call in flight (D10): not sent — the failure net
+          // refunds what nothing billed.
+          throw new Error(`Job ${ctx.jobId}: the start of its LLM call could not be recorded — not sent`)
+        }
+      } else {
+        // Unmarked (a billed earlier attempt's ledger, a failed marker write, a
+        // row already cancelled when billing opened): a cancel keeps such a
+        // hold (R36), so a row already cancelled is not sent its call at all —
+        // the settle refunds what nothing billed. A failed read proceeds.
+        await throwIfRowCancelled(ctx.jobId)
+      }
+      callStarted = true
+    },
+    settle: async () => {
+      const { settleLlmUsageLog } = await import("../lib/llm-billing.js")
+      if (unseededSpends.has(spend)) {
+        // D13: one more read for an earlier attempt's calls; still unreadable →
+        // settle what this (final) attempt billed.
+        const late = await rowBilling(ctx.jobId)
+        if (!late.readFailed) lateSeed(late.ledger)
+      }
+      const settled = await settleLlmUsageLog(usageLogId, ctx.jobId, chargeId, spend)
+      if (settled.outcome === "unsettled") {
+        console.error(`[worker] Job ${ctx.jobId}: its metered settle (${chargeId}) was not confirmed — left non-terminal for the reconcile sweep`)
+        return { metered: true, outcome: settled.outcome }
+      }
+      return {
+        metered: true,
+        outcome: settled.outcome,
+        ...(settled.outcome === "charged" ? { charged: settled.charged } : {}),
+      }
+    },
+  }
+}
+
+/**
+ * Throw `JobCancelledError` when the job's row is `cancelled` — the check a
+ * metered call makes before it is sent when the row carries no pre-call
+ * marker (R38). A failed read proceeds: the call's own settle still charges it.
+ */
+async function throwIfRowCancelled(jobId: string): Promise<void> {
+  let status: unknown
+  try {
+    const { data } = await supabase.from("jobs").select("status").eq("id", jobId).maybeSingle()
+    status = (data as { status?: unknown } | null)?.status
+  } catch (err) {
+    console.warn(`[worker] Job ${jobId}: could not read its status before its first call:`, err)
+  }
+  if (status === "cancelled") {
+    const { JobCancelledError } = await import("../lib/job-cancellation.js")
+    throw new JobCancelledError(jobId)
+  }
+}
+
+/**
+ * The failure net's metered branch (D10): a failed job whose hold is metered
+ * is settled from what it billed — the spend its handler attached
+ * ({@link attachLlmSpend}), else the usage the error itself carries — charged
+ * when anything was billed, refunded when nothing was. Never the whole hold,
+ * never a refund of a billed call. An unconfirmed settle is left reserved and
+ * REPORTED (the row is already failed, so no sweep revisits it). Returns false
+ * for a reservation that is not metered: the caller refunds as before.
+ */
+async function settleFailedMeteredJob(
+  usageLogId: string,
+  jobId: string,
+  errorOrMessage: unknown,
+  /** `cancelled-run` (R38): the job's row was cancelled while it ran — its own report. */
+  context: "failure" | "cancelled-run" = "failure",
+): Promise<boolean> {
+  const reservation = await meteredReservationOf(usageLogId)
+  if (reservation.kind === "not-metered") return false
+  const { LlmSpend: Spend, settleLlmUsageLog } = await import("../lib/llm-billing.js")
+  // The handler's spend — every metered worker handler attaches one, recorded
+  // with its REAL requests (and the calls an earlier BullMQ attempt billed).
+  // Only an error with no handler spend at all is read for its own usage.
+  let spend = llmSpendOf(errorOrMessage)
+  if (spend && unseededSpends.has(spend)) {
+    // D13: the handler's spend was opened on a final attempt whose start read
+    // of the row failed, so it may lack an earlier attempt's billed calls. One
+    // more read seeds it; still unreadable → never settled or refunded on a
+    // guess (D10): left reserved, and reported.
+    if (reservation.kind !== "metered") {
+      await reportUnsettledMeteredFailure(jobId, usageLogId, "the reservation could not be read", context)
+      return true
+    }
+    const late = await rowBilling(jobId)
+    if (late.readFailed) {
+      await reportUnsettledMeteredFailure(jobId, usageLogId, "its billing ledger could not be read", context)
+      return true
+    }
+    unseededSpends.delete(spend)
+    carryRowAttempts(spend, reservation.chargeId, late.ledger, jobId)
+  }
+  if (!spend) {
+    spend = new Spend()
+    if (reservation.kind === "metered") {
+      const fromRow = await meteredSpendFromRow(jobId, reservation.chargeId)
+      if (fromRow) {
+        spend = fromRow.spend
+        // Only a row that recorded nothing is topped up with what the error
+        // itself carries (never both: that would count the failure twice).
+        if (!fromRow.fromRow && errorOrMessage !== null && typeof errorOrMessage === "object") {
+          try {
+            spend.add(fromRow.modelId, { modelId: fromRow.modelId, system: "", messages: [] }, { error: errorOrMessage })
+          } catch (err) {
+            console.warn(`[worker] Job ${jobId}: the failure's usage could not be read:`, err)
+          }
+        }
+        if (fromRow.readFailed) {
+          // The row could not be read: what the job billed (an earlier
+          // attempt's calls included) is unknown, so neither a refund nor a
+          // settle of the error's usage alone is safe. Never refunded on a
+          // guess (D10) — left reserved, and reported.
+          await reportUnsettledMeteredFailure(jobId, usageLogId, "its billing ledger could not be read", context)
+          return true
+        }
+      }
+    }
+  }
+  if (reservation.kind === "unknown") {
+    // The reservation could not be read. Nothing billed → refund as before;
+    // billed → never refunded on a guess: left reserved, and reported.
+    if (!spend.billedAnything) return false
+    await reportUnsettledMeteredFailure(jobId, usageLogId, "the reservation could not be read", context)
+    return true
+  }
+  const settled = await settleLlmUsageLog(usageLogId, jobId, reservation.chargeId, spend)
+  if (settled.outcome === "unsettled") {
+    await reportUnsettledMeteredFailure(jobId, usageLogId, "the settle was not confirmed", context)
+  } else {
+    console.log(`[worker] Metered failure of job ${jobId} settled: ${settled.outcome}${settled.outcome === "charged" ? ` (${settled.charged} credits)` : ""}`)
+  }
+  return true
+}
+
+async function reportUnsettledMeteredFailure(
+  jobId: string,
+  usageLogId: string,
+  why: string,
+  context: "failure" | "cancelled-run" = "failure",
+): Promise<void> {
+  const { insertAppReport } = await import("../lib/app-reports.js")
+  if (context === "cancelled-run") {
+    // Not stranded: the reconcile sweep's cancelled-hold pass settles it from
+    // the row's ledger after the grace (and reports an error at its cap).
+    console.warn(`[worker] cancelled metered job ${jobId} — ${why}; its hold (log ${usageLogId}) is kept for the reconcile sweep, never refunded`)
+    await insertAppReport({
+      node: "llm-billing-worker",
+      kind: "metered-hold-unsettled-on-cancelled-run",
+      severity: "warning",
+      title: `Metered LLM job ${jobId} was cancelled while it ran; its hold is kept (${why}) — settled by the sweep`,
+      payload: { usageLogId, why },
+      jobId,
+    })
+    return
+  }
+  console.error(`[worker] ALERT: failed metered job ${jobId} — ${why}; its hold (log ${usageLogId}) is left reserved, never refunded`)
+  await insertAppReport({
+    node: "llm-billing-worker",
+    kind: "metered-hold-unsettled-on-failure",
+    severity: "error",
+    title: `Metered LLM job ${jobId} failed and its hold could not be settled (${why})`,
+    payload: { usageLogId, why },
+    jobId,
+  })
+}
+
+/**
+ * R38: a metered LLM job whose row was CANCELLED while its worker ran still
+ * settles — the worker's handler unwound with a `JobCancelledError`, or failed
+ * on the cancelled row (its `markJobFailed` CAS lost, so the failure net never
+ * ran). A cancel that found the job's call started kept its hold (R36: billed-
+ * unknown), and the row is cancelled, so nothing else revisits it soon: this
+ * charges what the job billed (D10: a billed call is never refunded; D2: a
+ * stopped call is charged its estimated usage, as the spend recorded it) and
+ * refunds a hold nothing billed against. The row stays `cancelled`.
+ *
+ * Only an error carrying a spend `workerLlmBilling` opened metered (or on an
+ * unreadable reservation) is considered: every other error — every tier job
+ * under the rollback — returns `false` with no read, and the cancel route owns
+ * its refund exactly as before. `true` = the row is cancelled and its metered
+ * hold was handed to the settle (an unconfirmed settle is reported; the
+ * cancelled-hold sweep retries it). Never throws.
+ */
+export async function settleCancelledMeteredJob(
+  usageLogId: string | null | undefined,
+  jobId: string,
+  err: unknown,
+): Promise<boolean> {
+  const spend = llmSpendOf(err)
+  if (!spend || !meteredOpenSpends.has(spend) || !usageLogId || !hasCredits()) return false
+  try {
+    const { data, error } = await supabase.from("jobs").select("status").eq("id", jobId).maybeSingle()
+    if (error || (data as { status?: unknown } | null)?.status !== "cancelled") return false
+    // An unbilled hold on a reservation that could not be read answers false
+    // here: left to the cancel route's refund or the cancelled-hold sweep.
+    const settled = await settleFailedMeteredJob(usageLogId, jobId, err, "cancelled-run")
+    if (settled) console.log(`[worker] Job ${jobId} was cancelled mid-run — its metered hold was settled (the row stays cancelled)`)
+    return true
+  } catch (settleErr) {
+    console.error(`[worker] Job ${jobId}: the settle of its cancelled metered hold failed — left for the cancelled-hold sweep:`, settleErr)
+    return true
+  }
+}
+
+/**
+ * R38 (m5): a metered LLM job whose BullMQ entry is picked up AFTER its row was
+ * cancelled — a retry waiting out its backoff, a job a worker drain handed back
+ * to the queue — is discarded at pickup without running. Once the row is past
+ * the cancelled-hold grace (N2: a stall re-pick's stalled-but-alive processor
+ * may still be mid-call before it), its hold is settled there and then: what
+ * the row recorded billed is charged at its actual and the rest released, or a
+ * hold nothing billed is refunded. The row stays cancelled; within the grace
+ * the reconcile sweep's cancelled-hold pass settles it later.
+ *
+ * Only a still-RESERVED metered hold on a CANCELLED row is touched (a hold the
+ * cancel already settled or refunded is not); a tier hold returns before any
+ * write. Keyed off the reservation, never the pricing switch (R15): a metered
+ * hold reserved before a rollback flip is settled all the same; before this
+ * process has confirmed the metered schema (R33) it is left to the sweep.
+ * Never throws: a failure leaves the hold to the sweep's cancelled-hold pass.
+ */
+export async function settleDiscardedCancelledMeteredHold(usageLogId: string | null | undefined, jobId: string): Promise<void> {
+  if (!hasCredits() || !usageLogId) return
+  try {
+    // Keyed off the reservation (R15), not the pricing switch: a metered hold
+    // reserved before a rollback flip still settles. Before this process has
+    // confirmed the metered schema it is left to the cancelled-hold sweep.
+    const { llmMeteredSchemaReady } = await import("../lib/llm-metered-schema-gate.js")
+    if (!llmMeteredSchemaReady()) return
+    const { data: log, error } = await supabase.from("usage_logs").select("action, status").eq("id", usageLogId).maybeSingle()
+    if (error || !log) return
+    const { action, status } = log as { action?: unknown; status?: unknown }
+    if (status !== "reserved" || typeof action !== "string") return
+    const { parseMeteredLlmId } = await import("../ee/billing/metered-llm-id.js")
+    if (!parseMeteredLlmId(action)) return
+    const { data: row } = await supabase
+      .from("jobs")
+      .select("status, provider_kind, provider_call_started_at, created_at, job_type, input_data")
+      .eq("id", jobId)
+      .maybeSingle()
+    if ((row as { status?: unknown } | null)?.status !== "cancelled") return
+    // N2: only past the SAME grace the sweep's cancelled-hold pass waits. A
+    // BullMQ stall re-pick can discard a job whose stalled-but-alive processor
+    // is still mid-call (lockDuration 300 s, maxStalledCount 3): settling now
+    // would refund that call's unbilled hold, or release the rest of the hold
+    // under it. Within the grace the sweep settles it later.
+    const { cancelledHoldPastGrace } = await import("../lib/reconcile/cancelled-metered-holds.js")
+    if (!cancelledHoldPastGrace(row as Record<string, unknown>, Date.now())) return
+    const fromRow = await meteredSpendFromRow(jobId, action)
+    if (!fromRow || fromRow.readFailed) return // never settled or refunded on a guess — the sweep reads it later
+    const { settleLlmUsageLog } = await import("../lib/llm-billing.js")
+    const settled = await settleLlmUsageLog(usageLogId, jobId, action, fromRow.spend)
+    console.log(`[worker] Job ${jobId} discarded at pickup (cancelled) — its metered hold settled: ${settled.outcome}`)
+  } catch (err) {
+    console.warn(`[worker] Job ${jobId}: settling the metered hold of a cancelled job at pickup failed — left to the reconcile sweep:`, err)
+  }
+}
+
 export async function refundJobCredits(
   usageLogId: string | null | undefined,
   jobId: string,
@@ -769,6 +1421,10 @@ export async function refundJobCredits(
   if (!hasCredits() || !usageLogId) return
 
   try {
+    // A metered LLM hold is settled from what the failure billed — before the
+    // post-processing skip and the refusal rule, which would leave it reserved
+    // or commit it whole (D10).
+    if (await settleFailedMeteredJob(usageLogId, jobId, errorOrMessage)) return
     const { CreditsService: ManagedCredits } = await import("../ee/services/credits.js")
     if (await ManagedCredits.trySettleManagedCredits(usageLogId)) return
     if (isPostProcessingError(errorOrMessage)) {

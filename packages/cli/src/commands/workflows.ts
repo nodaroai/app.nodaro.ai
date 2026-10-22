@@ -391,7 +391,8 @@ export function workflowsCommand(): Command {
           success(`Render final of ${renderNodeId} runs ${quote.nodeIds.join(", ")}`)
           if (quote.estimatedCredits !== null) {
             dim(
-              `estimated ${quote.estimatedCredits} credits` +
+              // `~`: an LLM node in the run is charged its actual usage, so the figure is an estimate.
+              `estimated ${quote.estimatedCreditsIsEstimate ? "~" : ""}${quote.estimatedCredits} credits` +
                 (quote.sufficient === false ? ` — not covered${quote.available !== null ? ` (${quote.available} available)` : ""}` : ""),
             )
           }

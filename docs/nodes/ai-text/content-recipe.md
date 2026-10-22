@@ -62,7 +62,7 @@ One flat price per run, by the tier of the chosen model:
 | Standard (e.g. Claude Sonnet 4.6) | 22<!-- credits: content-recipe -->|
 | Premium (e.g. Claude Opus 5) | 39<!-- credits: content-recipe:premium -->|
 
-A reasoning effort of `xhigh` or `max` moves the run one tier up, as on every language-model node. The credit id is `content-recipe:economy`, `content-recipe` or `content-recipe:premium`. A run that fails is refunded.
+A reasoning effort of `xhigh` or `max` moves the run one tier up (Content Recipe is priced by tier, not per token). The credit id is `content-recipe:economy`, `content-recipe` or `content-recipe:premium`. A run that fails is refunded.
 
 The recipe is cheap; the [Video Analysis](../processing-video/video-analysis.md) that usually feeds it is priced separately, by the video's length.
 

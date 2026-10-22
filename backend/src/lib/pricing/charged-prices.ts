@@ -31,7 +31,17 @@ export interface ChargedPrices {
    * for a `credits-rate` figure (`ee/billing/docs-pricing.ts :: rateOf`).
    */
   rate(identifier: string): number | undefined
+  /**
+   * A metered LLM price key's quote: its estimate, or `unpriced` for a model
+   * with no price on its lane (never 0, R49) — null when `identifier` is not a
+   * metered key here (any other id, the tier-pricing rollback, an edition
+   * that charges nothing). Absent on a price set with no metered keys.
+   */
+  llmQuote?(identifier: string): LlmKeyQuote | null
 }
+
+/** What a metered LLM price key is quoted (`ChargedPrices.llmQuote`). */
+export type LlmKeyQuote = { readonly kind: "estimate"; readonly credits: number } | { readonly kind: "unpriced" }
 
 const NO_PRICES: ChargedPrices = { credits: () => undefined, rate: () => undefined }
 
@@ -47,9 +57,16 @@ function loadDocsPricingModule(): Promise<typeof import("../../ee/billing/docs-p
 
 export async function loadChargedPrices(): Promise<ChargedPrices> {
   if (!hasCredits()) return NO_PRICES
-  const [{ getChargedPriceTable, chargedCredits }, { docsPricing }] = await Promise.all([loadCreditsModule(), loadDocsPricingModule()])
+  const [{ getChargedPriceTable, chargedCredits, meteredLlmQuote }, { docsPricing }] = await Promise.all([loadCreditsModule(), loadDocsPricingModule()])
   const table = await getChargedPriceTable()
   // The live table, so no snapshot: every rate is priced from its row.
   const { rateOf } = docsPricing(table, chargedCredits, {})
-  return { credits: (identifier, units) => chargedCredits(table, identifier, units), rate: rateOf }
+  return {
+    credits: (identifier, units) => chargedCredits(table, identifier, units),
+    rate: rateOf,
+    llmQuote: (identifier) => {
+      const quote = meteredLlmQuote(table, identifier)
+      return quote === null ? null : quote.kind === "estimate" ? { kind: "estimate", credits: quote.credits } : { kind: "unpriced" }
+    },
+  }
 }

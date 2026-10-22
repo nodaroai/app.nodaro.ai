@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
 
 // KIE only: no Anthropic key and no Gemini key, so the KIE leg is the only one.
 vi.mock("@/lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: {
     EDITION: "cloud",
     KIE_API_KEY: "test-kie-key",

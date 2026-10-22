@@ -13,6 +13,7 @@
  */
 import { supabase } from "./supabase.js"
 import { settledCharge } from "./usage-amount.js"
+import { withSideCharge } from "./job-step-charge.js"
 
 export type CreditStatus = "reserved" | "committed" | "refunded"
 
@@ -61,10 +62,20 @@ export function creditStatusOf(
   return usageLogId ? map.get(usageLogId)?.status ?? null : null
 }
 
-/** The settled charge of a job; `null` until it settles or when it has no usage log. */
+/**
+ * The settled charge of a job; `null` until it settles or when it has no usage
+ * log. R53: PLUS what its metered side holds settled (`sideHoldChargesFor`,
+ * migration 554 — a call the job made beside its own reservation, which never
+ * writes the job's row). Both arguments are required, so no caller can show a
+ * job's charge without them (`step-charge-side-holds-guard.test.ts`).
+ */
 export function creditsChargedOf(
   usageLogId: string | null | undefined,
   map: Map<string, JobCreditFigures>,
+  jobId: string | null | undefined,
+  sideCharges: ReadonlyMap<string, number>,
 ): number | null {
-  return usageLogId ? map.get(usageLogId)?.charged ?? null : null
+  const own = usageLogId ? map.get(usageLogId)?.charged ?? null : null
+  if (own === null) return null
+  return withSideCharge(own, jobId, sideCharges)
 }

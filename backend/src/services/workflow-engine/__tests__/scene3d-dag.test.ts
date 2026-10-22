@@ -12,7 +12,18 @@
  * sentence when there is none — rather than enqueueing a job that dies in the
  * worker.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// D6: metered LLM pricing is the default; the rollback restores the tier ids.
+const pricing = vi.hoisted(() => ({ rollback: false }))
+vi.mock("../../../lib/config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/config.js")>()),
+  llmMeteredPricing: () => !pricing.rollback,
+}))
+beforeEach(() => {
+  pricing.rollback = false
+})
+
 import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, renderVideoCreditId, type Scene3DPlan } from "@nodaro/shared/scene3d"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
@@ -51,7 +62,7 @@ describe("generate-3d-scene", () => {
     })
     expect(result.jobName).toBe("generate-3d-scene")
     expect(result.queueName).toBe("video-generation")
-    expect(result.modelIdentifier).toBe("3d-scene")
+    expect(result.modelIdentifier).toBe("3d-scene:claude-sonnet-5.5")
     expect(result.payload).toMatchObject({
       kind: "generate",
       jobId: "job-1",
@@ -70,7 +81,14 @@ describe("generate-3d-scene", () => {
     expect(result.payload).toMatchObject({ fps: 24, durationInFrames: 96, width: 1920, height: 1080 })
   })
 
-  it("bills the tier the node's model implies", () => {
+  it("is charged under 3d-scene:<model> — the node's model, never a tier row (A1)", () => {
+    expect(build("generate-3d-scene", { scenePrompt: "x", llmModel: "claude-opus-4.7" }).modelIdentifier).toBe("3d-scene:claude-opus-4.7")
+    expect(build("generate-3d-scene", { scenePrompt: "x", llmModel: "gemini-3.6-flash" }).modelIdentifier).toBe("3d-scene:gemini-3.6-flash")
+  })
+
+  it("rollback: bills the tier the node's model implies, byte-identical", () => {
+    pricing.rollback = true
+    expect(build("generate-3d-scene", { scenePrompt: "x" }).modelIdentifier).toBe("3d-scene")
     expect(build("generate-3d-scene", { scenePrompt: "x", llmModel: "claude-opus-4.7" }).modelIdentifier).toBe("3d-scene:premium")
     expect(build("generate-3d-scene", { scenePrompt: "x", llmModel: "gemini-3.6-flash" }).modelIdentifier).toBe("3d-scene:economy")
   })
@@ -203,7 +221,7 @@ describe("edit-3d-scene", () => {
   it("edits the plan stored on the node", () => {
     const result = build("edit-3d-scene", { scenePlan: PLAN, editPrompt: "move the hero left" })
     expect(result.jobName).toBe("edit-3d-scene")
-    expect(result.modelIdentifier).toBe("3d-scene")
+    expect(result.modelIdentifier).toBe("3d-scene:claude-sonnet-5.5")
     expect(result.payload).toMatchObject({
       kind: "edit",
       expectedRevisionId: REV,

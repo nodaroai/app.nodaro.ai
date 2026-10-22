@@ -4,7 +4,9 @@ import { generateImage, imageToVideo, videoToVideo } from "../../providers/index
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
 import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import {
+  attachLlmSpend,
   commitJobCredits,
+  workerLlmBilling,
   shouldSaveJobResult,
   markJobCompleted,
   setJobProgress,
@@ -255,23 +257,57 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
   // A keyless install with a live connection runs the LLM on the cloud rather
   // than failing — the LLM lane never reaches the capability router, so the
   // handler is where this decision belongs. Any local LLM key still wins.
-  const script = (await shouldRunLlmOnCloud())
-    ? ((await (await import("../../providers/nodaro/run-on-cloud.js")).runJobOnCloud(
-        "generate-script",
-        job.data as Record<string, unknown>,
-      )).script as Awaited<ReturnType<typeof generateScript>>)
-    : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced, { styleGuide }, { cheapLanesOnly })
-  await setJobProgress(job, ctx.jobId, 100)
+  // Metered (a hold under `generate-script:<model>`): the call is charged what
+  // it cost — settled before the completion; a failed call that billed (an
+  // answer that would not parse included) is charged through the failure net,
+  // which reads the spend off the thrown error.
+  const billing = await workerLlmBilling(ctx, job)
+  let script: Awaited<ReturnType<typeof generateScript>>
+  try {
+    // R38: the call is next — the row stops being "pre-call" (a row cancelled
+    // first throws here and is never sent the call).
+    await billing.callStarting()
+    script = (await shouldRunLlmOnCloud())
+      ? ((await (await import("../../providers/nodaro/run-on-cloud.js")).runJobOnCloud(
+          "generate-script",
+          job.data as Record<string, unknown>,
+        )).script as Awaited<ReturnType<typeof generateScript>>)
+      : await generateScript(prompt, sceneCount, tone, targetDuration, provider, llmModel, reasoningEffort, advanced, { styleGuide }, { cheapLanesOnly }, billing.recorder)
+  } catch (err) {
+    // A billed failure (an answer that would not parse included) is recorded
+    // on the row before it is rethrown: a cancel during a retry's backoff sees
+    // it billed, and the retry carries it (R31).
+    await billing.noteSpend()
+    throw attachLlmSpend(err, billing.spend)
+  }
+  try {
+    await billing.noteSpend()
+    await setJobProgress(job, ctx.jobId, 100)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
+    if (!await shouldSaveJobResult(ctx.jobId)) {
+      // R38: cancelled mid-run — the script is discarded, but the hold is
+      // still settled (the billed call charged, nothing billed refunded; the
+      // row stays cancelled). A tier hold: no-op, the cancel refunded it.
+      await billing.settle()
+      return
+    }
 
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { script },
-  })
-  if (!ok) return
+    const settled = await billing.settle()
+    if (settled.metered && settled.outcome === "unsettled") return
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
+    const ok = await markJobCompleted(ctx.jobId, {
+      output_data: { script },
+      ...(settled.metered && settled.charged !== undefined ? { credits_actual: settled.charged } : {}),
+    })
+    if (!ok) return
+
+    if (!settled.metered) await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    console.log(`[worker] Job ${ctx.jobId} completed: "${script.title}" (${script.scenes.length} scenes)`)
+  } catch (err) {
+    // A failure after the answer (a progress write, the completion) still
+    // carries the billed call to the failure net.
+    throw attachLlmSpend(err, billing.spend)
+  }
 }
 
 const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCharacterMotion(job, ctx) {

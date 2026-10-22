@@ -91,3 +91,28 @@ describe("ReasoningEffortSelect — no Auto on a model whose run has a recipe ef
     expect(screen.getByText(/choosing an effort runs the call/)).toBeInTheDocument()
   })
 })
+
+describe("ReasoningEffortSelect — the effort labels follow the server's pricing mode", () => {
+  it("effortPricingMode: the server's last answer wins (a rollback over a cached estimate); until one, the surface's own estimate", async () => {
+    const { effortPricingMode } = await import("../reasoning-effort-select")
+    expect(effortPricingMode("tier", true)).toBe("tier")
+    expect(effortPricingMode("metered", false)).toBe("metered")
+    expect(effortPricingMode("unknown", true)).toBe("metered")
+    expect(effortPricingMode("unknown", false)).toBe("unknown")
+  })
+
+  it("the open select re-words its levels when an answer changes the mode, without a remount", async () => {
+    const { act } = await import("@testing-library/react")
+    const { notePricingAnswer, forgetLlmPricingMode } = await import("@/hooks/use-llm-pricing-mode")
+    render(<ReasoningEffortSelect feature="llm-chat" modelId="gpt-5.6-terra" value="max" onChange={() => {}} />)
+    try {
+      expect(screen.getByTestId("item-max").textContent).toBe("Max")
+      act(() => notePricingAnswer({ estimates: ["llm-chat:gpt-5.6-terra"] }))
+      expect(screen.getByTestId("item-max").textContent).toBe("Max (the most reasoning tokens, charged per token)")
+      act(() => notePricingAnswer({ missing: ["llm-chat:gpt-5.6-terra"] }))
+      expect(screen.getByTestId("item-max").textContent).toBe("Max (may bill one tier up)")
+    } finally {
+      act(() => forgetLlmPricingMode())
+    }
+  })
+})

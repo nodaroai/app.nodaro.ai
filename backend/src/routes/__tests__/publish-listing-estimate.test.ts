@@ -22,8 +22,10 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+const metered = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  llmMeteredPricing: () => metered.on,
   isCloud: () => true,
   hasCredits: () => true,
   isCommunity: () => false,
@@ -98,7 +100,7 @@ function serve(rows: Record<string, unknown>): void {
   vi.mocked(supabase.from).mockImplementation(((table: string) => {
     const result = { data: rows[table] ?? null, error: null }
     const chain: Record<string, unknown> = {}
-    for (const m of ["select", "eq", "is", "in", "order", "limit", "upsert", "delete", "neq", "or"]) {
+    for (const m of ["select", "eq", "is", "in", "order", "limit", "upsert", "delete", "neq", "or", "contains", "overlaps", "lt", "textSearch"]) {
       chain[m] = vi.fn(() => chain)
     }
     for (const op of ["insert", "update"] as const) {
@@ -306,5 +308,97 @@ describe("the 'up to' stored at publish", () => {
     const tpl = insertInto("workflow_templates")
     expect(tpl.max_estimated_credits).toBe(500 + FINAL)
     expect(tpl.max_estimated_per_minute_credits).toBe(3)
+  })
+})
+
+// R49: a metered LLM model with no price is never listed — the publish answers the run's own refusal.
+describe("a publish whose graph holds an unpriced metered LLM model", () => {
+  const unpriced = () => Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" })
+
+  it.each([
+    ["/v1/apps/publish", "published_apps"],
+    ["/v1/templates/publish", "workflow_templates"],
+  ])("%s answers 400 llm_model_unpriced and stores nothing", async (url, table) => {
+    serve({ workflows: WORKFLOW })
+    estimates.listing.mockRejectedValue(unpriced())
+    const res = await app.inject({ method: "POST", url, headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut" } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "claude-opus-5.5" })
+    expect(writes.find((w) => w.table === table && w.op === "insert")).toBeUndefined()
+  })
+
+  it("B1: a REPUBLISH refused for it writes nothing — the live version is not retired, its slug not renamed", async () => {
+    serve({
+      workflows: WORKFLOW,
+      published_apps: { id: APP_ID, version: 3, slug: "cut-app-abc123", is_listed: true, monetization_enabled: false, monetization_flat_fee: 0, monetization_percent: 0 },
+    })
+    estimates.listing.mockRejectedValue(unpriced())
+    const res = await app.inject({ method: "POST", url: "/v1/apps/publish", headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut" } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ reason: "llm_model_unpriced" })
+    expect(writes.filter((w) => w.table === "published_apps")).toEqual([])
+  })
+})
+
+// R47: the listing's own estimate flag is stored beside its price (migration 553).
+describe("the listing's estimate flag stored at publish", () => {
+  it.each([
+    ["/v1/apps/publish", "published_apps"],
+    ["/v1/templates/publish", "workflow_templates"],
+  ])("%s stores estimated_credits_is_estimate from the listing (true for a metered LLM estimate, false otherwise)", async (url, table) => {
+    serve({ workflows: WORKFLOW })
+    estimates.listing.mockImplementation(async () => ({ preview: PREVIEW, final: FINAL, estimate: true }))
+    await app.inject({ method: "POST", url, headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut" } })
+    expect(insertInto(table).estimated_credits_is_estimate).toBe(true)
+    writes = []
+    estimates.listing.mockImplementation(async () => ({ preview: PREVIEW, final: FINAL }))
+    await app.inject({ method: "POST", url, headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut" } })
+    expect(insertInto(table).estimated_credits_is_estimate).toBe(false)
+  })
+})
+
+// R47: the readers serve the stored flag — the marketplace card and the template gallery show `~N` —
+// only while metered pricing is on; under the rollback the answer is as before.
+describe("the listing's estimate flag served to the cards", () => {
+  const APP_ROW = { id: APP_ID, slug: "cut-app", name: "Cut", estimated_credits: 280, estimated_credits_is_estimate: true }
+  const TEMPLATE_ROW = { id: "t1", slug: "cut-template", name: "Cut", estimated_credits: 280, estimated_credits_is_estimate: true }
+
+  it.each([
+    ["/v1/apps/browse", { published_apps: APP_ROW }],
+    ["/v1/templates/browse", { workflow_templates: TEMPLATE_ROW }],
+  ] as const)("%s: estimatedCreditsIsEstimate while metered; absent under the rollback", async (url, rows) => {
+    serve(rows)
+    metered.on = true
+    const onRes = await app.inject({ method: "GET", url })
+    expect(onRes.statusCode, onRes.body).toBe(200)
+    const on = onRes.json() as { data: Array<Record<string, unknown>> }
+    expect(on.data[0]).toMatchObject({ estimatedCredits: 280, estimatedCreditsIsEstimate: true })
+    metered.on = false
+    try {
+      const off = (await app.inject({ method: "GET", url })).json() as { data: Array<Record<string, unknown>> }
+      expect(off.data[0]!.estimatedCredits).toBe(280)
+      expect(off.data[0]).not.toHaveProperty("estimatedCreditsIsEstimate")
+    } finally {
+      metered.on = true
+    }
+  })
+
+  it("/v1/apps/mine (the creator's own list): estimatedCreditsIsEstimate while metered; absent under the rollback", async () => {
+    serve({ published_apps: APP_ROW })
+    const mine = async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/apps/mine", headers: { "x-user-id": OWNER } })
+      expect(res.statusCode, res.body).toBe(200)
+      return (res.json() as Array<Record<string, unknown>>)[0]!
+    }
+    metered.on = true
+    expect(await mine()).toMatchObject({ estimatedCredits: 280, estimatedCreditsIsEstimate: true })
+    metered.on = false
+    try {
+      const off = await mine()
+      expect(off.estimatedCredits).toBe(280)
+      expect(off).not.toHaveProperty("estimatedCreditsIsEstimate")
+    } finally {
+      metered.on = true
+    }
   })
 })

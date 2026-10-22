@@ -15,7 +15,8 @@ import { commitReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { prepareStructuredRequest, runStructuredCompletion } from "../../lib/llm-structured-request.js"
 import { billedProviderCost } from "../../lib/llm-errors.js"
 import { StructuredLlmError } from "../../lib/llm/structured.js"
-import { markJobCompleted, setJobProgress, type HandlerFn, type JobContext } from "../shared.js"
+import { attachLlmSpend, markJobCompleted, setJobProgress, workerLlmBilling, type HandlerFn, type JobContext, type WorkerLlmBilling } from "../shared.js"
+import type { LlmRequest } from "../../lib/llm/types.js"
 import type { LlmStructuredBody } from "../../lib/llm-structured-request.js"
 
 /** The BullMQ `job.data` the route enqueues and this handler reads. The full
@@ -138,7 +139,9 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
   const heartbeat = setInterval(() => {
     void markProviderCallStart(ctx.jobId, "pre-task")
   }, LLM_STRUCTURED_HEARTBEAT_MS)
+  let billing: WorkerLlmBilling | undefined
   try {
+    billing = await workerLlmBilling(ctx, job)
     // The route already ran this; re-running it here converts the schema
     // for THIS process and keeps the two entry points on one pre-flight.
     const prepared = prepareStructuredRequest(p)
@@ -162,6 +165,15 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
     }
 
     await throwIfJobCancelled()
+    // D13: a spend opened unseeded (the start read failed on a final attempt —
+    // a stall-restart included) is seeded from the row BEFORE the first call,
+    // floored like a start carry. Still unreadable → a later read seeds it.
+    // The running billing ledger lives in its own server-only column (R32), so
+    // the stage write below — which REPLACES output_data — never touches it. A
+    // tier job writes exactly what it always has.
+    if (!(await billing.seedFromRow())) {
+      console.warn(`[llm-structured] Job ${ctx.jobId}: its billing ledger cannot be read yet — seeded by a later read`)
+    }
     await supabase
       .from("jobs")
       // This write REPLACES output_data, so the child's price (stamped at
@@ -177,7 +189,40 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
       .eq("id", ctx.jobId)
     await setJobProgress(job, ctx.jobId, DRAFT_PROGRESS)
 
-    const { output, inputTokens, outputTokens, providerCost, lane } = await runStructuredCompletion(p, prepared, input)
+    // The draft as it is sent — what the spend's attempts are recorded against.
+    const draftRequest: LlmRequest = {
+      modelId: prepared.model.id,
+      system: p.system,
+      messages: [{ role: "user", content: input }],
+      // The caller's schema rides the request as its size (`requestChars`) — the
+      // structured call sends its normalized form of the same schema.
+      jsonSchema: { name: p.schemaName ?? "structured_output", schema: p.jsonSchema as Record<string, unknown> },
+    }
+    // R38: the row stops being "pre-call" only now — a cancel during the
+    // analysis wait above refunded the hold at once; a row cancelled first
+    // throws here and is never sent the call.
+    await billing.callStarting()
+    let completion: Awaited<ReturnType<typeof runStructuredCompletion>>
+    try {
+      completion = await runStructuredCompletion(p, prepared, input)
+    } catch (err) {
+      // Every attempt the failure billed (each validation re-ask, a billed
+      // refusal, a cap stop) — the failure net charges them on a metered hold.
+      billing.recorder.add(prepared.model.id, draftRequest, { error: err })
+      await billing.noteSpend()
+      throw attachLlmSpend(err, billing.spend)
+    }
+    billing.recorder.add(prepared.model.id, draftRequest, { output: completion })
+    // On the row before the settle: a settle that throws before writing its
+    // ledger still leaves the job billed for the sweep (never a refund).
+    await billing.noteSpend()
+    const { output, inputTokens, outputTokens, providerCost, lane } = completion
+
+    // Metered: settle BEFORE the completion — every attempt charged what it
+    // cost (the settle writes provider_cost and the server-only ledger); an
+    // unconfirmed settle leaves the row for the reconcile sweep.
+    const settled = await billing.settle()
+    if (settled.metered && settled.outcome === "unsettled") return
 
     // markJobCompleted REPLACES output_data — the ids must ride this write.
     const ok = await markJobCompleted(ctx.jobId, {
@@ -190,30 +235,38 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
       },
       // The lane that served the draft and what it cost the platform there —
       // the sync route's columns, so the async path is not blind to the cost
-      // reports. Admin-only columns, never in output_data.
+      // reports. Admin-only columns, never in output_data. A metered settle
+      // already wrote the cost of EVERY attempt.
       provider: lane,
-      provider_cost: providerCost ?? null,
+      ...(settled.metered ? {} : { provider_cost: providerCost ?? null }),
+      ...(settled.metered && settled.charged !== undefined ? { credits_actual: settled.charged } : {}),
     })
     if (!ok) return // cancelled mid-flight — the cancel route owns the refund
     // Flat per tier, exactly as the synchronous route commits.
-    await commitReservedCreditsForJob(ctx.jobId)
+    if (!settled.metered) await commitReservedCreditsForJob(ctx.jobId)
     console.log(`[worker] Job ${ctx.jobId} completed: llm-structured (${inputTokens} in / ${outputTokens} out${p.analysisJobId ? `, analysis ${p.analysisJobId}` : ""})`)
   } catch (err) {
     // The worker funnel fails and refunds the row; it records no provider
     // cost, so a failure that carried usage (every attempt of a validation
     // failure, a billed refusal, a cap stop) writes its cost — and the lane
     // that served it — here first, as the sync route does. Best-effort: the
-    // failure itself is what must reach the funnel.
+    // failure itself is what must reach the funnel. A METERED job's
+    // `provider_cost` is the cumulative figure `noteSpend` wrote (every
+    // attempt, earlier BullMQ attempts included): only the lane is added.
     const cost = billedProviderCost(err)
     const lane = err instanceof StructuredLlmError ? err.lane : undefined
-    if (cost !== null || lane) {
+    const metered = billing?.metered === true
+    if ((cost !== null && !metered) || lane) {
       const { error } = await supabase
         .from("jobs")
-        .update({ provider_cost: cost, ...(lane ? { provider: lane } : {}) })
+        .update({ ...(metered ? {} : { provider_cost: cost }), ...(lane ? { provider: lane } : {}) })
         .eq("id", ctx.jobId)
       if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record the failed draft's provider cost: ${error.message}`)
     }
-    throw err
+    // Any failure — a pre-call one too (the pre-flight, the analysis wait, the
+    // input limit) — carries the job's spend, which holds the billed calls an
+    // earlier BullMQ attempt made (R31): the failure net charges them.
+    throw billing ? attachLlmSpend(err, billing.spend) : err
   } finally {
     clearInterval(heartbeat)
   }

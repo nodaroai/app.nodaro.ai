@@ -51,9 +51,12 @@ vi.mock("@/lib/app-settings.js", () => ({
   getAppSettings: vi.fn().mockResolvedValue({ ai_provider: "kie", cost_markup_percent: 0 }),
 }))
 
+// D6: metered LLM pricing is the default; the rollback restores the tier ids.
+const llmPricing = vi.hoisted(() => ({ rollback: false }))
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud" },
   hasCredits: () => mockHasCreditsRef.value,
+  llmMeteredPricing: () => mockHasCreditsRef.value && !llmPricing.rollback,
   isCloud: () => true,
   isCommunity: () => false,
   isBusiness: () => false,
@@ -1029,6 +1032,11 @@ describe("CreditsService", () => {
   // ════════════════════════════════════════════════════════════════════════
 
   describe("estimateWorkflowBaseCredits — llm-chat reasoning-effort tier bump", () => {
+    // Today's tier figures: they hold under the rollback, byte-identical (the
+    // metered price keys are covered in llm-metered-node-ids.test.ts).
+    beforeEach(() => { llmPricing.rollback = true })
+    afterEach(() => { llmPricing.rollback = false })
+
     it("resolves llm-chat gpt-5.6-terra at the standard price with no reasoning effort", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "llm-chat", data: { llmModel: "gpt-5.6-terra" } },
@@ -1058,6 +1066,10 @@ describe("CreditsService", () => {
   // ════════════════════════════════════════════════════════════════════════
 
   describe("estimateWorkflowBaseCredits — describe-to-picker resolves the default model and effort", () => {
+    // Today's tier figures, under the rollback (see above).
+    beforeEach(() => { llmPricing.rollback = true })
+    afterEach(() => { llmPricing.rollback = false })
+
     it("an untouched node quotes Gemini 3.8 Flash at Auto: the economy row", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([{ type: "describe-to-picker", data: {} }]))
         .toBe(STATIC_CREDIT_COSTS["describe-to-picker:economy"])

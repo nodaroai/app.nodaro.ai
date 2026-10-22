@@ -1,3 +1,4 @@
+// @registry-enumerates prices the run by estimateWorkflowCreditsDetailed over whatever node types the workflow holds
 import { formatExecutionResult } from "../lib/execution-result.js"
 import { executionOutcome } from "@nodaro/shared/workflow"
 /**
@@ -30,7 +31,8 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
-import { estimateWorkflowCredits, type EstimateNode } from "../ee/billing/credits.js"
+import { estimateWorkflowCreditsDetailed, type EstimateNode } from "../ee/billing/credits.js"
+import { isLlmUnpricedError, llmUnpricedMessage, refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
@@ -690,11 +692,20 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // Described BEFORE the caller's inputs exist: an exposed speech text is
       // priced at its input's character limit (or the model's cap), never at
       // the author's placeholder (lib/exposed-text-caps.ts).
-      const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges, {
-        speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
-        // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
-        ...(await usecaseViewerEstimateFor(nodes as EstimateNode[], resolved.userId)),
-      })
+      // A metered LLM model with no price (R51): the schema still answers — its cost is omitted and
+      // `estimatedCreditsUnpriced` says why; the run is what is refused (POST /v1/api/run).
+      let estimate: Awaited<ReturnType<typeof estimateWorkflowCreditsDetailed>> | undefined
+      let estimatedCreditsUnpriced: { reason: "llm_model_unpriced"; modelId: string; message: string } | undefined
+      try {
+        estimate = await estimateWorkflowCreditsDetailed(nodes as EstimateNode[], edges, {
+          speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
+          // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
+          ...(await usecaseViewerEstimateFor(nodes as EstimateNode[], resolved.userId)),
+        })
+      } catch (err) {
+        if (!isLlmUnpricedError(err)) throw err
+        estimatedCreditsUnpriced = { reason: "llm_model_unpriced", modelId: err.modelId, message: await llmUnpricedMessage(err) }
+      }
 
       const inputs = sortedInputs.map((node) => {
         const fieldSchema = getInputFieldSchema(node.type ?? "")
@@ -719,7 +730,10 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       return reply.send({
         workflowId: workflow.id,
         name: workflow.name,
-        estimatedCredits,
+        ...(estimate ? { estimatedCredits: estimate.credits } : {}),
+        // A metered LLM line makes the figure an estimate (`~`, spec §8.5); present only then.
+        ...(estimate?.estimate ? { estimatedCreditsIsEstimate: true } : {}),
+        ...(estimatedCreditsUnpriced ? { estimatedCreditsUnpriced } : {}),
         inputs,
         outputs,
       })
@@ -793,6 +807,10 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         { triggerType: "api", inputOverrides },
       )
       if (previewRefusal) return reply.status(400).send({ error: previewRefusal })
+
+      // A metered LLM call on a model with no price (R51): refused before any row exists, so no fixed
+      // node runs and is charged ahead of the call the run would refuse mid-graph.
+      if (await refuseIfRunUnpriced(reply, nodes, ((workflow as { edges?: unknown }).edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [], { overrides: inputOverrides as Record<string, Record<string, unknown>> | undefined })) return reply
 
       // Create execution
       const { data: execution, error: execError } = await supabase

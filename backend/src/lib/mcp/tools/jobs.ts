@@ -11,6 +11,7 @@ import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
+import { sideHoldChargesFor } from "../../job-step-charge.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
@@ -28,14 +29,17 @@ const jobsRateGate: ToolGate = { required: ["assets:write"] }
  * charge, read through the one charge reader in one query. `credits` stays the
  * hold. The raw usage-log id never reaches the agent.
  */
-async function withCreditsCharged<T extends { usage_log_id?: unknown }>(
+async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unknown }>(
   rows: readonly T[],
 ): Promise<Array<Omit<T, "usage_log_id"> & { credits_charged: number | null }>> {
   const logId = (r: T) => (typeof r.usage_log_id === "string" ? r.usage_log_id : null)
+  const jobId = (r: T) => (typeof r.id === "string" ? r.id : null)
   const map = await creditStatusMapFor(rows.map(logId))
+  // R53: plus each job's settled metered side holds (one read).
+  const side = await sideHoldChargesFor(rows.map(jobId))
   return rows.map((r) => {
     const { usage_log_id: _log, ...rest } = r
-    return { ...rest, credits_charged: creditsChargedOf(logId(r), map) }
+    return { ...rest, credits_charged: creditsChargedOf(logId(r), map, jobId(r), side) }
   })
 }
 

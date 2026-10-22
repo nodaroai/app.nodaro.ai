@@ -20,7 +20,9 @@ import {
   kieResponsesTextFormat,
 } from "./message-builders.js"
 import { assertKieEnvelope, assertMediaIngested, buildResponse, extractActualUsd } from "./response.js"
+import { requestChars } from "./kie-cost.js"
 import { parseSseStream } from "./sse.js"
+import { asStoppedStream, type StreamAbortContext } from "./stream-abort.js"
 import { withTransportRetry } from "./transport-retry.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
@@ -85,11 +87,13 @@ export function streamKie(
 export function streamKieMessages(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
   onToolJson?: (partialJson: string) => void,
+  /** Bill a caller's stop (`llmStream` only — see {@link streamKieUnguarded}). */
+  abort?: StreamAbortContext,
 ): Promise<LlmResponse> {
   assertKieServable(model)
   return guardLaneAccount(
     { lane: "kie", provider: "kie", modelId: model.id },
-    () => streamKieMessagesUnguarded(model, req, onToken, signal, onToolJson),
+    () => streamKieMessagesUnguarded(model, req, onToken, signal, onToolJson, abort),
   )
 }
 
@@ -133,19 +137,46 @@ async function callKieUnguarded(model: LlmModelDef, req: LlmRequest, signal?: Ab
   }
 }
 
+/**
+ * The `llmStream` entry. Only here is `signal` the CALLER's cancel, so only
+ * here is a stop billed (D2): an abort after dispatch throws
+ * `LlmStreamAbortedError` with the estimated usage of the caller's request
+ * (sized before any image is inlined, as the metered settle sizes it) and of
+ * the answer streamed so far. The collapsed non-streaming wires below reuse
+ * the same stream functions with their own deadline and bill nothing for it.
+ */
 async function streamKieUnguarded(
   model: LlmModelDef,
   req: LlmRequest,
   onToken: (chunk: string) => void,
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
+  const abort = signal ? { signal, requestChars: requestChars(req) } : undefined
   switch (model.kieFormat) {
     case "chat-completions":
-      return streamKieChatCompletions(model, await inlineImagesForKie(req, { signal }), onToken, signal)
+      return streamKieChatCompletions(model, await inlineImagesForKie(req, { signal }), onToken, signal, abort)
     case "messages":
-      return streamKieMessages(model, req, onToken, signal)
+      return streamKieMessages(model, req, onToken, signal, undefined, abort)
     case "responses":
-      return streamKieResponses(model, await inlineImagesForKie(req, { signal }), onToken, signal)
+      return streamKieResponses(model, await inlineImagesForKie(req, { signal }), onToken, signal, abort)
+  }
+}
+
+/**
+ * POST a KIE stream request. With `abort`, a caller's stop while the request
+ * is in flight (dispatched, no response yet) throws the stopped-stream error
+ * with no answer streamed; an abort that had fired before the request went out
+ * spent nothing and keeps fetch's own plain error.
+ */
+async function fetchKieStream(
+  url: string, init: RequestInit, model: LlmModelDef, abort: StreamAbortContext | undefined,
+): Promise<Response> {
+  const liveAtDispatch = abort !== undefined && !abort.signal.aborted
+  try {
+    return await fetch(url, init)
+  } catch (err) {
+    if (liveAtDispatch) throw asStoppedStream(err, { ...abort, modelId: model.id, lane: "kie", streamedChars: 0 })
+    throw err
   }
 }
 
@@ -203,6 +234,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
  */
 async function streamKieChatCompletions(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
+  abort?: StreamAbortContext,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
   const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
@@ -218,19 +250,19 @@ async function streamKieChatCompletions(
   const responseFormat = kieResponseFormat(model, req)
   if (responseFormat) body.response_format = responseFormat.body
 
-  const response = await fetch(url, {
+  const response = await fetchKieStream(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
-  })
+  }, model, abort)
 
   if (!response.ok) {
     const errText = await response.text()
     throw new LlmLaneError(`KIE.ai chat-completions stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens)
+  const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens, undefined, false, abort)
   return responseFormat ? { ...streamed, text: responseFormat.restoreText(streamed.text) } : streamed
 }
 
@@ -298,24 +330,25 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
 async function streamKieMessagesUnguarded(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
   onToolJson?: (partialJson: string) => void,
+  abort?: StreamAbortContext,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/claude/v1/messages`
   const base = buildMessagesBody(model, req)
   const body = { ...base, stream: true }
 
-  const response = await fetch(url, {
+  const response = await fetchKieStream(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
-  })
+  }, model, abort)
 
   if (!response.ok) {
     const errText = await response.text()
     throw new LlmLaneError(`KIE.ai messages stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  const streamed = await parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson, req.failOnRefusal === true)
+  const streamed = await parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson, req.failOnRefusal === true, abort)
   return kieClaudePromptJson(model, req) ? kiePromptJsonPayload(model, streamed) : streamed
 }
 
@@ -461,6 +494,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
 
 async function streamKieResponses(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
+  abort?: StreamAbortContext,
 ): Promise<LlmResponse> {
   const url = kieResponsesUrl(model)
   // Responses API models are reasoning models — temperature is unsupported
@@ -475,12 +509,12 @@ async function streamKieResponses(
   const textFormat = kieResponsesTextFormat(model, req)
   if (textFormat) body.text = textFormat.body
 
-  const response = await fetch(url, {
+  const response = await fetchKieStream(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
-  })
+  }, model, abort)
 
   if (!response.ok) {
     const errText = await response.text()
@@ -489,7 +523,7 @@ async function streamKieResponses(
 
   // As on the chat-completions stream: `onToken` chunks are the wire form, the
   // returned text the caller's.
-  const streamed = await parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined)
+  const streamed = await parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined, undefined, false, abort)
   return textFormat ? { ...streamed, text: textFormat.restoreText(streamed.text) } : streamed
 }
 
@@ -554,7 +588,7 @@ async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): P
           inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens,
           providerCost: res.providerCost, ...(res.creditsUsd !== undefined ? { creditsUsd: res.creditsUsd } : {}),
           complete: res.providerCost !== undefined,
-        })
+        }, "kie")
       }
       throw new Error(detail)
     }

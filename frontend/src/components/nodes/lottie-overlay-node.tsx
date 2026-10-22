@@ -7,16 +7,15 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import type { LottieOverlayData } from "@/types/nodes"
 
 function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as LottieOverlayData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const credits = useModelCredits(buildLlmCreditIdentifier("lottie-overlay", nodeData.llmModel || LLM_FEATURE_DEFAULTS["lottie-overlay"], nodeData.reasoningEffort, nodeData.advancedMode === true), 10)
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("lottie-overlay", nodeData, 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
@@ -38,14 +37,14 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Layers className="h-4 w-4" />}
       category="processing"
-      credits={credits}
+      credits={credits} creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={isRunning}
       hideHeader
       minWidth={220}
       topToolbarContent={
         !isRunning ? (
-          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          <RunNodeButton nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
         ) : undefined
       }
       handles={[

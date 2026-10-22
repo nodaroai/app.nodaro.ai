@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { getAuthHeaders } from "@/lib/api"
 import { Loader2, AlertTriangle, CheckCircle, HelpCircle, TrendingDown, TrendingUp, Download, Trash2 } from "lucide-react"
+import { LlmAuditTable, LLM_AUDIT_DAYS, type LlmAuditResult } from "./llm-audit-table"
 
 // ---------- Theoretical mode types ----------
 interface AuditModel {
@@ -87,7 +88,15 @@ interface AuditResultPerTask extends AuditResultBase {
   tasks: PerTaskDiff[]
 }
 
-type AuditResult = AuditResultModels | AuditResultPerTask
+type AuditResult = AuditResultModels | AuditResultPerTask | LlmAuditResult
+type AuditMode = "theoretical" | "actual" | "per-task" | "llm"
+
+const MODE_LABELS: Record<AuditMode, string> = {
+  theoretical: "Pricing Table",
+  actual: "Actual Charges",
+  "per-task": "Per-task Diff",
+  llm: "LLM Metered",
+}
 
 const STORAGE_KEY = "nodaro-credit-audit-result"
 
@@ -123,7 +132,8 @@ function formatPeriod(minutes: number): string {
 export default function AdminCreditAudit() {
   const [token, setToken] = useState("")
   const [lookbackMinutes, setLookbackMinutes] = useState(10080) // 7 days
-  const [auditMode, setAuditMode] = useState<"theoretical" | "actual" | "per-task">("theoretical")
+  const [auditMode, setAuditMode] = useState<AuditMode>("theoretical")
+  const [llmDays, setLlmDays] = useState<number>(7)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AuditResult | null>(null)
@@ -144,20 +154,22 @@ export default function AdminCreditAudit() {
   }, [])
 
   async function runAudit() {
-    if (!token.trim()) {
+    const llm = auditMode === "llm"
+    if (!llm && !token.trim()) {
       setError("Paste the authorization header value from the provider logs Network tab")
       return
     }
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/v1/admin/credit-audit/sync", {
+      // The LLM mode reads our own ledgers: no provider session token.
+      const res = await fetch(llm ? "/v1/admin/credit-audit/llm" : "/v1/admin/credit-audit/sync", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...await getAuthHeaders(),
         },
-        body: JSON.stringify({
+        body: JSON.stringify(llm ? { days: llmDays } : {
           token: token.trim(),
           lookbackMinutes,
           mode: auditMode,
@@ -165,7 +177,8 @@ export default function AdminCreditAudit() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? `Failed: ${res.status}`)
+        const message = typeof data.error === "string" ? data.error : data.error?.message
+        setError(message ?? `Failed: ${res.status}`)
         return
       }
       const resultWithTimestamp = { ...data, timestamp: new Date().toISOString() }
@@ -219,7 +232,7 @@ export default function AdminCreditAudit() {
       <div className="rounded-lg border border-border bg-card p-4 mb-6">
         {/* Mode toggle */}
         <div className="flex gap-1 p-0.5 rounded-lg bg-muted/50 w-fit mb-4">
-          {(["theoretical", "actual", "per-task"] as const).map(m => (
+          {(["theoretical", "actual", "per-task", "llm"] as const).map(m => (
             <button
               key={m}
               onClick={() => setAuditMode(m)}
@@ -229,18 +242,49 @@ export default function AdminCreditAudit() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {m === "theoretical" ? "Pricing Table" : m === "actual" ? "Actual Charges" : "Per-task Diff"}
+              {MODE_LABELS[m]}
             </button>
           ))}
         </div>
         <p className="text-xs text-muted-foreground mb-3">
           {auditMode === "theoretical"
             ? "Compares KIE provider costs against our STATIC pricing table. Catches stale prices."
+            : auditMode === "llm"
+            ? "Metered LLM calls per feature and model: the provider cost our settles recorded vs what payers were charged, with absorbed overruns and unconfirmed settles. Needs no provider token."
             : auditMode === "actual"
             ? "Compares KIE provider costs against what we ACTUALLY charged users. Catches code bugs (wrong duration estimates, wrong credit identifiers)."
             : "Per-task drill-down: matches each KIE task to our `jobs` row via `provider_task_id` (Phase 1 reconciliation). Surfaces outlier tasks the aggregate `actual` mode would average away."}
         </p>
 
+        {auditMode === "llm" ? (
+          <>
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="w-36">
+                <label htmlFor="llm-audit-days" className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Lookback
+                </label>
+                <select
+                  id="llm-audit-days"
+                  value={llmDays}
+                  onChange={e => setLlmDays(Number(e.target.value))}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {LLM_AUDIT_DAYS.map(d => (
+                    <option key={d} value={d}>{d === 1 ? "1 day" : `${d} days`}</option>
+                  ))}
+                </select>
+              </div>
+              <Button onClick={runAudit} disabled={loading} className="shrink-0">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Run Audit
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              A per-model margin (a <code>&lt;feature&gt;:&lt;model&gt;</code> entry in the service margins) is an emergency lever only — for a vendor reprice the rate table has not caught yet — never pricing policy.
+            </p>
+          </>
+        ) : (
+        <>
         <div className="flex flex-col sm:flex-row gap-3 items-end">
           <div className="flex-1 min-w-0">
             <label className="text-xs font-medium text-muted-foreground mb-1 block">
@@ -276,6 +320,8 @@ export default function AdminCreditAudit() {
         <p className="text-xs text-muted-foreground mt-2">
           Open provider dashboard logs → DevTools → Network → copy the <code className="text-[#ff0073]">authorization</code> header value from any request
         </p>
+        </>
+        )}
       </div>
 
       {error && (
@@ -294,7 +340,7 @@ export default function AdminCreditAudit() {
                 Last run: {result.timestamp ? new Date(result.timestamp).toLocaleString() : "unknown"}
               </p>
               <Badge variant="outline" className="text-[10px]">
-                {result.mode === "actual" ? "Actual Charges" : result.mode === "per-task" ? "Per-task Diff" : "Pricing Table"}
+                {MODE_LABELS[result.mode]}
               </Badge>
             </div>
             <div className="flex gap-2">
@@ -309,6 +355,10 @@ export default function AdminCreditAudit() {
             </div>
           </div>
 
+          {result.mode === "llm" ? (
+            <LlmAuditTable result={result} />
+          ) : (
+          <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             <StatCard label="KIE Tasks" value={result.successRecords} sub={`of ${result.totalRecords} records`} />
             {result.mode === "actual" ? (
@@ -373,6 +423,8 @@ export default function AdminCreditAudit() {
               )}
             </div>
           </div>
+          </>
+          )}
         </>
       )}
     </div>

@@ -17,7 +17,8 @@
     "captions"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 929,
+  "estimatedCredits": 943,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "web-scrape",
     "text-prompt",

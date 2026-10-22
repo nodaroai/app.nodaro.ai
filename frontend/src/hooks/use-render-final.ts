@@ -18,6 +18,7 @@ import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useRunSetPrice } from "@/hooks/use-run-from-here-credits"
 import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
+import type { RunUnpriced } from "@/components/editor/workflow-editor/run-unpriced"
 import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "@/components/editor/workflow-editor/render-final-set"
 import { usecaseRenderFinalRun } from "@/components/editor/workflow-editor/use-case-render-final-set"
@@ -52,6 +53,14 @@ export interface RenderFinalControls {
   readonly finalUnchecked?: UgcPriceState
   /** Update preview's, likewise. */
   readonly previewUnchecked?: UgcPriceState
+  /** Render final's price holds a metered LLM call's estimate (charged its actual usage): shown approximate, as the server's quote flags it. */
+  readonly finalApprox?: true
+  /** Update preview's, likewise. */
+  readonly previewApprox?: true
+  /** Render final's run holds a node the server refuses to price (`llm_model_unpriced`): no figure, not priced yet. */
+  readonly finalUnpriced?: RunUnpriced
+  /** Update preview's, likewise. */
+  readonly previewUnpriced?: RunUnpriced
   /** Update preview exists only with the stop rule on (decided 2026-10-06). */
   readonly canUpdatePreview: boolean
   /** Render final can go ahead here: always on a render; on a use-case node only
@@ -89,6 +98,10 @@ export function useRenderFinal(renderId: string): RenderFinalControls {
     previewCredits: previewPrice.credits,
     ...(finalPrice.unchecked ? { finalUnchecked: finalPrice.unchecked } : {}),
     ...(previewPrice.unchecked ? { previewUnchecked: previewPrice.unchecked } : {}),
+    ...(finalPrice.approx ? { finalApprox: true as const } : {}),
+    ...(previewPrice.approx ? { previewApprox: true as const } : {}),
+    ...(finalPrice.unpriced ? { finalUnpriced: finalPrice.unpriced } : {}),
+    ...(previewPrice.unpriced ? { previewUnpriced: previewPrice.unpriced } : {}),
     canUpdatePreview,
     canRenderFinal: asFinal.available,
     checkPending,

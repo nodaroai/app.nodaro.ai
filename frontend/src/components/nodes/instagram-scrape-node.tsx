@@ -9,7 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useScrapeNodeCredits } from "./use-scrape-node-credits"
+import { useScrapeAnalysisCredits, useScrapeNodeCredits } from "./use-scrape-node-credits"
 import { getVideoProxyUrl } from "@/lib/api"
 import { instagramScrapeMode, splitInstagramTargets, type InstagramScrapeMode } from "@nodaro/shared/social"
 import type { InstagramScrapeNodeData } from "@/types/nodes"
@@ -227,7 +227,10 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
 
   const mode = instagramScrapeMode(nodeData.mode)
-  const credits = useScrapeNodeCredits(id, "instagram-scrape", nodeData)
+  const scrapeCredits = useScrapeNodeCredits(id, "instagram-scrape", nodeData)
+  // With AI analysis under metered pricing: fixed + the analyses' estimate, shown `~`.
+  const analysisCredits = useScrapeAnalysisCredits("instagram-scrape", nodeData)
+  const credits = analysisCredits?.credits ?? scrapeCredits
   const state = deriveInstagramScrapeCardState(nodeData)
   const running = state.kind === "running"
   const hasAge = state.kind !== "never-ran" && !running && "at" in state && state.at !== undefined
@@ -283,7 +286,7 @@ function InstagramScrapeNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={WIDTH}
         hideHeader
         className={state.kind === "never-ran" ? "border-dashed" : undefined}
-        topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={running} onRun={(nid) => runSingleNode?.(nid)} />}
+        topToolbarContent={<RunNodeButton nodeId={id} credits={credits} creditsEstimate={analysisCredits?.estimate === true} isRunning={running} onRun={(nid) => runSingleNode?.(nid)} />}
         handles={HANDLES}
       >
         <div className="flex flex-col gap-3 px-[18px] pb-4 pt-4">

@@ -183,6 +183,10 @@ nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
 #   table shows id, kind, family, maker (the company that made the model), modes, credit tiers, featured ★ and the doctrine ✓ flag
 #   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
+nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
+#   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
+#   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ~N;
+#   every model's per-token rate is in docs/pricing/llm-models.md. An id with no price prints "-" and why
 
 # Billing — plans and prices, your subscription (buying and changing plans stay in the app)
 nodaro billing plans [--base-url <url>] [--json]        # plans and credit packs on sale, with prices (Nodaro Cloud; no sign-in needed)
@@ -322,7 +326,7 @@ nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [
 nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # return guided questions
 nodaro prompt generate --node-type <type> --selection category=value [--selection ...] [--original-prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # build a prompt from selections
 nodaro prompt enhance --node-type <type> --prompt "…" [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # one-shot rewrite, no questions
-#   --reasoning-effort <level>: none|low|medium|high|xhigh|max (model-dependent; unsupported/omitted -> vendor default). xhigh/max bill one tier up. `--advanced` (Gemini and Claude models) runs on the provider's own API so `--temperature` / `--max-tokens` / the full reasoning range apply, and also bills one tier up.
+#   --reasoning-effort <level>: none|low|medium|high|xhigh|max (model-dependent; unsupported/omitted -> vendor default). The call is charged for the tokens it uses at the model's rate (a higher effort usually writes more). `--advanced` (Gemini and Claude models) runs on the provider's own API so `--temperature` / `--max-tokens` / the full reasoning range apply, charged at that lane's rate (docs/pricing/llm-models.md).
 
 # Executions
 nodaro executions get <id> [--watch] [--json]

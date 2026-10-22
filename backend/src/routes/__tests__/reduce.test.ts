@@ -17,6 +17,12 @@ vi.mock("../../services/reduce-strategies/index.js", async () => {
 const cloudMocks = vi.hoisted(() => ({
   maybeProxyLlmRouteToCloud: vi.fn<(req: unknown, reply: { status: (c: number) => { send: (b: unknown) => unknown } }, path: string) => Promise<boolean>>(async () => false),
 }))
+// The tier path (the rollback, D6): these cases pin today's tier billing;
+// the metered AI-judge path is llm-metered-creative-routes.test.ts.
+vi.mock("../../lib/config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/config.js")>()),
+  llmMeteredPricing: () => false,
+}))
 vi.mock("../../lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: cloudMocks.maybeProxyLlmRouteToCloud }))
 // Re-hosting for the image-candidate hooks — never a real upload here.
 vi.mock("../../providers/nodaro/client.js", () => ({

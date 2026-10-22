@@ -9,8 +9,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockEstimate, appRow } = vi.hoisted(() => ({
+const { mockEstimate, mockEstimateFlag, appRow } = vi.hoisted(() => ({
   mockEstimate: vi.fn(),
+  mockEstimateFlag: { value: false },
   appRow: {
     component_metadata: { inputs: [], outputs: [], exposedSettings: [] },
     snapshot_nodes: [
@@ -21,7 +22,7 @@ const { mockEstimate, appRow } = vi.hoisted(() => ({
   },
 }))
 
-vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCredits: mockEstimate }))
+vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCreditsDetailed: async (...a: unknown[]) => ({ credits: await mockEstimate(...a), estimate: mockEstimateFlag.value, perNode: {} }) }))
 vi.mock("@/services/app-execution.js", () => ({ executeAppRun: vi.fn() }))
 vi.mock("@/middleware/credit-guard.js", () => ({ resolveWebSurfaceFlag: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/supabase.js", () => {
@@ -41,6 +42,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   vi.clearAllMocks()
   mockEstimate.mockResolvedValue(33)
+  mockEstimateFlag.value = false
   app = Fastify()
   app.addHook("preHandler", async (req) => {
     req.userId = "user-1"
@@ -67,5 +69,22 @@ describe("POST /v1/component/estimate-credits", () => {
     expect(edges).toEqual(appRow.snapshot_edges)
     // The author's snapshot is read, never written.
     expect(appRow.snapshot_nodes[0]!.data.resolution).toBe("1K")
+  })
+
+  it("R49: a metered LLM model with no price is refused 400 llm_model_unpriced", async () => {
+    mockEstimate.mockRejectedValueOnce(Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "claude-opus-5.5" }))
+    const res = await app.inject({ method: "POST", url: "/v1/component/estimate-credits", payload: { appSlug: "deliver", exposedSettings: {} } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ reason: "llm_model_unpriced", modelId: "claude-opus-5.5" })
+  })
+
+  it("a metered LLM line makes it an estimate (`estimatedCreditsIsEstimate`); a fixed figure is byte-identical", async () => {
+    const payload = { appSlug: "deliver", exposedSettings: {} }
+    mockEstimateFlag.value = true
+    const metered = await app.inject({ method: "POST", url: "/v1/component/estimate-credits", payload })
+    expect(metered.json()).toEqual({ estimatedCredits: 33, estimatedCreditsIsEstimate: true })
+    mockEstimateFlag.value = false
+    const fixed = await app.inject({ method: "POST", url: "/v1/component/estimate-credits", payload })
+    expect(fixed.body).toBe('{"estimatedCredits":33}')
   })
 })

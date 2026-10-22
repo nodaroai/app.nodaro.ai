@@ -265,6 +265,8 @@ function LlmControls({ data, onUpdate }: { data: Scene3DLlmNodeData; onUpdate: (
         feature={SCENE3D_LLM_FEATURE}
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
+        reasoningEffort={data.reasoningEffort}
+        advancedMode={data.advancedMode === true}
       />
       <ReasoningEffortSelect
         feature={SCENE3D_LLM_FEATURE}

@@ -25,16 +25,52 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("../../../lib/llm-client.js", () => ({ llmComplete: mocks.llmComplete }))
-vi.mock("../../shared.js", () => ({
-  commitJobCredits: mocks.commitJobCredits,
-  shouldSaveJobResult: mocks.shouldSaveJobResult,
-  markJobCompleted: mocks.markJobCompleted,
-  setJobProgress: mocks.setJobProgress,
+// The worker's metered billing (workers/shared.ts `workerLlmBilling`): a TIER
+// hold by default — the cases below are today's path, byte-identical — and a
+// metered hold in the "metered" block (a real LlmSpend records the calls).
+const billing = vi.hoisted(() => ({
+  metered: false,
+  outcome: "charged" as "charged" | "refunded" | "unsettled",
+  settled: [] as Array<{ attempts: readonly unknown[] }>,
+  attached: [] as Array<{ attempts: readonly unknown[] }>,
+  settle: vi.fn(),
+  /** R38: the call-start CAS — a cancelled row throws here. */
+  callStarting: vi.fn(async () => {}),
 }))
+vi.mock("../../shared.js", async () => {
+  const { LlmSpend } = await import("../../../lib/llm-billing.js")
+  return {
+    commitJobCredits: mocks.commitJobCredits,
+    shouldSaveJobResult: mocks.shouldSaveJobResult,
+    markJobCompleted: mocks.markJobCompleted,
+    setJobProgress: mocks.setJobProgress,
+    workerLlmBilling: vi.fn(async () => {
+      const spend = new LlmSpend()
+      return {
+        metered: billing.metered,
+        spend,
+        recorder: billing.metered ? spend : { add: () => {} },
+        noteSpend: async () => {},
+        callStarting: billing.callStarting,
+        settle: async () => {
+          billing.settle()
+          billing.settled.push(spend)
+          return billing.metered
+            ? { metered: true, outcome: billing.outcome }
+            : { metered: false }
+        },
+      }
+    }),
+    attachLlmSpend: (err: unknown, spend: { attempts: readonly unknown[] }) => {
+      billing.attached.push(spend)
+      return err
+    },
+  }
+})
 vi.mock("../../../lib/storage.js", () => ({ uploadBufferToR2: mocks.uploadBufferToR2 }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.supabaseFrom } }))
 
-import { motionGraphicsLottieHandlers } from "../motion-graphics-lottie.js"
+import { buildLottieRequest, motionGraphicsLottieHandlers } from "../motion-graphics-lottie.js"
 
 const handler = motionGraphicsLottieHandlers["motion-graphics-lottie"]
 
@@ -119,6 +155,10 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  billing.metered = false
+  billing.outcome = "charged"
+  billing.settled.length = 0
+  billing.attached.length = 0
   mocks.shouldSaveJobResult.mockResolvedValue(true)
   mocks.markJobCompleted.mockResolvedValue(true)
   mocks.uploadBufferToR2.mockResolvedValue("https://cdn.example.com/lottie/job-1.json")
@@ -276,5 +316,73 @@ describe("motion-graphics-lottie handler", () => {
     // The worker's generic pre-task pickup owns provider_kind/stale-sweep; the
     // handler must never issue its own jobs.update.
     expect(mocks.supabaseFrom).not.toHaveBeenCalled()
+  })
+})
+
+describe("motion-graphics-lottie handler — a metered hold (D1/A6)", () => {
+  beforeEach(() => {
+    billing.metered = true
+  })
+
+  it("R38: cancelled while the calls ran (shouldSaveJobResult=false) — the plan is discarded but the hold is STILL settled", async () => {
+    mocks.llmComplete.mockResolvedValue({ text: VALID_LOTTIE, usage: { inputTokens: 100, outputTokens: 500 }, providerCost: 0.01, lane: "kie" })
+    mocks.shouldSaveJobResult.mockResolvedValueOnce(false)
+    await expect(handler(makeJob() as never, makeCtx())).resolves.toBeUndefined()
+    expect(billing.settled).toHaveLength(1)
+    expect(billing.settled[0]!.attempts).toHaveLength(1)
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.commitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("R38: the call-start CAS runs before the first call; a row cancelled first is never sent it", async () => {
+    mocks.llmComplete.mockResolvedValue({ text: VALID_LOTTIE, usage: { inputTokens: 100, outputTokens: 500 }, providerCost: 0.01, lane: "kie" })
+    await handler(makeJob() as never, makeCtx())
+    expect(billing.callStarting.mock.invocationCallOrder.at(-1)!).toBeLessThan(mocks.llmComplete.mock.invocationCallOrder.at(-1)!)
+    mocks.llmComplete.mockClear()
+    billing.callStarting.mockRejectedValueOnce(new Error("Job job-1 was cancelled"))
+    await expect(handler(makeJob() as never, makeCtx())).rejects.toThrow(/cancelled/)
+    expect(mocks.llmComplete).not.toHaveBeenCalled()
+  })
+
+  it("the metered hold's request is the FIRST attempt exactly (buildLottieRequest — the route and the DAG hold it)", async () => {
+    mocks.llmComplete.mockResolvedValue({ text: VALID_LOTTIE, usage: { inputTokens: 100, outputTokens: 500 }, providerCost: 0.01, lane: "kie" })
+    const job = makeJob({ llmModel: "claude-sonnet-5.5", reasoningEffort: "high", previousSids: ["a"] })
+    await handler(job as never, makeCtx())
+    expect(mocks.llmComplete.mock.calls[0][0]).toEqual(buildLottieRequest(job.data as never))
+  })
+
+  it("first answer + repair attempt both charged — settled BEFORE the completion, the ledger never on output_data (R32)", async () => {
+    mocks.llmComplete
+      .mockResolvedValueOnce({ text: "this is not json at all", usage: { inputTokens: 50, outputTokens: 10 }, providerCost: 0.002, lane: "kie" })
+      .mockResolvedValueOnce({ text: VALID_LOTTIE, usage: { inputTokens: 120, outputTokens: 600 }, providerCost: 0.008, lane: "kie" })
+
+    await handler(makeJob() as never, makeCtx())
+
+    // Both calls are on the spend the settle charges — the hold only covered the first.
+    expect(billing.settled).toHaveLength(1)
+    expect(billing.settled[0]!.attempts).toHaveLength(2)
+    expect(billing.settle.mock.invocationCallOrder[0]).toBeLessThan(mocks.markJobCompleted.mock.invocationCallOrder[0]!)
+    const patch = mocks.markJobCompleted.mock.calls[0][1]
+    // R32: the settle writes the ledger to its own server-only column — never output_data.
+    expect(patch.output_data).not.toHaveProperty("billing")
+    // The settle wrote the summed provider cost and the charge: no tier commit, no overwrite.
+    expect("provider_cost" in patch).toBe(false)
+    expect(mocks.commitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("an unconfirmed settle leaves the job non-terminal for the reconcile sweep", async () => {
+    billing.outcome = "unsettled"
+    mocks.llmComplete.mockResolvedValue({ text: VALID_LOTTIE, usage: { inputTokens: 100, outputTokens: 500 }, providerCost: 0.01, lane: "kie" })
+    await handler(makeJob() as never, makeCtx())
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.commitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("rejected twice: BOTH billed calls ride the thrown error to the failure net (never refunded for them)", async () => {
+    mocks.llmComplete.mockResolvedValue({ text: REJECTED_LOTTIE, usage: { inputTokens: 80, outputTokens: 300 }, providerCost: 0.005, lane: "kie" })
+    await expect(handler(makeJob() as never, makeCtx())).rejects.toThrow(/validation failed/i)
+    expect(billing.attached).toHaveLength(1)
+    expect(billing.attached[0]!.attempts).toHaveLength(2)
+    expect(billing.settle).not.toHaveBeenCalled()
   })
 })

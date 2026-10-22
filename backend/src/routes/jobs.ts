@@ -11,6 +11,7 @@ import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
 import { ORDER_QUALITY_COLUMNS, fillJobRenderQuality, fillJobsRenderQuality } from "../lib/render-label-fill.js"
 import type { ErrorHint } from "../lib/safety-block.js"
 import { creditStatusMapFor, creditStatusOf, creditsChargedOf } from "../lib/job-credit-status.js"
+import { sideHoldChargesFor } from "../lib/job-step-charge.js"
 import { JOB_RATINGS, JOB_RATING_FILTERS } from "../lib/job-ratings.js"
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../lib/job-owner-state.js"
 import { MAX_JOB_LIST_FILTER_VALUES, applyJobListFilters, jobListFilterSelect, parseJobListQuery, ratingsNotAvailable, withoutFilterEmbeds } from "../lib/job-list-filters.js"
@@ -430,6 +431,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     const usageLogId = (job as { usage_log_id?: string | null }).usage_log_id ?? null
     const creditMap = await creditStatusMapFor([usageLogId])
+    const sideCharges = await sideHoldChargesFor([job.id])
     // The owner's favorite and rating of it — the owner's, also when an admin
     // reads it. Pollers read this route: a failed read leaves the two fields
     // out (unknown) and the job still answers.
@@ -447,7 +449,7 @@ export async function jobRoutes(app: FastifyInstance) {
         ...sanitizeJobForPublic(fillJobRenderQuality(job) as unknown as JobRecord, isAdmin),
         credit_status: creditStatusOf(usageLogId, creditMap),
         // What was charged once the hold settled; `credits` stays the hold.
-        credits_charged: creditsChargedOf(usageLogId, creditMap),
+        credits_charged: creditsChargedOf(usageLogId, creditMap, job.id, sideCharges),
         ...ownerStateFields(job.id, ownerState),
       },
     }
@@ -672,6 +674,8 @@ export async function jobRoutes(app: FastifyInstance) {
     const creditMap = await creditStatusMapFor(
       cleanedJobs.map((job) => (job as { usage_log_id?: string | null }).usage_log_id),
     )
+    // R53: each job's settled metered side holds, in one read for the page.
+    const sideCharges = await sideHoldChargesFor(cleanedJobs.map((job) => job.id as string))
     // And one read per table for the owner's favorite and rating of each job;
     // as on GET /v1/jobs/:id, a failed read leaves the two fields out.
     let ownerState: JobOwnerStateMap | null = null
@@ -686,7 +690,7 @@ export async function jobRoutes(app: FastifyInstance) {
       const sanitized = {
         ...sanitizeJobForPublic(fillJobRenderQuality(job) as JobRecord, isAdmin),
         credit_status: creditStatusOf(usageLogId, creditMap),
-        credits_charged: creditsChargedOf(usageLogId, creditMap),
+        credits_charged: creditsChargedOf(usageLogId, creditMap, job.id as string, sideCharges),
         ...ownerStateFields(job.id, ownerState),
       }
       if (!attachToCharacterId) return sanitized

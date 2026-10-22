@@ -10,8 +10,7 @@ import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import type { ImageCriticData } from "@/types/nodes"
 
 interface ImageCriticDetailsModalProps {
@@ -116,10 +115,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
-  const credits = useModelCredits(
-    buildLlmCreditIdentifier("image-critic", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-critic"], nodeData.reasoningEffort, nodeData.advancedMode === true),
-    1,
-  )
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("image-critic", nodeData, 1)
   const [modalOpen, setModalOpen] = useState(false)
 
   const score = nodeData.score
@@ -139,13 +135,13 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<Eye className="h-4 w-4" />}
         category="ai"
-        credits={credits}
+        credits={credits} creditsEstimate={creditsEstimate}
         selected={selected}
         isRunning={status === "running"}
         hideHeader
         minWidth={240}
         topToolbarContent={
-          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+          <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
         }
         handles={[
           { id: "image",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

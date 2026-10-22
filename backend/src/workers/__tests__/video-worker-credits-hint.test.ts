@@ -120,6 +120,8 @@ vi.mock("@/config/content-filter.js", () => ({
 
 vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
+  settleCancelledMeteredJob: vi.fn(async () => false),
+  settleDiscardedCancelledMeteredHold: vi.fn(async () => {}),
   createAssetFromJob: mocks.mockCreateAssetFromJob,
   isFinalJobAttempt: mocks.mockIsFinalJobAttempt,
   LLM_PRODUCT_JOB_TYPES: new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"]),

@@ -14,7 +14,7 @@ generated_from: cb1e786d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `ai-writer`
 **Category:** ai
-**Credit cost:** priced by the chosen LLM tier (`ai-writer:economy` / `ai-writer` / `ai-writer:premium`) — the live price is `GET /v1/credits/model-cost?model=<id>` (MCP: `list_models`).
+**Credit cost:** charged for the tokens the call used, at the chosen model's rate (`docs/pricing/llm-models.md`) — the estimate for a model is `GET /v1/credits/model-cost?model=ai-writer:<model>` (an `estimate: true` answer; MCP: `list_models`).
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `text`
 
@@ -43,10 +43,12 @@ block above):
 
 - `llmModel?: string` — any id from the LLM model registry.
 - `reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh" | "max"` —
-  clamped to what the chosen model declares. `xhigh`/`max` bill one tier up.
+  clamped to what the chosen model declares. A higher effort costs more only
+  through the tokens it writes; on a Claude model any effort runs on Anthropic's
+  own API, at that lane's rate.
 - `advancedMode?: boolean` — Gemini models only. Runs the request on the
   provider's own API so `temperature` / `maxTokens` / the full reasoning range
-  actually apply. Bills one credit tier up. Sending it with a non-Gemini model
+  actually apply, charged at that lane's rate. Sending it with a non-Gemini model
   returns `400 advanced_mode_unsupported`.
 
 ## When to use

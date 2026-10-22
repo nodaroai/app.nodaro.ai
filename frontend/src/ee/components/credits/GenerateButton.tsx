@@ -5,7 +5,8 @@ import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useModelCreditCost, useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
-import { creditUnits } from "@/lib/credit-units"
+import { creditUnits, creditUnitsApprox } from "@/lib/credit-units"
+import { isModelEstimate } from "@/hooks/use-model-credit-cost"
 import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 
@@ -83,6 +84,10 @@ export function GenerateButton({
   // Display unit (Phase B): the gate above compares RAW credits; only what is
   // shown converts.
   const shownCost = creditUnits(totalCost)
+  // A metered LLM node priced at the server's estimate for its model (the id
+  // the server marked `estimates`): `~N` (spec §8.5). An override is a figure
+  // the caller computed, never this id's price.
+  const estimate = creditOverride === undefined && isModelEstimate(modelIdentifier)
 
   const buttonContent = (
     <>
@@ -91,7 +96,7 @@ export function GenerateButton({
       {showCreditInfo && !isRunning && (
         <span className="ms-1 opacity-80">
           {t("credits.amount", {
-            n: shownCost,
+            n: creditUnitsApprox(totalCost, estimate),
             unit: shownCost === 1 ? t("credits.unit.one") : t("credits.unit.other"),
           })}
         </span>

@@ -561,6 +561,18 @@ batch, and do not present it for approval.
   applied is unknown from here, so re-read the production before deciding
   anything.
 
+### Metered LLM requests: `job_cancelled` and `job_start_failed`
+
+A synchronous LLM request priced per model (metered) can answer two codes that
+have no class of their own. They arrive as a `NodaroError` with that `code`
+and `status`:
+
+- **409 `job_cancelled`.** The job was cancelled after its credits were held
+  but before its call was sent. The call is never sent and nothing is charged.
+  Do not retry it as-is: the job was cancelled on purpose.
+- **503 `job_start_failed`.** The server could not record that the call is
+  starting, so it did not send it. Nothing is charged. Retry it.
+
 ### `class JobBlockedError extends NodaroError`
 
 HTTP 422 `job_blocked`. A job policy registered by this deployment refused the
@@ -935,8 +947,9 @@ it does not run hands on what that execution produced, the Edit Plan its plan
 with the review applied.
 
 `estimateRenderFinal` quotes it first and creates nothing: the nodes it will run,
-the override it runs with, its estimated credits, whether the payer can cover
-them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
+the override it runs with, its estimated credits (`estimatedCreditsIsEstimate:
+true` when the run executes an LLM node, which is charged its actual usage — show
+it `~N`), whether the payer can cover them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
 workspace budget or a deployment's operator pays). The figures are `null` in an
 edition without credits.
 
@@ -1377,7 +1390,11 @@ cancel(id: string): Promise<CancelJobResult>
 ```
 
 Cancels a job and refunds any reserved credit holds. Returns
-`{ success: true, cancelled: number }`.
+`{ success: true, cancelled: number, inFlight?: boolean }`. A running LLM job priced per model (metered) is an exception: if its call
+has already started, the cancel answers `{ success: true, cancelled: 0, inFlight: true }`
+— the job finishes and is charged only what it used. A job stopped before its
+call starts is refunded, except for what an earlier attempt of the same job
+already used (a retry after a billed attempt): that is charged.
 
 ```ts
 const { cancelled } = await client.jobs.cancel(jobId)
@@ -1403,11 +1420,12 @@ await client.jobs.delete(jobId)
 ### `client.llm`
 
 Structured LLM output: your system prompt and JSON Schema in, a validated
-object out. Billed under `llm-structured` per model tier and lane (see
-[Structured LLM output](api-integration.md#structured-llm-output-any-schema)):
-economy 11 credits<!-- credits: llm-structured:economy -->, standard 20 credits<!-- credits: llm-structured -->,
-premium 40 credits<!-- credits: llm-structured:premium -->, premium-direct 150 credits<!-- credits: llm-structured:premium-direct -->.
-Claude Fable 5 is not offered (`400 validation_error`).
+object out. Billed under `llm-structured` for the tokens the call used, at the
+model's rate on the lane that served it (see
+[Structured LLM output](api-integration.md#structured-llm-output-any-schema) and
+[LLM model rates](pricing/llm-models.md)): a typical call is ~18 credits<!-- credits: llm-structured:gemini-3.6-flash -->
+on the default Gemini 3.6 Flash and ~154 credits<!-- credits: llm-structured:claude-fable-5 --> on Claude Fable 5,
+which is offered. A failure the provider billed is charged for that usage.
 
 #### `structured(input)`
 
@@ -2305,7 +2323,11 @@ cancel(id: string, params?: CancelExecutionParams): Promise<{ success: true }>
 Cancels an execution. Three modes:
 
 - **default** (no `mode`) — cancels immediately, killing in-flight jobs and
-  refunding reserved credit holds (status `"cancelled"`).
+  refunding reserved credit holds (status `"cancelled"`). A running LLM job
+  priced per model (metered) is cancelled too, but charged what the provider
+  already billed for it, and the rest of its hold is refunded. One stopped
+  before its call starts is refunded, except for what an earlier attempt of
+  the same job already used, which is charged.
 - **`mode: "after_current"`** — sets the execution to `"stopping"` so in-flight
   nodes finish (and land on the canvas + My Library) before the run stops.
 - **`mode: "discard"`** — stops scheduling new nodes WITHOUT cancelling in-flight
@@ -2815,10 +2837,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > omitted on that model — send another level to change it; any other model,
 > their default Gemini 3.8 Flash included, keeps Auto (see
 > [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost) for
-> what that run costs). `xhigh` and `max` bill **one tier up** (economy → standard,
-> standard → premium); see
-> [Reasoning effort](nodes/ai-text/llm-chat.md#reasoning-effort) for the
-> exact rule and worked examples. Workflow/canvas LLM nodes carry the same
+> what that run costs). Effort has no price of its own: the call is charged for
+> the tokens it used at the model's rate, so a higher effort costs more only
+> through the reasoning it writes — and any effort on a Claude model runs the
+> call on Anthropic's own API, at that lane's rate (see
+> [Credit pricing](nodes/ai-text/llm-chat.md#credit-pricing) and
+> [LLM model rates](pricing/llm-models.md)). Workflow/canvas LLM nodes carry the same
 > field on their node `data` (`reasoningEffort?: LlmReasoningEffort`), and
 > `client.promptHelper.*` accepts it directly in its request body.
 
@@ -2826,8 +2850,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > Claude models), which runs the request on the provider's own API rather than through
 > the aggregator. That is the only lane where `temperature`, `maxTokens` and the
 > full reasoning-effort range actually take effect — on the default lane those
-> levers are not reliably honoured. It bills **one credit rung up** (a premium model moves to its premium-direct price), and this
-> bump is independent of the effort bump above. A model with no direct lane
+> levers are not reliably honoured. The call is charged at that lane's rate
+> (each model's rates for both lanes are in [LLM model rates](pricing/llm-models.md)). A model with no direct lane
 > returns `400 advanced_mode_unsupported`.
 > While the model's own provider is not taking requests, an Advanced-mode
 > request answers `advanced_mode_unavailable` (400 up front, or 502 mid-call,
@@ -2950,7 +2974,7 @@ release, absent on older jobs and wherever the server could not read the size
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `signal` | `AbortSignal` | — | Abort the poll loop; rejects with `JobAbortedError` (its `jobId` names the job once submitted). Aborting stops the **waiting** only — the job keeps running and is charged unless `cancelOnAbort` is set. |
-| `cancelOnAbort` | `boolean` | `false` | Also cancel the submitted job when `signal` aborts (`POST /v1/jobs/:id/cancel`, which refunds its hold). Best effort: a failed cancel still rejects with the `JobAbortedError`. |
+| `cancelOnAbort` | `boolean` | `false` | Also cancel the submitted job when `signal` aborts (`POST /v1/jobs/:id/cancel`, which refunds its hold — except a metered LLM job whose call has started: it answers `inFlight: true`, finishes, and is charged what it used). Best effort: a failed cancel still rejects with the `JobAbortedError`. |
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
 | `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
@@ -4472,7 +4496,7 @@ run(input: ReduceInput): Promise<ReduceResult>
 
 | Strategy | Config shape |
 |----------|--------------|
-| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model (economy/standard/premium credit tiers apply) |
+| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url", llmModel?: string }` — `llmModel` picks the judge model; the judge's call is charged per token at that model's rate, ~6 credits<!-- credits: reduce:pick-best-llm:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5 ([LLM model rates](./pricing/llm-models.md)) |
 | `concat` | `{ separator?: string }` (default `"\n\n"`) |
 | `first-non-empty` | `{}` |
 | `count` | `{}` |
@@ -4513,14 +4537,15 @@ credits surface as `InsufficientCreditsError`.
 
 AI prompt assistance for generation nodes. All three methods delegate to
 `POST /v1/prompt-helper/wizard` (see
-[API Integration §12](./api-integration.md#15-prompt-wizard)) and reserve
-credits per call.
+[API Integration §12](./api-integration.md#15-prompt-wizard)). Each call
+is charged for the tokens it used at the model's rate (~4 credits<!-- credits: prompt-helper:gemini-3.6-flash --> typical on
+the default Gemini 3.6 Flash; [LLM model rates](pricing/llm-models.md)).
 
 All three inputs also accept optional `llmModel`, `reasoningEffort`, `advancedMode`, `temperature` and `maxTokens` fields
 (the latter is model-dependent — unsupported or omitted levels fall back to
 the vendor default). Both are forwarded to the underlying LLM call and affect
-credit cost the same way as every other LLM-backed node — see
-[Reasoning effort](nodes/ai-text/llm-chat.md#reasoning-effort). The CLI
+the charge only through the tokens the call uses and the lane it runs on — see
+[Credit pricing](nodes/ai-text/llm-chat.md#credit-pricing). The CLI
 exposes the same lever as `--llm-model <id>` / `--reasoning-effort <level>`
 on `nodaro prompt wizard/analyze/generate/enhance`.
 
@@ -4601,7 +4626,9 @@ restricted values where set; `estimatedCredits` and its parts are the saved
 settings — "from". The `max*` fields are present only when they differ, and are
 absent on an app published before the range existed until its next publish.
 Templates carry `maxEstimatedCredits` / `maxEstimatedPerMinuteCredits` the same
-way.
+way. `estimatedCreditsIsEstimate: true` (apps, templates, tutorials) marks a
+listed price that holds a metered LLM call's estimate — charged its actual usage
+per token — so show it `~N`; it is absent for a fixed price.
 
 ```ts
 const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
@@ -6343,12 +6370,28 @@ the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
 | `data` | `Record<string, number>` | Priced identifier → credit cost. |
 | `missing` | `string[]` | Identifiers with no pricing row (render `'—'`). |
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
+| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `~N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
+| `errorCodes` | `Record<string, { code, message }>?` | Why each identifier in `errors` has no price — today `llm_model_unpriced`: a model with no rate on the lane it would be served on (it cannot be run). Omitted when `errors` is empty. |
 
 ```ts
 const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
 console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
 ```
+
+A metered LLM call's estimate (every model's per-token rate is in
+[LLM model rates](pricing/llm-models.md)):
+
+```ts
+import { llmPriceKey } from "@nodaro/shared/llm-models"
+
+const key = llmPriceKey("llm-chat", "claude-fable-5") // "llm-chat:claude-fable-5"
+const { data, estimates } = await client.credits.modelCosts([key])
+const shown = estimates?.includes(key) ? `~${data[key]}` : String(data[key])
+```
+
+`GET /v1/credits/model-cost?model=<id>` answers one identifier as
+`ModelCostResult` — `{ model, creditCost, estimate?: true }`.
 
 #### `transactions(options?)`
 
@@ -7280,7 +7323,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature (a default run reads every picker's catalog) on the rung the model's tier and lane decide, as for Describe to Picker: economy 18 credits<!-- credits: text-to-picker:economy -->, standard 46 credits<!-- credits: text-to-picker -->, premium 90 credits<!-- credits: text-to-picker:premium -->, premium-direct 220 credits<!-- credits: text-to-picker:premium-direct -->. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the economy rung. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API, the premium-direct rung; any other model with no effort keeps Auto. Claude Fable 5 is not offered (`400 validation_error`). |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed under the route's own `text-to-picker` feature for the tokens its batches used, at the model's rate on the lane that served each ([LLM model rates](pricing/llm-models.md); a default run reads every picker's catalog). A typical run: ~16 credits<!-- credits: text-to-picker:gemini-3.8-flash --> on the default, ~53<!-- credits: text-to-picker:claude-sonnet-5.5 --> on Claude Sonnet 5.5, ~262<!-- credits: text-to-picker:claude-opus-5.5:direct --> on Claude Opus 5.5. Omitted, the run is Gemini 3.8 Flash at Auto — the describe-to-picker default — on the aggregator. `claude-opus-5.5` with no effort runs at `"high"` on Anthropic's own API; any other model with no effort keeps Auto. Claude Fable 5 is offered. |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —
@@ -7873,7 +7916,7 @@ several recordings or a Master audio adds `cameras`: `{ speakers: [{ speaker,
 ordinal, camera, marginDb }], syncNotes, mapNotes }` — who was put on which
 recording (`camera` `null` = the wide shot).
 
-`estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+`estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:tighten-episode --> per run.
 The estimate leans high — the render is priced at the recording's full length
 and a framed episode's Speaker View at its higher rate, before the edit is
@@ -7924,7 +7967,7 @@ first starts at 0. A run that finds no
 chapters fails ("The plan found no chapters in this recording."), and its fee
 is refunded.
 
-`estimateEpisodeChapters` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+`estimateEpisodeChapters` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-chapters --> per run.
 A recording whose length cannot be read is estimated at the 180-minute
 ceiling. Both refuse before anything is created or charged, with the codes
@@ -7976,7 +8019,7 @@ completes with the others, keeps its fee and is not charged for that format.
 A run with no format rendered fails, and its fee is refunded. A run on several
 recordings or a Master audio adds `output_data.cameras`, as on `tightenEpisode`.
 
-`estimateEpisodeTrailer` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+`estimateEpisodeTrailer` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-trailer --> per run.
 The trailer is quoted at 40 seconds, the longest trailer the plan cuts (its
 render, and Combine Videos with an intro card); a Render final
@@ -8039,7 +8082,7 @@ fee. A clip whose captions could not be added comes uncaptioned, marked
 captions are not charged. A run with no clip rendered fails, and its fee is
 refunded.
 
-`estimateClipPack` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+`estimateClipPack` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:clip-pack --> per run.
 Each clip is quoted at twice the target length (the charge follows each
 clip's real length); a Render final (`continueUseCase`) is quoted on the
@@ -8088,7 +8131,7 @@ was put on which camera. A run on one recording reads the recording's size
 before it starts, and may be refused `429 rate_limit_exceeded` (try again in a
 moment) when you start too many of those in a minute.
 
-`estimateSpeakerLayout` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+`estimateSpeakerLayout` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:speaker-layout --> per run.
 Speaker View is quoted at its higher rate over the recording's full length (a
 recording whose length cannot be read at the 180-minute ceiling); a Render

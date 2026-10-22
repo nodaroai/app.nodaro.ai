@@ -13,13 +13,16 @@ import {
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
   LLM_REASONING_EFFORTS,
-  LLM_STRUCTURED_WITHHELD_MODELS,
   type LlmModelDef,
 } from "@nodaro/shared/llm-models"
 import {
   LLM_TEXT_INPUT_MAX,
 } from "@nodaro/shared/models"
-import { llmCompleteStructured, LLM_MAX_LANES_PER_CALL, LLM_STRUCTURED_DIRECT_BACKUP_ASKS, type StructuredLlmOutput } from "./llm-client.js"
+import { VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared/credits"
+import { stripDerivedAnalysisFields, type VideoAnalysisResult } from "@nodaro/shared/video"
+import { llmCompleteStructured, LLM_MAX_LANES_PER_CALL, LLM_STRUCTURED_DIRECT_BACKUP_ASKS, type LlmRequest, type StructuredLlmOutput } from "./llm-client.js"
+// Re-exported: the structured routes size their hold with it.
+export { plannedStructuredCall } from "./llm-metered-route.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "./llm-advanced-mode.js"
 import { buildJobInputData } from "./job-input-data.js"
 import { clientOriginSchema } from "./client-origin-schema.js"
@@ -220,12 +223,6 @@ export function prepareStructuredRequest(body: LlmStructuredBody): PreparedStruc
   if (!model) {
     return { ok: false, status: 400, error: { code: "validation_error", message: "Unknown llmModel" } }
   }
-  // The models withheld from every legend-sized structured read (Claude Fable
-  // 5 — production cost audit, 2026-10-20): the same 400 as an unknown model,
-  // here so the sync route, the jobs route and the worker refuse alike.
-  if (LLM_STRUCTURED_WITHHELD_MODELS.has(model.id)) {
-    return { ok: false, status: 400, error: { code: "validation_error", message: `llmModel ${model.id} is not offered on llm-structured` } }
-  }
   const advancedError = advancedModeError(body, model.id)
   if (advancedError) return { ok: false, status: 400, error: advancedError }
   // `deriveParams` floors the output cap UP when reasoning shares the
@@ -268,6 +265,10 @@ export function prepareStructuredRequest(body: LlmStructuredBody): PreparedStruc
     ok: true,
     model,
     schema: converted.schema,
+    // The TIER credit id — what a reservation under the rollback bills
+    // (`LLM_TIER_PRICING_ROLLBACK`). A metered run is charged under
+    // `llm-structured:<model>` instead, which `reserveLlmCall` derives and
+    // returns as `chargeId`.
     modelIdentifier: buildLlmCreditIdentifier("llm-structured", llmModelId, body.reasoningEffort, body.advancedMode),
   }
 }
@@ -286,6 +287,29 @@ export type StructuredCompletionBody = Pick<
   "system" | "schemaName" | "reasoningEffort" | "maxRetries" | "maxTokens" | "advancedMode" | "temperature"
 >
 
+/**
+ * The request the one completion call sends, BEFORE the structured client adds
+ * the forced schema — built once, so the metered hold
+ * ({@link plannedStructuredCall}) and the call are sized from the same object.
+ */
+export function structuredCompletionRequest(
+  body: StructuredCompletionBody,
+  prepared: { model: { id: string } },
+  input: string,
+): LlmRequest {
+  return {
+    modelId: prepared.model.id,
+    system: body.system,
+    messages: [{ role: "user", content: input }],
+    reasoningEffort: body.reasoningEffort,
+    timeoutMs: STRUCTURED_LLM_TIMEOUT_MS,
+    // The caller's maxTokens is the DEFAULT, not an Advanced-only lever: a
+    // generic route has no tuned literal of its own to protect, and a bare
+    // resolveLlmParams(body) would discard the value outside Advanced mode.
+    ...resolveLlmParams(body, { maxTokens: body.maxTokens }),
+  }
+}
+
 /** The one completion call. `input` is passed separately because the async
  *  worker composes it (caller text + analysis) after the body was stored. */
 export function runStructuredCompletion(
@@ -294,20 +318,48 @@ export function runStructuredCompletion(
   input: string,
 ): Promise<StructuredLlmOutput<unknown>> {
   return llmCompleteStructured(
-    {
-      modelId: prepared.model.id,
-      system: body.system,
-      messages: [{ role: "user", content: input }],
-      reasoningEffort: body.reasoningEffort,
-      timeoutMs: STRUCTURED_LLM_TIMEOUT_MS,
-      // The caller's maxTokens is the DEFAULT, not an Advanced-only lever: a
-      // generic route has no tuned literal of its own to protect, and a bare
-      // resolveLlmParams(body) would discard the value outside Advanced mode.
-      ...resolveLlmParams(body, { maxTokens: body.maxTokens }),
-    },
+    structuredCompletionRequest(body, prepared, input),
     prepared.schema,
     { schemaName: body.schemaName, maxRetries: body.maxRetries },
   )
+}
+
+/**
+ * Characters one second of analyzed video adds to a drafted prompt — a SEED
+ * (D5), measured for real by `scripts/measure-llm-typical-usage.ts` (Task 17).
+ */
+export const LLM_ANALYSIS_CHARS_PER_SECOND = 100
+
+/**
+ * The caller's input + the analysis, in the ONE compact form the
+ * `llm-structured` worker drafts from (its `composeAnalysisInput`; a test
+ * holds the two byte-identical). Compact, not pretty-printed.
+ */
+export function composeStructuredAnalysisInput(input: string, analysis: VideoAnalysisResult): string {
+  return `${input}\n\n${JSON.stringify(stripDerivedAnalysisFields(analysis))}`
+}
+
+/**
+ * D5 — how many characters a jobs-route draft adds to the caller's input from
+ * its video analysis, for the metered hold:
+ *  - with `analysisJobId`: exactly what the reused analysis (already parsed by
+ *    the route's precheck) adds to the input the worker composes;
+ *  - with `videoUrl`: the analysis does not exist yet — the route holds BEFORE
+ *    the child is created (spec D16), so the duration bucket is unknown — so
+ *    the longest analysis, `VIDEO_ANALYSIS_MAX_DURATION_SEC` (600 s), ×
+ *    {@link LLM_ANALYSIS_CHARS_PER_SECOND}. The settle charges the actual (D1);
+ *  - neither: 0.
+ * The analysis child keeps its own fixed video-analysis price.
+ */
+export function llmStructuredVideoBound(
+  body: { input: string; videoUrl?: string; analysisJobId?: string },
+  reusedAnalysis?: VideoAnalysisResult,
+): { extraChars: number } {
+  if (body.analysisJobId && reusedAnalysis) {
+    return { extraChars: composeStructuredAnalysisInput(body.input, reusedAnalysis).length - body.input.length }
+  }
+  if (body.videoUrl) return { extraChars: VIDEO_ANALYSIS_MAX_DURATION_SEC * LLM_ANALYSIS_CHARS_PER_SECOND }
+  return { extraChars: 0 }
 }
 
 /**

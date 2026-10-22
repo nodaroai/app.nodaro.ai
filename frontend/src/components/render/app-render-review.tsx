@@ -269,7 +269,7 @@ function AppRenderFinalAction({
   readonly onRender: (renderId: string) => void
 }) {
   const t = useT()
-  const { credits, unchecked } = useAppRenderFinalPrice(renderId)
+  const { credits, unchecked, approx, unpriced } = useAppRenderFinalPrice(renderId)
   // A render that cannot run at all (Speaker View until it is priced) says so instead.
   const refusal = renderRunRefusalKey(useContext(AppRenderReviewContext)?.graph.find((n) => n.id === renderId))
   const [confirming, setConfirming] = useState(false)
@@ -282,6 +282,8 @@ function AppRenderFinalAction({
           onRenderFinal={() => setConfirming(true)}
           finalCredits={credits}
           finalUnchecked={unchecked}
+          finalApprox={approx}
+          {...(unpriced ? { finalUnpriced: unpriced } : {})}
           busy={false}
           note={note}
           {...(refusal ? { disabledReason: t(refusal) } : {})}
@@ -289,12 +291,13 @@ function AppRenderFinalAction({
       </div>
     )
   }
-  // The question states the price as the button did: one that is not the server's checked figure is
-  // marked as an estimate (run-price.ts), with the reason under it — where a title would never show.
-  const price = unchecked
-    ? `${t("renderFinal.action")}${runPriceSuffix(t, credits, unchecked)}`
+  // The question states the price as the button did: an estimate (a figure not the server's checked
+  // one, or a metered LLM call's) is `~N`, a run holding a node the server refuses to price says it is
+  // not priced yet (run-price.ts) — with the reason under it, where a title would never show.
+  const price = unchecked || approx || unpriced
+    ? `${t("renderFinal.action")}${runPriceSuffix(t, credits, unchecked, { approx, ...(unpriced ? { unpriced } : {}) })}`
     : hasCredits() && credits > 0 ? t("renderFinal.confirmTitleCredits", { credits: creditUnits(credits) }) : t("renderFinal.action")
-  const reason = runPriceTitle(t, unchecked)
+  const reason = runPriceTitle(t, unchecked, unpriced)
   return (
     <div className="flex flex-col gap-1 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 p-2" role="alertdialog" aria-label={price}>
       <p className="text-xs font-medium text-foreground">{price}</p>

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
-import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
+import { llmMcpFields, llmPayloadFields } from "./_llm-fields.js"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -61,7 +61,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         style: z.string().optional(),
         aspectRatio: z.string().optional(),
         duration: z.number().optional(),
-        ...LLM_MCP_FIELDS,
+        ...llmMcpFields("prompt-helper"),
       },
       annotations,
     },
@@ -96,7 +96,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         style: z.string().optional(),
         aspectRatio: z.string().optional(),
         duration: z.number().optional(),
-        ...LLM_MCP_FIELDS,
+        ...llmMcpFields("prompt-helper"),
       },
       annotations,
     },
@@ -128,7 +128,7 @@ export function registerPromptHelper({ server, session, fastify }: RegisterPromp
         style: z.string().optional(),
         aspectRatio: z.string().optional(),
         duration: z.number().optional(),
-        ...LLM_MCP_FIELDS,
+        ...llmMcpFields("prompt-helper"),
       },
       annotations,
     },

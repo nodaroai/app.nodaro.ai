@@ -134,6 +134,15 @@ cancellable like any in-flight job, and cancelling refunds the reservation and
 deletes the withheld object, so a reservation is never stranded behind a
 reviewer's response time.
 
+**Metered LLM jobs.** A job priced per token (metered LLM pricing) settles its
+calls at their actual cost *before* its completion is written, so when the gate
+speaks its credits are already charged rather than reserved. "Refunded in full"
+still holds: a result `block`, a reviewer's reject and the owner's cancel of a
+held job also reverse that settled charge — and any metered calls the job made
+beside its own reservation — through the database's own reversal, per payer,
+for exactly what each charge moved. Nothing else ever refunds a metered call the
+provider billed.
+
 **Who may be held.** `hold` is honoured only where the platform can replay the
 completion later: a job completing through the finalize funnel, standing on its
 own (no workflow execution, pipeline or parent job; not the director lane), on

@@ -4,6 +4,7 @@ import { isSeedanceRefQuoteKey, parseSeedanceRefQuoteKey } from "@/lib/seedance-
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
+import { forgetLlmPricingMode, notePricingAnswer } from "./use-llm-pricing-mode"
 
 /**
  * Ids the server has answered are priced NOWHERE on this instance (the batch
@@ -29,6 +30,58 @@ export function forgetUnpricedModels(): void {
   unpricedModelIds.clear()
 }
 
+/**
+ * Ids the server answered with an ESTIMATE (the batch's `estimates`, the GET's
+ * `estimate: true`): a metered LLM call's price key, charged its actual usage
+ * after the run. Every surface shows such a figure with a leading `~`. Only the
+ * server marks one — under the tier-pricing rollback no metered key is priced,
+ * so nothing lands here and every surface looks exactly as before.
+ */
+const estimateModelIds = new Set<string>()
+
+/** The server priced `model` as an estimate this session. */
+export function isModelEstimate(model: string): boolean {
+  return estimateModelIds.has(model)
+}
+
+/** Remember the ids an answer marked as estimates. */
+export function rememberEstimateModels(models: readonly string[] | undefined): void {
+  for (const model of models ?? []) estimateModelIds.add(model)
+}
+
+/**
+ * Metered price keys the server REFUSES to price (`errorCodes` —
+ * `llm_model_unpriced`): a run on that model would be refused, so no price is
+ * shown for it (and it is never quoted at another key's price). Each with the
+ * server's own sentence, the one the run's refusal says.
+ */
+const refusedModelIds = new Map<string, string | undefined>()
+
+/** The server refused to price `model` (a metered model with no rate). */
+export function isModelRefused(model: string): boolean {
+  return refusedModelIds.has(model)
+}
+
+/** Why the server refused to price `model` — its `llm_model_unpriced` message — when it did and said so. */
+export function refusedModelMessage(model: string): string | undefined {
+  return refusedModelIds.get(model)
+}
+
+/** Remember the metered keys an answer refused to price (`errorCodes`), each with its message when the answer gave one. */
+export function rememberRefusedModels(
+  models: readonly string[] | undefined,
+  messages?: Readonly<Record<string, { readonly message?: string }>>,
+): void {
+  for (const model of models ?? []) refusedModelIds.set(model, messages?.[model]?.message ?? refusedModelIds.get(model))
+}
+
+/** Tests only: forget every remembered estimate and refused id, and the pricing mode they showed. */
+export function forgetEstimateModels(): void {
+  estimateModelIds.clear()
+  refusedModelIds.clear()
+  forgetLlmPricingMode()
+}
+
 /** The one query both readers below share, so a price either of them fetched
  *  is already cached for the other. */
 function modelCreditCostQuery(model: string) {
@@ -36,6 +89,10 @@ function modelCreditCostQuery(model: string) {
     queryKey: queryKeys.credits.modelCost(model),
     queryFn: async () => {
       const { data } = await getModelCreditCost(model)
+      if (data.estimate === true) rememberEstimateModels([model])
+      // The pricing mode this answer shows: an estimate is per-model pricing; a
+      // metered key priced at a plain figure, the tier rollback.
+      notePricingAnswer(data.estimate === true ? { estimates: [model] } : { missing: [model] })
       return data.creditCost
     },
     staleTime: Infinity,
@@ -147,11 +204,20 @@ export async function prefetchModelCreditCosts(models: readonly string[]): Promi
 
 async function prefetchRows(uncached: readonly string[]): Promise<void> {
   try {
-    const { data: costs, missing } = await fetchBatchModelCreditCosts([...uncached])
+    const { data: costs, missing, estimates, errorCodes } = await fetchBatchModelCreditCosts([...uncached])
+    // Marked BEFORE the prices land in the cache: a reader re-rendered by the
+    // cache write already sees the id as an estimate.
+    rememberEstimateModels(estimates)
+    const refused = Object.keys(errorCodes ?? {})
+    rememberRefusedModels(refused, errorCodes)
+    // Every answer says which mode the server prices LLM calls in (the effort
+    // labels follow it, a mid-session rollback included).
+    notePricingAnswer({ estimates, refused, missing })
     for (const [model, cost] of Object.entries(costs)) {
       queryClient.setQueryData(queryKeys.credits.modelCost(model), cost)
     }
-    rememberUnpricedModels(missing)
+    // A refused key is not asked again either: its answer will not change.
+    rememberUnpricedModels([...missing, ...refused])
   } catch {
     await Promise.allSettled(uncached.map((model) => queryClient.prefetchQuery(modelCreditCostQuery(model))))
   }

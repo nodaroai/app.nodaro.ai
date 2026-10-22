@@ -9,13 +9,18 @@
  * omission-correct (a field the caller didn't send must not reach the route as
  * an explicit `undefined`).
  */
-import { describe, it, expect } from "vitest"
+import { beforeAll, describe, it, expect } from "vitest"
 import { z } from "zod"
 import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
-import { LLM_MCP_FIELDS, llmPayloadFields } from "../_llm-fields.js"
+import { LLM_MCP_FIELDS, llmMcpFields, llmPayloadFields } from "../_llm-fields.js"
+import { statedPrices } from "../../../../ee/billing/stated-prices.js"
+import { setLlmMeteredSchemaReadyForTesting } from "../../../llm-metered-schema-gate.js"
+
+// The copy describes the hosted deployment, metered (R33: its schema is applied).
+beforeAll(() => setLlmMeteredSchemaReadyForTesting(true))
 
 const TOOLS_DIR = dirname(fileURLToPath(import.meta.url)).replace(/__tests__$/, "")
 
@@ -36,12 +41,33 @@ describe("LLM_MCP_FIELDS", () => {
   it("is spread by every LLM-backed tool file rather than hand-copied", () => {
     for (const file of LLM_TOOL_FILES) {
       const src = readFileSync(join(TOOLS_DIR, file), "utf8")
-      expect(src, `${file} must spread LLM_MCP_FIELDS`).toContain("...LLM_MCP_FIELDS")
+      expect(src, `${file} must spread llmMcpFields(<feature>)`).toMatch(/\.\.\.llmMcpFields\("[a-z0-9:-]+"\)/)
       // A hand-rolled copy would drift the moment the routes gain a knob.
       expect(src, `${file} re-declares advanced_mode instead of spreading`).not.toMatch(
         /^\s*advanced_mode:\s*z\./m,
       )
     }
+  })
+})
+
+describe("the LLM fields' pricing copy (metered: per token at the model's rate)", () => {
+  const describedBy = (schema: z.ZodType) => (toJsonSchemaCompat(z.object({ f: schema })) as { properties: { f: { description?: string } } }).properties.f.description ?? ""
+
+  it("names no credit tier or rung", () => {
+    for (const [key, schema] of Object.entries(llmMcpFields("prompt-helper"))) {
+      expect(describedBy(schema), key).not.toMatch(/\btier\b|\brung\b|premium-direct/i)
+    }
+  })
+
+  it("llmModel names the feature's default model and its typical estimate", () => {
+    const quoted = statedPrices().credits("image-to-text:claude-sonnet-5.5")!
+    const text = describedBy(llmMcpFields("image-to-text").llmModel)
+    expect(text).toContain("Defaults to Claude Sonnet 5.5 (`claude-sonnet-5.5`)")
+    expect(text).toContain(`~${quoted} credits typical on Claude Sonnet 5.5`)
+    // Still the same field: every registered id accepted, only pickable ones advertised.
+    const listed = toJsonSchemaCompat(z.object(llmMcpFields("image-to-text"))) as { properties?: Record<string, { enum?: string[] }> }
+    expect(listed.properties?.llmModel?.enum).toContain("gemini-3.8-flash")
+    expect(listed.properties?.llmModel?.enum).not.toContain("gemini-3.7-flash")
   })
 })
 

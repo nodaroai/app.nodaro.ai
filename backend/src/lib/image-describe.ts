@@ -27,11 +27,7 @@ export const IMAGE_DESCRIBE_SYSTEM_PROMPTS: Record<ImageDescribeDetailLevel, str
     "You are an image description assistant. Describe the image using these labeled sections:\n- Subject: Main subject(s)\n- Setting: Environment/background\n- Colors: Dominant colors and palette\n- Lighting: Light quality and direction\n- Mood: Overall atmosphere\n- Details: Notable secondary elements\n\nKeep each section to 1-2 sentences.",
 }
 
-/**
- * Run the describe vision call. `customPrompt` (when non-empty) replaces the
- * detail-level system prompt, exactly as the route always behaved.
- */
-export async function describeImageWithLlm(args: {
+export interface ImageDescribeArgs {
   imageUrl: string
   llmModel: string
   detailLevel: ImageDescribeDetailLevel
@@ -40,9 +36,40 @@ export async function describeImageWithLlm(args: {
   advanced?: LlmAdvancedInput
   /** "Cheap lanes only" (lib/llm-cheap-lanes.ts): no direct-vendor fallback. */
   lanes?: LlmCheapLanesInput
-}): Promise<LlmResponse> {
-  const systemPrompt = args.customPrompt || IMAGE_DESCRIBE_SYSTEM_PROMPTS[args.detailLevel]
+}
 
+/**
+ * The describe request for one image block. With the default (the URL form)
+ * it is the request a metered caller sizes its hold from and records its
+ * spend against: an image counts as an image whether it travels as a URL or
+ * inline (`llmRequestInputBound`, `requestChars`), so the URL form and the
+ * pre-fetched base64 form size and cost the same.
+ */
+export function imageDescribeRequest(
+  args: ImageDescribeArgs,
+  imageBlock: LlmContentBlock = { type: "image", url: args.imageUrl },
+): LlmRequest {
+  const systemPrompt = args.customPrompt || IMAGE_DESCRIBE_SYSTEM_PROMPTS[args.detailLevel]
+  return {
+    modelId: args.llmModel,
+    system: systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content: [imageBlock, { type: "text", text: "Describe this image." }],
+      },
+    ],
+    ...resolveLlmParams(args.advanced ?? {}, LLM_ROUTE_DEFAULTS["image-to-text"]),
+    ...cheapLanesParam(args.lanes),
+    reasoningEffort: args.reasoningEffort,
+  }
+}
+
+/**
+ * Run the describe vision call. `customPrompt` (when non-empty) replaces the
+ * detail-level system prompt, exactly as the route always behaved.
+ */
+export async function describeImageWithLlm(args: ImageDescribeArgs): Promise<LlmResponse> {
   // Pre-fetch image to base64 — external CDNs (Instagram, etc.) often block
   // requests from LLM provider IPs, causing empty responses.
   let imageBlock: LlmContentBlock = { type: "image", url: args.imageUrl }
@@ -63,17 +90,5 @@ export async function describeImageWithLlm(args: {
     // Fall back to URL — might still work for public images
   }
 
-  return llmComplete({
-    modelId: args.llmModel,
-    system: systemPrompt,
-    messages: [
-      {
-        role: "user",
-        content: [imageBlock, { type: "text", text: "Describe this image." }],
-      },
-    ],
-    ...resolveLlmParams(args.advanced ?? {}, LLM_ROUTE_DEFAULTS["image-to-text"]),
-    ...cheapLanesParam(args.lanes),
-    reasoningEffort: args.reasoningEffort,
-  })
+  return llmComplete(imageDescribeRequest(args, imageBlock))
 }

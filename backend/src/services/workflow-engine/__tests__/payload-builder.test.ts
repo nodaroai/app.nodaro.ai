@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { setLlmMeteredSchemaReadyForTesting } from "../../../lib/llm-metered-schema-gate.js"
 import sunoSeparateSourceCases from "../../../../../packages/render-rules/fixtures/suno-separate-source.cases.json"
 
 // ---------------------------------------------------------------------------
@@ -1364,6 +1365,9 @@ describe("buildPayload", () => {
 
   // --- Motion graphics (lottie engine — async worker queue) ---
   describe("motion-graphics (lottie engine)", () => {
+    // The hosted deployment: metered pricing, its schema applied (R33).
+    beforeAll(() => setLlmMeteredSchemaReadyForTesting(true))
+    afterAll(() => setLlmMeteredSchemaReadyForTesting(undefined))
     it("motion-graphics with engine=lottie builds a worker-queue payload", () => {
       const n = node("n1", "motion-graphics", {
         engine: "lottie",
@@ -1377,8 +1381,9 @@ describe("buildPayload", () => {
       const result = buildPayload(n, jobId, {}, undefined, {})
       expect(result.jobName).toBe("motion-graphics-lottie")
       expect(result.queueName).toBe("video-generation")
-      // default model => standard tier => bare feature id
-      expect(result.modelIdentifier).toBe("motion-graphics-lottie")
+      // default model => charged under motion-graphics-lottie:<default model>
+      // (the rollback's bare tier id is held in dag-parity-fixes.test.ts)
+      expect(result.modelIdentifier).toBe("motion-graphics-lottie:claude-sonnet-5.5")
       expect(result.payload).toMatchObject({
         jobId,
         fps: 30,

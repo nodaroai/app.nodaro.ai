@@ -12,7 +12,7 @@ import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useUserCredits, getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/queries/use-credits-queries"
-import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
+import { useLiveRunFigure } from "@/hooks/use-live-run-estimate"
 import { useChosenRecordingLengths } from "@/hooks/use-chosen-recording-lengths"
 import { recordingLengthPending, runCostLabel } from "@/lib/run-price"
 import { hasCredits } from "@/lib/edition"
@@ -172,10 +172,16 @@ export function MobileAppShell({
   // one is already marked up, so it is used as-is until the first compute.
   // The recordings the user chose, read for their length (decided 2026-10-07).
   const chosenRecordingLengths = useChosenRecordingLengths(inputNodes, presInputValues)
-  const liveBaseEstimate = useLiveRunEstimate(
+  const liveFigure = useLiveRunFigure(
     { nodes: presNodes, edges: presEdges, inputValues: presInputValues, enabled: hasCredits(), mediaLengths: chosenRecordingLengths },
     { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
+  const liveBaseEstimate = liveFigure.total
+  // The live figure holds a metered LLM call's estimate: the Run label reads
+  // `~N` (spec §8.5), marked up or not. Until the live figure is in, the
+  // seeded server figure says itself whether it is one (`estimatedCostIsEstimate`, Task 12).
+  const seededIsEstimate = usePresentationStore((s) => s.estimatedCostIsEstimate)
+  const estimateIsApprox = liveBaseEstimate > 0 ? liveFigure.estimate : seededIsEstimate
   const estimatedCost = useMemo(() => {
     if (liveBaseEstimate <= 0) return presEstimatedCost
     return monetizationEnabled
@@ -203,6 +209,7 @@ export function MobileAppShell({
   const costLabel = hasCredits()
     ? runCostLabel({
         exact: estimatedCost,
+        estimate: estimateIsApprox,
         listing: listedPrice,
         pending: recordingLengthPending(inputNodes, presInputValues, chosenRecordingLengths),
         plusPerMinute: (n) => t("credits.plusPerMinute", { n }),

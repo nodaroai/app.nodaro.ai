@@ -65,6 +65,8 @@ export interface ListedPrice {
   readonly perMinute: number
   /** Per item beyond the saved count of a List the user fills (decided 2026-10-07); 0 when none. */
   readonly perItem?: number
+  /** The listing holds a metered LLM call's estimate (Task 12 / R47): shown `~`. */
+  readonly estimate?: boolean
 }
 
 /**
@@ -83,21 +85,26 @@ export function appRunListedPrice(app: {
   readonly runPerMinuteCredits?: number | null
   readonly perItemCredits?: number | null
   readonly runPerItemCredits?: number | null
+  readonly estimatedCreditsIsEstimate?: boolean
 }): ListedPrice {
   return {
     fixed: app.runEstimatedCredits ?? app.estimatedCredits ?? 0,
     perMinute: app.runPerMinuteCredits ?? app.perMinuteCredits ?? 0,
     perItem: app.runPerItemCredits ?? app.perItemCredits ?? 0,
+    ...(app.estimatedCreditsIsEstimate === true ? { estimate: true } : {}),
   }
 }
 
 /**
  * The Run button's price, as the " (…)" after its label: the listing while a
  * recording's length is pending and the listing has a per-minute part, else
- * the exact figure. Empty when there is nothing to show.
+ * the exact figure. Empty when there is nothing to show. An exact figure that
+ * holds a metered LLM call's ESTIMATE (`estimate`) reads `~N` (spec §8.5).
  */
 export function runCostLabel(args: {
   readonly exact: number
+  /** `exact` includes a metered LLM call's estimate: shown `~N`. */
+  readonly estimate?: boolean
   readonly listing: ListedPrice | null | undefined
   readonly pending: boolean
   /** The localized "+ {n}/min" (`credits.plusPerMinute`), given the converted per-minute figure. */
@@ -107,10 +114,10 @@ export function runCostLabel(args: {
    *  none (the live estimate counts the items entered). */
   readonly plusPerItem?: (n: number) => string
 }): string {
-  const { exact, listing, pending, plusPerMinute, plusPerItem } = args
+  const { exact, estimate, listing, pending, plusPerMinute, plusPerItem } = args
   if (pending && listing && listing.perMinute > 0) {
     const perItem = (listing.perItem ?? 0) > 0 && plusPerItem ? ` ${plusPerItem(creditUnits(listing.perItem ?? 0))}` : ""
-    return ` (${formatCreditUnits(listing.fixed)} ${plusPerMinute(creditUnits(listing.perMinute))}${perItem})`
+    return ` (${listing.estimate ? "~" : ""}${formatCreditUnits(listing.fixed)} ${plusPerMinute(creditUnits(listing.perMinute))}${perItem})`
   }
-  return exact > 0 ? ` (${formatCreditUnits(exact)})` : ""
+  return exact > 0 ? ` (${estimate ? "~" : ""}${formatCreditUnits(exact)})` : ""
 }

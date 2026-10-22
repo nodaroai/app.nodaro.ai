@@ -24,7 +24,7 @@ const HEBREW = /[֐-׿]/
 
 /** Every key the UGC nodes brought: their cards, panels, prices, messages and the run's pick. */
 const UGC_KEYS = (Object.keys(en) as MessageKey[]).filter((k) =>
-  /^(ugc\.|run\.ugc|pubDialog\.ugc|apiErr\.reason\.ugc)|^(copilot\.autoOverLimitHold|copilot\.proposeEstimateUnchecked|runUpToHere\.buttonEstimate|node\.creditsSuffixEstimate)$/.test(k),
+  /^(ugc\.|run\.ugc|pubDialog\.ugc|apiErr\.reason\.ugc)|^(copilot\.autoOverLimitHold|copilot\.proposeEstimateUnchecked|runUpToHere\.buttonEstimate)$/.test(k),
 )
 
 /** The UGC nodes' English names, from their definitions. */

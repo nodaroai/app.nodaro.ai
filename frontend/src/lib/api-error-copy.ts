@@ -2,6 +2,7 @@ import { tx, type MessageKey } from "@/lib/i18n"
 import { DICTS } from "@/lib/i18n/dicts"
 import { useLocaleStore } from "@/lib/locale-store"
 import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 
 /**
  * The text of a failed API call, in the interface language.
@@ -142,14 +143,38 @@ export interface ApiErrorCopyInput {
   readonly fallbackKey: MessageKey
   /** The values the headline names (`{label}`, …). */
   readonly fallbackVars?: Record<string, string | number>
+  /** A 402's `required` (raw credits, beside `error`): the most the refused run can hold. */
+  readonly required?: number
+}
+
+/**
+ * The server's balance refusal of a run that can hold more than the balance
+ * (`insufficient_credits`, e.g. a metered LLM call's hold): "Needs up to N
+ * credits", N raw credits, with `required` beside the error carrying N.
+ */
+const NEEDS_UP_TO = /^Needs up to \d+ credits$/
+
+/**
+ * That refusal in the interface language and the deployment's display unit
+ * ("Needs up to N CR."), or undefined for any other message.
+ */
+function needsUpToReason(code: string | undefined, serverMessage: string | undefined, required: number | undefined): string | undefined {
+  if (code !== "insufficient_credits" || required === undefined || !serverMessage || !NEEDS_UP_TO.test(serverMessage)) return undefined
+  return tx("apiErr.reason.needsUpTo", { n: creditUnits(required), u: creditUnitLabel(tx("credits.unitShort")) })
 }
 
 /** The message for a failed API call — see the module comment. */
-export function apiErrorMessage({ code, serverMessage, fallbackKey, fallbackVars }: ApiErrorCopyInput): string {
+export function apiErrorMessage({ code, serverMessage, fallbackKey, fallbackVars, required }: ApiErrorCopyInput): string {
   const context = tx(fallbackKey, fallbackVars)
-  if (!speaksOwnLanguage(fallbackKey)) return serverMessage ?? context
+  const needsUpTo = needsUpToReason(code, serverMessage, required)
+  if (!speaksOwnLanguage(fallbackKey)) {
+    // English keeps the server's words — unless the deployment shows another
+    // unit, whose figure the server's raw "N credits" would misstate.
+    const relabelled = needsUpTo !== undefined && (creditUnitLabel() !== "CR" || creditUnits(required) !== required)
+    return relabelled ? needsUpTo : (serverMessage ?? context)
+  }
   const reasonKey = apiErrorReasonKey(code)
-  const reason = reasonKey ? tx(reasonKey) : serverMessage
+  const reason = needsUpTo ?? (reasonKey ? tx(reasonKey) : serverMessage)
   return reason ? tx("apiErr.withReason", { context, reason }) : context
 }
 

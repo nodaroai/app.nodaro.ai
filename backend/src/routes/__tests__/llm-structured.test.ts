@@ -22,8 +22,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test", LLM_TIER_PRICING_ROLLBACK: true },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  // D6: metered pricing is the default; this suite pins the TIER behaviour under
+  // the rollback (`LLM_TIER_PRICING_ROLLBACK`). The metered path is covered by
+  // llm-metered-structured-routes.test.ts.
+  llmMeteredPricing: () => false,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
 // insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
@@ -144,14 +148,17 @@ describe("POST /v1/llm/structured — refusals that cost nothing", () => {
     expect(mocks.insertJob).not.toHaveBeenCalled()
   })
 
-  // Decided 2026-10-20 (production cost audit): Claude Fable 5 is withheld from
-  // every legend-sized structured read, this route included.
-  it("400s Claude Fable 5 with a validation_error, before reserving credits", async () => {
+  // Claude Fable 5 — Studio Director's default — is offered again (metered
+  // pricing charges what a read costs). Under the rollback it bills the
+  // post-#2403 premium rung (C8).
+  it("accepts Claude Fable 5; under the rollback it reserves the premium rung, byte-identically", async () => {
     const res = await post({ ...VALID, llmModel: "claude-fable-5" })
-    expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe("validation_error")
-    expect(mocks.insertJob).not.toHaveBeenCalled()
-    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    // Exactly today's call: four arguments, no metered hold option.
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mocks.reserveCreditsForJob.mock.calls[0]).toHaveLength(4)
+    expect(mocks.reserveCreditsForJob.mock.calls[0][3]).toBe("llm-structured:premium")
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
   })
 
   it("400s Advanced mode on a model with no direct lane", async () => {

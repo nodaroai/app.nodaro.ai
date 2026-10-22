@@ -23,6 +23,9 @@ import Fastify from "fastify"
 // ---------------------------------------------------------------------------
 
 vi.mock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   hasCredits: vi.fn(() => true),
   hasAdmin: vi.fn(() => true),
   isCommunity: vi.fn(() => false),

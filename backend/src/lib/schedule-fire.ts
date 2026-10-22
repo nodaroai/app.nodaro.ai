@@ -13,6 +13,7 @@ import { resolveBillingContext, shouldRefuseDegradedRunFor, type BillingContext 
 import { billingPairColumns } from "./insert-job.js"
 import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
 import { refusePreviewFire } from "./preview-fire-refusal.js"
+import { refuseUnpricedFire } from "./llm-unpriced-fire-refusal.js"
 import type { ScheduleRetryStamp } from "./schedule-retry.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
@@ -55,13 +56,10 @@ export async function admitScheduleTrigger(trigger: ScheduleTriggerRow, nodeId: 
     return false
   }
 
-  return !(await refusePreviewFire({
-    workflowId: trigger.workflow_id,
-    userId: trigger.user_id,
-    triggerType: "schedule",
-    triggerId: trigger.id,
-    triggerNodeId: nodeId,
-  }))
+  const fire = { workflowId: trigger.workflow_id, userId: trigger.user_id, triggerType: "schedule" as const, triggerId: trigger.id, triggerNodeId: nodeId }
+  if (await refusePreviewFire(fire)) return false
+  // A metered LLM model with no price on the branch (R51): skipped the same way, one deduped row.
+  return !(await refuseUnpricedFire(fire))
 }
 
 /**

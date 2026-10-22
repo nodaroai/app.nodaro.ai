@@ -1,6 +1,8 @@
 import { useT, tx } from "@/lib/i18n"
 import { useEffect } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useLlmDirectCost } from "@/hooks/use-llm-price"
+import { useLlmPricingMode, type LlmPricingMode } from "@/hooks/use-llm-pricing-mode"
 import {
   availableReasoningEfforts,
   defaultReasoningEffort,
@@ -11,20 +13,37 @@ import {
 } from "@nodaro/shared/llm-models"
 
 /** Shared across every reasoning-effort surface (this select + the llm-chat
- *  quick toolbar) so the wording can't drift between them. */
-export function EFFORT_LABELS(): Record<LlmReasoningEffort, string> {
+ *  quick toolbar + the quick strip) so the wording can't drift between them.
+ *
+ *  `mode`: how the server prices LLM calls, as its price answers last said
+ *  (`useLlmPricingMode()`). Metered: a higher effort costs the reasoning tokens
+ *  it uses. Tier (the rollback): these two levels bump one tier. Unknown (no
+ *  answer yet): the bare level, true in both modes. */
+export function EFFORT_LABELS(mode: LlmPricingMode = "unknown"): Record<LlmReasoningEffort, string> {
   return {
   none: tx("cfgshared.effortNone"),
   low: tx("audiocfg.low"),
   medium: tx("cfgshared.effortMedium"),
   high: tx("audiocfg.high"),
-  // "May": these two levels bump one tier for the effort itself. On a Claude
+  // Tier pricing ("may"): these two levels bump one tier for the effort itself. On a Claude
   // model the call ALSO runs direct (any effort does — see the hint below), and
   // the two bumps stack, as Advanced mode's always has; the stacking is pinned
   // in packages/shared's llm-models test ("the effort and direct bumps stack").
-  xhigh: tx("cfgshared.effortVeryHigh"),
-  max: tx("cfgshared.effortMax"),
+  // Metered: the call is charged the tokens it uses, so more reasoning costs more.
+  xhigh: tx(mode === "metered" ? "cfgshared.effortVeryHighMetered" : mode === "tier" ? "cfgshared.effortVeryHigh" : "cfgshared.effortVeryHighPlain"),
+  max: tx(mode === "metered" ? "cfgshared.effortMaxMetered" : mode === "tier" ? "cfgshared.effortMax" : "cfgshared.effortMaxPlain"),
 }
+}
+
+/**
+ * The mode a surface's labels and notes read: the server's last answer
+ * (`useLlmPricingMode`) — which follows a mid-session rollback — and, until any
+ * answer has said, this surface's own price answer (`metered` from its key's
+ * estimate), else unknown.
+ */
+export function effortPricingMode(answered: LlmPricingMode, ownEstimate: boolean): LlmPricingMode {
+  if (answered !== "unknown") return answered
+  return ownEstimate ? "metered" : "unknown"
 }
 const AUTO = "__auto__"
 
@@ -61,6 +80,11 @@ export function ReasoningEffortSelect({ feature, modelId, advanced, value, onCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveModel, advanced])
 
+  // What an effort's direct run costs against the effort-free one, from the
+  // server's two estimates (metered pricing; the tier-era note otherwise).
+  // Called before the early return below (Rules of Hooks).
+  const directCost = useLlmDirectCost(feature, effectiveModel, { reasoningEffort: value ?? levels[0], advancedMode: advanced === true })
+  const pricingMode = effortPricingMode(useLlmPricingMode(), directCost.metered)
   if (levels.length === 0) return null
   // Claude's effort only takes effect on Anthropic's own API, so any level
   // runs there and bills one tier more (llmServesDirect) — say so where the
@@ -88,7 +112,7 @@ export function ReasoningEffortSelect({ feature, modelId, advanced, value, onCha
           )}
           {levels.map((level) => (
             <SelectItem key={level} value={level} className="text-xs">
-              {EFFORT_LABELS()[level]}
+              {EFFORT_LABELS(pricingMode)[level]}
             </SelectItem>
           ))}
         </SelectContent>
@@ -98,7 +122,13 @@ export function ReasoningEffortSelect({ feature, modelId, advanced, value, onCha
           {/* With a default effort there is no effort-free run to fall back
               on, so the usual hint ("choosing an effort runs it there")
               would imply one. */}
-          {t(featureDefault === undefined ? "cfgshared.effortRunsDirect" : "cfgshared.effortRunsDirectByDefault")}
+          {pricingMode !== "metered"
+            ? t(featureDefault === undefined ? "cfgshared.effortRunsDirect" : "cfgshared.effortRunsDirectByDefault")
+            : featureDefault !== undefined
+              ? t("cfgshared.effortRunsDirectByDefaultMetered")
+              : directCost.times !== undefined
+                ? t("cfgshared.effortRunsDirectMetered", { n: directCost.times })
+                : t("cfgshared.effortRunsDirectMeteredPlain")}
         </p>
       )}
     </div>

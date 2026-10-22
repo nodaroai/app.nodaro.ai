@@ -40,6 +40,7 @@ import { getRuntimeEnv } from "./runtime-env.js"
 import { canRunWorkflow } from "./workflow-access.js"
 import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
 import { refusePreviewFire } from "./preview-fire-refusal.js"
+import { refuseUnpricedFire } from "./llm-unpriced-fire-refusal.js"
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
 import { billingPairColumns } from "./insert-job.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
@@ -230,6 +231,10 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
   // The branch this event runs stops at a Preview render nobody is there to
   // review: refused before anything is created or billed (one deduped row).
   if (await refusePreviewFire({ workflowId, userId, triggerType: lane, triggerId: row.id, triggerNodeId })) {
+    return { fired: false, reason: "refused" }
+  }
+  // A metered LLM model with no price on the branch (R51): refused the same way.
+  if (await refuseUnpricedFire({ workflowId, userId, triggerType: lane, triggerId: row.id, triggerNodeId })) {
     return { fired: false, reason: "refused" }
   }
 

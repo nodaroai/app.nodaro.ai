@@ -4,9 +4,8 @@ import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Image as ImageIcon, ScanFace, AlertCircle } from "lucide-react"
-import { buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { NodeJobProgress } from "./node-job-progress"
@@ -24,15 +23,7 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
   // An unset effort quotes the effort the run uses: the model's recipe effort
   // when it has one (Opus 5.5 at high, which runs and bills direct), else
   // Auto — the default, Gemini 3.8 Flash, quotes the economy rung.
-  const credits = useModelCredits(
-    buildLlmCreditIdentifier(
-      "describe-to-picker",
-      nodeData.llmModel || LLM_FEATURE_DEFAULTS["describe-to-picker"],
-      nodeData.reasoningEffort ?? defaultReasoningEffort("describe-to-picker", nodeData.llmModel),
-      nodeData.advancedMode === true,
-    ),
-    1,
-  )
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("describe-to-picker", nodeData, 1)
   const status = nodeData.executionStatus ?? "idle"
   const picker = nodeData.generatedPickerJson
   const detected = picker ? Object.keys(picker).length : 0
@@ -49,14 +40,14 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<ScanFace className="h-4 w-4" />}
         category="ai"
-        credits={credits}
+        credits={credits} creditsEstimate={creditsEstimate}
         selected={selected}
         isRunning={status === "running"}
         minWidth={240}
         minHeight={150}
         hideHeader
         topToolbarContent={
-          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+          <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
         }
         handles={[
           { id: "image", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },

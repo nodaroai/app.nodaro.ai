@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { insertInternalJob } from "../../../lib/insert-job.js"
 import { JobBlockedError } from "../../../lib/job-policy.js"
+import { sideHoldChargesFor, withSideCharge } from "../../../lib/job-step-charge.js"
 import { freeVideoRequestForJob, isVideoModelId } from "../../billing/free-video-limits.js"
 import { pollForAssetId, pollJobUntilComplete } from "./_poll.js"
 
@@ -179,7 +180,8 @@ export async function runPipelineWorkerJob(
     jobId,
     assetId,
     assetUrl: url,
-    creditsSpent: row.credits_actual ?? 0,
+    // R53: plus the job's settled metered side holds (554).
+    creditsSpent: withSideCharge(row.credits_actual ?? 0, jobId, await sideHoldChargesFor([jobId])),
   }
 }
 

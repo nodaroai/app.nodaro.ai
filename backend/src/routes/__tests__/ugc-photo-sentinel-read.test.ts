@@ -23,7 +23,7 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/workflow-delete.js", () => ({ deleteWorkflowWithPrivateMedia: vi.fn() }))
 vi.mock("@/lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: vi.fn() } }))
-vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCredits: vi.fn().mockResolvedValue(0) }))
+vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCreditsDetailed: vi.fn().mockResolvedValue({ credits: 0, estimate: false, perNode: {} }) }))
 // The copier stands nowhere on the author's work: it is read for a copy only.
 vi.mock("@/lib/workflow-access.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/workflow-access.js")>()),

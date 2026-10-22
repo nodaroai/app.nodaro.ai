@@ -93,8 +93,8 @@ hooks, USPs, CTA, summary.
   drives the run.
 - **Pricing = 1.1<!-- credits-rate: meta-ads-scrape:10@0.1 --> credits per REQUESTED ad, charged**, tiered on `count × sources` (a search
   is 1 source; each Page URL / resolved advertiser is a source, max 5). AI
-  analysis adds per-ad by the model's tier and is settled only for ads actually
-  analysed. So `count` and the number of sources set the cost — a generated
+  analysis adds one LLM call per analysed ad, charged for the tokens it used at
+  the model's rate (an ad never analysed costs nothing). So `count` and the number of sources set the cost — a generated
   workflow should keep both modest.
 - **Media links expire.** Ad image/video URLs are Meta-signed and die within
   days; the node copies images + posters (and the featured video, or all videos

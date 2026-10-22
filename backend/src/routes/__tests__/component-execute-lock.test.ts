@@ -16,6 +16,21 @@ const { mockExecuteAppRun, mockInsertJob, mockInsertJobIdempotent } = vi.hoisted
   mockInsertJobIdempotent: vi.fn(),
 }))
 
+// The run pre-check (R51): credits on only for its case; the estimator (unit-tested in
+// workflow-estimate-metered.test.ts) answers a node naming "unpriced-model" as the refused call.
+const r51 = vi.hoisted(() => ({ credits: false }))
+vi.mock("@/lib/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/config.js")>()
+  return { ...actual, hasCredits: () => r51.credits || actual.hasCredits() }
+})
+vi.mock("@/ee/billing/credits.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/billing/credits.js")>()),
+  unpricedMeteredLlmOfRun: (nodes: Array<{ data?: { llmModel?: unknown } }>) =>
+    nodes.some((n) => n.data?.llmModel === "unpriced-model")
+      ? Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+      : null,
+}))
+
 vi.mock("@/services/app-execution.js", () => ({
   executeAppRun: mockExecuteAppRun,
 }))
@@ -45,6 +60,7 @@ vi.mock("@/lib/supabase.js", () => {
       { id: "text-1", type: "text-prompt", data: { text: "hello" } },
       { id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } },
       { id: "hook-1", type: "webhook-output", data: { url: "https://author.example/hook" } },
+      { id: "chat-1", type: "llm-chat", data: { llmModel: "claude-opus-5.5" } },
     ],
     snapshot_edges: [],
   }
@@ -138,5 +154,25 @@ describe("POST /v1/component/execute — the override lock (issue #1555)", () =>
     expect(mockExecuteAppRun).toHaveBeenCalledWith(
       expect.objectContaining({ inputOverrides: { "text-1": { text: "a legitimate input" } } }),
     )
+  })
+})
+
+describe("POST /v1/component/execute — R51: an unpriced metered LLM model", () => {
+  it("is refused 400 llm_model_unpriced before the wrapper job exists, so nothing runs or charges", async () => {
+    r51.credits = true
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/component/execute",
+        payload: { appSlug: "deliver", inputOverrides: { "chat-1": { llmModel: "unpriced-model" } } },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "unpriced-model" })
+      expect(mockInsertJob).not.toHaveBeenCalled()
+      expect(mockInsertJobIdempotent).not.toHaveBeenCalled()
+      expect(mockExecuteAppRun).not.toHaveBeenCalled()
+    } finally {
+      r51.credits = false
+    }
   })
 })

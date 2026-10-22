@@ -227,7 +227,8 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         "Check a UGC video script and turn it into clip requests. Pass the script as `plan`. An invalid script " +
         "returns every problem at once, each with a fix to apply before calling again. A valid script returns one " +
         "ready-to-run generate_video call per clip, the call that joins them, and a credit quote for the rest of " +
-        "the video. Free: it generates nothing. Used by the ugc-website recipe (get_recipe).",
+        "the video (a line with `estimate: true` is a metered LLM call's estimate, and then the quote has " +
+        "`totalIsEstimate: true`: show it as ~N). Free: it generates nothing. Used by the ugc-website recipe (get_recipe).",
       inputSchema: {
         plan: z.record(z.string(), z.unknown()),
         gender: z.enum(["woman", "man"]),

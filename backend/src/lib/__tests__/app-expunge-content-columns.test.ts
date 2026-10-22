@@ -64,6 +64,9 @@ const KEPT_JOB_COLUMNS = [
   "provider_task_id",
   "provider_call_started_at",
   "provider_cost",
+  // The metered LLM billing ledger (552): the billing record — cost, source,
+  // lanes — never the runner's content, kept with the other billing columns.
+  "llm_billing",
   "display_cost",
   "credits",
   "credits_actual",

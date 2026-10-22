@@ -1,0 +1,269 @@
+{
+  "slug": "podcast-vertical-speaker-clip",
+  "name": "Vertical speaker clip",
+  "description": "Turn a recording of a conversation into a vertical clip that follows whoever is talking: speakers are found, their faces tracked, and the picture cuts to the speaker. The clip renders as a 720p Preview first; review it, then Render final renders it at full quality.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "vertical",
+    "shorts",
+    "video"
+  ],
+  "complexity": "beginner",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 8,
+  "estimatedCredits": 66,
+  "estimatedPerMinuteCredits": 15,
+  "withoutPreviewStopRule": {
+    "estimatedCredits": 66,
+    "estimatedPerMinuteCredits": 12,
+    "description": "Turn a recording of a conversation into a vertical clip that follows whoever is talking: speakers are found, their faces tracked, and the picture cuts to the speaker.",
+    "notes": {
+      "vsc-note-intro": {
+        "text": "Vertical speaker clip\n\nTurn a recording of a conversation into a vertical (9:16) clip that follows whoever is talking. Transcribe reads the recording with speaker labels, Speaker Frames finds where each speaker's face is, and Speaker View cuts to that speaker, framed for a phone screen.\n\nDrop your recording on Video and Run down the chain.",
+        "height": 340
+      },
+      "vsc-note-render": {
+        "text": "The render\n\nSpeaker View renders the vertical clip at 1080 x 1920 with the recording's own sound. Its Transcript output is the transcript remapped onto the clip: wire it into an Add Captions node to caption it.",
+        "height": 220
+      }
+    }
+  },
+  "nodeTypesUsed": [
+    "upload-video",
+    "transcribe",
+    "speaker-frames",
+    "speaker-view",
+    "sticky-note"
+  ],
+  "providersUsed": [
+    "elevenlabs-stt"
+  ],
+  "nodes": [
+    {
+      "id": "vsc-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -520
+      },
+      "data": {
+        "bold": false,
+        "text": "Vertical speaker clip\n\nTurn a recording of a conversation into a vertical (9:16) clip that follows whoever is talking. Transcribe reads the recording with speaker labels, Speaker Frames finds where each speaker's face is, and Speaker View cuts to that speaker, framed for a phone screen. It renders as a 720p Preview first. Review it, then choose Render final on Speaker View.\n\nDrop your recording on Video and Run down the chain.\n\nTo skip the review, set Speaker View's Quality to Final.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 480,
+        "height": 400,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 480,
+        "height": 400
+      }
+    },
+    {
+      "id": "vsc-src",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "label": "Video",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "vsc-transcribe",
+      "type": "transcribe",
+      "position": {
+        "x": 440,
+        "y": -140
+      },
+      "data": {
+        "label": "Transcribe",
+        "provider": "elevenlabs-stt",
+        "language": "auto",
+        "diarize": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "vsc-frames",
+      "type": "speaker-frames",
+      "position": {
+        "x": 900,
+        "y": 20
+      },
+      "data": {
+        "label": "Speaker Frames",
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "vsc-view",
+      "type": "speaker-view",
+      "position": {
+        "x": 1360,
+        "y": 20
+      },
+      "data": {
+        "label": "Speaker View",
+        "quality": "proxy",
+        "targetAspect": "9:16",
+        "layout": "auto",
+        "switchType": "cut",
+        "motion": "glide",
+        "requireFaces": true,
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "vsc-note-steps",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 440,
+        "y": -560
+      },
+      "data": {
+        "bold": false,
+        "text": "What each step does\n\nTranscribe writes the words with a speaker label on each turn (Speaker A, Speaker B). Speaker Frames looks for faces in the video and matches them to those voices, so the crop knows who is who. Speaker View cuts to the speaker at every change of turn and keeps their face in the frame as they move.\n\nThe recording needs the speakers' faces on screen, and it has to be wider than a vertical 9:16 frame. A recording with no faces in it is refused before anything is charged.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 380,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 380
+      }
+    },
+    {
+      "id": "vsc-note-fix",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 900,
+        "y": -460
+      },
+      "data": {
+        "bold": false,
+        "text": "When the wrong face is followed\n\nOpen Speaker View's Edit framing. Click a face to say which face is which speaker, or draw a box around each speaker. A box you draw wins over what Speaker Frames found. When Speaker Frames cannot tell who is who, the panel offers Which face is …? to walk you through it.\n\nA low-resolution recording is enlarged to fill a vertical frame, and Speaker View warns you when the enlargement is large.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 340,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 340
+      }
+    },
+    {
+      "id": "vsc-note-render",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 1360,
+        "y": -460
+      },
+      "data": {
+        "bold": false,
+        "text": "The render\n\nSpeaker View renders the vertical clip with the recording's own sound. The Preview is private and shows the cut and the framing; Render final renders the same clip at 1080 x 1920. Its Transcript output is the transcript remapped onto the clip: wire it into an Add Captions node to caption it.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 280,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 280
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "vsc-e-src-transcribe",
+      "source": "vsc-src",
+      "target": "vsc-transcribe",
+      "sourceHandle": "video",
+      "targetHandle": "audio"
+    },
+    {
+      "id": "vsc-e-src-frames",
+      "source": "vsc-src",
+      "target": "vsc-frames",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "vsc-e-src-view",
+      "source": "vsc-src",
+      "target": "vsc-view",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "vsc-e-transcribe-frames",
+      "source": "vsc-transcribe",
+      "target": "vsc-frames",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "vsc-e-transcribe-view",
+      "source": "vsc-transcribe",
+      "target": "vsc-view",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "vsc-e-frames-view",
+      "source": "vsc-frames",
+      "target": "vsc-view",
+      "sourceHandle": "tracks",
+      "targetHandle": "tracks"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 120,
+      "y": 340,
+      "zoom": 0.55
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

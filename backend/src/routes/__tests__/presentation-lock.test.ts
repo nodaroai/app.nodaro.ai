@@ -36,7 +36,13 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: mockOrchestrationQueueAdd },
 }))
 
+// The run pre-check (R51; the estimator is unit-tested in workflow-estimate-metered.test.ts):
+// a node naming "unpriced-model" is the call a run would be refused at.
 vi.mock("@/ee/billing/credits.js", () => ({
+  unpricedMeteredLlmOfRun: (nodes: Array<{ data?: { llmModel?: unknown } }>) =>
+    nodes.some((n) => n.data?.llmModel === "unpriced-model")
+      ? Object.assign(new Error("unpriced"), { name: "LlmUnpricedModelError", code: "llm_model_unpriced", modelId: "unpriced-model" })
+      : null,
   estimateWorkflowCredits: vi.fn().mockResolvedValue(0),
 }))
 
@@ -212,5 +218,18 @@ describe("POST /v1/workflows/:id/share — the credential gate (plan D3)", () =>
     expect(res.statusCode).toBe(200)
     expect(res.json().shareToken).toBe("existing-token")
     expect(findUnboundMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/present/:token/run — R51: an unpriced metered LLM model", () => {
+  it("refuses the run 400 llm_model_unpriced before any row exists, so nothing runs or charges", async () => {
+    mockSharedWorkflow([
+      { id: "t1", type: "text-prompt", data: { text: "hello" } },
+      { id: "chat", type: "llm-chat", data: { llmModel: "unpriced-model" } },
+    ])
+    const res = await viewerRun({})
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", reason: "llm_model_unpriced", modelId: "unpriced-model" })
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 })

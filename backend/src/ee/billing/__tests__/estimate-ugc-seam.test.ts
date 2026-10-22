@@ -54,9 +54,20 @@ function modelPricingQuery() {
   return query
 }
 
+/** The payer's profile a Render final quote's balance check reads (`checkRunSetCredits`). */
+function profilesQuery() {
+  const query = {
+    select: () => query,
+    eq: () => query,
+    single: async () => ({ data: { tier: "pro", subscription_tier: "pro", lifetime_topup_credits: 0, subscription_credits: 1_000_000, topup_credits: 0 }, error: null }),
+  }
+  return query
+}
+
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: (table: string) => {
+      if (table === "profiles") return profilesQuery()
       if (table !== "model_pricing") throw new Error(`unexpected table ${table}`)
       return modelPricingQuery()
     },
@@ -72,10 +83,13 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...orig, hasCredits: () => edition.hasCredits }
 })
 
+// R58: the plugin's reading mode, the one switch for whether a clip's reading is an estimate.
+const readingMode = vi.hoisted(() => ({ value: "fixed" as "metered" | "fixed" }))
 const h = vi.hoisted(() => ({ estimate: vi.fn() }))
 vi.mock("../../lib/ugc-estimate.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/ugc-estimate.js")>()),
   estimateUgcRun: h.estimate,
+  ugcClipReadingMode: () => readingMode.value,
 }))
 
 import { stripUgcPublishState } from "@nodaro/render-rules"
@@ -247,5 +261,90 @@ describe("a published listing is priced on what its runners run", () => {
     const base = await listed(INPUTS as ReturnType<typeof authors>)
     expect(await listed(stripUgcPublishState(authors(), EDGES))).toBe(2563 + base)
     expect(h.estimate.mock.calls.at(-1)![1]).toEqual({ targetDurationSec: 20, screenshotCount: 3, source: "photo" })
+  })
+})
+
+// A clip's frame reading and the creator check are billed metered (owner decision D15): while metered
+// pricing is on, the parts holding them are estimates (`~`) — the total is the same sum either way.
+describe("the UGC part's estimate flag (metered LLM pricing, Task 12)", () => {
+  it("metered: the clip and creator parts are estimates, the listing too; rollback: nothing is", async () => {
+    const { setLlmMeteredSchemaReadyForTesting } = await import("../../../lib/llm-metered-schema-gate.js")
+    const { config } = await import("../../../lib/config.js")
+    const { estimateWorkflowCreditsDetailed } = await import("../credits.js")
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      // The quote's own answer says which parts are estimates (`estimateParts`, R58's rule lives in
+      // ugc-estimate.ts): here, as the real quote answers — fixed mode marks the creator check only.
+      const answer = (estimateParts: string[]) => ({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts: PARTS, holdParts: PARTS, estimateParts })
+      h.estimate.mockImplementation(async () => answer(readingMode.value === "metered" ? ["creator", "clip"] : ["creator"]))
+      // R58, fixed mode (every deployed plugin): the clip's reading is the tier row the plugin charges —
+      // not an estimate; the creator check (the host's metered route) still is.
+      readingMode.value = "fixed"
+      const fixed = await estimateWorkflowCreditsDetailed(NODES, EDGES)
+      expect(fixed.perNode.clip).toEqual({ credits: PARTS.clip, estimate: false })
+      expect(fixed.perNode.creator).toEqual({ credits: PARTS.creator, estimate: true })
+      readingMode.value = "metered"
+      const metered = await estimateWorkflowCreditsDetailed(NODES, EDGES)
+      expect(metered.credits).toBe(await CreditsService.estimateWorkflowCredits(NODES, EDGES))
+      expect(metered.perNode.clip).toEqual({ credits: PARTS.clip, estimate: true })
+      expect(metered.perNode.creator).toEqual({ credits: PARTS.creator, estimate: true })
+      expect(metered.perNode.script).toEqual({ credits: PARTS.script, estimate: false })
+      expect(metered.estimate).toBe(true)
+      expect((await estimateWorkflowListingCredits(NODES, EDGES, { publishType: "app" })).estimate).toBe(true)
+      ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = true
+      const rolledBack = await estimateWorkflowCreditsDetailed(NODES, EDGES)
+      expect(rolledBack.estimate).toBe(false)
+      expect(rolledBack.credits).toBe(metered.credits)
+      expect((await estimateWorkflowListingCredits(NODES, EDGES, { publishType: "app" })).estimate).toBeUndefined()
+    } finally {
+      readingMode.value = "fixed"
+      ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = false
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
+  })
+})
+
+// A Render final quote's `~` (render-final-run.ts): `runHoldsMeteredLlmEstimate` reads the run's own
+// lines, so a UGC part its quote flags — the creator check — makes the quote an estimate, exactly as
+// the run estimate's `perNode` reads it (`estimateUgcPart`), from the same answer: one quote, not two.
+describe("a Render final quote of a UGC graph: `~` from the UGC parts its quote flags", () => {
+  it("the creator check (flagged in fixed reading mode) marks it `~`; no flagged part, or the rollback, does not", async () => {
+    const { setLlmMeteredSchemaReadyForTesting } = await import("../../../lib/llm-metered-schema-gate.js")
+    const { config } = await import("../../../lib/config.js")
+    const { runHoldsMeteredLlmEstimate, estimateRunSetCredits } = await import("../credits.js")
+    const { renderFinalCredits } = await import("../../../lib/render-final-run.js")
+    const answer = (estimateParts: string[]) => ({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts: PARTS, holdParts: PARTS, estimateParts })
+    const runNodeIds = NODES.map((node) => node.id)
+    const quote = () => renderFinalCredits({ userId: "u1", nodes: NODES, edges: EDGES, runNodeIds, overrides: undefined, surface: {} })
+    setLlmMeteredSchemaReadyForTesting(true)
+    try {
+      readingMode.value = "fixed"
+      h.estimate.mockImplementation(async () => answer(["creator"]))
+      // No node of the graph makes a metered call of its own: the graph walk alone sees no estimate.
+      expect(runHoldsMeteredLlmEstimate(NODES, EDGES, new Set(runNodeIds))).toBe(false)
+      const lines: Array<{ credits: number; estimate: boolean }> = []
+      const figure = await estimateRunSetCredits(NODES, EDGES, new Set(runNodeIds), undefined, undefined, (_id, credits, estimate) => lines.push({ credits, estimate }))
+      expect(lines.reduce((sum, l) => sum + l.credits, 0)).toBe(figure)
+      expect(runHoldsMeteredLlmEstimate(NODES, EDGES, new Set(runNodeIds), lines)).toBe(true)
+      const flagged = await quote()
+      expect(flagged).toMatchObject({ estimatedCredits: figure, estimate: true, sufficient: true })
+      // One quote per UGC video for the figure and its flag alike (the flag is read off the figure's own lines).
+      const calls = h.estimate.mock.calls.length
+      await quote()
+      expect(h.estimate.mock.calls.length - calls).toBe(1)
+
+      h.estimate.mockImplementation(async () => answer([]))
+      expect((await quote())?.estimate).toBeUndefined()
+
+      h.estimate.mockImplementation(async () => answer(["creator"]))
+      ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = true
+      const rolledBack = await quote()
+      expect(rolledBack?.estimate).toBeUndefined()
+      expect(rolledBack?.estimatedCredits).toBe(figure)
+    } finally {
+      readingMode.value = "fixed"
+      ;(config as { LLM_TIER_PRICING_ROLLBACK: boolean }).LLM_TIER_PRICING_ROLLBACK = false
+      setLlmMeteredSchemaReadyForTesting(undefined)
+    }
   })
 })

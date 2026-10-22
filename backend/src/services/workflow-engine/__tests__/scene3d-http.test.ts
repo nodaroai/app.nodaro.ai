@@ -11,7 +11,7 @@ vi.mock("../../../lib/supabase.js", () => {
   }
   return { supabase: { from: () => chain } }
 })
-vi.mock("../../../lib/config.js", () => ({ config: { INTERNAL_ORCHESTRATOR_SECRET: "x".repeat(40) }, hasCredits: () => true, isCloud: () => true, isBusiness: () => false, isCommunity: () => false }))
+vi.mock("../../../lib/config.js", () => ({ config: { INTERNAL_ORCHESTRATOR_SECRET: "x".repeat(40) }, hasCredits: () => true, llmMeteredPricing: () => true, isCloud: () => true, isBusiness: () => false, isCommunity: () => false }))
 vi.mock("../../../lib/queue.js", () => ({ videoQueue: { add: mocks.queue } }))
 vi.mock("../../../lib/render-queue.js", () => ({ renderQueue: { add: mocks.queue } }))
 vi.mock("../../../ee/billing/credits.js", () => ({ CreditsService: {} }))

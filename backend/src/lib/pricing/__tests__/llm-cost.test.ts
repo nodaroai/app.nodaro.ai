@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
-import { calculateLlmCost } from "../llm-cost.js"
+import { LlmRateMissingError, calculateLlmCost } from "../llm-cost.js"
 
 describe("calculateLlmCost", () => {
   it("calculates cost for gemini-3-flash by model ID string", () => {
@@ -22,9 +22,8 @@ describe("calculateLlmCost", () => {
     expect(cost).toBeCloseTo(0.015, 10)
   })
 
-  it("returns 0 for unknown model ID", () => {
-    const cost = calculateLlmCost("nonexistent-model", { inputTokens: 5000, outputTokens: 5000 })
-    expect(cost).toBe(0)
+  it("throws for an unknown model ID — an unpriced model is never costed at $0", () => {
+    expect(() => calculateLlmCost("nonexistent-model", { inputTokens: 5000, outputTokens: 5000 })).toThrow(LlmRateMissingError)
   })
 
   it("returns 0 for zero tokens", () => {
@@ -56,8 +55,10 @@ describe("calculateLlmCost", () => {
   it("produces consistent results between model ID string and model def object", () => {
     const usage = { inputTokens: 12345, outputTokens: 6789 }
     for (const model of LLM_MODELS) {
-      const costById = calculateLlmCost(model.id, usage)
-      const costByDef = calculateLlmCost(model, usage)
+      // A directOnly model has no KIE row; cost it on the lane it runs on.
+      const lane = model.directOnly ? "direct" : "kie"
+      const costById = calculateLlmCost(model.id, usage, lane)
+      const costByDef = calculateLlmCost(model, usage, lane)
       expect(costById).toBe(costByDef)
     }
   })
@@ -93,7 +94,7 @@ describe("calculateLlmCost", () => {
   })
   it("carries no KIE row for gemini-4-argon — it is directOnly, so no KIE call is ever costed", () => {
     expect(getLlmModel("gemini-4-argon")?.directOnly).toBe(true)
-    expect(calculateLlmCost("gemini-4-argon", { inputTokens: 1000, outputTokens: 500 }, "kie")).toBe(0)
+    expect(() => calculateLlmCost("gemini-4-argon", { inputTokens: 1000, outputTokens: 500 }, "kie")).toThrow(LlmRateMissingError)
   })
   it("prices gpt-6-astra at KIE list rates", () => {
     // 560/2800 KIE credits per M @ $0.005 = $2.80/$14.00. 1M/1M: 2.80 + 14.00 = 16.80

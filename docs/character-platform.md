@@ -506,11 +506,14 @@ generation routes:
   variant.
 - `POST /v1/generate-character-motion` — `creditCost(provider)` credits per
   motion clip. Provider defaults to `kling` (303 credits<!-- credits: kling:10s --> / 10-second clip; `kling:5s` = 152<!-- credits: kling:5s -->).
-- `POST /v1/characters/:id/approve-portrait` — currently free; the LLM
-  caption is uncharged. (See the route's TODO comment in
-  `backend/src/routes/character-portrait-approval.ts` for the pending 8-CR<!-- credits: prompt-helper -->
-  caption charge.)
-- `POST /v1/characters/:id/llm-caption` — 8 credits<!-- credits: prompt-helper --> per call (the `prompt-helper` price).
+- `POST /v1/characters/:id/approve-portrait` — the approval itself is free; its vision
+  caption (Claude Sonnet 4.6) is charged for the tokens it used, at that model's
+  rate (~20 credits<!-- credits: prompt-helper:claude-sonnet-4.6 --> typical; [LLM model rates](./pricing/llm-models.md)). An
+  approval is never refused for credits: with too little balance for the
+  caption, the image is still approved, the caption is skipped
+  (`canonical_description` stays empty) and `llm-caption` writes it later.
+- `POST /v1/characters/:id/llm-caption` — the same caption, charged the same way
+  (a caption the provider billed is charged even when it comes back empty).
 
 `creditCost` is fetched from the `model_pricing` table at runtime. See the
 [Architecture](./architecture.md) doc for the full credit-flow walkthrough.

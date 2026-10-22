@@ -13,6 +13,7 @@ export function ModelSelectOption({
   tooltip,
   perSecond,
   creditId,
+  badge: badgeOverride,
 }: {
   value: string
   label: string
@@ -32,6 +33,9 @@ export function ModelSelectOption({
    *  "~N CR/s" rate (from the `:15s` bucket ÷15) instead of the bare ceiling,
    *  which would otherwise read as an alarming flat price. */
   perSecond?: boolean
+  /** A badge the caller priced itself, shown instead of this row's own price
+   *  (a Choose Best judge's metered estimate, `~N CR`). Unset: priced as above. */
+  badge?: string
 }) {
   // Both hooks run unconditionally (Rules of Hooks). When not per-second the
   // second call resolves the same id as the first (cached, no extra fetch).
@@ -40,9 +44,9 @@ export function ModelSelectOption({
   const baseCredits = useModelCredits(priceId)
   const perSecondCredits = useModelCredits(perSecond ? `${priceId}:15s` : priceId)
   const range = useModelCreditRange(priceId)
-  const badge = perSecond
+  const badge = badgeOverride ?? (perSecond
     ? formatPerSecondCreditBadge(perSecondCredits)
-    : formatCreditBadge(priceId, baseCredits, range)
+    : formatCreditBadge(priceId, baseCredits, range))
 
   return (
     <SelectItemWithMeta

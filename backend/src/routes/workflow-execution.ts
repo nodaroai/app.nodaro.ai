@@ -32,7 +32,7 @@ import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-c
 import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
-import { cancelOwnedJob } from "../lib/cancel-job.js"
+import { cancelOwnedJob, refundReservedHolds } from "../lib/cancel-job.js"
 import { liveUseCaseWrappersOf } from "../lib/use-case/execution-wrappers.js"
 import { USE_CASE_WRAPPER_PROVIDER } from "../lib/wrapper-providers.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
@@ -40,7 +40,6 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CHILD_JOB_COLUMN, redactPrivateJobData, trendRunErrorText } from "../lib/public-job-data.js"
-import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
@@ -84,6 +83,7 @@ import {
   type SupersedingRun,
 } from "../lib/continue-from-failed-lineage.js"
 import { retryStampOf } from "../lib/schedule-retry.js"
+import { refuseIfRunUnpriced, replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -220,34 +220,22 @@ openApiRegistry.registerPath({
 })
 
 /**
- * Refund any reserved credit holds for the given job IDs. Best-effort —
- * `CreditsService.refundCredits` short-circuits on rows that aren't
- * `status='reserved'` (per PR #1502), so it's safe if the worker happens to
- * commit/refund the same row concurrently.
+ * Refund the reserved credit holds of the given (cancelled) job IDs — through
+ * the shared cancel refund (`refundReservedHolds`, lib/cancel-job.ts), so a
+ * workflow cancel applies the same rule as every other cancel (D10, R22): a
+ * billed metered LLM hold (a Generate Script / lottie / structured / 3D scene
+ * call already answered, or a scrape's billed analyses) is COMMITTED, never
+ * refunded; one that cannot be committed is left reserved and reported. Every
+ * other hold is refunded exactly as before.
  *
- * Without this, cancelling a workflow execution leaves every child job's
- * `usage_logs` row stuck at `status='reserved'` — the user's balance was
- * decremented when each node was reserved but never restored. Same shape
- * as the per-job leak fixed in PR #1508; this closes the workflow-level
- * variant for all queued/running children.
+ * Without the refund, cancelling a workflow execution leaves every child
+ * job's `usage_logs` row stuck at `status='reserved'` — the user's balance was
+ * decremented when each node was reserved but never restored. Same shape as
+ * the per-job leak fixed in PR #1508; this closes the workflow-level variant
+ * for all queued/running children.
  */
 async function refundReservedCreditsForJobs(jobIds: string[]): Promise<void> {
-  if (jobIds.length === 0) return
-  const { data: usageLogs } = await supabase
-    .from("usage_logs")
-    .select("id")
-    .in("job_id", jobIds)
-    .eq("status", "reserved")
-
-  if (!usageLogs || usageLogs.length === 0) return
-
-  await Promise.all(
-    usageLogs.map((row) =>
-      CreditsService.refundCredits(row.id).catch((err) =>
-        console.error(`[workflow-cancel] Failed to refund usage_log ${row.id}:`, err),
-      ),
-    ),
-  )
+  await refundReservedHolds(jobIds)
 }
 
 /** True for a plain object (not null, not an array). */
@@ -935,6 +923,17 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       if (refusal) return reply.status(400).send({ error: refusal })
     }
 
+    // A metered LLM call on a model with no price (R51): refused before any row exists, so no fixed
+    // node runs and is charged ahead of the call the run would refuse mid-graph.
+    if (
+      await refuseIfRunUnpriced(
+        reply,
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: unknown }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+        { runNodeIds: nodeIds, overrides: effectiveOverrides as Record<string, Record<string, unknown>> | undefined },
+      )
+    ) return reply
+
     // Check for an execution THIS CALLER already has running (best-effort fast
     // path; the DB UNIQUE constraint on (user_id, idempotency_key) is the
     // race-proof backstop below).
@@ -1043,6 +1042,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           ...(continuationPricing ? { continuation: continuationPricing } : {}),
         })
       } catch (err) {
+        // A metered LLM model with no price (R49): refused before anything runs.
+        if (await replyIfLlmUnpriced(reply, err)) return reply
         return sendInternalError(reply, req, err, "Failed to check credits for the continuation")
       }
       if (credits && !credits.sufficient) {

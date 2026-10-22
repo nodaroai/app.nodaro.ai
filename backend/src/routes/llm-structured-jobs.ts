@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, LightMyRequestResponse } from "fastify"
 import { z } from "zod"
 import { resolveLlmCreditId } from "@nodaro/shared/llm-models"
-import { videoAnalysisResultSchema } from "@nodaro/shared/video"
+import { videoAnalysisResultSchema, type VideoAnalysisResult } from "@nodaro/shared/video"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -14,10 +14,16 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import {
+  composeStructuredAnalysisInput,
   llmStructuredBody,
+  llmStructuredVideoBound,
+  plannedStructuredCall,
   prepareStructuredRequest,
+  structuredCompletionRequest,
   structuredJobInputData,
 } from "../lib/llm-structured-request.js"
+import { llmPrecheckBaseCredits, reserveLlmCall } from "../lib/llm-billing.js"
+import { llmPrecheckBody, llmTextChars } from "../lib/llm-metered-route.js"
 import type { LlmStructuredJobPayload } from "../workers/handlers/llm-structured.js"
 
 /**
@@ -131,7 +137,7 @@ async function createAnalysisChild(app: FastifyInstance, req: FastifyRequest, bo
   return { ok: true, jobId }
 }
 
-type ReuseResult = { ok: true; credits: number | null } | { ok: false; status: number; body: unknown }
+type ReuseResult = { ok: true; credits: number | null; analysis: VideoAnalysisResult } | { ok: false; status: number; body: unknown }
 
 /**
  * Admit a CLIENT-SUPPLIED analysis (the recast create route's precheck, on
@@ -160,10 +166,13 @@ async function precheckReusedAnalysis(analysisJobId: string, userId: string): Pr
     return refuse(422, "analysis_not_ready", "The source analysis is still processing. Retry once it completes.")
   }
   const json = (row.output_data as Record<string, unknown> | null)?.json
-  if (!videoAnalysisResultSchema.safeParse(json).success) {
+  const parsed = videoAnalysisResultSchema.safeParse(json)
+  if (!parsed.success) {
     return refuse(422, "invalid_analysis", "The source analysis output is invalid.")
   }
-  return { ok: true, credits: row.credits }
+  // The parsed analysis rides back: the metered hold is sized from exactly
+  // what the worker will draft from (D5).
+  return { ok: true, credits: row.credits, analysis: parsed.data }
 }
 
 /** The enqueue payload: the body the worker needs, minus the create-time-only
@@ -176,7 +185,22 @@ function workerPayload(body: LlmStructuredJobBody): Omit<LlmStructuredJobPayload
 export async function llmStructuredJobsRoutes(app: FastifyInstance) {
   app.post(
     "/v1/llm/structured/jobs",
-    { preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body)) },
+    {
+      preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body), {
+        // Metered (D1): pre-checked at the body's 1-attempt hold — its text,
+        // plus the 600 s analysis bound for a movie run (D5; a reused
+        // analysis is read in the handler, which holds its exact size).
+        // Undefined under the rollback: the tier row prices it as before.
+        computeCredits: (body) => {
+          const precheck = llmPrecheckBody(body)
+          const raw = (body ?? {}) as Record<string, unknown>
+          const videoChars = typeof raw.videoUrl === "string" && raw.analysisJobId === undefined
+            ? llmStructuredVideoBound({ input: "", videoUrl: raw.videoUrl }).extraChars
+            : 0
+          return precheck && llmPrecheckBaseCredits("llm-structured", precheck, llmTextChars(raw.system, raw.input, raw.jsonSchema) + videoChars)
+        },
+      }),
+    },
     async (req, reply) => {
       if (await shouldProxyLlmToCloud()) {
         return reply.status(503).send({
@@ -202,9 +226,11 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
 
       // A reused analysis is admitted BEFORE the row exists: a refusal here
       // is one more that costs nothing.
+      let reusedAnalysis: VideoAnalysisResult | undefined
       if (parsed.data.analysisJobId) {
         const admitted = await precheckReusedAnalysis(parsed.data.analysisJobId, userId)
         if (!admitted.ok) return reply.status(admitted.status).send(admitted.body)
+        reusedAnalysis = admitted.analysis
       }
 
       // Derived ONCE: the row's projection and the analysis stamp below are
@@ -222,7 +248,22 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      const reservation = await reserveCreditsForJob(req, reply, job.id, prepared.modelIdentifier)
+      // Metered (D1/D5): one attempt of the draft as the worker will send it —
+      // the input it composes from a reused analysis (exactly), or a movie
+      // run's 600 s analysis bound (the child does not exist yet: spec D16
+      // holds the parent first) — held under `llm-structured:<model>`. The
+      // worker settles the actual against this usage log (Task 11). Under the
+      // rollback `{ metered: false }` and the tier id is reserved as before.
+      const { input } = parsed.data
+      const plannedInput = reusedAnalysis
+        ? composeStructuredAnalysisInput(input, reusedAnalysis)
+        : input + "x".repeat(llmStructuredVideoBound(parsed.data).extraChars)
+      const planned = plannedStructuredCall(structuredCompletionRequest(parsed.data, prepared, plannedInput), prepared.schema, parsed.data.schemaName)
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "llm-structured", calls: [planned] })
+      if (reply.sent || !reserve) return
+      const reservation = reserve.metered
+        ? reserve.reservation
+        : await reserveCreditsForJob(req, reply, job.id, prepared.modelIdentifier)
       if (reply.sent) return
 
       let analysisJobId: string | undefined

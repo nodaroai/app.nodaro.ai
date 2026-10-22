@@ -26,11 +26,13 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai"
 import type { LlmModelDef, LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { config } from "../config.js"
-import { calculateLlmCost } from "../pricing/llm-cost.js"
+import { llmCostOrZero } from "../pricing/llm-cost.js"
 import { blocksToGeminiParts } from "./media.js"
 import { toGeminiResponseSchema } from "./response-schema.js"
 import { LlmStreamResponseError, assertNotContentRefusal, assertNotOutputCapped, isContentRefusalStop, type ReplyEnd } from "../llm-errors.js"
 import type { LlmRequest, LlmResponse } from "../llm-client.js"
+import { requestChars } from "../llm/kie-cost.js"
+import { asStoppedStream, callerStopped } from "../llm/stream-abort.js"
 
 /** Per-call params already derived by `llm-client.deriveParams` — passed in so
  *  that clamping/temperature-stripping stays single-sourced there. */
@@ -157,18 +159,18 @@ function toResponse(
   // Costed on the DIRECT rate band — Google list price, not KIE's resale.
   // There is no `credits_consumed` equivalent to reconcile against here, so
   // the rate table is the only source of truth for this lane.
-  const providerCost = usage ? calculateLlmCost(model, usage, "direct") : undefined
-  const lane = "direct-gemini"
+  const providerCost = usage ? llmCostOrZero(model, usage, "direct") : undefined
+  const lane = "direct-gemini" as const
   if (end.blockReason !== undefined && end.blockReason !== "BLOCKED_REASON_UNSPECIFIED") {
     // Google's prompt-block spellings overlap its finish reasons only in part
     // (OTHER, MODEL_ARMOR are block-only); a blocked prompt is a content verdict
     // whichever it names, so those two are judged as SAFETY — logged raw first.
     console.warn(`[llm-content-refusal] ${lane} ${model.id} prompt blocked: ${String(end.blockReason)}`)
     const stopReason = isContentRefusalStop(end.blockReason) ? end.blockReason : "SAFETY"
-    assertNotContentRefusal({ modelId: model.id, lane, stopReason, usage, providerCost })
+    assertNotContentRefusal({ modelId: model.id, lane, stopReason, usage, providerCost, servedLane: lane })
   }
-  assertNotOutputCapped({ modelId: model.id, lane, stopReason: end.stopReason, cap: end.cap, usage, providerCost })
-  assertNotContentRefusal({ modelId: model.id, lane, stopReason: end.stopReason, usage, providerCost })
+  assertNotOutputCapped({ modelId: model.id, lane, stopReason: end.stopReason, cap: end.cap, usage, providerCost, servedLane: lane })
+  assertNotContentRefusal({ modelId: model.id, lane, stopReason: end.stopReason, usage, providerCost, servedLane: lane })
   if (!UNJUDGED_STOPS.has(end.stopReason)) {
     const detail = `${lane} ${model.id} stopped with ${String(end.stopReason)} after ${text.length} characters ` +
       `(in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
@@ -178,7 +180,7 @@ function toResponse(
       outputTokens: usage?.outputTokens ?? 0,
       providerCost,
       complete: usage !== undefined && providerCost !== undefined,
-    })
+    }, lane)
   }
   return { text, usage, model: model.id, providerCost, lane }
 }
@@ -217,11 +219,10 @@ export async function streamGeminiDirect(
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const ai = getGeminiClient()
-  const stream = await ai.models.generateContentStream({
-    model: geminiModelId(model),
-    contents: await buildContents(req),
-    config: buildConfig(model, req, params, signal),
-  })
+  const contents = await buildContents(req)
+  // A stop before the request went out (during media preparation, or before
+  // the call) spent nothing: its plain abort error, refunded.
+  signal?.throwIfAborted()
 
   let text = ""
   // Usage arrives cumulatively; the LAST chunk carrying it is authoritative.
@@ -230,18 +231,40 @@ export async function streamGeminiDirect(
   let stopReason: unknown
   // A refused prompt arrives as a chunk with no candidate, only promptFeedback.
   let blockReason: unknown
-  for await (const chunk of stream) {
-    const piece = chunk.text
-    if (piece) {
-      text += piece
-      onToken(piece)
+  // Stopped after dispatch (D2): billed what the chunks so far REPORTED, else
+  // the estimate from the prompt's size and the streamed text, at the direct rate.
+  const stopped = (err: unknown): unknown => signal
+    ? asStoppedStream(err, {
+      signal, requestChars: requestChars(req), modelId: model.id, lane: "direct-gemini", streamedChars: text.length,
+      ...(usage ? { reported: usage } : {}),
+    })
+    : err
+  try {
+    const stream = await ai.models.generateContentStream({
+      model: geminiModelId(model),
+      contents,
+      config: buildConfig(model, req, params, signal),
+    })
+    for await (const chunk of stream) {
+      const piece = chunk.text
+      if (piece) {
+        text += piece
+        onToken(piece)
+      }
+      const chunkUsage = readUsage(chunk.usageMetadata)
+      if (chunkUsage) usage = chunkUsage
+      const finishReason = chunk.candidates?.[0]?.finishReason
+      if (finishReason) stopReason = finishReason
+      const chunkBlock = chunk.promptFeedback?.blockReason
+      if (chunkBlock) blockReason = chunkBlock
     }
-    const chunkUsage = readUsage(chunk.usageMetadata)
-    if (chunkUsage) usage = chunkUsage
-    const finishReason = chunk.candidates?.[0]?.finishReason
-    if (finishReason) stopReason = finishReason
-    const chunkBlock = chunk.promptFeedback?.blockReason
-    if (chunkBlock) blockReason = chunkBlock
+  } catch (err) {
+    throw stopped(err)
+  }
+  // A stream the caller stopped that simply ENDED (no finish reason, no block)
+  // is a stopped stream too, never a short finished answer.
+  if (callerStopped(signal) && stopReason === undefined && blockReason === undefined) {
+    throw stopped(new Error(`direct-gemini stream ${model.id} ended after the caller stopped it`))
   }
   return toResponse(model, text, { stopReason, cap: params.maxTokens, blockReason }, usage)
 }

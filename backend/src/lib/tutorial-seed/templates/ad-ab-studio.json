@@ -15,7 +15,8 @@
     "product"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 66,
+  "estimatedCredits": 87,
+  "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

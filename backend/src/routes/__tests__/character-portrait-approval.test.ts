@@ -17,11 +17,17 @@ vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock("../../lib/meter-sync-llm.js", () => ({ meterSyncLlm: vi.fn() }))
+vi.mock("../../lib/sync-llm-meter.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/sync-llm-meter.js")>()),
+  meterSyncLlm: vi.fn(),
+}))
 // CI has no .env so config.KIE_API_KEY / ANTHROPIC_API_KEY are empty strings,
 // which trips the route's 503 provider_unavailable preflight before any test
 // logic runs. Mock the keys as truthy so the preflight passes.
 vi.mock("../../lib/config.js", () => ({
+  // The tier path (the rollback, D6): these cases pin today's tier billing;
+  // the metered paths are llm-metered-creative-routes.test.ts.
+  llmMeteredPricing: () => false,
   config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: "test-key" },
   hasCredits: () => true,
 }))

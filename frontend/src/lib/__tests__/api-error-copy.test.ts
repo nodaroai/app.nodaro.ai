@@ -124,3 +124,27 @@ describe("a stub locale", () => {
     expect(refusalMessage("A character named Maya exists", "apiErr.nameTaken")).toBe("A character named Maya exists")
   })
 })
+
+// A balance refusal of a run that can hold more than the balance (a metered LLM
+// call's hold, Task 13): "Needs up to N credits", N raw credits, `required` beside it.
+describe("apiErrorMessage — Needs up to N credits", () => {
+  const refusal = { code: "insufficient_credits", serverMessage: "Needs up to 368 credits", fallbackKey: "apiErr.generateText", required: 368 } as const
+
+  it("English keeps the server's words on a deployment showing credits", () => {
+    expect(apiErrorMessage(refusal)).toBe("Needs up to 368 credits")
+  })
+
+  it("another language says it in its own words, with the figure and the display unit", () => {
+    useLocaleStore.setState({ locale: "he" })
+    const message = apiErrorMessage(refusal)
+    expect(message).toContain("368")
+    expect(message).toContain(translate("he", "apiErr.reason.needsUpTo", { n: 368, u: translate("he", "credits.unitShort") }))
+    expect(message).not.toContain(translate("he", "apiErr.reason.insufficientCredits"))
+  })
+
+  it("any other insufficient-credits message keeps its usual reason", () => {
+    useLocaleStore.setState({ locale: "he" })
+    const message = apiErrorMessage({ ...refusal, serverMessage: "Insufficient credits" })
+    expect(message).toContain(translate("he", "apiErr.reason.insufficientCredits"))
+  })
+})

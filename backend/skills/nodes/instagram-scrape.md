@@ -85,8 +85,9 @@ summary.
 
 - **Pricing = 1.1<!-- credits-rate: instagram-scrape:10@0.1 --> credits per REQUESTED post, charged**, tiered on `count × sources` (each
   profile / hashtag / post link is a source, max 5; in `post` mode each link is
-  one post, so 1–5 links cost the 10-post tier). AI analysis adds per-post by the
-  model's tier, settled only for posts analysed. Keep `count` and the number of
+  one post, so 1–5 links cost the 10-post tier). AI analysis adds one LLM call per
+  analysed post, charged for the tokens it used at the model's rate (a post never
+  analysed costs nothing). Keep `count` and the number of
   sources modest.
 - **The period is honoured server-side** (unlike Meta's keyword search), so a
   narrow window returns fewer posts where the account/hashtag is quiet.

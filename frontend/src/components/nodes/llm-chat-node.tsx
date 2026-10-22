@@ -16,8 +16,8 @@ import { isValidLlmChatConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, LLM_MODELS } from "@nodaro/shared/llm-models"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { getGenerateTextTemplate, GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { MAX_OUTPUT_HEIGHT, shouldCapOutput } from "./text-output-cap"
@@ -124,7 +124,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   }, [Boolean(activeText), outputView])
   const capOutput = shouldCapOutput(contentHeight, isResized)
 
-  const credits = useModelCredits(buildLlmCreditIdentifier("llm-chat", nodeData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"], nodeData.reasoningEffort, nodeData.advancedMode === true), 3)
+  const { credits, estimate: creditsEstimate } = useLlmNodeCredits("llm-chat", nodeData, 3)
   const template = getGenerateTextTemplate(nodeData.templateId ?? "")
 
   // Per-result model + template — what actually produced the active result
@@ -152,7 +152,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<MessageSquare className="h-4 w-4" />}
         category="ai"
-        credits={credits}
+        credits={credits} creditsEstimate={creditsEstimate}
         selected={selected}
         isRunning={status === "running"}
         minWidth={260}
@@ -164,7 +164,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
           <LlmChatQuickToolbar
             nodeId={id}
             data={nodeData}
-            credits={credits}
+            credits={credits} creditsEstimate={creditsEstimate}
             isRunning={status === "running"}
             onAnyOpenChange={setToolbarDropdownOpen}
           />

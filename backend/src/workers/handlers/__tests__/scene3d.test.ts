@@ -35,10 +35,20 @@ vi.mock("../../../services/scene3d/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../services/scene3d/index.js")>()
   return { ...actual, generateScenePlan: mocks.generateScenePlan, editScenePlan: mocks.editScenePlan }
 })
+// The hold's usage log (its action decides metered — null: a tier hold, today's
+// path) and the row's running billing ledger (an earlier BullMQ attempt's, R31).
+const billingRow = vi.hoisted(() => ({ action: null as string | null, ledger: null as Record<string, unknown> | null }))
 vi.mock("../../../lib/supabase.js", () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: mocks.jobRead(), error: null }) }) }),
+    from: vi.fn((table: string) => ({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: mocks.jobRead(), error: null }),
+          maybeSingle: async () => (table === "usage_logs"
+            ? { data: billingRow.action ? { action: billingRow.action } : null, error: null }
+            : { data: { provider_cost: null, llm_billing: billingRow.ledger }, error: null }),
+        }),
+      }),
       update: () => ({ eq: async () => ({ data: null, error: null }) }),
     })),
   },
@@ -160,6 +170,23 @@ describe("generate-3d-scene", () => {
     await expect(handleGenerate3dScene(job({ ...GENERATE, analysisJobId: "analysis-1" }), CTX)).rejects.toThrow(/clip too long/)
     expect(mocks.markJobCompleted).not.toHaveBeenCalled()
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("I-2: an analysis failure on a RETRY carries the earlier attempt's billed planner calls to the failure net", async () => {
+    billingRow.action = "3d-scene:claude-sonnet-5.5"
+    billingRow.ledger = { costUsd: 0.02, source: "kie-stated", calls: 1, lanes: ["kie"], attempts: [
+      { lane: "kie", modelId: "claude-sonnet-5.5", requestChars: 5000, inputTokens: 1200, outputTokens: 900, creditsUsd: 0.02 },
+    ] }
+    try {
+      mocks.jobRead.mockReturnValue({ status: "failed", progress: 0, output_data: null, error_message: "clip too long", user_id: "user-1", credits: null })
+      const err = await handleGenerate3dScene(job({ ...GENERATE, analysisJobId: "analysis-1" }), CTX).catch((e: unknown) => e)
+      expect((err as Error).message).toMatch(/clip too long/)
+      const { llmSpendOf } = await import("../../shared.js")
+      expect(llmSpendOf(err)?.attempts).toHaveLength(1)
+    } finally {
+      billingRow.action = null
+      billingRow.ledger = null
+    }
   })
 
   it("lets an authoring failure through so the job fails and refunds", async () => {

@@ -21,6 +21,8 @@ import { allowanceEnforcementActive, deploymentBillingContext, deploymentPayerAc
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { getWelcomeOfferConfig } from "./welcome-offer-config.js"
 import { consentBlockExempt, sendConsentRequired } from "./welcome-consent-gate.js"
+import { LlmUnpricedModelError } from "../billing/llm-metered.js"
+import { sendLlmModelUnpriced } from "../billing/llm-unpriced-reply.js"
 
 /** 403 body code when an extension-granted account has not consented yet. */
 export { CONSENT_REQUIRED_CODE } from "./consent-required.js"
@@ -280,6 +282,12 @@ export function creditGuardImpl(
         // Hard-fail policy: a missing-price error during computeCredits must
         // reject the request, not silently proceed without a credit check.
         if (handlePriceNotConfigured(err, reply, routeName)) return
+        // A metered LLM model with no price on its lane: refused before any
+        // job row or reservation (`llmPrecheckBaseCredits`).
+        if (err instanceof LlmUnpricedModelError) {
+          sendLlmModelUnpriced(reply, err)
+          return
+        }
         throw err
       }
     }
@@ -581,12 +589,26 @@ export async function reserveCreditsForJobImpl(
   reply: FastifyReply,
   jobId: string,
   modelIdentifier: string,
-  options?: { oncePerJob?: boolean; retainJobOnFailure?: boolean },
+  options?: { oncePerJob?: boolean; retainJobOnFailure?: boolean; holdCredits?: number },
 ): Promise<ReserveResult | undefined> {
   const userId = req.userId
-  if (!userId) return undefined
+  if (!userId) {
+    // A metered hold's caller treats `undefined` as "a reply was sent"; every
+    // other caller keeps today's silent return.
+    if (options?.holdCredits !== undefined) {
+      reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    return undefined
+  }
 
   const routeName = req.url.split("?")[0] ?? "unknown"
+
+  // A metered LLM hold (A2): the balance is checked against the hold itself
+  // before the RPC, so a short balance is a clear 402 with no usage log left.
+  const holdCredits = options?.holdCredits
+  if (holdCredits !== undefined && !(await holdCovered(req, reply, jobId, modelIdentifier, holdCredits, routeName, options))) {
+    return undefined
+  }
 
   try {
     const reservation = await CreditsService.reserveCredits(
@@ -607,7 +629,8 @@ export async function reserveCreditsForJobImpl(
         // exclusion predicate. (A workspace payer is additionally excluded
         // INSIDE reserveCredits, as an invariant — not a flag here.)
         skipAutoRecharge: Boolean(req.appAuthorization),
-        creditOverride: req.creditReservation?.creditOverride,
+        // A metered hold wins over the guard's pre-check figure.
+        creditOverride: holdCredits ?? req.creditReservation?.creditOverride,
         ...(options?.oncePerJob ? { oncePerJob: true } : {}),
         webFreeMode: req.webFreeMode,
         communityInstance: req.appAuthorization?.appKind === "community_instance",
@@ -680,4 +703,62 @@ export async function reserveCreditsForJobImpl(
     })
     return undefined
   }
+}
+
+/**
+ * The A2 pre-RPC check of a metered LLM hold: true when the payer can cover
+ * `holdCredits`; otherwise the refusal is sent, the job row deleted (unless
+ * the caller keeps its jobs) and false returned. Same refusal branches as the
+ * guard's credit check; the insufficient-balance message names the hold.
+ */
+async function holdCovered(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  jobId: string,
+  modelIdentifier: string,
+  holdCredits: number,
+  routeName: string,
+  options: { retainJobOnFailure?: boolean } | undefined,
+): Promise<boolean> {
+  const userId = req.userId!
+  let check: Awaited<ReturnType<typeof CreditsService.checkCredits>>
+  try {
+    check = await CreditsService.checkCredits(userId, modelIdentifier, req.isAppRun, holdCredits, {
+      billingContext: req.billingContext,
+      webFreeMode: req.webFreeMode ?? false,
+    })
+  } catch (err) {
+    if (!options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+    if (handlePriceNotConfigured(err, reply, routeName)) return false
+    console.error(`[credit-guard] ${routeName} metered hold check failed:`, err)
+    reply.status(500).send({ error: { code: "credit_check_failed", message: "Failed to check credits" } })
+    return false
+  }
+  if (check.allowed) return true
+  if (!options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+  if (check.code === "free_video_limit") {
+    reply.status(402).send({ error: { code: "free_video_limit", message: check.error ?? "Not available on free credits" } })
+    return false
+  }
+  if (check.subscriptionRequired) {
+    sendSubscriptionRequired(reply)
+    return false
+  }
+  if (req.billingContext?.payer === "deployment") {
+    reply.status(402).send({
+      error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." },
+      required: holdCredits,
+    })
+    return false
+  }
+  const shortBalance = check.balance !== undefined && check.balance < holdCredits
+  reply.status(402).send({
+    error: {
+      code: "insufficient_credits",
+      message: shortBalance ? `Needs up to ${holdCredits} credits` : check.error ?? "Insufficient credits",
+    },
+    required: holdCredits,
+    balance: check.balance,
+  })
+  return false
 }

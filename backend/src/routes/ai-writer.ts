@@ -10,6 +10,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
+import type { LlmRequest, LlmResponse } from "../lib/llm-client.js"
+import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
+import { abortOnClientDisconnect, addCallToSpend, billedEvidence, meteredFailureMessage, meteredTextPrecheck, recordMeteredJobOutput } from "../lib/metered-text-route.js"
 import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
@@ -22,6 +25,7 @@ import { billedProviderCost } from "../lib/llm-errors.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 
 const aiWriterBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: the input feeds an
@@ -40,6 +44,57 @@ const aiWriterBody = z.object({
   ...LLM_CHEAP_LANES_SHAPE,
 })
 
+/** The guard's metered pre-check: the text the route sends (system + user input). */
+const aiWriterPrecheck = meteredTextPrecheck("ai-writer", {
+  schema: aiWriterBody,
+  textOf: (b) => [b.systemPrompt, b.userInput],
+  // The cap the route sends: resolveLlmParams over the (schema-defaulted) body maxTokens.
+  maxTokensOf: (b) => resolveLlmParams(b, { maxTokens: b.maxTokens }).maxTokens,
+})
+
+type MeteredReserve = Extract<NonNullable<LlmReserveResult>, { metered: true }>
+
+/**
+ * Settle a metered job whose call answered, then — unless the settle is
+ * `unsettled` (the row is left non-terminal for the reconcile sweep, C3) —
+ * mark it completed. The caller recorded the output and its billed evidence
+ * (`recordMeteredJobOutput`) before the settle, so the terminal write carries
+ * the status only and never clobbers the billing columns. A spend that could not record
+ * the call (`!recorded`) is not settled: the row is left to the sweep, which
+ * charges its hold from the evidence. Never throws — a settle that crashes
+ * leaves the row to the sweep the same way.
+ */
+async function completeMetered(jobId: string, reserve: MeteredReserve, spend: LlmSpend, recorded: boolean): Promise<void> {
+  if (!recorded) return
+  try {
+    const settled = await settleLlmJob(jobId, reserve, spend)
+    if (settled.outcome === "unsettled") return
+    await completeSettledSyncJob(jobId)
+  } catch (err) {
+    console.error(`[ai-writer] settling job ${jobId} failed — left to the reconcile sweep:`, err)
+  }
+}
+
+/**
+ * Settle a metered job whose call failed (a billed failure is charged, an
+ * unbilled one refunded), then — unless `unsettled` — mark it failed. Returns
+ * the sentence the person reads: `message`, with the charge stated only when
+ * the settle confirmed it (`meteredFailureMessage`). Never throws.
+ */
+async function failMetered(jobId: string, reserve: MeteredReserve, spend: LlmSpend, recorded: boolean, err: unknown, message: string): Promise<string> {
+  if (!recorded) return message
+  try {
+    const settled = await settleLlmJob(jobId, reserve, spend)
+    if (settled.outcome === "unsettled") return message
+    const shown = meteredFailureMessage(err, message, settled)
+    await markJobFailed(jobId, { error_message: shown })
+    return shown
+  } catch (settleErr) {
+    console.error(`[ai-writer] settling failed job ${jobId} failed — left to the reconcile sweep:`, settleErr)
+    return message
+  }
+}
+
 export async function aiWriterRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /v1/ai-writer/generate  (Legacy synchronous endpoint)
@@ -48,7 +103,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-writer/generate",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body)),
+      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck }),
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -92,6 +147,15 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const advancedError = advancedModeError(parsed.data, llmModel)
       if (advancedError) return reply.status(400).send({ error: advancedError })
       const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
+      // Built once: the metered hold is sized from the very request the lane is sent.
+      const request: LlmRequest = {
+        modelId: llmModel,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userInput }],
+        ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
+        ...cheapLanesParam(parsed.data),
+        reasoningEffort: parsed.data.reasoningEffort,
+      }
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await insertSyncJob(req, {
@@ -107,7 +171,36 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Reserve credits
+      // Metered (the default): hold one attempt of this call.
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "ai-writer", calls: [{ modelId: llmModel, request }] })
+      if (!reserve || reply.sent) return
+      if (reserve.metered) {
+        if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+        const spend = new LlmSpend()
+        let response: LlmResponse
+        try {
+          response = await llmComplete(request)
+        } catch (err) {
+          const message = userFacingMessage(err, "Claude API call failed")
+          const recorded = addCallToSpend(spend, llmModel, request, { error: err })
+          console.error("[ai-writer] Error details:", JSON.stringify(err, null, 2))
+          await recordMeteredJobOutput(job.id, { error: message }, billedEvidence(spend, billedProviderCost(err)))
+          const shown = await failMetered(job.id, reserve, spend, recorded, err, message)
+          return reply.status(502).send({ error: { code: llmErrorCode(err), message: shown } })
+        }
+        // Outside the call's catch: a ledger error is never read as a provider failure.
+        const recorded = addCallToSpend(spend, llmModel, request, { response })
+        await recordMeteredJobOutput(
+          job.id,
+          { generatedText: response.text, model: llmModel, usage: response.usage },
+          billedEvidence(spend, response.providerCost),
+          recorded ? undefined : reserve.chargeId,
+        )
+        await completeMetered(job.id, reserve, spend, recorded)
+        return reply.send({ jobId: job.id, generatedText: response.text })
+      }
+
+      // LLM_TIER_PRICING_ROLLBACK (or no credits): the tier id, exactly as before.
       const reservation = await reserveCreditsForJob(
         req,
         reply,
@@ -123,14 +216,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
-        const response = await llmComplete({
-          modelId: llmModel,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userInput }],
-          ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
-          ...cheapLanesParam(parsed.data),
-          reasoningEffort: parsed.data.reasoningEffort,
-        })
+        const response = await llmComplete(request)
 
         const generatedText = response.text
 
@@ -180,7 +266,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-writer/generate-stream",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body)),
+      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck }),
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -223,6 +309,15 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const advancedError = advancedModeError(parsed.data, llmModel)
       if (advancedError) return reply.status(400).send({ error: advancedError })
       const modelIdentifier = buildLlmCreditIdentifier("ai-writer", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
+      // Built once: the metered hold is sized from the very request the lane is sent.
+      const request: LlmRequest = {
+        modelId: llmModel,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userInput }],
+        ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
+        ...cheapLanesParam(parsed.data),
+        reasoningEffort: parsed.data.reasoningEffort,
+      }
 
       // Create job record
       const { data: job, error: jobError } = await insertSyncJob(req, {
@@ -238,7 +333,67 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Reserve credits
+      // Metered (the default): hold one attempt of this call.
+      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "ai-writer", calls: [{ modelId: llmModel, request }] })
+      if (!reserve || reply.sent) return
+      if (reserve.metered) {
+        if (!(await stampSyncLlmCallStart(job.id, reserve, reply))) return
+        // Open SSE stream -- from here on, errors go through the stream
+        const sse = await createSSEStream(req, reply)
+        sse.sendEvent({ type: "metadata", data: { jobId: job.id, model: llmModel, maxTokens } })
+        // Abort upstream LLM stream when client disconnects
+        const abortController = new AbortController()
+        // The CLIENT's disconnect (the response closing early) stops the stream:
+        // charged its estimated usage (D2), or refunded if not yet dispatched.
+        abortOnClientDisconnect(reply, abortController)
+
+        let fullText = ""
+        const spend = new LlmSpend()
+        let finalResponse: LlmResponse
+        try {
+          finalResponse = await llmStream(
+            request,
+            (delta) => {
+              if (sse.isClosed) return
+              fullText += delta
+              sse.sendEvent({ type: "token", data: delta })
+            },
+            abortController.signal,
+          )
+        } catch (err) {
+          // A stream the person stopped is charged its estimated usage (D2:
+          // `LlmStreamAbortedError`); one stopped before it was sent billed
+          // nothing and is refunded.
+          const message = userFacingMessage(err, "Claude API stream failed")
+          const recorded = addCallToSpend(spend, llmModel, request, { error: err })
+          console.error("[ai-writer-stream] Error:", err instanceof Error ? err.message : message)
+          await recordMeteredJobOutput(job.id, { error: message }, billedEvidence(spend, billedProviderCost(err)))
+          const shown = await failMetered(job.id, reserve, spend, recorded, err, message)
+          if (!sse.isClosed) {
+            sse.sendEvent({ type: "error", data: { code: llmErrorCode(err), message: shown } })
+            sse.close()
+          }
+          return
+        }
+        // Outside the call's catch: a ledger error is never read as a provider failure.
+        const recorded = addCallToSpend(spend, llmModel, request, { response: finalResponse })
+        await recordMeteredJobOutput(
+          job.id,
+          { generatedText: fullText, model: llmModel, usage: finalResponse.usage },
+          billedEvidence(spend, finalResponse.providerCost),
+          recorded ? undefined : reserve.chargeId,
+        )
+        // Settled whether or not the client is still there: the answer finished
+        // (the early-complete path settles exactly like the normal one).
+        await completeMetered(job.id, reserve, spend, recorded)
+        if (!sse.isClosed) {
+          sse.sendEvent({ type: "done", data: { jobId: job.id, generatedText: fullText, usage: finalResponse.usage } })
+          sse.close()
+        }
+        return
+      }
+
+      // LLM_TIER_PRICING_ROLLBACK (or no credits): the tier id, exactly as before.
       const reservation = await reserveCreditsForJob(
         req,
         reply,
@@ -269,14 +424,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
 
       try {
         const finalResponse = await llmStream(
-          {
-            modelId: llmModel,
-            system: systemPrompt,
-            messages: [{ role: "user", content: userInput }],
-            ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
-            ...cheapLanesParam(parsed.data),
-            reasoningEffort: parsed.data.reasoningEffort,
-          },
+          request,
           (delta) => {
             if (sse.isClosed) return
             fullText += delta

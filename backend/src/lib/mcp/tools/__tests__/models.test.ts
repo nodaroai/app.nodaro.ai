@@ -40,11 +40,19 @@ vi.mock("../../../../ee/billing/credits.js", () => ({
 // The prices a run is charged — the admin's, which can sit above the
 // catalog's base figures. `loadChargedPrices` is the shim over the billing
 // module; the pricing test below pins that list_models serves these.
-const { chargedByIdentifier } = vi.hoisted(() => ({
+const { chargedByIdentifier, llmQuotes } = vi.hoisted(() => ({
   chargedByIdentifier: new Map<string, number>([["nano-banana-2", 22], ["nano-banana-2:2K", 55]]),
+  // The metered LLM keys the charged prices quote (metered pricing on): an estimate, or unpriced.
+  llmQuotes: new Map<string, { kind: "estimate"; credits: number } | { kind: "unpriced" }>([
+    ["llm-chat:claude-opus-5.5", { kind: "estimate", credits: 11 }],
+    ["llm-chat:gemini-4-argon", { kind: "unpriced" }],
+  ]),
 }))
 vi.mock("../../../pricing/charged-prices.js", () => ({
-  loadChargedPrices: async () => ({ credits: (identifier: string) => chargedByIdentifier.get(identifier) }),
+  loadChargedPrices: async () => ({
+    credits: (identifier: string) => chargedByIdentifier.get(identifier),
+    llmQuote: (identifier: string) => llmQuotes.get(identifier) ?? null,
+  }),
 }))
 
 // Mutable edition flag: default matches setup.ts's EDITION=cloud; the
@@ -202,6 +210,38 @@ describe("list_models tool (always available)", () => {
       const text = result.content[0]?.text ?? ""
       expect(text).toContain("\"nano-banana-2\"") // catalog still served
       expect(text).not.toContain("\"pricing\"")
+    } finally {
+      mockHasCredits = true
+    }
+  })
+})
+
+describe("list_models price lookup (priceIds)", () => {
+  const lookup = async (priceIds: string[]) => {
+    const server = buildServer()
+    registerModels({ server, session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }), fastify: Fastify() })
+    return callTool(server, "list_models", { priceIds })
+  }
+
+  it("quotes an LLM call on any model by its `<feature>:<model>` key, as an estimate; a fixed id at its charged price", async () => {
+    const result = await lookup(["llm-chat:claude-opus-5.5", "nano-banana-2:2K", "llm-chat:gemini-4-argon", "no-such-id"])
+    expect(result.isError).toBeUndefined()
+    const { prices } = JSON.parse(result.content[0]?.text ?? "{}") as { prices: Record<string, unknown> }
+    expect(prices).toEqual({
+      "llm-chat:claude-opus-5.5": { credits: 11, estimate: true },
+      "nano-banana-2:2K": { credits: 55 },
+      // A model with no rate on its lane: a run on it is refused, so it has no price — never 0.
+      "llm-chat:gemini-4-argon": { error: "llm_model_unpriced" },
+      "no-such-id": { error: "not_priced" },
+    })
+  })
+
+  it("is refused on an edition without credits", async () => {
+    mockHasCredits = false
+    try {
+      const result = await lookup(["llm-chat:claude-opus-5.5"])
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.text).toContain("no_credit_system")
     } finally {
       mockHasCredits = true
     }

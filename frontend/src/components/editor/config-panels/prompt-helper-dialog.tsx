@@ -23,8 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { wizardAnalyze, wizardGenerate } from "@/lib/api"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { useLlmNodeCredits } from "@/hooks/use-llm-price"
+import { type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import type { WizardQuestion, RecommendedModel, ModelChange } from "@nodaro/prompts/doctrine"
 import { LlmModelSelect } from "./llm-model-select"
 import { formatCreditUnits } from "@/lib/credit-units"
@@ -233,8 +233,10 @@ export function PromptHelperDialog({
     }
   }
 
-  const effectiveModel = llmModel || LLM_FEATURE_DEFAULTS["prompt-helper"]
-  const creditCost = useModelCredits(buildLlmCreditIdentifier("prompt-helper", effectiveModel, reasoningEffort), 1)
+  // The model's estimate while metered pricing is on (shown `~N`), else the
+  // tier price, exactly as before (`useLlmPrice`).
+  const { credits: creditCost, estimate: creditEstimate } = useLlmNodeCredits("prompt-helper", { llmModel, reasoningEffort }, 1)
+  const creditLabel = creditCost === undefined ? "" : `${creditEstimate ? "~" : ""}${formatCreditUnits(creditCost)}`
 
   // -- Phase 1: Analyze --
   async function handleAnalyze() {
@@ -730,7 +732,7 @@ export function PromptHelperDialog({
                 <>
                   <Sparkles className="w-3.5 h-3.5 me-1.5" />
                   {t("cfgext.phdBuildPrompt")}
-                  <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
+                  <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditLabel}</span>
                 </>
               )}
             </Button>
@@ -745,7 +747,7 @@ export function PromptHelperDialog({
               >
                 <ArrowLeft className={cn("w-3.5 h-3.5 me-1", isRtl && "rotate-180")} />
                 {t("cfgext.phdReanalyze")}
-                <span className="ms-1 text-[10px] opacity-60">{formatCreditUnits(creditCost)}</span>
+                <span className="ms-1 text-[10px] opacity-60">{creditLabel}</span>
               </Button>
               <Button
                 onClick={handleGenerate}
@@ -757,7 +759,7 @@ export function PromptHelperDialog({
                 ) : (
                   <>
                     {t("cfgext.phdGeneratePrompt")}
-                    <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
+                    <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditLabel}</span>
                   </>
                 )}
               </Button>

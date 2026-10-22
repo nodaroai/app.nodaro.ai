@@ -28,6 +28,25 @@ describe("pick-best-llm strategy", () => {
     expect(out.meta.reasoning).toMatch(/cut off/)
   })
 
+  it("the judge's call is reported once: an error recording a SUCCESS is not recorded again as its failure", async () => {
+    vi.mocked(llmComplete).mockResolvedValue({ text: `{"chosen_index": 1, "reasoning": "ok"}` } as any)
+    const onLlmCall = vi.fn((_m: string, _r: unknown, outcome: { response?: unknown; error?: unknown }) => {
+      if ("response" in outcome) throw new TypeError("malformed answer")
+    })
+    await expect(execute(["a", "b"], { criteria: "x", inputKind: "text" }, { ...ctx, onLlmCall })).rejects.toThrow(/malformed answer/)
+    expect(onLlmCall).toHaveBeenCalledTimes(1)
+    expect(onLlmCall.mock.calls[0]![2]).toHaveProperty("response")
+  })
+
+  it("a cut-off verdict is reported as the call's (billed) failure", async () => {
+    const err = new LlmOutputTruncatedError("cut off", { inputTokens: 10, outputTokens: 400, complete: false })
+    vi.mocked(llmComplete).mockRejectedValue(err)
+    const onLlmCall = vi.fn()
+    await execute(["a", "b"], { criteria: "x", inputKind: "text" }, { ...ctx, onLlmCall })
+    expect(onLlmCall).toHaveBeenCalledTimes(1)
+    expect(onLlmCall.mock.calls[0]![2]).toEqual({ error: err })
+  })
+
   it("any other judge failure still fails the strategy", async () => {
     vi.mocked(llmComplete).mockRejectedValue(new Error("KIE.ai chat-completions failed (500)"))
 
