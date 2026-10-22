@@ -342,6 +342,28 @@ describe("tk.jobs.readJobsOwnedBy", () => {
     expect(opsNamed(q, "eq")).toEqual([["eq", "user_id", CALLER]])
   })
 
+  it("returns each row's error_hint (the user-safe failure verdict), null when absent", async () => {
+    state.result = {
+      data: [
+        {
+          id: "job-1",
+          status: "failed",
+          output_data: null,
+          error_message: "The provider's safety filter blocked this output.",
+          error_hint: { kind: "safety-block", class: "safety", retried: false },
+        },
+        { id: "job-2", status: "completed", output_data: null, error_message: null },
+      ],
+      error: null,
+    }
+
+    const rows = await tk.jobs.readJobsOwnedBy!(CALLER, ["job-1", "job-2"])
+
+    expect(rows[0].error_hint).toEqual({ kind: "safety-block", class: "safety", retried: false })
+    expect(rows[1].error_hint).toBeNull()
+    expect(opsNamed(lastQuery(), "select")).toEqual([["select", "id, status, output_data, error_message, error_hint"]])
+  })
+
   it("issues no query at all for an empty id list", async () => {
     expect(await tk.jobs.readJobsOwnedBy!(CALLER, [])).toEqual([])
     expect(state.queries).toHaveLength(0)

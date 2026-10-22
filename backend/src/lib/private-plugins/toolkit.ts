@@ -153,7 +153,7 @@ import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
-import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
+import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -1287,7 +1287,7 @@ async function readJobsOwnedBy(
 
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, status, output_data, error_message")
+    .select("id, status, output_data, error_message, error_hint")
     .in("id", ids)
     .eq("user_id", userId)
   if (error) throw new Error(`Failed to read jobs: ${error.message}`)
@@ -1302,10 +1302,13 @@ async function readJobsOwnedBy(
       (raw.output_data as Record<string, unknown> | null) ?? null,
     ),
     error_message: (raw.error_message as string | null) ?? null,
+    // The user-safe failure verdict (migration 376) — a plugin reads a child's
+    // failure class here rather than guessing it from `error_message`.
+    error_hint: (raw.error_hint as PluginJobErrorHint | null | undefined) ?? null,
   }))
 }
 
-const OWNED_RAW_JOB_COLUMNS = "id,status,input_data,output_data,created_at,completed_at"
+const OWNED_RAW_JOB_COLUMNS = "id,status,input_data,output_data,created_at,completed_at,error_hint"
 
 /**
  * `tk.jobs.readOwnedJob` — one job, for its owner, with `input_data` and
@@ -1338,6 +1341,7 @@ async function readOwnedJob(jobId: string, userId: string): Promise<PluginOwnedR
     output_data: (row.output_data as Record<string, unknown> | null) ?? null,
     created_at: row.created_at as string,
     completed_at: (row.completed_at as string | null) ?? null,
+    error_hint: (row.error_hint as PluginJobErrorHint | null | undefined) ?? null,
   }
 }
 

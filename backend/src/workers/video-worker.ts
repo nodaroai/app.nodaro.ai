@@ -25,6 +25,7 @@ import {
   creditsHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
+  hasUserSafeMessage,
 } from "../lib/safety-block.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { isPreviewRender } from "../lib/preview-render.js"
@@ -612,8 +613,19 @@ export function createVideoWorker() {
           // CONTENT_POLICY_MESSAGES text unchanged.
           // A model-lane failure carries a user-safe sentence (no lane, vendor
           // or internal model id); its full diagnostic is the error_detail below.
+          // A PLUGIN handler may vouch for its own sentence (`userSafeMessage:
+          // true` on the thrown error itself — lib/safety-block.ts): a safety
+          // block from it keeps that sentence (through the same
+          // `userFacingMessage` path as any other failure) while the hint
+          // below is still the safety block's. The generic message's "adjust
+          // the prompt" advice is wrong for a run whose prompt the user never
+          // wrote. Built-in handlers never get this: only a job type the
+          // plugins serve (the key, not the handler identity — the map's
+          // entries are wrapped by the edit-plan gate and the heartbeat).
+          const keepPluginMessage =
+            Object.hasOwn(privatePluginHandlers, job.name) && hasUserSafeMessage(err)
           const errorMessage =
-            block && block.class === "safety"
+            block && block.class === "safety" && !keepPluginMessage
               ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
               : userFacingMessage(err, message)
           // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job

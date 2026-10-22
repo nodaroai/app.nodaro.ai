@@ -34,6 +34,7 @@ const ROW = {
   output_data: { videoUrl: "https://cdn/out.mp4", __checkpoint: { step: 3 } },
   created_at: "2026-10-20T10:00:00Z",
   completed_at: "2026-10-20T10:05:00Z",
+  error_hint: null,
 }
 
 beforeEach(() => {
@@ -49,7 +50,13 @@ describe("tk.jobs.readOwnedJob", () => {
     expect(q.table).toBe("jobs")
     expect(has(q, "eq", "id", JOB)).toBe(true)
     expect(has(q, "eq", "user_id", OWNER)).toBe(true)
-    expect(has(q, "select", "id,status,input_data,output_data,created_at,completed_at")).toBe(true)
+    expect(has(q, "select", "id,status,input_data,output_data,created_at,completed_at,error_hint")).toBe(true)
+  })
+
+  it("returns the job's error_hint, so a plugin reads a child's failure class without parsing its message", async () => {
+    const hint = { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" }
+    db.respond = () => ({ data: { ...ROW, status: "failed", output_data: null, error_hint: hint }, error: null })
+    expect((await buildToolkit().jobs.readOwnedJob!(JOB, OWNER))?.error_hint).toEqual(hint)
   })
 
   it("someone else's (or a missing) job reads as null", async () => {
@@ -60,7 +67,7 @@ describe("tk.jobs.readOwnedJob", () => {
   it("normalises absent columns to null", async () => {
     db.respond = () => ({ data: { id: JOB, status: "processing", input_data: null, output_data: null, created_at: "t", completed_at: null }, error: null })
     expect(await buildToolkit().jobs.readOwnedJob!(JOB, OWNER)).toEqual({
-      id: JOB, status: "processing", input_data: {}, output_data: null, created_at: "t", completed_at: null,
+      id: JOB, status: "processing", input_data: {}, output_data: null, created_at: "t", completed_at: null, error_hint: null,
     })
   })
 

@@ -127,7 +127,9 @@ export type InputRefusedHint = {
  *
  *  Hand-copied mirrors that must be updated in the same change (each says so in
  *  its own comment): `frontend/src/types/nodes.ts` `JobErrorHint`,
- *  `packages/client/src/resources/jobs.ts` `JobErrorHint` (minor + changeset).
+ *  `packages/client/src/resources/jobs.ts` `JobErrorHint` (minor + changeset),
+ *  `lib/private-plugins/types.ts` `PluginJobErrorHint` (and the plugin repo's
+ *  copy of that contract).
  *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
 export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint
 
@@ -256,6 +258,26 @@ export function jobModelIdOf(data: unknown): string | null {
   if (typeof model === "string") return model
   if (typeof resolvedModel === "string") return resolvedModel
   return typeof provider === "string" ? provider : null
+}
+
+/** True iff the thrown error ITSELF vouches that its `message` is user-safe:
+ *  a strict `userSafeMessage === true` own property. A plugin handler that
+ *  fails a job with a fixed sentence of its own (and `contentPolicyClass` for
+ *  the hint) sets it so the worker keeps that sentence instead of the generic
+ *  `safetyBlockMessage` — whose "adjust the prompt" advice is wrong for a run
+ *  whose prompt the user never wrote.
+ *
+ *  Read on the TOP-LEVEL error only, never the `cause` chain: the text kept is
+ *  the top-level message, and a marker on a cause would vouch for a wrapper's
+ *  text nobody checked. Never throws (a throwing getter or Proxy reads as "not
+ *  marked"). The worker honours it for plugin-served job types only. */
+export function hasUserSafeMessage(err: unknown): boolean {
+  try {
+    return err instanceof Error && Object.hasOwn(err, "userSafeMessage")
+      && (err as { userSafeMessage?: unknown }).userSafeMessage === true
+  } catch {
+    return false
+  }
 }
 
 /** User-facing message for a FINAL `safety`-class block only — copyright and

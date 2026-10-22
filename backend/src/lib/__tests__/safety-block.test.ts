@@ -11,6 +11,7 @@ import {
   jobModelIdOf,
   safetyBlockMessage,
   fallbackLabelOf,
+  hasUserSafeMessage,
   type SafetyBlock,
 } from "../safety-block.js"
 
@@ -221,6 +222,31 @@ describe("fallbackLabelOf", () => {
 
   it("returns undefined for an unknown model id", () => {
     expect(fallbackLabelOf("totally-not-a-real-model-id")).toBeUndefined()
+  })
+})
+
+describe("hasUserSafeMessage", () => {
+  it("is true only for a strict own `userSafeMessage: true` on the error itself", () => {
+    expect(hasUserSafeMessage(Object.assign(new Error("x"), { userSafeMessage: true }))).toBe(true)
+    expect(hasUserSafeMessage(Object.assign(new Error("x"), { userSafeMessage: "true" }))).toBe(false)
+    expect(hasUserSafeMessage(Object.assign(new Error("x"), { userSafeMessage: 1 }))).toBe(false)
+    expect(hasUserSafeMessage(new Error("x"))).toBe(false)
+    expect(hasUserSafeMessage({ message: "x", userSafeMessage: true })).toBe(false)
+    expect(hasUserSafeMessage(undefined)).toBe(false)
+  })
+
+  it("ignores a marker on the cause chain or the prototype", () => {
+    const cause = Object.assign(new Error("safe"), { userSafeMessage: true })
+    expect(hasUserSafeMessage(new Error("wrapper", { cause }))).toBe(false)
+    class Marked extends Error {}
+    ;(Marked.prototype as { userSafeMessage?: boolean }).userSafeMessage = true
+    expect(hasUserSafeMessage(new Marked("x"))).toBe(false)
+  })
+
+  it("never throws: a throwing getter reads as not marked", () => {
+    const err = new Error("x")
+    Object.defineProperty(err, "userSafeMessage", { get() { throw new Error("boom") } })
+    expect(hasUserSafeMessage(err)).toBe(false)
   })
 })
 

@@ -99,7 +99,40 @@ export interface PluginHandlerCtx {
   shouldWatermark: boolean
 }
 
-/** Structural mirror of `HandlerFn` (`backend/src/workers/shared.ts`). */
+/**
+ * Structural mirror of `HandlerFn` (`backend/src/workers/shared.ts`).
+ *
+ * HOW A HANDLER FAILS A JOB — the video worker reads these OWN PROPERTIES off
+ * the error a handler throws (duck-typed, because a class does not survive the
+ * plugin boundary):
+ *
+ * - `contentPolicyClass: "copyright" | "likeness" | "safety"` (top-level error
+ *   only) — a provider content-policy block: the attempt is final, the job is
+ *   refunded and `jobs.error_hint` becomes `{ kind: "safety-block", class, … }`.
+ *   A `safety` block's `error_message` is the host's generic safety sentence
+ *   ("…Try adjusting the prompt or the input image.") unless the error also
+ *   carries `userSafeMessage: true`.
+ * - `userSafeMessage: true` (strict `true`, an own property of the TOP-LEVEL
+ *   error; a marker on a `cause` does not count) — the handler vouches that
+ *   the error's `message` is a fixed sentence fit to show the user, so a
+ *   `safety` block keeps it as `error_message` (the hint is unchanged). For a
+ *   run whose prompt the user never wrote (a trend preset), where the generic
+ *   advice is wrong. Never put provider text, URLs or hidden inputs in a
+ *   marked message. Copyright/likeness blocks and plain failures already keep
+ *   the handler's message. Honoured only for a job type a plugin serves.
+ *   ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): an older host ignores it and
+ *   writes the generic sentence.
+ * - `failureHint: { kind: "credits", code }` (on the error or its `cause`
+ *   chain) — a child job's credit reservation was refused; written to
+ *   `error_hint` as a credits hint (`code` a lowercase snake_case token).
+ * - `deterministic: true` (error or `cause` chain) — the refusal is a pure
+ *   function of the job's inputs: final now, no queue retry.
+ * - `inputVideoRefused: true` (error or `cause` chain) — the provider refused
+ *   the job's INPUT VIDEO. Honoured only when the job's payload sent a video
+ *   (`videoUrl`, `referenceVideoUrl` or `referenceVideoUrls`): final now, and
+ *   `error_hint` names it — `subject: "input_video"` on a safety-block hint, or
+ *   `{ kind: "input-refused", subject: "input_video" }` with no content class.
+ */
 export type PluginHandlerFn = (job: PluginJob, ctx: PluginHandlerCtx) => Promise<void>
 
 // ============================================================================
@@ -1339,6 +1372,12 @@ export interface PluginOwnedJobRow {
   status: string
   output_data: Record<string, unknown> | null
   error_message: string | null
+  /**
+   * The job's `error_hint`, null when it has none (any job that did not fail
+   * with a classified verdict). ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump):
+   * absent on an older host — read it as `row.error_hint ?? null`.
+   */
+  error_hint?: PluginJobErrorHint | null
 }
 
 /**
@@ -1352,6 +1391,11 @@ export interface PluginOwnedRawJob {
   output_data: Record<string, unknown> | null
   created_at: string
   completed_at: string | null
+  /**
+   * The job's `error_hint` (see `PluginJobErrorHint`), null when it has none.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): absent on an older host.
+   */
+  error_hint?: PluginJobErrorHint | null
 }
 
 /** Structural mirror of `_wait-for-job.ts`'s own (unexported) options. */

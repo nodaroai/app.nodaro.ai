@@ -46,6 +46,29 @@ describe("waitForJob", () => {
     expect(outputData.pro.unscoredUrl).toContain("private.example")
   })
 
+  it("returns a terminal job's error_hint as errorHint", async () => {
+    const hint = { kind: "safety-block", class: "safety", retried: false }
+    mocks.maybeSingle.mockResolvedValue({
+      data: { status: "failed", output_data: null, job_type: "image-to-video", error_message: "Blocked.", error_hint: hint },
+      error: null,
+    })
+
+    const result = await waitForJob({ jobId: "job-f", timeoutMs: 100 })
+
+    expect(result.status).toBe("failed")
+    expect(result.error).toBe("Blocked.")
+    expect(result.errorHint).toEqual(hint)
+  })
+
+  it("a terminal job without a hint reads errorHint null", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: { status: "completed", output_data: { videoUrl: "https://r2/v.mp4" }, job_type: "image-to-video", error_message: null },
+      error: null,
+    })
+
+    expect((await waitForJob({ jobId: "job-c", timeoutMs: 100 })).errorHint).toBeNull()
+  })
+
   /**
    * A held job (spec 2026-09-03-job-policy-hook-design §6.4) is neither
    * terminal nor a timeout: it is parked on a human, for an unbounded time.
