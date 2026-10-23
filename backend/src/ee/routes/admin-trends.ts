@@ -335,7 +335,10 @@ async function saveValidDraft(
 
 function trendRunError(reply: FastifyReply, e: TrendRunError) {
   // Admins see the real reason (the public route masks some of them).
-  return err(reply, 400, e.code, e.message, e.slot !== undefined ? { slot: e.slot } : {})
+  return err(reply, 400, e.code, e.message, {
+    ...(e.slot !== undefined ? { slot: e.slot } : {}),
+    ...(e.chip !== undefined ? { chip: e.chip } : {}),
+  })
 }
 
 function mediaError(reply: FastifyReply, e: TrendMediaError) {
@@ -527,7 +530,13 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       let composed: ComposedTrendRun
       try {
         // The DRAFT version: what the admin is building, not what users see.
-        composed = composeTrendRun({ id: trend.id, slug: trend.slug, version: trend.draftVersion, data: draft }, parsed.data)
+        // Every chip of every slot may be set here, the ones the draft hides
+        // from people too, so the admin can try each before choosing.
+        composed = composeTrendRun(
+          { id: trend.id, slug: trend.slug, version: trend.draftVersion, data: draft },
+          parsed.data,
+          { allowHiddenChips: true },
+        )
       } catch (e) {
         if (e instanceof TrendRunError) return trendRunError(reply, e)
         throw e

@@ -2515,11 +2515,13 @@ html, body {
 }
 
 /*
- * "Reduce motion" (an operating-system setting): animations and transitions
- * finish at once, smooth scrolling is off and React Flow's moving edge dashes
- * stand still. A spinner still shows; it stops turning. The end events still
- * fire (0.01ms, not none), so code that waits for an animation to end is
- * unchanged.
+ * Reduce motion — the operating system's setting (the media query; CSS alone,
+ * so it holds in every edition and follows a change at once) or the
+ * accessibility menu's "Stop animations" (data-a11y-motion, set by
+ * lib/accessibility-preferences.ts). Animations and transitions finish at once,
+ * smooth scrolling is off and React Flow's moving edge dashes stand still. A
+ * spinner still shows; it stops turning. The end events still fire (0.01ms,
+ * not none), so code that waits for an animation to end is unchanged.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -2535,4 +2537,77 @@ html, body {
   .react-flow__edge.animated path {
     animation: none !important;
   }
+}
+:root[data-a11y-motion] *,
+:root[data-a11y-motion] *::before,
+:root[data-a11y-motion] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+:root[data-a11y-motion] .react-flow__edge.animated path {
+  animation: none !important;
+}
+
+/*
+ * The accessibility menu's other choices (components/accessibility): each is a
+ * data-a11y-* attribute on <html>.
+ */
+
+/* Text size: the interface is sized in rem, so the root size scales it. On the
+   editor (data-a11y-canvas, set by the menu for its routes) the canvas keeps
+   its own size, since its nodes are laid out in pixels; the browser's zoom
+   still enlarges it. */
+:root[data-a11y-text="1"]:not([data-a11y-canvas]) {
+  font-size: 115%;
+}
+:root[data-a11y-text="2"]:not([data-a11y-canvas]) {
+  font-size: 130%;
+}
+
+/* Higher contrast: secondary text and borders take the full text colour —
+   also inside the surfaces that redefine those tokens for themselves. */
+:root[data-a11y-contrast],
+:root[data-a11y-contrast] :is(.home-panel, .templates-page) {
+  --muted-foreground: var(--foreground);
+  --border: color-mix(in oklab, var(--foreground) 55%, transparent);
+  --input: color-mix(in oklab, var(--foreground) 55%, transparent);
+}
+
+/* Text spacing (WCAG 1.4.12 values), outside the canvas. */
+:root[data-a11y-spacing] body :not(.react-flow, .react-flow *) {
+  line-height: 1.6 !important;
+  letter-spacing: 0.08em !important;
+  word-spacing: 0.16em !important;
+}
+
+:root[data-a11y-links] a[href] {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+:root[data-a11y-headings] :is(h1, h2, h3, h4, h5, h6, [role="heading"]) {
+  outline: 2px dashed #b45309;
+  outline-offset: 3px;
+}
+
+:root[data-a11y-font] body,
+:root[data-a11y-font] body * {
+  font-family: Arial, "Segoe UI", Helvetica, sans-serif !important;
+}
+
+/* Large cursor: a 40px arrow (black with a white edge) on the page and on
+   links and buttons. Text fields, resize handles and the canvas keep their own
+   cursors (an I-beam, a resize or grab arrow), which say what the place does. */
+:root[data-a11y-cursor] body,
+:root[data-a11y-cursor] :is(a[href], button, [role="button"], summary, label, select) {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'%3E%3Cpath d='M4 2l15 11-6.5 1.2L16 21l-3 1.4-3.4-6.9L4 20z' fill='%23000' stroke='%23fff' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E")
+      6 3,
+    auto !important;
 }

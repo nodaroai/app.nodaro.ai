@@ -3,6 +3,8 @@
 // The runs of this trend by admin accounts are listed below with their result,
 // status and inputs; a finished full-length one can become an example, and
 // any one's composed engine prompt can be opened (admins only, never users).
+// Every chip of every slot can be set here, the ones hidden from people too,
+// so each variant can be tried before choosing what people see.
 
 import { useState } from "react"
 import { Eye, Loader2, Play, Sparkles, X } from "lucide-react"
@@ -12,6 +14,13 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -19,18 +28,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import type { AdminTrendRun, AdminTrendSlot, TrendResolution, TrendTestRunRequest } from "@/lib/api"
+import type { AdminTrendRun, AdminTrendSlot, TrendChipKey, TrendChoice, TrendResolution, TrendTestRunRequest } from "@/lib/api"
 import {
   isTrendRunInFlight,
   useStartTrendTestRun,
   useTrendRunPrompt,
   useTrendTestRuns,
 } from "@/ee/hooks/queries/use-admin-queries"
-import { MAX_IMAGES_PER_SLOT } from "../model"
+import { CHIPS_BY_KIND, CHIP_LABELS, MAX_IMAGES_PER_SLOT, shownChips } from "../model"
 import { MediaPicker } from "./MediaPicker"
 import { uploadLocalFile } from "./uploads"
 
 const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
+
+type ChipChoices = Partial<Record<TrendChipKey, TrendChoice>>
+
+const CHOICE_LABELS: Readonly<Record<TrendChoice, string>> = { new: "New", original: "Keep original" }
+
+/** The value a chip runs with when the test leaves it alone: the slot's, else New. */
+const slotValue = (s: AdminTrendSlot, chip: TrendChipKey): TrendChoice => s.defaults?.[chip] ?? "new"
 
 interface Props {
   readonly trendId: string
@@ -47,6 +63,7 @@ export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPr
   const start = useStartTrendTestRun(trendId)
   const runs = useTrendTestRuns(trendId)
   const [images, setImages] = useState<Record<string, string[]>>({})
+  const [chips, setChips] = useState<Record<string, ChipChoices>>({})
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [preview, setPreview] = useState(true)
   const [resolution, setResolution] = useState<TrendResolution>("480p")
@@ -70,10 +87,29 @@ export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPr
   const missingRequired = slots.filter((s) => s.required && !(images[s.key]?.length ?? 0))
   const canRun = !dirty && slots.length > 0 && missingRequired.length === 0 && !start.isPending
 
+  const setChip = (key: string, chip: TrendChipKey, v: TrendChoice | "slot") =>
+    setChips((m) => {
+      const next: ChipChoices = { ...m[key] }
+      if (v === "slot") delete next[chip]
+      else next[chip] = v
+      return { ...m, [key]: next }
+    })
+  /** The chips the admin set on this slot, only its kind's own. */
+  const chipsOf = (s: AdminTrendSlot): ChipChoices => {
+    const set = chips[s.key] ?? {}
+    return Object.fromEntries(CHIPS_BY_KIND[s.kind].filter((c) => set[c]).map((c) => [c, set[c]]))
+  }
+
   const run = () => {
     const body: TrendTestRunRequest = {
       slots: Object.fromEntries(
-        slots.filter((s) => (images[s.key]?.length ?? 0) > 0).map((s) => [s.key, { images: images[s.key]! }]),
+        slots
+          .map((s) => {
+            const list = images[s.key] ?? []
+            const set = chipsOf(s)
+            return [s.key, { ...(list.length > 0 ? { images: list } : {}), ...set }] as const
+          })
+          .filter(([, entry]) => Object.keys(entry).length > 0),
       ),
       preview: hasPreview && preview,
       resolution,
@@ -125,6 +161,38 @@ export function TestPanel({ trendId, slots, hasPreview, dirty, promotingId, onPr
                   onFiles={(files) => void fromFiles(s.key, files)}
                   onUrl={(url) => add(s.key, [url])}
                 />
+                {CHIPS_BY_KIND[s.kind].length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {CHIPS_BY_KIND[s.kind].map((chip) => {
+                      const hidden = !shownChips(s).includes(chip)
+                      return (
+                        <div key={chip} className="flex flex-col gap-1 text-xs" data-test-chip={`${s.key}.${chip}`}>
+                          <span className="text-muted-foreground">
+                            {CHIP_LABELS[chip]}
+                            {hidden && (
+                              <Badge variant="secondary" className="ml-1 font-normal">
+                                Hidden from people
+                              </Badge>
+                            )}
+                          </span>
+                          <Select
+                            value={chips[s.key]?.[chip] ?? "slot"}
+                            onValueChange={(v) => setChip(s.key, chip, v as TrendChoice | "slot")}
+                          >
+                            <SelectTrigger className="h-9" aria-label={`Test ${s.key} ${CHIP_LABELS[chip]}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="slot">{`Slot's value (${CHOICE_LABELS[slotValue(s, chip)]})`}</SelectItem>
+                              <SelectItem value="new">{CHOICE_LABELS.new}</SelectItem>
+                              <SelectItem value="original">{CHOICE_LABELS.original}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -268,6 +336,14 @@ function RunCard({
                   <img key={u + i} src={u} alt={`${s.label} picture ${i + 1}`} className="h-10 w-10 rounded object-cover" />
                 ))}
               </div>
+              {CHIPS_BY_KIND[s.kind].some((c) => s[c]) && (
+                <span className="text-muted-foreground">
+                  {CHIPS_BY_KIND[s.kind]
+                    .filter((c) => s[c])
+                    .map((c) => `${CHIP_LABELS[c]}: ${CHOICE_LABELS[s[c]!]}`)
+                    .join(" · ")}
+                </span>
+              )}
             </div>
           ))}
         </div>

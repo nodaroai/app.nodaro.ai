@@ -197,6 +197,8 @@ export const queryKeys = {
     list: (userId: string, cursor?: string) =>
       ["jobs", "list", userId, cursor] as const,
     detail: (jobId: string) => ["jobs", "detail", jobId] as const,
+    /** The caller's latest jobs made through MCP (the MCP Workflows tab). */
+    mcpRecent: (userId: string) => ["jobs", "mcp-recent", userId] as const,
   },
 
   // Projects

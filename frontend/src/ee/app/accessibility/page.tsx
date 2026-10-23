@@ -5,55 +5,25 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { useLocaleStore } from "@/lib/locale-store"
+import { getLocaleDirection, type LocaleId } from "@nodaro/shared/i18n"
+import { statementFor, type StatementForm } from "./statement-content"
 
 /**
  * The accessibility statement (Israeli Equal Rights for Persons with
  * Disabilities (Service Accessibility Adjustments) Regulations 2013, reg 35ה).
  *
- * Hebrew only, whatever the interface language (owner's decision 2026-10-23):
- * the text lives here, not in the five dictionaries, and the page sets its own
- * `lang="he" dir="rtl"`. It names no accessibility coordinator (fewer than 25
- * employees, reg 91). It states only what is true on the day it is updated:
- * what was done, what is still known not to work, and how to report.
+ * In the interface language (owner's decision 2026-10-23; the text and its
+ * five copies live in statement-content.ts, a language without a copy reads
+ * the English). It names no accessibility coordinator (fewer than 25
+ * employees, reg 91). It is short on purpose: the level, what was made
+ * accessible, the accessibility menu, the content not fully accessible, and
+ * how to report — the parts reg 35ה asks for.
  * Reports go to the founders through POST /v1/accessibility/report; when that
  * cannot deliver, the page gives the email instead.
  */
 
-export const STATEMENT_UPDATED = "אוקטובר 2026"
 export const REPORT_EMAIL = "info@nodaro.ai"
-
-const DONE: readonly string[] = [
-  "שפת הממשק וכיוון הכתיבה מתחלפים לפי השפה שבחרתם, ובעברית האתר נקרא מימין לשמאל.",
-  "תפריטים, רשימות בחירה ורוב החלונות בנויים על רכיבים שתומכים במקלדת ובקוראי מסך.",
-  "בכפתורים ובשדות הרגילים יש סימון ברור של המקום שבו נמצא המיקוד.",
-  "למשטח העבודה בעורך יש תיאורים לקוראי מסך בשפת הממשק.",
-  "בכל דפי האזור האישי, העורך כולל, הלחיצה הראשונה על Tab מציעה קישור ״דלג לתוכן״ שמדלג על התפריטים.",
-  "לדפים הראשיים באזור האישי (אלה שבתפריט הצד) ולעורך יש שם משלהם, שמופיע בלשונית הדפדפן ושקורא מסך מקריא.",
-  "מי שהגדיר במחשב או בטלפון ״הפחתת תנועה״ רואה את הממשק בלי אנימציות ומעברים.",
-  "כפתורים ורודים עם כיתוב לבן עברו לגוון כהה יותר, כך שהכיתוב עומד בדרישת הניגודיות — בכל הדפים הציבוריים וברוב האתר.",
-  "בגלריה הציבורית אפשר לפתוח כל פריט עם המקלדת, וכפתורי הפעולה מופיעים גם כשמגיעים אליהם במקלדת.",
-  "בדפים הציבוריים, בדפי האזור האישי ובעורך, לכפתורים שמוצג בהם רק סמל יש שם שקורא מסך מקריא, ואזורים שאפשר ללחוץ עליהם בעכבר אפשר להפעיל גם מהמקלדת, כולל פסי ההתקדמות של נגני הווידאו והקול (בחיצים).",
-  "בעורך, המקש Tab עובר בין הכפתורים ובין הרכיבים כמו בכל דף. הוא פותח את חלון הוספת הרכיב רק כשהלחיצה האחרונה בעכבר הייתה על משטח העבודה, ו־Shift+Tab תמיד חוזר אחורה. מהמקלדת מוסיפים רכיב בכפתור ״הוספת רכיב״ שבסרגל.",
-  "בעורך מחברים רכיבים גם מהמקלדת: מגיעים ב־Tab לנקודת החיבור של רכיב, לוחצים Enter, ובוחרים רכיב קיים או רכיב חדש.",
-  "בעורך התמונות המובנה, הלשוניות והכלים נבחרים מהמקלדת (Tab ואז Enter), ולמחווני הכוונון ולשדות שלהם יש שם. עורכי התמונה, הקול והווידאו נפתחים כחלון שהמיקוד עובר אליו ונשאר בתוכו, וחוזר למקומו כשהם נסגרים.",
-  "בממשק שלנו שום טקסט אינו קטן מ־11 פיקסלים, וצבע האפור המשני של הממשק עומד ביחס ניגודיות של 4.5:1 לפחות מול הרקע, במצב בהיר ובמצב כהה.",
-  "הצהרה זו וטופס לדיווח על בעיות נגישות.",
-]
-
-const CHECKED: readonly string[] = [
-  "בדיקה אוטומטית בדפדפן לפי WCAG 2.0 ברמה AA (כולל ניגודיות צבעים) של דף הכניסה, הגלריה, דף המחירים, אפליקציה שפורסמה ודף ההצהרה הזה, במסך מחשב ובמסך טלפון, עם ממשק בעברית ובאנגלית. בבדיקה האחרונה לא נמצאו ליקויים.",
-  "מעבר במקלדת בלבד על אותם דפים: אפשר להגיע לכל הפקדים ב־Tab, לכל אחד יש שם, ותמיד רואים איפה נמצא המיקוד.",
-  "בדיקות קבועות בקוד של האתר, שרצות לפני כל שינוי, מונעות חזרה של בעיות בתיקיות שהן בודקות (הדפים הציבוריים, האזור האישי, התבניות והעורך): כפתור בלי שם, אזור לחיץ שאי אפשר להפעיל מהמקלדת, טקסט קטן מ־11 פיקסלים, אפור משני חלש מדי וכיתוב לבן על ורוד בניגודיות נמוכה.",
-  "עוד לא נעשתה בדיקה ידנית עם קורא מסך (כמו NVDA או VoiceOver), ודפי האזור האישי והעורך נבדקו דרך הקוד ולא בדפדפן עם משתמש מחובר.",
-]
-
-const LIMITS: readonly string[] = [
-  "טקסט שמונח על תמונות או על רקעים צבעוניים (למשל כיתובים שקופים למחצה על תוצאות) עוד לא נבדק אחד־אחד מול כל רקע אפשרי.",
-  "טקסט אפור בגוונים קבועים (שאינו צבע האפור המשני של הממשק), למשל בכותרות טבלאות, עוד לא נבדק כולו מול הרקע.",
-  "חלק מהחלונות הקופצים לא מעבירים את המיקוד פנימה כשהם נפתחים, לא שומרים אותו בתוכם ולא מחזירים אותו למקומו כשהם נסגרים.",
-  "עורכי התמונה, הקול והווידאו המובנים מגיעים מצד שלישי: עורך התמונות כולו מוצג באנגלית, וכפתור יחסי החיתוך שבו נמצא בתוך לשונית; עורכי הקול והווידאו עצמם (בתוך החלון) אינם נגישים במלואם מהמקלדת ומקורא מסך. תצוגות תלת־ממד ונגן ההדמיה של העורך הן גרפיקה, ומתוארות רק בכותרת שלהן.",
-  "תמונות וסרטונים שנוצרים בבינה מלאכותית מתוארים רק על ידי ההנחיה שיצרה אותם, ולסרטונים אין כתוביות.",
-]
 
 function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   const id = useId()
@@ -69,7 +39,7 @@ function Section({ title, children }: { readonly title: string; readonly childre
 
 type ReportState = { kind: "idle" } | { kind: "sending" } | { kind: "sent" } | { kind: "failed"; message: string }
 
-function ReportForm() {
+function ReportForm({ text }: { readonly text: StatementForm }) {
   const [message, setMessage] = useState("")
   const [page, setPage] = useState("")
   const [contact, setContact] = useState("")
@@ -112,20 +82,17 @@ function ReportForm() {
       }
       setState({
         kind: "failed",
-        message:
-          res.status === 429
-            ? "שלחתם כמה דיווחים ברצף. נסו שוב בעוד כמה דקות, או כתבו לנו במייל."
-            : "הדיווח לא נשלח. אפשר לכתוב לנו במייל.",
+        message: res.status === 429 ? text.rateLimited : text.failed,
       })
     } catch {
-      setState({ kind: "failed", message: "הדיווח לא נשלח. אפשר לכתוב לנו במייל." })
+      setState({ kind: "failed", message: text.failed })
     }
   }
 
   return (
     <form onSubmit={submit} noValidate className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="a11y-report-message">מה הבעיה? (חובה)</Label>
+        <Label htmlFor="a11y-report-message">{text.message}</Label>
         <Textarea
           ref={messageRef}
           id="a11y-report-message"
@@ -140,16 +107,16 @@ function ReportForm() {
         />
         {missing && (
           <p id="a11y-report-message-error" role="alert" className="text-sm text-destructive">
-            כתבו כמה מילים על הבעיה.
+            {text.messageMissing}
           </p>
         )}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="a11y-report-page">באיזה דף? (לא חובה)</Label>
+        <Label htmlFor="a11y-report-page">{text.page}</Label>
         <Input id="a11y-report-page" value={page} onChange={(e) => setPage(e.target.value)} maxLength={500} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="a11y-report-contact">איך נחזור אליכם? מייל או טלפון (לא חובה)</Label>
+        <Label htmlFor="a11y-report-contact">{text.contact}</Label>
         <Input
           id="a11y-report-contact"
           value={contact}
@@ -171,10 +138,10 @@ function ReportForm() {
       </div>
       {/* aria-disabled, not disabled: a disabled button drops the keyboard focus. */}
       <Button type="submit" aria-disabled={sending || undefined}>
-        {sending ? "שולח…" : "שליחת הדיווח"}
+        {sending ? text.sending : text.send}
       </Button>
       <div aria-live="polite" role="status">
-        {state.kind === "sent" && <p className="text-sm">תודה. הדיווח הגיע אלינו ונטפל בו.</p>}
+        {state.kind === "sent" && <p className="text-sm">{text.sent}</p>}
       </div>
       {state.kind === "failed" && (
         <p role="alert" className="text-sm text-destructive">
@@ -189,83 +156,79 @@ function ReportForm() {
 }
 
 export default function AccessibilityStatementPage() {
-  // The page is Hebrew whatever the interface language, so the document says so
-  // too (WCAG 3.1.1 reads <html lang>); the interface's values come back on leave.
+  const locale = useLocaleStore((st) => st.locale)
+  const text = statementFor(locale)
+  const dir = getLocaleDirection(text.lang as LocaleId)
+
+  // The copy shown may be the English one for a language without its own, so
+  // the document follows the copy (WCAG 3.1.1 reads <html lang>); the
+  // interface's values come back on leave.
   useEffect(() => {
     const html = document.documentElement
     const previous = { title: document.title, lang: html.lang, dir: html.dir }
-    document.title = "הצהרת נגישות | Nodaro"
-    html.lang = "he"
-    html.dir = "rtl"
+    document.title = `${text.pageTitle} | Nodaro`
+    html.lang = text.lang
+    html.dir = dir
     return () => {
       document.title = previous.title
       html.lang = previous.lang
       html.dir = previous.dir
     }
-  }, [])
+  }, [text, dir])
 
   return (
-    <div lang="he" dir="rtl" className="min-h-screen bg-background text-foreground">
+    <div lang={text.lang} dir={dir} className="min-h-screen bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
           <span className="text-lg font-semibold">Nodaro</span>
           <Link to="/" className="text-sm underline underline-offset-4">
-            חזרה לאתר
+            {text.backToSite}
           </Link>
         </div>
       </header>
       <main id="main" className="mx-auto max-w-3xl space-y-10 px-4 py-10 leading-relaxed">
         <div className="space-y-3">
-          <h1 className="text-3xl font-bold">הצהרת נגישות</h1>
-          <p>
-            אנחנו ב-Nodaro רוצים שכל אחד יוכל להשתמש באתר, כולל אנשים עם מוגבלות. ההצהרה הזו מתארת את מצב הנגישות של
-            האתר app.nodaro.ai, לפי תקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), התשע״ג-2013.
-          </p>
+          <h1 className="text-3xl font-bold">{text.title}</h1>
+          <p>{text.intro}</p>
         </div>
 
-        <Section title="רמת הנגישות">
+        <Section title={text.levelTitle}>
+          <p>{text.level}</p>
+        </Section>
+
+        <Section title={text.doneTitle}>
+          <ul className="list-disc space-y-1.5 ps-6">
+            {text.done.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section title={text.menuTitle}>
+          <p>{text.menu}</p>
+        </Section>
+
+        <Section title={text.limitsTitle}>
+          <p>{text.limitsIntro}</p>
+          <ul className="list-disc space-y-1.5 ps-6">
+            {text.limits.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p>{text.limitsOutro}</p>
+        </Section>
+
+        <Section title={text.reportTitle}>
           <p>
-            אנחנו פועלים להתאים את האתר לתקן הישראלי ת״י 5568 (חלק 1, ספטמבר 2023), שמבוסס על הנחיות WCAG 2.0 ברמה AA.
-            העבודה עדיין נמשכת, והאתר עוד לא עומד בכל הדרישות. מה שעדיין לא נגיש מפורט למטה.
-          </p>
-        </Section>
-
-        <Section title="מה כבר עשינו">
-          <ul className="list-disc space-y-1.5 ps-6">
-            {DONE.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </Section>
-
-        <Section title="איך בדקנו">
-          <ul className="list-disc space-y-1.5 ps-6">
-            {CHECKED.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </Section>
-
-        <Section title="מה עוד לא נגיש">
-          <p>אנחנו עובדים על התיקונים בשלבים, ונעדכן את ההצהרה בכל שלב.</p>
-          <ul className="list-disc space-y-1.5 ps-6">
-            {LIMITS.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </Section>
-
-        <Section title="נתקלתם בבעיית נגישות?">
-          <p>
-            ספרו לנו מה ניסיתם לעשות ובאיזה דף. כל דיווח מגיע ישירות אלינו. אפשר גם לכתוב במייל:{" "}
+            {text.reportIntro}{" "}
             <a href={`mailto:${REPORT_EMAIL}`} dir="ltr" className="underline">
               {REPORT_EMAIL}
             </a>
           </p>
-          <ReportForm />
+          <ReportForm text={text.form} />
         </Section>
 
-        <p className="text-sm">ההצהרה עודכנה לאחרונה ב{STATEMENT_UPDATED}.</p>
+        <p className="text-sm">{text.updated}</p>
       </main>
     </div>
   )

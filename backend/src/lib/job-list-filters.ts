@@ -13,6 +13,8 @@
  *    synchronous route inserted and is rewritten to the queue name by the
  *    video worker at pickup (see the list route's comment).
  *  - `origin`: `input_data.origin`, the client app that sent the job.
+ *  - `source`: one or more caller kinds (`jobs.source`, job-source.ts) — the
+ *    surface that created the job: `mcp`, `cli`, `web`, ….
  *  - `favorited`: the owner favorited it (`gallery_favorites`) — or, false,
  *    did not.
  *  - `rating`: the owner rated it good / bad (`job_ratings`, migration 520),
@@ -28,6 +30,7 @@
  */
 import { z } from "zod"
 import { JOB_STATUSES, type JobStatus } from "./job-status.js"
+import { JOB_SOURCES, type JobSource } from "./job-source.js"
 import { JOB_RATING_FILTERS, type JobRatingFilter } from "./job-ratings.js"
 import { isMissingRelationshipError, isMissingTableError } from "./postgrest-errors.js"
 
@@ -35,6 +38,7 @@ export interface JobListFilters {
   readonly statuses?: readonly JobStatus[]
   readonly types?: readonly string[]
   readonly origin?: string
+  readonly sources?: readonly JobSource[]
   readonly favorited?: boolean
   readonly rating?: JobRatingFilter
 }
@@ -65,6 +69,7 @@ const jobListQuerySchema = z.object({
   status: listParam(z.enum(JOB_STATUSES)).optional(),
   type: listParam(z.string().max(100)).optional(),
   origin: z.string().max(100).optional(),
+  source: listParam(z.enum(JOB_SOURCES)).optional(),
   favorited: z.enum(["true", "false"]).optional(),
   rating: z.enum(JOB_RATING_FILTERS).optional(),
 })
@@ -75,13 +80,14 @@ export type ParsedJobListQuery = { success: true; data: JobListFilters } | { suc
 export function parseJobListQuery(query: unknown): ParsedJobListQuery {
   const parsed = jobListQuerySchema.safeParse(query ?? {})
   if (!parsed.success) return { success: false, error: parsed.error }
-  const { status, type, origin, favorited, rating } = parsed.data
+  const { status, type, origin, source, favorited, rating } = parsed.data
   return {
     success: true,
     data: {
       ...(status && status.length > 0 ? { statuses: status } : {}),
       ...(type && type.length > 0 ? { types: type } : {}),
       ...(origin ? { origin } : {}),
+      ...(source && source.length > 0 ? { sources: source } : {}),
       ...(favorited ? { favorited: favorited === "true" } : {}),
       ...(rating ? { rating } : {}),
     },
@@ -121,12 +127,13 @@ type JobListFilterable<Q> = {
  */
 export function applyJobListFilters<Q extends JobListFilterable<Q>>(query: Q, filters: JobListFilters, ownerId: string): Q {
   let out = query.is("parent_job_id", null)
-  const { statuses, types, origin, favorited, rating } = filters
+  const { statuses, types, origin, sources, favorited, rating } = filters
   if (statuses && statuses.length > 0) out = statuses.length === 1 ? out.eq("status", statuses[0]!) : out.in("status", statuses)
   if (types && types.length > 0) {
     out = types.length === 1 ? out.filter("input_data->>type", "eq", types[0]!) : out.in("input_data->>type", types)
   }
   if (origin) out = out.filter("input_data->>origin", "eq", origin)
+  if (sources && sources.length > 0) out = sources.length === 1 ? out.eq("source", sources[0]!) : out.in("source", sources)
   if (favorited !== undefined) {
     out = out.eq("gallery_favorites.user_id", ownerId)
     if (!favorited) out = out.is("gallery_favorites", null)

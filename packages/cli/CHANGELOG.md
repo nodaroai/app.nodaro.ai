@@ -1,5 +1,24 @@
 # @nodaro/cli
 
+## 1.38.0
+
+### Minor Changes
+
+- fea87e4: `nodaro jobs list --source <s,s>` lists only the jobs the named surfaces created; `--source mcp` lists what your MCP clients (Claude, ChatGPT, …) made.
+
+### Patch Changes
+
+- Updated dependencies [fea87e4]
+  - @nodaro/sdk@2.43.0
+
+## 1.37.1
+
+### Patch Changes
+
+- 7621ecf: Trends: a trend can offer only some chips on a slot. `TrendDetailSlot.chips` (always present) lists the chips you may set on that slot, in its kind's order (`[]` = none), and `defaults` covers only those; the new `TrendChipKey` type names a chip. A chip of the slot's kind that it does not list is fixed by the trend, and `estimate()` / `run()` refuse sending it with `400 chip_not_offered` (`err.details` is `{ slot, chip }`). The CLI's `--choice` help says to send only the chips `trends get` lists.
+- Updated dependencies [7621ecf]
+  - @nodaro/sdk@2.42.0
+
 ## 1.37.0
 
 ### Minor Changes

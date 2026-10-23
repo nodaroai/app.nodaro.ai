@@ -478,6 +478,21 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     })
     expect(badMask.statusCode).toBe(400)
 
+    // The chips each slot shows to people are saved as written; only the kind's own.
+    const [lead, dog] = draftData().slots
+    const shown = await call("PUT", `/v1/admin/trends/${id}/draft`, {
+      data: { ...draftData(), slots: [{ ...lead!, chips: ["outfit"] }, { ...dog!, chips: [] }] },
+      revision: await revisionOf(id),
+    })
+    expect(shown.statusCode).toBe(200)
+    const shownRead = (await call("GET", `/v1/admin/trends/${id}`)).json().data as { draft: TrendVersionData }
+    expect(shownRead.draft.slots.map((s) => s.chips)).toEqual([["outfit"], []])
+    const badChips = await call("PUT", `/v1/admin/trends/${id}/draft`, {
+      data: { ...draftData(), slots: [{ ...lead!, chips: ["coat"] }, dog!] },
+      revision: await revisionOf(id),
+    })
+    expect(badChips.statusCode).toBe(400)
+
     // Promote an admin run to Example 1, then publish v1.
     world.jobs.set(RUN, jobRow(RUN, ADMIN, { input_data: runInput({ trend: { id, slug: "neon-dance", version: 1, name: "Neon Dance" } }) }))
     expect((await call("POST", `/v1/admin/trends/${id}/examples`, { jobId: RUN })).statusCode).toBe(201)
@@ -998,6 +1013,35 @@ describe("test runs", () => {
       expect(res.statusCode, sessionId).toBe(404)
       expect(db.log.filter((q) => q.table === "jobs"), sessionId).toEqual([])
     }
+    expect(engine.calls).toEqual([])
+  })
+
+  it("sets every chip of every slot, the ones hidden from people too", async () => {
+    const [lead, dog] = draftData().slots
+    seed({}, draftData({
+      slots: [
+        { ...lead!, defaults: { body: "original" }, chips: ["hair"] } as TrendVersionData["slots"][number],
+        { ...dog!, chips: [] } as TrendVersionData["slots"][number],
+      ],
+      examples: [EXAMPLE],
+    }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/test-runs`, {
+      slots: {
+        lead: { images: ["https://u.example/me.png"], body: "new", outfit: "original" },
+        dog: { images: ["https://u.example/dog.png"], coat: "original" },
+      },
+    })
+    expect(res.statusCode).toBe(202)
+    const roles = engine.calls[0]!.body.roles as Array<Record<string, unknown>>
+    expect(roles[0]).toMatchObject({ body: "new", outfit: "original", hair: "new" })
+    expect(roles[1]).toMatchObject({ body: "new", coat: "original" })
+  })
+
+  it("a chip of another kind is still a 400 invalid_choice naming the slot", async () => {
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    const res = await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots: { lead: { images: ["https://u.example/me.png"], coat: "new" } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "invalid_choice", slot: "lead" })
     expect(engine.calls).toEqual([])
   })
 

@@ -77,7 +77,7 @@ export const trendRunShape = {
     .record(z.string().regex(/^[a-z0-9_]{1,32}$/), slotInput)
     .describe(
       "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the example's. " +
-        'Chips, each "new" (from the images) or "original" (as in the clip): person body/outfit/hair, pet body/coat, product shape/finish.',
+        'Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot\'s chips.',
     ),
   example: z.number().int().min(1).optional().describe("The example (1-based, default 1) whose pictures fill optional slots left out."),
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
@@ -156,13 +156,16 @@ function detailView(d: Rec): Rec {
     slots: (Array.isArray(d.slots) ? d.slots.filter(isRec) : []).map((s) => {
       const hint = str(s.hint)
       const given = isRec(s.defaults) ? s.defaults : {}
-      const defaults = Object.fromEntries(CHIPS.filter((k) => given[k] === "new" || given[k] === "original").map((k) => [k, given[k]]))
+      const listed = strings(s.chips)
+      const chips = CHIPS.filter((k) => listed.includes(k))
+      const defaults = Object.fromEntries(chips.filter((k) => given[k] === "new" || given[k] === "original").map((k) => [k, given[k]]))
       return {
         key: str(s.key) ?? "",
         label: str(s.label) ?? "",
         kind: str(s.kind) ?? "",
         required: s.required === true,
         ...(hint ? { hint } : {}),
+        chips,
         ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
       }
     }),
@@ -216,7 +219,7 @@ function quoteSentence(q: TrendQuote, preview: boolean | undefined): string {
 
 const failure = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true as const })
 
-/** A route refusal as a tool error: a router 404 is `not_available`; a slot error also names the slot's key. */
+/** A route refusal as a tool error: a router 404 is `not_available`; a slot error also names the slot's key (and a chip error the chip). */
 function refusal(statusCode: number, body: string) {
   if (isRouterNotFound(statusCode, body)) {
     return errorResult(404, JSON.stringify({ error: { code: "not_available", message: NOT_AVAILABLE } }))
@@ -235,7 +238,10 @@ function refusal(statusCode: number, body: string) {
     return failure(`Nodaro: this trend cannot run right now. [${code}]`)
   }
   const slot = str(err.slot)
-  if (slot && statusCode >= 400 && statusCode < 500) return failure(`${res.content[0].text} (slot "${slot}")`)
+  const chip = str(err.chip)
+  if (slot && statusCode >= 400 && statusCode < 500) {
+    return failure(`${res.content[0].text} (slot "${slot}"${chip ? `, chip "${chip}"` : ""})`)
+  }
   return res
 }
 
@@ -287,8 +293,8 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       {
         title: "Get Trend",
         description:
-          "One trend: its slots (key, label, kind, required, hint, default chips), its examples (the result video and the pictures each slot used), " +
-          "previewSec and resolutions. Fill estimate_trend / run_trend `slots` by these keys.",
+          "One trend: its slots (key, label, kind, required, hint, chips the user may set, their defaults), its examples (the result video and the pictures each slot used), " +
+          "previewSec and resolutions. Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },
@@ -337,7 +343,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       description:
         "Make a trend's video with the user's pictures. Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, " +
         "and call again with `confirm: true` only once they accept. That returns a job id: poll it with wait_for_job. " +
-        "Image URLs must be http(s): upload local files with the upload tools first.",
+        "Image URLs must be http(s): upload local files with the upload tools first. A chip a slot does not list is refused (chip_not_offered).",
       inputSchema: {
         ...trendRunShape,
         session_id: z.string().min(1).optional().describe("A generation session; accepted, not yet applied (runs are not filed into sessions yet)."),

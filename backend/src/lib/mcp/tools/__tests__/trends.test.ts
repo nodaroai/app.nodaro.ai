@@ -80,8 +80,8 @@ const DETAIL = {
   previewSec: 4,
   resolutions: ["480p", "720p", "1080p"],
   slots: [
-    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", defaults: { outfit: "original" } },
-    { key: "partner", label: "Partner", kind: "person", required: false },
+    { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
+    { key: "partner", label: "Partner", kind: "person", required: false, chips: [] },
   ],
   examples: [
     {
@@ -174,6 +174,18 @@ describe("get_trend", () => {
     for (const hidden of ["source.mp4", "secret", "the woman in red", "j-src", "roleName", "trendPrompt"]) {
       expect(text).not.toContain(hidden)
     }
+  })
+
+  it("lists only a slot's shown chips, and the defaults of those only", async () => {
+    const body = {
+      ...DETAIL,
+      slots: [{ ...DETAIL.slots[0], chips: ["hair", "coat", 7], defaults: { outfit: "original", hair: "new" } }],
+    }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: body } } })
+    const res = await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })
+    const [slot] = (res.structuredContent as { slots: Array<Record<string, unknown>> }).slots
+    expect(slot!.chips).toEqual(["hair", "coat"])
+    expect(slot!.defaults).toEqual({ hair: "new" })
   })
 
   it("passes the route's own 404 through as itself", async () => {
@@ -329,6 +341,21 @@ describe("run_trend", () => {
     expect(text).toContain("missing_slot")
     expect(text).toContain('"Lead" needs a picture.')
     expect(text).toContain('"lead"')
+  })
+
+  it("passes a chip_not_offered refusal back naming the slot and the chip", async () => {
+    const { fastify } = stubFastify({
+      "POST /v1/trends/dance-off/estimate": {
+        statusCode: 400,
+        body: { error: { code: "chip_not_offered", message: 'Slot "lead" does not offer the "hair" chip: this trend fixes it.', slot: "lead", chip: "hair" } },
+      },
+    })
+    const res = await callTool(serverWith(fastify), "run_trend", { slug: "dance-off", slots: { lead: { images: ["https://cdn.example/me.png"], hair: "new" } } })
+    expect(res.isError).toBe(true)
+    const text = res.content[0]!.text!
+    expect(text).toContain("chip_not_offered")
+    expect(text).toContain('chip "hair"')
+    expect(text).toContain('slot "lead"')
   })
 
   it("answers not_available where the trend routes are not served", async () => {

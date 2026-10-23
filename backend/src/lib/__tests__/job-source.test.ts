@@ -19,12 +19,18 @@ describe("deriveJobSource", () => {
     expect(deriveJobSource(req())).toEqual({ source: "api", sourceDetail: null })
   })
 
-  it("internal orchestrator wins over everything", () => {
+  it("an MCP verb's internal hop is mcp, not internal", () => {
+    // The MCP verbs inject() our routes WITH the internal secret, so internal
+    // must not be checked first: every MCP job read as internal for months.
+    const r = req({ isInternalCall: true, body: { mcp_client: "Claude" } })
+    expect(deriveJobSource(r)).toEqual({ source: "mcp", sourceDetail: "Claude" })
+  })
+
+  it("internal orchestrator wins over every transport signal", () => {
     // The orchestrator's own HTTP hop carries an Origin and may carry a body;
-    // without this first check a workflow node would read as a browser call.
+    // without this check a workflow node would read as a browser call.
     const r = req({
       isInternalCall: true,
-      body: { mcp_client: "Claude" },
       headers: { origin: "https://app.nodaro.ai", "x-nodaro-client": "cli/1.0.0" },
     })
     expect(deriveJobSource(r)).toEqual({ source: "internal", sourceDetail: null })

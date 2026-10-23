@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { FlagshipApps } from "@/components/dashboard/flagship-apps"
 import { ImportJsonButton } from "@/components/dashboard/home/import-json-button"
+import { McpRecentJobs } from "@/components/dashboard/mcp-recent-jobs"
 import { MyWorkflowsView } from "@/components/dashboard/my-workflows-view"
 import { ProjectsGridView } from "@/components/dashboard/projects-grid-view"
 import { StudioWorkflowsView } from "@/components/dashboard/studio-workflows-view"
@@ -198,13 +199,16 @@ export function ContinueTab({
           {activeTab === "studio" && <StudioWorkflowsView showAll={showAll} search={search} />}
           {activeTab === "projects" && <ProjectsGridView showAll={showAll} search={search} adminUsers={adminUsers} />}
           {activeTab === "mcp" && (
-            <MyWorkflowsView
-              scope="mcp"
-              onCreateWorkflow={onCreateWorkflow}
-              onMoveWorkflow={onMoveWorkflow}
-              isCreating={isCreating}
-              search={search}
-            />
+            <>
+              <MyWorkflowsView
+                scope="mcp"
+                onCreateWorkflow={onCreateWorkflow}
+                onMoveWorkflow={onMoveWorkflow}
+                isCreating={isCreating}
+                search={search}
+              />
+              <McpRecentJobs search={search} />
+            </>
           )}
         </div>
       </section>

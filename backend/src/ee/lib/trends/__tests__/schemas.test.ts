@@ -8,8 +8,10 @@
  */
 import { describe, it, expect } from "vitest"
 import {
+  hiddenChip,
   maxImagesOf,
   misplacedChip,
+  shownChips,
   trendRunRequestSchema,
   trendVersionDataSchema,
 } from "../schemas.js"
@@ -103,6 +105,35 @@ describe("trendVersionDataSchema", () => {
 
     it("rejects a value other than new / original", () => {
       expect(trendVersionDataSchema.safeParse(data({ slots: [slot("dancer", "person", { defaults: { body: "keep" } })] })).success).toBe(false)
+    })
+  })
+
+  describe("chips shown to the person are per kind", () => {
+    it("accepts a subset, none, or all of the kind's own chips", () => {
+      const r = trendVersionDataSchema.safeParse(data({
+        slots: [
+          slot("dancer", "person", { chips: ["outfit"] }),
+          slot("dog", "pet", { chips: [] }),
+          slot("can", "product", { chips: ["shape", "finish"] }),
+        ],
+      }))
+      expect(r.success).toBe(true)
+    })
+
+    it("rejects a chip of another kind", () => {
+      expect(trendVersionDataSchema.safeParse(data({ slots: [slot("dancer", "person", { chips: ["coat"] })] })).success).toBe(false)
+      expect(trendVersionDataSchema.safeParse(data({ slots: [slot("can", "product", { chips: ["body"] })] })).success).toBe(false)
+      expect(trendVersionDataSchema.safeParse(data({ slots: [slot("dog", "pet", { chips: ["hair"] })] })).success).toBe(false)
+    })
+
+    it("rejects a chip listed twice", () => {
+      const r = trendVersionDataSchema.safeParse(data({ slots: [slot("dancer", "person", { chips: ["hair", "hair"] })] }))
+      expect(r.success).toBe(false)
+      expect(messages(r).join(" ")).toMatch(/twice/)
+    })
+
+    it("rejects any chips on a location, even none", () => {
+      expect(trendVersionDataSchema.safeParse(data({ slots: [slot("room", "location", { chips: [] })] })).success).toBe(false)
     })
   })
 
@@ -340,5 +371,39 @@ describe("trendRunRequestSchema — previewJobId", () => {
   it("refuses anything that is not a uuid", () => {
     expect(trendRunRequestSchema.safeParse({ slots: {}, previewJobId: "job-1" }).success).toBe(false)
     expect(trendRunRequestSchema.safeParse({ slots: {}, previewJobId: 7 }).success).toBe(false)
+  })
+})
+
+describe("shownChips", () => {
+  const base = { key: "k", label: { en: "k" }, required: true, roleName: "r" }
+
+  it("is every chip of the kind when the slot lists none (absent)", () => {
+    expect(shownChips({ ...base, kind: "person" } as TrendSlot)).toEqual(["body", "outfit", "hair"])
+    expect(shownChips({ ...base, kind: "pet" } as TrendSlot)).toEqual(["body", "coat"])
+    expect(shownChips({ ...base, kind: "product" } as TrendSlot)).toEqual(["shape", "finish"])
+    expect(shownChips({ ...base, kind: "location" } as TrendSlot)).toEqual([])
+  })
+
+  it("is the listed chips in the kind's order, and none for []", () => {
+    expect(shownChips({ ...base, kind: "person", chips: ["hair", "body"] } as TrendSlot)).toEqual(["body", "hair"])
+    expect(shownChips({ ...base, kind: "person", chips: [] } as TrendSlot)).toEqual([])
+  })
+})
+
+describe("hiddenChip", () => {
+  const trend = {
+    slots: [
+      { key: "dancer", label: { en: "d" }, kind: "person", required: true, roleName: "r", chips: ["outfit"] },
+      { key: "dog", label: { en: "d" }, kind: "pet", required: false, roleName: "r" },
+    ] as TrendSlot[],
+  }
+
+  it("names the first chip a slot hides", () => {
+    expect(hiddenChip({ slots: { dancer: { images: [IMG], outfit: "new", hair: "original" } } }, trend)).toEqual({ slot: "dancer", chip: "hair" })
+  })
+
+  it("is null for shown chips, a slot without `chips`, and a chip of another kind (misplacedChip's)", () => {
+    expect(hiddenChip({ slots: { dancer: { outfit: "new" }, dog: { body: "new", coat: "original" } } }, trend)).toBeNull()
+    expect(hiddenChip({ slots: { dancer: { coat: "new" } } }, trend)).toBeNull()
   })
 })

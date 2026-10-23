@@ -342,8 +342,8 @@ nodaro executions get <id> [--watch] [--json]
 nodaro executions cancel <id> [--mode cancelled|stopping]
 
 # Jobs
-nodaro jobs list [--status <s,s>] [--type <t,t>] [--origin <app>] [--favorited | --no-favorited] [--rating good|bad|rated|unrated] [--limit <n>] [--cursor <c>] [--json]
-#   newest first; --status / --type take a comma-separated list; --no-favorited keeps the jobs you did not favorite; every filter combines with AND
+nodaro jobs list [--status <s,s>] [--type <t,t>] [--origin <app>] [--source <s,s>] [--favorited | --no-favorited] [--rating good|bad|rated|unrated] [--limit <n>] [--cursor <c>] [--json]
+#   newest first; --status / --type / --source take a comma-separated list; --source mcp lists what your MCP clients (Claude, ChatGPT, …) made; --no-favorited keeps the jobs you did not favorite; every filter combines with AND
 nodaro jobs get <id> [--json]
 nodaro jobs rate <id> good|bad|clear [--json]             # your rating of one of your jobs; clear removes it
 nodaro jobs cancel <id> [--json]

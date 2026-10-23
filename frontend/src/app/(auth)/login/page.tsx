@@ -14,6 +14,7 @@ import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
+import { useDocumentTitle } from "@/components/layout/page-title"
 import { formatNumber } from "@/lib/i18n/format"
 import { isBlockedSignIn } from "@/lib/sign-in-error"
 
@@ -32,6 +33,7 @@ function consumeRedirect(): string {
 
 export default function LoginPage() {
   const t = useT()
+  useDocumentTitle(t("page.login"))
   const { signInWithGoogle, signInWithEmail } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()

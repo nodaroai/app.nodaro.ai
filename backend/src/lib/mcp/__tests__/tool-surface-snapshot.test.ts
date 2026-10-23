@@ -1270,6 +1270,13 @@ const CAST_SWAP_DEFAULT_ZONE_BYTES = 139
 // after trimming generate_video back under the per-tool budget; the 73 B of headroom carry across.
 const KLING_4_MODELS_BYTES = 317
 
+// RAISED 2026-10-23 by `list_jobs`'s `sources` filter and nothing else: the owner can list what
+// their MCP clients made (`sources: ["mcp"]`), the same filter `GET /v1/jobs?source=` gained. One
+// optional argument, the eight-value caller-kind enum plus a one-clause description. No tool was
+// added, so the fixture does NOT move. Measured by this suite: 496_638 total − 496_450 = 188 B;
+// the 73 B of headroom carry across.
+const LIST_JOBS_SOURCES_BYTES = 188
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1424,7 +1431,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_REFERENCES_BYTES +
     CAST_SWAP_FULL_QUALITY_TOOLS_BYTES +
     CAST_SWAP_DEFAULT_ZONE_BYTES +
-    KLING_4_MODELS_BYTES,
+    KLING_4_MODELS_BYTES +
+    LIST_JOBS_SOURCES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

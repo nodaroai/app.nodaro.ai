@@ -204,7 +204,26 @@ function cleanSlot(s: FormSlot): AdminTrendSlot {
     if (v) defaults[chip] = v
   }
   if (Object.keys(defaults).length > 0) out.defaults = defaults
+  const shown = shownChips(s)
+  // Every chip shown is saved as none listed (the server's default), so a trend nobody limited stays as it was.
+  if (shown.length < CHIPS_BY_KIND[s.kind].length) out.chips = shown
   return out
+}
+
+/** The chips a slot shows to people, in its kind's order: its `chips`, else all of its kind's. */
+export function shownChips(s: Pick<AdminTrendSlot, "kind" | "chips">): TrendChipKey[] {
+  const all = CHIPS_BY_KIND[s.kind]
+  return s.chips ? all.filter((c) => s.chips!.includes(c)) : [...all]
+}
+
+/** Show (or hide) one chip of a slot to people. All shown again = none listed. */
+export function withChipShown(s: FormSlot, chip: TrendChipKey, show: boolean): FormSlot {
+  const all = CHIPS_BY_KIND[s.kind]
+  const shown = shownChips(s)
+  const next = all.filter((c) => (c === chip ? show : shown.includes(c)))
+  const rest: FormSlot = { ...s }
+  delete rest.chips
+  return next.length === all.length ? rest : { ...rest, chips: next }
 }
 
 /** The draft body to save (examples are never sent: only the example routes write them). */
@@ -227,12 +246,13 @@ export function imageCount(form: Pick<TrendForm, "slots" | "references">): numbe
   return MAX_IMAGES_PER_SLOT * form.slots.length + form.references.reduce((n, r) => n + r.images.length, 0)
 }
 
-/** A slot kind changed: keep only the chips the new kind takes. */
+/** A slot kind changed: keep only the defaults the new kind takes, and show all of its chips again. */
 export function withKind(s: FormSlot, kind: TrendSlotKind): FormSlot {
   const defaults: Partial<Record<TrendChipKey, TrendChoice>> = {}
   for (const chip of CHIPS_BY_KIND[kind]) if (s.defaults?.[chip]) defaults[chip] = s.defaults[chip]
   const rest: FormSlot = { ...s, kind }
   delete rest.defaults
+  delete rest.chips
   return kind === "location" || Object.keys(defaults).length === 0 ? rest : { ...rest, defaults }
 }
 

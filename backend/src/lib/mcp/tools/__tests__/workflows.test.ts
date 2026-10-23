@@ -1015,3 +1015,50 @@ describe("update_workflow_json — settings.studio guard", () => {
     expect(result.structuredContent?.updated_at).toBe("t4")
   })
 })
+
+// ── editor links on every workflow tool ─────────────────────────────────────
+// An assistant can only offer the user the flow in the app if the tool hands it
+// the link: create/import always did; every other workflow tool does too now.
+
+describe("editor link on every workflow tool", () => {
+  const link = (id: string) => `${appBaseUrl()}/editor/${id}`
+
+  it("list_workflows gives each workflow its editor link", async () => {
+    fromMock.mockReturnValue(chain({ data: [{ id: WORKFLOW_ID, project_id: MCP_PROJECT_ID, name: "Flow", created_at: "2026-04-01T00:00:00Z" }], error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, "list_workflows", {})
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as { data: Array<{ editorUrl?: string }> }
+    expect(payload.data[0]?.editorUrl).toBe(link(WORKFLOW_ID))
+  })
+
+  it("get_workflow and get_workflow_json carry it", async () => {
+    fromMock.mockReturnValue(chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID, name: "Flow", nodes: [], edges: [], settings: {} }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })
+    const meta = JSON.parse((await callTool(server, "get_workflow", { workflow_id: WORKFLOW_ID })).content[0]?.text ?? "{}") as { data: { editorUrl?: string } }
+    expect(meta.data.editorUrl).toBe(link(WORKFLOW_ID))
+    const graph = JSON.parse((await callTool(server, "get_workflow_json", { workflow_id: WORKFLOW_ID })).content[0]?.text ?? "{}") as { editorUrl?: string }
+    expect(graph.editorUrl).toBe(link(WORKFLOW_ID))
+  })
+
+  it("update_workflow_json says where to see the change", async () => {
+    fromMock.mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "2026-04-03T00:00:00Z" }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, nodes: [], edges: [] })
+    expect(result.structuredContent?.editorUrl).toBe(link(WORKFLOW_ID))
+    expect(result.content[0]?.text).toContain(link(WORKFLOW_ID))
+  })
+
+  it("run_workflow says where to watch the run", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/workflows/:id/run", async () => ({ executionId: "e-1", status: "pending" }))
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    const result = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID })
+    expect(result.structuredContent?.editorUrl).toBe(link(WORKFLOW_ID))
+    expect(result.content[0]?.text).toContain(link(WORKFLOW_ID))
+  })
+})

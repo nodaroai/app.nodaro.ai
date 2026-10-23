@@ -33,7 +33,14 @@ export function pageTitleKey(pathname: string, entries: readonly TitledEntry[]):
 export function usePageTitle(pathname: string, entries: readonly TitledEntry[]): void {
   const t = useT()
   const key = pageTitleKey(pathname, entries)
-  const page = key ? t(key) : null
+  useDocumentTitle(key ? t(key) : null)
+}
+
+/**
+ * Names a page outside the sidebar (sign-in, the gallery, a published app):
+ * "<page> | <brand>", or the brand alone while `page` is null.
+ */
+export function useDocumentTitle(page: string | null): void {
   useEffect(() => {
     const brand = surfaceBrandName()
     document.title = page ? `${page} | ${brand}` : brand

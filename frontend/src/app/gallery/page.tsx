@@ -28,6 +28,8 @@ import { TypeBadge, formatGalleryDate } from "@/components/gallery/gallery-media
 import { PreviewBadge } from "@/components/render/preview-badge"
 import { GallerySelectButton, GallerySelectionBar } from "@/components/gallery/gallery-admin-bar"
 import { GalleryBlockCreatorButton } from "@/components/gallery/gallery-block-creator-button"
+import { SkipToContent } from "@/components/layout/skip-to-content"
+import { useDocumentTitle } from "@/components/layout/page-title"
 
 type FilterType = "all" | "image" | "video" | "audio"
 
@@ -77,6 +79,8 @@ export default function GalleryPage() {
   const isRtl = useAppDir() === "rtl"
   const location = useLocation()
   const isEmbedded = location.pathname.startsWith("/_")
+  // Inside the dashboard (/_gallery) the layout names the page and skips to it.
+  useDocumentTitle(isEmbedded ? null : t("gallery.title"))
   const [filter, setFilter] = useState<FilterType>("all")
   const [myItemsOnly, setMyItemsOnly] = useState(() => {
     try { return localStorage.getItem("gallery:myItemsOnly") === "true" } catch { return false }
@@ -330,6 +334,7 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {!isEmbedded && <SkipToContent />}
       {/* Header — hidden when rendered inside DashboardLayout (/_gallery) */}
       {!isEmbedded && (
         <header className="border-b border-zinc-200 dark:border-zinc-800">
@@ -350,6 +355,7 @@ export default function GalleryPage() {
       )}
 
       {/* Hero */}
+      <main id={isEmbedded ? undefined : "main"} tabIndex={isEmbedded ? undefined : -1} className="outline-none">
       <section className="py-12 text-center">
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           {t("gallery.title")}
@@ -715,6 +721,7 @@ export default function GalleryPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </main>
     </div>
   )
 }

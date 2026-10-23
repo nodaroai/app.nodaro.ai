@@ -273,7 +273,10 @@ export function registerWorkflows({
         const last = rows[rows.length - 1]
         const nextCursor =
           rows.length === limit && last?.created_at ? (last.created_at as string) : null
-        return ok(JSON.stringify({ data: rows, next_cursor: nextCursor }, null, 2))
+        // Every row carries its editor link, so an assistant can offer the
+        // user the flow in the app without building an address itself.
+        const withLinks = rows.map((row) => ({ ...row, editorUrl: workflowEditorUrl(row.id as string) }))
+        return ok(JSON.stringify({ data: withLinks, next_cursor: nextCursor }, null, 2))
       },
     )
 
@@ -294,7 +297,7 @@ export function registerWorkflows({
           "id, project_id, name, description, version, thumbnail_url, created_at, updated_at",
         )
         if (!loaded.ok) return err(loaded.message)
-        return ok(JSON.stringify({ data: loaded.row }, null, 2))
+        return ok(JSON.stringify({ data: { ...loaded.row, editorUrl: workflowEditorUrl(args.workflow_id) } }, null, 2))
       },
     )
 
@@ -332,6 +335,7 @@ export function registerWorkflows({
               // The CAS token `update_workflow_json` asks for as `expected_version`
               // — the doc promised it here long before the read side supplied it.
               version: row.version,
+              editorUrl: workflowEditorUrl(args.workflow_id),
             },
             null,
             2,
@@ -644,8 +648,10 @@ export function registerWorkflows({
           // form does here; what it changed or doubted is relayed the same way.
           const deltaAdjustments = out.edgeAdjustments ?? []
           const deltaWarnings = out.edgeWarnings ?? []
-          return ok(`Applied delta to workflow ${args.workflow_id} (version ${out.version ?? "?"}).${edgeNote(deltaAdjustments, deltaWarnings)}`, {
+          const deltaEditorUrl = workflowEditorUrl(args.workflow_id)
+          return ok(`Applied delta to workflow ${args.workflow_id} (version ${out.version ?? "?"}). Open it in the editor: ${deltaEditorUrl}${edgeNote(deltaAdjustments, deltaWarnings)}`, {
             id: args.workflow_id,
+            editorUrl: deltaEditorUrl,
             ...(out.version !== undefined ? { version: out.version } : {}),
             ...(out.updatedAt !== undefined ? { updated_at: out.updatedAt } : {}),
             ...edgeStructured(deltaAdjustments, deltaWarnings),
@@ -821,11 +827,13 @@ export function registerWorkflows({
             ? `\n\nAdjusted ${nodeAdjustments.length} parameter(s) the selected model does not accept:\n` +
               describeNodeAdjustments(nodeAdjustments).map((l) => `  - ${l}`).join("\n")
             : ""
+        const updatedEditorUrl = workflowEditorUrl(args.workflow_id)
         return ok(
-          `Updated workflow ${args.workflow_id} (${changed.join(", ")}).${healNote}${edgeNote(edgeAdjustments, edgeWarnings)}`,
+          `Updated workflow ${args.workflow_id} (${changed.join(", ")}). Open it in the editor: ${updatedEditorUrl}${healNote}${edgeNote(edgeAdjustments, edgeWarnings)}`,
           {
             id: updated.id,
             name: updated.name,
+            editorUrl: updatedEditorUrl,
             updated_at: updated.updated_at,
             version: updated.version,
             ...(nodeAdjustments.length > 0 ? { adjustments: nodeAdjustments } : {}),
@@ -1094,10 +1102,11 @@ export function registerWorkflows({
                 `Read it with get_app_run(execution_id) — this is an EXECUTION id, not a job id (get_job will not find it): ` +
                 `it lists every node's status, text and media, and the run's outcome once it completes ` +
                 `("nothing_new" when the nodes had nothing to work on — a feed with no new posts — and nothing failed). ` +
-                `While the flow is open in the editor the run shows on the canvas live; otherwise its results land on the next open.`,
+                `While the flow is open in the editor the run shows on the canvas live; otherwise its results land on the next open. ` +
+                `Watch it in the editor: ${workflowEditorUrl(args.workflow_id)}`,
             },
           ],
-          structuredContent: { executionId, name: workflowName },
+          structuredContent: { executionId, name: workflowName, editorUrl: workflowEditorUrl(args.workflow_id) },
         }
       },
     )

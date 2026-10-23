@@ -23,8 +23,11 @@ import {
   MAX_PRE_PROMPT,
   MAX_TREND_PROMPT,
   promptBudget,
+  shownChips,
   TREND_DETAILS_MAX,
   toForm,
+  withChipShown,
+  withKind,
 } from "../model"
 
 function draft(over: Partial<AdminTrendData> = {}): AdminTrendData {
@@ -180,5 +183,40 @@ describe("face masking and the pre prompt in the form", () => {
       "Trend prompt: at most 2998 characters, to leave room for the user's details (up to 1000).",
     ])
     expect(issues("t".repeat(3001))).toEqual(["Trend prompt: at most 3000 characters."])
+  })
+})
+
+describe("the chips a slot shows to people", () => {
+  const lead = (over: Record<string, unknown> = {}) =>
+    ({ key: "lead", label: { en: "Lead" }, kind: "person", required: true, roleName: "the woman", ...over }) as AdminTrendData["slots"][number]
+
+  it("round-trips a slot with none listed (all shown) and one that hides some or all", () => {
+    for (const slot of [lead(), lead({ chips: ["outfit"] }), lead({ chips: [] })]) {
+      const d = draft({ slots: [slot] })
+      expect(fromForm(toForm(d))).toEqual(savedOf(d))
+    }
+  })
+
+  it("lists the shown chips in the kind's order; all shown again is none listed", () => {
+    const [form] = toForm(draft({ slots: [lead()] })).slots
+    const hidden = withChipShown(form!, "hair", false)
+    expect(shownChips(hidden)).toEqual(["body", "outfit"])
+    const none = withChipShown(withChipShown(hidden, "body", false), "outfit", false)
+    expect(none.chips).toEqual([])
+    const back = withChipShown(withChipShown(hidden, "outfit", true), "hair", true)
+    expect(shownChips(back)).toEqual(["body", "outfit", "hair"])
+    expect(back).not.toHaveProperty("chips")
+  })
+
+  it("a slot that lists every chip of its kind saves as none listed", () => {
+    const d = draft({ slots: [lead({ chips: ["hair", "body", "outfit"] })] })
+    expect(fromForm(toForm(d)).slots[0]).not.toHaveProperty("chips")
+  })
+
+  it("a kind change shows every chip of the new kind; a location saves no chips", () => {
+    const [form] = toForm(draft({ slots: [lead({ chips: ["outfit"] })] })).slots
+    expect(withKind(form!, "pet")).not.toHaveProperty("chips")
+    const place = withKind(form!, "location")
+    expect(fromForm({ ...toForm(draft()), slots: [place] }).slots[0]).not.toHaveProperty("chips")
   })
 })

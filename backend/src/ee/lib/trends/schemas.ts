@@ -13,6 +13,7 @@ import type {
   Choice,
   LocalizedText,
   TrendRunRequest,
+  TrendSlot,
   TrendSlotKind,
   TrendVersionData,
 } from "./types.js"
@@ -93,6 +94,14 @@ function chips<K extends ChipKey>(keys: readonly K[]) {
   return z.strictObject(Object.fromEntries(keys.map((k) => [k, choice.optional()])) as Record<K, z.ZodOptional<typeof choice>>)
 }
 
+/**
+ * The chips a slot shows to the person: only its kind's own, each once.
+ * Absent = all of them; `[]` = none.
+ */
+function shown<K extends ChipKey>(keys: readonly [K, ...K[]]) {
+  return z.array(z.enum(keys)).refine((list) => new Set(list).size === list.length, "A chip is listed twice in `chips`.")
+}
+
 const slotBase = {
   key: slotKeySchema,
   label: localizedText(100),
@@ -102,11 +111,26 @@ const slotBase = {
 }
 
 // Strict objects: a chip that is not the slot kind's own (or any `defaults`
-// on a location) is an error, never silently dropped.
+// or `chips` on a location) is an error, never silently dropped.
 const trendSlotSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ ...slotBase, kind: z.literal("person"), defaults: chips(CHIPS_BY_KIND.person).optional() }),
-  z.strictObject({ ...slotBase, kind: z.literal("pet"), defaults: chips(CHIPS_BY_KIND.pet).optional() }),
-  z.strictObject({ ...slotBase, kind: z.literal("product"), defaults: chips(CHIPS_BY_KIND.product).optional() }),
+  z.strictObject({
+    ...slotBase,
+    kind: z.literal("person"),
+    defaults: chips(CHIPS_BY_KIND.person).optional(),
+    chips: shown(CHIPS_BY_KIND.person).optional(),
+  }),
+  z.strictObject({
+    ...slotBase,
+    kind: z.literal("pet"),
+    defaults: chips(CHIPS_BY_KIND.pet).optional(),
+    chips: shown(CHIPS_BY_KIND.pet).optional(),
+  }),
+  z.strictObject({
+    ...slotBase,
+    kind: z.literal("product"),
+    defaults: chips(CHIPS_BY_KIND.product).optional(),
+    chips: shown(CHIPS_BY_KIND.product).optional(),
+  }),
   z.strictObject({ ...slotBase, kind: z.literal("location") }),
 ])
 
@@ -221,6 +245,37 @@ export function misplacedChip(
     const allowed: readonly string[] = CHIPS_BY_KIND[slot.kind]
     for (const [k, v] of Object.entries(entry)) {
       if (k !== "images" && v !== undefined && !allowed.includes(k)) return { slot: slot.key, chip: k }
+    }
+  }
+  return null
+}
+
+/**
+ * The chips a slot shows to the person, in its kind's order: its `chips`, or
+ * every chip of its kind when it has none listed. A location shows none.
+ */
+export function shownChips(slot: Pick<TrendSlot, "kind" | "chips">): ChipKey[] {
+  const kindChips: readonly ChipKey[] = CHIPS_BY_KIND[slot.kind]
+  if (!slot.chips) return [...kindChips]
+  const listed: readonly string[] = slot.chips
+  return kindChips.filter((c) => listed.includes(c))
+}
+
+/**
+ * The first chip in a run request that the trend's slot takes but hides from
+ * the person (it is fixed at the slot's value), or null. A chip that is not
+ * the kind's own is `misplacedChip`'s.
+ */
+export function hiddenChip(
+  req: Pick<TrendRunRequest, "slots">,
+  data: Pick<TrendVersionData, "slots">,
+): { slot: string; chip: ChipKey } | null {
+  for (const slot of data.slots) {
+    const entry = Object.hasOwn(req.slots, slot.key) ? req.slots[slot.key] : undefined
+    if (!entry) continue
+    const shownList = shownChips(slot)
+    for (const chip of CHIPS_BY_KIND[slot.kind] as readonly ChipKey[]) {
+      if (entry[chip] !== undefined && !shownList.includes(chip)) return { slot: slot.key, chip }
     }
   }
   return null

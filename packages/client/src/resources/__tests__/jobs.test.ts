@@ -112,6 +112,17 @@ describe("jobs resource", () => {
     })
   })
 
+  it("list sends source as one value or a comma-separated list", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: [], next: null }))
+      .mockReturnValueOnce(mockOk({ data: [], next: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.jobs.list({ source: "mcp" })
+    await c.jobs.list({ source: ["mcp", "cli"] })
+    expect(new URL(fetchMock.mock.calls[0][0] as string).searchParams.get("source")).toBe("mcp")
+    expect(new URL(fetchMock.mock.calls[1][0] as string).searchParams.get("source")).toBe("mcp,cli")
+  })
+
   it("list sends a single status or type as itself, and favorited: false too", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], next: null }))
     const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })

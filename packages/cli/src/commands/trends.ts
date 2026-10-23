@@ -36,7 +36,7 @@ function addRunFlags(cmd: Command): Command {
     )
     .option(
       "--choice <key.chip=new|original>",
-      "a slot's chip: make it anew from your pictures or keep the clip's, e.g. person.outfit=original (repeatable)",
+      "a slot's chip: make it anew from your pictures or keep the clip's, e.g. person.outfit=original (repeatable; only the chips `trends get` lists for the slot)",
       collectVariadic,
     )
     .option("--example <n>", "1-based example whose pictures fill the optional slots you leave empty (default 1)")

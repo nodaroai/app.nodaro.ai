@@ -16,6 +16,7 @@ import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
+import { JOB_SOURCES } from "../../job-source.js"
 import { applyJobListFilters, jobListFilterSelect, ratingsNotAvailable, withoutFilterEmbeds, MAX_JOB_LIST_FILTER_VALUES, type JobListFilters } from "../../job-list-filters.js"
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../../job-owner-state.js"
 import { JOB_RATINGS, JOB_RATING_FILTERS, setJobRating } from "../../job-ratings.js"
@@ -131,6 +132,11 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           .max(MAX_JOB_LIST_FILTER_VALUES)
           .optional()
           .describe("input_data.type values (the route that made the job, e.g. generate-image). Lifts the default kinds."),
+        sources: z
+          .array(z.enum(JOB_SOURCES))
+          .min(1)
+          .optional()
+          .describe("Who made it; mcp = your MCP clients."),
         favorited: z.boolean().optional().describe("true: only jobs you favorited; false: only the rest."),
         rating: z.enum(JOB_RATING_FILTERS).optional().describe("Your rating: good, bad, rated (any) or unrated."),
       },
@@ -142,14 +148,15 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       const filters: JobListFilters = {
         ...(args.status ? { statuses: Array.isArray(args.status) ? args.status : [args.status] } : {}),
         ...(args.types ? { types: args.types } : {}),
+        ...(args.sources ? { sources: args.sources } : {}),
         ...(args.favorited !== undefined ? { favorited: args.favorited } : {}),
         ...(args.rating ? { rating: args.rating } : {}),
       }
       // Someone else's jobs have no favorite or rating of yours to filter on,
       // and the public scope is the gallery: its kinds are what it lists.
-      if (scope !== "mine" && (filters.types || filters.favorited !== undefined || filters.rating)) {
+      if (scope !== "mine" && (filters.types || filters.sources || filters.favorited !== undefined || filters.rating)) {
         return {
-          content: [{ type: "text", text: "types, favorited and rating filter your own jobs: use scope \"mine\"." }],
+          content: [{ type: "text", text: "types, sources, favorited and rating filter your own jobs: use scope \"mine\"." }],
           isError: true,
         }
       }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { renderHook } from "@testing-library/react"
-import { pageTitleKey, usePageTitle, type TitledEntry } from "../page-title"
+import { pageTitleKey, useDocumentTitle, usePageTitle, type TitledEntry } from "../page-title"
 import { NAV_ITEMS } from "../app-sidebar"
 
 /**
@@ -57,5 +57,19 @@ describe("usePageTitle", () => {
     expect(document.title).toBe("Settings | Acme Studio")
     renderHook(() => usePageTitle("/somewhere-else", ENTRIES))
     expect(document.title).toBe("Acme Studio")
+  })
+})
+
+describe("useDocumentTitle (pages outside the sidebar)", () => {
+  it("names the page, and gives the brand back on leave", () => {
+    brand.name = "Nodaro"
+    const { unmount, rerender } = renderHook(({ page }) => useDocumentTitle(page), {
+      initialProps: { page: null as string | null },
+    })
+    expect(document.title).toBe("Nodaro")
+    rerender({ page: "My app" })
+    expect(document.title).toBe("My app | Nodaro")
+    unmount()
+    expect(document.title).toBe("Nodaro")
   })
 })
