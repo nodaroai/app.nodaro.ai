@@ -266,6 +266,24 @@ export function grantMayWriteSessions(grant: CallerGrant | undefined): boolean {
 }
 
 /**
+ * Whether the job THIS request creates is a CHILD job: internal auth AND a
+ * server-only parent job id in this very request's submission scope
+ * (`tk.http.workerRequest` with a parent) — the same id `withJobProvenance`
+ * stamps as `parent_job_id`, so "is a child" and "was stamped a child" cannot
+ * disagree. A trusted plugin request WITHOUT a parent (`tk.http.internalRequest`)
+ * creates the user's own job, so it is not one. Never read from a header or
+ * the body; a caller mismatch is false, not a throw.
+ */
+export function createsChildJob(req: FastifyRequest): boolean {
+  if (req.authKind !== "internal") return false
+  try {
+    return jobSubmissionParentJobId(req) !== undefined
+  } catch {
+    return false
+  }
+}
+
+/**
  * Whether this request may name a CHILD job (`parent_job_id` set) as the
  * source of the job it creates or prices: only trusted plugin code reaching a
  * route as the caller — internal auth AND, on this very request, a server-only
@@ -279,9 +297,5 @@ export function grantMayWriteSessions(grant: CallerGrant | undefined): boolean {
  */
 export function mayUseChildJobAsSource(req: FastifyRequest): boolean {
   if (req.authKind !== "internal") return false
-  try {
-    return jobSubmissionParentJobId(req) !== undefined || isTrustedPluginRequest(req)
-  } catch {
-    return false
-  }
+  return createsChildJob(req) || isTrustedPluginRequest(req)
 }

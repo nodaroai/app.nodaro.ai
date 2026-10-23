@@ -34,7 +34,16 @@ describe("Cast Swap limits", () => {
     expect(inside(d.minFaceHeightPct, b.faceHeightPct)).toBe(true)
     expect(inside(d.maxFaceHeightPct, b.faceHeightPct)).toBe(true)
     expect(inside(d.zonePct, b.zonePct)).toBe(true)
+    for (const side of ["leftPct", "rightPct", "topPct", "bottomPct"] as const) expect(inside(d.zone[side], b.zonePct), side).toBe(true)
     expect(inside(d.blurStrengthPct, b.blurStrengthPct)).toBe(true)
     expect(inside(d.threshold, b.threshold)).toBe(true)
+  })
+
+  it("covers a masked face with a blur by default", () => {
+    expect(CAST_SWAP_FACE_MASKING_DEFAULTS.fill).toBe("blur")
+  })
+
+  it("leaves 10 % margins at the left and right when the zone is left out", () => {
+    expect(CAST_SWAP_FACE_MASKING_DEFAULTS.zone).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
   })
 })

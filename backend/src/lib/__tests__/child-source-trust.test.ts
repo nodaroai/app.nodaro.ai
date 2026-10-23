@@ -8,6 +8,9 @@
  * of that child). An internal hop that relays a caller's body — MCP's
  * `mcpInject` — and every public caller name a child as a missing job.
  *
+ * `createsChildJob` (the stricter half: a parent job in the scope) is true
+ * only for the `workerRequest` with a parent — the request whose job is a child.
+ *
  * Through the REAL auth hook (the internal secret is checked, `authKind` set
  * by it), against a probe on the two routes Cast Swap uses.
  */
@@ -28,7 +31,7 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn() }, redis: {} }))
 
 import { registerAuthHook } from "../../middleware/auth.js"
-import { mayUseChildJobAsSource } from "../job-submission-context.js"
+import { createsChildJob, mayUseChildJobAsSource } from "../job-submission-context.js"
 import { buildToolkit } from "../private-plugins/toolkit.js"
 import { mcpInject } from "../mcp/internal-request.js"
 import { newSession } from "../mcp/session.js"
@@ -44,7 +47,7 @@ beforeAll(async () => {
   app = Fastify({ logger: false })
   registerAuthHook(app)
   for (const url of ROUTES) {
-    app.post(url, async (req) => ({ userId: req.userId ?? null, authKind: req.authKind ?? null, mayUseChild: mayUseChildJobAsSource(req) }))
+    app.post(url, async (req) => ({ userId: req.userId ?? null, authKind: req.authKind ?? null, mayUseChild: mayUseChildJobAsSource(req), createsChild: createsChildJob(req) }))
   }
   await app.ready()
 })
@@ -59,19 +62,20 @@ describe.each(ROUTES)("%s", (url) => {
   it("the plugin toolkit's internalRequest may (trusted plugin code, as the caller)", async () => {
     const tk = buildToolkit()
     const res = await tk.http.internalRequest!(app, { method: "POST", url, userId: USER, payload: { sourceJobId: PARENT } })
-    expect(answer(res)).toEqual({ status: 200, userId: USER, authKind: "internal", mayUseChild: true })
+    // Trusted, but the job it creates is the user's own, not a child.
+    expect(answer(res)).toEqual({ status: 200, userId: USER, authKind: "internal", mayUseChild: true, createsChild: false })
   })
 
   it("a worker-side handler's own request for a child of its own may", async () => {
     const tk = buildToolkit({ workerApp: async () => app })
     const res = await tk.http.workerRequest!({ method: "POST", url, userId: USER, parentJobId: PARENT, payload: {} })
-    expect(answer(res)).toMatchObject({ status: 200, authKind: "internal", mayUseChild: true })
+    expect(answer(res)).toMatchObject({ status: 200, authKind: "internal", mayUseChild: true, createsChild: true })
   })
 
   it("an MCP relay of the caller's body may not, though it is internal", async () => {
     const session = newSession({ userId: USER, scopes: ["workflows:execute"] as Scope[], clientName: "Claude" })
     const res = await mcpInject(app, session, { method: "POST", url, payload: { sourceJobId: PARENT } })
-    expect(answer(res)).toEqual({ status: 200, userId: USER, authKind: "internal", mayUseChild: false })
+    expect(answer(res)).toEqual({ status: 200, userId: USER, authKind: "internal", mayUseChild: false, createsChild: false })
   })
 
   it("nothing a caller sends can claim the trust: a body or header flag is ignored", async () => {
@@ -85,13 +89,13 @@ describe.each(ROUTES)("%s", (url) => {
       },
       payload: { trustedPluginCaller: true, parentJobId: PARENT },
     })
-    expect(answer(res)).toMatchObject({ authKind: "internal", mayUseChild: false })
+    expect(answer(res)).toMatchObject({ authKind: "internal", mayUseChild: false, createsChild: false })
   })
 
   it("a public caller may not", async () => {
     const res = await app.inject({ method: "POST", url, headers: { "x-internal-user-id": USER }, payload: { sourceJobId: PARENT } })
     // No secret: not an internal call (anonymous here, refused or answered without trust).
-    if (res.statusCode === 200) expect((answer(res) as { mayUseChild?: unknown }).mayUseChild).toBe(false)
+    if (res.statusCode === 200) expect(answer(res)).toMatchObject({ mayUseChild: false, createsChild: false })
     else expect(res.statusCode).toBe(401)
   })
 })

@@ -159,6 +159,21 @@ describe("POST /v1/quote equals what the run reserves on the same body", () => {
     expect(quote.expected!).toBeLessThan(quote.reserve)
   })
 
+  it("outputFormat never moves the price: a Seedance edit quotes and reserves the same with mov", async () => {
+    const edit = {
+      prompt: "edit {video:1} as follows:\nmake it black and white",
+      provider: "seedance-2-5", resolution: "480p", duration: -1, aspectRatio: "adaptive",
+      referenceVideoUrls: [CLIP],
+    }
+    const plain = await quoteThenRun("text-to-video", edit)
+    vi.clearAllMocks()
+    const mov = await quoteThenRun("text-to-video", { ...edit, outputFormat: "mov" })
+    expect(mov.identifier).toBe(plain.identifier)
+    expect(mov.reserved).toBe(plain.reserved)
+    expect(mov.quote.reserve).toBe(plain.quote.reserve)
+    expect(mov.quote.expected).toBe(plain.quote.expected)
+  })
+
   it("a plain text-to-video run", async () => {
     const { quote, identifier, reserved } = await quoteThenRun("text-to-video", { prompt: "a quiet street at dawn" })
     expect(quote.identifier).toBe(identifier)

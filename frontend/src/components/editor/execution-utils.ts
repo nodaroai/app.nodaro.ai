@@ -85,6 +85,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "generate-image": "Image Generation",
   "image-to-image": "Image to Image",
   "edit-image": "Image Editing",
+  "image-edit": "Manual Image Edit",
   "image-to-video": "Image to Video",
   "text-to-video": "Text to Video",
   "video-to-video": "Video to Video",

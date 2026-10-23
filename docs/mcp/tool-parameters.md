@@ -417,7 +417,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `face_masking.fill` | string |  | Default "blur". One of `blur`, `depth`. |
 | `face_masking.min_face_height_pct` | number |  | Mask faces at least this % of frame height. Default 15. From 0 to 100. |
 | `face_masking.max_face_height_pct` | number |  | And at most this %; default 0 = no limit. From 0 to 100. |
-| `face_masking.zone` | object |  | Frame margins (%, default 0); a face centred in one is not masked. |
+| `face_masking.zone` | object or null |  | Frame margins, % (a face centred in one is not masked). Left out = left_pct 10, right_pct 10, top_pct 0, bottom_pct 0. Given: a margin left out is 0. null or all 0 = no margins. |
 | `face_masking.zone.left_pct` | number |  | From 0 to 49. |
 | `face_masking.zone.right_pct` | number |  | From 0 to 49. |
 | `face_masking.zone.top_pct` | number |  | From 0 to 49. |

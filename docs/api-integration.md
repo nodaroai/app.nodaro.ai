@@ -4097,8 +4097,12 @@ clip is sent as it is. It is
 - Which faces are masked: `minFaceHeightPct` (0–100, default 15) and
   `maxFaceHeightPct` (0–100, default 0 = no limit; when above 0 it must be at
   least `minFaceHeightPct`) keep faces by their height as a % of the frame's;
-  `zone` (`{ leftPct, rightPct, topPct, bottomPct }`, each 0–49 % of the frame,
-  default 0) leaves out a face whose centre lies in one of those margins;
+  `zone` (`{ leftPct, rightPct, topPct, bottomPct }`, each 0–49 % of the frame)
+  leaves out a face whose centre lies in one of those margins. Left out, it is
+  `{ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 }`, so people at the
+  left and right edges of the frame are not masked; a margin left out of a
+  zone that is given is 0; `zone: null`, or all four margins 0, means no
+  margins;
   `threshold` (0.05–0.95, default 0.5) is how sure the face finder must be —
   lower finds more faces.
 - `blurStrengthPct` (0.1–5 % of the frame's width, default 2): how strong the

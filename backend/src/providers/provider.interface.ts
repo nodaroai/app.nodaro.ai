@@ -137,9 +137,11 @@ export interface ProviderOptions {
   // Seedance 2.5 ONLY: request the `mov` container (H.264 yuv444p + PCM)
   // instead of KIE's default mp4. Opt-in per CALL, never a global default —
   // mov bytes are not browser-safe and `storage.ts` stamps a provider video
-  // `.mp4`/`video/mp4`, so only a caller that re-encodes downstream (the
-  // seedance extend worker's stitch) may ask for it. `seedance25OutputFormat()`
-  // in providers/kie/video.ts reads the lever that feeds this.
+  // `.mp4`/`video/mp4`, so only a caller that re-encodes downstream may ask
+  // for it: the seedance extend worker's stitch (fed by the
+  // `seedance25OutputFormat()` lever in providers/kie/video.ts), and a
+  // text-to-video CHILD job whose parent re-encodes it (the route's
+  // `seedance25OutputFormatFor`), stored with `{ ext: "mov" }`.
   outputFormat?: "mp4" | "mov"
   webSearch?: boolean      // Enable online search capability (Seedance 2, required field)
   nsfwChecker?: boolean    // Toggle NSFW content filter (Seedance 2)

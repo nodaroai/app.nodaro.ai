@@ -42,7 +42,7 @@ function draft(over: Partial<AdminTrendData> = {}): AdminTrendData {
 
 const FULL: AdminTrendFaceMasking = {
   mode: "auto",
-  fill: "depth",
+  fill: "blur",
   minFaceHeightPct: 10,
   maxFaceHeightPct: 60,
   zone: { leftPct: 5, bottomPct: 49 },
@@ -104,8 +104,8 @@ describe("face masking and the pre prompt in the form", () => {
       { minFaceHeightPct: 101 },
       { maxFaceHeightPct: -1 },
       { zone: { topPct: 50 } },
-      { blurStrengthPct: 0 },
-      { blurStrengthPct: 6 },
+      { fill: "blur" as const, blurStrengthPct: 0 },
+      { fill: "blur" as const, blurStrengthPct: 6 },
       { threshold: 0.01 },
       { threshold: 1 },
       { minFaceHeightPct: 30, maxFaceHeightPct: 20 },
@@ -114,6 +114,36 @@ describe("face masking and the pre prompt in the form", () => {
       expect(issues(bad).length, JSON.stringify(bad)).toBe(1)
     }
     expect(issues({ minFaceHeightPct: 30, maxFaceHeightPct: 0 })).toEqual([])
+  })
+
+  it("a blur strength under the depth fill is neither checked nor saved; under blur (or no fill = blur) it is", () => {
+    const depth = toForm(draft())
+    depth.faceMasking = { mode: "always", fill: "depth", blurStrengthPct: 9 }
+    expect(formIssues(depth)).toEqual([])
+    expect(fromForm(depth).faceMasking).toEqual({ mode: "always", fill: "depth" })
+    for (const fill of ["blur", undefined] as const) {
+      const form = toForm(draft())
+      form.faceMasking = { mode: "always", ...(fill ? { fill } : {}), blurStrengthPct: 3 }
+      expect(formIssues(form), String(fill)).toEqual([])
+      expect(fromForm(form).faceMasking, String(fill)).toEqual({ mode: "always", ...(fill ? { fill } : {}), blurStrengthPct: 3 })
+      form.faceMasking = { ...form.faceMasking, blurStrengthPct: 9 }
+      expect(formIssues(form), String(fill)).toEqual(["Face masking: the blur strength is 0.1–5 %."])
+    }
+  })
+
+  it("saves a null zone (no margins) as null, and an empty zone as left out (the default margins)", () => {
+    const form = toForm(draft())
+    form.faceMasking = { mode: "always", zone: null }
+    expect(fromForm(form).faceMasking).toEqual({ mode: "always", zone: null })
+    expect(formIssues(form)).toEqual([])
+    form.faceMasking = { mode: "always", zone: {} }
+    expect(fromForm(form).faceMasking).toEqual({ mode: "always" })
+    form.faceMasking = { mode: "always", zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }
+    expect(fromForm(form).faceMasking).toEqual({ mode: "always", zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } })
+  })
+
+  it("pins the default zone the editor shows: 10 % left and right", () => {
+    expect(FACE_MASKING_DEFAULTS.zone).toEqual({ leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 })
   })
 
   it("describes an engine without face masking", () => {

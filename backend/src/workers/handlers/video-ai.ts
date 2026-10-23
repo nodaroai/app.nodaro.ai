@@ -591,8 +591,11 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat } = job.data as {
     jobId: string
+    /** Seedance 2.5 container, set by the route only for a child job
+     *  (`seedance25OutputFormatFor`); absent = mp4. */
+    outputFormat?: "mov"
     /** Seedance Draft — see the image-to-video payload above. */
     draft?: boolean
     prompt: string
@@ -658,7 +661,10 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // Extracted to a const so the content-policy retry below resubmits with
   // byte-identical options — only the prompt text differs between the two
   // textToVideo calls.
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, draft, contentPolicyRewrite: allowContentPolicyRewrite }
+  // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
+  // job): the mp4 options stay key-for-key what they were.
+  const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, draft, contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -725,7 +731,14 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     providerOutputUrl = await stripAudioFromR2Url(providerOutputUrl, ctx.jobId)
   }
 
-  const r2Url = await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // A MOV the provider actually returned (decided by the result, never the
+  // request alone: a relayed run's far end may answer mp4) is kept as it is,
+  // `.mov` / `video/quicktime` — its parent re-encodes it, and the browser-
+  // safe transcode would undo the very container it asked for. A watermarked
+  // run re-encodes in the watermark step, which writes an honest mp4.
+  const r2Url = wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
+    ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId, { ext: "mov" }))
+    : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)

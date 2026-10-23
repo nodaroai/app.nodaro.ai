@@ -30,6 +30,7 @@ import { applyPromptPoliciesToCharacterReferences } from "../lib/character-refer
 import { subjectSchema } from "../lib/subject-schema.js"
 import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { createsChildJob } from "../lib/job-submission-context.js"
 
 export const textToVideoBody = z.object({
   /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
@@ -97,8 +98,29 @@ export const textToVideoBody = z.object({
   // A copyright refusal from the provider is retried ONCE with a reworded
   // prompt (absent / true). `false` = the refusal fails the job instead.
   contentPolicyRewrite: z.boolean().optional(),
+  // Server-side callers only, and NOT a public field (no SDK, MCP or docs
+  // entry): the container Seedance 2.5 returns its video in. Honoured only
+  // for a child job (`seedance25OutputFormatFor`); any other request is
+  // treated as mp4, the field dropped. Never moves the price.
+  outputFormat: z.enum(["mp4", "mov"]).optional(),
   userId: z.string().uuid().optional(),
 })
+
+/**
+ * The container a t2v request's video is asked for in: `"mov"` (H.264
+ * yuv444p + PCM) only when the caller asked for it, the model is Seedance
+ * 2.5, and the request creates a CHILD job (`createsChildJob`: internal auth
+ * plus a server-only parent job id). A MOV does not play in browsers; only a
+ * child job's video is never shown to its owner and is re-encoded by its
+ * parent before delivery. Everything else → undefined (mp4, sent as no field).
+ */
+export function seedance25OutputFormatFor(
+  req: FastifyRequest,
+  provider: string | undefined,
+  requested: "mp4" | "mov" | undefined,
+): "mov" | undefined {
+  return requested === "mov" && provider === "seedance-2-5" && createsChildJob(req) ? "mov" : undefined
+}
 
 /**
  * Everything /v1/text-to-video prices a request with — registered as the
@@ -292,6 +314,11 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // Platform default when the request omits provider/duration (shared with
   // generate-video and the DAG payload builder).
   const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
+  // The requested container leaves `parsed.data` here, so `input_data` never
+  // records a request that was not honoured; the honoured one is added back
+  // below by name (absent on the mp4 path, which stays byte-identical).
+  const outputFormat = seedance25OutputFormatFor(req, provider, parsed.data.outputFormat)
+  delete parsed.data.outputFormat
   // Recomputed rather than read off `req` so the handler is correct even when
   // credits are disabled (community edition never runs the guard). Pure, so it
   // agrees with the preHandler by construction.
@@ -499,6 +526,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
             // The pre-check's ffprobe of the reference clips — the
             // settlement prices from the same numbers the reservation did.
             ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}),
+            // Only when honoured, so a reader can tell the child asked for mov.
+            ...(outputFormat ? { outputFormat } : {}),
           },
           "text-to-video",
         ),
@@ -547,6 +576,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     nsfwChecker,
     enableTranslation,
     contentPolicyRewrite,
+    ...(outputFormat ? { outputFormat } : {}),
     usageLogId,
   })
 

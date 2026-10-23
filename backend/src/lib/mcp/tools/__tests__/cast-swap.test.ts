@@ -240,6 +240,15 @@ describe("cast_swap", () => {
     expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "always", zone: { topPct: 10 } } })
   })
 
+  it("leaves a zone left out to the route's default margins, and sends zone: null as all four margins 0 (no margins)", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto" } })
+    expect(calls[0]!.payload).toEqual({ ...BODY, faceMasking: { mode: "auto" } })
+    // Not null: an engine that predates zone: null refuses it, and reads all 0 as no margins.
+    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, face_masking: { mode: "auto", zone: null } })
+    expect(calls[1]!.payload).toEqual({ ...BODY, faceMasking: { mode: "auto", zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } } })
+  })
+
   it("sends no faceMasking key at all without face_masking", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     await callTool(serverWith(fastify), "cast_swap", ARGS)

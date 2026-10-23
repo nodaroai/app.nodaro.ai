@@ -4,8 +4,12 @@
 // a full run whose preview needed it is masked from the start). The settings
 // are the platform's Cast Swap ones; a field left empty takes the engine's
 // default, shown as its placeholder and never written into the draft.
+// Margins: left out, the engine leaves 10 % at the left and right (shown as
+// placeholders); the first margin typed writes the whole default zone with it,
+// so what is saved is what the fields show; "No margins" saves `zone: null`.
 
 import { useId } from "react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -20,7 +24,7 @@ import type {
   AdminTrendFaceMaskingMode,
   AdminTrendFaceMaskingZone,
 } from "@/lib/api"
-import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES } from "../model"
+import { FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
 
 const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hint: string }> = [
   { value: "off", label: "Off", hint: "Runs as before: the clip goes to the video model as it is." },
@@ -52,19 +56,32 @@ interface Props {
 
 export function FaceMaskingEditor({ value, onChange }: Props) {
   const mode = value?.mode ?? "off"
-  const set = (patch: Partial<AdminTrendFaceMasking>) => onChange({ ...(value ?? { mode: "off" }), ...patch })
-  const setZone = (side: keyof AdminTrendFaceMaskingZone, v: number | undefined) =>
-    set({ zone: { ...value?.zone, [side]: v } })
+  // A key set to undefined (a field emptied, "No margins" unticked) is removed, never kept as
+  // `key: undefined`, so the draft holds only what is set.
+  const set = (patch: Partial<AdminTrendFaceMasking>) => onChange(definedOnly({ ...(value ?? { mode: "off" }), ...patch }))
+  // A zone with any margin set: its empty margins are 0. None set: the default margins.
+  const zoneGiven = !!value?.zone && ZONE_SIDES.some((side) => typeof value.zone?.[side] === "number")
+  const noMargins = value?.zone === null
+  // The first margin typed into the default zone keeps the default's other margins, as shown.
+  // Every margin emptied is the zone left out again (the default), with no `zone` key kept.
+  const setZone = (side: keyof AdminTrendFaceMaskingZone, v: number | undefined) => {
+    const zone: AdminTrendFaceMaskingZone = { ...(zoneGiven ? value?.zone : FACE_MASKING_DEFAULTS.zone), [side]: v }
+    set({ zone: ZONE_SIDES.some((s) => typeof zone[s] === "number") ? zone : undefined })
+  }
   const setMode = (m: AdminTrendFaceMaskingMode) => {
     // Off with nothing else set is the same as no setting: keep the draft as it was.
-    if (m === "off" && (!value || Object.keys(value).length === 1)) onChange(undefined)
+    if (m === "off" && (!value || Object.keys(definedOnly(value)).length === 1)) onChange(undefined)
     else set({ mode: m })
   }
   const hint = MODES.find((m) => m.value === mode)?.hint
+  // A fill left out is the engine's default. The blur strength belongs to the blur fill only: hidden
+  // otherwise, and then neither checked nor saved (`maskingUsesBlur`), so it never holds Save.
+  const fill = value?.fill ?? FACE_MASKING_DEFAULTS.fill
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
   const hintId = `${id}-hint`
+  const noMarginsId = `${id}-no-margins`
 
   return (
     <div className="flex flex-col gap-3">
@@ -91,7 +108,7 @@ export function FaceMaskingEditor({ value, onChange }: Props) {
             <label htmlFor={fillId} className="font-medium">
               Fill
             </label>
-            <Select value={value?.fill ?? "blur"} onValueChange={(f) => set({ fill: f as AdminTrendFaceMaskingFill })}>
+            <Select value={fill} onValueChange={(f) => set({ fill: f as AdminTrendFaceMaskingFill })}>
               <SelectTrigger id={fillId} className="h-9">
                 <SelectValue />
               </SelectTrigger>
@@ -133,15 +150,17 @@ export function FaceMaskingEditor({ value, onChange }: Props) {
               step={1}
               onChange={(v) => set({ maxFaceHeightPct: v })}
             />
-            <NumberField
-              label="Blur strength (%)"
-              help="Of the frame's width, for the blur fill."
-              value={value?.blurStrengthPct}
-              placeholder={FACE_MASKING_DEFAULTS.blurStrengthPct}
-              bounds={FACE_MASKING_BOUNDS.blurStrengthPct}
-              step={0.1}
-              onChange={(v) => set({ blurStrengthPct: v })}
-            />
+            {maskingUsesBlur({ fill }) && (
+              <NumberField
+                label="Blur strength (%)"
+                help="Of the frame's width, for the blur fill."
+                value={value?.blurStrengthPct}
+                placeholder={FACE_MASKING_DEFAULTS.blurStrengthPct}
+                bounds={FACE_MASKING_BOUNDS.blurStrengthPct}
+                step={0.1}
+                onChange={(v) => set({ blurStrengthPct: v })}
+              />
+            )}
             <NumberField
               label="Detection threshold"
               help="Lower finds more faces."
@@ -154,25 +173,43 @@ export function FaceMaskingEditor({ value, onChange }: Props) {
           </div>
           <fieldset className="flex flex-col gap-2 rounded-md border p-3">
             <legend className="px-1 text-sm font-medium">Margins (%)</legend>
-            <p className="text-xs text-muted-foreground">A face centred inside a margin is left as it is.</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {ZONE_SIDES.map((side) => (
-                <NumberField
-                  key={side}
-                  label={ZONE_LABELS[side]}
-                  value={value?.zone?.[side]}
-                  placeholder={FACE_MASKING_DEFAULTS.zonePct}
-                  bounds={FACE_MASKING_BOUNDS.zonePct}
-                  step={1}
-                  onChange={(v) => setZone(side, v)}
-                />
-              ))}
+            <p className="text-xs text-muted-foreground">
+              A face centred inside a margin is left as it is. Left empty: {FACE_MASKING_DEFAULTS.zone.leftPct} % at the
+              left and right (the default), so people at the edges of the frame are not covered.
+            </p>
+            <div className="flex min-h-11 items-center gap-2 text-sm">
+              <Checkbox
+                id={noMarginsId}
+                checked={noMargins}
+                onCheckedChange={(checked) => set({ zone: checked === true ? null : undefined })}
+              />
+              <label htmlFor={noMarginsId}>No margins: cover faces anywhere in the frame</label>
             </div>
+            {!noMargins && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {ZONE_SIDES.map((side) => (
+                  <NumberField
+                    key={side}
+                    label={ZONE_LABELS[side]}
+                    value={value?.zone?.[side]}
+                    placeholder={zoneGiven ? FACE_MASKING_DEFAULTS.zonePct : FACE_MASKING_DEFAULTS.zone[side]}
+                    bounds={FACE_MASKING_BOUNDS.zonePct}
+                    step={1}
+                    onChange={(v) => setZone(side, v)}
+                  />
+                ))}
+              </div>
+            )}
           </fieldset>
         </>
       )}
     </div>
   )
+}
+
+/** The setting without its undefined keys (`zone: null`, "no margins", is kept). */
+function definedOnly(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
+  return Object.fromEntries(Object.entries(m).filter(([, v]) => v !== undefined)) as AdminTrendFaceMasking
 }
 
 interface NumberFieldProps {

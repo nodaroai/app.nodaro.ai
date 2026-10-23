@@ -107,6 +107,8 @@ beforeEach(async () => {
       req.userId = body.userId
       req.userRole = undefined
     }
+    // Test-only stand-in for the auth middleware's internal-auth verdict.
+    if (req.headers["x-test-auth-kind"] === "internal") req.authKind = "internal"
   })
 
   await app.register(async (instance) => {
@@ -491,6 +493,65 @@ describe("POST /v1/text-to-video — child jobs", () => {
     expect(res.statusCode).toBe(200)
     expect(mockInsert).toHaveBeenCalledTimes(1)
     expect(mockInsert.mock.calls[0]![0]).not.toHaveProperty("parent_job_id")
+  })
+})
+
+/**
+ * `outputFormat` (server-side callers only): Seedance 2.5's mov container,
+ * honoured ONLY for a child job — internal auth plus a server-only parent job
+ * id — on seedance-2-5. Anything else is treated as mp4 and the field dropped,
+ * so the job and the queued payload are exactly what they are without it.
+ */
+describe("POST /v1/text-to-video — outputFormat (child jobs only)", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const PARENT = "00000000-0000-4000-8000-0000000000b2"
+  const BODY = { prompt: "an edit", provider: "seedance-2-5", userId: USER }
+  const INTERNAL = { "x-test-auth-kind": "internal" }
+
+  async function run(payload: Record<string, unknown>, opts: { internal?: boolean; parent?: boolean } = {}) {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-mov" }, error: null })
+    const inject = () => app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload,
+      ...(opts.internal ? { headers: INTERNAL } : {}),
+    })
+    const res = opts.parent
+      ? await withJobSubmissionContext({ userId: USER, method: "POST", url: "/v1/text-to-video", parentJobId: PARENT }, inject)
+      : await inject()
+    expect(res.statusCode).toBe(200)
+    const row = mockInsert.mock.calls[0]![0] as Record<string, unknown>
+    const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    return { inputData: row.input_data as Record<string, unknown>, queued }
+  }
+
+  it("a seedance-2-5 child asking for mov: queued and recorded as mov", async () => {
+    const { inputData, queued } = await run({ ...BODY, outputFormat: "mov" }, { internal: true, parent: true })
+    expect(queued.outputFormat).toBe("mov")
+    expect(inputData.outputFormat).toBe("mov")
+  })
+
+  it("absent: the queued payload and input_data carry no outputFormat key", async () => {
+    const { inputData, queued } = await run(BODY, { internal: true, parent: true })
+    expect(queued).not.toHaveProperty("outputFormat")
+    expect(inputData).not.toHaveProperty("outputFormat")
+  })
+
+  it.each([
+    ["a non-child internal caller (no parent)", { ...BODY, outputFormat: "mov" }, { internal: true }],
+    ["a parent scope without internal auth", { ...BODY, outputFormat: "mov" }, { parent: true }],
+    ["a public caller", { ...BODY, outputFormat: "mov" }, {}],
+    ["another provider's child", { ...BODY, provider: "kling", outputFormat: "mov" }, { internal: true, parent: true }],
+    ["an explicit mp4", { ...BODY, outputFormat: "mp4" }, { internal: true, parent: true }],
+  ] as const)("ignored for %s: byte-identical to the request without the field", async (_label, payload, opts) => {
+    const asked = await run(payload, opts)
+    vi.clearAllMocks()
+    const { outputFormat: _dropped, ...without } = payload as Record<string, unknown>
+    const plain = await run(without, opts)
+    expect(asked.queued).not.toHaveProperty("outputFormat")
+    expect(asked.inputData).not.toHaveProperty("outputFormat")
+    expect(JSON.stringify(asked.queued)).toBe(JSON.stringify(plain.queued))
+    expect(JSON.stringify(asked.inputData)).toBe(JSON.stringify(plain.inputData))
   })
 })
 

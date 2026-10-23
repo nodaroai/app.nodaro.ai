@@ -1256,6 +1256,12 @@ const CAST_SWAP_REFERENCES_BYTES = 494
 // before carries across.
 const CAST_SWAP_FULL_QUALITY_TOOLS_BYTES = 1_767
 
+// RAISED 2026-10-23 by `cast_swap`'s `face_masking.zone` taking `null` (no margins) and its
+// description stating the default margins (left out = 10 % at the left and right), and nothing
+// else. No tool was added, so the fixture does NOT move. Measured by this suite on the same tree
+// with and without the change: 496_133 total − 495_994 = 139 B; the 73 B of headroom carry across.
+const CAST_SWAP_DEFAULT_ZONE_BYTES = 139
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
@@ -1408,7 +1414,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_FACE_MASKING_BYTES +
     TRENDS_PREVIEW_JOB_ID_BYTES +
     CAST_SWAP_REFERENCES_BYTES +
-    CAST_SWAP_FULL_QUALITY_TOOLS_BYTES,
+    CAST_SWAP_FULL_QUALITY_TOOLS_BYTES +
+    CAST_SWAP_DEFAULT_ZONE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
