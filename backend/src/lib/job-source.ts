@@ -27,10 +27,17 @@
  * HTTP, so an MCP-originated request also carries whatever transport headers
  * that hop sets. Precedence resolves that to the ORIGINATING surface:
  *
- *  1. `internal`  — the internal-orchestrator secret. Server-to-server; the
- *                   caller is us. Checked first because the orchestrator's own
- *                   HTTP hop would otherwise look like a plain API call.
- *  2. `mcp`       — `mcp_client` in the body, injected by every MCP tool.
+ *  1. `mcp`       — `mcp_client` in the body, injected by every MCP tool.
+ *                   Checked BEFORE `internal`: the MCP verbs reach our routes
+ *                   by `inject()` WITH the internal secret, so with `internal`
+ *                   first every MCP job read as `internal` (all of them from
+ *                   2026-07-29 to 2026-10-23). The orchestrator's own hop
+ *                   carries `mcp_client` only for a run an MCP client started,
+ *                   which is that client's job.
+ *  2. `internal`  — the internal-orchestrator secret. Server-to-server; the
+ *                   caller is us. Checked before the transport signals because
+ *                   the orchestrator's own HTTP hop would otherwise look like a
+ *                   plain API call.
  *  3. `app`       — a developer-app OAuth token (`req.appAuthorization`).
  *                   Beats the client header: what matters is WHICH integration,
  *                   not that it happened to use our SDK to get there.
@@ -166,10 +173,10 @@ function parseClientHeader(raw: string | undefined): DerivedJobSource | null {
  * on the hot path of every job-creating route.
  */
 export function deriveJobSource(req: FastifyRequest): DerivedJobSource {
-  if (req.isInternalCall) return { source: "internal", sourceDetail: null }
-
   const mcpClient = extractMcpClient(req.body)
   if (mcpClient) return { source: "mcp", sourceDetail: detail(mcpClient) }
+
+  if (req.isInternalCall) return { source: "internal", sourceDetail: null }
 
   if (req.appAuthorization?.appId) {
     return { source: "app", sourceDetail: detail(req.appAuthorization.appId) }
