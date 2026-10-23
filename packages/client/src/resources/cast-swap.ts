@@ -259,26 +259,55 @@ export interface CastSwapParams {
 /** What a run would cost, in credits. */
 export interface CastSwapEstimate {
   /**
-   * The quote in credits: `breakdown.castSwap + breakdown.seedance +
-   * breakdown.references`, plus `breakdown.masking` with face masking
-   * `"always"`.
+   * What is held when the run starts: `breakdown.castSwap +
+   * breakdown.seedance + breakdown.references`, plus `breakdown.masking` with
+   * face masking `"always"`. The run is charged what it actually costs, which
+   * is expected to be `expectedCredits`.
    */
   totalCredits: number
   /**
-   * `castSwap`: the run itself; `seedance`: the video model it calls;
-   * `references`: preparing the reference pictures (0 when `prepareReferences`
-   * is off or there is nothing to prepare); `masking`: masking the faces,
-   * present only when `faceMasking` is on. With `"auto"` it equals
-   * `maskingCredits` and is not added to `totalCredits`.
+   * The charge the run is expected to come to: `breakdown.castSwap +
+   * breakdown.seedanceExpected + breakdown.references`, plus
+   * `breakdown.masking` with face masking `"always"` (the hold, with the video
+   * model's expected charge in place of its hold). Never above `totalCredits`.
+   * With `"auto"` the masking is in neither total (see `maskingCredits`).
+   * `totalCredits` is what is held when the run starts; the run is charged
+   * what it actually costs.
+   *
+   * Absent from an older Cast Swap engine: read `totalCredits` then.
    */
-  breakdown: { castSwap: number; seedance: number; references: number; masking?: number }
+  expectedCredits?: number
+  /**
+   * The parts of the quote:
+   * - `castSwap`: the run itself;
+   * - `seedance`: what the video model it calls holds (the video's length is
+   *   left to the model, so it is held at the model's longest output);
+   * - `seedanceExpected`: what the video model is expected to be charged (the
+   *   clip in and about as much out), never above `seedance`. It takes
+   *   `seedance`'s place in `expectedCredits`; it is not added to it. Absent
+   *   from an older Cast Swap engine, like `expectedCredits`;
+   * - `references`: preparing the reference pictures (0 when
+   *   `prepareReferences` is off or there is nothing to prepare);
+   * - `masking`: masking the faces, present only when `faceMasking` is on.
+   *   With `"always"` it is in both totals; with `"auto"` it equals
+   *   `maskingCredits` and is in neither.
+   *
+   * So the parts sum to more than either total: `seedance` and
+   * `seedanceExpected` are alternatives, and `"auto"` masking is outside both.
+   */
+  breakdown: { castSwap: number; seedance: number; references: number; seedanceExpected?: number; masking?: number }
   /**
    * Face masking `"auto"` only: the extra credits charged if the source clip
    * is refused and the run is retried with the faces masked. Not in
-   * `totalCredits`; `run()` needs credits for both (else 402).
+   * `totalCredits` or `expectedCredits`; `run()` needs credits for both the
+   * hold and this (else 402).
    */
   maskingCredits?: number
-  /** `true` when the video is made at Auto length: the final charge is expected to come out lower than this quote. */
+  /**
+   * `true` when the video is made at Auto length (every run today): the final
+   * charge is expected to come out lower than `totalCredits`, at about
+   * `expectedCredits`.
+   */
   settlesLower: boolean
 }
 
