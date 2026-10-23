@@ -380,7 +380,7 @@ export function PublishTemplateDialog({
                     className="inline-flex items-center gap-1 text-[11px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground"
                   >
                     {tag}
-                    <button
+                    <button aria-label={t("common.remove")}
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
                       className="hover:text-destructive"

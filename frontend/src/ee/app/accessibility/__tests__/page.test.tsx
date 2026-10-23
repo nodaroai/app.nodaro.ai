@@ -55,11 +55,11 @@ describe("accessibility statement page", () => {
   it("has the required parts: level, what was done, what is not accessible, how to report, the date", () => {
     renderPage()
     expect(screen.getByRole("heading", { level: 1, name: "הצהרת נגישות" })).toBeInTheDocument()
-    for (const name of ["רמת הנגישות", "מה כבר עשינו", "מה עוד לא נגיש", "נתקלתם בבעיית נגישות?"]) {
+    for (const name of ["רמת הנגישות", "מה כבר עשינו", "איך בדקנו", "מה עוד לא נגיש", "נתקלתם בבעיית נגישות?"]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument()
     }
     expect(screen.getByText(/ת״י 5568/)).toBeInTheDocument()
-    expect(screen.getByText(/WCAG 2\.0 ברמה AA/)).toBeInTheDocument()
+    expect(screen.getAllByText(/WCAG 2\.0 ברמה AA/).length).toBeGreaterThan(0)
     expect(screen.getByText(/עודכנה לאחרונה/)).toBeInTheDocument()
     expect(screen.getAllByRole("link", { name: REPORT_EMAIL })[0]).toHaveAttribute("href", `mailto:${REPORT_EMAIL}`)
   })

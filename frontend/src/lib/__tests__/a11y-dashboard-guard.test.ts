@@ -54,6 +54,7 @@ const SCOPE = [
   "app/mcp",
   "ee/app/explore",
   "components/tutorials",
+  "components/templates",
   // The editor (phase 3).
   "components/editor",
   "components/nodes",
