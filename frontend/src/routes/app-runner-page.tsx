@@ -31,6 +31,7 @@ import { updateAppRunInputs } from "@/lib/api"
 import { AppRenderReviewProvider } from "@/components/render/app-render-review"
 import { resolveViewMode } from "@/components/presentation/resolve-view-mode"
 import { useT } from "@/lib/i18n"
+import { useDocumentTitle } from "@/components/layout/page-title"
 
 export default function AppRunnerPage() {
   const t = useT()
@@ -48,6 +49,7 @@ export default function AppRunnerPage() {
   const errorMessage = useAppRunnerStore((s) => s.errorMessage)
   const cancel = useAppRunnerStore((s) => s.cancel)
   const reset = useAppRunnerStore((s) => s.reset)
+  useDocumentTitle(app?.name ?? null)
 
   // Load app on mount — don't wait for auth (app is public)
   useEffect(() => {

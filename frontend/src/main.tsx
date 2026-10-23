@@ -59,6 +59,8 @@ import { AppDirectionProvider, I18nHtmlDir } from "@/components/i18n-html-dir"
 import { BrandDocumentHead } from "@/components/brand-document-head"
 import { AppToaster } from "@/components/app-toaster"
 import { AccessBlockedScreen } from "@/components/access-blocked-screen"
+import { AccessibilityMenuRoot } from "@/components/accessibility/accessibility-menu-root"
+import { applyPreferences, loadPreferences } from "@/lib/accessibility-preferences"
 import { queryClient } from "@/lib/query-client"
 import { router } from "./router"
 
@@ -70,6 +72,8 @@ const ReactQueryDevtools = lazy(() =>
 
 void bootstrapCatalogs()
 bootstrapLookPreviews()
+// The viewer's accessibility choices apply before the first paint.
+applyPreferences(loadPreferences())
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -82,6 +86,7 @@ createRoot(document.getElementById("root")!).render(
             <RouterProvider router={router} />
           </PickerUiLocaleBridge>
           <AppToaster />
+          <AccessibilityMenuRoot router={router} />
           {/* A blocked account or network: one notice over every page. */}
           <AccessBlockedScreen />
         </AppDirectionProvider>

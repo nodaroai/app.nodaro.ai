@@ -87,12 +87,18 @@ describe("DashboardLayout accessibility foundations", () => {
 })
 
 describe("reduce motion", () => {
-  it("globals.css stops animations and transitions under prefers-reduced-motion", () => {
+  // Two triggers, the same rules: the operating system's setting in CSS alone
+  // (so no edition and no script can lose it) and the accessibility menu's
+  // "Stop animations" (data-a11y-motion).
+  it.each([
+    ["the operating system's setting", "@media (prefers-reduced-motion: reduce)", /\*,\s*\*::before,\s*\*::after\s*\{/],
+    ["the menu's choice", ":root[data-a11y-motion] *,", /:root\[data-a11y-motion\] \*::before,\s*:root\[data-a11y-motion\] \*::after\s*\{/],
+  ])("globals.css stops animations and transitions for %s", (_label, marker, selector) => {
     const css = readFileSync(resolve(__dirname, "../../globals.css"), "utf8")
-    const start = css.indexOf("@media (prefers-reduced-motion: reduce)")
+    const start = css.indexOf(marker)
     expect(start).not.toBe(-1)
     const block = css.slice(start)
-    expect(block).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{/)
+    expect(block).toMatch(selector)
     expect(block).toMatch(/animation-duration:\s*0\.01ms !important/)
     expect(block).toMatch(/transition-duration:\s*0\.01ms !important/)
     expect(block).toMatch(/scroll-behavior:\s*auto !important/)

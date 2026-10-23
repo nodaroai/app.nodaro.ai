@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Outlet } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { AppSidebar, MobileHeader, NAV_ITEMS } from "@/components/layout/app-sidebar"
 import { usePageTitle } from "@/components/layout/page-title"
-import { useT } from "@/lib/i18n"
+import { SkipToContent } from "@/components/layout/skip-to-content"
 import { FreeGrantBannerSlot } from "@/components/layout/free-grant-banner-slot"
 import { ConsentGateSlot } from "@/components/layout/consent-gate-slot"
 import { WelcomeOfferPopupSlot } from "@/components/layout/welcome-offer-popup-slot"
@@ -114,7 +114,6 @@ export default function DashboardLayout() {
   // The shared site header replaces the sidebar's own chrome (one gate for the
   // layout, the sidebar and the editor toolbar).
   const sharedHeader = useSharedHeaderActive()
-  const t = useT()
   usePageTitle(location.pathname, NAV_ITEMS)
 
   // Show loading state while checking auth
@@ -156,16 +155,7 @@ export default function DashboardLayout() {
           Add Node only once the canvas was clicked (canvas-tab-intent.ts), so
           a keyboard user reaches this first. Focus moves by script, so the
           address gains no #main and Back is unchanged. */}
-      <a
-        href="#main"
-        onClick={(event) => {
-          event.preventDefault()
-          document.getElementById("main")?.focus()
-        }}
-        className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline focus:outline-2 focus:outline-[#ff0073]"
-      >
-        {t("a11y.skipToContent")}
-      </a>
+      <SkipToContent />
       {sharedHeader ? (
         // The shared site header (Cloud, lib/shared-header.ts) above the
         // sidebar row; the row takes the rest of the screen.
