@@ -37,6 +37,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/checkout-complete",
   "/oauth/authorize",
   "/mcp",
+  // The accessibility statement (Cloud): linked from sign-in, the sidebar and the account menu.
+  "/accessibility",
 
   // Public share/embed surfaces — reached by a link someone was handed.
   "/present/:shareToken",

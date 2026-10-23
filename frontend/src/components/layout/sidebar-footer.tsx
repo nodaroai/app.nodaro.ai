@@ -12,6 +12,7 @@ import { APP_VERSION } from "@/lib/version"
 import { useUpdateCheck } from "@/hooks/use-update-check"
 import { UpdateDialog } from "@/components/layout/update-dialog"
 import { surfacePlatformLinks } from "@/lib/surface-selectors"
+import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
 
 interface SidebarFooterProps {
   readonly isCollapsed: boolean
@@ -199,6 +200,13 @@ export function SidebarFooter({ isCollapsed, isRtl, onToggleCollapsed, accountCo
           </div>
         )}
       </div>
+
+      {/* The accessibility statement (Cloud only; renders nothing elsewhere). */}
+      {!isCollapsed && (
+        <div className="text-center">
+          <AccessibilityStatementLink className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground" />
+        </div>
+      )}
 
       {/* Version row. Clickable whenever a release is known, every
           edition. A RED dot when a newer release exists — action needed

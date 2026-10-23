@@ -21,6 +21,7 @@ vi.mock("@/components/layout/site-header-slot", () => ({
 vi.mock("@/components/layout/app-sidebar", () => ({
   AppSidebar: ({ isMobileOpen }: { isMobileOpen: boolean }) => <aside data-testid="sidebar" data-open={String(isMobileOpen)} />,
   MobileHeader: () => <header data-testid="app-phone-header" />,
+  NAV_ITEMS: [],
 }))
 vi.mock("@/components/layout/free-grant-banner-slot", () => ({ FreeGrantBannerSlot: () => null }))
 vi.mock("@/components/layout/consent-gate-slot", () => ({ ConsentGateSlot: () => null }))

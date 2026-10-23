@@ -630,6 +630,9 @@ export const en = {
   "legal.terms": "Terms of Service",
   "legal.privacy": "Privacy Policy",
   "legal.refund": "Refund Policy",
+  "legal.accessibility": "Accessibility statement",
+  "a11y.skipToContent": "Skip to content",
+  "page.editor": "Workflow editor",
 
   // ── Language switcher ───────────────────────────────────────────────────
   "lang.label": "Language",

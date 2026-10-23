@@ -21,6 +21,7 @@ vi.mock("@/components/layout/app-sidebar", async () => {
   return {
     AppSidebar: () => <aside data-testid="sidebar" data-shared-header={String(useSharedHeaderActive())} />,
     MobileHeader: () => <header data-testid="app-phone-header" />,
+    NAV_ITEMS: [],
   }
 })
 vi.mock("@/components/layout/free-grant-banner-slot", () => ({ FreeGrantBannerSlot: () => null }))

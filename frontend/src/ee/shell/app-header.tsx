@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react"
+import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
 import { useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
@@ -137,6 +138,13 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
       }
       accountPages="in-app"
       onAccountPage={onAccountPage}
+      accountMenuExtras={({ close }) => (
+        <AccessibilityStatementLink
+          role="menuitem"
+          onClick={close}
+          className="flex min-h-10 w-full items-center rounded-[9px] px-2.5 text-start text-[13px] font-semibold hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-[#ff0073] dark:hover:bg-white/5"
+        />
+      )}
       claimSignupGrant={false}
       onSignOut={onSignOut}
       onOverlayChange={onOverlayChange}
