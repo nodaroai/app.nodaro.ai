@@ -6,6 +6,7 @@ import { requireScope } from "../lib/scopes.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { JOB_STATUSES } from "../lib/job-status.js"
+import { JOB_SOURCES } from "../lib/job-source.js"
 import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData } from "../lib/public-job-data.js"
 import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
 import { ORDER_QUALITY_COLUMNS, fillJobRenderQuality, fillJobsRenderQuality } from "../lib/render-label-fill.js"
@@ -178,6 +179,10 @@ openApiRegistry.registerPath({
         .optional()
         .describe(`One or more \`input_data.type\` values (the route that created the job) — comma-separated or repeated, up to ${MAX_JOB_LIST_FILTER_VALUES}.`),
       origin: z.string().optional().describe("`input_data.origin` — the client app that sent the job."),
+      source: z
+        .string()
+        .optional()
+        .describe(`One or more surfaces that created the job (${JOB_SOURCES.join(", ")}) — comma-separated or repeated. An unknown one is a 400.`),
       favorited: z.enum(["true", "false"]).optional().describe("`true`: only jobs you favorited; `false`: only jobs you did not."),
       rating: z.enum(JOB_RATING_FILTERS).optional().describe("Your rating: `good`, `bad`, any (`rated`) or none (`unrated`)."),
     }),
@@ -187,7 +192,7 @@ openApiRegistry.registerPath({
       description: "A page of jobs",
       content: { "application/json": { schema: z.object({ data: z.array(JobSummary), next: z.string().nullable() }) } },
     },
-    400: { description: "An unknown status, rating or favorited value" },
+    400: { description: "An unknown status, source, rating or favorited value" },
     401: { description: "Unauthorized" },
     503: { description: "A rating filter on a server where ratings are not available yet" },
   },
@@ -524,6 +529,7 @@ export async function jobRoutes(app: FastifyInstance) {
       status?: string | string[]
       type?: string | string[]
       origin?: string
+      source?: string | string[]
       favorited?: string
       rating?: string
       // One generate-image batch (`count` / `models`), by its `batchId`.

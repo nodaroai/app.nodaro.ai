@@ -1868,6 +1868,7 @@ Needs `jobs:read`.
 | `status` | string or string[] |  | Also takes `pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`. At least 1 item. |
 | `kinds` | string[] |  | Media kinds to include. Default: `["image", "video"]` — skips audio because most users browse visual generations. Pass any combination explicitly: `["audio"]` for music / TTS only, `["image", "video", "audio"]` for everything, etc. At least 1 item. |
 | `types` | string[] |  | input_data.type values (the route that made the job, e.g. generate-image). Lifts the default kinds. From 1 to 20 items. |
+| `sources` | string[] |  | Who made it; mcp = your MCP clients. At least 1 item. |
 | `favorited` | boolean |  | true: only jobs you favorited; false: only the rest. |
 | `rating` | string |  | Your rating: good, bad, rated (any) or unrated. One of `good`, `bad`, `rated`, `unrated`. |
 

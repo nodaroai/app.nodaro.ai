@@ -67,6 +67,14 @@ describe("parseJobListQuery", () => {
     expect(parseJobListQuery({ origin: ["a", "b"] }).success).toBe(false)
   })
 
+  it("takes source as one or more caller kinds and refuses an unknown one", () => {
+    const parsed = parseJobListQuery({ source: "mcp" })
+    expect(parsed.success && parsed.data).toEqual({ sources: ["mcp"] })
+    const several = parseJobListQuery({ source: "mcp,cli" })
+    expect(several.success && several.data).toEqual({ sources: ["mcp", "cli"] })
+    expect(parseJobListQuery({ source: "claude" }).success).toBe(false)
+  })
+
   it("reads favorited=true|false as a boolean and refuses anything else", () => {
     const yes = parseJobListQuery({ favorited: "true" })
     expect(yes.success && yes.data).toEqual({ favorited: true })
@@ -145,6 +153,11 @@ describe("applyJobListFilters", () => {
       NO_CHILDREN,
       ["in", "input_data->>type", ["generate-image", "generate-video"]],
     ])
+  })
+
+  it("filters source on the source column: one is an eq, several an in", () => {
+    expect(applied({ sources: ["mcp"] })).toEqual([NO_CHILDREN, ["eq", "source", "mcp"]])
+    expect(applied({ sources: ["mcp", "cli"] })).toEqual([NO_CHILDREN, ["in", "source", ["mcp", "cli"]]])
   })
 
   it("favorited keeps the owner's favorites only; false keeps the jobs with none (an anti-join)", () => {

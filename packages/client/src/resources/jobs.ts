@@ -199,6 +199,12 @@ export interface CancelJobResult {
   inFlight?: boolean
 }
 
+/**
+ * The kind of caller that created a job (`Job.source`). Hand-copied mirror of
+ * `JOB_SOURCES` in the platform's `backend/src/lib/job-source.ts`.
+ */
+export type JobSource = "internal" | "mcp" | "app" | "cli" | "sdk" | "extension" | "web" | "api"
+
 export interface DeleteJobResult {
   success: true
 }
@@ -211,6 +217,9 @@ export interface ListJobsParams {
   type?: string | readonly string[]
   /** Exact match on `input_data.origin` — the client app that sent it. */
   origin?: string
+  /** The surface that created the job (`Job.source`): `"mcp"` lists what your
+   *  MCP clients (Claude, ChatGPT, …) made. One value or several. */
+  source?: JobSource | readonly JobSource[]
   /** `true`: only jobs you favorited; `false`: only jobs you did not. */
   favorited?: boolean
   /** Your rating: `"good"`, `"bad"`, any (`"rated"`) or none (`"unrated"`). */
@@ -296,13 +305,14 @@ export class JobsResource {
    * `origin` filter on the job's own `input_data`, which every job carries —
    * a client app lists its runs with `{ type: "llm-structured", origin: "studio" }`.
    * `status` and `type` take one value or a list; `favorited` and `rating`
-   * filter on your own marks. Every filter combines with AND, and each job
+   * filter on your own marks, `source` on the surface that created the job.
+   * Every filter combines with AND, and each job
    * carries `favorited` and `rating`.
    */
   list(params: ListJobsParams = {}): Promise<ListJobsPage> {
-    const { status, type, ...rest } = params
+    const { status, type, source, ...rest } = params
     return this.client.request<ListJobsPage>("GET", "/v1/jobs", {
-      query: { ...rest, status: listParam(status), type: listParam(type) },
+      query: { ...rest, status: listParam(status), type: listParam(type), source: listParam(source) },
     })
   }
 

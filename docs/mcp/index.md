@@ -23,6 +23,22 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 - Apps via `list_apps` / `get_app_inputs` / `run_app`; saved components via `list_components` / `get_component_inputs` / `run_component`
 - Async progress tracking via MCP `tasks/*` API + interactive widgets
 
+## Seeing what your assistant made
+
+Everything an MCP client makes for you lands in your Nodaro account, under the
+**MCP Workflows** tab of the home screen:
+
+- **Workflows** the assistant created or imported, which live in your "mcp" project.
+- **Recent from MCP**, under them: the single images, videos and audio it generated
+  outside any workflow, newest first, each with the client that made it ("via
+  Claude"). **Show more** loads older ones. Click a card to open the result.
+
+The same list is available programmatically:
+- REST: `GET /v1/jobs?source=mcp`
+- SDK: `client.jobs.list({ source: "mcp" })`
+- MCP: `list_jobs` with `source: ["mcp"]`
+- CLI: `nodaro jobs list --source mcp`
+
 ## Supported clients
 
 - [Claude.ai (web)](./connecting-claude.md)

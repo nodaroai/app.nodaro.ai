@@ -184,8 +184,17 @@ describe("list_jobs — the shared filters (scope mine)", () => {
 })
 
 describe("list_jobs — scope public stays the gallery", () => {
+  it("sources filter the source column: what your MCP clients made", async () => {
+    const one = seedList([])
+    await listed({ sources: ["mcp"] })
+    expect(one).toContainEqual({ method: "eq", args: ["source", "mcp"] })
+    const many = seedList([])
+    await listed({ sources: ["mcp", "cli"] })
+    expect(many).toContainEqual({ method: "in", args: ["source", ["mcp", "cli"]] })
+  })
+
   it("refuses the owner-only filters, which have nothing to say about other people's jobs", async () => {
-    for (const args of [{ favorited: true }, { rating: "good" }, { types: ["generate-image"] }]) {
+    for (const args of [{ favorited: true }, { rating: "good" }, { types: ["generate-image"] }, { sources: ["mcp"] }]) {
       seedList([])
       const result = await listed({ scope: "public", ...args })
       expect(result.isError).toBe(true)

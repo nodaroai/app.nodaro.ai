@@ -1324,7 +1324,10 @@ matching any of them; an unknown status throws a `NodaroError` with code
 `validation_error`, status 400). `type` matches
 the job's `input_data.type` (the route that created it — `"llm-structured"`,
 `"video-analysis"`, …), one value or a list, and `origin` matches
-`input_data.origin` (the client app that sent it). `favorited` and `rating`
+`input_data.origin` (the client app that sent it). `source` is the surface that
+created the job (`"mcp"`, `"cli"`, `"sdk"`, `"web"`, `"extension"`, `"app"`,
+`"api"`, `"internal"`), one value or a list: `source: "mcp"` lists what your MCP
+clients (Claude, ChatGPT, …) made. `favorited` and `rating`
 filter on your own marks: `rating: "rated"` is any rating, `"unrated"` none.
 `batchId` matches `input_data.batchId` (the jobs of one generate-image batch —
 `count` / `models`).

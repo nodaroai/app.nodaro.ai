@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { JobRating, JobRatingFilter, JobStatus } from "@nodaro/sdk/jobs"
+import type { JobRating, JobRatingFilter, JobSource, JobStatus } from "@nodaro/sdk/jobs"
 import { buildClient, handleError } from "../client.js"
 import { detail, dim, emit, success, table, type OutputOpts } from "../output.js"
 
@@ -11,6 +11,7 @@ interface ListOpts extends GlobalOpts {
   status?: string
   type?: string
   origin?: string
+  source?: string
   favorited?: boolean
   rating?: string
   limit?: string
@@ -50,6 +51,7 @@ export function jobsCommand(): Command {
     .option("--status <statuses>", "only these statuses, comma-separated (e.g. failed,cancelled)")
     .option("--type <types>", "only these input_data.type values, comma-separated (e.g. generate-image)")
     .option("--origin <origin>", "only jobs this client app sent")
+    .option("--source <sources>", "only jobs these surfaces created, comma-separated (mcp, web, cli, sdk, extension, app, api, internal)")
     .option("--favorited", "only jobs you favorited")
     .option("--no-favorited", "only jobs you did not favorite")
     .option("--rating <rating>", "good, bad, rated (any) or unrated")
@@ -65,6 +67,7 @@ export function jobsCommand(): Command {
           status: list(opts.status) as JobStatus[] | undefined,
           type: list(opts.type),
           origin: opts.origin,
+          source: list(opts.source) as JobSource[] | undefined,
           favorited: opts.favorited,
           rating,
           limit: opts.limit ? Number(opts.limit) : undefined,

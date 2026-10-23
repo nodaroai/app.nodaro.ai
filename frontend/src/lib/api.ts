@@ -6270,6 +6270,10 @@ export interface Job {
   credit_status?: "reserved" | "committed" | "refunded" | null
   credits_actual?: number | null // Credits actually charged after anomaly correction (admin only)
   job_type?: string | null        // Job type (e.g. "generate-image")
+  /** The surface that created the job ("mcp", "web", "cli", …). */
+  source?: string | null
+  /** Narrows `source`: for "mcp", the MCP client's name ("Claude", "ChatGPT"). */
+  source_detail?: string | null
 }
 
 /**
@@ -6313,7 +6317,7 @@ export async function getJobStatus(jobId: string): Promise<Job> {
   return data as Job
 }
 
-export async function getJobs(userId?: string, cursor?: string, limit?: number): Promise<{
+export async function getJobs(userId?: string, cursor?: string, limit?: number, filters?: { readonly source?: string }): Promise<{
   data: Job[]
   next: string | null
   previous: string | null
@@ -6322,6 +6326,7 @@ export async function getJobs(userId?: string, cursor?: string, limit?: number):
   if (userId) params.set("userId", userId)
   if (cursor) params.set("cursor", cursor)
   if (limit) params.set("limit", String(limit))
+  if (filters?.source) params.set("source", filters.source)
   const url = params.toString() ? `/v1/jobs?${params.toString()}` : "/v1/jobs"
   return apiJson(url, {
     method: "GET",

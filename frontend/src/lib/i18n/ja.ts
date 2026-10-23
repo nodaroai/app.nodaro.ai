@@ -906,6 +906,8 @@ export const ja: ChromeDict = {
   "dash.studioWorkflows": "Studio のワークフロー",
   "dash.mcpWorkflows": "MCP のワークフロー",
   "dash.noMcpWorkflowsYet": "MCP のワークフローはまだありません。MCP クライアント（Claude、Cursor、ChatGPT など）が「mcp」プロジェクトに作成したワークフローがここに表示されます。",
+  "dash.mcpRecentActivity": "MCP からの最近の生成",
+  "dash.noMcpActivityYet": "MCP クライアントが作成したものはまだありません。Claude、ChatGPT などの MCP クライアントが生成した画像、動画、音声がここに表示されます。",
   "dash.duplicateFailed": "ワークフローを複製できませんでした。もう一度お試しください。",
   "dash.searchProjectsPlaceholder": "プロジェクトを検索…",
   "dash.searchProjectsUsers": "プロジェクト、ユーザーを検索…",

@@ -10,6 +10,7 @@ export { JobsResource } from "../resources/jobs.js"
 export type {
   Job,
   JobStatus,
+  JobSource,
   JobStatusResult,
   CancelJobResult,
   DeleteJobResult,

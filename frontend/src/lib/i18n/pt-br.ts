@@ -840,6 +840,8 @@ export const ptBR: ChromeDict = {
   "dash.studioWorkflows": "Workflows do Studio",
   "dash.mcpWorkflows": "Workflows MCP",
   "dash.noMcpWorkflowsYet": "Ainda não há workflows MCP. Os workflows que um cliente MCP (Claude, Cursor, ChatGPT…) cria no seu projeto “mcp” aparecem aqui.",
+  "dash.mcpRecentActivity": "Recentes via MCP",
+  "dash.noMcpActivityYet": "Nada criado por um cliente MCP ainda. Imagens, vídeos e áudios que o Claude, o ChatGPT ou outro cliente MCP gerar para você aparecem aqui.",
   "dash.duplicateFailed": "Não foi possível duplicar o workflow. Tente novamente.",
   "dash.searchProjectsPlaceholder": "Pesquisar projetos…",
   "dash.searchProjectsUsers": "Pesquisar projetos, usuários…",

@@ -871,6 +871,8 @@ export const en = {
   "dash.studioWorkflows": "Studio Workflows",
   "dash.mcpWorkflows": "MCP Workflows",
   "dash.noMcpWorkflowsYet": "No MCP workflows yet. Flows an MCP client (Claude, Cursor, ChatGPT…) creates in your \"mcp\" project show up here.",
+  "dash.mcpRecentActivity": "Recent from MCP",
+  "dash.noMcpActivityYet": "Nothing an MCP client made yet. Images, videos and audio that Claude, ChatGPT or another MCP client generates for you show up here.",
   "dash.duplicateFailed": "Could not duplicate the workflow. Try again.",
   "dash.searchProjectsPlaceholder": "Search projects...",
   "dash.searchProjectsUsers": "Search projects, users...",

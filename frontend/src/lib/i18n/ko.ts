@@ -840,6 +840,8 @@ export const ko: ChromeDict = {
   "dash.studioWorkflows": "스튜디오 워크플로",
   "dash.mcpWorkflows": "MCP 워크플로",
   "dash.noMcpWorkflowsYet": "아직 MCP 워크플로가 없습니다. MCP 클라이언트(Claude, Cursor, ChatGPT…)가 “mcp” 프로젝트에 만든 워크플로가 여기에 표시됩니다.",
+  "dash.mcpRecentActivity": "MCP 최근 작업",
+  "dash.noMcpActivityYet": "아직 MCP 클라이언트가 만든 결과물이 없습니다. Claude, ChatGPT 등 MCP 클라이언트가 생성한 이미지, 동영상, 오디오가 여기에 표시됩니다.",
   "dash.duplicateFailed": "워크플로를 복제하지 못했습니다. 다시 시도하세요.",
   "dash.searchProjectsPlaceholder": "프로젝트 검색…",
   "dash.searchProjectsUsers": "프로젝트, 사용자 검색…",

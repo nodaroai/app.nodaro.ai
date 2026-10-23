@@ -867,6 +867,8 @@ export const he: ChromeDict = {
   "dash.studioWorkflows": "תהליכי Studio",
   "dash.mcpWorkflows": "תהליכי MCP",
   "dash.noMcpWorkflowsYet": "עדיין אין תהליכי MCP. תהליכים שלקוח MCP (Claude, Cursor, ChatGPT…) יוצר בפרויקט \\\"mcp\\\" שלכם יופיעו כאן.",
+  "dash.mcpRecentActivity": "פעולות אחרונות דרך MCP",
+  "dash.noMcpActivityYet": "עדיין אין תוצרים מלקוח MCP. תמונות, סרטונים ואודיו ש-Claude, ChatGPT או לקוח MCP אחר יוצרים עבורכם יופיעו כאן.",
   "dash.duplicateFailed": "השכפול נכשל. נסו שוב.",
   "dash.searchProjectsPlaceholder": "חיפוש פרויקטים...",
   "dash.searchProjectsUsers": "חיפוש פרויקטים, משתמשים...",
