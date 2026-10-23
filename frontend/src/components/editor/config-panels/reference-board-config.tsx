@@ -55,7 +55,7 @@ function SourceSegmented({
           className={[
             "flex-1 py-1.5 text-xs font-medium transition-colors",
             value === v
-              ? "bg-[#ff0073] text-white"
+              ? "bg-cta text-white"
               : "bg-transparent text-muted-foreground hover:bg-muted",
           ].join(" ")}
           aria-pressed={value === v}

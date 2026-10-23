@@ -110,7 +110,7 @@ export function ListInputCard({
               type="button"
               onClick={handleAdd}
               disabled={atMax}
-              className="flex items-center justify-center w-6 h-6 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+              className="flex items-center justify-center w-6 h-6 rounded-md bg-cta text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
               title={t("present.addItem")}
             >
               <Plus className="w-3.5 h-3.5" />

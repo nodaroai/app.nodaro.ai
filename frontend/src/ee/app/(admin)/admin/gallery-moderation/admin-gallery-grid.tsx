@@ -109,7 +109,7 @@ export function AdminGalleryGrid() {
           <button
             key={value}
             type="button"
-            className={cn("rounded-full px-3 py-1 text-sm font-medium", filter === value ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground")}
+            className={cn("rounded-full px-3 py-1 text-sm font-medium", filter === value ? "bg-cta text-white" : "text-muted-foreground hover:text-foreground")}
             onClick={() => {
               setFilter(value)
               clear()

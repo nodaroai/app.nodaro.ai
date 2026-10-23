@@ -496,7 +496,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             onClick={(e) => e.stopPropagation()}
           >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-cta rounded-t-xl">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
             <button
               type="button"
@@ -562,7 +562,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors ${
                 typeFilter === "all"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("all")}
@@ -573,7 +573,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "character"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("character")}
@@ -586,7 +586,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "object"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("object")}
@@ -599,7 +599,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "creature"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("creature")}
@@ -612,7 +612,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "location"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("location")}
@@ -625,7 +625,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "face"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("face")}
@@ -639,7 +639,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "image"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("image")}
@@ -651,7 +651,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "video"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("video")}
@@ -663,7 +663,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                 typeFilter === "audio"
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
               }`}
               onClick={() => setTypeFilter("audio")}
@@ -751,7 +751,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                       {/* Add to canvas button */}
                       <button
                         type="button"
-                        className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
+                        className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-cta text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
                         onClick={(e) => handleAddToCanvas(e, asset)}
                         title={t("assetlib.addToCanvas", { name: asset.name })}
                       >
@@ -1137,7 +1137,7 @@ export function UnifiedAssetLibraryButton() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-cta rounded-t-xl">
               <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
               <button
                 type="button"
@@ -1203,7 +1203,7 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors ${
                   typeFilter === "all"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("all")}
@@ -1215,7 +1215,7 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "character"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("character")}
@@ -1228,7 +1228,7 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "object"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("object")}
@@ -1241,7 +1241,7 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "creature"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("creature")}
@@ -1254,7 +1254,7 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "location"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("location")}
@@ -1267,7 +1267,7 @@ export function UnifiedAssetLibraryButton() {
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "face"
-                    ? "bg-[#ff0073] text-white"
+                    ? "bg-cta text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
                 }`}
                 onClick={() => setTypeFilter("face")}
@@ -1354,7 +1354,7 @@ export function UnifiedAssetLibraryButton() {
                         {/* Add to canvas button */}
                         <button
                           type="button"
-                          className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
+                          className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-cta text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
                           onClick={(e) => handleAddToCanvas(e, asset)}
                           title={t("assetlib.addToCanvas", { name: asset.name })}
                         >

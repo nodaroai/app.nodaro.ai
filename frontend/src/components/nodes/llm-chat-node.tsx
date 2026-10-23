@@ -67,7 +67,7 @@ const STRIP_DELETE_BTN =
 const SHOW_OUTPUTS_BTN =
   "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
 const SHOW_OUTPUTS_BTN_ACTIVE =
-  "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 transition-colors"
+  "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-cta text-white hover:bg-cta-hover transition-colors"
 
 function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()

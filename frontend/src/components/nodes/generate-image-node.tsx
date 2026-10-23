@@ -200,7 +200,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                   showThumbnails
                     // Active: brand pink + always visible so the user
                     // sees it's the toggle and can press to turn off.
-                    ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                    ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
                     // Idle: hover-revealed dark chip, default state.
                     : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
                 }`}

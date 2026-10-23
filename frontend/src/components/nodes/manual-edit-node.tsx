@@ -150,7 +150,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
               onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight }) }}
             />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.edited")}</div>
-            <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-[#ff0073] text-white opacity-0 group-hover:opacity-100 transition-opacity">{t("node.reEdit")}</button>
+            <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-cta text-white opacity-0 group-hover:opacity-100 transition-opacity">{t("node.reEdit")}</button>
             {results.length > 0 && (
               <button type="button" aria-label={t("common.remove")} className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
@@ -192,7 +192,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
                 <button
                   type="button"
                   onClick={handleOpenEditor}
-                  className="px-3 py-1 text-xs font-medium rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/80 transition-colors"
+                  className="px-3 py-1 text-xs font-medium rounded-md bg-cta text-white hover:bg-cta-hover transition-colors"
                 >
                   {t("node.openEditor")}
                 </button>

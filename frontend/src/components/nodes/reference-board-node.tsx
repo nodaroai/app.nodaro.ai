@@ -218,7 +218,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                     type="button"
                     className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
                       showThumbnails
-                        ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                        ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
                         : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
                     }`}
                     onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
@@ -344,7 +344,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   onClick={handleApplyRefine}
                   disabled={!canRefine || !refineInstruction.trim()}
                   title={maskMode ? t("node.brushAMaskThenEdit") : t("node.applyEditToWholeBoard")}
-                  className="w-6 h-6 flex items-center justify-center rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className="w-6 h-6 flex items-center justify-center rounded-md bg-cta text-white hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
                   {maskMode ? <Brush className="w-3 h-3" /> : <Send className="w-3 h-3" />}
                 </button>
@@ -358,7 +358,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   title={maskMode ? t("node.maskOnEditBrushedArea") : t("node.maskOffEditWholeBoard")}
                   className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border transition-colors disabled:opacity-40 ${
                     maskMode
-                      ? "bg-[#ff0073] border-[#ff0073] text-white"
+                      ? "bg-cta border-[#ff0073] text-white"
                       : "bg-white/5 border-white/10 text-white/70 hover:text-white"
                   }`}
                 >

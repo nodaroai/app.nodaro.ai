@@ -127,7 +127,7 @@ function DraggableImage({
         {onAddToCanvas && (
           <button
             type="button"
-            className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-primary text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-primary/90"
+            className="absolute bottom-1 end-1 w-6 h-6 flex items-center justify-center bg-cta text-primary-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-cta-hover"
             onClick={(e) => { e.stopPropagation(); onAddToCanvas(src) }}
             aria-label={t("entity.addToCanvas")}
             title={t("entity.addToCanvas")}

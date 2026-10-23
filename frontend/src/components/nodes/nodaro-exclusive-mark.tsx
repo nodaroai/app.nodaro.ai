@@ -65,7 +65,7 @@ export function NodaroHeaderChip() {
     <a
       href="/integrations"
       onClick={(e) => e.stopPropagation()}
-      className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ff0073] text-white hover:bg-[#e0005f] transition-colors"
+      className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-cta text-white hover:bg-cta-hover transition-colors"
       title={t("node.requiresNodaroConnect")}
     >
       {t("node.connectNodaro")}

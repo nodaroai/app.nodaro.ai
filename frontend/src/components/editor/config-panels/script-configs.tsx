@@ -549,7 +549,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
                 type="button"
                 className={`px-2 py-1 text-xs rounded ${
                   i === activeIndex
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-cta text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
                 onClick={() =>

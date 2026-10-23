@@ -33,7 +33,7 @@ export function CinemaTopBar({
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold tracking-tight text-foreground">
           NODARO{" "}
-          <span className="rounded-sm bg-[#ff0073] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+          <span className="rounded-sm bg-cta px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
             Cinema
           </span>
         </span>
@@ -49,7 +49,7 @@ export function CinemaTopBar({
           type="button"
           onClick={() => onToggleAutopilot(false)}
           className={`rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
-            !autopilot ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+            !autopilot ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           ⊞ {t("pipe.cinemaProControl")}
@@ -58,7 +58,7 @@ export function CinemaTopBar({
           type="button"
           onClick={() => onToggleAutopilot(true)}
           className={`rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
-            autopilot ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+            autopilot ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           ✦ {t("pipe.cinemaAutopilotAr")}
@@ -131,7 +131,7 @@ export function FlowGraphModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded bg-[#ff0073] px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-white"
+              className="rounded bg-cta px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-white"
             >
               {t("pipe.cinemaCloseGraph")}
             </button>

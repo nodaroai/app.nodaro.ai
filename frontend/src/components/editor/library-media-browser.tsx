@@ -287,7 +287,7 @@ export function LibraryMediaBrowser({
               onClick={() => setFilterType(opt.value)}
               className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
                 filterType === opt.value
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "bg-muted/50 text-muted-foreground hover:bg-muted"
               }`}
             >
@@ -521,7 +521,7 @@ const AssetCard = memo(function AssetCard({
                 e.stopPropagation()
                 onAddToCanvas(asset)
               }}
-              className="w-8 h-8 rounded-lg bg-[#ff0073]/80 hover:bg-[#ff0073] flex items-center justify-center text-white transition-colors"
+              className="w-8 h-8 rounded-lg bg-cta hover:bg-cta flex items-center justify-center text-white transition-colors"
               title={t("assetlib.addToCanvasTitle")}
             >
               <Plus className="w-4 h-4" />

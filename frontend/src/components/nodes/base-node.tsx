@@ -136,17 +136,17 @@ const CATEGORY_STYLES: Record<string, string> = {
 const CATEGORY_HEADER: Record<string, string> = {
   input: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#007AFF] dark:bg-[#38BDF8] dark:text-white dark:border-t-0",
   parameter: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#6366F1] dark:bg-[#818CF8] dark:text-white dark:border-t-0",
-  ai: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  ai: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   processing: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#475569] dark:bg-[#475569] dark:text-white dark:border-t-0",
   output: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#22C55E] dark:bg-green-600 dark:text-white dark:border-t-0",
-  scene: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  scene: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   character: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#EC4899] dark:bg-[#F472B6] dark:text-white dark:border-t-0",
   face: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#F97316] dark:bg-[#FB923C] dark:text-white dark:border-t-0",
   object: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#10B981] dark:bg-[#34D399] dark:text-white dark:border-t-0",
   creature: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#8B5CF6] dark:bg-[#A78BFA] dark:text-white dark:border-t-0",
   location: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#06B6D4] dark:bg-[#22D3EE] dark:text-white dark:border-t-0",
-  script: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
-  i2v: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  script: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
+  i2v: "bg-[#282828] text-white dark:bg-cta dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   component: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#A855F7] dark:bg-[#A855F7] dark:text-white dark:border-t-0",
 }
 
@@ -801,7 +801,7 @@ function BaseNodeComponent({
               category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-[#ff0073]" :
               (category === "character" || category === "location" || category === "object" || category === "creature" ||
                category === "ai"        || category === "scene"    || category === "script" || category === "i2v")
-                                        ? "bg-[#ff0073] dark:bg-white/20 text-white hover:opacity-70" :
+                                        ? "bg-cta dark:bg-white/20 text-white hover:opacity-70" :
               cn(CATEGORY_ICON_COLOR[category], "hover:text-[#ff0073]")
             )}
           >

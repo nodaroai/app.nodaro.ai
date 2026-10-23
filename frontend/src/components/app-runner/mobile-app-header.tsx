@@ -172,7 +172,7 @@ export function MobileAppHeader({
           <button
             type="button"
             onClick={onNewRun}
-            className="shrink-0 h-8 px-3 rounded-full text-xs font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-1 transition-colors touch-manipulation"
+            className="shrink-0 h-8 px-3 rounded-full text-xs font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-1 transition-colors touch-manipulation"
           >
             <Plus className="h-3.5 w-3.5" />
             {t("common.new")}

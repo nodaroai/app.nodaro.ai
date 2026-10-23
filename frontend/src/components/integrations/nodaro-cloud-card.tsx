@@ -251,7 +251,7 @@ export function NodaroCloudCard() {
         <Button
           onClick={handleConnect}
           disabled={connecting}
-          className="w-full sm:w-auto sm:self-start bg-[#ff0073] hover:bg-[#e0005f] text-white"
+          className="w-full sm:w-auto sm:self-start bg-cta hover:bg-cta-hover text-white"
         >
           {connecting && <Loader2 className="h-4 w-4 animate-spin me-2" />}
           {t("integ.connect")}

@@ -931,7 +931,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleAddRow() }}
                   disabled={rows.length >= maxItems}
-                  className="flex items-center justify-center w-5 h-5 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+                  className="flex items-center justify-center w-5 h-5 rounded-md bg-cta text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
                   title={t("node.addRow")}
                 >
                   <Plus className="w-3 h-3" />

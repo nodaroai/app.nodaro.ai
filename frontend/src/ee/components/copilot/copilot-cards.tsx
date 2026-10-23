@@ -156,7 +156,7 @@ export function RunProposalCard({
           type="button"
           onClick={onRun}
           disabled={disabled}
-          className="px-4 py-[7px] bg-primary rounded-lg text-[12.5px] font-semibold text-primary-foreground disabled:opacity-50"
+          className="px-4 py-[7px] bg-cta rounded-lg text-[12.5px] font-semibold text-primary-foreground disabled:opacity-50"
         >
           {t(K.proposeRun)}
         </button>
@@ -266,7 +266,7 @@ export function RunFailedCard({
           type="button"
           onClick={onFix}
           disabled={disabled}
-          className="px-4 py-[7px] bg-primary rounded-lg text-[12.5px] font-semibold text-primary-foreground disabled:opacity-50"
+          className="px-4 py-[7px] bg-cta rounded-lg text-[12.5px] font-semibold text-primary-foreground disabled:opacity-50"
         >
           {t(K.fixIt)}
         </button>

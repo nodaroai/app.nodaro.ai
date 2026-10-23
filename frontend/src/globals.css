@@ -120,6 +120,8 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-cta: var(--cta);
+  --color-cta-hover: var(--cta-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -143,6 +145,9 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: #ff0073;
   --primary-foreground: #ffffff;
+  /* A solid fill under white text (buttons, badges): #ff0073 gives white only 3.8:1, this gives 4.6:1 (WCAG 1.4.3). Pink TEXT and rings stay --primary. */
+  --cta: #e6006a;
+  --cta-hover: #cc005e; /* white on it: 5.6:1 */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -250,6 +255,9 @@
   --popover-foreground: #E2E8F0;
   --primary: #ff0073;
   --primary-foreground: #ffffff;
+  /* A solid fill under white text (buttons, badges): #ff0073 gives white only 3.8:1, this gives 4.6:1 (WCAG 1.4.3). Pink TEXT and rings stay --primary. */
+  --cta: #e6006a;
+  --cta-hover: #cc005e; /* white on it: 5.6:1 */
   --secondary: #2D2D2D;
   --secondary-foreground: #E2E8F0;
   --muted: #2D2D2D;

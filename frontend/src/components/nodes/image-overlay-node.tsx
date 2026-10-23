@@ -269,10 +269,10 @@ function ImageOverlayNodeComponent({ id, data, selected }: NodeProps) {
             {/* Preview ⇄ Result switch, only once both exist. */}
             {status !== "running" && canPreview && hasResult && (
               <div className="nodrag nopan absolute top-2 right-2 z-20 flex rounded-md overflow-hidden border border-white/10 bg-black/50 backdrop-blur-sm text-[10px] font-medium">
-                <button type="button" className={`px-2 py-1 ${showPreview ? "bg-[#ff0073] text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("preview") }}>
+                <button type="button" className={`px-2 py-1 ${showPreview ? "bg-cta text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("preview") }}>
                   {t("node.overlayPreview")}
                 </button>
-                <button type="button" className={`px-2 py-1 ${!showPreview ? "bg-[#ff0073] text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("result") }}>
+                <button type="button" className={`px-2 py-1 ${!showPreview ? "bg-cta text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("result") }}>
                   {resultFresh ? t("node.overlayResult") : t("node.overlayResultOld")}
                 </button>
               </div>
@@ -285,7 +285,7 @@ function ImageOverlayNodeComponent({ id, data, selected }: NodeProps) {
                     type="button"
                     className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
                       showThumbnails
-                        ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                        ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
                         : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/overlay:opacity-100"
                     }`}
                     onClick={(e) => {
@@ -315,7 +315,7 @@ function ImageOverlayNodeComponent({ id, data, selected }: NodeProps) {
                         key={v.id}
                         href={`/v1/image-proxy?url=${encodeURIComponent(v.url)}&download=1`}
                         download={`${nodeData.label || "overlay"}-${v.id}.${nodeData.outputFormat ?? "png"}`}
-                        className="px-1.5 py-0.5 rounded-md bg-black/55 hover:bg-[#ff0073] backdrop-blur-sm border border-white/10 text-white text-[10px]"
+                        className="px-1.5 py-0.5 rounded-md bg-black/55 hover:bg-cta backdrop-blur-sm border border-white/10 text-white text-[10px]"
                         title={`${v.label} · ${v.width}×${v.height}`}
                         onClick={(e) => e.stopPropagation()}
                       >

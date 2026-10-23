@@ -158,7 +158,7 @@ export function GetCreditsModal({
                           type="button"
                           onClick={() => priceId && handleCheckout(priceId, "subscription")}
                           disabled={!priceId || loadingId === priceId}
-                          className="h-8 px-3 rounded-full text-xs font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                          className="h-8 px-3 rounded-full text-xs font-medium text-white bg-cta hover:bg-cta-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                         >
                           {loadingId === priceId && <Loader2 className="w-3 h-3 animate-spin" />}
                           {t("pricing.cta.subscribe")}
@@ -192,7 +192,7 @@ export function GetCreditsModal({
                     } ${loadingId === pkg.priceId ? "opacity-60 pointer-events-none" : ""}`}
                   >
                     {pkg.popular && (
-                      <span className="absolute -top-2 end-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
+                      <span className="absolute -top-2 end-2 rounded-full bg-cta px-2 py-0.5 text-[10px] font-medium text-white">
                         {t("pricing.popular")}
                       </span>
                     )}

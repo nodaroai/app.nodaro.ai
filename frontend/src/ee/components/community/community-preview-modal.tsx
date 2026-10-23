@@ -191,7 +191,7 @@ export function CommunityPreviewModal({ item, open, onOpenChange }: CommunityPre
             </Button>
 
             <Button
-              className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              className="flex-1 bg-cta hover:bg-cta-hover text-white"
               onClick={handleClone}
               disabled={isCloning}
             >

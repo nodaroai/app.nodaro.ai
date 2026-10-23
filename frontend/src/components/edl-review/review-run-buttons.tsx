@@ -42,7 +42,7 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
       {runs.canRenderFinal && (
       <button
         type="button"
-        className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
+        className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-cta text-white hover:bg-cta-hover")}
         disabled={disabled}
         aria-busy={runs.checking === "final" || undefined}
         title={runs.finalUnpriced || runs.finalCredits > 0 ? runPriceTitle(t, runs.finalUnchecked, runs.finalUnpriced) : undefined}

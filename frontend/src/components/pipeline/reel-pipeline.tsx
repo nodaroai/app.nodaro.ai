@@ -164,7 +164,7 @@ export function ReelPipeline({
               onClick={() => setView(v)}
               className={`rounded-md px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${
                 view === v
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -200,7 +200,7 @@ export function ReelPipeline({
                 )}
                 {r.video && (
                   <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity group-hover/clip:opacity-100">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ff0073] text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cta text-white">
                       ▶
                     </span>
                   </span>
@@ -257,7 +257,7 @@ export function ReelPipeline({
           <button
             type="button"
             onClick={() => setPlaying(null)}
-            className="absolute right-6 top-6 rounded-md bg-[#ff0073] px-3 py-1 font-mono text-[11px] font-bold uppercase text-white"
+            className="absolute right-6 top-6 rounded-md bg-cta px-3 py-1 font-mono text-[11px] font-bold uppercase text-white"
           >
             {t("pipe.closeX")}
           </button>

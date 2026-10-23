@@ -129,7 +129,7 @@ export function FlowTemplatesDialog({
             size="sm"
             onClick={handleSave}
             disabled={!hasChanges}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             <Save className="h-3.5 w-3.5 me-1.5" />
             {t("common.save")}

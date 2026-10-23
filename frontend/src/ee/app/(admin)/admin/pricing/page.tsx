@@ -353,7 +353,7 @@ function DetailedModelTable({
                               type="button"
                               onClick={() => onSave(m.model_identifier)}
                               disabled={isSaving}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-cta text-primary-foreground hover:bg-cta-hover disabled:opacity-50 transition-colors"
                             >
                               {isSaving ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />

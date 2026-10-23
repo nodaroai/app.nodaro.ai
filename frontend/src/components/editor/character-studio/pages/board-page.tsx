@@ -177,7 +177,7 @@ export function BoardPage({ state, jobs }: StudioPageProps<CharacterStudioState,
                   <img src={optimizedImageUrl(b.url)} alt={b.name} className="w-full object-contain" loading="lazy" />
                 </a>
                 {b.type === "identity" && (
-                  <span className="absolute start-1.5 top-1.5 rounded bg-primary/90 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground">
+                  <span className="absolute start-1.5 top-1.5 rounded bg-cta px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground">
                     {t("studio.identityBoardBadge")}
                   </span>
                 )}

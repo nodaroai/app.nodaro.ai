@@ -212,7 +212,7 @@ function ComposerPanel({
             {t("pipe.cinemaSelectedShotParams")}
           </div>
         </div>
-        <span className="rounded-sm bg-[#ff0073] px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white">
+        <span className="rounded-sm bg-cta px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-white">
           {t("pipe.cinemaProView")}
         </span>
       </div>
@@ -226,7 +226,7 @@ function ComposerPanel({
             onClick={() => setTab(id)}
             className={`rounded-md border px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider transition-colors ${
               tab === id
-                ? "border-[#ff0073] bg-[#ff0073] text-white"
+                ? "border-[#ff0073] bg-cta text-white"
                 : "border-[#2a2a2a] bg-transparent text-muted-foreground hover:border-[#ff0073]/50"
             }`}
           >
@@ -325,7 +325,7 @@ function ComposerPanel({
               onClick={() => setDuration(d)}
               className={`rounded px-2 py-0.5 font-mono text-[10px] ${
                 duration === d
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -371,7 +371,7 @@ function ComposerPanel({
           onClick={() => void (tab === "framing" ? generate() : save())}
           disabled={busy || !shot.shot_id}
           title={tab === "framing" ? t("pipe.cinemaRerollKeyframe") : t("pipe.cinemaSaveDirectingSpec")}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ff0073] text-white disabled:opacity-40"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cta text-white disabled:opacity-40"
         >
           {busy ? "…" : "✦"}
         </button>

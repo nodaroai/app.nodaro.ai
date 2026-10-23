@@ -309,7 +309,7 @@ function AppRenderFinalAction({
         </button>
         <button
           type="button"
-          className="rounded-md bg-[#ff0073] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#ff0073]/90"
+          className="rounded-md bg-cta px-2 py-1 text-[11px] font-medium text-white hover:bg-cta-hover"
           onClick={() => {
             setConfirming(false)
             onRender(renderId)

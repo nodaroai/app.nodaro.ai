@@ -368,7 +368,7 @@ export default function GalleryPage() {
               className={cn(
                 "rounded-full px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
                 filter === value
-                  ? "bg-[#ff0073] text-white"
+                  ? "bg-cta text-white"
                   : "text-muted-foreground hover:text-foreground",
               )}
               onClick={() => setFilter(value)}
@@ -668,7 +668,7 @@ export default function GalleryPage() {
                   size="sm"
                   onClick={handleReport}
                   disabled={reportMutation.isPending}
-                  className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                  className="bg-cta hover:bg-cta-hover text-white"
                 >
                   {reportMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

@@ -371,7 +371,7 @@ function ShotCard({
           type="button"
           onClick={() => void save()}
           disabled={!dirty || saving || !shot.shot_id}
-          className="rounded bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-40"
+          className="rounded bg-cta px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-40"
         >
           {saving ? t("common.saving") : t("common.save")}
         </button>

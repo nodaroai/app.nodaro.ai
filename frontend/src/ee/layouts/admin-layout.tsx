@@ -291,7 +291,7 @@ export default function AdminLayout() {
                     <>
                       <span>{label}</span>
                       {showBadge && (
-                        <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
+                        <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-cta text-white rounded-full">
                           {badgeCount}
                         </span>
                       )}

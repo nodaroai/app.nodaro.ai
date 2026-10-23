@@ -108,7 +108,7 @@ function PersonCard({ person, selected, onPick, roving }: ItemProps) {
           <span
             aria-hidden
             className={cn(
-              "absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-[#ff0073] text-white transition-opacity",
+              "absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-cta text-white transition-opacity",
               selected ? "opacity-100" : "opacity-0",
             )}
           >
@@ -151,7 +151,7 @@ function PersonRow({ person, selected, onPick, roving }: ItemProps) {
         {looksCount(person, t)}
       </span>
       <VTag person={person} />
-      <span className={cn("grid size-5 place-items-center rounded-full bg-[#ff0073] text-white", selected ? "opacity-100" : "opacity-0")} aria-hidden>
+      <span className={cn("grid size-5 place-items-center rounded-full bg-cta text-white", selected ? "opacity-100" : "opacity-0")} aria-hidden>
         <Check className="size-3" />
       </span>
     </button>

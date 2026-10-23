@@ -542,7 +542,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 onClick={() => { setLibraryHighQuality(!libraryHighQuality) }}
                 className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border transition-colors ${libraryHighQuality ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
               >
-                <span className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border text-[8px] leading-none ${libraryHighQuality ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                <span className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border text-[8px] leading-none ${libraryHighQuality ? "border-primary bg-cta text-primary-foreground" : "border-muted-foreground/40"}`}>
                   {libraryHighQuality && "✓"}
                 </span>
                 {t("cfgext.voiceHighQuality")}

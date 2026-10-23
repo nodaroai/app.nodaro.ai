@@ -364,7 +364,7 @@ function LibraryTab({
                     <div className="px-1.5 py-1 text-[10px] truncate">{item.name}</div>
                   </button>
                   {isCurrent && (
-                    <span className="absolute top-1 end-1 bg-primary text-primary-foreground rounded-full p-0.5 pointer-events-none">
+                    <span className="absolute top-1 end-1 bg-cta text-primary-foreground rounded-full p-0.5 pointer-events-none">
                       <Check className="h-3 w-3" />
                     </span>
                   )}

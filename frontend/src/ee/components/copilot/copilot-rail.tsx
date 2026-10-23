@@ -78,7 +78,7 @@ function CopilotStrip({ replies, onOpen }: { readonly replies: number; readonly 
       {replies > 0 && (
         <span
           aria-hidden
-          className="mt-1 min-w-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold leading-[16px] text-center tabular-nums"
+          className="mt-1 min-w-[18px] px-1 rounded-full bg-cta text-primary-foreground text-[10px] font-bold leading-[16px] text-center tabular-nums"
         >
           {replies}
         </span>

@@ -68,7 +68,7 @@ function CharacterFxNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground text-[11px] leading-snug">{description}</p>
       )}
       {isMulti && (
-        <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff0073] px-1 text-[10px] font-bold text-white">
+        <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-cta px-1 text-[10px] font-bold text-white">
           2
         </span>
       )}

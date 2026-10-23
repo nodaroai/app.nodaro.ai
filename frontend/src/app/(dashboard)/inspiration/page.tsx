@@ -97,7 +97,7 @@ export default function InspirationPage() {
               type="button"
               onClick={() => setTag(undefined)}
               aria-label={t("inspiration.clearTag", { tag })}
-              className="ms-2 flex items-center gap-1 rounded-full bg-[#FF0073] px-2.5 py-1 text-[12px] font-bold text-white"
+              className="ms-2 flex items-center gap-1 rounded-full bg-cta px-2.5 py-1 text-[12px] font-bold text-white"
               dir="auto"
             >
               #{tag}

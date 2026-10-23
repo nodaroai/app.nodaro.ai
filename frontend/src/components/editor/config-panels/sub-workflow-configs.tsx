@@ -363,7 +363,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
         <Button
           variant="default"
           size="sm"
-          className="mt-1 w-full h-8 text-xs bg-[#ff0073] hover:bg-[#ff0073]/90 text-white disabled:opacity-50"
+          className="mt-1 w-full h-8 text-xs bg-cta hover:bg-cta-hover text-white disabled:opacity-50"
           disabled={!workflowId || creating}
           onClick={async () => {
             if (!workflowId || creating) return

@@ -89,7 +89,7 @@ export function MentionPreview({
             <button
               type="button"
               onClick={onInsert}
-              className="px-3 py-[5px] rounded-[8px] bg-primary text-primary-foreground text-[11.5px] font-semibold whitespace-nowrap"
+              className="px-3 py-[5px] rounded-[8px] bg-cta text-primary-foreground text-[11.5px] font-semibold whitespace-nowrap"
             >
               {t(K.previewInsert)}
             </button>

@@ -224,7 +224,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
                       key={ft}
                       type="button"
                       onClick={() => setLibraryType(ft)}
-                      className={`px-2 py-1 text-[10px] rounded ${libraryType === ft ? "bg-[#ff0073] text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}
+                      className={`px-2 py-1 text-[10px] rounded ${libraryType === ft ? "bg-cta text-white" : "bg-white/5 text-white/50 hover:text-white/80"}`}
                     >
                       {ft === "all" ? t("common.all") : ft === "video" ? t("common.video") : ft === "image" ? t("common.image") : t("mediaed.typeAudio")}
                     </button>
@@ -278,7 +278,7 @@ export function FreeCutImportPicker({ workflowAssets, accept, multiple, onImport
               type="button"
               onClick={handleImportSelected}
               disabled={selected.size === 0 || importing}
-              className="px-4 py-1.5 text-xs font-medium rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-1.5 text-xs font-medium rounded-md bg-cta text-white hover:bg-cta-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {importing ? t("mediaed.importing") : `${t("common.import")}${selected.size > 0 ? ` (${selected.size})` : ""}`}
             </button>

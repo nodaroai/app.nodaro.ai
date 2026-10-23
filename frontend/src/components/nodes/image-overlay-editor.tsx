@@ -140,7 +140,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
               onValueChange={(id) => updateNodeData(nodeId, overlayPlatformPatch(id, nodeData))}
             >
               <SelectTrigger
-                className={`h-8 rounded-full border-2 ps-2.5 pe-3 gap-2 text-xs font-medium shadow-sm transition-colors ${platform ? "border-[#ff0073] bg-[#ff0073] text-white hover:bg-[#ff0073]/90" : "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20"}`}
+                className={`h-8 rounded-full border-2 ps-2.5 pe-3 gap-2 text-xs font-medium shadow-sm transition-colors ${platform ? "border-cta bg-cta text-white hover:bg-cta-hover" : "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20"}`}
                 aria-label={t("overlayPlatform.label")}
               >
                 <MonitorSmartphone className="w-4 h-4 shrink-0" aria-hidden />
@@ -354,7 +354,7 @@ function QrAddCard({ disabled, onAdd }: { disabled?: boolean; onAdd: (text: stri
         <div className="w-14 h-14 shrink-0 rounded bg-white p-0.5"><QrLayerPreview style={{ ...DEFAULT_OVERLAY_QR, text: text || " " }} /></div>
       </div>
       <div className="flex gap-1.5">
-        <button type="button" className="flex-1 h-7 rounded-md bg-[#ff0073] text-white text-xs font-medium hover:bg-[#ff0073]/90 disabled:opacity-50" disabled={!ready} onClick={submit}>{t("overlayEditor.qrAdd")}</button>
+        <button type="button" className="flex-1 h-7 rounded-md bg-cta text-white text-xs font-medium hover:bg-cta-hover disabled:opacity-50" disabled={!ready} onClick={submit}>{t("overlayEditor.qrAdd")}</button>
         <button type="button" className="h-7 px-2 rounded-md border border-border/70 text-xs hover:bg-muted" onClick={() => setDraft(null)}>{t("common.cancel")}</button>
       </div>
     </div>

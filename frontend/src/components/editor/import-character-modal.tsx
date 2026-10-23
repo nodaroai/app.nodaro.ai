@@ -200,7 +200,7 @@ export function ImportCharacterModal({
             type="button"
             onClick={handleImport}
             disabled={selectedCharIds.size === 0}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-cta text-primary-foreground hover:bg-cta-hover transition-colors disabled:opacity-50"
           >
             <Download className="w-3 h-3" />
             {selectedCharIds.size > 0 ? t("entity.importCount", { n: selectedCharIds.size }) : t("entity.importSelected")}

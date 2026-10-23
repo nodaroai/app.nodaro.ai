@@ -48,7 +48,7 @@ export function StageApproveBar({ stageLabel, onApprove }: Props) {
         size="sm"
         disabled={busy}
         onClick={handleClick}
-        className="shrink-0 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+        className="shrink-0 bg-cta hover:bg-cta-hover text-white"
         data-testid="stage-approve-button"
       >
         {busy && <Loader2 className="w-3 h-3 me-1 animate-spin" />}

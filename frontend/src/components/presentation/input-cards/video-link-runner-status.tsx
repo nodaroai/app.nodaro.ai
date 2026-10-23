@@ -25,7 +25,7 @@ function Button({ primary, onClick, children }: { primary?: boolean; onClick(): 
       onClick={onClick}
       className={
         primary
-          ? "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#ff0073] hover:bg-[#ff0073]/90 text-white text-xs font-medium transition-colors"
+          ? "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-cta hover:bg-cta-hover text-white text-xs font-medium transition-colors"
           : "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border hover:bg-muted/40 text-xs font-medium transition-colors"
       }
     >

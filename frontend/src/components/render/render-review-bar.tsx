@@ -103,7 +103,7 @@ export function RenderReviewBarView({
       <div className="flex items-center gap-1.5" role="group">
         <button
           type="button"
-          className={cn(BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
+          className={cn(BUTTON, "border-[#ff0073]/60 bg-cta text-white hover:bg-cta-hover")}
           disabled={off}
           aria-busy={checking === "final" || undefined}
           aria-describedby={described}

@@ -200,8 +200,8 @@ export function SaveToLibraryButton({
               : saveState === "error"
                 ? "bg-red-500/80 text-white"
                 : saveState === "saving"
-                  ? "bg-[#ff0073]/80 text-white"
-                  : "bg-[#ff0073]/80 hover:bg-[#ff0073] text-white",
+                  ? "bg-cta text-white"
+                  : "bg-cta hover:bg-cta text-white",
             className,
           )}
           onClick={handleClick}

@@ -180,7 +180,7 @@ function SocialSearchNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   onClick={(e) => { stop(e); setPickerOpen(true) }}
                   onMouseDown={stop}
-                  className="nodrag ms-auto rounded-full bg-[#FF0073] px-3 py-1 text-[11.5px] font-bold text-white hover:bg-[#e00066]"
+                  className="nodrag ms-auto rounded-full bg-cta px-3 py-1 text-[11.5px] font-bold text-white hover:bg-cta-hover"
                 >
                   {t("social.pickPosts")}
                 </button>

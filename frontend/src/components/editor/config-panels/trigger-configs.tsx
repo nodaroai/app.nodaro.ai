@@ -297,7 +297,7 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
       <div>
         <Button
           variant={isActive ? "outline" : "default"}
-          className={isActive ? "w-full border-destructive/30 text-destructive hover:bg-destructive/10" : "w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"}
+          className={isActive ? "w-full border-destructive/30 text-destructive hover:bg-destructive/10" : "w-full bg-cta hover:bg-cta-hover text-white"}
           onClick={handleToggleActive}
           disabled={!isActive && !hasBot}
         >

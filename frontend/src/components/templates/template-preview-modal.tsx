@@ -410,7 +410,7 @@ export function TemplatePreviewModal({
 
             {/* Clone button */}
             <Button
-              className="shrink-0 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              className="shrink-0 bg-cta hover:bg-cta-hover text-white"
               disabled={isCloning || !selectedProjectId}
               onClick={handleClone}
             >

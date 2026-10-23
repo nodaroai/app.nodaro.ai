@@ -1697,7 +1697,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 className={`shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 ${
                   isResetAction(newRunAction)
                     ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
-                    : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+                    : "text-white bg-cta hover:bg-cta-hover"
                 }`}
               >
                 {isResetAction(newRunAction)
@@ -1724,7 +1724,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   <button
                     type="button"
                     onClick={() => setShowGetCreditsModal(true)}
-                    className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200"
+                    className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200"
                   >
                     <Sparkles className="h-4 w-4" />
                     {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
@@ -1737,7 +1737,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     <button
                       type="button"
                       onClick={handleRunClick}
-                      className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!!user && !allInputsFilled}
                     >
                       {!user ? (
@@ -1944,7 +1944,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={handleRunClick}
-                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={(!isFullscreen && mode === "tab" && !onRun) || (isFullscreen && !allInputsFilled && !!user)}
                 >
                   {isFullscreen && !user ? (
@@ -2086,7 +2086,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               className={`shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-all duration-200 touch-manipulation ${
                 isResetAction(newRunAction)
                   ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
-                  : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+                  : "text-white bg-cta hover:bg-cta-hover"
               }`}
             >
               {isResetAction(newRunAction)
@@ -2112,7 +2112,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={() => setShowGetCreditsModal(true)}
-                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 touch-manipulation"
+                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 touch-manipulation"
                 >
                   <Sparkles className="h-4 w-4" />
                   {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
@@ -2121,7 +2121,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 <button
                   type="button"
                   onClick={handleRunClick}
-                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                  className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                   disabled={!!user && !allInputsFilled}
                 >
                   {!user ? (

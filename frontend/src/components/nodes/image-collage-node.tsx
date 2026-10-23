@@ -144,7 +144,7 @@ function ImageCollageNodeComponent({ id, data, selected }: NodeProps) {
                     type="button"
                     className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
                       showThumbnails
-                        ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                        ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100"
                         : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/collage:opacity-100"
                     }`}
                     onClick={(e) => {

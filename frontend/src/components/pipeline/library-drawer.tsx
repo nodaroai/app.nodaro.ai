@@ -107,7 +107,7 @@ export function LibraryDrawer({
           type="button"
           onClick={() => setTab("featured")}
           className={`rounded-md px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${
-            tab === "featured" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+            tab === "featured" ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           ★ {t("cfgext.voiceCatFeatured")}
@@ -116,7 +116,7 @@ export function LibraryDrawer({
           type="button"
           onClick={() => setTab("mine")}
           className={`rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-            tab === "mine" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+            tab === "mine" ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           + {t("pipe.cinemaMyCast", { n: mine?.length ?? 0 })}
@@ -125,7 +125,7 @@ export function LibraryDrawer({
           type="button"
           onClick={() => setTab("new")}
           className={`rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wider ${
-            tab === "new" ? "bg-[#ff0073] text-white" : "text-muted-foreground"
+            tab === "new" ? "bg-cta text-white" : "text-muted-foreground"
           }`}
         >
           + {t("common.new")}
@@ -186,7 +186,7 @@ export function LibraryDrawer({
                 onUseInShot?.(`new ${type}`, newDesc)
                 setNewDesc("")
               }}
-              className="w-full rounded-md bg-[#ff0073] py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
+              className="w-full rounded-md bg-cta py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
             >
               {t("pipe.cinemaUseInShot")}
             </button>

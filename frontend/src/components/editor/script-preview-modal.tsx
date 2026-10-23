@@ -225,7 +225,7 @@ export function ScriptPreviewModal({
           <div className="mt-3 flex gap-2">
             <button
               type="button"
-              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md bg-[#ff0073] hover:bg-[#ff0073]/90 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 h-8 px-4 text-xs font-medium rounded-md bg-cta hover:bg-cta-hover text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={generatingAll || hasAnyRunning || pendingCount === 0}
               onClick={handleGenerateAll}
             >

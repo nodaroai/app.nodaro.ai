@@ -125,7 +125,7 @@ export default function CopilotCenter({ leaving, onCreate, onContextMenu }: Copi
               type="button"
               // Always lit, as the call to action of an empty canvas; with nothing typed it points at the box.
               onClick={() => (draft.trim() ? send(draft) : inputRef.current?.focus())}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-cta text-primary-foreground text-[13px] font-semibold hover:bg-cta-hover transition-colors"
             >
               {t(K.build)}
               <ArrowRight className={cn("w-3.5 h-3.5", isRtl && "rotate-180")} strokeWidth={2.4} />

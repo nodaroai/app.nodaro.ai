@@ -1417,7 +1417,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <History className="w-4 h-4" />
               {t("nav.executions")}
               {activeJobCount > 0 && (
-                <span className="ms-1 px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
+                <span className="ms-1 px-1.5 py-0.5 text-xs font-medium bg-cta text-white rounded-full">
                   {activeJobCount}
                 </span>
               )}

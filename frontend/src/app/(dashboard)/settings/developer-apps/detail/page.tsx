@@ -450,7 +450,7 @@ export default function DeveloperAppDetailPage() {
           <Button
             onClick={handleSave}
             disabled={updateMutation.isPending}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {updateMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin me-2" />

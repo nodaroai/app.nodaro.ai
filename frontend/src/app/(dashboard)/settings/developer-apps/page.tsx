@@ -313,7 +313,7 @@ export default function DeveloperAppsPage() {
       <Button
         onClick={() => setShowCreate(true)}
         disabled={capReached}
-        className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+        className="bg-cta hover:bg-cta-hover text-white"
       >
         <Plus className="h-4 w-4 me-2" />
         {t("devApps.createApp")}
@@ -493,7 +493,7 @@ export default function DeveloperAppsPage() {
                 <Button
                   onClick={handleCreate}
                   disabled={createMutation.isPending}
-                  className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+                  className="bg-cta hover:bg-cta-hover text-white"
                 >
                   {createMutation.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin me-2" />

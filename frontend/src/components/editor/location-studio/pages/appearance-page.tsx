@@ -208,7 +208,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
               type="button"
               onClick={handleGenerate}
               disabled={generateDisabled}
-              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+              className="ms-auto px-4 py-1.5 text-[12px] rounded bg-cta hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
             >
               {t("common.generate")}
             </button>

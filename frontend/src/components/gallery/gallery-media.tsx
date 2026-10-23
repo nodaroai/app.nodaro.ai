@@ -49,7 +49,7 @@ export function AudioCard({ url }: { readonly url: string }) {
   return (
     <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-3">
       <div
-        className="w-full"
+        className="relative z-[3] w-full"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >

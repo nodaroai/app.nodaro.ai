@@ -130,7 +130,7 @@ export function SocialPostCard({
             title={saved ? t("social.savedRemove") : t("social.saveToWall")}
             className={cn(
               "absolute start-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border transition-colors disabled:opacity-60",
-              saved ? "border-[#FF0073] bg-[#FF0073] text-white" : "border-white/80 bg-black/40 text-white hover:bg-black/60",
+              saved ? "border-[#FF0073] bg-cta text-white" : "border-white/80 bg-black/40 text-white hover:bg-black/60",
             )}
           >
             {saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
@@ -146,7 +146,7 @@ export function SocialPostCard({
           <span
             className={cn(
               "absolute end-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full border text-[11px] font-extrabold transition-colors",
-              picked ? "border-[#FF0073] bg-[#FF0073] px-1.5 text-white" : "border-white/80 bg-black/30 text-transparent group-hover:text-white/80",
+              picked ? "border-[#FF0073] bg-cta px-1.5 text-white" : "border-white/80 bg-black/30 text-transparent group-hover:text-white/80",
             )}
             aria-hidden
           >

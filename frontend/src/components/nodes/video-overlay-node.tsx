@@ -229,10 +229,10 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
 
             {status !== "running" && canPreview && hasResult && (
               <div className="nodrag nopan absolute top-2 right-2 z-30 flex rounded-md overflow-hidden border border-white/10 bg-black/50 backdrop-blur-sm text-[10px] font-medium">
-                <button type="button" aria-pressed={showPreview} className={`px-2 py-1 ${showPreview ? "bg-[#ff0073] text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("preview") }}>
+                <button type="button" aria-pressed={showPreview} className={`px-2 py-1 ${showPreview ? "bg-cta text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("preview") }}>
                   {t("node.overlayPreview")}
                 </button>
-                <button type="button" aria-pressed={!showPreview} className={`px-2 py-1 ${!showPreview ? "bg-[#ff0073] text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("result") }}>
+                <button type="button" aria-pressed={!showPreview} className={`px-2 py-1 ${!showPreview ? "bg-cta text-white" : "text-white/80 hover:bg-white/10"}`} onClick={(e) => { e.stopPropagation(); setView("result") }}>
                   {resultFresh ? t("node.overlayResult") : t("node.overlayResultOld")}
                 </button>
               </div>
@@ -256,7 +256,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
                   <button
                     type="button"
                     className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-20 transition-opacity ${
-                      showThumbnails ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100" : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/overlay:opacity-100"
+                      showThumbnails ? "bg-cta hover:bg-cta-hover border-[#ff0073] text-white opacity-100" : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/overlay:opacity-100"
                     }`}
                     onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
                     title={showThumbnails ? t("node.hideVersions") : t("node.showVersions")}

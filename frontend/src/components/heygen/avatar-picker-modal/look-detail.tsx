@@ -147,7 +147,7 @@ export function LookDetail({ person, look, onPickLook, onUse, voice, costLabel }
           onClick={() => onUse(look)}
           disabled={!usable}
           title={usable ? undefined : t("heygen.lookNotFinished")}
-          className="flex-1 rounded-lg bg-[#ff0073] py-2.5 text-center text-[13px] font-medium text-white hover:bg-[#e6006a] disabled:cursor-not-allowed disabled:opacity-40 whitespace-nowrap"
+          className="flex-1 rounded-lg bg-cta py-2.5 text-center text-[13px] font-medium text-white hover:bg-[#e6006a] disabled:cursor-not-allowed disabled:opacity-40 whitespace-nowrap"
         >
           {t("heygen.useThisAvatar")}
         </button>

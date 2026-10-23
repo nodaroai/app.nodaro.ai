@@ -46,7 +46,7 @@ export function SubscriptionRequiredModal({ open, onClose }: SubscriptionRequire
             {t("connect.providerNotNow")}
           </Button>
           {surfaceBillingSelfServe() && (
-            <Button asChild className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white">
+            <Button asChild className="bg-cta hover:bg-cta-hover text-white">
               <Link to="/pricing">{t("credits.viewPlans")}</Link>
             </Button>
           )}

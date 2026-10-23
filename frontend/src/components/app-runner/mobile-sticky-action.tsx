@@ -51,7 +51,7 @@ export function MobileStickyAction({
           className={`shrink-0 h-11 px-4 rounded-full text-sm font-medium flex items-center gap-2 transition-colors touch-manipulation ${
             isResetAction(newRunAction)
               ? "text-foreground bg-muted hover:bg-muted/80 border border-border"
-              : "text-white bg-[#ff0073] hover:bg-[#ff0073]/90"
+              : "text-white bg-cta hover:bg-cta-hover"
           }`}
         >
           {isResetAction(newRunAction) ? (
@@ -77,7 +77,7 @@ export function MobileStickyAction({
         <button
           type="button"
           onClick={onGetCredits}
-          className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center justify-center gap-2 transition-colors touch-manipulation"
+          className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center justify-center gap-2 transition-colors touch-manipulation"
         >
           <Sparkles className="h-4 w-4" />
           {t("runner.getCredits")}
@@ -87,7 +87,7 @@ export function MobileStickyAction({
           type="button"
           onClick={onRun}
           disabled={isAuthenticated && !allInputsFilled}
-          className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-[#ff0073] hover:bg-[#ff0073]/90 flex items-center justify-center gap-2 transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center justify-center gap-2 transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {!isAuthenticated ? (
             <>

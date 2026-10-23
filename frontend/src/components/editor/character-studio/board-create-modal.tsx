@@ -189,12 +189,12 @@ export function BoardCreateModal({
                           className="h-full w-full object-cover"
                         />
                         {on && (
-                          <span className="absolute start-1 top-1 grid size-5 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                          <span className="absolute start-1 top-1 grid size-5 place-items-center rounded-full bg-cta text-[11px] font-semibold text-primary-foreground">
                             {order + 1}
                           </span>
                         )}
                         {on && (
-                          <span className="absolute end-1 top-1 rounded-sm bg-primary p-0.5 text-primary-foreground">
+                          <span className="absolute end-1 top-1 rounded-sm bg-cta p-0.5 text-primary-foreground">
                             <Check className="size-3" />
                           </span>
                         )}

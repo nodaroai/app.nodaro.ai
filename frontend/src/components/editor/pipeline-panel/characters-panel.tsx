@@ -308,7 +308,7 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
           onClick={handleApprove}
           disabled={!canApprove || busy !== null}
           data-testid="step-a-approve"
-          className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+          className="bg-cta hover:bg-cta-hover text-white"
         >
           {busy === "approve" && <Loader2 className="w-3 h-3 me-1 animate-spin" />}
           {isEdited ? t("pipe.saveAndApprove") : t("pipe.approve")}

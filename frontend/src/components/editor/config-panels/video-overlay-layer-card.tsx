@@ -166,7 +166,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
               type="button"
               role="radio"
               aria-checked={placement === opt.id}
-              className={`h-7 rounded border text-[10px] ${placement === opt.id ? "bg-[#ff0073] border-[#ff0073] text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
+              className={`h-7 rounded border text-[10px] ${placement === opt.id ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
               onClick={() => (opt.id === "custom" ? p.onCustom() : p.onPreset(opt.id))}
             >
               {t(opt.label)}
@@ -181,7 +181,7 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
                 type="button"
                 role="radio"
                 aria-checked={(layer.corner ?? "bottom-right") === c}
-                className={`h-6 rounded border text-[10px] ${(layer.corner ?? "bottom-right") === c ? "bg-[#ff0073] border-[#ff0073] text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
+                className={`h-6 rounded border text-[10px] ${(layer.corner ?? "bottom-right") === c ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
                 onClick={() => p.onPreset("corner-badge", c)}
               >
                 {t(CORNER_LABELS[c])}

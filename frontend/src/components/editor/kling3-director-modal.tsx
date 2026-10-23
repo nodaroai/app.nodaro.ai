@@ -340,7 +340,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
   const tabClass = (tab: DirectorTab) =>
     `flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all ${
       activeTab === tab
-        ? "bg-[#ff0073] text-white shadow-md"
+        ? "bg-cta text-white shadow-md"
         : "text-gray-500 dark:text-[#94A3B8] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] hover:text-gray-700 dark:hover:text-white"
     }`
 
@@ -1030,7 +1030,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
               <button
                 type="button"
                 disabled={status === "running"}
-                className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-cta hover:bg-cta-hover disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                 onClick={() => runSingleNode?.(nodeId)}
               >
                 {status === "running" ? (

@@ -189,7 +189,7 @@ export default function ApiSettingsPage() {
       <Button
         onClick={() => setShowCreate(true)}
         disabled={(tokens ?? []).length >= 10}
-        className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+        className="bg-cta hover:bg-cta-hover text-white"
       >
         <Plus className="h-4 w-4 me-2" />
         {t("apiTok.createToken")}
@@ -344,7 +344,7 @@ export default function ApiSettingsPage() {
                 <Button
                   onClick={handleCreate}
                   disabled={!newTokenName.trim() || createMutation.isPending}
-                  className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+                  className="bg-cta hover:bg-cta-hover text-white"
                 >
                   {createMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin me-2" />

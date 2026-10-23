@@ -661,14 +661,14 @@ export function PromptHelperDialog({
                     <button
                       type="button"
                       onClick={() => setOutputFormat("natural")}
-                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "natural" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "natural" ? "bg-cta text-white" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       {t("cfgext.phdNatural")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setOutputFormat("json")}
-                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "json" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                      className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "json" ? "bg-cta text-white" : "text-muted-foreground hover:text-foreground"}`}
                     >
                       {t("out.json")}
                     </button>
@@ -724,7 +724,7 @@ export function PromptHelperDialog({
             <Button
               onClick={handleAnalyze}
               disabled={loading}
-              className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+              className="w-full bg-cta hover:bg-cta-hover text-white"
             >
               {loading ? (
                 <><Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" />{t("cfgext.phdAnalyzing")}</>
@@ -752,7 +752,7 @@ export function PromptHelperDialog({
               <Button
                 onClick={handleGenerate}
                 disabled={!canGenerate}
-                className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                className="flex-1 bg-cta hover:bg-cta-hover text-white"
               >
                 {loading ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" />{t("cfgext.entGenerating")}</>
@@ -778,7 +778,7 @@ export function PromptHelperDialog({
               </Button>
               <Button
                 onClick={() => handleAccept(false)}
-                className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
+                className="flex-1 bg-cta hover:bg-cta-hover text-white"
               >
                 {t("cfgext.phdUseThisPrompt")}
               </Button>

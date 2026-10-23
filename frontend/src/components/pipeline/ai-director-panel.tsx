@@ -153,7 +153,7 @@ export function AiDirectorPanel({
             type="button"
             onClick={() => void send()}
             disabled={!draft.trim() || busy}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#ff0073] text-white disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-cta text-white disabled:opacity-40"
           >
             →
           </button>

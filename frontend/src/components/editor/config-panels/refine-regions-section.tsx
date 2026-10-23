@@ -388,7 +388,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
             type="button"
             onClick={handleApply}
             disabled={!prompt.trim() || applying || nodeRunning}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 transition-colors disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-md bg-cta text-white hover:bg-cta-hover transition-colors disabled:opacity-50"
           >
             {applying ? (
               <>

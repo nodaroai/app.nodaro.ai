@@ -184,7 +184,7 @@ export function ClipEditor({
           type="button"
           onClick={() => void regenerate()}
           disabled={busy || !shotId}
-          className="rounded-md bg-[#ff0073] px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
+          className="rounded-md bg-cta px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-40"
         >
           {busy ? t("cfgext.sceneRegenerating") : t("pipe.cinemaSaveRegenerateClip")}
         </button>

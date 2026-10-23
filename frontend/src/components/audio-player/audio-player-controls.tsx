@@ -56,7 +56,7 @@ function AudioPlayerControlsComponent({
           type="button"
           aria-label={isPlaying ? t("common.pause") : t("common.play")}
           onClick={(e) => { e.stopPropagation(); onPlayPause() }}
-          className={`${BTN} w-7 h-7 rounded-full bg-[#ff0073] text-white hover:bg-[#ff0073]/90`}
+          className={`${BTN} w-7 h-7 rounded-full bg-cta text-white hover:bg-cta-hover`}
         >
           {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 translate-x-px" />}
         </button>

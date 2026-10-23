@@ -103,7 +103,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
             className={cn(
               "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
               scope === "user"
-                ? "bg-[#ff0073] text-white"
+                ? "bg-cta text-white"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >
@@ -115,7 +115,7 @@ export function StatsOverview({ className }: StatsOverviewProps) {
             className={cn(
               "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
               scope === "platform"
-                ? "bg-[#ff0073] text-white"
+                ? "bg-cta text-white"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             )}
           >

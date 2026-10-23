@@ -562,7 +562,7 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
           type="button"
           onClick={() => void start()}
           disabled={!prompt.trim() || busy}
-          className="mt-3 rounded-md bg-[#ff0073] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="mt-3 rounded-md bg-cta px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {busy ? t("pipe.starting") : t("pipe.createFilm")}
         </button>
@@ -635,7 +635,7 @@ function StageTracker({
         const done =
           stageStatus[s] === "approved" || (currentIdx >= 0 && i < currentIdx)
         const cls = isSelected
-          ? "border-[#ff0073] bg-[#ff0073] text-white"
+          ? "border-[#ff0073] bg-cta text-white"
           : done
             ? "border-green-500/50 bg-green-500/10 text-green-400 hover:border-[#ff0073]/60"
             : "border-[var(--border-primary)] text-muted-foreground hover:border-[#ff0073]/60"
@@ -761,7 +761,7 @@ function EntityDescGate({
             type="button"
             disabled={busy}
             onClick={() => onGenerate(card.entityId, edited ? desc : undefined)}
-            className="rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-cta px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
           >
             {t("pipe.generate")}
           </button>
@@ -1000,7 +1000,7 @@ function GatePanel({
                         type="button"
                         disabled={acting}
                         onClick={() => actions.approveEntity(c.entityId)}
-                        className={`${btn} bg-[#ff0073] text-white`}
+                        className={`${btn} bg-cta text-white`}
                       >
                         {t("pipe.approve")}
                       </button>
@@ -1036,7 +1036,7 @@ function GatePanel({
                           setRedoFor(null)
                           setRedoFeedback("")
                         }}
-                        className={`${btn} bg-[#ff0073] text-white`}
+                        className={`${btn} bg-cta text-white`}
                       >
                         {t("pipe.regenerate")}
                       </button>
@@ -1062,7 +1062,7 @@ function GatePanel({
                 type="button"
                 disabled={acting}
                 onClick={() => actions.approveGate(g.stageName, g.subGate)}
-                className={`${btn} bg-[#ff0073] text-white`}
+                className={`${btn} bg-cta text-white`}
               >
                 {t("pipe.approveAndContinue", { stage: STAGE_LABELS[g.stageName] ? t(STAGE_LABELS[g.stageName]) : g.stageName })}
               </button>
@@ -1179,7 +1179,7 @@ function ScriptView({
   const inputCls =
     "flex-1 rounded-md border bg-background px-2 py-1 text-xs text-foreground"
   const pinkBtn =
-    "rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+    "rounded-md bg-cta px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
 
   return (
     <div className="max-w-3xl space-y-4 rounded-md border bg-card p-4 text-sm leading-relaxed text-foreground">

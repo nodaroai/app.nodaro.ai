@@ -235,7 +235,7 @@ export function TrimPanel({
     <div className="flex flex-col gap-2">
       {/* Play + Loop — own row on mobile, inline on desktop */}
       <div className="flex items-center justify-center gap-2 sm:hidden">
-        <button type="button" onClick={togglePlay} className="flex items-center justify-center w-8 h-8 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors">
+        <button type="button" onClick={togglePlay} className="flex items-center justify-center w-8 h-8 rounded-full bg-cta hover:bg-cta-hover text-white transition-colors">
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ms-0.5" />}
         </button>
         <button type="button" onClick={() => setLoopEnabled(!loopEnabled)} title={loopEnabled ? t("mediaed.loopOn") : t("mediaed.loopOff")}
@@ -249,7 +249,7 @@ export function TrimPanel({
         <span>{t("mediaed.trim")}</span>
         {/* Desktop only — centered */}
         <div className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-2">
-          <button type="button" onClick={togglePlay} className="flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] hover:bg-[#ff0073]/80 text-white transition-colors">
+          <button type="button" onClick={togglePlay} className="flex items-center justify-center w-7 h-7 rounded-full bg-cta hover:bg-cta-hover text-white transition-colors">
             {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ms-0.5" />}
           </button>
           <button type="button" onClick={() => setLoopEnabled(!loopEnabled)} title={loopEnabled ? t("mediaed.loopOn") : t("mediaed.loopOff")}

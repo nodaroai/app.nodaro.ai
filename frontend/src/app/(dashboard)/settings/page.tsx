@@ -632,7 +632,7 @@ export default function SettingsPage() {
           <Button
             onClick={handleSaveTemplates}
             disabled={templatesMutation.isPending || !hasTemplateChanges}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {templatesMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin me-2" />
@@ -691,7 +691,7 @@ export default function SettingsPage() {
           <Button
             onClick={handleSaveTextTemplates}
             disabled={templatesMutation.isPending || !hasTextTemplateChanges}
-            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+            className="bg-cta hover:bg-cta-hover text-white"
           >
             {templatesMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin me-2" />

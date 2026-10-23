@@ -542,7 +542,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                 <button
                   type="button"
                   onClick={handleImportFromScript}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-cta text-primary-foreground hover:bg-cta-hover"
                 >
                   <Download className="w-3 h-3" /> {t("scenecfg.importNow")}
                 </button>

@@ -131,7 +131,7 @@ const VoiceRow = memo(function VoiceRow({
         className={cn(
           "shrink-0 flex items-center justify-center size-6 rounded-full border transition-colors",
           isPlaying
-            ? "border-[#ff0073] bg-[#ff0073] text-white"
+            ? "border-[#ff0073] bg-cta text-white"
             : "border-gray-300 dark:border-[#3D3D3D] text-muted-foreground hover:border-[#ff0073] hover:text-[#ff0073]",
           !voice.previewAudio && "opacity-30 cursor-not-allowed",
         )}

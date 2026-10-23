@@ -2421,7 +2421,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
                         aria-checked={current === opt.value}
                         className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
                           current === opt.value
-                            ? "bg-[#ff0073] text-white"
+                            ? "bg-cta text-white"
                             : "bg-transparent text-muted-foreground hover:bg-muted"
                         }`}
                         onClick={() =>

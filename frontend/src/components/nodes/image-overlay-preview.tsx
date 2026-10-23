@@ -319,7 +319,7 @@ export function ImageOverlayPreview(p: ImageOverlayPreviewProps) {
                 {kind === "qr" && isSel && (
                   <button
                     type="button"
-                    className="nodrag nopan absolute left-1/2 -translate-x-1/2 top-full mt-1 max-w-[220px] whitespace-nowrap rounded-full bg-black/80 text-white text-[10px] leading-none px-2 py-1 flex items-center gap-1 hover:bg-[#ff0073]"
+                    className="nodrag nopan absolute left-1/2 -translate-x-1/2 top-full mt-1 max-w-[220px] whitespace-nowrap rounded-full bg-black/80 text-white text-[10px] leading-none px-2 py-1 flex items-center gap-1 hover:bg-cta"
                     style={{ transform: `translateX(-50%) rotate(${-layer.rotation}deg)` }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); p.onEditContent?.(i) }}

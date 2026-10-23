@@ -181,7 +181,7 @@ export default function AdminGalleryReportsPage() {
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               statusFilter === value
-                ? "bg-[#ff0073] text-white"
+                ? "bg-cta text-white"
                 : "text-muted-foreground hover:text-foreground",
             )}
             onClick={() => { setStatusFilter(value); setPage(1) }}

@@ -61,7 +61,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
 
         {/* RemX badge */}
         {app.supportsRemix && (
-          <span className="absolute top-2 start-2 text-[10px] px-1.5 py-0.5 rounded bg-[#ff0073]/90 text-white font-medium">
+          <span className="absolute top-2 start-2 text-[10px] px-1.5 py-0.5 rounded bg-cta text-white font-medium">
             RemX
           </span>
         )}

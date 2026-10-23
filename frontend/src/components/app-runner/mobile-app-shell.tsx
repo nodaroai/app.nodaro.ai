@@ -1066,7 +1066,7 @@ export function MobileAppShell({
                     <p className="text-sm">{t("runner.inputsReady")}</p>
                     <button
                       type="button"
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-cta px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-cta-hover"
                       onClick={handleRunClick}
                     >
                       <Play className="h-3.5 w-3.5" />

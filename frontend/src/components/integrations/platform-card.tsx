@@ -248,7 +248,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
           className={`flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[10px] text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${
             isConnected
               ? "border border-dashed hover:border-solid"
-              : "bg-foreground font-bold text-background hover:opacity-90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+              : "bg-foreground font-bold text-background hover:opacity-90 dark:bg-cta dark:text-primary-foreground dark:hover:bg-cta-hover"
           }`}
           style={
             isConnected

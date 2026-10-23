@@ -549,7 +549,7 @@ export function ExtractReferencesModal({
               <button
                 type="button"
                 className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium transition-colors ${
-                  selectionMode === "lasso" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                  selectionMode === "lasso" ? "bg-cta text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("lasso")}
                 title={t("editor.lassoSelectionTitle")}
@@ -559,7 +559,7 @@ export function ExtractReferencesModal({
               <button
                 type="button"
                 className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium transition-colors ${
-                  selectionMode === "rectangle" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                  selectionMode === "rectangle" ? "bg-cta text-primary-foreground" : "bg-muted hover:bg-muted/80"
                 }`}
                 onClick={() => setSelectionMode("rectangle")}
                 title={t("editor.rectSelectionTitle")}
@@ -656,7 +656,7 @@ export function ExtractReferencesModal({
                 </div>
                 <button
                   type="button"
-                  className="h-8 px-4 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  className="h-8 px-4 text-xs font-medium rounded-md bg-cta text-primary-foreground hover:bg-cta-hover disabled:opacity-50"
                   disabled={!nameInput.trim() || saving}
                   onClick={handleConfirmExtraction}
                 >
@@ -781,7 +781,7 @@ export function ExtractReferencesModal({
             </button>
             <button
               type="button"
-              className="h-8 px-4 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-8 px-4 text-xs font-medium rounded-md bg-cta text-primary-foreground hover:bg-cta-hover"
               onClick={handleSave}
             >
               {t("editor.saveReferences")}

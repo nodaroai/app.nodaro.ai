@@ -142,7 +142,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
               })
             }}
             disabled={!studio.isDirty || closeBlocked}
-            className="text-[11px] px-3 py-1.5 rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+            className="text-[11px] px-3 py-1.5 rounded bg-cta hover:bg-cta-hover disabled:opacity-40 disabled:cursor-not-allowed text-white"
           >
             {studio.isSaving ? t("common.saving") : t("common.save")}
           </button>

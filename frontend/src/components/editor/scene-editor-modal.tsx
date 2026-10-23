@@ -296,7 +296,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     onClick={() => setMediaTab("image")}
                     className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-full transition-all ${
                       mediaTab === "image"
-                        ? "bg-[#ff0073] text-white shadow-md"
+                        ? "bg-cta text-white shadow-md"
                         : "text-gray-500 dark:text-[#94A3B8] hover:text-foreground dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#2D2D2D]"
                     }`}
                   >
@@ -307,7 +307,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                     onClick={() => setMediaTab("video")}
                     className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-full transition-all ${
                       mediaTab === "video"
-                        ? "bg-[#ff0073] text-white shadow-md"
+                        ? "bg-cta text-white shadow-md"
                         : "text-gray-500 dark:text-[#94A3B8] hover:text-foreground dark:hover:text-white hover:bg-gray-200 dark:hover:bg-[#2D2D2D]"
                     }`}
                   >
@@ -348,7 +348,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         </button>
                         <button
                           type="button"
-                          className="p-2 bg-[#ff0073]/80 hover:bg-[#ff0073] text-white rounded-lg backdrop-blur-sm transition-colors"
+                          className="p-2 bg-cta hover:bg-cta text-white rounded-lg backdrop-blur-sm transition-colors"
                           onClick={() => setExtractOpen(true)}
                           title={t("node.extractReferences")}
                         >
@@ -513,7 +513,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                         onClick={() => setCurrentStep(s.step)}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium transition-all ${
                           isActive
-                            ? "bg-[#ff0073] text-white shadow-md"
+                            ? "bg-cta text-white shadow-md"
                             : isComplete
                               ? "text-green-600 dark:text-green-400 bg-green-500/10 hover:bg-green-500/20"
                               : "text-gray-500 dark:text-[#94A3B8] bg-gray-100 dark:bg-[#2D2D2D] hover:bg-gray-200 dark:hover:bg-[#3D3D3D] hover:text-gray-700 dark:hover:text-white"
@@ -547,7 +547,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                 <button
                   type="button"
                   disabled={status === "running"}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-cta hover:bg-cta-hover disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                   onClick={() => runSingleNode?.(nodeId)}
                 >
                   {status === "running" ? (
@@ -564,7 +564,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   type="button"
                   disabled={generatingAllAudio || !(data?.dialogue ?? []).some((d) => d.text.trim() && !(d.generatedAudioResults?.length))}
                   onClick={handleGenerateAllAudio}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-cta hover:bg-cta-hover disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                 >
                   {generatingAllAudio ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> {t("scene.generatingProgress", { current: audioProgress.current, total: audioProgress.total })}</>
@@ -578,7 +578,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   <button
                     type="button"
                     disabled={!activeUrl || generatingVideo}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-[#ff0073] hover:bg-[#e00066] disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 text-sm font-medium bg-cta hover:bg-cta-hover disabled:opacity-50 text-white rounded-lg transition-all shadow-md hover:shadow-lg"
                     onClick={handleGenerateVideo}
                     title={activeUrl ? t("scene.generateVideoFromImage") : t("scene.generateImageFirst")}
                   >
@@ -613,7 +613,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   <button
                     type="button"
                     onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
-                    className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-[#ff0073] text-white hover:bg-[#e00066] transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-cta text-white hover:bg-cta-hover transition-all shadow-md hover:shadow-lg"
                   >
                     {t("common.next")} <ChevronRight className={cn("w-4 h-4", isRtl && "rotate-180")} />
                   </button>
@@ -621,7 +621,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-[#ff0073] text-white hover:bg-[#e00066] transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center gap-1.5 px-6 py-2 text-sm font-medium rounded-lg bg-cta text-white hover:bg-cta-hover transition-all shadow-md hover:shadow-lg"
                   >
                     {t("common.done")} <Check className="w-4 h-4" />
                   </button>

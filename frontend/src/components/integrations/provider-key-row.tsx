@@ -79,7 +79,7 @@ export function ProviderKeyRow({ tile, onChanged }: Props) {
               disabled={busy}
               className="h-8 flex-1 min-w-[200px] font-mono text-xs"
             />
-            <Button type="submit" size="sm" disabled={busy} className="h-8 bg-[#ff0073] hover:bg-[#e0005f] text-white">
+            <Button type="submit" size="sm" disabled={busy} className="h-8 bg-cta hover:bg-cta-hover text-white">
               {phase === "saving" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {phase === "saving" ? t("common.saving") : t("common.save")}
             </Button>

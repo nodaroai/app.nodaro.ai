@@ -338,7 +338,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                     onPointerDown={(e) => e.stopPropagation()}
                     className={`text-[9px] leading-none px-1 py-0.5 rounded ${
                       isActive
-                        ? "bg-[#ff0073] text-white"
+                        ? "bg-cta text-white"
                         : "text-slate-300 hover:text-white hover:bg-white/10"
                     }`}
                   >
