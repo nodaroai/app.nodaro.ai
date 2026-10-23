@@ -1,5 +1,16 @@
 # @nodaro/cli
 
+## 1.38.0
+
+### Minor Changes
+
+- fea87e4: `nodaro jobs list --source <s,s>` lists only the jobs the named surfaces created; `--source mcp` lists what your MCP clients (Claude, ChatGPT, …) made.
+
+### Patch Changes
+
+- Updated dependencies [fea87e4]
+  - @nodaro/sdk@2.43.0
+
 ## 1.37.1
 
 ### Patch Changes

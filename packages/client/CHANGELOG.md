@@ -1,5 +1,11 @@
 # @nodaro/sdk
 
+## 2.43.0
+
+### Minor Changes
+
+- fea87e4: `client.jobs.list({ source })` filters your jobs by the surface that created them (`"mcp"`, `"cli"`, `"sdk"`, `"web"`, …), one value or a list; the `JobSource` type names them.
+
 ## 2.42.0
 
 ### Minor Changes
