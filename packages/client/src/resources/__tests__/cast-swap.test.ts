@@ -167,6 +167,24 @@ describe("castSwap resource", () => {
     expect(out.breakdown.masking).toBe(2)
   })
 
+  it("estimate passes the expected charge through beside the hold", async () => {
+    const estimate: CastSwapEstimate = {
+      totalCredits: 40,
+      expectedCredits: 31,
+      breakdown: { castSwap: 5, seedance: 32, seedanceExpected: 23, references: 3 },
+      settlesLower: true,
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
+    const client = make(fetchMock)
+
+    const out = await client.castSwap.estimate(params)
+    expect(out).toEqual(estimate)
+    expect(out.expectedCredits).toBe(31)
+    expect(out.breakdown.seedanceExpected).toBe(23)
+    // The expected charge is the hold with the video model's expected charge in place of its hold.
+    expect(out.totalCredits - out.breakdown.seedance + out.breakdown.seedanceExpected!).toBe(out.expectedCredits)
+  })
+
   it("estimate posts to /v1/cast-swap/estimate", async () => {
     const estimate = { totalCredits: 15, breakdown: { castSwap: 5, seedance: 7, references: 3 }, settlesLower: true }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))

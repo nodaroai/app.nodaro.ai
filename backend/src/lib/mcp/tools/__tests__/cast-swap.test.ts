@@ -124,6 +124,21 @@ describe("cast_swap", () => {
     expect(res.content[0]!.text).toMatch(/lower/)
   })
 
+  it("names the expected charge and the hold when the engine answers both", async () => {
+    const quote = {
+      totalCredits: 40,
+      expectedCredits: 31,
+      breakdown: { castSwap: 5, seedance: 32, seedanceExpected: 23, references: 3 },
+      settlesLower: true,
+    }
+    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    expect(res.content[0]!.text).toContain("costs about 31 credits (up to 40 held while it runs).")
+    // The expected charge already is the lower figure: no "lower than this quote" after it.
+    expect(res.content[0]!.text).not.toMatch(/lower than this quote/)
+    expect(res.structuredContent).toEqual({ ...quote, confirmed: false })
+  })
+
   it("names the reference preparation in the quote when it costs something", async () => {
     const withPrep = { totalCredits: 15, breakdown: { castSwap: 5, seedance: 7, references: 3 }, settlesLower: false }
     const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: withPrep } })

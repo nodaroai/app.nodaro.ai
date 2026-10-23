@@ -1,5 +1,23 @@
 # @nodaro/sdk
 
+## 2.41.0
+
+### Minor Changes
+
+- 9ab753b: `CastSwapEstimate` gains the charge a Cast Swap run is expected to come to: `expectedCredits` (the hold with the video model's expected charge in place of its hold; never above `totalCredits`) and `breakdown.seedanceExpected` (that expected video-model charge, which takes `breakdown.seedance`'s place in `expectedCredits`). `totalCredits` is now documented as what is held when the run starts; the run is charged what it actually costs. Both new fields are optional: an older Cast Swap engine leaves them out, so read `totalCredits` then.
+
+## 2.40.0
+
+### Minor Changes
+
+- b9864da: `GenerateVideoParams` and `TextToVideoParams` type `keepOriginalSound` (Kling 4.0: keep a reference video's own sound), and the `characterReferences` docs cover Kling 4.0's named subjects (up to 7, 2–4 images each through `bodyImageUrl` / the new `extraImageUrls`).
+
+### Patch Changes
+
+- Updated dependencies [b9864da]
+  - @nodaro/shared@3.40.0
+  - @nodaro/prompts@1.41.0
+
 ## 2.39.0
 
 ### Minor Changes

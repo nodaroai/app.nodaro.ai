@@ -4084,7 +4084,7 @@ installs (SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, breakdown: { castSwap, seedance, references, masking? }, maskingCredits?, settlesLower }`. |
+| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ totalCredits, expectedCredits, breakdown: { castSwap, seedance, seedanceExpected, references, masking? }, maskingCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4157,18 +4157,27 @@ retried with the faces masked after the source clip was refused), `"no_faces"`
 unmasked, while an `auto` run fails with the original refusal instead) or
 `"off"`.
 
-The quote is `totalCredits` = `breakdown.castSwap` (the run itself) +
-`breakdown.seedance` (the video model it calls) + `breakdown.references` (the
-reference preparation; 0 when it is off or there is nothing to prepare), plus
+The quote names two totals. `totalCredits` is what is held when the run
+starts: `breakdown.castSwap` (the run itself) + `breakdown.seedance` (what the
+video model it calls holds) + `breakdown.references` (the reference
+preparation; 0 when it is off or there is nothing to prepare), plus
 `breakdown.masking` (masking the faces) with `faceMasking.mode` `"always"`.
-With `"auto"` the masking is not in `totalCredits`: `maskingCredits` is the
+`expectedCredits` is the charge the run is expected to come to: the same sum
+with `breakdown.seedanceExpected` (what the video model is expected to be
+charged) in place of `breakdown.seedance`. The video's length is left to the
+model (Auto), so the video model is held at its longest output but is expected
+to be charged for about the clip in and as much out: `seedanceExpected` is
+never above `seedance`, and `expectedCredits` never above `totalCredits`. The
+run is charged what it actually costs. An older Cast Swap engine leaves out
+`expectedCredits` and `seedanceExpected`; read `totalCredits` then.
+With `"auto"` the masking is in neither total: `maskingCredits` is the
 extra charged only if the masked retry runs, and starting the run needs
-credits for both. `breakdown.masking` is present with `"auto"` too (equal to
-`maskingCredits`) but is not added to `totalCredits`, so under `"auto"` the
-breakdown sums to more than the total.
-`settlesLower: true` means the
-video's length is left to the model (Auto), so the final charge is expected to
-come out lower than the quote.
+credits for both the hold and it. `breakdown.masking` is present with
+`"auto"` too (equal to `maskingCredits`) but is not added to either total.
+So the breakdown always sums to more than either total: `seedance` and
+`seedanceExpected` are alternatives, and `"auto"` masking is outside both.
+`settlesLower: true` (every run today) means the final charge is expected to
+come out lower than `totalCredits`, at about `expectedCredits`.
 
 **Repeats.** Send the same `Idempotency-Key` (8–200 characters) when you
 retry a run. A repeat within the credit guard's dedup window (about 10 s)

@@ -45,9 +45,12 @@ export interface RegisterCastSwapToolsOpts {
 }
 
 interface CastSwapQuote {
+  /** Held when the run starts. */
   totalCredits: number
-  breakdown: { castSwap: number; seedance: number; references: number; masking?: number }
-  /** Face masking "auto" only: charged only if the masked retry runs; not in totalCredits. */
+  /** The charge the run is expected to come to (`seedanceExpected` in place of `seedance`); absent from an older engine. */
+  expectedCredits?: number
+  breakdown: { castSwap: number; seedance: number; references: number; seedanceExpected?: number; masking?: number }
+  /** Face masking "auto" only: charged only if the masked retry runs; in neither total. */
   maskingCredits?: number
   settlesLower: boolean
 }
@@ -259,15 +262,20 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
             : maskMode === "always" && quote.breakdown?.masking
               ? ` That includes ${quote.breakdown.masking} credits to mask the faces first.`
               : ""
-        const lower = quote.settlesLower
-          ? " The video's length is left to the model, so the final charge is expected to come out lower than this quote."
-          : ""
+        // The expected charge first, with the hold beside it (as estimate_trend words it);
+        // an older engine answers only the hold, which settles lower.
+        const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : null
+        const held = expected !== null && expected !== quote.totalCredits ? ` (up to ${quote.totalCredits} held while it runs)` : ""
+        const lower =
+          expected === null && quote.settlesLower
+            ? " The video's length is left to the model, so the final charge is expected to come out lower than this quote."
+            : ""
         return {
           content: [
             {
               type: "text" as const,
               text:
-                `This Cast Swap ${args.preview ? "preview " : ""}costs about ${quote.totalCredits} credits.${references}${masking}${lower} ` +
+                `This Cast Swap ${args.preview ? "preview " : ""}costs about ${expected ?? quote.totalCredits} credits${held}.${references}${masking}${lower} ` +
                 "Present this to the user; call cast_swap again with the same arguments and confirm: true once they accept.",
             },
           ],
